@@ -95,14 +95,18 @@ export function applySprings(
 
         // Hooke's Law: F = k * (current_distance - rest_length)
         // We want the force to act to RESTORE the length.
-        const displacement = d - (link.length ?? springLength);
-        // If displacement > 0 (too far), force pulls source towards target (positive direction relative to source->target vector)
-        // Actually: standard vector from source to target is (dx, dy).
-        // If d > rest, we want force to pull source TOWARD target.
-        // So force vector on source should be aligned with (dx, dy).
 
-        const k = link.strength ?? springStiffness;
-        const forceMagnitude = k * displacement;
+        // Effective Length = Base (or Override) * Bias
+        const baseLen = link.length ?? springLength;
+        const effectiveLength = baseLen * (link.lengthBias ?? 1.0);
+
+        const displacement = d - effectiveLength;
+
+        // Effective Stiffness = Base (or Override) * Bias
+        const baseK = link.strength ?? springStiffness;
+        const effectiveK = baseK * (link.stiffnessBias ?? 1.0);
+
+        const forceMagnitude = effectiveK * displacement;
 
         // Normalize direction (dx/d, dy/d)
         const fx = (dx / d) * forceMagnitude;

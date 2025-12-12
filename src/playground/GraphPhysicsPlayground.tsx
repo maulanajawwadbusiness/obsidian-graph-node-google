@@ -48,15 +48,27 @@ const DEBUG_OVERLAY_STYLE: React.CSSProperties = {
 // -----------------------------------------------------------------------------
 // Helper: Random Graph Generator
 // -----------------------------------------------------------------------------
-function generateRandomGraph(nodeCount: number, linkProbability: number) {
+
+/**
+ * Simple string hash for deterministic "randomness".
+ */
+function simpleHash(str: string): number {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+        hash = ((hash << 5) - hash) + str.charCodeAt(i);
+        hash |= 0; // Convert to 32bit integer
+    }
+    return Math.abs(hash);
+}
+
+// Generate a random graph
+function generateRandomGraph(nodeCount: number, connectivity: number) {
     const nodes: PhysicsNode[] = [];
     const links: PhysicsLink[] = [];
 
-    // Create Nodes
     for (let i = 0; i < nodeCount; i++) {
         nodes.push({
-            id: `n-${i}`,
-            // Scatter initially (tight cluster for explosion effect)
+            id: `n${i}`,
             x: (Math.random() - 0.5) * 50,
             y: (Math.random() - 0.5) * 50,
             vx: 0,
@@ -69,13 +81,24 @@ function generateRandomGraph(nodeCount: number, linkProbability: number) {
         });
     }
 
-    // Create Links
+    // Connect them randomly but deterministically biased
     for (let i = 0; i < nodeCount; i++) {
         for (let j = i + 1; j < nodeCount; j++) {
-            if (Math.random() < linkProbability) {
+            if (Math.random() < connectivity) {
+                const source = `n${i}`;
+                const target = `n${j}`;
+
+                // Deterministic bias based on link identity
+                const hash = simpleHash(source + target);
+                // Map hash to 0.7 - 1.3 range (approx +/- 30%)
+                const normalized = (hash % 1000) / 1000; // 0.0 - 1.0
+                const bias = 0.7 + (normalized * 0.6);
+
                 links.push({
-                    source: `n-${i}`,
-                    target: `n-${j}`,
+                    source,
+                    target,
+                    lengthBias: bias,
+                    stiffnessBias: 1.0 // varied length is usually enough for "organic" look
                 });
             }
         }

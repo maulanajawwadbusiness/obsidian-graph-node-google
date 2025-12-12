@@ -28,6 +28,10 @@ export interface PhysicsLink {
   target: string; // Node ID
   length?: number; // Optional override for resting length
   strength?: number; // Optional override for stiffness
+
+  // Organic Variation (Multipliers)
+  lengthBias?: number; // e.g. 0.8 to 1.3
+  stiffnessBias?: number; // e.g. 0.9 to 1.1
 }
 
 export interface ForceConfig {

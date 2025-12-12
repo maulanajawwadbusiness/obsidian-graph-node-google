@@ -69,8 +69,9 @@ function generateRandomGraph(nodeCount: number, connectivity: number) {
     for (let i = 0; i < nodeCount; i++) {
         nodes.push({
             id: `n${i}`,
-            x: (Math.random() - 0.5) * 50,
-            y: (Math.random() - 0.5) * 50,
+            // SINGULARITY START: No geometric shape. Just pressure.
+            x: (Math.random() - 0.5) * 1.0,
+            y: (Math.random() - 0.5) * 1.0,
             vx: 0,
             vy: 0,
             fx: 0,
@@ -116,7 +117,17 @@ export const GraphPhysicsPlayground: React.FC = () => {
 
     // State for React UI
     const [config, setConfig] = useState<ForceConfig>(DEFAULT_PHYSICS_CONFIG);
-    const [metrics, setMetrics] = useState({ nodes: 0, links: 0, fps: 0, avgVel: 0, activeNodes: 0 });
+    const [metrics, setMetrics] = useState({
+        nodes: 0,
+        links: 0,
+        fps: 0,
+        avgVel: 0,
+        activeNodes: 0,
+        // Shape Diagnostics
+        avgDist: 0,
+        stdDist: 0,
+        aspectRatio: 0
+    });
     const [spawnCount, setSpawnCount] = useState(20);
 
     // Rendering Loop
@@ -222,12 +233,43 @@ export const GraphPhysicsPlayground: React.FC = () => {
                 });
                 const avgVel = engine.nodes.size > 0 ? totalVel / engine.nodes.size : 0;
 
+                // Shape Analysis
+                let distSum = 0;
+                let distSqSum = 0;
+                let minX = Infinity, maxX = -Infinity;
+                let minY = Infinity, maxY = -Infinity;
+
+                engine.nodes.forEach(n => {
+                    const d = Math.sqrt(n.x * n.x + n.y * n.y);
+                    distSum += d;
+                    distSqSum += d * d;
+                    minX = Math.min(minX, n.x);
+                    maxX = Math.max(maxX, n.x);
+                    minY = Math.min(minY, n.y);
+                    maxY = Math.max(maxY, n.y);
+                });
+
+                const count = engine.nodes.size;
+                const avgDist = count > 0 ? distSum / count : 0;
+                const variance = count > 0 ? (distSqSum / count) - (avgDist * avgDist) : 0;
+                const stdDist = Math.sqrt(Math.max(0, variance));
+
+                const width = maxX - minX;
+                const height = maxY - minY;
+                // Avoid divide by zero
+                const aspect = (height > 0.1) ? width / height : 1.0;
+                // Normalize aspect (always >= 1.0) for easier reading? User wanted raw logs.
+                // Let's keep raw W/H ratio. 
+
                 setMetrics({
                     nodes: engine.nodes.size,
                     links: engine.links.length,
                     fps: Math.round((frameCount * 1000) / (time - lastFpsTime)),
                     avgVel: avgVel,
-                    activeNodes: activeNodes
+                    activeNodes: activeNodes,
+                    avgDist,
+                    stdDist,
+                    aspectRatio: aspect
                 });
 
                 frameCount = 0;
@@ -306,11 +348,14 @@ export const GraphPhysicsPlayground: React.FC = () => {
     const handleReset = () => {
         // Just randomize positions of existing nodes
         engineRef.current.nodes.forEach(n => {
-            n.x = (Math.random() - 0.5) * 50;
-            n.y = (Math.random() - 0.5) * 50;
+            // SINGULARITY RESET
+            n.x = (Math.random() - 0.5) * 1.0;
+            n.y = (Math.random() - 0.5) * 1.0;
             n.vx = 0;
             n.vy = 0;
+            n.warmth = 1.0;
         });
+        engineRef.current.resetLifecycle();
     };
 
     return (
@@ -327,10 +372,17 @@ export const GraphPhysicsPlayground: React.FC = () => {
 
                 {/* Debug Overlay */}
                 <div style={DEBUG_OVERLAY_STYLE}>
+                    <strong>Performance</strong><br />
                     FPS: {metrics.fps} <br />
                     Nodes: {metrics.nodes} (Active: {metrics.activeNodes}) <br />
                     Links: {metrics.links} <br />
-                    Avg Vel: {metrics.avgVel.toFixed(4)}
+                    Avg Vel: {metrics.avgVel.toFixed(4)} <br />
+                    <br />
+                    <strong>Shape Diagnostics</strong><br />
+                    Spread (R_mean): {metrics.avgDist.toFixed(2)} px <br />
+                    Irregularity (R_std): {metrics.stdDist.toFixed(2)} px <br />
+                    CV (Std/Mean): {(metrics.avgDist > 0 ? (metrics.stdDist / metrics.avgDist) : 0).toFixed(3)} <br />
+                    Aspect Ratio (W/H): {metrics.aspectRatio.toFixed(3)}
                 </div>
             </div>
 

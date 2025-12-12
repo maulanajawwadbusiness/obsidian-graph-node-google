@@ -16,8 +16,8 @@ export class PhysicsEngine {
     private draggedNodeId: string | null = null;
     private dragTarget: { x: number, y: number } | null = null;
 
-    // Cooling State
-    // (Local warmth is stored on nodes)
+    // Lifecycle State (Startup Animation)
+    private lifecycle: number = 0;
 
     constructor(config: Partial<ForceConfig> = {}) {
         this.config = { ...DEFAULT_PHYSICS_CONFIG, ...config };
@@ -48,7 +48,7 @@ export class PhysicsEngine {
     clear() {
         this.nodes.clear();
         this.links = [];
-        // Nothing to wake
+        this.lifecycle = 0;
     }
 
     /**
@@ -60,12 +60,21 @@ export class PhysicsEngine {
     }
 
     /**
+     * Restart the lifecycle (Explosion effect).
+     */
+    resetLifecycle() {
+        this.lifecycle = 0;
+        this.wakeAll();
+    }
+
+    /**
      * Wake up a specific node.
      */
     wakeNode(nodeId: string) {
         const node = this.nodes.get(nodeId);
         if (node) {
             node.warmth = 1.0;
+            // Also reset lifecycle? No, dragging shouldn't restart the WHOLE intro.
         }
     }
 
@@ -112,10 +121,6 @@ export class PhysicsEngine {
             // LOCAL WAKE ONLY
             this.wakeNode(nodeId);
             this.wakeNeighbors(nodeId);
-
-            // Optional: Clear velocity on grab for better control?
-            // Or keep it for "catch and throw"? 
-            // Let's keep momentum -> funner.
         }
     }
 
@@ -146,21 +151,32 @@ export class PhysicsEngine {
      */
     tick(dt: number) {
         const nodeList = Array.from(this.nodes.values());
-        const { damping, maxVelocity, formingTime, restForceScale, velocitySleepThreshold } = this.config;
+        const { damping, maxVelocity, formingTime, restForceScale, velocitySleepThreshold, springStiffness } = this.config;
 
-        // 1. Update Warmth & Calculate Local Factors
-        // We will store effective damping on the node temporarily? 
-        // No, we'll just use it in the integration loop. 
-        // We DO need to apply force scale to fx/fy though.
+        // Lifecycle Management
+        this.lifecycle += dt;
 
+        // Phase 0: Compression (0 - 0.15s)
+        const isCompression = this.lifecycle < 0.15;
+        // Phase 1: Release (0.15s - 0.5s)
+        const isRelease = this.lifecycle >= 0.15 && this.lifecycle < 0.50;
+        // Phase 2: Normal (0.5s+)
+        const isNormal = this.lifecycle >= 0.50;
+
+        // 1. Update Warmth (Per Node)
         for (const node of nodeList) {
             // Init warmth
             if (node.warmth === undefined) node.warmth = 1.0;
 
-            // Decay
-            if (formingTime > 0) {
-                node.warmth -= dt / formingTime;
-                if (node.warmth < 0) node.warmth = 0;
+            // Decay Warmth ONLY in Normal Phase
+            // During intro, keeping them hot makes sure they don't freeze mid-expansion.
+            if (isNormal) {
+                if (formingTime > 0) {
+                    node.warmth -= dt / formingTime;
+                    if (node.warmth < 0) node.warmth = 0;
+                } else {
+                    node.warmth = 1.0;
+                }
             } else {
                 node.warmth = 1.0;
             }
@@ -172,13 +188,30 @@ export class PhysicsEngine {
             node.fy = 0;
         }
 
-        // 3. Apply Core Forces
-        applyRepulsion(nodeList, this.config);
-        applySprings(this.nodes, this.links, this.config);
-        applyCenterGravity(nodeList, this.config);
-        applyBoundaryForce(nodeList, this.config, this.worldWidth, this.worldHeight);
+        // 3. Apply Core Forces IN ORDER based on Phase
+        if (isCompression) {
+            // COMPRESSION: Gravity only. Pull them tight.
+            applyCenterGravity(nodeList, this.config);
+            // No springs, no repulsion.
+        }
+        else if (isRelease) {
+            // RELEASE: Repulsion ON.
+            // No Boost (Neutered). Just "Constraint Release".
+            applyRepulsion(nodeList, this.config);
+            applySprings(this.nodes, this.links, this.config);
+            applyCenterGravity(nodeList, this.config);
+            applyBoundaryForce(nodeList, this.config, this.worldWidth, this.worldHeight);
+        }
+        else {
+            // NORMAL (Steady State)
+            applyRepulsion(nodeList, this.config);
+            applySprings(this.nodes, this.links, this.config);
+            applyCenterGravity(nodeList, this.config);
+            applyBoundaryForce(nodeList, this.config, this.worldWidth, this.worldHeight);
+        }
 
         // 4. Apply Local Phase Scale (Per Node)
+        // (Only meaningful in Normal phase where warmth decays, but safe to run always)
         for (const node of nodeList) {
             const t = node.warmth ?? 0;
             // Lerp force scale: 1.0 (Hot) -> restForceScale (Cold)
@@ -192,11 +225,11 @@ export class PhysicsEngine {
         if (this.draggedNodeId && this.dragTarget) {
             const node = this.nodes.get(this.draggedNodeId);
             if (node) {
-                // ... same drag logic as before ...
+                // Strong spring to cursor
                 const dx = this.dragTarget.x - node.x;
                 const dy = this.dragTarget.y - node.y;
                 const dragStrength = 200.0;
-                // Note: We do NOT scale drag force (it's external and mandatory)
+
                 node.fx += dx * dragStrength;
                 node.fy += dy * dragStrength;
                 node.vx += dx * 2.0 * dt;
@@ -217,14 +250,17 @@ export class PhysicsEngine {
             node.vy += ay * dt;
 
             // Apply Damping (Air Resistance)
-            // Dynamic based on warmth
+            let currentDamping = damping;
+
+            // Phase Shift Damping (Always)
+            // Startup Release no longer overrides this (Removed 0.6 override)
             const t = node.warmth ?? 0;
             const coldDamping = 0.98;
-            const effectiveDamping = coldDamping + (damping - coldDamping) * t;
+            currentDamping = coldDamping + (damping - coldDamping) * t;
 
             // Simple linear decay
-            node.vx *= (1 - effectiveDamping * dt * 5.0);
-            node.vy *= (1 - effectiveDamping * dt * 5.0);
+            node.vx *= (1 - currentDamping * dt * 5.0);
+            node.vy *= (1 - currentDamping * dt * 5.0);
 
             // Clamp Velocity
             const vSq = node.vx * node.vx + node.vy * node.vy;

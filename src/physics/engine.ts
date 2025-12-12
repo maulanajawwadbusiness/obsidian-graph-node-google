@@ -107,7 +107,7 @@ export class PhysicsEngine {
                 const dx = this.dragTarget.x - node.x;
                 const dy = this.dragTarget.y - node.y;
 
-                const dragStrength = 20.0; // Very strong compared to normal springs
+                const dragStrength = 200.0; // Very strong (law, not suggestion)
 
                 node.fx += dx * dragStrength;
                 node.fy += dy * dragStrength;

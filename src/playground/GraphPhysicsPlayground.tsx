@@ -56,9 +56,9 @@ function generateRandomGraph(nodeCount: number, linkProbability: number) {
     for (let i = 0; i < nodeCount; i++) {
         nodes.push({
             id: `n-${i}`,
-            // Scatter initially
-            x: (Math.random() - 0.5) * 800,
-            y: (Math.random() - 0.5) * 600,
+            // Scatter initially (tight cluster for explosion effect)
+            x: (Math.random() - 0.5) * 50,
+            y: (Math.random() - 0.5) * 50,
             vx: 0,
             vy: 0,
             fx: 0,
@@ -264,8 +264,8 @@ export const GraphPhysicsPlayground: React.FC = () => {
     const handleReset = () => {
         // Just randomize positions of existing nodes
         engineRef.current.nodes.forEach(n => {
-            n.x = (Math.random() - 0.5) * 500;
-            n.y = (Math.random() - 0.5) * 500;
+            n.x = (Math.random() - 0.5) * 50;
+            n.y = (Math.random() - 0.5) * 50;
             n.vx = 0;
             n.vy = 0;
         });

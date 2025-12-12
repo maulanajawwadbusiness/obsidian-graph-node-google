@@ -17,7 +17,7 @@ export class PhysicsEngine {
     private dragTarget: { x: number, y: number } | null = null;
 
     // Lifecycle State (Startup Animation)
-    private lifecycle: number = 0;
+    public lifecycle: number = 0;
 
     constructor(config: Partial<ForceConfig> = {}) {
         this.config = { ...DEFAULT_PHYSICS_CONFIG, ...config };

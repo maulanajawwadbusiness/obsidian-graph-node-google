@@ -126,7 +126,8 @@ export const GraphPhysicsPlayground: React.FC = () => {
         // Shape Diagnostics
         avgDist: 0,
         stdDist: 0,
-        aspectRatio: 0
+        aspectRatio: 0,
+        lifecycleMs: 0
     });
     const [spawnCount, setSpawnCount] = useState(20);
 
@@ -269,7 +270,8 @@ export const GraphPhysicsPlayground: React.FC = () => {
                     activeNodes: activeNodes,
                     avgDist,
                     stdDist,
-                    aspectRatio: aspect
+                    aspectRatio: aspect,
+                    lifecycleMs: Math.round(engine.lifecycle * 1000)
                 });
 
                 frameCount = 0;
@@ -372,6 +374,8 @@ export const GraphPhysicsPlayground: React.FC = () => {
 
                 {/* Debug Overlay */}
                 <div style={DEBUG_OVERLAY_STYLE}>
+                    <strong>Time: T+{metrics.lifecycleMs}ms</strong><br />
+                    <br />
                     <strong>Performance</strong><br />
                     FPS: {metrics.fps} <br />
                     Nodes: {metrics.nodes} (Active: {metrics.activeNodes}) <br />

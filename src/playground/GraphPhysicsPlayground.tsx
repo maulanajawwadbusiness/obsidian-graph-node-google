@@ -117,6 +117,11 @@ export const GraphPhysicsPlayground: React.FC = () => {
             links.forEach(l => engine.addLink(l));
         }
 
+        // Init bounds
+        if (canvas) {
+            engine.updateBounds(canvas.width, canvas.height);
+        }
+
         const render = (time: number) => {
             // 1. Calc Delta Time
             // Cap dt to avoid explosion if tab becomes inactive
@@ -132,6 +137,7 @@ export const GraphPhysicsPlayground: React.FC = () => {
             if (canvas.width !== canvas.offsetWidth || canvas.height !== canvas.offsetHeight) {
                 canvas.width = canvas.offsetWidth;
                 canvas.height = canvas.offsetHeight;
+                engine.updateBounds(canvas.width, canvas.height); // Sync bounds
             }
 
             const width = canvas.width;
@@ -326,11 +332,11 @@ export const GraphPhysicsPlayground: React.FC = () => {
                         max = 1.0;
                         step = 0.01;
                     }
-                    if (k === 'repulsionStrength') {
+                    if (k === 'repulsionStrength' || k === 'boundaryStrength') {
                         max = 10000;
                         step = 100;
                     }
-                    if (k === 'repulsionDistanceMax' || k === 'springLength') {
+                    if (k === 'repulsionDistanceMax' || k === 'springLength' || k === 'boundaryMargin') {
                         max = 500;
                     }
 

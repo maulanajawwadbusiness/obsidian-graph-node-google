@@ -14,7 +14,7 @@ export interface PhysicsNode {
   // Accumulated Force (cleared every tick)
   fx: number;
   fy: number;
-  
+
   // Physical properties
   mass: number;    // Affects how hard it is to move
   radius: number;  // For collision/repulsion radius
@@ -41,10 +41,14 @@ export interface ForceConfig {
 
   // Gravity (Center)
   gravityCenterStrength: number; // Pull toward (0,0) usually
-  
+
   // Damping / Friction
   damping: number; // Velocity decay 0.0 (no friction) to 1.0 (frozen)
-  
+
   // Constraints
   maxVelocity: number; // Cap speed to prevent explosions
+
+  // Boundary (Soft Wall)
+  boundaryMargin: number; // Distance from edge where force starts
+  boundaryStrength: number; // How hard the wall pushes back
 }

@@ -143,3 +143,60 @@ export function applyCenterGravity(
         node.fy += dy * gravityCenterStrength;
     }
 }
+
+/**
+ * Apply soft boundary force.
+ * UX Anchor: "Screen Containment".
+ * Pushes nodes back if they get too close to the world bounds.
+ * Forces are zero if > margin away. Ramps up linearly as they approach/cross edge.
+ */
+export function applyBoundaryForce(
+    nodes: PhysicsNode[],
+    config: ForceConfig,
+    worldWidth: number,
+    worldHeight: number
+) {
+    const { boundaryMargin, boundaryStrength } = config;
+    const halfW = worldWidth / 2;
+    const halfH = worldHeight / 2;
+
+    const minX = -halfW + boundaryMargin;
+    const maxX = halfW - boundaryMargin;
+    const minY = -halfH + boundaryMargin;
+    const maxY = halfH - boundaryMargin;
+
+    // We assume world is centered at 0,0
+    for (const node of nodes) {
+        if (node.isFixed) continue;
+
+        // Check Left
+        if (node.x < minX) {
+            // Distance into the margin or past it
+            const penetration = minX - node.x;
+            // Normalized 0..1 (if we used margin as scale) but simplest is direct force * penetration
+            // Force points RIGHT (positive)
+            node.fx += penetration * boundaryStrength * 0.01;
+        }
+
+        // Check Right
+        if (node.x > maxX) {
+            const penetration = node.x - maxX;
+            // Force points LEFT (negative)
+            node.fx -= penetration * boundaryStrength * 0.01;
+        }
+
+        // Check Top
+        if (node.y < minY) {
+            const penetration = minY - node.y;
+            // Force points DOWN (positive)
+            node.fy += penetration * boundaryStrength * 0.01;
+        }
+
+        // Check Bottom
+        if (node.y > maxY) {
+            const penetration = node.y - maxY;
+            // Force points UP (negative)
+            node.fy -= penetration * boundaryStrength * 0.01;
+        }
+    }
+}

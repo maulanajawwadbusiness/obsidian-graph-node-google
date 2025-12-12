@@ -52,4 +52,11 @@ export const DEFAULT_PHYSICS_CONFIG: ForceConfig = {
     // ---------------------------------------------------------------------------
     // Prevents "explosions" if forces get too high (e.g. initial spawn overlap).
     maxVelocity: 150,
+
+    // ---------------------------------------------------------------------------
+    // ANCHOR: Screen Containment
+    // ---------------------------------------------------------------------------
+    // Push back gently when nodes get close to the edge.
+    boundaryMargin: 50,   // Start pushing 50px before the edge
+    boundaryStrength: 500, // Strong enough to turn them around
 };

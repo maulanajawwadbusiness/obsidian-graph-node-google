@@ -1,11 +1,16 @@
 import { PhysicsNode, PhysicsLink, ForceConfig } from './types';
 import { DEFAULT_PHYSICS_CONFIG } from './config';
-import { applyRepulsion, applySprings, applyCenterGravity } from './forces';
+import { applyRepulsion, applySprings, applyCenterGravity, applyBoundaryForce } from './forces';
 
 export class PhysicsEngine {
     public nodes: Map<string, PhysicsNode> = new Map();
     public links: PhysicsLink[] = [];
     public config: ForceConfig;
+
+    // World Bounds for Containment
+    // Default to something large until Playground updates it
+    private worldWidth: number = 2000;
+    private worldHeight: number = 2000;
 
     // Interaction State
     private draggedNodeId: string | null = null;
@@ -42,6 +47,14 @@ export class PhysicsEngine {
      */
     updateConfig(newConfig: Partial<ForceConfig>) {
         this.config = { ...this.config, ...newConfig };
+    }
+
+    /**
+     * Update World Bounds (from Canvas resize).
+     */
+    updateBounds(width: number, height: number) {
+        this.worldWidth = width;
+        this.worldHeight = height;
     }
 
     /**
@@ -98,6 +111,7 @@ export class PhysicsEngine {
         applyRepulsion(nodeList, this.config);
         applySprings(this.nodes, this.links, this.config);
         applyCenterGravity(nodeList, this.config);
+        applyBoundaryForce(nodeList, this.config, this.worldWidth, this.worldHeight);
 
         // 3. Apply Mouse Drag Force (The "Rubbery Grip")
         if (this.draggedNodeId && this.dragTarget) {

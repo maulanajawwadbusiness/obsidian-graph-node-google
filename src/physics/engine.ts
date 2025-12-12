@@ -188,27 +188,15 @@ export class PhysicsEngine {
             node.fy = 0;
         }
 
-        // 3. Apply Core Forces IN ORDER based on Phase
-        if (isCompression) {
-            // COMPRESSION: Gravity only. Pull them tight.
-            applyCenterGravity(nodeList, this.config);
-            // No springs, no repulsion.
-        }
-        else if (isRelease) {
-            // RELEASE: Repulsion ON.
-            // No Boost (Neutered). Just "Constraint Release".
-            applyRepulsion(nodeList, this.config);
-            applySprings(this.nodes, this.links, this.config);
-            applyCenterGravity(nodeList, this.config);
-            applyBoundaryForce(nodeList, this.config, this.worldWidth, this.worldHeight);
-        }
-        else {
-            // NORMAL (Steady State)
-            applyRepulsion(nodeList, this.config);
-            applySprings(this.nodes, this.links, this.config);
-            applyCenterGravity(nodeList, this.config);
-            applyBoundaryForce(nodeList, this.config, this.worldWidth, this.worldHeight);
-        }
+        // 3. Apply Core Forces ALWAYS (Structure First)
+        // Compression phase is removed. Springs active from t=0.
+        // We only check if we are in "Initial Unfold" vs "Steady state" for Damping purposes maybe?
+        // But forces are ON.
+
+        applyRepulsion(nodeList, this.config);
+        applySprings(this.nodes, this.links, this.config);
+        applyCenterGravity(nodeList, this.config);
+        applyBoundaryForce(nodeList, this.config, this.worldWidth, this.worldHeight);
 
         // 4. Apply Local Phase Scale (Per Node)
         // (Only meaningful in Normal phase where warmth decays, but safe to run always)

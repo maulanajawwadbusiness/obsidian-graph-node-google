@@ -82,26 +82,42 @@ function generateRandomGraph(nodeCount: number, connectivity: number) {
         });
     }
 
-    // Connect them randomly but deterministically biased
-    for (let i = 0; i < nodeCount; i++) {
-        for (let j = i + 1; j < nodeCount; j++) {
-            if (Math.random() < connectivity) {
-                const source = `n${i}`;
-                const target = `n${j}`;
+    // Guarantee Connectivity: Build a Spanning Tree first
+    // Link node i to a random node j < i.
+    for (let i = 1; i < nodeCount; i++) {
+        const targetIndex = Math.floor(Math.random() * i);
+        const source = `n${i}`;
+        const target = `n${targetIndex}`;
 
-                // Deterministic bias based on link identity
-                const hash = simpleHash(source + target);
-                // Map hash to 0.7 - 1.3 range (approx +/- 30%)
-                const normalized = (hash % 1000) / 1000; // 0.0 - 1.0
-                const bias = 0.7 + (normalized * 0.6);
+        // Deterministic bias
+        const hash = simpleHash(source + target);
+        const normalized = (hash % 1000) / 1000;
+        const bias = 0.7 + (normalized * 0.6);
 
-                links.push({
-                    source,
-                    target,
-                    lengthBias: bias,
-                    stiffnessBias: 1.0 // varied length is usually enough for "organic" look
-                });
-            }
+        links.push({
+            source,
+            target,
+            lengthBias: bias,
+            stiffnessBias: 1.0
+        });
+    }
+
+    // Add extra random edges for complexity (Cycles)
+    // connectivity 0.05 -> approx 5% of possible extra edges?
+    // Let's just add N * connectivity * 4 edges to mimic density
+    const extraEdges = Math.floor(nodeCount * 4 * connectivity);
+    for (let k = 0; k < extraEdges; k++) {
+        const i = Math.floor(Math.random() * nodeCount);
+        const j = Math.floor(Math.random() * nodeCount);
+        if (i !== j) {
+            const source = `n${i}`;
+            const target = `n${j}`;
+            const hash = simpleHash(source + target);
+            const bias = 0.7 + ((hash % 1000) / 1000) * 0.6;
+
+            // Avoid dupes? Engine handles it or doesn't care. 
+            // Simple check:
+            links.push({ source, target, lengthBias: bias, stiffnessBias: 1.0 });
         }
     }
 

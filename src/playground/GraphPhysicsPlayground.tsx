@@ -64,7 +64,7 @@ function generateRandomGraph(nodeCount: number, linkProbability: number) {
             fx: 0,
             fy: 0,
             mass: 1, // uniform mass for now
-            radius: 5 + Math.random() * 5, // 5-10px radius
+            radius: 5.0, // Fixed size as requested
             isFixed: false,
         });
     }
@@ -94,7 +94,7 @@ export const GraphPhysicsPlayground: React.FC = () => {
     // State for React UI
     const [config, setConfig] = useState<ForceConfig>(DEFAULT_PHYSICS_CONFIG);
     const [metrics, setMetrics] = useState({ nodes: 0, links: 0, fps: 0 });
-    const [spawnCount, setSpawnCount] = useState(50);
+    const [spawnCount, setSpawnCount] = useState(20);
 
     // Rendering Loop
     useEffect(() => {
@@ -112,7 +112,7 @@ export const GraphPhysicsPlayground: React.FC = () => {
 
         // Initial Spawn if empty
         if (engine.nodes.size === 0) {
-            const { nodes, links } = generateRandomGraph(50, 0.05);
+            const { nodes, links } = generateRandomGraph(20, 0.05);
             nodes.forEach(n => engine.addNode(n));
             links.forEach(l => engine.addLink(l));
         }
@@ -336,7 +336,7 @@ export const GraphPhysicsPlayground: React.FC = () => {
                         max = 10000;
                         step = 100;
                     }
-                    if (k === 'repulsionDistanceMax' || k === 'springLength' || k === 'boundaryMargin') {
+                    if (k === 'repulsionDistanceMax' || k === 'springLength' || k === 'boundaryMargin' || k === 'gravityBaseRadius') {
                         max = 500;
                     }
 

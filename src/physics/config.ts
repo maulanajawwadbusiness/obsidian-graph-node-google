@@ -4,36 +4,33 @@ export const DEFAULT_PHYSICS_CONFIG: ForceConfig = {
     // ---------------------------------------------------------------------------
     // ANCHOR: Idle Spacing & Clusters
     // ---------------------------------------------------------------------------
-    // We want nodes to spread out comfortably but not fly off screen.
-    // Higher repulsion = more spread.
-    repulsionStrength: 8000,
+    // Repulsion is now "Close Range Protection" only.
+    // It prevents overlap but doesn't define the general spacing.
+    repulsionStrength: 4000,
 
-    // Cutoff for repulsion.
-    // If too small, clusters overlap.
-    // If too large, everything pushes everything (O(N^2) perf hit).
-    // ~300-500 is usually a good balance for "local clouds".
-    repulsionDistanceMax: 250,
+    // Very short range. 
+    // Nodes beyond 60px don't even know each other exists.
+    repulsionDistanceMax: 60,
 
     // ---------------------------------------------------------------------------
     // ANCHOR: Friend-Distance
     // ---------------------------------------------------------------------------
-    // Controls the "spring" feel between connected nodes.
+    // Springs are the primary layout driver now.
+    // High stiffness = cohesive cluster.
+    springStiffness: 0.5,
 
-    // [0.0 - 1.0]. Low = loose rubber band. High = steel wire.
-    // For "Obsidian-like", we want a soft-ish spring that allows some stretch
-    // but snaps back.
-    springStiffness: 0.2,
-
-    // The ideal distance between linked nodes.
-    // Should be large enough to read labels if we had them.
-    springLength: 100,
+    // Short length = Tightly packed thoughts.
+    springLength: 30,
 
     // ---------------------------------------------------------------------------
-    // ANCHOR: Center-of-Mass
+    // ANCHOR: Center-of-Mass (Comfort Field)
     // ---------------------------------------------------------------------------
-    // Keeps the graph centered so it doesn't drift away.
-    // A weak pull is usually sufficient.
-    gravityCenterStrength: 0.05,
+    // Strong pull to keep the "territory" defined by the center.
+    gravityCenterStrength: 0.5,
+
+    // Base scalar for the dynamic safe zone.
+    // 10 base -> ~50-80px radius for 20 nodes.
+    gravityBaseRadius: 10,
 
     // ---------------------------------------------------------------------------
     // ANCHOR: Calm-down & Drag-Lag
@@ -56,7 +53,8 @@ export const DEFAULT_PHYSICS_CONFIG: ForceConfig = {
     // ---------------------------------------------------------------------------
     // ANCHOR: Screen Containment
     // ---------------------------------------------------------------------------
-    // Push back gently when nodes get close to the edge.
-    boundaryMargin: 50,   // Start pushing 50px before the edge
-    boundaryStrength: 500, // Strong enough to turn them around
+    // Weak safety net only. 
+    // The "Comfort Field" (gravity) should do 99% of the work.
+    boundaryMargin: 20,
+    boundaryStrength: 10,
 };

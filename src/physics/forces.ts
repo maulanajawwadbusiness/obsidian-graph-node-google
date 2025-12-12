@@ -130,17 +130,48 @@ export function applyCenterGravity(
     config: ForceConfig,
     center: { x: number, y: number } = { x: 0, y: 0 }
 ) {
-    const { gravityCenterStrength } = config;
+    const { gravityCenterStrength, gravityBaseRadius } = config;
+    if (nodes.length === 0) return;
+
+    // UX Anchor: "Organism Sizing"
+    // Calculate dynamic "safe radius" based on population.
+    // 20 nodes -> ~4.5 * base -> base should be small (~30).
+    // Let's use: base + (sqrt(N) * spacingFactor)
+    // Or simpler: base * log(N+1)
+    // User wants: 20 nodes -> small. 400 nodes -> fits screen.
+    // Let's try: Radius = base + (N * 2) 
+    const populationRadius = gravityBaseRadius + (nodes.length * 3);
+
+    // UX Anchor: "Elliptical Comfort" (Aspect Ratio)
+    // We want to squeeze vertically more than horizontally.
+    // We can do this by scaling Y distance higher than X distance before checking against radius.
+    // effectively making the safe zone an ellipse (wider than tall).
+    const verticalPenalty = 2.5; // Y axis is 2.5x more "expensive"
 
     for (const node of nodes) {
         if (node.isFixed) continue;
 
-        // Pull toward center
         const dx = center.x - node.x;
         const dy = center.y - node.y;
 
-        node.fx += dx * gravityCenterStrength;
-        node.fy += dy * gravityCenterStrength;
+        // Elliptical distance metric
+        // We stretch dy effectively.
+        const effectiveDist = Math.sqrt(dx * dx + (dy * verticalPenalty) * (dy * verticalPenalty));
+
+        if (effectiveDist > populationRadius) {
+            const distOutside = effectiveDist - populationRadius;
+
+            // Direction TO center
+            const d = Math.sqrt(dx * dx + dy * dy); // True geometric distance for normalization
+            const nx = dx / d;
+            const ny = dy / d;
+
+            // Force
+            const force = distOutside * gravityCenterStrength;
+
+            node.fx += nx * force;
+            node.fy += ny * force;
+        }
     }
 }
 

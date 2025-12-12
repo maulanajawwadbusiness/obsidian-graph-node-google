@@ -41,6 +41,9 @@ export interface ForceConfig {
 
   // Gravity (Center)
   gravityCenterStrength: number; // Pull toward (0,0) usually
+  // gravityRange removed in favor of dynamic calc
+  // But we need a base scalar for population sizing
+  gravityBaseRadius: number;
 
   // Damping / Friction
   damping: number; // Velocity decay 0.0 (no friction) to 1.0 (frozen)

@@ -16,6 +16,9 @@ export class PhysicsEngine {
     private draggedNodeId: string | null = null;
     private dragTarget: { x: number, y: number } | null = null;
 
+    // Cooling State
+    private activeTime: number = 0;
+
     constructor(config: Partial<ForceConfig> = {}) {
         this.config = { ...DEFAULT_PHYSICS_CONFIG, ...config };
     }
@@ -25,6 +28,7 @@ export class PhysicsEngine {
      */
     addNode(node: PhysicsNode) {
         this.nodes.set(node.id, node);
+        this.wakeUp();
     }
 
     /**
@@ -32,6 +36,7 @@ export class PhysicsEngine {
      */
     addLink(link: PhysicsLink) {
         this.links.push(link);
+        this.wakeUp();
     }
 
     /**
@@ -40,6 +45,7 @@ export class PhysicsEngine {
     clear() {
         this.nodes.clear();
         this.links = [];
+        this.wakeUp();
     }
 
     /**
@@ -47,6 +53,14 @@ export class PhysicsEngine {
      */
     updateConfig(newConfig: Partial<ForceConfig>) {
         this.config = { ...this.config, ...newConfig };
+        this.wakeUp();
+    }
+
+    /**
+     * Reset cooling timer.
+     */
+    wakeUp() {
+        this.activeTime = 0;
     }
 
     /**
@@ -55,6 +69,7 @@ export class PhysicsEngine {
     updateBounds(width: number, height: number) {
         this.worldWidth = width;
         this.worldHeight = height;
+        this.wakeUp();
     }
 
     /**
@@ -66,6 +81,7 @@ export class PhysicsEngine {
         if (this.nodes.has(nodeId)) {
             this.draggedNodeId = nodeId;
             this.dragTarget = { ...position };
+            this.wakeUp();
 
             // Optional: Clear velocity on grab for better control?
             // Or keep it for "catch and throw"? 
@@ -82,6 +98,7 @@ export class PhysicsEngine {
     moveDrag(position: { x: number, y: number }) {
         if (this.draggedNodeId && this.dragTarget) {
             this.dragTarget = { ...position };
+            this.wakeUp();
         }
     }
 
@@ -91,6 +108,7 @@ export class PhysicsEngine {
     releaseNode() {
         this.draggedNodeId = null;
         this.dragTarget = null;
+        this.wakeUp();
     }
 
     /**
@@ -99,7 +117,19 @@ export class PhysicsEngine {
      */
     tick(dt: number) {
         const nodeList = Array.from(this.nodes.values());
-        const { damping, maxVelocity } = this.config;
+        const { damping, maxVelocity, formingTime, restForceScale, velocitySleepThreshold } = this.config;
+
+        // Update Cooling Timer
+        this.activeTime += dt;
+
+        // Calculate Global Force Scale (Phase Shift)
+        let forceScale = 1.0;
+        let effectiveDamping = damping;
+
+        if (formingTime > 0 && this.activeTime > formingTime) {
+            forceScale = restForceScale; // e.g. 0.02
+            effectiveDamping = 0.98; // Concrete (Anchor State)
+        }
 
         // 1. Clear forces
         for (const node of nodeList) {
@@ -113,21 +143,25 @@ export class PhysicsEngine {
         applyCenterGravity(nodeList, this.config);
         applyBoundaryForce(nodeList, this.config, this.worldWidth, this.worldHeight);
 
+        // Apply Phase Scale to accumulated structural forces
+        if (forceScale !== 1.0) {
+            for (const node of nodeList) {
+                node.fx *= forceScale;
+                node.fy *= forceScale;
+            }
+        }
+
         // 3. Apply Mouse Drag Force (The "Rubbery Grip")
         if (this.draggedNodeId && this.dragTarget) {
             const node = this.nodes.get(this.draggedNodeId);
             if (node) {
-                // Strong spring to cursor
+                // ... same drag logic as before ...
                 const dx = this.dragTarget.x - node.x;
                 const dy = this.dragTarget.y - node.y;
-
-                const dragStrength = 200.0; // Very strong (law, not suggestion)
-
+                const dragStrength = 200.0;
+                // Note: We do NOT scale drag force. User intent is always 100%.
                 node.fx += dx * dragStrength;
                 node.fy += dy * dragStrength;
-
-                // Alternative: Crude "P" controller approach
-                // helps reduce wobble when holding still
                 node.vx += dx * 2.0 * dt;
                 node.vy += dy * 2.0 * dt;
             }
@@ -152,8 +186,10 @@ export class PhysicsEngine {
             // But standard linear damp is: v *= (1 - damping)
             // User requested "0.85" type numbers.
             // Let's us simple multiplication for now since dt is roughly constant.
-            node.vx *= (1 - damping * dt * 5.0); // * 5.0 to make the config range 0-1 feel good
-            node.vy *= (1 - damping * dt * 5.0);
+
+            // Hardening Phase: Use effectiveDamping
+            node.vx *= (1 - effectiveDamping * dt * 5.0);
+            node.vy *= (1 - effectiveDamping * dt * 5.0);
 
             // Clamp Velocity
             const vSq = node.vx * node.vx + node.vy * node.vy;
@@ -166,6 +202,17 @@ export class PhysicsEngine {
             // Update Position
             node.x += node.vx * dt;
             node.y += node.vy * dt;
+
+            // Sleep Check
+            // If very slow, just stop.
+            if (this.config.velocitySleepThreshold) {
+                const velSq = node.vx * node.vx + node.vy * node.vy;
+                const threshSq = this.config.velocitySleepThreshold * this.config.velocitySleepThreshold;
+                if (velSq < threshSq) {
+                    node.vx = 0;
+                    node.vy = 0;
+                }
+            }
         }
     }
 }

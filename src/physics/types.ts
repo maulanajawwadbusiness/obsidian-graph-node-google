@@ -54,8 +54,9 @@ export interface ForceConfig {
 
   // Constraints
   maxVelocity: number; // Cap speed to prevent explosions
+  velocitySleepThreshold?: number; // Stop moving if slower than this (e.g. 0.01)
 
-  // Boundary (Soft Wall)
-  boundaryMargin: number; // Distance from edge where force starts
-  boundaryStrength: number; // How hard the wall pushes back
+  // Cooling / Phase Shift
+  formingTime: number; // Time in seconds to stay "hot"
+  restForceScale: number; // Multiplier for forces when "cold"
 }

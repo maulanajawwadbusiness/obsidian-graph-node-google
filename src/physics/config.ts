@@ -20,7 +20,7 @@ export const DEFAULT_PHYSICS_CONFIG: ForceConfig = {
     springStiffness: 0.5,
 
     // Short length = Tightly packed thoughts.
-    springLength: 30,
+    springLength: 33,
 
     // ---------------------------------------------------------------------------
     // ANCHOR: Center-of-Mass (Comfort Field)
@@ -30,7 +30,7 @@ export const DEFAULT_PHYSICS_CONFIG: ForceConfig = {
 
     // Base scalar for the dynamic safe zone.
     // 10 base -> ~50-80px radius for 20 nodes.
-    gravityBaseRadius: 10,
+    gravityBaseRadius: 12,
 
     // ---------------------------------------------------------------------------
     // ANCHOR: Calm-down & Drag-Lag
@@ -42,13 +42,23 @@ export const DEFAULT_PHYSICS_CONFIG: ForceConfig = {
     // 0.95 is "molasses".
     // < 0.8 feels "slippery" or "space-like".
     // We want it to settle quickly (1-3s), so a relatively high damping is good.
-    damping: 0.80,
+    damping: 0.90, // Increased for stability (was 0.80)
 
     // ---------------------------------------------------------------------------
     // Safety
     // ---------------------------------------------------------------------------
     // Prevents "explosions" if forces get too high (e.g. initial spawn overlap).
     maxVelocity: 150,
+
+    // Stop moving if slower than this. Eliminate micro-jitter.
+    velocitySleepThreshold: 0.05,
+
+    // ---------------------------------------------------------------------------
+    // ANCHOR: Cooling / Phase Shift
+    // ---------------------------------------------------------------------------
+    // Allow forces to act fully for 1 second, then clamp down to stabilize.
+    formingTime: 1.0,
+    restForceScale: 0.02,
 
     // ---------------------------------------------------------------------------
     // ANCHOR: Screen Containment

@@ -116,7 +116,7 @@ export const GraphPhysicsPlayground: React.FC = () => {
 
     // State for React UI
     const [config, setConfig] = useState<ForceConfig>(DEFAULT_PHYSICS_CONFIG);
-    const [metrics, setMetrics] = useState({ nodes: 0, links: 0, fps: 0 });
+    const [metrics, setMetrics] = useState({ nodes: 0, links: 0, fps: 0, avgVel: 0, activeNodes: 0 });
     const [spawnCount, setSpawnCount] = useState(20);
 
     // Rendering Loop
@@ -209,14 +209,27 @@ export const GraphPhysicsPlayground: React.FC = () => {
 
             ctx.restore();
 
-            // FPS Calc
+            // FPS & Stats Calc
             frameCount++;
-            if (time - lastFpsTime >= 1000) {
+            if (time - lastFpsTime >= 500) { // Update every 500ms
+                // Calc Average Kinetic Energy / Velocity
+                let totalVel = 0;
+                let activeNodes = 0;
+                engine.nodes.forEach(n => {
+                    const v = Math.sqrt(n.vx * n.vx + n.vy * n.vy);
+                    totalVel += v;
+                    if (v > 0) activeNodes++;
+                });
+                const avgVel = engine.nodes.size > 0 ? totalVel / engine.nodes.size : 0;
+
                 setMetrics({
                     nodes: engine.nodes.size,
                     links: engine.links.length,
                     fps: Math.round((frameCount * 1000) / (time - lastFpsTime)),
+                    avgVel: avgVel,
+                    activeNodes: activeNodes
                 });
+
                 frameCount = 0;
                 lastFpsTime = time;
             }
@@ -315,8 +328,9 @@ export const GraphPhysicsPlayground: React.FC = () => {
                 {/* Debug Overlay */}
                 <div style={DEBUG_OVERLAY_STYLE}>
                     FPS: {metrics.fps} <br />
-                    Nodes: {metrics.nodes} <br />
-                    Links: {metrics.links}
+                    Nodes: {metrics.nodes} (Active: {metrics.activeNodes}) <br />
+                    Links: {metrics.links} <br />
+                    Avg Vel: {metrics.avgVel.toFixed(4)}
                 </div>
             </div>
 
@@ -351,9 +365,13 @@ export const GraphPhysicsPlayground: React.FC = () => {
                     let max = 100;
                     let step = 1;
 
-                    if (k === 'springStiffness' || k === 'damping' || k === 'gravityCenterStrength') {
+                    if (k === 'springStiffness' || k === 'damping' || k === 'gravityCenterStrength' || k === 'restForceScale') {
                         max = 1.0;
                         step = 0.01;
+                    }
+                    if (k === 'formingTime') {
+                        max = 10.0;
+                        step = 0.1;
                     }
                     if (k === 'repulsionStrength' || k === 'boundaryStrength') {
                         max = 10000;

@@ -17,7 +17,7 @@ export class PhysicsEngine {
     private dragTarget: { x: number, y: number } | null = null;
 
     // Cooling State
-    private activeTime: number = 0;
+    // (Local warmth is stored on nodes)
 
     constructor(config: Partial<ForceConfig> = {}) {
         this.config = { ...DEFAULT_PHYSICS_CONFIG, ...config };
@@ -28,7 +28,8 @@ export class PhysicsEngine {
      */
     addNode(node: PhysicsNode) {
         this.nodes.set(node.id, node);
-        this.wakeUp();
+        // New node is hot, and wakes neighbors? No neighbors yet.
+        this.wakeNode(node.id);
     }
 
     /**
@@ -36,7 +37,9 @@ export class PhysicsEngine {
      */
     addLink(link: PhysicsLink) {
         this.links.push(link);
-        this.wakeUp();
+        // Wakes the connected nodes
+        this.wakeNode(link.source);
+        this.wakeNode(link.target);
     }
 
     /**
@@ -45,7 +48,7 @@ export class PhysicsEngine {
     clear() {
         this.nodes.clear();
         this.links = [];
-        this.wakeUp();
+        // Nothing to wake
     }
 
     /**
@@ -53,14 +56,38 @@ export class PhysicsEngine {
      */
     updateConfig(newConfig: Partial<ForceConfig>) {
         this.config = { ...this.config, ...newConfig };
-        this.wakeUp();
+        this.wakeAll();
     }
 
     /**
-     * Reset cooling timer.
+     * Wake up a specific node.
      */
-    wakeUp() {
-        this.activeTime = 0;
+    wakeNode(nodeId: string) {
+        const node = this.nodes.get(nodeId);
+        if (node) {
+            node.warmth = 1.0;
+        }
+    }
+
+    /**
+     * Wake up a node and its neighbors.
+     */
+    wakeNeighbors(nodeId: string) {
+        // Find all links connected to this node
+        // (Inefficient O(L) scan, but fine for small N)
+        for (const link of this.links) {
+            if (link.source === nodeId) this.wakeNode(link.target);
+            if (link.target === nodeId) this.wakeNode(link.source);
+        }
+    }
+
+    /**
+     * Wake up everything (e.g. on config change).
+     */
+    wakeAll() {
+        for (const node of this.nodes.values()) {
+            node.warmth = 1.0;
+        }
     }
 
     /**
@@ -69,7 +96,7 @@ export class PhysicsEngine {
     updateBounds(width: number, height: number) {
         this.worldWidth = width;
         this.worldHeight = height;
-        this.wakeUp();
+        this.wakeAll();
     }
 
     /**
@@ -81,14 +108,14 @@ export class PhysicsEngine {
         if (this.nodes.has(nodeId)) {
             this.draggedNodeId = nodeId;
             this.dragTarget = { ...position };
-            this.wakeUp();
+
+            // LOCAL WAKE ONLY
+            this.wakeNode(nodeId);
+            this.wakeNeighbors(nodeId);
 
             // Optional: Clear velocity on grab for better control?
             // Or keep it for "catch and throw"? 
             // Let's keep momentum -> funner.
-
-            // We do NOT set isFixed = true, because we want physics (repulsion etc)
-            // to still affect it, just overpowered by the mouse force.
         }
     }
 
@@ -98,7 +125,9 @@ export class PhysicsEngine {
     moveDrag(position: { x: number, y: number }) {
         if (this.draggedNodeId && this.dragTarget) {
             this.dragTarget = { ...position };
-            this.wakeUp();
+            // Keep waking it as we drag
+            this.wakeNode(this.draggedNodeId);
+            this.wakeNeighbors(this.draggedNodeId);
         }
     }
 
@@ -108,7 +137,7 @@ export class PhysicsEngine {
     releaseNode() {
         this.draggedNodeId = null;
         this.dragTarget = null;
-        this.wakeUp();
+        // No global wake. Local nodes are already warm from drag.
     }
 
     /**
@@ -119,39 +148,47 @@ export class PhysicsEngine {
         const nodeList = Array.from(this.nodes.values());
         const { damping, maxVelocity, formingTime, restForceScale, velocitySleepThreshold } = this.config;
 
-        // Update Cooling Timer
-        this.activeTime += dt;
+        // 1. Update Warmth & Calculate Local Factors
+        // We will store effective damping on the node temporarily? 
+        // No, we'll just use it in the integration loop. 
+        // We DO need to apply force scale to fx/fy though.
 
-        // Calculate Global Force Scale (Phase Shift)
-        let forceScale = 1.0;
-        let effectiveDamping = damping;
+        for (const node of nodeList) {
+            // Init warmth
+            if (node.warmth === undefined) node.warmth = 1.0;
 
-        if (formingTime > 0 && this.activeTime > formingTime) {
-            forceScale = restForceScale; // e.g. 0.02
-            effectiveDamping = 0.98; // Concrete (Anchor State)
+            // Decay
+            if (formingTime > 0) {
+                node.warmth -= dt / formingTime;
+                if (node.warmth < 0) node.warmth = 0;
+            } else {
+                node.warmth = 1.0;
+            }
         }
 
-        // 1. Clear forces
+        // 2. Clear forces
         for (const node of nodeList) {
             node.fx = 0;
             node.fy = 0;
         }
 
-        // 2. Apply Core Forces
+        // 3. Apply Core Forces
         applyRepulsion(nodeList, this.config);
         applySprings(this.nodes, this.links, this.config);
         applyCenterGravity(nodeList, this.config);
         applyBoundaryForce(nodeList, this.config, this.worldWidth, this.worldHeight);
 
-        // Apply Phase Scale to accumulated structural forces
-        if (forceScale !== 1.0) {
-            for (const node of nodeList) {
-                node.fx *= forceScale;
-                node.fy *= forceScale;
-            }
+        // 4. Apply Local Phase Scale (Per Node)
+        for (const node of nodeList) {
+            const t = node.warmth ?? 0;
+            // Lerp force scale: 1.0 (Hot) -> restForceScale (Cold)
+            const forceScale = restForceScale + (1.0 - restForceScale) * t;
+
+            node.fx *= forceScale;
+            node.fy *= forceScale;
         }
 
-        // 3. Apply Mouse Drag Force (The "Rubbery Grip")
+        // 5. Apply Mouse Drag Force (The "Rubbery Grip")
         if (this.draggedNodeId && this.dragTarget) {
             const node = this.nodes.get(this.draggedNodeId);
             if (node) {
@@ -159,7 +196,7 @@ export class PhysicsEngine {
                 const dx = this.dragTarget.x - node.x;
                 const dy = this.dragTarget.y - node.y;
                 const dragStrength = 200.0;
-                // Note: We do NOT scale drag force. User intent is always 100%.
+                // Note: We do NOT scale drag force (it's external and mandatory)
                 node.fx += dx * dragStrength;
                 node.fy += dy * dragStrength;
                 node.vx += dx * 2.0 * dt;
@@ -167,7 +204,7 @@ export class PhysicsEngine {
             }
         }
 
-        // 4. Integrate (Velocity Verlet-ish / Euler)
+        // 6. Integrate (Velocity Verlet-ish / Euler)
         for (const node of nodeList) {
             if (node.isFixed) continue; // Hard fixed nodes don't move
 
@@ -180,14 +217,12 @@ export class PhysicsEngine {
             node.vy += ay * dt;
 
             // Apply Damping (Air Resistance)
-            // Velocity decays by factor (1 - damping)
-            // But damping 0.8 is "friction factor", so we multiply by (1 - damping * dt)?
-            // Simple exp decay is better for stability: v *= pow(damping, dt)
-            // But standard linear damp is: v *= (1 - damping)
-            // User requested "0.85" type numbers.
-            // Let's us simple multiplication for now since dt is roughly constant.
+            // Dynamic based on warmth
+            const t = node.warmth ?? 0;
+            const coldDamping = 0.98;
+            const effectiveDamping = coldDamping + (damping - coldDamping) * t;
 
-            // Hardening Phase: Use effectiveDamping
+            // Simple linear decay
             node.vx *= (1 - effectiveDamping * dt * 5.0);
             node.vy *= (1 - effectiveDamping * dt * 5.0);
 
@@ -204,7 +239,6 @@ export class PhysicsEngine {
             node.y += node.vy * dt;
 
             // Sleep Check
-            // If very slow, just stop.
             if (this.config.velocitySleepThreshold) {
                 const velSq = node.vx * node.vx + node.vy * node.vy;
                 const threshSq = this.config.velocitySleepThreshold * this.config.velocitySleepThreshold;

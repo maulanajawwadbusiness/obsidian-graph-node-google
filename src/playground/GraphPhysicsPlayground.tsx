@@ -201,8 +201,8 @@ export const GraphPhysicsPlayground: React.FC = () => {
             ctx.translate(width / 2, height / 2);
 
             // Draw Links
-            ctx.strokeStyle = '#555';
-            ctx.lineWidth = 1;
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+            ctx.lineWidth = 0.4;
             engine.links.forEach((link) => {
                 const source = engine.nodes.get(link.source);
                 const target = engine.nodes.get(link.target);

@@ -69,12 +69,13 @@ function generateRandomGraph(nodeCount: number, connectivity: number) {
     const links: PhysicsLink[] = [];
 
     // 0. Helper: Create Node (initially at 0,0, moved later)
-    const createNode = (id: string, roleRadius: number, roleMass: number): PhysicsNode => ({
+    const createNode = (id: string, roleRadius: number, roleMass: number, role: 'spine' | 'rib' | 'fiber'): PhysicsNode => ({
         id,
         x: 0, y: 0, // Will be set by structure
         vx: 0, vy: 0, fx: 0, fy: 0,
         mass: roleMass,
         radius: roleRadius,
+        role: role,
         isFixed: false,
     });
 
@@ -107,7 +108,7 @@ function generateRandomGraph(nodeCount: number, connectivity: number) {
         spineIndices.push(globalIdx);
         globalIdx++;
 
-        const node = createNode(id, 8.0, 4.0); // Heavy, Big
+        const node = createNode(id, 8.0, 4.0, 'spine'); // Heavy, Big
 
         // PLACEMENT: Sequential
         if (i === 0) {
@@ -146,7 +147,7 @@ function generateRandomGraph(nodeCount: number, connectivity: number) {
         ribIndices.push(globalIdx);
         globalIdx++;
 
-        const node = createNode(id, 6.0, 2.0); // Medium
+        const node = createNode(id, 6.0, 2.0, 'rib'); // Medium
 
         // Pick Anchor
         const spineAnchorIdx = spineIndices[Math.floor(Math.random() * spineIndices.length)];
@@ -192,7 +193,7 @@ function generateRandomGraph(nodeCount: number, connectivity: number) {
         fiberIndices.push(globalIdx);
         globalIdx++;
 
-        const node = createNode(id, 4.0, 1.0); // Light
+        const node = createNode(id, 4.0, 1.0, 'fiber'); // Light
 
         // Pick Anchor
         const ribAnchorIdx = ribIndices[Math.floor(Math.random() * ribIndices.length)];

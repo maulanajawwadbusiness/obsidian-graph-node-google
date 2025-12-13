@@ -22,6 +22,7 @@ export interface PhysicsNode {
   // State
   isFixed: boolean; // If true, physics ignores position updates (useful for dragging)
   warmth?: number; // 0.0 (Cold) to 1.0 (Hot). Defaults to 1.0 if undefined.
+  role?: 'spine' | 'rib' | 'fiber'; // Topology role for directed impulse weighting
 }
 
 export interface PhysicsLink {

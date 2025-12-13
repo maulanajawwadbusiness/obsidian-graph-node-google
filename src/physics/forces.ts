@@ -65,6 +65,69 @@ export function applyRepulsion(
 }
 
 /**
+ * Apply hard collision/personal space.
+ * UX Anchor: "Visual Dignity".
+ * Prevents overlap. Acts as a hard shell with padding.
+ */
+export function applyCollision(
+    nodes: PhysicsNode[],
+    config: ForceConfig,
+    strengthScale: number = 1.0
+) {
+    const { collisionStrength, collisionPadding } = config;
+    // Effective strength
+    const strength = collisionStrength * strengthScale;
+    if (strength <= 0.01) return; // Optimization: Skip if minimal
+
+    for (let i = 0; i < nodes.length; i++) {
+        const nodeA = nodes[i];
+        for (let j = i + 1; j < nodes.length; j++) {
+            const nodeB = nodes[j];
+
+            const dx = nodeA.x - nodeB.x;
+            const dy = nodeA.y - nodeB.y;
+            const distSq = dx * dx + dy * dy;
+
+            const radiusSum = nodeA.radius + nodeB.radius + collisionPadding;
+            const minDistSq = radiusSum * radiusSum;
+
+            if (distSq < minDistSq && distSq > 0) {
+                const dist = Math.sqrt(distSq);
+                const overlap = radiusSum - dist;
+
+                // Force is proportional to overlap (Penalty Method)
+                // Or we could use strength / distance, but overlap is more "solid".
+                // User wants "force strength increases sharply as distance approaches zero".
+                // Overlap is linear, but we can make it exponential or just very strong.
+                // k * overlap is standard spring collision.
+                const forceMagnitude = overlap * strength;
+
+                const nx = dx / dist;
+                const ny = dy / dist;
+
+                const fx = nx * forceMagnitude;
+                const fy = ny * forceMagnitude;
+
+                if (!nodeA.isFixed) {
+                    nodeA.fx += fx;
+                    nodeA.fy += fy;
+                }
+                if (!nodeB.isFixed) {
+                    nodeB.fx -= fx;
+                    nodeB.fy -= fy;
+                }
+            } else if (distSq === 0) {
+                // Exact overlap? Push apart randomly.
+                const angle = Math.random() * Math.PI * 2;
+                const force = collisionStrength * 0.1;
+                if (!nodeA.isFixed) { nodeA.fx += Math.cos(angle) * force; nodeA.fy += Math.sin(angle) * force; }
+                if (!nodeB.isFixed) { nodeB.fx -= Math.cos(angle) * force; nodeB.fy -= Math.sin(angle) * force; }
+            }
+        }
+    }
+}
+
+/**
  * Apply spring force for links.
  * UX Anchor: "Friend-Distance".
  * Pulls connected nodes together or pushes them if too close.

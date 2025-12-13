@@ -1,6 +1,6 @@
 import { PhysicsNode, PhysicsLink, ForceConfig } from './types';
 import { DEFAULT_PHYSICS_CONFIG } from './config';
-import { applyRepulsion, applySprings, applyCenterGravity, applyBoundaryForce } from './forces';
+import { applyRepulsion, applySprings, applyCenterGravity, applyBoundaryForce, applyCollision } from './forces';
 
 export class PhysicsEngine {
     public nodes: Map<string, PhysicsNode> = new Map();
@@ -193,7 +193,13 @@ export class PhysicsEngine {
         // We only check if we are in "Initial Unfold" vs "Steady state" for Damping purposes maybe?
         // But forces are ON.
 
+        // COLLISION RAMP UP
+        // To preserve "Emergence" and avoid "Big Bang", collision force starts at 0 
+        // and fades in AFTER the structure has had time to unfold (0.2s - 1.0s).
+        const collisionRamp = Math.min(1.0, Math.max(0, (this.lifecycle - 0.2) / 0.8));
+
         applyRepulsion(nodeList, this.config);
+        applyCollision(nodeList, this.config, collisionRamp);
         applySprings(this.nodes, this.links, this.config);
         applyCenterGravity(nodeList, this.config);
         applyBoundaryForce(nodeList, this.config, this.worldWidth, this.worldHeight);

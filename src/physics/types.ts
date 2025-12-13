@@ -60,4 +60,14 @@ export interface ForceConfig {
   // Cooling / Phase Shift
   formingTime: number; // Time in seconds to stay "hot"
   restForceScale: number; // Multiplier for forces when "cold"
+
+  // Boundary
+  boundaryMargin: number;
+  boundaryStrength: number;
+
+  // ---------------------------------------------------------------------------
+  // Personal Space (Collision)
+  // ---------------------------------------------------------------------------
+  collisionStrength: number; // Stiffness of the personal bubble
+  collisionPadding: number; // Extra radius around node to keep empty
 }

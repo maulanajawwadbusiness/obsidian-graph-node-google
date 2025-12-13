@@ -59,4 +59,13 @@ export const DEFAULT_PHYSICS_CONFIG: ForceConfig = {
     // ---------------------------------------------------------------------------
     boundaryMargin: 50,
     boundaryStrength: 50,
+
+    // ---------------------------------------------------------------------------
+    // ANCHOR: Personal Space
+    // ---------------------------------------------------------------------------
+    // Prevent overlap. Hard shell.
+    // High strength to act as a solid object.
+    collisionStrength: 2000,
+    // Small padding to ensure readability (nodes don't kiss)
+    collisionPadding: 10,
 };

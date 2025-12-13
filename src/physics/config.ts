@@ -42,7 +42,7 @@ export const DEFAULT_PHYSICS_CONFIG: ForceConfig = {
     // ---------------------------------------------------------------------------
     // Safety
     // ---------------------------------------------------------------------------
-    maxVelocity: 80, // Cap lower to prevent initial explosion speed.
+    maxVelocity: 1000, // Unlocked for Impulse Snap
 
     // Stop moving if slower than this. Eliminate micro-jitter.
     velocitySleepThreshold: 0.1,

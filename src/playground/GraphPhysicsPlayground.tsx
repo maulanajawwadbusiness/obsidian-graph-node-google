@@ -2,6 +2,7 @@ import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { PhysicsEngine } from '../physics/engine';
 import { PhysicsNode, PhysicsLink, ForceConfig } from '../physics/types';
 import { DEFAULT_PHYSICS_CONFIG } from '../physics/config';
+import { SeededRandom } from '../utils/seededRandom';
 
 // -----------------------------------------------------------------------------
 // Styles (Inline for simplicity, as requested)
@@ -64,9 +65,18 @@ function simpleHash(str: string): number {
 // Generate a "Spine-Rib-Fiber" Topology
 // KEY UPDATE: "Structural Seeding". Nodes are placed relative to their parents
 // to break radial symmetry at t=0.
-function generateRandomGraph(nodeCount: number, connectivity: number, springLength: number = 120) {
+function generateRandomGraph(
+    nodeCount: number,
+    connectivity: number,
+    targetSpacing: number = 500,
+    initScale: number = 0.1,
+    seed: number = Date.now()
+) {
     const nodes: PhysicsNode[] = [];
     const links: PhysicsLink[] = [];
+
+    // Initialize seeded RNG for deterministic generation
+    const rng = new SeededRandom(seed);
 
     // 0. Helper: Create Node (initially at 0,0, moved later)
     const createNode = (id: string, roleRadius: number, roleMass: number, role: 'spine' | 'rib' | 'fiber'): PhysicsNode => ({
@@ -83,7 +93,7 @@ function generateRandomGraph(nodeCount: number, connectivity: number, springLeng
     // 1. Roles & Counts
     const spineCount = Math.max(3, Math.min(5, Math.floor(nodeCount * 0.1))); // 3-5 Spine nodes
     const remaining = nodeCount - spineCount;
-    const ribRatio = 0.6 + Math.random() * 0.15; // 60-75% Ribs
+    const ribRatio = 0.6 + rng.next() * 0.15; // 60-75% Ribs
     const ribCount = Math.floor(remaining * ribRatio);
     const fiberCount = remaining - ribCount;
 
@@ -96,15 +106,15 @@ function generateRandomGraph(nodeCount: number, connectivity: number, springLeng
 
     // 2. Build Spine (The Axis)
     // Intentional Asymmetry: Diagonal Axis (1, 0.5)
-    // Start offset
+    // Start offset (clamped to prevent singularity at targetSpacing=0)
     const currentPos = {
-        x: (Math.random() - 0.5) * springLength * 0.5,
-        y: (Math.random() - 0.5) * springLength * 0.5
+        x: (rng.next() - 0.5) * Math.max(40, targetSpacing * initScale * 5),
+        y: (rng.next() - 0.5) * Math.max(40, targetSpacing * initScale * 5)
     };
 
     const spineStep = {
-        x: springLength * 0.1,  // Proportional to springLength
-        y: springLength * 0.05  // "Crooked" diagonal
+        x: Math.max(8, targetSpacing * initScale),  // Min 8px to prevent circle mode
+        y: Math.max(4, targetSpacing * initScale * 0.5)  // Min 4px
     };
 
     for (let i = 0; i < spineCount; i++) {
@@ -119,9 +129,9 @@ function generateRandomGraph(nodeCount: number, connectivity: number, springLeng
             node.x = currentPos.x;
             node.y = currentPos.y;
         } else {
-            // Move "forward" along axis
-            currentPos.x += spineStep.x + (Math.random() - 0.5) * springLength * 0.03; // Slight jitter
-            currentPos.y += spineStep.y + (Math.random() - 0.5) * springLength * 0.03;
+            // Move "forward" along axis (jitter clamped)
+            currentPos.x += spineStep.x + (rng.next() - 0.5) * Math.max(2, targetSpacing * initScale * 0.3);
+            currentPos.y += spineStep.y + (rng.next() - 0.5) * Math.max(2, targetSpacing * initScale * 0.3);
             node.x = currentPos.x;
             node.y = currentPos.y;
         }
@@ -132,7 +142,7 @@ function generateRandomGraph(nodeCount: number, connectivity: number, springLeng
         if (i > 0) {
             // Crooked Chain: Occasional branching (Y-shape)
             let targetStep = 1;
-            if (i > 1 && Math.random() < 0.2) targetStep = 2; // Connect to grandparent
+            if (i > 1 && rng.next() < 0.2) targetStep = 2; // Connect to grandparent
 
             const prevIdx = spineIndices[i - targetStep];
             links.push({
@@ -154,20 +164,20 @@ function generateRandomGraph(nodeCount: number, connectivity: number, springLeng
         const node = createNode(id, 6.0, 2.0, 'rib'); // Medium
 
         // Pick Anchor
-        const spineAnchorIdx = spineIndices[Math.floor(Math.random() * spineIndices.length)];
+        const spineAnchorIdx = spineIndices[Math.floor(rng.next() * spineIndices.length)];
         const spineAnchor = nodes[spineAnchorIdx];
 
-        // PLACEMENT: Offset from Normal
+        // PLACEMENT: Offset from Normal (clamped to prevent singularity)
         // "Normal" to (1, 0.5) is (-0.5, 1) or (0.5, -1).
         // Let's alternate sides based on index parity to create "volume"
         const side = (i % 2 === 0) ? 1 : -1;
         const ribOffset = {
-            x: -springLength * 0.025 * side,  // Proportional to springLength
-            y: springLength * 0.05 * side
+            x: -Math.max(2, targetSpacing * initScale * 0.25) * side,
+            y: Math.max(4, targetSpacing * initScale * 0.5) * side
         };
 
-        node.x = spineAnchor.x + ribOffset.x + (Math.random() - 0.5) * springLength * 0.03;
-        node.y = spineAnchor.y + ribOffset.y + (Math.random() - 0.5) * springLength * 0.03;
+        node.x = spineAnchor.x + ribOffset.x + (rng.next() - 0.5) * Math.max(2, targetSpacing * initScale * 0.3);
+        node.y = spineAnchor.y + ribOffset.y + (rng.next() - 0.5) * Math.max(2, targetSpacing * initScale * 0.3);
 
         nodes.push(node);
 
@@ -180,8 +190,8 @@ function generateRandomGraph(nodeCount: number, connectivity: number, springLeng
         });
 
         // Cage (20% chance double link)
-        if (Math.random() < 0.2) {
-            const anchor2Idx = spineIndices[Math.floor(Math.random() * spineIndices.length)];
+        if (rng.next() < 0.2) {
+            const anchor2Idx = spineIndices[Math.floor(rng.next() * spineIndices.length)];
             if (anchor2Idx !== spineAnchorIdx) {
                 links.push({
                     source: `n${anchor2Idx}`,
@@ -203,14 +213,14 @@ function generateRandomGraph(nodeCount: number, connectivity: number, springLeng
         const node = createNode(id, 4.0, 1.0, 'fiber'); // Light
 
         // Pick Anchor
-        const ribAnchorIdx = ribIndices[Math.floor(Math.random() * ribIndices.length)];
+        const ribAnchorIdx = ribIndices[Math.floor(rng.next() * ribIndices.length)];
         const ribAnchor = nodes[ribAnchorIdx];
 
-        // PLACEMENT: Small outward offset
+        // PLACEMENT: Small outward offset (clamped to prevent singularity)
         // Just extend further out
         const fiberOffset = {
-            x: (Math.random() - 0.5) * springLength * 0.067,  // Proportional to springLength
-            y: (Math.random() - 0.5) * springLength * 0.067
+            x: (rng.next() - 0.5) * Math.max(6, targetSpacing * initScale * 0.67),
+            y: (rng.next() - 0.5) * Math.max(6, targetSpacing * initScale * 0.67)
         };
 
         node.x = ribAnchor.x + fiberOffset.x;
@@ -253,6 +263,7 @@ export const GraphPhysicsPlayground: React.FC = () => {
         lifecycleMs: 0
     });
     const [spawnCount, setSpawnCount] = useState(20);
+    const [seed, setSeed] = useState(Date.now()); // Seed for deterministic generation
 
     // Camera State (for automatic framing)
     const cameraRef = useRef({
@@ -287,7 +298,7 @@ export const GraphPhysicsPlayground: React.FC = () => {
 
         // Initial Spawn if empty
         if (engine.nodes.size === 0) {
-            const { nodes, links } = generateRandomGraph(20, 0.05, config.springLength);
+            const { nodes, links } = generateRandomGraph(20, 0.05, config.targetSpacing, config.initScale, seed);
             nodes.forEach(n => engine.addNode(n));
             links.forEach(l => engine.addLink(l));
         }
@@ -534,7 +545,10 @@ export const GraphPhysicsPlayground: React.FC = () => {
 
     const handleSpawn = () => {
         engineRef.current.clear();
-        const { nodes, links } = generateRandomGraph(spawnCount, 0.05, config.springLength);
+        // Generate new random seed for each spawn
+        const newSeed = Date.now();
+        setSeed(newSeed);
+        const { nodes, links } = generateRandomGraph(spawnCount, 0.05, config.targetSpacing, config.initScale, newSeed);
         nodes.forEach(n => engineRef.current.addNode(n));
         links.forEach(l => engineRef.current.addLink(l));
     };
@@ -550,6 +564,42 @@ export const GraphPhysicsPlayground: React.FC = () => {
             n.warmth = 1.0;
         });
         engineRef.current.resetLifecycle();
+    };
+
+    const handleLogPreset = () => {
+        const preset = {
+            // Core spacing
+            targetSpacing: config.targetSpacing,
+            initScale: config.initScale,
+            snapImpulseScale: config.snapImpulseScale,
+
+            // Physics timing
+            dampingSnap: 0.30,     // From engine.ts Flight phase
+            dampingSettle: 0.90,   // From engine.ts Settle phase
+            maxVelocity: config.maxVelocity,
+            sleepThreshold: config.velocitySleepThreshold,
+
+            // Springs
+            springStiffness: config.springStiffness,
+
+            // Collision
+            collisionPadding: config.collisionPadding,
+            collisionStrength: config.collisionStrength,
+
+            // Repulsion
+            repulsionStrength: config.repulsionStrength,
+            repulsionDistanceMax: config.repulsionDistanceMax,
+
+            // Generation
+            seed: seed,
+            nodeCount: spawnCount
+        };
+
+        console.log('='.repeat(60));
+        console.log('PRESET CAPTURE');
+        console.log('='.repeat(60));
+        console.log(JSON.stringify(preset, null, 2));
+        console.log('='.repeat(60));
     };
 
     return (
@@ -587,9 +637,10 @@ export const GraphPhysicsPlayground: React.FC = () => {
                 <h3>Physics Playground</h3>
 
                 {/* Actions */}
-                <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
+                <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', flexWrap: 'wrap' }}>
                     <button onClick={handleSpawn}>Spawn New</button>
                     <button onClick={handleReset}>Explode</button>
+                    <button onClick={handleLogPreset} style={{ backgroundColor: '#2a5' }}>Log Preset</button>
                 </div>
 
                 {/* Size Toggle */}
@@ -612,6 +663,20 @@ export const GraphPhysicsPlayground: React.FC = () => {
                         onChange={(e) => setSpawnCount(Number(e.target.value))}
                         style={{ width: '100%' }}
                     />
+                </div>
+
+                <div style={{ marginTop: '12px' }}>
+                    <label>Seed: {seed}</label>
+                    <input
+                        type="number"
+                        value={seed}
+                        onChange={(e) => setSeed(Number(e.target.value))}
+                        style={{ width: '100%', padding: '4px', marginTop: '4px' }}
+                        placeholder="Enter seed number"
+                    />
+                    <div style={{ fontSize: '11px', color: '#888', marginTop: '4px' }}>
+                        Same seed = identical graph. Click "Spawn New" to use current seed.
+                    </div>
                 </div>
 
                 <hr style={{ border: '0', borderTop: '1px solid #444', width: '100%' }} />

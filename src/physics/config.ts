@@ -19,7 +19,13 @@ export const DEFAULT_PHYSICS_CONFIG: ForceConfig = {
     springStiffness: 0.2, // Moderate stiffness for "unfolding".
 
     // Define the "relaxed" length of edges.
-    springLength: 500,
+    springLength: 500, // DEPRECATED - kept for UI compatibility, use targetSpacing
+
+    // Decoupled Spacing Controls (Phase 1)
+    // These values preserve exact springLength=500 behavior
+    targetSpacing: 500,        // Actual spring rest length
+    initScale: 0.1,           // Current ratio (springLength * 0.1 for initial positions)
+    snapImpulseScale: 0.4,    // Current ratio (springLength * 0.4 for impulse, clamped 120-600)
 
     // ---------------------------------------------------------------------------
     // ANCHOR: Center-of-Mass (Comfort Field)

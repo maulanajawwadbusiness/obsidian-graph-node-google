@@ -43,7 +43,12 @@ export interface ForceConfig {
 
   // Springs (Links)
   springStiffness: number; // How "stiff" the link is (0.0 to 1.0 usually)
-  springLength: number;    // Ideal resting distance
+  springLength: number;    // Ideal resting distance (DEPRECATED - use targetSpacing)
+
+  // Decoupled Spacing Controls (Phase 1)
+  targetSpacing: number;      // Actual spring rest length (replaces springLength semantically)
+  initScale: number;          // Initial placement compression (e.g., 0.1 = tight start)
+  snapImpulseScale: number;   // Impulse force multiplier (e.g., 0.4 = current ratio)
 
   // Gravity (Center)
   gravityCenterStrength: number; // Pull toward (0,0) usually

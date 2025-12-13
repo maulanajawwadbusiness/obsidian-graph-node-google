@@ -141,7 +141,7 @@ export class PhysicsEngine {
      * Calculated from spring vectors to "shoot" nodes toward their destinations.
      */
     private fireInitialImpulse() {
-        const { springLength, springStiffness } = this.config;
+        const { targetSpacing, snapImpulseScale } = this.config;
 
         // Map to store accumulated impulses
         const impulses = new Map<string, { x: number, y: number }>();
@@ -172,9 +172,9 @@ export class PhysicsEngine {
             // If d=10, len=60, disp = -50.
             // Force acts to increase d. So it pushes apart.
 
-            // Impulse magnitude scales with springLength but is clamped to prevent explosions
+            // Impulse magnitude scales with targetSpacing but is clamped to prevent explosions
             // This ensures snap strength matches geometry scale while staying controlled
-            const forceBase = Math.max(120, Math.min(600, springLength * 0.4));
+            const forceBase = Math.max(120, Math.min(600, targetSpacing * snapImpulseScale));
 
             impulses.get(source.id)!.x += nx * forceBase;
             impulses.get(source.id)!.y += ny * forceBase;

@@ -138,7 +138,7 @@ export function applySprings(
     config: ForceConfig,
     stiffnessScale: number = 1.0
 ) {
-    const { springStiffness, springLength } = config;
+    const { springStiffness, targetSpacing } = config;
 
     for (const link of links) {
         const source = nodes.get(link.source);
@@ -161,7 +161,7 @@ export function applySprings(
         // We want the force to act to RESTORE the length.
 
         // Effective Length = Base (or Override) * Bias
-        const baseLen = link.length ?? springLength;
+        const baseLen = link.length ?? targetSpacing;
         const effectiveLength = baseLen * (link.lengthBias ?? 1.0);
 
         const displacement = d - effectiveLength;
@@ -199,7 +199,7 @@ export function applySpringConstraint(
     config: ForceConfig,
     strength: number = 0.5 // How much of the error to correct per frame (0.0 - 1.0)
 ) {
-    const { springLength } = config;
+    const { targetSpacing } = config;
 
     for (const link of links) {
         const source = nodes.get(link.source);
@@ -220,7 +220,7 @@ export function applySpringConstraint(
         const d = Math.sqrt(dx * dx + dy * dy);
 
         // Target Distance
-        const baseLen = link.length ?? springLength;
+        const baseLen = link.length ?? targetSpacing;
         const targetLen = baseLen * (link.lengthBias ?? 1.0);
 
         // Difference

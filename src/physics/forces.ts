@@ -1,16 +1,6 @@
 import { PhysicsNode, PhysicsLink, ForceConfig } from './types';
 
 /**
- * Calculates the distance squared between two points.
- * Easier on CPU than distance (no sqrt).
- */
-function distSq(x1: number, y1: number, x2: number, y2: number): number {
-    const dx = x1 - x2;
-    const dy = y1 - y2;
-    return dx * dx + dy * dy;
-}
-
-/**
  * Apply repulsion efficiently.
  * UX Anchor: "Cluster" & "Idle Spacing".
  * Nodes should push away from each other.

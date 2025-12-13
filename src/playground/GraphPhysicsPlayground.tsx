@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState, useCallback } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import { PhysicsEngine } from '../physics/engine';
 import { PhysicsNode, PhysicsLink, ForceConfig } from '../physics/types';
 import { DEFAULT_PHYSICS_CONFIG } from '../physics/config';
@@ -12,7 +12,8 @@ const CONTAINER_STYLE: React.CSSProperties = {
     width: '100vw',
     height: '100vh',
     overflow: 'hidden',
-    fontFamily: 'sans-serif',
+    // Use the app font defined in src/index.css (@font-face 'Quicksand')
+    fontFamily: "'Quicksand', Inter, system-ui, Avenir, Helvetica, Arial, sans-serif",
     background: '#111',
     color: '#eee',
 };
@@ -32,6 +33,7 @@ const SIDEBAR_STYLE: React.CSSProperties = {
     display: 'flex',
     flexDirection: 'column',
     gap: '16px',
+    position: 'relative', // allow absolute-positioned close button
 };
 
 const DEBUG_OVERLAY_STYLE: React.CSSProperties = {
@@ -41,33 +43,93 @@ const DEBUG_OVERLAY_STYLE: React.CSSProperties = {
     padding: '8px 12px',
     background: 'rgba(0, 0, 0, 0.7)',
     borderRadius: '4px',
-    pointerEvents: 'none',
+    pointerEvents: 'auto',
     fontSize: '12px',
-    fontFamily: 'monospace',
+    // Inherit Quicksand from the playground container (src/index.css + CONTAINER_STYLE)
+    fontFamily: 'inherit',
+    // Allow synthetic bold (root disables it via `font-synthesis: none`)
+    fontSynthesis: 'weight',
+    zIndex: 10,
+};
+
+const SIDEBAR_TOGGLE_STYLE: React.CSSProperties = {
+    position: 'absolute',
+    top: '16px',
+    right: '16px',
+    zIndex: 10,
+    background: 'rgba(0,0,0,0.55)',
+    color: '#eee',
+    border: '1px solid rgba(255,255,255,0.25)',
+    borderRadius: '8px',
+    padding: '8px 10px',
+    cursor: 'pointer',
+    fontFamily: 'inherit',
+    fontSize: '12px',
+    lineHeight: 1,
+    backdropFilter: 'blur(6px)',
+};
+
+const DEBUG_TOGGLE_STYLE: React.CSSProperties = {
+    position: 'absolute',
+    top: '16px',
+    left: '16px',
+    zIndex: 11,
+    background: 'rgba(0,0,0,0.55)',
+    color: '#eee',
+    border: '1px solid rgba(255,255,255,0.25)',
+    borderRadius: '8px',
+    padding: '8px 10px',
+    cursor: 'pointer',
+    fontFamily: 'inherit',
+    fontSize: '12px',
+    lineHeight: 1,
+    backdropFilter: 'blur(6px)',
+};
+
+const DEBUG_CLOSE_STYLE: React.CSSProperties = {
+    width: '28px',
+    height: '28px',
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: '8px',
+    background: 'rgba(0,0,0,0.35)',
+    border: '1px solid rgba(255,255,255,0.18)',
+    color: '#eee',
+    cursor: 'pointer',
+    fontFamily: 'inherit',
+    fontSize: '13px',
+    lineHeight: 1,
+};
+
+const SIDEBAR_CLOSE_STYLE: React.CSSProperties = {
+    position: 'absolute',
+    top: '10px',
+    right: '10px',
+    width: '32px',
+    height: '32px',
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: '8px',
+    background: 'rgba(0,0,0,0.35)',
+    border: '1px solid rgba(255,255,255,0.18)',
+    color: '#eee',
+    cursor: 'pointer',
+    fontFamily: 'inherit',
+    fontSize: '14px',
+    lineHeight: 1,
 };
 
 // -----------------------------------------------------------------------------
 // Helper: Random Graph Generator
 // -----------------------------------------------------------------------------
 
-/**
- * Simple string hash for deterministic "randomness".
- */
-function simpleHash(str: string): number {
-    let hash = 0;
-    for (let i = 0; i < str.length; i++) {
-        hash = ((hash << 5) - hash) + str.charCodeAt(i);
-        hash |= 0; // Convert to 32bit integer
-    }
-    return Math.abs(hash);
-}
-
 // Generate a "Spine-Rib-Fiber" Topology
 // KEY UPDATE: "Structural Seeding". Nodes are placed relative to their parents
 // to break radial symmetry at t=0.
 function generateRandomGraph(
     nodeCount: number,
-    connectivity: number,
     targetSpacing: number = 500,
     initScale: number = 0.1,
     seed: number = Date.now()
@@ -250,6 +312,8 @@ export const GraphPhysicsPlayground: React.FC = () => {
     // State for React UI
     const [config, setConfig] = useState<ForceConfig>(DEFAULT_PHYSICS_CONFIG);
     const [useVariedSize, setUseVariedSize] = useState(true); // Toggle State
+    const [sidebarOpen, setSidebarOpen] = useState(false); // Hidden by default
+    const [debugOpen, setDebugOpen] = useState(false); // Hidden by default
     const [metrics, setMetrics] = useState({
         nodes: 0,
         links: 0,
@@ -282,6 +346,28 @@ export const GraphPhysicsPlayground: React.FC = () => {
         settingsRef.current.useVariedSize = useVariedSize;
     }, [useVariedSize]);
 
+    // Keyboard shortcut: "U" toggles both UI panels (sidebar + debug)
+    useEffect(() => {
+        const isTypingTarget = (target: EventTarget | null) => {
+            const el = target as HTMLElement | null;
+            if (!el) return false;
+            const tag = el.tagName?.toLowerCase();
+            return tag === 'input' || tag === 'textarea' || tag === 'select' || el.isContentEditable;
+        };
+
+        const onKeyDown = (e: KeyboardEvent) => {
+            if (isTypingTarget(e.target)) return;
+            if (e.key !== 'u' && e.key !== 'U') return;
+
+            e.preventDefault();
+            setSidebarOpen((v) => !v);
+            setDebugOpen((v) => !v);
+        };
+
+        window.addEventListener('keydown', onKeyDown);
+        return () => window.removeEventListener('keydown', onKeyDown);
+    }, []);
+
     // Rendering Loop
     useEffect(() => {
         const canvas = canvasRef.current;
@@ -298,7 +384,7 @@ export const GraphPhysicsPlayground: React.FC = () => {
 
         // Initial Spawn if empty
         if (engine.nodes.size === 0) {
-            const { nodes, links } = generateRandomGraph(20, 0.05, config.targetSpacing, config.initScale, seed);
+            const { nodes, links } = generateRandomGraph(20, config.targetSpacing, config.initScale, seed);
             nodes.forEach(n => engine.addNode(n));
             links.forEach(l => engine.addLink(l));
         }
@@ -548,7 +634,7 @@ export const GraphPhysicsPlayground: React.FC = () => {
         // Generate new random seed for each spawn
         const newSeed = Date.now();
         setSeed(newSeed);
-        const { nodes, links } = generateRandomGraph(spawnCount, 0.05, config.targetSpacing, config.initScale, newSeed);
+        const { nodes, links } = generateRandomGraph(spawnCount, config.targetSpacing, config.initScale, newSeed);
         nodes.forEach(n => engineRef.current.addNode(n));
         links.forEach(l => engineRef.current.addLink(l));
     };
@@ -614,118 +700,200 @@ export const GraphPhysicsPlayground: React.FC = () => {
             >
                 <canvas ref={canvasRef} style={{ width: '100%', height: '100%' }} />
 
+                {/* Debug Toggle (when hidden) */}
+                {!debugOpen && (
+                    <button
+                        type="button"
+                        style={DEBUG_TOGGLE_STYLE}
+                        onMouseDown={(e) => e.stopPropagation()}
+                        onMouseMove={(e) => e.stopPropagation()}
+                        onMouseUp={(e) => e.stopPropagation()}
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            setDebugOpen(true);
+                        }}
+                        aria-label="Show debug panel"
+                        title="Show debug"
+                    >
+                        Debug
+                    </button>
+                )}
+
+                {/* Sidebar Toggle */}
+                <button
+                    type="button"
+                    style={SIDEBAR_TOGGLE_STYLE}
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onMouseMove={(e) => e.stopPropagation()}
+                    onMouseUp={(e) => e.stopPropagation()}
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        setSidebarOpen((v) => !v);
+                    }}
+                    aria-label={sidebarOpen ? 'Hide controls' : 'Show controls'}
+                    title={sidebarOpen ? 'Hide controls' : 'Show controls'}
+                >
+                    {sidebarOpen ? 'Hide Controls' : 'Controls'}
+                </button>
+
                 {/* Debug Overlay */}
-                <div style={DEBUG_OVERLAY_STYLE}>
-                    <strong>Time: T+{metrics.lifecycleMs}ms</strong><br />
-                    <br />
-                    <strong>Performance</strong><br />
-                    FPS: {metrics.fps} <br />
-                    Nodes: {metrics.nodes} (Active: {metrics.activeNodes}) <br />
-                    Links: {metrics.links} <br />
-                    Avg Vel: {metrics.avgVel.toFixed(4)} <br />
-                    <br />
-                    <strong>Shape Diagnostics</strong><br />
-                    Spread (R_mean): {metrics.avgDist.toFixed(2)} px <br />
-                    Irregularity (R_std): {metrics.stdDist.toFixed(2)} px <br />
-                    CV (Std/Mean): {(metrics.avgDist > 0 ? (metrics.stdDist / metrics.avgDist) : 0).toFixed(3)} <br />
-                    Aspect Ratio (W/H): {metrics.aspectRatio.toFixed(3)}
-                </div>
+                {debugOpen && (
+                    <div
+                        style={DEBUG_OVERLAY_STYLE}
+                        onMouseDown={(e) => e.stopPropagation()}
+                        onMouseMove={(e) => e.stopPropagation()}
+                        onMouseUp={(e) => e.stopPropagation()}
+                    >
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
+                            <strong>Time: T+{metrics.lifecycleMs}ms</strong>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <button
+                                    type="button"
+                                    style={{
+                                        ...DEBUG_CLOSE_STYLE,
+                                        width: '44px',
+                                        fontSize: '11px',
+                                        padding: 0
+                                    }}
+                                    onClick={() => setDebugOpen(false)}
+                                    aria-label="Hide debug panel"
+                                    title="Hide"
+                                >
+                                    Hide
+                                </button>
+                                <button
+                                    type="button"
+                                    style={DEBUG_CLOSE_STYLE}
+                                    onClick={() => setDebugOpen(false)}
+                                    aria-label="Close debug panel"
+                                    title="Close"
+                                >
+                                    ✕
+                                </button>
+                            </div>
+                        </div>
+                        <br />
+                        <strong style={{ fontWeight: 700 }}>Performance</strong><br />
+                        FPS: {metrics.fps} <br />
+                        Nodes: {metrics.nodes} (Active: {metrics.activeNodes}) <br />
+                        Links: {metrics.links} <br />
+                        Avg Vel: {metrics.avgVel.toFixed(4)} <br />
+                        <br />
+                        <strong style={{ fontWeight: 700 }}>Shape Diagnostics</strong><br />
+                        Spread (R_mean): {metrics.avgDist.toFixed(2)} px <br />
+                        Irregularity (R_std): {metrics.stdDist.toFixed(2)} px <br />
+                        CV (Std/Mean): {(metrics.avgDist > 0 ? (metrics.stdDist / metrics.avgDist) : 0).toFixed(3)} <br />
+                        Aspect Ratio (W/H): {metrics.aspectRatio.toFixed(3)}
+                    </div>
+                )}
             </div>
 
             {/* Sidebar Controls */}
-            <div style={SIDEBAR_STYLE}>
-                <h3>Physics Playground</h3>
+            {sidebarOpen && (
+                <div className="gp-sidebar" style={SIDEBAR_STYLE}>
+                    <button
+                        type="button"
+                        style={SIDEBAR_CLOSE_STYLE}
+                        onClick={() => setSidebarOpen(false)}
+                        aria-label="Close controls"
+                        title="Close"
+                    >
+                        ✕
+                    </button>
 
-                {/* Actions */}
-                <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', flexWrap: 'wrap' }}>
-                    <button onClick={handleSpawn}>Spawn New</button>
-                    <button onClick={handleReset}>Explode</button>
-                    <button onClick={handleLogPreset} style={{ backgroundColor: '#2a5' }}>Log Preset</button>
-                </div>
+                    <h3 style={{ paddingRight: '36px' }}>Physics Playground</h3>
 
-                {/* Size Toggle */}
-                <div style={{ marginBottom: '16px' }}>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <input
-                            type="checkbox"
-                            checked={useVariedSize}
-                            onChange={(e) => setUseVariedSize(e.target.checked)}
-                        />
-                        Varied Node Sizes
-                    </label>
-                </div>
-
-                <div>
-                    <label>Node Count: {spawnCount}</label>
-                    <input
-                        type="range" min="10" max="400" step="10"
-                        value={spawnCount}
-                        onChange={(e) => setSpawnCount(Number(e.target.value))}
-                        style={{ width: '100%' }}
-                    />
-                </div>
-
-                <div style={{ marginTop: '12px' }}>
-                    <label>Seed: {seed}</label>
-                    <input
-                        type="number"
-                        value={seed}
-                        onChange={(e) => setSeed(Number(e.target.value))}
-                        style={{ width: '100%', padding: '4px', marginTop: '4px' }}
-                        placeholder="Enter seed number"
-                    />
-                    <div style={{ fontSize: '11px', color: '#888', marginTop: '4px' }}>
-                        Same seed = identical graph. Click "Spawn New" to use current seed.
+                    {/* Actions */}
+                    <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', flexWrap: 'wrap' }}>
+                        <button onClick={handleSpawn}>Spawn New</button>
+                        <button onClick={handleReset}>Explode</button>
+                        <button onClick={handleLogPreset} style={{ backgroundColor: '#2a5' }}>Log Preset</button>
                     </div>
-                </div>
 
-                <hr style={{ border: '0', borderTop: '1px solid #444', width: '100%' }} />
-
-                {/* Sliders */}
-                {Object.keys(DEFAULT_PHYSICS_CONFIG).map((key) => {
-                    const k = key as keyof ForceConfig;
-                    const val = config[k];
-
-                    // Define ranges broadly for testing
-                    let min = 0;
-                    let max = 100;
-                    let step = 1;
-
-                    if (k === 'springStiffness' || k === 'damping' || k === 'gravityCenterStrength' || k === 'restForceScale') {
-                        max = 1.0;
-                        step = 0.01;
-                    }
-                    if (k === 'formingTime') {
-                        max = 10.0;
-                        step = 0.1;
-                    }
-                    if (k === 'repulsionStrength' || k === 'boundaryStrength' || k === 'collisionStrength') {
-                        max = 10000;
-                        step = 100;
-                    }
-                    if (k === 'repulsionDistanceMax' || k === 'springLength' || k === 'boundaryMargin' || k === 'gravityBaseRadius') {
-                        max = 500;
-                    }
-
-                    return (
-                        <div key={k}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: '4px' }}>
-                                <span>{k}</span>
-                                <span>{val}</span>
-                            </div>
+                    {/* Size Toggle */}
+                    <div style={{ marginBottom: '16px' }}>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                             <input
-                                type="range"
-                                min={min}
-                                max={max}
-                                step={step}
-                                value={val}
-                                onChange={(e) => handleConfigChange(k, Number(e.target.value))}
-                                style={{ width: '100%' }}
+                                type="checkbox"
+                                checked={useVariedSize}
+                                onChange={(e) => setUseVariedSize(e.target.checked)}
                             />
+                            Varied Node Sizes
+                        </label>
+                    </div>
+
+                    <div>
+                        <label>Node Count: {spawnCount}</label>
+                        <input
+                            type="range" min="10" max="400" step="10"
+                            value={spawnCount}
+                            onChange={(e) => setSpawnCount(Number(e.target.value))}
+                            style={{ width: '100%' }}
+                        />
+                    </div>
+
+                    <div style={{ marginTop: '12px' }}>
+                        <label>Seed: {seed}</label>
+                        <input
+                            type="number"
+                            value={seed}
+                            onChange={(e) => setSeed(Number(e.target.value))}
+                            style={{ width: '100%', padding: '4px', marginTop: '4px', fontFamily: 'inherit' }}
+                            placeholder="Enter seed number"
+                        />
+                        <div style={{ fontSize: '11px', color: '#888', marginTop: '4px' }}>
+                            Same seed = identical graph. Click "Spawn New" to use current seed.
                         </div>
-                    );
-                })}
-            </div>
+                    </div>
+
+                    <hr style={{ border: '0', borderTop: '1px solid #444', width: '100%' }} />
+
+                    {/* Sliders */}
+                    {Object.keys(DEFAULT_PHYSICS_CONFIG).map((key) => {
+                        const k = key as keyof ForceConfig;
+                        const val = config[k];
+
+                        // Define ranges broadly for testing
+                        let min = 0;
+                        let max = 100;
+                        let step = 1;
+
+                        if (k === 'springStiffness' || k === 'damping' || k === 'gravityCenterStrength' || k === 'restForceScale') {
+                            max = 1.0;
+                            step = 0.01;
+                        }
+                        if (k === 'formingTime') {
+                            max = 10.0;
+                            step = 0.1;
+                        }
+                        if (k === 'repulsionStrength' || k === 'boundaryStrength' || k === 'collisionStrength') {
+                            max = 10000;
+                            step = 100;
+                        }
+                        if (k === 'repulsionDistanceMax' || k === 'springLength' || k === 'boundaryMargin' || k === 'gravityBaseRadius') {
+                            max = 500;
+                        }
+
+                        return (
+                            <div key={k}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: '4px' }}>
+                                    <span>{k}</span>
+                                    <span>{val}</span>
+                                </div>
+                                <input
+                                    type="range"
+                                    min={min}
+                                    max={max}
+                                    step={step}
+                                    value={val}
+                                    onChange={(e) => handleConfigChange(k, Number(e.target.value))}
+                                    style={{ width: '100%' }}
+                                />
+                            </div>
+                        );
+                    })}
+                </div>
+            )}
         </div>
     );
 };

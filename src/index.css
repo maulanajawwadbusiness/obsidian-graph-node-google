@@ -1,7 +1,15 @@
+@font-face {
+  font-family: 'Quicksand';
+  src: url('./assets/Quicksand-Light.ttf') format('truetype');
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
+
 :root {
-  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+  font-family: 'Quicksand', Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
   line-height: 1.5;
-  font-weight: 400;
+  font-weight: 300;
 
   color-scheme: dark;
   color: rgba(255, 255, 255, 0.87);
@@ -19,4 +27,12 @@ body {
   place-items: center;
   min-width: 320px;
   min-height: 100vh;
+}
+
+/* Ensure form controls inside the physics playground sidebar inherit Quicksand */
+.gp-sidebar button,
+.gp-sidebar input,
+.gp-sidebar select,
+.gp-sidebar textarea {
+  font-family: inherit;
 }

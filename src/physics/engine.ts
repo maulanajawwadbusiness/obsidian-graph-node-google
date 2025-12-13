@@ -1,6 +1,6 @@
 import { PhysicsNode, PhysicsLink, ForceConfig } from './types';
 import { DEFAULT_PHYSICS_CONFIG } from './config';
-import { applyRepulsion, applySprings, applyCenterGravity, applyBoundaryForce, applyCollision } from './forces';
+import { applyRepulsion, applySprings, applyBoundaryForce, applyCollision } from './forces';
 
 export class PhysicsEngine {
     public nodes: Map<string, PhysicsNode> = new Map();
@@ -214,7 +214,7 @@ export class PhysicsEngine {
      */
     tick(dt: number) {
         const nodeList = Array.from(this.nodes.values());
-        const { maxVelocity, damping } = this.config;
+        const { maxVelocity } = this.config;
 
         // Lifecycle Management
         this.lifecycle += dt;

@@ -135,7 +135,8 @@ export function applyCollision(
 export function applySprings(
     nodes: Map<string, PhysicsNode>,
     links: PhysicsLink[],
-    config: ForceConfig
+    config: ForceConfig,
+    stiffnessScale: number = 1.0
 ) {
     const { springStiffness, springLength } = config;
 
@@ -165,9 +166,9 @@ export function applySprings(
 
         const displacement = d - effectiveLength;
 
-        // Effective Stiffness = Base (or Override) * Bias
+        // Effective Stiffness = Base (or Override) * Bias * Global Scale
         const baseK = link.strength ?? springStiffness;
-        const effectiveK = baseK * (link.stiffnessBias ?? 1.0);
+        const effectiveK = baseK * (link.stiffnessBias ?? 1.0) * stiffnessScale;
 
         const forceMagnitude = effectiveK * displacement;
 
@@ -183,6 +184,74 @@ export function applySprings(
         if (!target.isFixed) {
             target.fx -= fx;
             target.fy -= fy;
+        }
+    }
+}
+
+/**
+ * PBD (Position Based Dynamics) Constraint for Snap Phase.
+         * Directly projects nodes to their target distance.
+         * This ignores mass and inertia, strictly enforcing geometry.
+         */
+export function applySpringConstraint(
+    nodes: Map<string, PhysicsNode>,
+    links: PhysicsLink[],
+    config: ForceConfig,
+    strength: number = 0.5 // How much of the error to correct per frame (0.0 - 1.0)
+) {
+    const { springLength } = config;
+
+    for (const link of links) {
+        const source = nodes.get(link.source);
+        const target = nodes.get(link.target);
+
+        if (!source || !target) continue;
+        if (source.isFixed && target.isFixed) continue;
+
+        let dx = target.x - source.x;
+        let dy = target.y - source.y;
+
+        // Zero shim
+        if (dx === 0 && dy === 0) {
+            dx = (Math.random() - 0.5) * 0.1;
+            dy = (Math.random() - 0.5) * 0.1;
+        }
+
+        const d = Math.sqrt(dx * dx + dy * dy);
+
+        // Target Distance
+        const baseLen = link.length ?? springLength;
+        const targetLen = baseLen * (link.lengthBias ?? 1.0);
+
+        // Difference
+        const diff = d - targetLen;
+
+        // PBD Correction vector
+        // We want to move them closer/further by `diff`.
+        // Fraction to move per node:
+        const correction = diff * strength;
+
+        // Normalize
+        const ndx = dx / d;
+        const ndy = dy / d;
+
+        // Move amount
+        // If both free: split 50/50. If one fixed: move other 100%.
+        let wS = source.isFixed ? 0 : 0.5;
+        let wT = target.isFixed ? 0 : 0.5;
+
+        // Rescale if one is fixed
+        if (wS === 0 && wT === 0.5) wT = 1.0;
+        if (wT === 0 && wS === 0.5) wS = 1.0;
+
+        // Apply Position Shift immediately
+        if (wS > 0) {
+            source.x += ndx * correction * wS;
+            source.y += ndy * correction * wS;
+        }
+        if (wT > 0) {
+            target.x -= ndx * correction * wT;
+            target.y -= ndy * correction * wT;
         }
     }
 }

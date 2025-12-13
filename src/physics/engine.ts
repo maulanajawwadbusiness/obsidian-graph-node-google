@@ -1,6 +1,6 @@
 import { PhysicsNode, PhysicsLink, ForceConfig } from './types';
 import { DEFAULT_PHYSICS_CONFIG } from './config';
-import { applyRepulsion, applySprings, applyCenterGravity, applyBoundaryForce, applyCollision } from './forces';
+import { applyRepulsion, applySprings, applyCenterGravity, applyBoundaryForce, applyCollision, applySpringConstraint } from './forces';
 
 export class PhysicsEngine {
     public nodes: Map<string, PhysicsNode> = new Map();
@@ -8,7 +8,6 @@ export class PhysicsEngine {
     public config: ForceConfig;
 
     // World Bounds for Containment
-    // Default to something large until Playground updates it
     private worldWidth: number = 2000;
     private worldHeight: number = 2000;
 
@@ -28,7 +27,6 @@ export class PhysicsEngine {
      */
     addNode(node: PhysicsNode) {
         this.nodes.set(node.id, node);
-        // New node is hot, and wakes neighbors? No neighbors yet.
         this.wakeNode(node.id);
     }
 
@@ -37,7 +35,6 @@ export class PhysicsEngine {
      */
     addLink(link: PhysicsLink) {
         this.links.push(link);
-        // Wakes the connected nodes
         this.wakeNode(link.source);
         this.wakeNode(link.target);
     }
@@ -74,7 +71,6 @@ export class PhysicsEngine {
         const node = this.nodes.get(nodeId);
         if (node) {
             node.warmth = 1.0;
-            // Also reset lifecycle? No, dragging shouldn't restart the WHOLE intro.
         }
     }
 
@@ -82,8 +78,6 @@ export class PhysicsEngine {
      * Wake up a node and its neighbors.
      */
     wakeNeighbors(nodeId: string) {
-        // Find all links connected to this node
-        // (Inefficient O(L) scan, but fine for small N)
         for (const link of this.links) {
             if (link.source === nodeId) this.wakeNode(link.target);
             if (link.target === nodeId) this.wakeNode(link.source);
@@ -110,15 +104,11 @@ export class PhysicsEngine {
 
     /**
      * Start dragging a node.
-     * We don't hard-fix it; we will apply a strong force towards the mouse
-     * to give it that "heavy/rubbery" feel.
      */
     grabNode(nodeId: string, position: { x: number, y: number }) {
         if (this.nodes.has(nodeId)) {
             this.draggedNodeId = nodeId;
             this.dragTarget = { ...position };
-
-            // LOCAL WAKE ONLY
             this.wakeNode(nodeId);
             this.wakeNeighbors(nodeId);
         }
@@ -130,7 +120,6 @@ export class PhysicsEngine {
     moveDrag(position: { x: number, y: number }) {
         if (this.draggedNodeId && this.dragTarget) {
             this.dragTarget = { ...position };
-            // Keep waking it as we drag
             this.wakeNode(this.draggedNodeId);
             this.wakeNeighbors(this.draggedNodeId);
         }
@@ -142,7 +131,6 @@ export class PhysicsEngine {
     releaseNode() {
         this.draggedNodeId = null;
         this.dragTarget = null;
-        // No global wake. Local nodes are already warm from drag.
     }
 
     /**
@@ -151,79 +139,48 @@ export class PhysicsEngine {
      */
     tick(dt: number) {
         const nodeList = Array.from(this.nodes.values());
-        const { damping, maxVelocity, formingTime, restForceScale, velocitySleepThreshold, springStiffness } = this.config;
+        const { maxVelocity } = this.config;
 
         // Lifecycle Management
         this.lifecycle += dt;
 
-        // Phase 0: Compression (0 - 0.15s)
-        const isCompression = this.lifecycle < 0.15;
-        // Phase 1: Release (0.15s - 0.5s)
-        const isRelease = this.lifecycle >= 0.15 && this.lifecycle < 0.50;
-        // Phase 2: Normal (0.5s+)
-        const isNormal = this.lifecycle >= 0.50;
+        // NEW LIFECYCLE: HYBRID PBD / DYNAMICS
+        // 0s - 0.25s: SNAP (Geometric Constraint Projection, Zero Inertia)
+        // 0.25s+:     LOCK (Standard Dynamics, High Damping)
+        const isSnap = this.lifecycle < 0.25;
 
-        // 1. Update Warmth (Per Node)
-        for (const node of nodeList) {
-            // Init warmth
-            if (node.warmth === undefined) node.warmth = 1.0;
-
-            // Decay Warmth ONLY in Normal Phase
-            // During intro, keeping them hot makes sure they don't freeze mid-expansion.
-            if (isNormal) {
-                if (formingTime > 0) {
-                    node.warmth -= dt / formingTime;
-                    if (node.warmth < 0) node.warmth = 0;
-                } else {
-                    node.warmth = 1.0;
-                }
-            } else {
-                node.warmth = 1.0;
-            }
-        }
-
-        // 2. Clear forces
+        // 1. Clear forces
         for (const node of nodeList) {
             node.fx = 0;
             node.fy = 0;
         }
 
-        // 3. Apply Core Forces ALWAYS (Structure First)
-        // Compression phase is removed. Springs active from t=0.
-        // We only check if we are in "Initial Unfold" vs "Steady state" for Damping purposes maybe?
-        // But forces are ON.
-
-        // COLLISION RAMP UP
-        // To preserve "Emergence" and avoid "Big Bang", collision force starts at 0 
-        // and fades in AFTER the structure has had time to unfold (0.2s - 1.0s).
-        const collisionRamp = Math.min(1.0, Math.max(0, (this.lifecycle - 0.2) / 0.8));
-
+        // 2. Apply Core Forces
+        // Forces are applied in BOTH phases for Collision/Repulsion/Gravity/Boundary
+        // but handled differently in integration.
         applyRepulsion(nodeList, this.config);
-        applyCollision(nodeList, this.config, collisionRamp);
-        applySprings(this.nodes, this.links, this.config);
+        applyCollision(nodeList, this.config, 1.0);
         applyCenterGravity(nodeList, this.config);
         applyBoundaryForce(nodeList, this.config, this.worldWidth, this.worldHeight);
 
-        // 4. Apply Local Phase Scale (Per Node)
-        // (Only meaningful in Normal phase where warmth decays, but safe to run always)
-        for (const node of nodeList) {
-            const t = node.warmth ?? 0;
-            // Lerp force scale: 1.0 (Hot) -> restForceScale (Cold)
-            const forceScale = restForceScale + (1.0 - restForceScale) * t;
-
-            node.fx *= forceScale;
-            node.fy *= forceScale;
+        // 3. Springs (Hybrid)
+        if (isSnap) {
+            // PBD Mode: Directly project positions to satisfy links
+            // "Concept: move nodes directly toward their spring-rest targets"
+            // Strength 0.6 = 60% correction per frame
+            applySpringConstraint(this.nodes, this.links, this.config, 0.6);
+        } else {
+            // Dynamics Mode: Standard Spring Forces
+            applySprings(this.nodes, this.links, this.config, 1.0);
         }
 
-        // 5. Apply Mouse Drag Force (The "Rubbery Grip")
+        // 4. Apply Mouse Drag Force
         if (this.draggedNodeId && this.dragTarget) {
             const node = this.nodes.get(this.draggedNodeId);
             if (node) {
-                // Strong spring to cursor
                 const dx = this.dragTarget.x - node.x;
                 const dy = this.dragTarget.y - node.y;
                 const dragStrength = 200.0;
-
                 node.fx += dx * dragStrength;
                 node.fy += dy * dragStrength;
                 node.vx += dx * 2.0 * dt;
@@ -231,11 +188,10 @@ export class PhysicsEngine {
             }
         }
 
-        // 6. Integrate (Velocity Verlet-ish / Euler)
+        // 5. Integrate
         for (const node of nodeList) {
-            if (node.isFixed) continue; // Hard fixed nodes don't move
+            if (node.isFixed) continue;
 
-            // F = ma -> a = F/m
             const ax = node.fx / node.mass;
             const ay = node.fy / node.mass;
 
@@ -243,30 +199,36 @@ export class PhysicsEngine {
             node.vx += ax * dt;
             node.vy += ay * dt;
 
-            // Apply Damping (Air Resistance)
-            let currentDamping = damping;
+            // Phase-Dependent Integration
+            if (isSnap) {
+                // SNAP PHASE:
+                // Move based on velocity (from collision forces), but KILL momentum.
+                // This allows collision to push things apart, but prevents oscillation.
+                // Effectively: "Overdamped" / "Quasi-static"
+                node.x += node.vx * dt;
+                node.y += node.vy * dt;
 
-            // Phase Shift Damping (Always)
-            // Startup Release no longer overrides this (Removed 0.6 override)
-            const t = node.warmth ?? 0;
-            const coldDamping = 0.98;
-            currentDamping = coldDamping + (damping - coldDamping) * t;
+                // Zero out inertia for next frame
+                node.vx = 0;
+                node.vy = 0;
+            } else {
+                // LOCK PHASE:
+                // Standard Velocity Verlet with High Damping
+                const lockDamping = 0.95;
+                node.vx *= (1 - lockDamping * dt * 5.0);
+                node.vy *= (1 - lockDamping * dt * 5.0);
 
-            // Simple linear decay
-            node.vx *= (1 - currentDamping * dt * 5.0);
-            node.vy *= (1 - currentDamping * dt * 5.0);
+                // Clamp
+                const vSq = node.vx * node.vx + node.vy * node.vy;
+                if (vSq > maxVelocity * maxVelocity) {
+                    const v = Math.sqrt(vSq);
+                    node.vx = (node.vx / v) * maxVelocity;
+                    node.vy = (node.vy / v) * maxVelocity;
+                }
 
-            // Clamp Velocity
-            const vSq = node.vx * node.vx + node.vy * node.vy;
-            if (vSq > maxVelocity * maxVelocity) {
-                const v = Math.sqrt(vSq);
-                node.vx = (node.vx / v) * maxVelocity;
-                node.vy = (node.vy / v) * maxVelocity;
+                node.x += node.vx * dt;
+                node.y += node.vy * dt;
             }
-
-            // Update Position
-            node.x += node.vx * dt;
-            node.y += node.vy * dt;
 
             // Sleep Check
             if (this.config.velocitySleepThreshold) {

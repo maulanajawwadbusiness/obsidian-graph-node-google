@@ -61,64 +61,128 @@ function simpleHash(str: string): number {
     return Math.abs(hash);
 }
 
-// Generate a random graph
+// Generate a "Spine-Rib-Fiber" Topology
+// This guarantees asymmetry by creating a "Vertebrate" structure.
 function generateRandomGraph(nodeCount: number, connectivity: number) {
     const nodes: PhysicsNode[] = [];
     const links: PhysicsLink[] = [];
 
+    // 1. Create all nodes first (Singularity Position)
     for (let i = 0; i < nodeCount; i++) {
         nodes.push({
             id: `n${i}`,
-            // SINGULARITY START: No geometric shape. Just pressure.
             x: (Math.random() - 0.5) * 1.0,
             y: (Math.random() - 0.5) * 1.0,
-            vx: 0,
-            vy: 0,
-            fx: 0,
-            fy: 0,
-            mass: 1, // uniform mass for now
-            radius: 5.0, // Fixed size as requested
+            vx: 0, vy: 0, fx: 0, fy: 0,
+            mass: 1.0,
+            radius: 5.0,
             isFixed: false,
         });
     }
 
-    // Guarantee Connectivity: Build a Spanning Tree first
-    // Link node i to a random node j < i.
-    for (let i = 1; i < nodeCount; i++) {
-        const targetIndex = Math.floor(Math.random() * i);
-        const source = `n${i}`;
-        const target = `n${targetIndex}`;
+    // 2. Identify Roles
+    const spineCount = Math.max(3, Math.min(5, Math.floor(nodeCount * 0.1))); // 3-5 Spine nodes
+    const remaining = nodeCount - spineCount;
+    // RIB Count: Randomize 60-75%
+    const ribRatio = 0.6 + Math.random() * 0.15;
+    const ribCount = Math.floor(remaining * ribRatio);
+    const fiberCount = remaining - ribCount;
 
-        // Deterministic bias
-        const hash = simpleHash(source + target);
-        const normalized = (hash % 1000) / 1000;
-        const bias = 0.7 + (normalized * 0.6);
+    const spineNodes: number[] = [];
+    const ribNodes: number[] = [];
+    const fiberNodes: number[] = [];
 
-        links.push({
-            source,
-            target,
-            lengthBias: bias,
-            stiffnessBias: 1.0
-        });
+    let idx = 0;
+    for (let i = 0; i < spineCount; i++) spineNodes.push(idx++);
+    for (let i = 0; i < ribCount; i++) ribNodes.push(idx++);
+    for (let i = 0; i < fiberCount; i++) fiberNodes.push(idx++);
+
+    // 3. Build Spine (The Axis)
+    // CROOKED SPINE: Offset from center
+    const startOffset = {
+        x: (Math.random() - 0.5) * 50,
+        y: (Math.random() - 0.5) * 50
+    };
+
+    for (let i = 0; i < spineNodes.length; i++) {
+        const nIdx = spineNodes[i];
+        const node = nodes[nIdx];
+
+        // Offset Initial Position slightly to bias the unfolding
+        node.x += startOffset.x;
+        node.y += startOffset.y;
+
+        // Physics: Heavy Anchor
+        node.mass = 4.0;
+        node.radius = 8.0;
+
+        if (i > 0) {
+            // Crooked Chain: Occasional branching
+            // 20% chance to connect to i-2 instead of i-1 (Branching Y)
+            let targetDiff = 1;
+            if (i > 1 && Math.random() < 0.2) targetDiff = 2;
+
+            const prevIdx = spineNodes[i - targetDiff];
+            links.push({
+                source: `n${prevIdx}`,
+                target: `n${nIdx}`,
+                lengthBias: 0.5, // SHORT
+                stiffnessBias: 1.0 // STIFF
+            });
+        }
     }
 
-    // Add extra random edges for complexity (Cycles)
-    // connectivity 0.05 -> approx 5% of possible extra edges?
-    // Let's just add N * connectivity * 4 edges to mimic density
-    const extraEdges = Math.floor(nodeCount * 4 * connectivity);
-    for (let k = 0; k < extraEdges; k++) {
-        const i = Math.floor(Math.random() * nodeCount);
-        const j = Math.floor(Math.random() * nodeCount);
-        if (i !== j) {
-            const source = `n${i}`;
-            const target = `n${j}`;
-            const hash = simpleHash(source + target);
-            const bias = 0.7 + ((hash % 1000) / 1000) * 0.6;
+    // 4. Build Ribs (The Body)
+    // Attach to random spine nodes
+    for (const nIdx of ribNodes) {
+        const node = nodes[nIdx];
 
-            // Avoid dupes? Engine handles it or doesn't care. 
-            // Simple check:
-            links.push({ source, target, lengthBias: bias, stiffnessBias: 1.0 });
+        // Physics: Medium Body
+        node.mass = 2.0;
+        node.radius = 6.0;
+
+        // Cage (2 links) or Flail (1 link)?
+        const isCage = Math.random() < 0.2; // 20% Cage
+
+        // First Link
+        const spineTarget = spineNodes[Math.floor(Math.random() * spineNodes.length)];
+        links.push({
+            source: `n${spineTarget}`,
+            target: `n${nIdx}`,
+            lengthBias: 1.0, // NORMAL
+            stiffnessBias: 0.8 // FIRM
+        });
+
+        // Second Link (Cage)
+        if (isCage) {
+            const spineTarget2 = spineNodes[Math.floor(Math.random() * spineNodes.length)];
+            if (spineTarget2 !== spineTarget) {
+                links.push({
+                    source: `n${spineTarget2}`,
+                    target: `n${nIdx}`,
+                    lengthBias: 1.0,
+                    stiffnessBias: 0.8
+                });
+            }
         }
+    }
+
+    // 5. Build Fibers (The Detail)
+    // Attach to random Rib nodes
+    for (const nIdx of fiberNodes) {
+        const node = nodes[nIdx];
+
+        // Physics: Light Detail
+        node.mass = 1.0;
+        node.radius = 4.0;
+
+        const ribTarget = ribNodes[Math.floor(Math.random() * ribNodes.length)];
+        links.push({
+            source: `n${ribTarget}`,
+            target: `n${nIdx}`,
+            lengthBias: 1.5, // LONG
+            stiffnessBias: 0.4 // LOOSE (Soft)
+        });
     }
 
     return { nodes, links };
@@ -133,6 +197,7 @@ export const GraphPhysicsPlayground: React.FC = () => {
 
     // State for React UI
     const [config, setConfig] = useState<ForceConfig>(DEFAULT_PHYSICS_CONFIG);
+    const [useVariedSize, setUseVariedSize] = useState(true); // Toggle State
     const [metrics, setMetrics] = useState({
         nodes: 0,
         links: 0,
@@ -146,6 +211,13 @@ export const GraphPhysicsPlayground: React.FC = () => {
         lifecycleMs: 0
     });
     const [spawnCount, setSpawnCount] = useState(20);
+
+    // Ref for Loop Access
+    const settingsRef = useRef({ useVariedSize: true });
+
+    useEffect(() => {
+        settingsRef.current.useVariedSize = useVariedSize;
+    }, [useVariedSize]);
 
     // Rendering Loop
     useEffect(() => {
@@ -173,12 +245,13 @@ export const GraphPhysicsPlayground: React.FC = () => {
             engine.updateBounds(canvas.width, canvas.height);
         }
 
-        const render = (time: number) => {
+        const render = () => {
+            const now = performance.now();
+
             // 1. Calc Delta Time
-            // Cap dt to avoid explosion if tab becomes inactive
-            const dtMs = time - lastTime;
-            const dt = Math.min(dtMs / 1000, 0.1);
-            lastTime = time;
+            const dtMs = now - lastTime;
+            const dt = Math.min(dtMs / 1000, 0.1); // Cap at 100ms
+            lastTime = now;
 
             // 2. Physics Tick
             engine.tick(dt);
@@ -217,7 +290,11 @@ export const GraphPhysicsPlayground: React.FC = () => {
             // Draw Nodes
             engine.nodes.forEach((node) => {
                 ctx.beginPath();
-                ctx.arc(node.x, node.y, node.radius, 0, Math.PI * 2);
+
+                // SIZE TOGGLE LOGIC
+                const radius = settingsRef.current.useVariedSize ? node.radius : 5.0;
+
+                ctx.arc(node.x, node.y, radius, 0, Math.PI * 2);
 
                 // Style dependent on state
                 if (node.isFixed) {
@@ -239,7 +316,11 @@ export const GraphPhysicsPlayground: React.FC = () => {
 
             // FPS & Stats Calc
             frameCount++;
-            if (time - lastFpsTime >= 500) { // Update every 500ms
+            const fpsDelta = now - lastFpsTime;
+
+            if (fpsDelta >= 500) { // Update every 500ms
+                const fps = Math.round((frameCount * 1000) / fpsDelta);
+
                 // Calc Average Kinetic Energy / Velocity
                 let totalVel = 0;
                 let activeNodes = 0;
@@ -271,17 +352,17 @@ export const GraphPhysicsPlayground: React.FC = () => {
                 const variance = count > 0 ? (distSqSum / count) - (avgDist * avgDist) : 0;
                 const stdDist = Math.sqrt(Math.max(0, variance));
 
-                const width = maxX - minX;
-                const height = maxY - minY;
+                const shapeW = maxX - minX;
+                const shapeH = maxY - minY;
                 // Avoid divide by zero
-                const aspect = (height > 0.1) ? width / height : 1.0;
+                const aspect = (shapeH > 0.1) ? shapeW / shapeH : 1.0;
                 // Normalize aspect (always >= 1.0) for easier reading? User wanted raw logs.
                 // Let's keep raw W/H ratio. 
 
                 setMetrics({
                     nodes: engine.nodes.size,
                     links: engine.links.length,
-                    fps: Math.round((frameCount * 1000) / (time - lastFpsTime)),
+                    fps: isNaN(fps) ? 0 : fps,
                     avgVel: avgVel,
                     activeNodes: activeNodes,
                     avgDist,
@@ -291,7 +372,7 @@ export const GraphPhysicsPlayground: React.FC = () => {
                 });
 
                 frameCount = 0;
-                lastFpsTime = time;
+                lastFpsTime = now;
             }
 
             frameId = requestAnimationFrame(render);
@@ -415,6 +496,19 @@ export const GraphPhysicsPlayground: React.FC = () => {
                     <button onClick={handleSpawn}>Spawn New</button>
                     <button onClick={handleReset}>Explode</button>
                 </div>
+
+                {/* Size Toggle */}
+                <div style={{ marginBottom: '16px' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <input
+                            type="checkbox"
+                            checked={useVariedSize}
+                            onChange={(e) => setUseVariedSize(e.target.checked)}
+                        />
+                        Varied Node Sizes
+                    </label>
+                </div>
+
                 <div>
                     <label>Node Count: {spawnCount}</label>
                     <input

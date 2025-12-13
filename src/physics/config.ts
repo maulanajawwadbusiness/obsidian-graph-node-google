@@ -4,67 +4,59 @@ export const DEFAULT_PHYSICS_CONFIG: ForceConfig = {
     // ---------------------------------------------------------------------------
     // ANCHOR: Idle Spacing & Clusters
     // ---------------------------------------------------------------------------
-    // Repulsion is now "Close Range Protection" only.
-    // It prevents overlap but doesn't define the general spacing.
-    repulsionStrength: 4000,
+    // Repulsion is now "Physical Volume" only.
+    // It prevents overlap but doesn't shape the cloud.
+    repulsionStrength: 500, // Reduced from 4000. Just a hard shell.
 
-    // Very short range. 
-    // Nodes beyond 60px don't even know each other exists.
+    // Very short range. Only affects immediate neighbors.
     repulsionDistanceMax: 60,
 
     // ---------------------------------------------------------------------------
     // ANCHOR: Friend-Distance
     // ---------------------------------------------------------------------------
-    // Springs are the primary layout driver now.
-    // High stiffness = cohesive cluster.
-    springStiffness: 0.5,
+    // Springs are the PRIMARY layout driver now.
+    // High stiffness = the structure snaps into place.
+    springStiffness: 0.2, // Moderate stiffness for "unfolding".
 
-    // Short length = Tightly packed thoughts.
-    springLength: 33,
+    // Define the "relaxed" length of edges.
+    springLength: 120,
 
     // ---------------------------------------------------------------------------
     // ANCHOR: Center-of-Mass (Comfort Field)
     // ---------------------------------------------------------------------------
-    // Strong pull to keep the "territory" defined by the center.
-    gravityCenterStrength: 0.5,
+    // Weak leash only. Prevents drifting off-screen.
+    // Does NOT compress the graph.
+    gravityCenterStrength: 0.01, // Reduced from 0.5.
 
     // Base scalar for the dynamic safe zone.
     // 10 base -> ~50-80px radius for 20 nodes.
-    gravityBaseRadius: 12,
+    gravityBaseRadius: 30, // Relaxed radius.
 
     // ---------------------------------------------------------------------------
     // ANCHOR: Calm-down & Drag-Lag
     // ---------------------------------------------------------------------------
-    // Damping is CRITICAL for the "Jelly" feel.
-    // It acts like air resistance.
-
-    // 0.8 to 0.9 is usually "thick jelly". 
-    // 0.95 is "molasses".
-    // < 0.8 feels "slippery" or "space-like".
-    // We want it to settle quickly (1-3s), so a relatively high damping is good.
-    damping: 0.90, // Increased for stability (was 0.80)
+    // High damping to preventing "bouncing". 
+    // We want "settling".
+    damping: 0.85,
 
     // ---------------------------------------------------------------------------
     // Safety
     // ---------------------------------------------------------------------------
-    // Prevents "explosions" if forces get too high (e.g. initial spawn overlap).
-    maxVelocity: 150,
+    maxVelocity: 80, // Cap lower to prevent initial explosion speed.
 
     // Stop moving if slower than this. Eliminate micro-jitter.
-    velocitySleepThreshold: 0.05,
+    velocitySleepThreshold: 0.1,
 
     // ---------------------------------------------------------------------------
     // ANCHOR: Cooling / Phase Shift
     // ---------------------------------------------------------------------------
-    // Allow forces to act fully for 1 second, then clamp down to stabilize.
-    formingTime: 1.0,
-    restForceScale: 0.02,
+    // Longer forming time to allow the "unfolding" to happen gracefully.
+    formingTime: 2.0,
+    restForceScale: 0.05,
 
     // ---------------------------------------------------------------------------
     // ANCHOR: Screen Containment
     // ---------------------------------------------------------------------------
-    // Weak safety net only. 
-    // The "Comfort Field" (gravity) should do 99% of the work.
-    boundaryMargin: 20,
-    boundaryStrength: 10,
+    boundaryMargin: 50,
+    boundaryStrength: 50,
 };

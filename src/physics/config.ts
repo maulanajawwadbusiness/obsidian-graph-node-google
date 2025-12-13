@@ -23,34 +23,37 @@ export const DEFAULT_PHYSICS_CONFIG: ForceConfig = {
 
     // Decoupled Spacing Controls (Phase 1)
     // These values preserve exact springLength=500 behavior
-    targetSpacing: 500,        // Actual spring rest length
+    targetSpacing: 375,        // Actual spring rest length (Phase 4: 25% reduction from 500)
     initScale: 0.1,           // Current ratio (springLength * 0.1 for initial positions)
     snapImpulseScale: 0.4,    // Current ratio (springLength * 0.4 for impulse, clamped 120-600)
 
     // ---------------------------------------------------------------------------
     // ANCHOR: Center-of-Mass (Comfort Field)
     // ---------------------------------------------------------------------------
-    // Weak leash only. Prevents drifting off-screen.
-    // Does NOT compress the graph.
-    gravityCenterStrength: 0.01, // Reduced from 0.5.
+    // A very weak gravity toward the origin to keep outliers from drifting too far.
+    // Usually around 0.01 or so.
+    gravityCenterStrength: 0.01,
 
-    // Base scalar for the dynamic safe zone.
-    // 10 base -> ~50-80px radius for 20 nodes.
-    gravityBaseRadius: 30, // Relaxed radius.
-
-    // ---------------------------------------------------------------------------
-    // ANCHOR: Calm-down & Drag-Lag
-    // ---------------------------------------------------------------------------
-    // High damping to preventing "bouncing". 
-    // We want "settling".
-    damping: 0.85,
+    // Base radius at which the center gravity is "max". Usually the expected cluster size.
+    // Beyond this radius, the Force tapers off.
+    gravityBaseRadius: 30,
 
     // ---------------------------------------------------------------------------
-    // Safety
+    // ANCHOR: Damping (Air Friction)
     // ---------------------------------------------------------------------------
-    maxVelocity: 80, // Cap lower to prevent initial explosion speed.
+    // A simple linear fraction of velocity removed per frame.
+    // For example, 0.05 means each frame, velocity *= (1 - 0.05).
+    damping: 0.90, // High damping for tight control
 
-    // Stop moving if slower than this. Eliminate micro-jitter.
+    // ---------------------------------------------------------------------------
+    // ANCHOR: Velocity Cap
+    // ---------------------------------------------------------------------------
+    maxVelocity: 80,
+
+    // ---------------------------------------------------------------------------
+    // ANCHOR: Sleep
+    // ---------------------------------------------------------------------------
+    // If a node's speed is below this threshold, we might skip physics or mark inactive.
     velocitySleepThreshold: 0.1,
 
     // ---------------------------------------------------------------------------
@@ -73,5 +76,5 @@ export const DEFAULT_PHYSICS_CONFIG: ForceConfig = {
     // High strength to act as a solid object.
     collisionStrength: 2000,
     // Small padding to ensure readability (nodes don't kiss)
-    collisionPadding: 10,
+    collisionPadding: 8,  // Phase 4: 25% reduction from 10
 };

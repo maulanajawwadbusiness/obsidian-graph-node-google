@@ -62,104 +62,122 @@ function simpleHash(str: string): number {
 }
 
 // Generate a "Spine-Rib-Fiber" Topology
-// This guarantees asymmetry by creating a "Vertebrate" structure.
+// KEY UPDATE: "Structural Seeding". Nodes are placed relative to their parents
+// to break radial symmetry at t=0.
 function generateRandomGraph(nodeCount: number, connectivity: number) {
     const nodes: PhysicsNode[] = [];
     const links: PhysicsLink[] = [];
 
-    // 1. Create all nodes first (Singularity Position)
-    for (let i = 0; i < nodeCount; i++) {
-        nodes.push({
-            id: `n${i}`,
-            x: (Math.random() - 0.5) * 1.0,
-            y: (Math.random() - 0.5) * 1.0,
-            vx: 0, vy: 0, fx: 0, fy: 0,
-            mass: 1.0,
-            radius: 5.0,
-            isFixed: false,
-        });
-    }
+    // 0. Helper: Create Node (initially at 0,0, moved later)
+    const createNode = (id: string, roleRadius: number, roleMass: number): PhysicsNode => ({
+        id,
+        x: 0, y: 0, // Will be set by structure
+        vx: 0, vy: 0, fx: 0, fy: 0,
+        mass: roleMass,
+        radius: roleRadius,
+        isFixed: false,
+    });
 
-    // 2. Identify Roles
+    // 1. Roles & Counts
     const spineCount = Math.max(3, Math.min(5, Math.floor(nodeCount * 0.1))); // 3-5 Spine nodes
     const remaining = nodeCount - spineCount;
-    // RIB Count: Randomize 60-75%
-    const ribRatio = 0.6 + Math.random() * 0.15;
+    const ribRatio = 0.6 + Math.random() * 0.15; // 60-75% Ribs
     const ribCount = Math.floor(remaining * ribRatio);
     const fiberCount = remaining - ribCount;
 
-    const spineNodes: number[] = [];
-    const ribNodes: number[] = [];
-    const fiberNodes: number[] = [];
+    // Arrays to track indices
+    const spineIndices: number[] = [];
+    const ribIndices: number[] = [];
+    const fiberIndices: number[] = [];
 
-    let idx = 0;
-    for (let i = 0; i < spineCount; i++) spineNodes.push(idx++);
-    for (let i = 0; i < ribCount; i++) ribNodes.push(idx++);
-    for (let i = 0; i < fiberCount; i++) fiberNodes.push(idx++);
+    let globalIdx = 0;
 
-    // 3. Build Spine (The Axis)
-    // CROOKED SPINE: Offset from center
-    const startOffset = {
+    // 2. Build Spine (The Axis)
+    // Intentional Asymmetry: Diagonal Axis (1, 0.5)
+    // Start offset
+    const currentPos = {
         x: (Math.random() - 0.5) * 50,
         y: (Math.random() - 0.5) * 50
     };
 
-    for (let i = 0; i < spineNodes.length; i++) {
-        const nIdx = spineNodes[i];
-        const node = nodes[nIdx];
+    const spineStep = { x: 12, y: 6 }; // "Crooked" step vector (small px)
 
-        // Offset Initial Position slightly to bias the unfolding
-        node.x += startOffset.x;
-        node.y += startOffset.y;
+    for (let i = 0; i < spineCount; i++) {
+        const id = `n${globalIdx}`;
+        spineIndices.push(globalIdx);
+        globalIdx++;
 
-        // Physics: Heavy Anchor
-        node.mass = 4.0;
-        node.radius = 8.0;
+        const node = createNode(id, 8.0, 4.0); // Heavy, Big
 
+        // PLACEMENT: Sequential
+        if (i === 0) {
+            node.x = currentPos.x;
+            node.y = currentPos.y;
+        } else {
+            // Move "forward" along axis
+            currentPos.x += spineStep.x + (Math.random() - 0.5) * 4; // Slight jitter
+            currentPos.y += spineStep.y + (Math.random() - 0.5) * 4;
+            node.x = currentPos.x;
+            node.y = currentPos.y;
+        }
+
+        nodes.push(node);
+
+        // LINKING
         if (i > 0) {
-            // Crooked Chain: Occasional branching
-            // 20% chance to connect to i-2 instead of i-1 (Branching Y)
-            let targetDiff = 1;
-            if (i > 1 && Math.random() < 0.2) targetDiff = 2;
+            // Crooked Chain: Occasional branching (Y-shape)
+            let targetStep = 1;
+            if (i > 1 && Math.random() < 0.2) targetStep = 2; // Connect to grandparent
 
-            const prevIdx = spineNodes[i - targetDiff];
+            const prevIdx = spineIndices[i - targetStep];
             links.push({
                 source: `n${prevIdx}`,
-                target: `n${nIdx}`,
+                target: id,
                 lengthBias: 0.5, // SHORT
                 stiffnessBias: 1.0 // STIFF
             });
         }
     }
 
-    // 4. Build Ribs (The Body)
-    // Attach to random spine nodes
-    for (const nIdx of ribNodes) {
-        const node = nodes[nIdx];
+    // 3. Build Ribs (The Body)
+    // Anchored to Spine
+    for (let i = 0; i < ribCount; i++) {
+        const id = `n${globalIdx}`;
+        ribIndices.push(globalIdx);
+        globalIdx++;
 
-        // Physics: Medium Body
-        node.mass = 2.0;
-        node.radius = 6.0;
+        const node = createNode(id, 6.0, 2.0); // Medium
 
-        // Cage (2 links) or Flail (1 link)?
-        const isCage = Math.random() < 0.2; // 20% Cage
+        // Pick Anchor
+        const spineAnchorIdx = spineIndices[Math.floor(Math.random() * spineIndices.length)];
+        const spineAnchor = nodes[spineAnchorIdx];
 
-        // First Link
-        const spineTarget = spineNodes[Math.floor(Math.random() * spineNodes.length)];
+        // PLACEMENT: Offset from Normal
+        // "Normal" to (1, 0.5) is (-0.5, 1) or (0.5, -1).
+        // Let's alternate sides based on index parity to create "volume"
+        const side = (i % 2 === 0) ? 1 : -1;
+        const ribOffset = { x: -3 * side, y: 6 * side };
+
+        node.x = spineAnchor.x + ribOffset.x + (Math.random() - 0.5) * 4;
+        node.y = spineAnchor.y + ribOffset.y + (Math.random() - 0.5) * 4;
+
+        nodes.push(node);
+
+        // LINKING
         links.push({
-            source: `n${spineTarget}`,
-            target: `n${nIdx}`,
+            source: spineAnchor.id,
+            target: id,
             lengthBias: 1.0, // NORMAL
             stiffnessBias: 0.8 // FIRM
         });
 
-        // Second Link (Cage)
-        if (isCage) {
-            const spineTarget2 = spineNodes[Math.floor(Math.random() * spineNodes.length)];
-            if (spineTarget2 !== spineTarget) {
+        // Cage (20% chance double link)
+        if (Math.random() < 0.2) {
+            const anchor2Idx = spineIndices[Math.floor(Math.random() * spineIndices.length)];
+            if (anchor2Idx !== spineAnchorIdx) {
                 links.push({
-                    source: `n${spineTarget2}`,
-                    target: `n${nIdx}`,
+                    source: `n${anchor2Idx}`,
+                    target: id,
                     lengthBias: 1.0,
                     stiffnessBias: 0.8
                 });
@@ -167,19 +185,35 @@ function generateRandomGraph(nodeCount: number, connectivity: number) {
         }
     }
 
-    // 5. Build Fibers (The Detail)
-    // Attach to random Rib nodes
-    for (const nIdx of fiberNodes) {
-        const node = nodes[nIdx];
+    // 4. Build Fibers (The Detail)
+    // Anchored to Ribs
+    for (let i = 0; i < fiberCount; i++) {
+        const id = `n${globalIdx}`;
+        fiberIndices.push(globalIdx);
+        globalIdx++;
 
-        // Physics: Light Detail
-        node.mass = 1.0;
-        node.radius = 4.0;
+        const node = createNode(id, 4.0, 1.0); // Light
 
-        const ribTarget = ribNodes[Math.floor(Math.random() * ribNodes.length)];
+        // Pick Anchor
+        const ribAnchorIdx = ribIndices[Math.floor(Math.random() * ribIndices.length)];
+        const ribAnchor = nodes[ribAnchorIdx];
+
+        // PLACEMENT: Small outward offset
+        // Just extend further out
+        const fiberOffset = {
+            x: (Math.random() - 0.5) * 8,
+            y: (Math.random() - 0.5) * 8
+        };
+
+        node.x = ribAnchor.x + fiberOffset.x;
+        node.y = ribAnchor.y + fiberOffset.y;
+
+        nodes.push(node);
+
+        // LINKING
         links.push({
-            source: `n${ribTarget}`,
-            target: `n${nIdx}`,
+            source: ribAnchor.id,
+            target: id,
             lengthBias: 1.5, // LONG
             stiffnessBias: 0.4 // LOOSE (Soft)
         });
@@ -298,17 +332,14 @@ export const GraphPhysicsPlayground: React.FC = () => {
 
                 // Style dependent on state
                 if (node.isFixed) {
-                    ctx.fillStyle = '#ff4444'; // Red if fixed (unused currently but good for debug)
+                    ctx.fillStyle = '#ff4444';
                 } else {
-                    ctx.fillStyle = '#4488ff'; // Blue default
+                    ctx.fillStyle = '#4488ff';
                 }
-
-                // Highlight dragged node
-                // (We can't easily access private draggedNodeId, but we know if we are rendering)
 
                 ctx.fill();
                 ctx.strokeStyle = '#fff';
-                ctx.lineWidth = 1; // node.isFixed ? 2 : 1; 
+                ctx.lineWidth = 1;
                 ctx.stroke();
             });
 
@@ -318,7 +349,7 @@ export const GraphPhysicsPlayground: React.FC = () => {
             frameCount++;
             const fpsDelta = now - lastFpsTime;
 
-            if (fpsDelta >= 500) { // Update every 500ms
+            if (fpsDelta >= 100) { // Update every 100ms
                 const fps = Math.round((frameCount * 1000) / fpsDelta);
 
                 // Calc Average Kinetic Energy / Velocity
@@ -354,10 +385,7 @@ export const GraphPhysicsPlayground: React.FC = () => {
 
                 const shapeW = maxX - minX;
                 const shapeH = maxY - minY;
-                // Avoid divide by zero
                 const aspect = (shapeH > 0.1) ? shapeW / shapeH : 1.0;
-                // Normalize aspect (always >= 1.0) for easier reading? User wanted raw logs.
-                // Let's keep raw W/H ratio. 
 
                 setMetrics({
                     nodes: engine.nodes.size,
@@ -539,7 +567,7 @@ export const GraphPhysicsPlayground: React.FC = () => {
                         max = 10.0;
                         step = 0.1;
                     }
-                    if (k === 'repulsionStrength' || k === 'boundaryStrength') {
+                    if (k === 'repulsionStrength' || k === 'boundaryStrength' || k === 'collisionStrength') {
                         max = 10000;
                         step = 100;
                     }

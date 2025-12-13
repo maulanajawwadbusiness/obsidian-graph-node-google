@@ -219,25 +219,19 @@ export class PhysicsEngine {
         this.lifecycle += dt;
 
         // 0. FIRE IMPULSE (One Shot)
-        // Ensure we only do this once per "session" of lifecycle
         if (this.lifecycle < 0.1 && !this.hasFiredImpulse) {
-            // Let forces run for one tick to establish direction?? 
-            // Or just fire it. 
-            // We'll fire it immediately.
-            // Actually, let's let Repulsion establish vectors first? 
-            // No, Repulsion is expensive. Springs are the guide.
-            // We will rely on the fact that graph gen (seeding) placed them in relative positions.
-            // So spring vectors are somewhat valid.
             this.fireInitialImpulse();
         }
 
         // NEW LIFECYCLE: IMPULSE SNAP
-        // 0s - 0.25s: FLIGHT (Low Damping, let the impulse carry)
-        // 0.25s+:     LOCK   (High Damping, clamp the result)
-        const isFlight = this.lifecycle < 0.25;
+        // 0s - 0.3s: SNAP (Low Damping, UNLIMITED SPEED)
+        // 0.3s+:     LOCK (High Damping, CLAMPED SPEED)
+        const isSnap = this.lifecycle < 0.30;
 
-        // Discrete Jump
-        const effectiveDamping = isFlight ? 0.3 : 0.90;
+        // Phase-Based Parameters
+        const phaseName = isSnap ? 'SNAP' : 'LOCK';
+        const effectiveDamping = isSnap ? 0.3 : 0.90;
+        const maxVelocityEffective = isSnap ? 1500 : maxVelocity; // Hot: 1500, Cold: 80
 
         // 1. Clear forces
         for (const node of nodeList) {
@@ -247,9 +241,9 @@ export class PhysicsEngine {
 
         // 2. Apply Core Forces
         applyRepulsion(nodeList, this.config);
-        applyCollision(nodeList, this.config, 1.0); // Collision always on
-        applySprings(this.nodes, this.links, this.config, 1.0); // Standard springs
-        applyCenterGravity(nodeList, this.config);
+        applyCollision(nodeList, this.config, 1.0);
+        applySprings(this.nodes, this.links, this.config, 1.0);
+        // Note: No gravity - we use hard spatial envelope instead
         applyBoundaryForce(nodeList, this.config, this.worldWidth, this.worldHeight);
 
         // 3. Apply Mouse Drag Force
@@ -267,6 +261,7 @@ export class PhysicsEngine {
         }
 
         // 4. Integrate
+        let clampHitCount = 0;
         for (const node of nodeList) {
             if (node.isFixed) continue;
 
@@ -281,12 +276,13 @@ export class PhysicsEngine {
             node.vx *= (1 - effectiveDamping * dt * 5.0);
             node.vy *= (1 - effectiveDamping * dt * 5.0);
 
-            // Clamp Velocity
+            // Clamp Velocity (Phase-Based)
             const vSq = node.vx * node.vx + node.vy * node.vy;
-            if (vSq > maxVelocity * maxVelocity) {
+            if (vSq > maxVelocityEffective * maxVelocityEffective) {
                 const v = Math.sqrt(vSq);
-                node.vx = (node.vx / v) * maxVelocity;
-                node.vy = (node.vy / v) * maxVelocity;
+                node.vx = (node.vx / v) * maxVelocityEffective;
+                node.vy = (node.vy / v) * maxVelocityEffective;
+                clampHitCount++;
             }
 
             // Update Position
@@ -302,6 +298,11 @@ export class PhysicsEngine {
                     node.vy = 0;
                 }
             }
+        }
+
+        // DEBUG: Log phase info every 10 frames (~166ms at 60fps)
+        if (Math.floor(this.lifecycle * 60) % 10 === 0) {
+            console.log(`[Physics] Phase: ${phaseName} | MaxV: ${maxVelocityEffective} | Speed Clamps: ${clampHitCount}/${nodeList.length}`);
         }
     }
 }

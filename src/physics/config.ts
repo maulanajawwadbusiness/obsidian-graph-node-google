@@ -19,7 +19,7 @@ export const DEFAULT_PHYSICS_CONFIG: ForceConfig = {
     springStiffness: 0.2, // Moderate stiffness for "unfolding".
 
     // Define the "relaxed" length of edges.
-    springLength: 120,
+    springLength: 90,
 
     // ---------------------------------------------------------------------------
     // ANCHOR: Center-of-Mass (Comfort Field)

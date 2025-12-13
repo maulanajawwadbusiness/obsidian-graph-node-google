@@ -247,6 +247,16 @@ export const GraphPhysicsPlayground: React.FC = () => {
     });
     const [spawnCount, setSpawnCount] = useState(20);
 
+    // Camera State (for automatic framing)
+    const cameraRef = useRef({
+        panX: 0,
+        panY: 0,
+        zoom: 1.0,
+        targetPanX: 0,
+        targetPanY: 0,
+        targetZoom: 1.0
+    });
+
     // Ref for Loop Access
     const settingsRef = useRef({ useVariedSize: true });
 
@@ -304,9 +314,58 @@ export const GraphPhysicsPlayground: React.FC = () => {
 
             ctx.clearRect(0, 0, width, height);
 
-            // Camera: Center (0,0) at screen center
+            // CAMERA LEASH CONTAINMENT
+            // Calculate node AABB in world space
+            const nodes = Array.from(engine.nodes.values());
+            if (nodes.length > 0) {
+                let minX = Infinity, maxX = -Infinity;
+                let minY = Infinity, maxY = -Infinity;
+
+                nodes.forEach(node => {
+                    minX = Math.min(minX, node.x - node.radius);
+                    maxX = Math.max(maxX, node.x + node.radius);
+                    minY = Math.min(minY, node.y - node.radius);
+                    maxY = Math.max(maxY, node.y + node.radius);
+                });
+
+                const aabbWidth = maxX - minX;
+                const aabbHeight = maxY - minY;
+                const aabbCenterX = (minX + maxX) / 2;
+                const aabbCenterY = (minY + maxY) / 2;
+
+                // Define safe rect (viewport inset by margin)
+                const marginPx = Math.min(width, height) * 0.15;
+                const safeWidth = width - 2 * marginPx;
+                const safeHeight = height - 2 * marginPx;
+
+                // Calculate required zoom to fit AABB in safe rect
+                const zoomX = safeWidth / aabbWidth;
+                const zoomY = safeHeight / aabbHeight;
+                const requiredZoom = Math.min(zoomX, zoomY, 1.0); // Don't zoom in past 1.0
+
+                // Calculate required pan to center AABB
+                const requiredPanX = -aabbCenterX;
+                const requiredPanY = -aabbCenterY;
+
+                // Update camera targets
+                const camera = cameraRef.current;
+                camera.targetPanX = requiredPanX;
+                camera.targetPanY = requiredPanY;
+                camera.targetZoom = requiredZoom;
+
+                // Smooth damping (fast settle ~200-300ms)
+                const dampingFactor = 0.15; // Higher = faster
+                camera.panX += (camera.targetPanX - camera.panX) * dampingFactor;
+                camera.panY += (camera.targetPanY - camera.panY) * dampingFactor;
+                camera.zoom += (camera.targetZoom - camera.zoom) * dampingFactor;
+            }
+
+            // Apply camera transform
             ctx.save();
+            const camera = cameraRef.current;
             ctx.translate(width / 2, height / 2);
+            ctx.scale(camera.zoom, camera.zoom);
+            ctx.translate(camera.panX, camera.panY);
 
             // Draw Links
             ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';

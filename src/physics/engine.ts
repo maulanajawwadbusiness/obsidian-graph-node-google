@@ -172,8 +172,9 @@ export class PhysicsEngine {
             // If d=10, len=60, disp = -50.
             // Force acts to increase d. So it pushes apart.
 
-            // We will inject a massive scalar of this natural force.
-            const forceBase = 50.0; // Impulse multiplier
+            // Impulse magnitude scales with springLength but is clamped to prevent explosions
+            // This ensures snap strength matches geometry scale while staying controlled
+            const forceBase = Math.max(120, Math.min(600, springLength * 0.4));
 
             impulses.get(source.id)!.x += nx * forceBase;
             impulses.get(source.id)!.y += ny * forceBase;

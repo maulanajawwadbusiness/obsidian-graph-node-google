@@ -64,7 +64,7 @@ function simpleHash(str: string): number {
 // Generate a "Spine-Rib-Fiber" Topology
 // KEY UPDATE: "Structural Seeding". Nodes are placed relative to their parents
 // to break radial symmetry at t=0.
-function generateRandomGraph(nodeCount: number, connectivity: number) {
+function generateRandomGraph(nodeCount: number, connectivity: number, springLength: number = 120) {
     const nodes: PhysicsNode[] = [];
     const links: PhysicsLink[] = [];
 
@@ -75,8 +75,9 @@ function generateRandomGraph(nodeCount: number, connectivity: number) {
         vx: 0, vy: 0, fx: 0, fy: 0,
         mass: roleMass,
         radius: roleRadius,
-        role: role,
         isFixed: false,
+        warmth: 1.0,
+        role
     });
 
     // 1. Roles & Counts
@@ -97,11 +98,14 @@ function generateRandomGraph(nodeCount: number, connectivity: number) {
     // Intentional Asymmetry: Diagonal Axis (1, 0.5)
     // Start offset
     const currentPos = {
-        x: (Math.random() - 0.5) * 50,
-        y: (Math.random() - 0.5) * 50
+        x: (Math.random() - 0.5) * springLength * 0.5,
+        y: (Math.random() - 0.5) * springLength * 0.5
     };
 
-    const spineStep = { x: 12, y: 6 }; // "Crooked" step vector (small px)
+    const spineStep = {
+        x: springLength * 0.1,  // Proportional to springLength
+        y: springLength * 0.05  // "Crooked" diagonal
+    };
 
     for (let i = 0; i < spineCount; i++) {
         const id = `n${globalIdx}`;
@@ -116,8 +120,8 @@ function generateRandomGraph(nodeCount: number, connectivity: number) {
             node.y = currentPos.y;
         } else {
             // Move "forward" along axis
-            currentPos.x += spineStep.x + (Math.random() - 0.5) * 4; // Slight jitter
-            currentPos.y += spineStep.y + (Math.random() - 0.5) * 4;
+            currentPos.x += spineStep.x + (Math.random() - 0.5) * springLength * 0.03; // Slight jitter
+            currentPos.y += spineStep.y + (Math.random() - 0.5) * springLength * 0.03;
             node.x = currentPos.x;
             node.y = currentPos.y;
         }
@@ -157,10 +161,13 @@ function generateRandomGraph(nodeCount: number, connectivity: number) {
         // "Normal" to (1, 0.5) is (-0.5, 1) or (0.5, -1).
         // Let's alternate sides based on index parity to create "volume"
         const side = (i % 2 === 0) ? 1 : -1;
-        const ribOffset = { x: -3 * side, y: 6 * side };
+        const ribOffset = {
+            x: -springLength * 0.025 * side,  // Proportional to springLength
+            y: springLength * 0.05 * side
+        };
 
-        node.x = spineAnchor.x + ribOffset.x + (Math.random() - 0.5) * 4;
-        node.y = spineAnchor.y + ribOffset.y + (Math.random() - 0.5) * 4;
+        node.x = spineAnchor.x + ribOffset.x + (Math.random() - 0.5) * springLength * 0.03;
+        node.y = spineAnchor.y + ribOffset.y + (Math.random() - 0.5) * springLength * 0.03;
 
         nodes.push(node);
 
@@ -202,8 +209,8 @@ function generateRandomGraph(nodeCount: number, connectivity: number) {
         // PLACEMENT: Small outward offset
         // Just extend further out
         const fiberOffset = {
-            x: (Math.random() - 0.5) * 8,
-            y: (Math.random() - 0.5) * 8
+            x: (Math.random() - 0.5) * springLength * 0.067,  // Proportional to springLength
+            y: (Math.random() - 0.5) * springLength * 0.067
         };
 
         node.x = ribAnchor.x + fiberOffset.x;
@@ -280,7 +287,7 @@ export const GraphPhysicsPlayground: React.FC = () => {
 
         // Initial Spawn if empty
         if (engine.nodes.size === 0) {
-            const { nodes, links } = generateRandomGraph(20, 0.05);
+            const { nodes, links } = generateRandomGraph(20, 0.05, config.springLength);
             nodes.forEach(n => engine.addNode(n));
             links.forEach(l => engine.addLink(l));
         }
@@ -527,7 +534,7 @@ export const GraphPhysicsPlayground: React.FC = () => {
 
     const handleSpawn = () => {
         engineRef.current.clear();
-        const { nodes, links } = generateRandomGraph(spawnCount, 0.05);
+        const { nodes, links } = generateRandomGraph(spawnCount, 0.05, config.springLength);
         nodes.forEach(n => engineRef.current.addNode(n));
         links.forEach(l => engineRef.current.addLink(l));
     };

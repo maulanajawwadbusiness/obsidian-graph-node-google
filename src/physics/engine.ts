@@ -310,15 +310,45 @@ export class PhysicsEngine {
         // 0.6 REST STATE TRANSITION (Time-based, NOT velocity-based)
         // At latchTime, DECLARE the shape complete and freeze immediately
         if (this.formLatched && this.restState === 'forming') {
-            this.snapToHome(); // Freeze positions to home offsets
+            // Don't snap immediately - let the perceptual fade handle it
             this.restState = 'rest';
-            console.log('[RestState] forming → rest (shape locked)');
+            console.log('[RestState] forming → rest (fade started)');
         }
 
-        // 0.7 HARD STOP: Exit immediately if in rest and not dragging
-        // When resting, behave like a static object, not a physics system
-        if (this.restState === 'rest' && !this.draggedNodeId) {
-            return; // Zero computation: no forces, no integration, no drift
+        // 0.7 PERCEPTUAL FADE: Smooth motion fade-out (animation, not physics)
+        // Positions lerp toward home over fadeDuration, then freeze
+        if (this.restState === 'rest') {
+            const fadeDuration = 0.3; // 300ms fade
+            const timeSinceLatch = this.lifecycle - (this.config.latchTime / 1000);
+            const fadeProgress = Math.min(timeSinceLatch / fadeDuration, 1.0);
+
+            // If drag active, skip fade - cursor wins
+            if (this.draggedNodeId) {
+                // Allow physics to run for drag
+            } else if (fadeProgress < 1.0) {
+                // During fade: lerp positions toward home (animation, not integration)
+                const centroid = this.getCentroid();
+                const easeOut = 1 - Math.pow(1 - fadeProgress, 3); // Cubic ease-out
+
+                for (const node of nodeList) {
+                    if (node.homeOffsetX === undefined) continue;
+                    if (node.homeOffsetY === undefined) continue;
+
+                    const homeX = centroid.x + node.homeOffsetX;
+                    const homeY = centroid.y + node.homeOffsetY;
+
+                    // Lerp toward home with easing
+                    node.x = node.x + (homeX - node.x) * easeOut * 0.15;
+                    node.y = node.y + (homeY - node.y) * easeOut * 0.15;
+                    node.vx = 0;
+                    node.vy = 0;
+                }
+                return; // Skip physics during fade
+            } else {
+                // Fade complete: snap to exact home and freeze
+                this.snapToHome();
+                return; // Zero computation
+            }
         }
 
         // NEW LIFECYCLE: IMPULSE SNAP

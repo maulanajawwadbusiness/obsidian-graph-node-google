@@ -23,6 +23,9 @@ export interface PhysicsNode {
   isFixed: boolean; // If true, physics ignores position updates (useful for dragging)
   warmth?: number; // 0.0 (Cold) to 1.0 (Hot). Defaults to 1.0 if undefined.
   role?: 'spine' | 'rib' | 'fiber'; // Topology role for directed impulse weighting
+
+  // Orbital Drift (captured at equilibrium time)
+  equilibrium?: { x: number, y: number }; // Settled position for anisotropic damping
 }
 
 export interface PhysicsLink {
@@ -76,4 +79,11 @@ export interface ForceConfig {
   // ---------------------------------------------------------------------------
   collisionStrength: number; // Stiffness of the personal bubble
   collisionPadding: number; // Extra radius around node to keep empty
+
+  // ---------------------------------------------------------------------------
+  // Orbital Drift (Anisotropic Damping)
+  // ---------------------------------------------------------------------------
+  equilibriumCaptureTime: number; // When to capture equilibrium positions (ms)
+  radialDamping: number;   // Damping for motion toward/away from equilibrium (kills expansion)
+  tangentDamping: number;  // Damping for orbital motion (preserves curl)
 }

@@ -77,4 +77,14 @@ export const DEFAULT_PHYSICS_CONFIG: ForceConfig = {
     collisionStrength: 2000,
     // Small padding to ensure readability (nodes don't kiss)
     collisionPadding: 8,  // Phase 4: 25% reduction from 10
+
+    // ---------------------------------------------------------------------------
+    // ANCHOR: Orbital Drift (Anisotropic Damping)
+    // ---------------------------------------------------------------------------
+    // When to capture equilibrium positions (ms after spawn)
+    equilibriumCaptureTime: 600,
+    // Heavy damping for radial motion (kills expansion/contraction)
+    radialDamping: 0.95,
+    // Light damping for tangential motion (preserves orbital drift / curl)
+    tangentDamping: 0.3,
 };

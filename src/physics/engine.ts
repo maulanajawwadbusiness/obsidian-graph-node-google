@@ -18,6 +18,7 @@ export class PhysicsEngine {
     // Lifecycle State (Startup Animation)
     public lifecycle: number = 0;
     private hasFiredImpulse: boolean = false;
+    private equilibriumCaptured: boolean = false; // Orbital drift equilibrium captured?
 
     constructor(config: Partial<ForceConfig> = {}) {
         this.config = { ...DEFAULT_PHYSICS_CONFIG, ...config };
@@ -48,6 +49,7 @@ export class PhysicsEngine {
         this.links = [];
         this.lifecycle = 0;
         this.hasFiredImpulse = false;
+        this.equilibriumCaptured = false; // Reset equilibrium
     }
 
     /**
@@ -290,6 +292,27 @@ export class PhysicsEngine {
 
         // 4. Integrate (always runs, never stops)
         let clampHitCount = 0;
+
+        // =====================================================================
+        // EQUILIBRIUM CAPTURE (One Shot at 600ms)
+        // =====================================================================
+        if (!this.equilibriumCaptured && this.lifecycle * 1000 >= this.config.equilibriumCaptureTime) {
+            for (const node of nodeList) {
+                node.equilibrium = { x: node.x, y: node.y };
+            }
+            this.equilibriumCaptured = true;
+            console.log(`[Orbital] Equilibrium captured at T+${Math.round(this.lifecycle * 1000)}ms`);
+        }
+
+        // Calculate live centroid for anisotropic damping during forming
+        let centroidX = 0, centroidY = 0;
+        for (const node of nodeList) {
+            centroidX += node.x;
+            centroidY += node.y;
+        }
+        centroidX /= nodeList.length;
+        centroidY /= nodeList.length;
+
         for (const node of nodeList) {
             if (node.isFixed) continue;
 
@@ -300,9 +323,47 @@ export class PhysicsEngine {
             node.vx += ax * dt;
             node.vy += ay * dt;
 
-            // Apply Damping (increases over time)
-            node.vx *= (1 - effectiveDamping * dt * 5.0);
-            node.vy *= (1 - effectiveDamping * dt * 5.0);
+            // =====================================================================
+            // ANISOTROPIC DAMPING: Always active (radial fast, tangential slow)
+            // Before capture: use live centroid as reference
+            // After capture: use frozen equilibrium
+            // =====================================================================
+
+            // Choose reference point
+            const refX = (node.equilibrium && this.equilibriumCaptured) ? node.equilibrium.x : centroidX;
+            const refY = (node.equilibrium && this.equilibriumCaptured) ? node.equilibrium.y : centroidY;
+
+            // Displacement from reference
+            const dx = node.x - refX;
+            const dy = node.y - refY;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+
+            if (dist < 0.5) {
+                // Too close to reference - use isotropic damping
+                node.vx *= (1 - effectiveDamping * dt * 5.0);
+                node.vy *= (1 - effectiveDamping * dt * 5.0);
+            } else {
+                // Radial and tangential unit vectors
+                const rx = dx / dist, ry = dy / dist;
+                const tx = -ry, ty = rx; // 90° CCW rotation
+
+                // Project velocity onto components
+                const vr = node.vx * rx + node.vy * ry;  // Radial (+ = away)
+                const vt = node.vx * tx + node.vy * ty;  // Tangential (+ = CCW)
+
+                // Apply differential damping
+                // Radial: heavy damping (kills expansion/contraction)
+                // Tangent: light damping (preserves orbital drift / curl)
+                const radialDamp = this.config.radialDamping;
+                const tangentDamp = this.config.tangentDamping;
+
+                const vrNew = vr * (1 - radialDamp * dt * 5.0);
+                const vtNew = vt * (1 - tangentDamp * dt * 5.0);
+
+                // Reconstruct velocity vector
+                node.vx = vrNew * rx + vtNew * tx;
+                node.vy = vrNew * ry + vtNew * ty;
+            }
 
             // Clamp Velocity
             const vSq = node.vx * node.vx + node.vy * node.vy;
@@ -317,7 +378,7 @@ export class PhysicsEngine {
             node.x += node.vx * dt;
             node.y += node.vy * dt;
 
-            // Sleep Check
+            // Sleep Check (optional - keeps physics running but zeros micro-motion)
             if (this.config.velocitySleepThreshold) {
                 const velSq = node.vx * node.vx + node.vy * node.vy;
                 const threshSq = this.config.velocitySleepThreshold * this.config.velocitySleepThreshold;

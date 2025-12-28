@@ -1,4 +1,4 @@
-import { PhysicsNode, PhysicsLink, ForceConfig } from './types';
+import { PhysicsNode, PhysicsLink, ForceConfig, RestState } from './types';
 import { DEFAULT_PHYSICS_CONFIG } from './config';
 import { applyRepulsion, applySprings, applyBoundaryForce, applyCollision } from './forces';
 
@@ -18,6 +18,8 @@ export class PhysicsEngine {
     // Lifecycle State (Startup Animation)
     public lifecycle: number = 0;
     private hasFiredImpulse: boolean = false;
+    private formLatched: boolean = false; // Shape memory captured?
+    private restState: RestState = 'forming'; // Rest state machine
 
     constructor(config: Partial<ForceConfig> = {}) {
         this.config = { ...DEFAULT_PHYSICS_CONFIG, ...config };
@@ -48,6 +50,8 @@ export class PhysicsEngine {
         this.links = [];
         this.lifecycle = 0;
         this.hasFiredImpulse = false;
+        this.formLatched = false; // Reset shape memory
+        this.restState = 'forming'; // Reset rest state
     }
 
     /**
@@ -114,6 +118,11 @@ export class PhysicsEngine {
             this.dragTarget = { ...position };
             this.wakeNode(nodeId);
             this.wakeNeighbors(nodeId);
+
+            // Note: We don't change restState when dragging
+            // The node is marked isFixed and will move with cursor
+            // On release, it stays where dropped (no elastic rebound)
+            // The hard stop check allows drag to bypass (checks draggedNodeId)
         }
     }
 
@@ -208,6 +217,77 @@ export class PhysicsEngine {
         this.hasFiredImpulse = true;
     }
 
+    // =========================================================================
+    // FORM LATCH (Shape Memory)
+    // =========================================================================
+
+    /**
+     * Capture the current shape as "home" positions.
+     * Called once when lifecycle reaches latchTime.
+     * Each node remembers its offset from the group centroid.
+     */
+    private captureFormLatch() {
+        if (this.formLatched) return;
+        if (this.lifecycle * 1000 < this.config.latchTime) return;
+
+        const nodeList = Array.from(this.nodes.values());
+        if (nodeList.length === 0) return;
+
+        // Calculate centroid
+        let cx = 0, cy = 0;
+        for (const node of nodeList) {
+            cx += node.x;
+            cy += node.y;
+        }
+        cx /= nodeList.length;
+        cy /= nodeList.length;
+
+        // Store home offsets (position relative to centroid)
+        for (const node of nodeList) {
+            node.homeOffsetX = node.x - cx;
+            node.homeOffsetY = node.y - cy;
+        }
+
+        this.formLatched = true;
+        console.log(`[FormLatch] Shape captured at T+${Math.round(this.lifecycle * 1000)}ms`);
+    }
+
+    // =========================================================================
+    // REST STATE HELPERS
+    // =========================================================================
+
+    /**
+     * Calculate the centroid (center of mass) of all nodes.
+     */
+    private getCentroid(): { x: number, y: number } {
+        const nodeList = Array.from(this.nodes.values());
+        if (nodeList.length === 0) return { x: 0, y: 0 };
+
+        let cx = 0, cy = 0;
+        for (const node of nodeList) {
+            cx += node.x;
+            cy += node.y;
+        }
+        return { x: cx / nodeList.length, y: cy / nodeList.length };
+    }
+
+    /**
+     * Snap all nodes to their home positions (centroid + homeOffset).
+     * Called when transitioning from 'settling' → 'rest'.
+     */
+    private snapToHome() {
+        const centroid = this.getCentroid();
+        for (const node of this.nodes.values()) {
+            if (node.homeOffsetX === undefined) continue;
+            if (node.homeOffsetY === undefined) continue;
+
+            node.x = centroid.x + node.homeOffsetX;
+            node.y = centroid.y + node.homeOffsetY;
+            node.vx = 0;
+            node.vy = 0;
+        }
+    }
+
     /**
      * Main Physics Tick.
      * @param dt Delta time in seconds (e.g. 0.016 for 60fps)
@@ -222,6 +302,23 @@ export class PhysicsEngine {
         // 0. FIRE IMPULSE (One Shot)
         if (this.lifecycle < 0.1 && !this.hasFiredImpulse) {
             this.fireInitialImpulse();
+        }
+
+        // 0.5 CAPTURE FORM LATCH (One Shot at 600ms)
+        this.captureFormLatch();
+
+        // 0.6 REST STATE TRANSITION (Time-based, NOT velocity-based)
+        // At latchTime, DECLARE the shape complete and freeze immediately
+        if (this.formLatched && this.restState === 'forming') {
+            this.snapToHome(); // Freeze positions to home offsets
+            this.restState = 'rest';
+            console.log('[RestState] forming → rest (shape locked)');
+        }
+
+        // 0.7 HARD STOP: Exit immediately if in rest and not dragging
+        // When resting, behave like a static object, not a physics system
+        if (this.restState === 'rest' && !this.draggedNodeId) {
+            return; // Zero computation: no forces, no integration, no drift
         }
 
         // NEW LIFECYCLE: IMPULSE SNAP
@@ -244,7 +341,6 @@ export class PhysicsEngine {
         applyRepulsion(nodeList, this.config);
         applyCollision(nodeList, this.config, 1.0);
         applySprings(this.nodes, this.links, this.config, 1.0);
-        // Note: No gravity - we use hard spatial envelope instead
         applyBoundaryForce(nodeList, this.config, this.worldWidth, this.worldHeight);
 
         // 3. Apply Mouse Drag Force
@@ -264,8 +360,16 @@ export class PhysicsEngine {
         // 4. Integrate
         let clampHitCount = 0;
         for (const node of nodeList) {
-            if (node.isFixed) continue;
+            if (node.isFixed) continue; // Drag always bypasses
 
+            // REST STATE: Freeze integration
+            if (this.restState === 'rest') {
+                node.vx = 0;
+                node.vy = 0;
+                continue; // Skip position update
+            }
+
+            // FORMING or SETTLING: Normal integration
             const ax = node.fx / node.mass;
             const ay = node.fy / node.mass;
 
@@ -273,7 +377,7 @@ export class PhysicsEngine {
             node.vx += ax * dt;
             node.vy += ay * dt;
 
-            // Apply Damping (Step Function)
+            // Apply Damping
             node.vx *= (1 - effectiveDamping * dt * 5.0);
             node.vy *= (1 - effectiveDamping * dt * 5.0);
 

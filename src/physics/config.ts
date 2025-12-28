@@ -85,6 +85,14 @@ export const DEFAULT_PHYSICS_CONFIG: ForceConfig = {
     equilibriumCaptureTime: 600,
     // Heavy damping for radial motion (kills expansion/contraction)
     radialDamping: 0.95,
-    // Light damping for tangential motion (preserves orbital drift / curl)
+    // Light damping for tangential motion (LEGACY - replaced by global spin)
     tangentDamping: 0.3,
+
+    // ---------------------------------------------------------------------------
+    // ANCHOR: Global Spin (Unified Rotation)
+    // ---------------------------------------------------------------------------
+    // How fast global spin decays (per second)
+    spinDamping: 0.5,
+    // How strongly nodes align to global spin direction (0 = ignore, 1 = instant)
+    spinBlend: 0.15,
 };

@@ -85,5 +85,11 @@ export interface ForceConfig {
   // ---------------------------------------------------------------------------
   equilibriumCaptureTime: number; // When to capture equilibrium positions (ms)
   radialDamping: number;   // Damping for motion toward/away from equilibrium (kills expansion)
-  tangentDamping: number;  // Damping for orbital motion (preserves curl)
+  tangentDamping: number;  // Damping for orbital motion (preserves curl) - LEGACY, use spinBlend
+
+  // ---------------------------------------------------------------------------
+  // Global Spin (Unified Rotation)
+  // ---------------------------------------------------------------------------
+  spinDamping: number;   // How fast global spin decays (per second)
+  spinBlend: number;     // How strongly nodes align to global spin direction
 }

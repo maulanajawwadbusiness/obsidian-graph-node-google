@@ -471,6 +471,14 @@ export const GraphPhysicsPlayground: React.FC = () => {
             ctx.scale(camera.zoom, camera.zoom);
             ctx.translate(camera.panX, camera.panY);
 
+            // Apply global rotation (rotating reference frame)
+            // Rotate entire graph around centroid
+            const centroid = engine.getCentroid();
+            const globalAngle = engine.getGlobalAngle();
+            ctx.translate(centroid.x, centroid.y);
+            ctx.rotate(globalAngle);
+            ctx.translate(-centroid.x, -centroid.y);
+
             // Draw Links
             ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
             ctx.lineWidth = 0.4;

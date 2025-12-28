@@ -18,7 +18,11 @@ export class PhysicsEngine {
     // Lifecycle State (Startup Animation)
     public lifecycle: number = 0;
     private hasFiredImpulse: boolean = false;
-    private equilibriumCaptured: boolean = false; // Orbital drift equilibrium captured?
+    private equilibriumCaptured: boolean = false;
+
+    // Rotating Reference Frame (global spin as a medium, not a force)
+    private globalAngle: number = 0;       // Accumulated rotation (radians)
+    private globalAngularVel: number = 0;  // Angular velocity (rad/s, + = CCW)
 
     constructor(config: Partial<ForceConfig> = {}) {
         this.config = { ...DEFAULT_PHYSICS_CONFIG, ...config };
@@ -49,7 +53,9 @@ export class PhysicsEngine {
         this.links = [];
         this.lifecycle = 0;
         this.hasFiredImpulse = false;
-        this.equilibriumCaptured = false; // Reset equilibrium
+        this.equilibriumCaptured = false;
+        this.globalAngle = 0;
+        this.globalAngularVel = 0;
     }
 
     /**
@@ -58,6 +64,33 @@ export class PhysicsEngine {
     updateConfig(newConfig: Partial<ForceConfig>) {
         this.config = { ...this.config, ...newConfig };
         this.wakeAll();
+    }
+
+    // =========================================================================
+    // ROTATING FRAME: Public Access
+    // =========================================================================
+
+    /**
+     * Get the accumulated global rotation angle (radians).
+     * Apply this at render time to rotate all nodes around centroid.
+     */
+    getGlobalAngle(): number {
+        return this.globalAngle;
+    }
+
+    /**
+     * Get the current centroid of all nodes.
+     */
+    getCentroid(): { x: number, y: number } {
+        const nodeList = Array.from(this.nodes.values());
+        if (nodeList.length === 0) return { x: 0, y: 0 };
+
+        let cx = 0, cy = 0;
+        for (const node of nodeList) {
+            cx += node.x;
+            cy += node.y;
+        }
+        return { x: cx / nodeList.length, y: cy / nodeList.length };
     }
 
     /**
@@ -293,18 +326,7 @@ export class PhysicsEngine {
         // 4. Integrate (always runs, never stops)
         let clampHitCount = 0;
 
-        // =====================================================================
-        // EQUILIBRIUM CAPTURE (One Shot at 600ms)
-        // =====================================================================
-        if (!this.equilibriumCaptured && this.lifecycle * 1000 >= this.config.equilibriumCaptureTime) {
-            for (const node of nodeList) {
-                node.equilibrium = { x: node.x, y: node.y };
-            }
-            this.equilibriumCaptured = true;
-            console.log(`[Orbital] Equilibrium captured at T+${Math.round(this.lifecycle * 1000)}ms`);
-        }
-
-        // Calculate live centroid for anisotropic damping during forming
+        // Calculate live centroid (needed for global spin and anisotropic damping)
         let centroidX = 0, centroidY = 0;
         for (const node of nodeList) {
             centroidX += node.x;
@@ -312,6 +334,46 @@ export class PhysicsEngine {
         }
         centroidX /= nodeList.length;
         centroidY /= nodeList.length;
+
+        // =====================================================================
+        // EQUILIBRIUM CAPTURE + ROTATING FRAME (One Shot at 600ms)
+        // =====================================================================
+        if (!this.equilibriumCaptured && this.lifecycle * 1000 >= this.config.equilibriumCaptureTime) {
+            // Capture equilibrium positions
+            for (const node of nodeList) {
+                node.equilibrium = { x: node.x, y: node.y };
+            }
+
+            // Capture global angular velocity from current node velocities
+            let spinSum = 0, weightSum = 0;
+            for (const node of nodeList) {
+                const dx = node.x - centroidX;
+                const dy = node.y - centroidY;
+                const r = Math.sqrt(dx * dx + dy * dy);
+                if (r < 1) continue;
+
+                // Tangent direction (CCW)
+                const tx = -dy / r, ty = dx / r;
+                // Tangent velocity component
+                const vt = node.vx * tx + node.vy * ty;
+                // Angular velocity = vt / r, weight by r^2 (moment of inertia)
+                spinSum += (vt / r) * r * r;
+                weightSum += r * r;
+            }
+            this.globalAngularVel = weightSum > 0 ? spinSum / weightSum : 0;
+
+            this.equilibriumCaptured = true;
+            console.log(`[RotatingFrame] Captured ω=${this.globalAngularVel.toFixed(4)} rad/s at T+${Math.round(this.lifecycle * 1000)}ms`);
+        }
+
+        // =====================================================================
+        // ROTATING FRAME: Decay angular velocity and accumulate angle
+        // (Rotation is applied at RENDER time, not here)
+        // =====================================================================
+        if (this.equilibriumCaptured) {
+            this.globalAngularVel *= Math.exp(-this.config.spinDamping * dt);
+            this.globalAngle += this.globalAngularVel * dt;
+        }
 
         for (const node of nodeList) {
             if (node.isFixed) continue;
@@ -324,22 +386,18 @@ export class PhysicsEngine {
             node.vy += ay * dt;
 
             // =====================================================================
-            // ANISOTROPIC DAMPING: Always active (radial fast, tangential slow)
-            // Before capture: use live centroid as reference
-            // After capture: use frozen equilibrium
+            // AUTHORITATIVE ROTATION: Kill tangent velocity after capture
+            // Before capture: anisotropic damping (to capture initial spin)
+            // After capture: PURE RADIAL motion only (rotation from transform)
             // =====================================================================
 
-            // Choose reference point
-            const refX = (node.equilibrium && this.equilibriumCaptured) ? node.equilibrium.x : centroidX;
-            const refY = (node.equilibrium && this.equilibriumCaptured) ? node.equilibrium.y : centroidY;
-
-            // Displacement from reference
-            const dx = node.x - refX;
-            const dy = node.y - refY;
+            // Displacement from centroid
+            const dx = node.x - centroidX;
+            const dy = node.y - centroidY;
             const dist = Math.sqrt(dx * dx + dy * dy);
 
             if (dist < 0.5) {
-                // Too close to reference - use isotropic damping
+                // Too close to centroid - use isotropic damping
                 node.vx *= (1 - effectiveDamping * dt * 5.0);
                 node.vy *= (1 - effectiveDamping * dt * 5.0);
             } else {
@@ -348,21 +406,23 @@ export class PhysicsEngine {
                 const tx = -ry, ty = rx; // 90° CCW rotation
 
                 // Project velocity onto components
-                const vr = node.vx * rx + node.vy * ry;  // Radial (+ = away)
-                const vt = node.vx * tx + node.vy * ty;  // Tangential (+ = CCW)
+                const vr = node.vx * rx + node.vy * ry;
+                const vt = node.vx * tx + node.vy * ty;
 
-                // Apply differential damping
-                // Radial: heavy damping (kills expansion/contraction)
-                // Tangent: light damping (preserves orbital drift / curl)
-                const radialDamp = this.config.radialDamping;
-                const tangentDamp = this.config.tangentDamping;
-
-                const vrNew = vr * (1 - radialDamp * dt * 5.0);
-                const vtNew = vt * (1 - tangentDamp * dt * 5.0);
-
-                // Reconstruct velocity vector
-                node.vx = vrNew * rx + vtNew * tx;
-                node.vy = vrNew * ry + vtNew * ty;
+                // After capture: KILL tangent velocity completely
+                // Rotation comes ONLY from globalAngle transform
+                if (this.equilibriumCaptured) {
+                    // Pure radial motion only
+                    const vrNew = vr * (1 - this.config.radialDamping * dt * 5.0);
+                    node.vx = vrNew * rx;  // No tangent component
+                    node.vy = vrNew * ry;
+                } else {
+                    // Before capture: anisotropic damping (to capture initial spin)
+                    const vrNew = vr * (1 - this.config.radialDamping * dt * 5.0);
+                    const vtNew = vt * (1 - this.config.tangentDamping * dt * 5.0);
+                    node.vx = vrNew * rx + vtNew * tx;
+                    node.vy = vrNew * ry + vtNew * ty;
+                }
             }
 
             // Clamp Velocity

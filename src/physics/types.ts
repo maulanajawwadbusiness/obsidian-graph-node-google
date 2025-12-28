@@ -3,11 +3,6 @@ export interface Vector2 {
   y: number;
 }
 
-// Rest State Machine (for equilibrium behavior)
-// forming: physics active, finding shape
-// rest: positions frozen, zero computation
-export type RestState = 'forming' | 'rest';
-
 export interface PhysicsNode {
   id: string;
   // Position
@@ -28,10 +23,6 @@ export interface PhysicsNode {
   isFixed: boolean; // If true, physics ignores position updates (useful for dragging)
   warmth?: number; // 0.0 (Cold) to 1.0 (Hot). Defaults to 1.0 if undefined.
   role?: 'spine' | 'rib' | 'fiber'; // Topology role for directed impulse weighting
-
-  // Form Latch (Shape Memory)
-  homeOffsetX?: number; // Position relative to centroid at latch time
-  homeOffsetY?: number;
 }
 
 export interface PhysicsLink {
@@ -85,9 +76,4 @@ export interface ForceConfig {
   // ---------------------------------------------------------------------------
   collisionStrength: number; // Stiffness of the personal bubble
   collisionPadding: number; // Extra radius around node to keep empty
-
-  // ---------------------------------------------------------------------------
-  // Form Latch (Shape Memory) + Rest State
-  // ---------------------------------------------------------------------------
-  latchTime: number; // When to capture form and freeze (ms after lifecycle start)
 }

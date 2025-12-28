@@ -1,4 +1,4 @@
-import { PhysicsNode, PhysicsLink, ForceConfig, RestState } from './types';
+import { PhysicsNode, PhysicsLink, ForceConfig } from './types';
 import { DEFAULT_PHYSICS_CONFIG } from './config';
 import { applyRepulsion, applySprings, applyBoundaryForce, applyCollision } from './forces';
 
@@ -18,8 +18,6 @@ export class PhysicsEngine {
     // Lifecycle State (Startup Animation)
     public lifecycle: number = 0;
     private hasFiredImpulse: boolean = false;
-    private formLatched: boolean = false; // Shape memory captured?
-    private restState: RestState = 'forming'; // Rest state machine
 
     constructor(config: Partial<ForceConfig> = {}) {
         this.config = { ...DEFAULT_PHYSICS_CONFIG, ...config };
@@ -50,8 +48,6 @@ export class PhysicsEngine {
         this.links = [];
         this.lifecycle = 0;
         this.hasFiredImpulse = false;
-        this.formLatched = false; // Reset shape memory
-        this.restState = 'forming'; // Reset rest state
     }
 
     /**
@@ -217,84 +213,12 @@ export class PhysicsEngine {
         this.hasFiredImpulse = true;
     }
 
-    // =========================================================================
-    // FORM LATCH (Shape Memory)
-    // =========================================================================
-
-    /**
-     * Capture the current shape as "home" positions.
-     * Called once when lifecycle reaches latchTime.
-     * Each node remembers its offset from the group centroid.
-     */
-    private captureFormLatch() {
-        if (this.formLatched) return;
-        if (this.lifecycle * 1000 < this.config.latchTime) return;
-
-        const nodeList = Array.from(this.nodes.values());
-        if (nodeList.length === 0) return;
-
-        // Calculate centroid
-        let cx = 0, cy = 0;
-        for (const node of nodeList) {
-            cx += node.x;
-            cy += node.y;
-        }
-        cx /= nodeList.length;
-        cy /= nodeList.length;
-
-        // Store home offsets (position relative to centroid)
-        for (const node of nodeList) {
-            node.homeOffsetX = node.x - cx;
-            node.homeOffsetY = node.y - cy;
-        }
-
-        this.formLatched = true;
-        console.log(`[FormLatch] Shape captured at T+${Math.round(this.lifecycle * 1000)}ms`);
-    }
-
-    // =========================================================================
-    // REST STATE HELPERS
-    // =========================================================================
-
-    /**
-     * Calculate the centroid (center of mass) of all nodes.
-     */
-    private getCentroid(): { x: number, y: number } {
-        const nodeList = Array.from(this.nodes.values());
-        if (nodeList.length === 0) return { x: 0, y: 0 };
-
-        let cx = 0, cy = 0;
-        for (const node of nodeList) {
-            cx += node.x;
-            cy += node.y;
-        }
-        return { x: cx / nodeList.length, y: cy / nodeList.length };
-    }
-
-    /**
-     * Snap all nodes to their home positions (centroid + homeOffset).
-     * Called when transitioning from 'settling' → 'rest'.
-     */
-    private snapToHome() {
-        const centroid = this.getCentroid();
-        for (const node of this.nodes.values()) {
-            if (node.homeOffsetX === undefined) continue;
-            if (node.homeOffsetY === undefined) continue;
-
-            node.x = centroid.x + node.homeOffsetX;
-            node.y = centroid.y + node.homeOffsetY;
-            node.vx = 0;
-            node.vy = 0;
-        }
-    }
-
     /**
      * Main Physics Tick.
      * @param dt Delta time in seconds (e.g. 0.016 for 60fps)
      */
     tick(dt: number) {
         const nodeList = Array.from(this.nodes.values());
-        const { maxVelocity } = this.config;
 
         // Lifecycle Management
         this.lifecycle += dt;
@@ -304,62 +228,33 @@ export class PhysicsEngine {
             this.fireInitialImpulse();
         }
 
-        // 0.5 CAPTURE FORM LATCH (One Shot at 600ms)
-        this.captureFormLatch();
 
-        // 0.6 REST STATE TRANSITION (Time-based, NOT velocity-based)
-        // At latchTime, DECLARE the shape complete and freeze immediately
-        if (this.formLatched && this.restState === 'forming') {
-            // Don't snap immediately - let the perceptual fade handle it
-            this.restState = 'rest';
-            console.log('[RestState] forming → rest (fade started)');
-        }
 
-        // 0.7 PERCEPTUAL FADE: Smooth motion fade-out (animation, not physics)
-        // Positions lerp toward home over fadeDuration, then freeze
-        if (this.restState === 'rest') {
-            const fadeDuration = 0.3; // 300ms fade
-            const timeSinceLatch = this.lifecycle - (this.config.latchTime / 1000);
-            const fadeProgress = Math.min(timeSinceLatch / fadeDuration, 1.0);
+        // =====================================================================
+        // EXPONENTIAL COOLING: Energy decays asymptotically, never stops
+        // =====================================================================
+        // τ (tau) = time constant. After τ seconds, energy is ~37% of initial.
+        // After 3τ, energy is ~5%. After 5τ, energy is ~0.7%.
+        const tau = 0.3; // 300ms time constant
+        const energy = Math.exp(-this.lifecycle / tau);
 
-            // If drag active, skip fade - cursor wins
-            if (this.draggedNodeId) {
-                // Allow physics to run for drag
-            } else if (fadeProgress < 1.0) {
-                // During fade: lerp positions toward home (animation, not integration)
-                const centroid = this.getCentroid();
-                const easeOut = 1 - Math.pow(1 - fadeProgress, 3); // Cubic ease-out
+        // Energy envelope:
+        // - At t=0: energy=1.0 (full forces, low damping)
+        // - At t=300ms: energy≈0.37
+        // - At t=600ms: energy≈0.14
+        // - At t=1s: energy≈0.04 (imperceptible)
+        // - Never reaches exactly 0
 
-                for (const node of nodeList) {
-                    if (node.homeOffsetX === undefined) continue;
-                    if (node.homeOffsetY === undefined) continue;
+        // Force effectiveness scales with energy
+        const forceScale = energy;
 
-                    const homeX = centroid.x + node.homeOffsetX;
-                    const homeY = centroid.y + node.homeOffsetY;
+        // Damping increases as energy decreases (from 0.3 to 0.98)
+        const baseDamping = 0.3;
+        const maxDamping = 0.98;
+        const effectiveDamping = baseDamping + (maxDamping - baseDamping) * (1 - energy);
 
-                    // Lerp toward home with easing
-                    node.x = node.x + (homeX - node.x) * easeOut * 0.15;
-                    node.y = node.y + (homeY - node.y) * easeOut * 0.15;
-                    node.vx = 0;
-                    node.vy = 0;
-                }
-                return; // Skip physics during fade
-            } else {
-                // Fade complete: snap to exact home and freeze
-                this.snapToHome();
-                return; // Zero computation
-            }
-        }
-
-        // NEW LIFECYCLE: IMPULSE SNAP
-        // 0s - 0.3s: SNAP (Low Damping, UNLIMITED SPEED)
-        // 0.3s+:     LOCK (High Damping, CLAMPED SPEED)
-        const isSnap = this.lifecycle < 0.30;
-
-        // Phase-Based Parameters
-        const phaseName = isSnap ? 'SNAP' : 'LOCK';
-        const effectiveDamping = isSnap ? 0.3 : 0.90;
-        const maxVelocityEffective = isSnap ? 1500 : maxVelocity; // Hot: 1500, Cold: 80
+        // Max velocity decreases with energy
+        const maxVelocityEffective = 50 + 1450 * energy; // 1500 → 50
 
         // 1. Clear forces
         for (const node of nodeList) {
@@ -367,13 +262,19 @@ export class PhysicsEngine {
             node.fy = 0;
         }
 
-        // 2. Apply Core Forces
+        // 2. Apply Core Forces (scaled by energy)
         applyRepulsion(nodeList, this.config);
         applyCollision(nodeList, this.config, 1.0);
         applySprings(this.nodes, this.links, this.config, 1.0);
         applyBoundaryForce(nodeList, this.config, this.worldWidth, this.worldHeight);
 
-        // 3. Apply Mouse Drag Force
+        // Scale all forces by energy envelope
+        for (const node of nodeList) {
+            node.fx *= forceScale;
+            node.fy *= forceScale;
+        }
+
+        // 3. Apply Mouse Drag Force (NOT scaled - cursor always wins)
         if (this.draggedNodeId && this.dragTarget) {
             const node = this.nodes.get(this.draggedNodeId);
             if (node) {
@@ -387,19 +288,11 @@ export class PhysicsEngine {
             }
         }
 
-        // 4. Integrate
+        // 4. Integrate (always runs, never stops)
         let clampHitCount = 0;
         for (const node of nodeList) {
-            if (node.isFixed) continue; // Drag always bypasses
+            if (node.isFixed) continue;
 
-            // REST STATE: Freeze integration
-            if (this.restState === 'rest') {
-                node.vx = 0;
-                node.vy = 0;
-                continue; // Skip position update
-            }
-
-            // FORMING or SETTLING: Normal integration
             const ax = node.fx / node.mass;
             const ay = node.fy / node.mass;
 
@@ -407,11 +300,11 @@ export class PhysicsEngine {
             node.vx += ax * dt;
             node.vy += ay * dt;
 
-            // Apply Damping
+            // Apply Damping (increases over time)
             node.vx *= (1 - effectiveDamping * dt * 5.0);
             node.vy *= (1 - effectiveDamping * dt * 5.0);
 
-            // Clamp Velocity (Phase-Based)
+            // Clamp Velocity
             const vSq = node.vx * node.vx + node.vy * node.vy;
             if (vSq > maxVelocityEffective * maxVelocityEffective) {
                 const v = Math.sqrt(vSq);
@@ -435,9 +328,9 @@ export class PhysicsEngine {
             }
         }
 
-        // DEBUG: Log phase info every 10 frames (~166ms at 60fps)
+        // DEBUG: Log energy info every 10 frames (~166ms at 60fps)
         if (Math.floor(this.lifecycle * 60) % 10 === 0) {
-            console.log(`[Physics] Phase: ${phaseName} | MaxV: ${maxVelocityEffective} | Speed Clamps: ${clampHitCount}/${nodeList.length}`);
+            console.log(`[Physics] Energy: ${(energy * 100).toFixed(1)}% | Damping: ${effectiveDamping.toFixed(2)} | MaxV: ${maxVelocityEffective.toFixed(0)}`);
         }
     }
 }

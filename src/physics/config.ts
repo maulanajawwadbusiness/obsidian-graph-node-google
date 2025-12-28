@@ -77,11 +77,4 @@ export const DEFAULT_PHYSICS_CONFIG: ForceConfig = {
     collisionStrength: 2000,
     // Small padding to ensure readability (nodes don't kiss)
     collisionPadding: 8,  // Phase 4: 25% reduction from 10
-
-    // ---------------------------------------------------------------------------
-    // ANCHOR: Form Latch (Shape Memory) + Rest State
-    // ---------------------------------------------------------------------------
-    // When to capture shape and freeze (ms after lifecycle start)
-    // At this time: positions snap to home, state becomes 'rest', physics stops
-    latchTime: 600,
 };

@@ -445,31 +445,17 @@ export class PhysicsEngine {
         }
 
         // =====================================================================
-        // POST-SOLVE SOFT PACKING (Topology-aware geometry hygiene)
-        // Only apply spacing to UNCONNECTED node pairs.
-        // Connected pairs are handled by edge springs.
+        // HARD MINIMUM DISTANCE (Geometric barrier, not force)
+        // All node pairs must respect minNodeDistance. Always enforced.
+        // No energy scaling, no topology exceptions. Dots never touch.
         // =====================================================================
-
-        // Build adjacency set for O(1) lookup
-        const connectedPairs = new Set<string>();
-        for (const link of this.links) {
-            const key = [link.source, link.target].sort().join(':');
-            connectedPairs.add(key);
-        }
-
         const minDist = this.config.minNodeDistance;
-        const packingStrength = 0.1 * energy;  // Fades with energy
 
         for (let i = 0; i < nodeList.length; i++) {
             const a = nodeList[i];
-            if (a.isFixed) continue;
 
             for (let j = i + 1; j < nodeList.length; j++) {
                 const b = nodeList[j];
-
-                // Skip connected pairs - edges handle their spacing
-                const pairKey = [a.id, b.id].sort().join(':');
-                if (connectedPairs.has(pairKey)) continue;
 
                 const dx = b.x - a.x;
                 const dy = b.y - a.y;
@@ -477,37 +463,45 @@ export class PhysicsEngine {
 
                 if (d >= minDist || d < 0.1) continue;  // Only when too close
 
-                // How much overlap?
+                // Hard correction: full overlap removed
                 const overlap = minDist - d;
-
-                // Small positional correction (not velocity/force)
-                const correction = overlap * packingStrength;
 
                 const nx = dx / d;
                 const ny = dy / d;
 
                 // Push apart by adjusting positions directly
                 if (!a.isFixed && !b.isFixed) {
-                    a.x -= nx * correction * 0.5;
-                    a.y -= ny * correction * 0.5;
-                    b.x += nx * correction * 0.5;
-                    b.y += ny * correction * 0.5;
+                    a.x -= nx * overlap * 0.5;
+                    a.y -= ny * overlap * 0.5;
+                    b.x += nx * overlap * 0.5;
+                    b.y += ny * overlap * 0.5;
                 } else if (!a.isFixed) {
-                    a.x -= nx * correction;
-                    a.y -= ny * correction;
+                    a.x -= nx * overlap;
+                    a.y -= ny * overlap;
                 } else if (!b.isFixed) {
-                    b.x += nx * correction;
-                    b.y += ny * correction;
+                    b.x += nx * overlap;
+                    b.y += ny * overlap;
                 }
             }
         }
 
         // =====================================================================
-        // TRIANGLE AREA FLOOR (Prevent collapse of fully-connected triplets)
-        // Detect triangles, compute centroid, push outward if too compressed.
+        // TRIANGLE AREA SPRING (Face-level constraint, not spacing)
+        // Each triangle has a rest area. If current area < rest area,
+        // push vertices outward along altitude directions.
         // =====================================================================
-        const clusterMinRadius = this.config.clusterMinRadius;
-        const clusterStrength = 0.15 * energy;  // Fades with energy
+
+        // Rest area for equilateral triangle with edge = linkRestLength
+        const L = this.config.linkRestLength;
+        const restArea = (Math.sqrt(3) / 4) * L * L;
+        const areaStrength = 0.0005 * energy;  // Very soft, fades with energy
+
+        // Build adjacency set for triangle detection
+        const connectedPairs = new Set<string>();
+        for (const link of this.links) {
+            const key = [link.source, link.target].sort().join(':');
+            connectedPairs.add(key);
+        }
 
         // Find all triangles (A-B-C where all pairs connected)
         const triangles: [string, string, string][] = [];
@@ -529,43 +523,123 @@ export class PhysicsEngine {
             }
         }
 
-        // Apply area floor to each triangle
+        // Apply area spring to each triangle
         for (const [idA, idB, idC] of triangles) {
             const a = this.nodes.get(idA);
             const b = this.nodes.get(idB);
             const c = this.nodes.get(idC);
             if (!a || !b || !c) continue;
 
-            // Compute triangle centroid
-            const cx = (a.x + b.x + c.x) / 3;
-            const cy = (a.y + b.y + c.y) / 3;
+            // Current area (signed area formula, take absolute)
+            const currentArea = 0.5 * Math.abs(
+                (b.x - a.x) * (c.y - a.y) - (c.x - a.x) * (b.y - a.y)
+            );
 
-            // Average radius from centroid
-            const rA = Math.sqrt((a.x - cx) ** 2 + (a.y - cy) ** 2);
-            const rB = Math.sqrt((b.x - cx) ** 2 + (b.y - cy) ** 2);
-            const rC = Math.sqrt((c.x - cx) ** 2 + (c.y - cy) ** 2);
-            const avgRadius = (rA + rB + rC) / 3;
+            if (currentArea >= restArea) continue;  // Big enough
 
-            if (avgRadius >= clusterMinRadius) continue;  // Big enough
+            // How much deficit?
+            const deficit = restArea - currentArea;
+            const correction = deficit * areaStrength;
 
-            // How much are we under?
-            const deficit = clusterMinRadius - avgRadius;
-            const correction = deficit * clusterStrength;
+            // Push each vertex outward along altitude direction
+            // (from opposite edge midpoint toward vertex)
+            const vertices = [
+                { node: a, opp1: b, opp2: c },
+                { node: b, opp1: a, opp2: c },
+                { node: c, opp1: a, opp2: b }
+            ];
 
-            // Push each node outward from centroid
-            for (const node of [a, b, c]) {
+            for (const { node, opp1, opp2 } of vertices) {
                 if (node.isFixed) continue;
 
-                const dx = node.x - cx;
-                const dy = node.y - cy;
-                const r = Math.sqrt(dx * dx + dy * dy);
-                if (r < 0.1) continue;
+                // Midpoint of opposite edge
+                const midX = (opp1.x + opp2.x) / 2;
+                const midY = (opp1.y + opp2.y) / 2;
 
-                const nx = dx / r;
-                const ny = dy / r;
+                // Direction from midpoint to vertex (altitude direction)
+                const dx = node.x - midX;
+                const dy = node.y - midY;
+                const d = Math.sqrt(dx * dx + dy * dy);
+                if (d < 0.1) continue;
 
+                const nx = dx / d;
+                const ny = dy / d;
+
+                // Push outward
                 node.x += nx * correction;
                 node.y += ny * correction;
+            }
+        }
+
+        // =====================================================================
+        // MINIMUM EDGE ANGLE (Geometric constraint, not force)
+        // No two edges at a node should be closer than minEdgeAngle.
+        // Rotate cramped neighbors apart around the node.
+        // =====================================================================
+        const minAngle = this.config.minEdgeAngle;
+
+        // Build adjacency map: node -> list of neighbors
+        const neighbors = new Map<string, string[]>();
+        for (const node of nodeList) {
+            neighbors.set(node.id, []);
+        }
+        for (const link of this.links) {
+            neighbors.get(link.source)?.push(link.target);
+            neighbors.get(link.target)?.push(link.source);
+        }
+
+        // For each node with 2+ neighbors
+        for (const node of nodeList) {
+            const nbIds = neighbors.get(node.id);
+            if (!nbIds || nbIds.length < 2) continue;
+
+            // Compute angle of each edge
+            const edges: { id: string; angle: number }[] = [];
+            for (const nbId of nbIds) {
+                const nb = this.nodes.get(nbId);
+                if (!nb) continue;
+                const dx = nb.x - node.x;
+                const dy = nb.y - node.y;
+                edges.push({ id: nbId, angle: Math.atan2(dy, dx) });
+            }
+
+            // Sort by angle
+            edges.sort((a, b) => a.angle - b.angle);
+
+            // Check adjacent pairs (including wrap-around)
+            for (let i = 0; i < edges.length; i++) {
+                const curr = edges[i];
+                const next = edges[(i + 1) % edges.length];
+
+                // Angular difference (handle wrap-around)
+                let delta = next.angle - curr.angle;
+                if (delta < 0) delta += 2 * Math.PI;
+
+                if (delta >= minAngle) continue;  // Wide enough
+
+                // Deficit to correct
+                const deficit = minAngle - delta;
+
+                // Rotate neighbors apart around the node
+                const currNb = this.nodes.get(curr.id);
+                const nextNb = this.nodes.get(next.id);
+                if (!currNb || !nextNb) continue;
+
+                // Rotate currNb clockwise by deficit/2
+                // Rotate nextNb counter-clockwise by deficit/2
+                const rotateNode = (nb: typeof currNb, angleOffset: number) => {
+                    if (nb.isFixed) return;
+                    const dx = nb.x - node.x;
+                    const dy = nb.y - node.y;
+                    const r = Math.sqrt(dx * dx + dy * dy);
+                    const currentAngle = Math.atan2(dy, dx);
+                    const newAngle = currentAngle + angleOffset;
+                    nb.x = node.x + r * Math.cos(newAngle);
+                    nb.y = node.y + r * Math.sin(newAngle);
+                };
+
+                rotateNode(currNb, -deficit * 0.5);
+                rotateNode(nextNb, deficit * 0.5);
             }
         }
 

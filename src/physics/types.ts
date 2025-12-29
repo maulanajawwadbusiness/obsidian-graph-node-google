@@ -104,5 +104,5 @@ export interface ForceConfig {
   // ---------------------------------------------------------------------------
   minNodeDistance: number;     // Soft minimum distance between all nodes (px)
   softRepulsionStrength: number;  // Very low strength for personal space effect
-  clusterMinRadius: number;    // Minimum average radius for triangles (area floor)
+  minEdgeAngle: number;        // Minimum angle between edges at a node (radians)
 }

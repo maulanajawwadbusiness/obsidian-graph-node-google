@@ -348,6 +348,17 @@ export class PhysicsEngine {
         this.globalAngle += this.globalAngularVel * dt;
 
         // =====================================================================
+        // WATER MICRO-DRIFT: The water is alive, not glass
+        // Very slow, very tiny drift to globalAngle - "water touching the underside"
+        // =====================================================================
+        const t = this.lifecycle;
+        const microDrift =
+            Math.sin(t * 0.3) * 0.0008 +  // ~20 second period, tiny amplitude
+            Math.sin(t * 0.7) * 0.0004 +  // ~9 second period, tinier
+            Math.sin(t * 1.1) * 0.0002;   // ~6 second period, tiniest
+        this.globalAngle += microDrift * dt;
+
+        // =====================================================================
         // INTEGRATION: Simple unified damping (no radial/tangent split)
         // All forces already scaled by energy. Damping increases as energy falls.
         // =====================================================================

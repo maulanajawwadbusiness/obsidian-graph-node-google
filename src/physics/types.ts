@@ -102,7 +102,14 @@ export interface ForceConfig {
   // ---------------------------------------------------------------------------
   // Soft Spacing (Personal Space)
   // ---------------------------------------------------------------------------
-  minNodeDistance: number;     // Soft minimum distance between all nodes (px)
+  minNodeDistance: number;        // Hard minimum distance between all nodes (px)
   softRepulsionStrength: number;  // Very low strength for personal space effect
-  minEdgeAngle: number;        // Minimum angle between edges at a node (radians)
+  minEdgeAngle: number;           // Minimum angle between edges at a node (radians)
+
+  // Soft pre-zone before hard barrier
+  softDistanceMultiplier: number; // D_soft = D_hard * multiplier (default 1.5)
+  softRepulsionExponent: number;  // How sharply resistance ramps up (default 2.5)
+  softMaxCorrectionPx: number;    // Max correction per pair per frame in soft zone (default 2.0)
+  maxCorrectionPerFrame: number;  // Global max correction per pair per frame (default 1.5)
+  hardSoftnessBand: number;       // Fraction of minDist for smoothstep ramp (default 0.2)
 }

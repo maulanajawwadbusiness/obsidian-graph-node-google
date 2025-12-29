@@ -113,4 +113,11 @@ export const DEFAULT_PHYSICS_CONFIG: ForceConfig = {
     softRepulsionStrength: 5,
     // Minimum angle between edges at a node (30 degrees = π/6)
     minEdgeAngle: Math.PI / 6,
+
+    // Soft pre-zone before hard barrier
+    softDistanceMultiplier: 1.5,  // D_soft = D_hard * 1.5
+    softRepulsionExponent: 2.5,   // How sharply resistance ramps up
+    softMaxCorrectionPx: 2.0,     // Max correction in soft zone
+    maxCorrectionPerFrame: 1.5,   // Global max to prevent snapping
+    hardSoftnessBand: 0.2,        // Fraction of minDist for smoothstep ramp
 };

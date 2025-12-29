@@ -445,46 +445,76 @@ export class PhysicsEngine {
         }
 
         // =====================================================================
-        // HARD MINIMUM DISTANCE (Geometric barrier, not force)
-        // All node pairs must respect minNodeDistance. Always enforced.
-        // No energy scaling, no topology exceptions. Dots never touch.
+        // DISTANCE-BASED SPACING (Soft pre-zone + Hard barrier)
+        // Soft zone: resistance ramps up as nodes approach hard barrier
+        // Hard zone: guarantee separation (dots never touch)
+        // Gated by energy: completely disabled during expansion
+        // Shadow barrier during expansion: prevent overlaps from deepening
         // =====================================================================
-        const minDist = this.config.minNodeDistance;
+        const D_hard = this.config.minNodeDistance;
 
-        for (let i = 0; i < nodeList.length; i++) {
-            const a = nodeList[i];
+        if (energy <= 0.7) {
+            // SETTLING PHASE: full spacing with smoothstep gate
+            const D_soft = D_hard * this.config.softDistanceMultiplier;
+            const softExponent = this.config.softRepulsionExponent;
+            const softMaxCorr = this.config.softMaxCorrectionPx;
 
-            for (let j = i + 1; j < nodeList.length; j++) {
-                const b = nodeList[j];
+            // Spacing gate: smoothstep for settling strength (0 at energy=0.7, 1 at energy=0.4)
+            const gateT = Math.max(0, Math.min(1, (0.7 - energy) / 0.3));
+            const spacingGate = gateT * gateT * (3 - 2 * gateT);  // smoothstep
 
-                const dx = b.x - a.x;
-                const dy = b.y - a.y;
-                const d = Math.sqrt(dx * dx + dy * dy);
+            for (let i = 0; i < nodeList.length; i++) {
+                const a = nodeList[i];
 
-                if (d >= minDist || d < 0.1) continue;  // Only when too close
+                for (let j = i + 1; j < nodeList.length; j++) {
+                    const b = nodeList[j];
 
-                // Hard correction: full overlap removed
-                const overlap = minDist - d;
+                    const dx = b.x - a.x;
+                    const dy = b.y - a.y;
+                    const d = Math.sqrt(dx * dx + dy * dy);
 
-                const nx = dx / d;
-                const ny = dy / d;
+                    if (d >= D_soft || d < 0.1) continue;  // Outside soft zone or singularity
 
-                // Push apart by adjusting positions directly
-                if (!a.isFixed && !b.isFixed) {
-                    a.x -= nx * overlap * 0.5;
-                    a.y -= ny * overlap * 0.5;
-                    b.x += nx * overlap * 0.5;
-                    b.y += ny * overlap * 0.5;
-                } else if (!a.isFixed) {
-                    a.x -= nx * overlap;
-                    a.y -= ny * overlap;
-                } else if (!b.isFixed) {
-                    b.x += nx * overlap;
-                    b.y += ny * overlap;
+                    // Normalize direction (from a toward b)
+                    const nx = dx / d;
+                    const ny = dy / d;
+
+                    let corr: number;
+
+                    if (d <= D_hard) {
+                        // HARD ZONE: smoothstep ramp to eliminate chattering
+                        const penetration = D_hard - d;
+                        const softnessBand = D_hard * this.config.hardSoftnessBand;
+                        const t = Math.min(penetration / softnessBand, 1);  // 0→1
+                        const ramp = t * t * (3 - 2 * t);  // smoothstep
+                        corr = penetration * ramp;
+                    } else {
+                        // SOFT ZONE: resistance ramps up as d approaches D_hard
+                        const t = (D_soft - d) / (D_soft - D_hard);  // 0 at D_soft, 1 at D_hard
+                        const s = Math.pow(t, softExponent);
+                        corr = s * softMaxCorr;
+                    }
+
+                    // Rate-limit and gate by energy (minimal during expansion)
+                    const maxCorr = this.config.maxCorrectionPerFrame;
+                    const corrApplied = Math.min(corr * spacingGate, maxCorr);
+
+                    // Apply positional correction (equal split)
+                    if (!a.isFixed && !b.isFixed) {
+                        a.x -= nx * corrApplied * 0.5;
+                        a.y -= ny * corrApplied * 0.5;
+                        b.x += nx * corrApplied * 0.5;
+                        b.y += ny * corrApplied * 0.5;
+                    } else if (!a.isFixed) {
+                        a.x -= nx * corrApplied;
+                        a.y -= ny * corrApplied;
+                    } else if (!b.isFixed) {
+                        b.x += nx * corrApplied;
+                        b.y += ny * corrApplied;
+                    }
                 }
             }
-        }
-
+        }  // End energy gate
         // =====================================================================
         // TRIANGLE AREA SPRING (Face-level constraint, not spacing)
         // Each triangle has a rest area. If current area < rest area,
@@ -640,6 +670,44 @@ export class PhysicsEngine {
 
                 rotateNode(currNb, -deficit * 0.5);
                 rotateNode(nextNb, deficit * 0.5);
+            }
+        }
+
+        // =====================================================================
+        // HARD POSITION CLAMP (During expansion only)
+        // After all physics + constraints, enforce minimum distance geometrically
+        // Prevents overlap debt from accumulating, so spacing has nothing to fix later
+        // =====================================================================
+        if (energy > 0.7) {
+            for (let i = 0; i < nodeList.length; i++) {
+                const a = nodeList[i];
+                for (let j = i + 1; j < nodeList.length; j++) {
+                    const b = nodeList[j];
+
+                    const dx = b.x - a.x;
+                    const dy = b.y - a.y;
+                    const d = Math.sqrt(dx * dx + dy * dy);
+
+                    if (d >= D_hard || d < 0.1) continue;
+
+                    // Hard clamp: push positions apart to exactly minDistance
+                    const overlap = D_hard - d;
+                    const nx = dx / d;
+                    const ny = dy / d;
+
+                    if (!a.isFixed && !b.isFixed) {
+                        a.x -= nx * overlap * 0.5;
+                        a.y -= ny * overlap * 0.5;
+                        b.x += nx * overlap * 0.5;
+                        b.y += ny * overlap * 0.5;
+                    } else if (!a.isFixed) {
+                        a.x -= nx * overlap;
+                        a.y -= ny * overlap;
+                    } else if (!b.isFixed) {
+                        b.x += nx * overlap;
+                        b.y += ny * overlap;
+                    }
+                }
             }
         }
 

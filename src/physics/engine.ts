@@ -445,10 +445,18 @@ export class PhysicsEngine {
         }
 
         // =====================================================================
-        // POST-SOLVE SOFT PACKING (Geometry hygiene, not a force)
-        // If nodes are too close, nudge positions apart gently.
-        // This is circle packing relaxation, not repulsion physics.
+        // POST-SOLVE SOFT PACKING (Topology-aware geometry hygiene)
+        // Only apply spacing to UNCONNECTED node pairs.
+        // Connected pairs are handled by edge springs.
         // =====================================================================
+
+        // Build adjacency set for O(1) lookup
+        const connectedPairs = new Set<string>();
+        for (const link of this.links) {
+            const key = [link.source, link.target].sort().join(':');
+            connectedPairs.add(key);
+        }
+
         const minDist = this.config.minNodeDistance;
         const packingStrength = 0.1 * energy;  // Fades with energy
 
@@ -458,6 +466,10 @@ export class PhysicsEngine {
 
             for (let j = i + 1; j < nodeList.length; j++) {
                 const b = nodeList[j];
+
+                // Skip connected pairs - edges handle their spacing
+                const pairKey = [a.id, b.id].sort().join(':');
+                if (connectedPairs.has(pairKey)) continue;
 
                 const dx = b.x - a.x;
                 const dy = b.y - a.y;
@@ -487,6 +499,73 @@ export class PhysicsEngine {
                     b.x += nx * correction;
                     b.y += ny * correction;
                 }
+            }
+        }
+
+        // =====================================================================
+        // TRIANGLE AREA FLOOR (Prevent collapse of fully-connected triplets)
+        // Detect triangles, compute centroid, push outward if too compressed.
+        // =====================================================================
+        const clusterMinRadius = this.config.clusterMinRadius;
+        const clusterStrength = 0.15 * energy;  // Fades with energy
+
+        // Find all triangles (A-B-C where all pairs connected)
+        const triangles: [string, string, string][] = [];
+        const nodeIds = nodeList.map(n => n.id);
+
+        for (let i = 0; i < nodeIds.length; i++) {
+            for (let j = i + 1; j < nodeIds.length; j++) {
+                const keyAB = [nodeIds[i], nodeIds[j]].sort().join(':');
+                if (!connectedPairs.has(keyAB)) continue;
+
+                for (let k = j + 1; k < nodeIds.length; k++) {
+                    const keyAC = [nodeIds[i], nodeIds[k]].sort().join(':');
+                    const keyBC = [nodeIds[j], nodeIds[k]].sort().join(':');
+
+                    if (connectedPairs.has(keyAC) && connectedPairs.has(keyBC)) {
+                        triangles.push([nodeIds[i], nodeIds[j], nodeIds[k]]);
+                    }
+                }
+            }
+        }
+
+        // Apply area floor to each triangle
+        for (const [idA, idB, idC] of triangles) {
+            const a = this.nodes.get(idA);
+            const b = this.nodes.get(idB);
+            const c = this.nodes.get(idC);
+            if (!a || !b || !c) continue;
+
+            // Compute triangle centroid
+            const cx = (a.x + b.x + c.x) / 3;
+            const cy = (a.y + b.y + c.y) / 3;
+
+            // Average radius from centroid
+            const rA = Math.sqrt((a.x - cx) ** 2 + (a.y - cy) ** 2);
+            const rB = Math.sqrt((b.x - cx) ** 2 + (b.y - cy) ** 2);
+            const rC = Math.sqrt((c.x - cx) ** 2 + (c.y - cy) ** 2);
+            const avgRadius = (rA + rB + rC) / 3;
+
+            if (avgRadius >= clusterMinRadius) continue;  // Big enough
+
+            // How much are we under?
+            const deficit = clusterMinRadius - avgRadius;
+            const correction = deficit * clusterStrength;
+
+            // Push each node outward from centroid
+            for (const node of [a, b, c]) {
+                if (node.isFixed) continue;
+
+                const dx = node.x - cx;
+                const dy = node.y - cy;
+                const r = Math.sqrt(dx * dx + dy * dy);
+                if (r < 0.1) continue;
+
+                const nx = dx / r;
+                const ny = dy / r;
+
+                node.x += nx * correction;
+                node.y += ny * correction;
             }
         }
 

@@ -111,4 +111,6 @@ export const DEFAULT_PHYSICS_CONFIG: ForceConfig = {
     minNodeDistance: 100,
     // Very low strength for personal space effect (spatial etiquette, not physics dominance)
     softRepulsionStrength: 5,
+    // Minimum average radius for triangles (area floor to prevent collapse)
+    clusterMinRadius: 50,
 };

@@ -793,10 +793,20 @@ export class PhysicsEngine {
 
         // =====================================================================
         // FINAL PASS: APPLY CLAMPED CORRECTIONS (One decision per node per frame)
-        // Clamp total correction magnitude to budget
+        // Degree-weighted resistance: hubs act heavier
         // Directional inertia prevents visible direction flips
         // =====================================================================
         const nodeBudget = this.config.maxNodeCorrectionPerFrame;
+
+        // Compute node degree (number of connected edges)
+        const nodeDegree = new Map<string, number>();
+        for (const node of nodeList) {
+            nodeDegree.set(node.id, 0);
+        }
+        for (const link of this.links) {
+            nodeDegree.set(link.source, (nodeDegree.get(link.source) || 0) + 1);
+            nodeDegree.set(link.target, (nodeDegree.get(link.target) || 0) + 1);
+        }
 
         for (const node of nodeList) {
             if (node.isFixed) continue;
@@ -805,9 +815,14 @@ export class PhysicsEngine {
             if (!accum) continue;
 
             // Total correction magnitude
-            const totalMag = Math.sqrt(accum.dx * accum.dx + accum.dy * accum.dy);
+            let totalMag = Math.sqrt(accum.dx * accum.dx + accum.dy * accum.dy);
 
             if (totalMag < 0.001) continue;  // Skip tiny corrections
+
+            // Degree-weighted resistance (hubs act heavier)
+            const degree = nodeDegree.get(node.id) || 1;
+            const degreeScale = 1 / Math.sqrt(degree);  // sqrt for moderate scaling
+            totalMag *= degreeScale;
 
             // Normalize new direction
             const newDir = { x: accum.dx / totalMag, y: accum.dy / totalMag };
@@ -822,8 +837,8 @@ export class PhysicsEngine {
                 }
             }
 
-            // Clamp to budget and apply attenuation
-            const scale = Math.min(1, nodeBudget / totalMag) * attenuationFactor;
+            // Clamp to budget and apply attenuation + degree scaling
+            const scale = Math.min(1, nodeBudget / totalMag) * attenuationFactor * degreeScale;
 
             // Apply clamped & attenuated correction
             node.x += accum.dx * scale;

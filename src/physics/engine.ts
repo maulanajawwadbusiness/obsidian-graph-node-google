@@ -444,6 +444,52 @@ export class PhysicsEngine {
             }
         }
 
+        // =====================================================================
+        // POST-SOLVE SOFT PACKING (Geometry hygiene, not a force)
+        // If nodes are too close, nudge positions apart gently.
+        // This is circle packing relaxation, not repulsion physics.
+        // =====================================================================
+        const minDist = this.config.minNodeDistance;
+        const packingStrength = 0.1 * energy;  // Fades with energy
+
+        for (let i = 0; i < nodeList.length; i++) {
+            const a = nodeList[i];
+            if (a.isFixed) continue;
+
+            for (let j = i + 1; j < nodeList.length; j++) {
+                const b = nodeList[j];
+
+                const dx = b.x - a.x;
+                const dy = b.y - a.y;
+                const d = Math.sqrt(dx * dx + dy * dy);
+
+                if (d >= minDist || d < 0.1) continue;  // Only when too close
+
+                // How much overlap?
+                const overlap = minDist - d;
+
+                // Small positional correction (not velocity/force)
+                const correction = overlap * packingStrength;
+
+                const nx = dx / d;
+                const ny = dy / d;
+
+                // Push apart by adjusting positions directly
+                if (!a.isFixed && !b.isFixed) {
+                    a.x -= nx * correction * 0.5;
+                    a.y -= ny * correction * 0.5;
+                    b.x += nx * correction * 0.5;
+                    b.y += ny * correction * 0.5;
+                } else if (!a.isFixed) {
+                    a.x -= nx * correction;
+                    a.y -= ny * correction;
+                } else if (!b.isFixed) {
+                    b.x += nx * correction;
+                    b.y += ny * correction;
+                }
+            }
+        }
+
         // DEBUG: Log energy info every 10 frames (~166ms at 60fps)
         if (Math.floor(this.lifecycle * 60) % 10 === 0) {
             console.log(`[Physics] Energy: ${(energy * 100).toFixed(1)}% | Damping: ${effectiveDamping.toFixed(2)} | MaxV: ${maxVelocityEffective.toFixed(0)}`);

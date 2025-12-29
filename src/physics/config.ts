@@ -103,4 +103,12 @@ export const DEFAULT_PHYSICS_CONFIG: ForceConfig = {
     linkRestLength: 130,  // 35% of 375px for tighter spacing
     // Dead zone for soft springs (no force within this band)
     springDeadZone: 0.15,  // ±15% of rest length
+
+    // ---------------------------------------------------------------------------
+    // ANCHOR: Soft Spacing (Personal Space)
+    // ---------------------------------------------------------------------------
+    // Soft minimum distance between all nodes (personal space, not collision)
+    minNodeDistance: 100,
+    // Very low strength for personal space effect (spatial etiquette, not physics dominance)
+    softRepulsionStrength: 5,
 };

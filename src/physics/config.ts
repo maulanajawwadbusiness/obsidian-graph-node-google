@@ -122,4 +122,5 @@ export const DEFAULT_PHYSICS_CONFIG: ForceConfig = {
     hardSoftnessBand: 0.2,        // Fraction of minDist for smoothstep ramp
     clampHysteresisMargin: 25,    // Wide buffer to make clamp imperceptible
     maxNodeCorrectionPerFrame: 0.5,  // Per-node budget to prevent multi-constraint pileup
+    contactSlop: 12,              // Zone above minDist for gradual velocity projection
 };

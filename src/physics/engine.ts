@@ -735,7 +735,33 @@ export class PhysicsEngine {
                 const nx = dx / d;
                 const ny = dy / d;
 
-                if (d < D_hard) {
+                // Contact slop zone: gradual velocity projection before hitting hard wall
+                const slop = this.config.contactSlop;
+                const slopStart = D_hard + slop;  // Start of gradual resistance zone
+
+                if (d >= D_hard && d < slopStart) {
+                    // SLOP ZONE: velocity-only projection, no positional correction
+                    // Strength ramps from 0 (at slopStart) to 1 (at minDist)
+                    const slopT = (slopStart - d) / slop;  // 0→1 as d approaches minDist
+                    const slopRamp = slopT * slopT * (3 - 2 * slopT);  // smoothstep
+
+                    // Project inward velocity with ramped strength
+                    if (!a.isFixed) {
+                        const aInward = a.vx * nx + a.vy * ny;
+                        if (aInward > 0) {
+                            a.vx -= aInward * nx * slopRamp;
+                            a.vy -= aInward * ny * slopRamp;
+                        }
+                    }
+                    if (!b.isFixed) {
+                        const bInward = b.vx * nx + b.vy * ny;
+                        if (bInward < 0) {
+                            b.vx -= bInward * nx * slopRamp;
+                            b.vy -= bInward * ny * slopRamp;
+                        }
+                    }
+                }
+                else if (d < D_hard) {
                     // CONTINUOUS BIAS: apply outward velocity, ramped by penetration
                     const penetration = D_hard - d;
                     const t = Math.min(penetration / D_hard, 1);  // 0→1
@@ -753,6 +779,25 @@ export class PhysicsEngine {
                     } else if (!b.isFixed) {
                         b.vx += nx * bias * 2;
                         b.vy += ny * bias * 2;
+                    }
+
+                    // VELOCITY PROJECTION: remove inward component to prevent "invisible wall" bounce
+                    // n points from a toward b, so:
+                    // - for a, inward = moving toward b = positive dot with n
+                    // - for b, inward = moving toward a = negative dot with n
+                    if (!a.isFixed) {
+                        const aInward = a.vx * nx + a.vy * ny;  // positive = moving toward b
+                        if (aInward > 0) {
+                            a.vx -= aInward * nx;
+                            a.vy -= aInward * ny;
+                        }
+                    }
+                    if (!b.isFixed) {
+                        const bInward = b.vx * nx + b.vy * ny;  // negative = moving toward a
+                        if (bInward < 0) {
+                            b.vx -= bInward * nx;
+                            b.vy -= bInward * ny;
+                        }
                     }
 
                     // SAFETY NET: hard clamp only for deep violations

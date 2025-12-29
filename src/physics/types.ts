@@ -117,4 +117,5 @@ export interface ForceConfig {
   hardSoftnessBand: number;       // Fraction of minDist for smoothstep ramp (default 0.2)
   clampHysteresisMargin: number;  // Buffer above minDist before releasing clamp (default 5px)
   maxNodeCorrectionPerFrame: number;  // Per-node correction budget to prevent pileup (default 0.5px)
+  contactSlop: number;            // Zone above minDist for gradual velocity projection (default 12px)
 }

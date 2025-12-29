@@ -127,10 +127,11 @@ damping: 0.90            // High friction
 
 **Key Responsibilities**:
 1. **State Management**: Maintains `Map<id, PhysicsNode>` and `PhysicsLink[]`
-2. **Lifecycle Tracking**: 3-phase system (Flight → Freeze → Settle)
+2. **Lifecycle Tracking**: Unified energy-based decay (no phase switches)
 3. **Integration Loop**: Euler integration (velocity → position)
 4. **Force Coordination**: Calls force functions from `forces.ts`
 5. **Impulse System**: One-time initial "kick" at t=0
+6. **Rotating Medium**: Global rotation independent of node physics
 
 **Key Methods**:
 ```typescript
@@ -138,15 +139,37 @@ addNode(node)              // Add to simulation
 addLink(link)              // Create connection
 tick(dt)                   // Main update loop
 applyDrag(nodeId, x, y)    // User interaction
-fireInitialImpulse()       // Snap kick (private)
+fireInitialImpulse()       // Snap kick + spin init (private)
+getGlobalAngle()           // Get rotation for rendering
+getCentroid()              // Get graph center
 ```
 
-**Lifecycle Phases**:
+**Lotus Leaf Settling Model**:
 ```typescript
-0-200ms:   Flight  → Low damping, high velocity, springs OFF
-200-300ms: Freeze  → Velocity = 0, motion locked
-300ms+:    Settle  → High damping, springs ON, slow drift
+// Unified energy decay (no phase switches)
+globalEnergy = exp(-lifecycle / τ)    // τ = 0.3s (300ms time constant)
+
+// Force scaling
+forces *= globalEnergy                // Forces weaken as energy decays
+
+// Damping increases as energy falls
+damping = 0.3 + 0.68 × (1 - globalEnergy)  // 0.3 → 0.98
+
+// Rotating medium (initialized at impulse)
+globalAngularVel *= exp(-spinDamping * dt)
+globalAngle += globalAngularVel * dt
+
+// Water micro-drift (alive stillness)
+microDrift = sin(t*0.3)*0.0008 + sin(t*0.7)*0.0004 + sin(t*1.1)*0.0002
+globalAngle += microDrift * dt
 ```
+
+**Key Properties**:
+- **No phase switches**: Energy decays continuously from t=0
+- **No capture moments**: Spin initialized at birth, not sampled later
+- **Asymptotic settling**: Motion never stops suddenly, just fades
+- **Rotating medium**: Physics runs in local space, rotation applied at render time
+- **Water feel**: Micro-drift makes stillness feel alive, not frozen
 
 **Interlinking**:
 - Uses types from `types.ts`
@@ -289,15 +312,20 @@ User Input → React State → PhysicsEngine → Forces → Node State → Rende
    ↓
 3. engine.tick(dt)
    ├─ Update lifecycle timer
-   ├─ Determine phase (Flight/Freeze/Settle)
-   ├─ Apply forces (if not Freeze):
+   ├─ Calculate globalEnergy = exp(-lifecycle / τ)
+   ├─ Apply forces (always):
    │  ├─ applyRepulsion()
-   │  ├─ applySprings() (if Settle phase)
+   │  ├─ applySprings()
    │  ├─ applyCollision()
    │  └─ applyBoundaryForce()
+   ├─ Scale forces by globalEnergy
+   ├─ Update rotating medium:
+   │  ├─ Decay globalAngularVel
+   │  ├─ Accumulate globalAngle
+   │  └─ Add water micro-drift
    ├─ Integrate velocity → position (Euler)
-   ├─ Apply damping (phase-dependent)
-   ├─ Clamp velocity (phase-dependent)
+   ├─ Apply unified damping (increases with energy decay)
+   ├─ Clamp velocity
    └─ Update warmth (activity tracking)
    ↓
 4. Calculate camera target (AABB)
@@ -307,6 +335,7 @@ User Input → React State → PhysicsEngine → Forces → Node State → Rende
 6. Render to canvas
    ├─ Clear screen
    ├─ Apply camera transform
+   ├─ Apply global rotation (globalAngle around centroid)
    ├─ Draw links
    ├─ Draw nodes
    └─ Draw debug overlay
@@ -350,39 +379,56 @@ User Input → React State → PhysicsEngine → Forces → Node State → Rende
 ### Force Application Order (in `tick()`)
 
 ```typescript
-// Phase: Flight (0-200ms) or Settle (300ms+)
-if (phase !== 'Freeze') {
-  1. applyRepulsion()      // Push apart
-  2. applySprings()        // Pull together (Settle only)
-  3. applyCollision()      // Hard shell
-  4. applyBoundaryForce()  // Screen containment
+// Calculate energy envelope (continuous decay)
+const tau = 0.3;  // 300ms time constant
+const energy = Math.exp(-this.lifecycle / tau);
+const forceScale = energy;
+
+// Damping increases as energy falls
+const baseDamping = 0.3;
+const maxDamping = 0.98;
+const effectiveDamping = baseDamping + (maxDamping - baseDamping) * (1 - energy);
+
+// Apply all forces (always active)
+applyRepulsion()      // Push apart
+applySprings()        // Pull together (always active)
+applyCollision()      // Hard shell
+applyBoundaryForce()  // Screen containment
+
+// Scale forces by energy envelope
+for (node of nodes) {
+  node.fx *= forceScale;
+  node.fy *= forceScale;
 }
 
-// Phase: Freeze (200-300ms)
-else {
-  node.vx = 0;
-  node.vy = 0;
-  // Position locked
-}
+// Update rotating medium
+globalAngularVel *= Math.exp(-spinDamping * dt);
+globalAngle += globalAngularVel * dt;
+microDrift = sin(t*0.3)*0.0008 + sin(t*0.7)*0.0004 + sin(t*1.1)*0.0002;
+globalAngle += microDrift * dt;
 
-// Integration (all phases except Freeze)
+// Integration (always runs)
 node.vx += ax * dt;
 node.vy += ay * dt;
 node.x += node.vx * dt;
 node.y += node.vy * dt;
 
-// Damping & Clamping
-node.vx *= (1 - dampingEffective);
-node.vy *= (1 - dampingEffective);
+// Unified damping (increases with energy decay)
+node.vx *= (1 - effectiveDamping * dt * 5.0);
+node.vy *= (1 - effectiveDamping * dt * 5.0);
+
+// Velocity clamping
 speed = clamp(speed, 0, maxVelocityEffective);
 ```
 
 ### Why This Order?
 
 1. **Repulsion first**: Establishes personal space
-2. **Springs second**: Pulls structure together (only in Settle)
+2. **Springs second**: Pulls structure together (always active)
 3. **Collision third**: Hard constraint override
 4. **Boundary last**: Soft screen containment
+5. **Energy scaling**: All forces weaken together as energy decays
+6. **Rotating medium**: Independent of node physics, applied at render time
 
 ---
 
@@ -470,32 +516,43 @@ useEffect(() => {
 
 ---
 
-### 2. Time-Gated Lifecycle System
+### 2. Unified Energy-Based Settling
 
-**Purpose**: Create "snap → freeze → swirl → settle" behavior
+**Purpose**: Create "lotus leaf floating on water" behavior with asymptotic decay
 
 **Algorithm**:
 ```typescript
-if (lifecycle < 200ms) {
-  phase = 'Flight';
-  damping = 0.30;           // Low friction
-  maxVelocity = 1500;       // High speed
-  springsEnabled = false;   // Ballistic flight
+// Single energy curve governs everything
+const tau = 0.3;  // 300ms time constant
+globalEnergy = Math.exp(-lifecycle / tau);
+
+// Forces scale with energy (weaken over time)
+forceScale = globalEnergy;
+for (node of nodes) {
+  node.fx *= forceScale;
+  node.fy *= forceScale;
 }
-else if (lifecycle < 300ms) {
-  phase = 'Freeze';
-  vx = vy = 0;              // Absolute stop
-  springsEnabled = false;   // No forces
-}
-else {
-  phase = 'Settle';
-  damping = 0.90;           // High friction
-  maxVelocity = 80;         // Low speed
-  springsEnabled = true;    // Pull to rest
-}
+
+// Damping increases as energy falls
+baseDamping = 0.3;
+maxDamping = 0.98;
+effectiveDamping = baseDamping + (maxDamping - baseDamping) * (1 - globalEnergy);
+
+// Rotating medium (initialized at impulse, decays independently)
+globalAngularVel *= Math.exp(-spinDamping * dt);
+globalAngle += globalAngularVel * dt;
+
+// Water micro-drift (alive stillness)
+microDrift = sin(t*0.3)*0.0008 + sin(t*0.7)*0.0004 + sin(t*1.1)*0.0002;
+globalAngle += microDrift * dt;
 ```
 
-**Why**: Creates decisive snap with controlled settling
+**Why**: 
+- No phase switches → smooth continuous motion
+- No capture moments → spin initialized at birth
+- Asymptotic decay → motion never "stops", just fades
+- Rotating medium → physics and rotation are orthogonal
+- Water feel → micro-drift makes stillness alive, not frozen
 
 ---
 
@@ -610,9 +667,13 @@ main.tsx
 4. **Deterministic**: Seeded randomness for reproducibility
 5. **UX-Driven**: Physics serves experience, not mathematical purity
 
-**Key Innovation**: Time-gated lifecycle system creates unique "snap → freeze → settle" behavior that feels organic and decisive.
+**Key Innovation**: Unified energy-based settling creates "lotus leaf on water" feel:
+- Single energy curve governs all motion
+- Rotating medium independent of node physics
+- Asymptotic decay (never stops, just fades)
+- Water micro-drift makes stillness feel alive
 
-**Extension Strategy**: Add new forces, parameters, or phases without touching core architecture.
+**Extension Strategy**: Add new forces, parameters, or behaviors without touching core architecture.
 
 ---
 

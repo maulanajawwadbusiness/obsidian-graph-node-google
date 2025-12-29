@@ -147,11 +147,21 @@ export function applySprings(
 
         const d = Math.sqrt(dx * dx + dy * dy);
 
-        // Hooke's Law: F = k * (current_distance - rest_length)
-        // Uniform rest length for all springs (harmonic net, not stressed web)
+        // Soft spring with dead zone
+        // No force within ±deadZone of rest length (perceptual uniformity)
         const restLength = config.linkRestLength;
+        const deadZone = restLength * config.springDeadZone;
 
-        const displacement = d - restLength;
+        const rawDisplacement = d - restLength;
+
+        // Apply dead zone: only apply force outside the band
+        let displacement = 0;
+        if (rawDisplacement > deadZone) {
+            displacement = rawDisplacement - deadZone;  // Stretched beyond band
+        } else if (rawDisplacement < -deadZone) {
+            displacement = rawDisplacement + deadZone;  // Compressed beyond band
+        }
+        // else: within dead zone, displacement = 0, no force
 
         // Effective Stiffness = Base (or Override) * Bias * Global Scale
         const baseK = link.strength ?? springStiffness;

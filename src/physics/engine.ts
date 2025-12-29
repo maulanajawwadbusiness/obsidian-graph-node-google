@@ -400,6 +400,50 @@ export class PhysicsEngine {
             }
         }
 
+        // =====================================================================
+        // POST-SOLVE EDGE RELAXATION (Shape nudge, not a force)
+        // Gently nudge each edge toward target length after physics is done.
+        // This creates perceptual uniformity without fighting physics.
+        // =====================================================================
+        const relaxStrength = 0.02; // 2% correction per frame
+        const targetLen = this.config.linkRestLength;
+
+        for (const link of this.links) {
+            const source = this.nodes.get(link.source);
+            const target = this.nodes.get(link.target);
+            if (!source || !target) continue;
+            if (source.isFixed && target.isFixed) continue;
+
+            const dx = target.x - source.x;
+            const dy = target.y - source.y;
+            const d = Math.sqrt(dx * dx + dy * dy);
+            if (d < 0.1) continue;
+
+            // How far off are we?
+            const error = d - targetLen;
+
+            // Small correction toward target (capped)
+            const correction = error * relaxStrength;
+
+            // Direction
+            const nx = dx / d;
+            const ny = dy / d;
+
+            // Apply to positions (split between nodes)
+            if (!source.isFixed && !target.isFixed) {
+                source.x += nx * correction * 0.5;
+                source.y += ny * correction * 0.5;
+                target.x -= nx * correction * 0.5;
+                target.y -= ny * correction * 0.5;
+            } else if (!source.isFixed) {
+                source.x += nx * correction;
+                source.y += ny * correction;
+            } else if (!target.isFixed) {
+                target.x -= nx * correction;
+                target.y -= ny * correction;
+            }
+        }
+
         // DEBUG: Log energy info every 10 frames (~166ms at 60fps)
         if (Math.floor(this.lifecycle * 60) % 10 === 0) {
             console.log(`[Physics] Energy: ${(energy * 100).toFixed(1)}% | Damping: ${effectiveDamping.toFixed(2)} | MaxV: ${maxVelocityEffective.toFixed(0)}`);

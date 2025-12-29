@@ -326,7 +326,7 @@ export const GraphPhysicsPlayground: React.FC = () => {
         aspectRatio: 0,
         lifecycleMs: 0
     });
-    const [spawnCount, setSpawnCount] = useState(20);
+    const [spawnCount, setSpawnCount] = useState(10);
     const [seed, setSeed] = useState(Date.now()); // Seed for deterministic generation
 
     // Camera State (for automatic framing)
@@ -384,7 +384,7 @@ export const GraphPhysicsPlayground: React.FC = () => {
 
         // Initial Spawn if empty
         if (engine.nodes.size === 0) {
-            const { nodes, links } = generateRandomGraph(20, config.targetSpacing, config.initScale, seed);
+            const { nodes, links } = generateRandomGraph(spawnCount, config.targetSpacing, config.initScale, seed);
             nodes.forEach(n => engine.addNode(n));
             links.forEach(l => engine.addLink(l));
         }

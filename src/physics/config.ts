@@ -100,5 +100,7 @@ export const DEFAULT_PHYSICS_CONFIG: ForceConfig = {
     // ANCHOR: Harmonic Net (Uniform Link Lengths)
     // ---------------------------------------------------------------------------
     // Uniform rest length for all springs (creates harmonic net, not stressed web)
-    linkRestLength: 375,  // Same as targetSpacing for balanced feel
+    linkRestLength: 130,  // 35% of 375px for tighter spacing
+    // Dead zone for soft springs (no force within this band)
+    springDeadZone: 0.15,  // ±15% of rest length
 };

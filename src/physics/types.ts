@@ -92,4 +92,9 @@ export interface ForceConfig {
   // ---------------------------------------------------------------------------
   spinDamping: number;   // How fast global spin decays (per second)
   spinBlend: number;     // How strongly nodes align to global spin direction
+
+  // ---------------------------------------------------------------------------
+  // Harmonic Net (Uniform Link Lengths)
+  // ---------------------------------------------------------------------------
+  linkRestLength: number;  // Uniform rest length for all springs (px)
 }

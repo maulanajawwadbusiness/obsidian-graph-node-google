@@ -128,7 +128,7 @@ export function applySprings(
     config: ForceConfig,
     stiffnessScale: number = 1.0
 ) {
-    const { springStiffness, targetSpacing } = config;
+    const { springStiffness } = config;
 
     for (const link of links) {
         const source = nodes.get(link.source);
@@ -148,13 +148,10 @@ export function applySprings(
         const d = Math.sqrt(dx * dx + dy * dy);
 
         // Hooke's Law: F = k * (current_distance - rest_length)
-        // We want the force to act to RESTORE the length.
+        // Uniform rest length for all springs (harmonic net, not stressed web)
+        const restLength = config.linkRestLength;
 
-        // Effective Length = Base (or Override) * Bias
-        const baseLen = link.length ?? targetSpacing;
-        const effectiveLength = baseLen * (link.lengthBias ?? 1.0);
-
-        const displacement = d - effectiveLength;
+        const displacement = d - restLength;
 
         // Effective Stiffness = Base (or Override) * Bias * Global Scale
         const baseK = link.strength ?? springStiffness;
@@ -189,7 +186,6 @@ export function applySpringConstraint(
     config: ForceConfig,
     strength: number = 0.5 // How much of the error to correct per frame (0.0 - 1.0)
 ) {
-    const { targetSpacing } = config;
 
     for (const link of links) {
         const source = nodes.get(link.source);
@@ -209,9 +205,8 @@ export function applySpringConstraint(
 
         const d = Math.sqrt(dx * dx + dy * dy);
 
-        // Target Distance
-        const baseLen = link.length ?? targetSpacing;
-        const targetLen = baseLen * (link.lengthBias ?? 1.0);
+        // Uniform rest length for all springs
+        const targetLen = config.linkRestLength;
 
         // Difference
         const diff = d - targetLen;

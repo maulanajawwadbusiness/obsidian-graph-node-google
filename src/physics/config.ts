@@ -95,4 +95,10 @@ export const DEFAULT_PHYSICS_CONFIG: ForceConfig = {
     spinDamping: 0.5,
     // How strongly nodes align to global spin direction (0 = ignore, 1 = instant)
     spinBlend: 0.15,
+
+    // ---------------------------------------------------------------------------
+    // ANCHOR: Harmonic Net (Uniform Link Lengths)
+    // ---------------------------------------------------------------------------
+    // Uniform rest length for all springs (creates harmonic net, not stressed web)
+    linkRestLength: 375,  // Same as targetSpacing for balanced feel
 };

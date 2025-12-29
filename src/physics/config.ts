@@ -120,4 +120,6 @@ export const DEFAULT_PHYSICS_CONFIG: ForceConfig = {
     softMaxCorrectionPx: 2.0,     // Max correction in soft zone
     maxCorrectionPerFrame: 1.5,   // Global max to prevent snapping
     hardSoftnessBand: 0.2,        // Fraction of minDist for smoothstep ramp
+    clampHysteresisMargin: 25,    // Wide buffer to make clamp imperceptible
+    maxNodeCorrectionPerFrame: 0.5,  // Per-node budget to prevent multi-constraint pileup
 };

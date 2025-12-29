@@ -26,6 +26,9 @@ export interface PhysicsNode {
 
   // Orbital Drift (captured at equilibrium time)
   equilibrium?: { x: number, y: number }; // Settled position for anisotropic damping
+
+  // Directional inertia (prevents correction direction churn)
+  lastCorrectionDir?: { x: number, y: number }; // Normalized direction of last frame's correction
 }
 
 export interface PhysicsLink {
@@ -112,4 +115,6 @@ export interface ForceConfig {
   softMaxCorrectionPx: number;    // Max correction per pair per frame in soft zone (default 2.0)
   maxCorrectionPerFrame: number;  // Global max correction per pair per frame (default 1.5)
   hardSoftnessBand: number;       // Fraction of minDist for smoothstep ramp (default 0.2)
+  clampHysteresisMargin: number;  // Buffer above minDist before releasing clamp (default 5px)
+  maxNodeCorrectionPerFrame: number;  // Per-node correction budget to prevent pileup (default 0.5px)
 }

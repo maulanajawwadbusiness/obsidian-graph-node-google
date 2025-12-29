@@ -23,6 +23,9 @@ export class PhysicsEngine {
     private globalAngle: number = 0;       // Accumulated rotation (radians)
     private globalAngularVel: number = 0;  // Angular velocity (rad/s, + = CCW)
 
+    // Hysteresis state for hard clamp (tracks pairs currently in clamped state)
+    private clampedPairs = new Set<string>();
+
     constructor(config: Partial<ForceConfig> = {}) {
         this.config = { ...DEFAULT_PHYSICS_CONFIG, ...config };
     }
@@ -401,6 +404,16 @@ export class PhysicsEngine {
         }
 
         // =====================================================================
+        // PER-NODE CORRECTION BUDGET SYSTEM
+        // All constraints request position corrections via accumulator
+        // Total correction magnitude is clamped to prevent multi-constraint pileup
+        // =====================================================================
+        const correctionAccum = new Map<string, { dx: number; dy: number }>();
+        for (const node of nodeList) {
+            correctionAccum.set(node.id, { dx: 0, dy: 0 });
+        }
+
+        // =====================================================================
         // POST-SOLVE EDGE RELAXATION (Shape nudge, not a force)
         // Gently nudge each edge toward target length after physics is done.
         // This creates perceptual uniformity without fighting physics.
@@ -429,18 +442,25 @@ export class PhysicsEngine {
             const nx = dx / d;
             const ny = dy / d;
 
-            // Apply to positions (split between nodes)
+            // Request correction via accumulator (split between nodes)
+            const sourceAccum = correctionAccum.get(source.id);
+            const targetAccum = correctionAccum.get(target.id);
+
             if (!source.isFixed && !target.isFixed) {
-                source.x += nx * correction * 0.5;
-                source.y += ny * correction * 0.5;
-                target.x -= nx * correction * 0.5;
-                target.y -= ny * correction * 0.5;
-            } else if (!source.isFixed) {
-                source.x += nx * correction;
-                source.y += ny * correction;
-            } else if (!target.isFixed) {
-                target.x -= nx * correction;
-                target.y -= ny * correction;
+                if (sourceAccum) {
+                    sourceAccum.dx += nx * correction * 0.5;
+                    sourceAccum.dy += ny * correction * 0.5;
+                }
+                if (targetAccum) {
+                    targetAccum.dx -= nx * correction * 0.5;
+                    targetAccum.dy -= ny * correction * 0.5;
+                }
+            } else if (!source.isFixed && sourceAccum) {
+                sourceAccum.dx += nx * correction;
+                sourceAccum.dy += ny * correction;
+            } else if (!target.isFixed && targetAccum) {
+                targetAccum.dx -= nx * correction;
+                targetAccum.dy -= ny * correction;
             }
         }
 
@@ -499,18 +519,25 @@ export class PhysicsEngine {
                     const maxCorr = this.config.maxCorrectionPerFrame;
                     const corrApplied = Math.min(corr * spacingGate, maxCorr);
 
-                    // Apply positional correction (equal split)
+                    // Request correction via accumulator (equal split)
+                    const aAccum = correctionAccum.get(a.id);
+                    const bAccum = correctionAccum.get(b.id);
+
                     if (!a.isFixed && !b.isFixed) {
-                        a.x -= nx * corrApplied * 0.5;
-                        a.y -= ny * corrApplied * 0.5;
-                        b.x += nx * corrApplied * 0.5;
-                        b.y += ny * corrApplied * 0.5;
-                    } else if (!a.isFixed) {
-                        a.x -= nx * corrApplied;
-                        a.y -= ny * corrApplied;
-                    } else if (!b.isFixed) {
-                        b.x += nx * corrApplied;
-                        b.y += ny * corrApplied;
+                        if (aAccum) {
+                            aAccum.dx -= nx * corrApplied * 0.5;
+                            aAccum.dy -= ny * corrApplied * 0.5;
+                        }
+                        if (bAccum) {
+                            bAccum.dx += nx * corrApplied * 0.5;
+                            bAccum.dy += ny * corrApplied * 0.5;
+                        }
+                    } else if (!a.isFixed && aAccum) {
+                        aAccum.dx -= nx * corrApplied;
+                        aAccum.dy -= ny * corrApplied;
+                    } else if (!b.isFixed && bAccum) {
+                        bAccum.dx += nx * corrApplied;
+                        bAccum.dy += ny * corrApplied;
                     }
                 }
             }
@@ -595,9 +622,12 @@ export class PhysicsEngine {
                 const nx = dx / d;
                 const ny = dy / d;
 
-                // Push outward
-                node.x += nx * correction;
-                node.y += ny * correction;
+                // Request correction via accumulator
+                const nodeAccum = correctionAccum.get(node.id);
+                if (nodeAccum) {
+                    nodeAccum.dx += nx * correction;
+                    nodeAccum.dy += ny * correction;
+                }
             }
         }
 
@@ -655,8 +685,7 @@ export class PhysicsEngine {
                 const nextNb = this.nodes.get(next.id);
                 if (!currNb || !nextNb) continue;
 
-                // Rotate currNb clockwise by deficit/2
-                // Rotate nextNb counter-clockwise by deficit/2
+                // Compute rotation correction and add to accumulator
                 const rotateNode = (nb: typeof currNb, angleOffset: number) => {
                     if (nb.isFixed) return;
                     const dx = nb.x - node.x;
@@ -664,8 +693,15 @@ export class PhysicsEngine {
                     const r = Math.sqrt(dx * dx + dy * dy);
                     const currentAngle = Math.atan2(dy, dx);
                     const newAngle = currentAngle + angleOffset;
-                    nb.x = node.x + r * Math.cos(newAngle);
-                    nb.y = node.y + r * Math.sin(newAngle);
+                    const newX = node.x + r * Math.cos(newAngle);
+                    const newY = node.y + r * Math.sin(newAngle);
+
+                    // Request correction via accumulator
+                    const nbAccum = correctionAccum.get(nb.id);
+                    if (nbAccum) {
+                        nbAccum.dx += newX - nb.x;
+                        nbAccum.dy += newY - nb.y;
+                    }
                 };
 
                 rotateNode(currNb, -deficit * 0.5);
@@ -674,39 +710,136 @@ export class PhysicsEngine {
         }
 
         // =====================================================================
-        // HARD POSITION CLAMP (During expansion only)
-        // After all physics + constraints, enforce minimum distance geometrically
-        // Prevents overlap debt from accumulating, so spacing has nothing to fix later
+        // DISTANCE FIELD BIAS (Continuous resistance, not discrete correction)
+        // When d < minDist, apply outward velocity bias (smooth, continuous)
+        // Bias strength ramps with penetration depth
+        // Hard positional clamp only as last-resort safety net
         // =====================================================================
-        if (energy > 0.7) {
-            for (let i = 0; i < nodeList.length; i++) {
-                const a = nodeList[i];
-                for (let j = i + 1; j < nodeList.length; j++) {
-                    const b = nodeList[j];
+        const releaseDist = D_hard + this.config.clampHysteresisMargin;
+        const biasStrength = 15.0;  // Outward velocity bias strength
 
-                    const dx = b.x - a.x;
-                    const dy = b.y - a.y;
-                    const d = Math.sqrt(dx * dx + dy * dy);
+        for (let i = 0; i < nodeList.length; i++) {
+            const a = nodeList[i];
+            for (let j = i + 1; j < nodeList.length; j++) {
+                const b = nodeList[j];
 
-                    if (d >= D_hard || d < 0.1) continue;
+                const dx = b.x - a.x;
+                const dy = b.y - a.y;
+                const d = Math.sqrt(dx * dx + dy * dy);
 
-                    // Hard clamp: push positions apart to exactly minDistance
-                    const overlap = D_hard - d;
-                    const nx = dx / d;
-                    const ny = dy / d;
+                if (d < 0.1) continue;  // Singularity guard
+
+                const pairKey = a.id < b.id ? `${a.id}:${b.id}` : `${b.id}:${a.id}`;
+                const wasClamped = this.clampedPairs.has(pairKey);
+
+                const nx = dx / d;
+                const ny = dy / d;
+
+                if (d < D_hard) {
+                    // CONTINUOUS BIAS: apply outward velocity, ramped by penetration
+                    const penetration = D_hard - d;
+                    const t = Math.min(penetration / D_hard, 1);  // 0→1
+                    const ramp = t * t * (3 - 2 * t);  // Smoothstep
+                    const bias = ramp * biasStrength;
 
                     if (!a.isFixed && !b.isFixed) {
-                        a.x -= nx * overlap * 0.5;
-                        a.y -= ny * overlap * 0.5;
-                        b.x += nx * overlap * 0.5;
-                        b.y += ny * overlap * 0.5;
+                        a.vx -= nx * bias;
+                        a.vy -= ny * bias;
+                        b.vx += nx * bias;
+                        b.vy += ny * bias;
                     } else if (!a.isFixed) {
-                        a.x -= nx * overlap;
-                        a.y -= ny * overlap;
+                        a.vx -= nx * bias * 2;
+                        a.vy -= ny * bias * 2;
                     } else if (!b.isFixed) {
-                        b.x += nx * overlap;
-                        b.y += ny * overlap;
+                        b.vx += nx * bias * 2;
+                        b.vy += ny * bias * 2;
                     }
+
+                    // SAFETY NET: hard clamp only for deep violations
+                    if (penetration > 5) {
+                        const emergencyCorrection = Math.min(penetration - 5, 0.3);
+                        const aAccum = correctionAccum.get(a.id);
+                        const bAccum = correctionAccum.get(b.id);
+
+                        if (!a.isFixed && !b.isFixed) {
+                            if (aAccum) {
+                                aAccum.dx -= nx * emergencyCorrection * 0.5;
+                                aAccum.dy -= ny * emergencyCorrection * 0.5;
+                            }
+                            if (bAccum) {
+                                bAccum.dx += nx * emergencyCorrection * 0.5;
+                                bAccum.dy += ny * emergencyCorrection * 0.5;
+                            }
+                        } else if (!a.isFixed && aAccum) {
+                            aAccum.dx -= nx * emergencyCorrection;
+                            aAccum.dy -= ny * emergencyCorrection;
+                        } else if (!b.isFixed && bAccum) {
+                            bAccum.dx += nx * emergencyCorrection;
+                            bAccum.dy += ny * emergencyCorrection;
+                        }
+                    }
+
+                    this.clampedPairs.add(pairKey);
+                }
+                else if (wasClamped && d < releaseDist) {
+                    // HOLD: inside hysteresis buffer, do nothing
+                }
+                else {
+                    // RELEASE: outside buffer, clear lock
+                    this.clampedPairs.delete(pairKey);
+                }
+            }
+        }
+
+        // =====================================================================
+        // FINAL PASS: APPLY CLAMPED CORRECTIONS (One decision per node per frame)
+        // Clamp total correction magnitude to budget
+        // Directional inertia prevents visible direction flips
+        // =====================================================================
+        const nodeBudget = this.config.maxNodeCorrectionPerFrame;
+
+        for (const node of nodeList) {
+            if (node.isFixed) continue;
+
+            const accum = correctionAccum.get(node.id);
+            if (!accum) continue;
+
+            // Total correction magnitude
+            const totalMag = Math.sqrt(accum.dx * accum.dx + accum.dy * accum.dy);
+
+            if (totalMag < 0.001) continue;  // Skip tiny corrections
+
+            // Normalize new direction
+            const newDir = { x: accum.dx / totalMag, y: accum.dy / totalMag };
+
+            // Check directional continuity
+            let attenuationFactor = 1.0;
+            if (node.lastCorrectionDir) {
+                const dot = newDir.x * node.lastCorrectionDir.x + newDir.y * node.lastCorrectionDir.y;
+                if (dot < 0) {
+                    // Opposite direction - strongly attenuate
+                    attenuationFactor = 0.2;
+                }
+            }
+
+            // Clamp to budget and apply attenuation
+            const scale = Math.min(1, nodeBudget / totalMag) * attenuationFactor;
+
+            // Apply clamped & attenuated correction
+            node.x += accum.dx * scale;
+            node.y += accum.dy * scale;
+
+            // Update lastCorrectionDir via slow lerp (heavy inertia)
+            if (!node.lastCorrectionDir) {
+                node.lastCorrectionDir = { x: newDir.x, y: newDir.y };
+            } else {
+                const lerpFactor = 0.3;  // Slow update
+                const lx = node.lastCorrectionDir.x * (1 - lerpFactor) + newDir.x * lerpFactor;
+                const ly = node.lastCorrectionDir.y * (1 - lerpFactor) + newDir.y * lerpFactor;
+                const lmag = Math.sqrt(lx * lx + ly * ly);
+                if (lmag > 0.001) {
+                    node.lastCorrectionDir.x = lx / lmag;
+                    node.lastCorrectionDir.y = ly / lmag;
                 }
             }
         }

@@ -304,6 +304,13 @@ export const applyExpansionResistance = (
     const passStats = getPassStats(stats, 'ExpansionResistance');
     const affected = new Set<string>();
     const expResist = engine.config.expansionResistance;
+    const trappedForceEpsilon = 1.0;
+    const trappedVelocityEpsilon = 0.5;
+    let hubSpeedBeforeTotal = 0;
+    let hubSpeedAfterTotal = 0;
+    let hubCount = 0;
+    let trappedHubCount = 0;
+    let skippedHubCount = 0;
 
     for (const node of nodeList) {
         if (node.isFixed) continue;
@@ -318,9 +325,26 @@ export const applyExpansionResistance = (
 
         const beforeVx = node.vx;
         const beforeVy = node.vy;
+        const speedBefore = Math.sqrt(beforeVx * beforeVx + beforeVy * beforeVy);
 
         // Apply as velocity damping (not position correction)
-        const damp = 1 - resistance * expResist;
+        let dampScale = 1;
+        if (degree >= 3) {
+            hubCount += 1;
+            hubSpeedBeforeTotal += speedBefore;
+
+            const fMag = Math.sqrt(node.fx * node.fx + node.fy * node.fy);
+            const isTrappedHub = fMag < trappedForceEpsilon && speedBefore < trappedVelocityEpsilon;
+            if (isTrappedHub) {
+                trappedHubCount += 1;
+                dampScale = Math.min(speedBefore / trappedVelocityEpsilon, 1);
+                if (dampScale === 0) {
+                    skippedHubCount += 1;
+                }
+            }
+        }
+
+        const damp = 1 - resistance * expResist * dampScale;
         node.vx *= damp;
         node.vy *= damp;
 
@@ -331,9 +355,20 @@ export const applyExpansionResistance = (
             passStats.velocity += deltaMag;
             affected.add(node.id);
         }
+
+        if (degree >= 3) {
+            const speedAfter = Math.sqrt(node.vx * node.vx + node.vy * node.vy);
+            hubSpeedAfterTotal += speedAfter;
+        }
     }
 
     passStats.nodes += affected.size;
+    stats.expansionResistance.trappedHubCount = trappedHubCount;
+    stats.expansionResistance.skippedHubCount = skippedHubCount;
+    if (hubCount > 0) {
+        stats.expansionResistance.avgHubSpeedBefore = hubSpeedBeforeTotal / hubCount;
+        stats.expansionResistance.avgHubSpeedAfter = hubSpeedAfterTotal / hubCount;
+    }
 };
 
 export const applyAngleResistanceVelocity = (

@@ -379,6 +379,21 @@ export class PhysicsEngine {
             node.vx *= (1 - effectiveDamping * dt * 5.0);
             node.vy *= (1 - effectiveDamping * dt * 5.0);
 
+            // HUB INERTIA: High-degree nodes feel heavier (slower velocity response)
+            // This is mass-like behavior during velocity integration, NOT damping
+            // Computed inline to avoid second loop
+            let nodeDeg = 0;
+            for (const link of this.links) {
+                if (link.source === node.id || link.target === node.id) nodeDeg++;
+            }
+            if (nodeDeg > 2) {
+                const hubFactor = Math.min((nodeDeg - 2) / 4, 1);
+                const hubVelocityScale = 0.7;  // How slow hubs respond
+                const velScale = 1.0 - hubFactor * (1.0 - hubVelocityScale);
+                node.vx *= velScale;
+                node.vy *= velScale;
+            }
+
             // Clamp Velocity
             const vSq = node.vx * node.vx + node.vy * node.vy;
             if (vSq > maxVelocityEffective * maxVelocityEffective) {
@@ -702,8 +717,7 @@ export class PhysicsEngine {
         // Base force strength
         const angleForceStrength = 25.0;
 
-        // Expansion phase boost
-        const expansionBoost = energy > 0.7 ? 1.3 : 1.0;
+        // No expansion boost - angle resistance is phase-gated instead
 
         // Build adjacency map: node -> list of neighbors
         const neighbors = new Map<string, string[]>();
@@ -747,17 +761,23 @@ export class PhysicsEngine {
                 // Zone A: Free - no resistance
                 if (theta >= ANGLE_FREE) continue;
 
+                // PHASE-AWARE: During expansion, disable most angle resistance
+                // Only allow emergency zones D/E to prevent collapse
+                const isExpansion = energy > 0.7;
+
                 // Compute resistance based on zone (continuous curve)
                 let resistance: number;
                 let localDamping = 1.0;
 
                 if (theta >= ANGLE_PRETENSION) {
                     // Zone B: Pre-tension (45-60°)
+                    if (isExpansion) continue;  // DISABLED during expansion
                     const t = (ANGLE_FREE - theta) / (ANGLE_FREE - ANGLE_PRETENSION);
                     const ease = t * t;  // Quadratic ease-in
                     resistance = ease * RESIST_PRETENSION_MAX;
                 } else if (theta >= ANGLE_SOFT) {
                     // Zone C: Soft constraint (30-45°)
+                    if (isExpansion) continue;  // DISABLED during expansion
                     const t = (ANGLE_PRETENSION - theta) / (ANGLE_PRETENSION - ANGLE_SOFT);
                     const ease = t * t * (3 - 2 * t);  // Smoothstep
                     resistance = RESIST_PRETENSION_MAX + ease * (RESIST_SOFT_MAX - RESIST_PRETENSION_MAX);
@@ -765,14 +785,18 @@ export class PhysicsEngine {
                     // Zone D: Emergency (20-30°)
                     const t = (ANGLE_SOFT - theta) / (ANGLE_SOFT - ANGLE_EMERGENCY);
                     const ease = t * t * t;  // Cubic ease-in
-                    resistance = RESIST_SOFT_MAX + ease * (RESIST_EMERGENCY_MAX - RESIST_SOFT_MAX);
-                    localDamping = 0.92;  // Add local damping
+                    // During expansion: reduced resistance (emergency only)
+                    const expansionScale = isExpansion ? 0.3 : 1.0;
+                    resistance = (RESIST_SOFT_MAX + ease * (RESIST_EMERGENCY_MAX - RESIST_SOFT_MAX)) * expansionScale;
+                    localDamping = isExpansion ? 1.0 : 0.92;  // No extra damping during expansion
                 } else {
                     // Zone E: Forbidden (<20°)
                     const penetration = ANGLE_EMERGENCY - theta;
                     const t = Math.min(penetration / (10 * DEG_TO_RAD), 1);
-                    resistance = RESIST_EMERGENCY_MAX + t * (RESIST_FORBIDDEN - RESIST_EMERGENCY_MAX);
-                    localDamping = 0.85;  // Strong local damping
+                    // During expansion: prevent collapse only, don't open angles
+                    const expansionScale = isExpansion ? 0.5 : 1.0;
+                    resistance = (RESIST_EMERGENCY_MAX + t * (RESIST_FORBIDDEN - RESIST_EMERGENCY_MAX)) * expansionScale;
+                    localDamping = isExpansion ? 0.95 : 0.85;  // Lighter damping during expansion
                 }
 
                 // Get neighbor nodes
@@ -780,8 +804,8 @@ export class PhysicsEngine {
                 const nextNb = this.nodes.get(next.id);
                 if (!currNb || !nextNb) continue;
 
-                // Force magnitude
-                const force = resistance * angleForceStrength * expansionBoost;
+                // Force magnitude (no expansion boost - gating handles expansion)
+                const force = resistance * angleForceStrength;
 
                 // Apply tangential force (push edges apart along angle bisector)
                 // currNb rotates clockwise, nextNb rotates counter-clockwise
@@ -999,8 +1023,16 @@ export class PhysicsEngine {
                 }
             }
 
-            // Clamp to budget and apply attenuation + degree scaling
-            const scale = Math.min(1, nodeBudget / totalMag) * attenuationFactor * degreeScale;
+            // PHASE-AWARE HUB INERTIA: high-degree nodes absorb corrections gradually
+            // Prevents synchronization spike during expansion→settling transition
+            // hubFactor = 0 for leaves, 1 for high-degree hubs
+            const hubFactor = Math.min(Math.max((degree - 2) / 3, 0), 1);
+            const inertiaStrength = 0.6;  // How much to slow hub correction acceptance
+            // Active during transition (energy 0.4-0.7) and settling
+            const hubInertiaScale = energy < 0.8 ? (1 - hubFactor * inertiaStrength) : 1.0;
+
+            // Clamp to budget and apply attenuation + degree scaling + hub inertia
+            const scale = Math.min(1, nodeBudget / totalMag) * attenuationFactor * degreeScale * hubInertiaScale;
             const corrDx = accum.dx * scale;
             const corrDy = accum.dy * scale;
 

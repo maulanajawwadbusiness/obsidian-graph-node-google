@@ -307,7 +307,7 @@ export class PhysicsEngine {
         // 2. Apply Core Forces (scaled by energy)
         applyRepulsion(nodeList, this.config);
         applyCollision(nodeList, this.config, 1.0);
-        applySprings(this.nodes, this.links, this.config, 1.0);
+        applySprings(this.nodes, this.links, this.config, 1.0, energy);
         applyBoundaryForce(nodeList, this.config, this.worldWidth, this.worldHeight);
 
         // Scale all forces by energy envelope
@@ -374,6 +374,40 @@ export class PhysicsEngine {
             // Update Velocity
             node.vx += ax * dt;
             node.vy += ay * dt;
+
+            // EARLY-PHASE SYMMETRY BREAKING: Prevent symmetric force cancellation in hubs
+            // Only active during early expansion (energy > 0.7), fades out smoothly
+            // Deterministic direction based on node ID hash
+            if (energy > 0.7) {
+                // Count degree inline
+                let deg = 0;
+                for (const link of this.links) {
+                    if (link.source === node.id || link.target === node.id) deg++;
+                }
+
+                if (deg >= 3) {
+                    // Deterministic hash from node ID
+                    let hash = 0;
+                    for (let i = 0; i < node.id.length; i++) {
+                        hash = ((hash << 5) - hash) + node.id.charCodeAt(i);
+                        hash |= 0;
+                    }
+                    // Convert to unit direction
+                    const angle = (hash % 1000) / 1000 * 2 * Math.PI;
+                    const dirX = Math.cos(angle);
+                    const dirY = Math.sin(angle);
+
+                    // Fade: 1.0 at energy=1.0, 0.0 at energy=0.7
+                    const fade = Math.min((energy - 0.7) / 0.3, 1);
+                    const smoothFade = fade * fade * (3 - 2 * fade);  // smoothstep
+
+                    // Tiny bias strength, scaled by degree
+                    const biasStrength = 0.04 * deg * smoothFade;
+
+                    node.vx += dirX * biasStrength;
+                    node.vy += dirY * biasStrength;
+                }
+            }
 
             // Apply unified damping (increases as energy falls)
             node.vx *= (1 - effectiveDamping * dt * 5.0);
@@ -583,19 +617,23 @@ export class PhysicsEngine {
                     const aDeg = nodeDegreeEarly.get(a.id) || 0;
                     const bDeg = nodeDegreeEarly.get(b.id) || 0;
 
+                    // EARLY-PHASE HUB PRIVILEGE: high-degree nodes skip spacing during early expansion
+                    const aHubSkip = energy > 0.85 && aDeg >= 3;
+                    const bHubSkip = energy > 0.85 && bDeg >= 3;
+
                     if (!a.isFixed && !b.isFixed) {
-                        if (aAccum && aDeg > 1) {
+                        if (aAccum && aDeg > 1 && !aHubSkip) {
                             aAccum.dx -= nx * corrApplied * 0.5;
                             aAccum.dy -= ny * corrApplied * 0.5;
                         }
-                        if (bAccum && bDeg > 1) {
+                        if (bAccum && bDeg > 1 && !bHubSkip) {
                             bAccum.dx += nx * corrApplied * 0.5;
                             bAccum.dy += ny * corrApplied * 0.5;
                         }
-                    } else if (!a.isFixed && aAccum && aDeg > 1) {
+                    } else if (!a.isFixed && aAccum && aDeg > 1 && !aHubSkip) {
                         aAccum.dx -= nx * corrApplied;
                         aAccum.dy -= ny * corrApplied;
-                    } else if (!b.isFixed && bAccum && bDeg > 1) {
+                    } else if (!b.isFixed && bAccum && bDeg > 1 && !bHubSkip) {
                         bAccum.dx += nx * corrApplied;
                         bAccum.dy += ny * corrApplied;
                     }
@@ -684,9 +722,11 @@ export class PhysicsEngine {
 
                 // Request correction via accumulator
                 // DEGREE-1 EXCLUSION: dangling nodes don't receive positional correction
+                // EARLY-PHASE HUB PRIVILEGE: high-degree nodes skip constraints during early expansion
                 const nodeAccum = correctionAccum.get(node.id);
                 const nodeDeg = nodeDegreeEarly.get(node.id) || 0;
-                if (nodeAccum && nodeDeg > 1) {
+                const earlyHubSkip = energy > 0.85 && nodeDeg >= 3;
+                if (nodeAccum && nodeDeg > 1 && !earlyHubSkip) {
                     nodeAccum.dx += nx * correction;
                     nodeAccum.dy += ny * correction;
                 }
@@ -814,6 +854,9 @@ export class PhysicsEngine {
                     const nbDeg = nodeDegreeEarly.get(nb.id) || 0;
                     if (nbDeg === 1) return;  // Skip dangling nodes
 
+                    // EARLY-PHASE HUB PRIVILEGE: high-degree nodes skip angle constraint during early expansion
+                    if (energy > 0.85 && nbDeg >= 3) return;
+
                     // Tangent direction (perpendicular to radial)
                     const radialX = (nb.x - node.x) / edge.r;
                     const radialY = (nb.y - node.y) / edge.r;
@@ -936,19 +979,23 @@ export class PhysicsEngine {
                         const aDeg = nodeDegreeEarly.get(a.id) || 0;
                         const bDeg = nodeDegreeEarly.get(b.id) || 0;
 
+                        // EARLY-PHASE HUB PRIVILEGE: high-degree nodes skip clamp during early expansion
+                        const aHubSkip = energy > 0.85 && aDeg >= 3;
+                        const bHubSkip = energy > 0.85 && bDeg >= 3;
+
                         if (!a.isFixed && !b.isFixed) {
-                            if (aAccum && aDeg > 1) {
+                            if (aAccum && aDeg > 1 && !aHubSkip) {
                                 aAccum.dx -= nx * emergencyCorrection * 0.5;
                                 aAccum.dy -= ny * emergencyCorrection * 0.5;
                             }
-                            if (bAccum && bDeg > 1) {
+                            if (bAccum && bDeg > 1 && !bHubSkip) {
                                 bAccum.dx += nx * emergencyCorrection * 0.5;
                                 bAccum.dy += ny * emergencyCorrection * 0.5;
                             }
-                        } else if (!a.isFixed && aAccum && aDeg > 1) {
+                        } else if (!a.isFixed && aAccum && aDeg > 1 && !aHubSkip) {
                             aAccum.dx -= nx * emergencyCorrection;
                             aAccum.dy -= ny * emergencyCorrection;
-                        } else if (!b.isFixed && bAccum && bDeg > 1) {
+                        } else if (!b.isFixed && bAccum && bDeg > 1 && !bHubSkip) {
                             bAccum.dx += nx * emergencyCorrection;
                             bAccum.dy += ny * emergencyCorrection;
                         }

@@ -126,9 +126,20 @@ export function applySprings(
     nodes: Map<string, PhysicsNode>,
     links: PhysicsLink[],
     config: ForceConfig,
-    stiffnessScale: number = 1.0
+    stiffnessScale: number = 1.0,
+    energy: number = 0.0  // For early-phase hub softening
 ) {
     const { springStiffness } = config;
+
+    // Precompute node degrees for hub softening
+    const nodeDegree = new Map<string, number>();
+    for (const [id] of nodes) {
+        nodeDegree.set(id, 0);
+    }
+    for (const link of links) {
+        nodeDegree.set(link.source, (nodeDegree.get(link.source) || 0) + 1);
+        nodeDegree.set(link.target, (nodeDegree.get(link.target) || 0) + 1);
+    }
 
     for (const link of links) {
         const source = nodes.get(link.source);
@@ -173,14 +184,37 @@ export function applySprings(
         const fx = (dx / d) * forceMagnitude;
         const fy = (dy / d) * forceMagnitude;
 
-        // Apply
+        // EARLY-PHASE HUB SPRING SOFTENING
+        // During early expansion, reduce spring force for high-degree nodes
+        // Allows hubs to drift and break symmetric equilibrium
+        const computeHubScale = (nodeId: string): number => {
+            if (energy <= 0.7) return 1.0;  // Full spring authority
+
+            const deg = nodeDegree.get(nodeId) || 0;
+            if (deg < 3) return 1.0;  // Low-degree nodes unaffected
+
+            // Hub factor: 0 at deg=3, 1 at deg=6+
+            const hubFactor = Math.min((deg - 3) / 3, 1);
+
+            // Softening: 0.3 at energy=1.0, lerp to 1.0 at energy=0.7
+            const minScale = 0.3;  // How soft hubs get during peak expansion
+            const energyFade = Math.min((energy - 0.7) / 0.3, 1);  // 0 at 0.7, 1 at 1.0
+            const softening = 1.0 - hubFactor * (1.0 - minScale) * energyFade;
+
+            return softening;
+        };
+
+        const sourceScale = computeHubScale(link.source);
+        const targetScale = computeHubScale(link.target);
+
+        // Apply with hub softening
         if (!source.isFixed) {
-            source.fx += fx;
-            source.fy += fy;
+            source.fx += fx * sourceScale;
+            source.fy += fy * sourceScale;
         }
         if (!target.isFixed) {
-            target.fx -= fx;
-            target.fy -= fy;
+            target.fx -= fx * targetScale;
+            target.fy -= fy * targetScale;
         }
     }
 }

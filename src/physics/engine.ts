@@ -29,6 +29,9 @@ export class PhysicsEngine {
     // Pre-roll phase: soft separation before expansion (frames remaining)
     private preRollFrames: number = 5;  // ~80ms at 60fps
 
+    // Escape window: frames remaining for trapped nodes to skip constraints
+    private escapeWindow = new Map<string, number>();
+
     constructor(config: Partial<ForceConfig> = {}) {
         this.config = { ...DEFAULT_PHYSICS_CONFIG, ...config };
     }
@@ -397,11 +400,30 @@ export class PhysicsEngine {
                 node.vy += tangentY;
             }
 
-            // NULL-FORCE SYMMETRY BREAKING
+            // NULL-FORCE SYMMETRY BREAKING (individual + cluster-level)
             // When hub nodes have near-zero net force, add tiny deterministic bias
             // Prevents starfish/brick eigenmodes from symmetric force cancellation
             const epsilon = 0.5;  // Near-zero threshold
             const biasStrength = 0.3;  // ~1% of typical spring force
+            const clusterBiasStrength = 0.5;  // Stronger for deep clusters
+
+            // Build neighbor map for cluster detection
+            const neighborMap = new Map<string, string[]>();
+            for (const node of nodeList) {
+                neighborMap.set(node.id, []);
+            }
+            for (const link of this.links) {
+                neighborMap.get(link.source)?.push(link.target);
+                neighborMap.get(link.target)?.push(link.source);
+            }
+
+            // Precompute which nodes are in "null-force" state
+            const isNullForce = new Map<string, boolean>();
+            for (const node of nodeList) {
+                const deg = preRollDegree.get(node.id) || 0;
+                const fMag = Math.sqrt(node.fx * node.fx + node.fy * node.fy);
+                isNullForce.set(node.id, deg >= 3 && fMag < epsilon);
+            }
 
             for (const node of nodeList) {
                 if (node.isFixed) continue;
@@ -412,17 +434,50 @@ export class PhysicsEngine {
                 const fMag = Math.sqrt(node.fx * node.fx + node.fy * node.fy);
                 if (fMag >= epsilon) continue;  // Has meaningful force, no bias needed
 
-                // Deterministic bias direction from node ID hash
-                let hash = 0;
-                for (let i = 0; i < node.id.length; i++) {
-                    hash = ((hash << 5) - hash) + node.id.charCodeAt(i);
-                    hash |= 0;
-                }
-                const angle = (hash % 1000) / 1000 * 2 * Math.PI;
+                // Check if neighbors are ALSO in null-force state (cluster detection)
+                const neighbors = neighborMap.get(node.id) || [];
+                let nullNeighborCount = 0;
+                let clusterCx = 0, clusterCy = 0;
 
-                // Apply tiny bias force (adds to acceleration)
-                node.fx += Math.cos(angle) * biasStrength;
-                node.fy += Math.sin(angle) * biasStrength;
+                for (const nbId of neighbors) {
+                    if (isNullForce.get(nbId)) {
+                        const nb = this.nodes.get(nbId);
+                        if (nb) {
+                            nullNeighborCount++;
+                            clusterCx += nb.x;
+                            clusterCy += nb.y;
+                        }
+                    }
+                }
+
+                if (nullNeighborCount > 0) {
+                    // CLUSTER-LEVEL BIAS: push away from null-force neighbor centroid
+                    clusterCx /= nullNeighborCount;
+                    clusterCy /= nullNeighborCount;
+
+                    let dx = node.x - clusterCx;
+                    let dy = node.y - clusterCy;
+                    const d = Math.sqrt(dx * dx + dy * dy);
+
+                    if (d > 0.1) {
+                        // Push away from cluster centroid
+                        node.fx += (dx / d) * clusterBiasStrength;
+                        node.fy += (dy / d) * clusterBiasStrength;
+                    }
+
+                    // Mark this node for ESCAPE WINDOW (skip constraints for next 6 frames)
+                    this.escapeWindow.set(node.id, 6);
+                } else {
+                    // Individual bias (original behavior)
+                    let hash = 0;
+                    for (let i = 0; i < node.id.length; i++) {
+                        hash = ((hash << 5) - hash) + node.id.charCodeAt(i);
+                        hash |= 0;
+                    }
+                    const angle = (hash % 1000) / 1000 * 2 * Math.PI;
+                    node.fx += Math.cos(angle) * biasStrength;
+                    node.fy += Math.sin(angle) * biasStrength;
+                }
             }
 
             // Integrate velocities with MICRO-ACCUMULATION
@@ -459,6 +514,16 @@ export class PhysicsEngine {
         // 0. FIRE IMPULSE (One Shot)
         if (this.lifecycle < 0.1 && !this.hasFiredImpulse) {
             this.fireInitialImpulse();
+        }
+
+        // ESCAPE WINDOW MANAGEMENT: decrement counters for trapped nodes
+        // These nodes skip topology constraints to allow sliding out
+        for (const [nodeId, frames] of this.escapeWindow.entries()) {
+            if (frames > 0) {
+                this.escapeWindow.set(nodeId, frames - 1);
+            } else {
+                this.escapeWindow.delete(nodeId);
+            }
         }
 
 
@@ -817,9 +882,11 @@ export class PhysicsEngine {
                     const aDeg = nodeDegreeEarly.get(a.id) || 0;
                     const bDeg = nodeDegreeEarly.get(b.id) || 0;
 
-                    // EARLY-PHASE HUB PRIVILEGE: high-degree nodes skip spacing during early expansion
-                    const aHubSkip = energy > 0.85 && aDeg >= 3;
-                    const bHubSkip = energy > 0.85 && bDeg >= 3;
+                    // EARLY-PHASE HUB PRIVILEGE + ESCAPE WINDOW
+                    const aEscape = this.escapeWindow.has(a.id);
+                    const bEscape = this.escapeWindow.has(b.id);
+                    const aHubSkip = (energy > 0.85 && aDeg >= 3) || aEscape;
+                    const bHubSkip = (energy > 0.85 && bDeg >= 3) || bEscape;
 
                     if (!a.isFixed && !b.isFixed) {
                         if (aAccum && aDeg > 1 && !aHubSkip) {
@@ -922,10 +989,11 @@ export class PhysicsEngine {
 
                 // Request correction via accumulator
                 // DEGREE-1 EXCLUSION: dangling nodes don't receive positional correction
-                // EARLY-PHASE HUB PRIVILEGE: high-degree nodes skip constraints during early expansion
+                // EARLY-PHASE HUB PRIVILEGE + ESCAPE WINDOW
                 const nodeAccum = correctionAccum.get(node.id);
                 const nodeDeg = nodeDegreeEarly.get(node.id) || 0;
-                const earlyHubSkip = energy > 0.85 && nodeDeg >= 3;
+                const nodeEscape = this.escapeWindow.has(node.id);
+                const earlyHubSkip = (energy > 0.85 && nodeDeg >= 3) || nodeEscape;
                 if (nodeAccum && nodeDeg > 1 && !earlyHubSkip) {
                     nodeAccum.dx += nx * correction;
                     nodeAccum.dy += ny * correction;
@@ -1054,8 +1122,9 @@ export class PhysicsEngine {
                     const nbDeg = nodeDegreeEarly.get(nb.id) || 0;
                     if (nbDeg === 1) return;  // Skip dangling nodes
 
-                    // EARLY-PHASE HUB PRIVILEGE: high-degree nodes skip angle constraint during early expansion
-                    if (energy > 0.85 && nbDeg >= 3) return;
+                    // EARLY-PHASE HUB PRIVILEGE + ESCAPE WINDOW
+                    const nbEscape = this.escapeWindow.has(nb.id);
+                    if ((energy > 0.85 && nbDeg >= 3) || nbEscape) return;
 
                     // Tangent direction (perpendicular to radial)
                     const radialX = (nb.x - node.x) / edge.r;

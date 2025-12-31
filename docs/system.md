@@ -1,121 +1,100 @@
 # System Architecture – Obsidian-Style Graph Physics Engine
 
-## 1. Overview
-This is a **4-phase hybrid physics engine** designed to create an organic, "living" node cloud that expands from a dense cluster into a stable network. It solves the problem of rigid, springy, or chaotic initial conditions by orchestrating a deterministic expansion sequence. The system transitions seamlessly from soft fluid-like behavior to structured rigid-body physics using a unified energy envelope.
+## Repository Structure (Up-to-Date)
 
-## 2. Simulation Loop (Authoritative)
-The `tick(dt)` method in `PhysicsEngine` orchestrates the frame. Execution order is strict:
+```
+.
+├── docs/
+│   ├── system.md
+│   └── vision.md
+├── public/
+│   └── Quicksand-Light.ttf
+├── src/
+│   ├── assets/
+│   │   └── Quicksand-Light.ttf
+│   ├── docs/
+│   │   └── organic-shape-creation.md
+│   ├── physics/
+│   │   ├── config.ts
+│   │   ├── engine.ts
+│   │   ├── forces.ts
+│   │   ├── test-physics.ts
+│   │   └── types.ts
+│   ├── playground/
+│   │   └── GraphPhysicsPlayground.tsx
+│   ├── utils/
+│   │   └── seededRandom.ts
+│   ├── index.css
+│   └── main.tsx
+├── index.html
+├── package-lock.json
+├── package.json
+├── tsconfig.json
+└── vite.config.ts
+```
 
-1.  **Lifecycle Tick**: Update time `t`, compute `energy = exp(-t/τ)`.
-2.  **Phase Logic**:
-    *   **Pre-Roll**: Soft separation (special forces, no integration).
-    *   **Impulse**: One-shot explosive kick (frame 0 of expansion).
-    *   **Main**: Full physics integration.
-3.  **Carrier Cleanup**: Manage escape windows & directional persistence timers.
-4.  **Force Application**:
-    *   Clear forces.
-    *   Apply Repulsion (Inverse-square).
-    *   Apply Springs (Hooke's law + Hub Softening).
-    *   Apply Collision (Hard shell).
-    *   Apply Boundary (Soft edge push).
-    *   Apply Drag (User interaction override).
-5.  **Integration**:
-    *   `v += F/m * dt`
-    *   **Symmetry Breaking**: Inject trapped hub carrier flow if needed.
-    *   **Damping**: `v *= (1 - damping * dt)`
-    *   **Hub Inertia**: Scale velocity for high-degree nodes.
-    *   **Clamp**: Limit max velocity.
-    *   `x += v * dt`
-6.  **Constraint Solving (Positional)**:
-    *   Iterative relaxation (Spacing, Triangle Area, Angle Resistance).
-    *   **Escape Window**: Trapped nodes skip constraints here.
-7.  **Deadlock Resolution**:
-    *   Check for stationary center nodes.
-    *   Apply one-time positional nudge if deadlocked.
+### File/Folder Purposes
 
-**Authority**:
-*   **Forces** drive velocity.
-*   **Velocity** drives position.
-*   **Constraints** correct position directly (violating conservation of momentum for stability).
-*   **Deadlock Nudge** is the final override.
+- `docs/`
+  - `docs/system.md`: System overview, repo structure, and physics engine responsibilities.
+  - `docs/vision.md`: High-level product/experience vision notes.
+- `public/`
+  - `public/Quicksand-Light.ttf`: Static font asset served by Vite.
+- `src/`
+  - `src/assets/Quicksand-Light.ttf`: App-bundled font asset referenced by CSS.
+  - `src/docs/organic-shape-creation.md`: Research notes on organic shape modeling.
+  - `src/physics/`
+    - `src/physics/config.ts`: Default physics configuration values and tuning constants.
+    - `src/physics/engine.ts`: Core physics engine implementation and simulation loop.
+    - `src/physics/forces.ts`: Force-application helpers (repulsion, springs, boundaries, collisions).
+    - `src/physics/test-physics.ts`: Local physics sanity checks / debug harness.
+    - `src/physics/types.ts`: Type definitions for physics nodes, links, and config.
+  - `src/playground/GraphPhysicsPlayground.tsx`: React UI + canvas playground for running the simulation.
+  - `src/utils/seededRandom.ts`: Deterministic RNG helper for reproducible layouts.
+  - `src/index.css`: Global styles and font-face definitions.
+  - `src/main.tsx`: React entry point bootstrapping the playground.
+- `index.html`: Vite HTML entry template.
+- `package-lock.json`: NPM dependency lockfile.
+- `package.json`: NPM scripts, dependencies, and metadata.
+- `tsconfig.json`: TypeScript compiler configuration.
+- `vite.config.ts`: Vite build/dev server configuration.
 
-## 3. Node Model
-Each `PhysicsNode` maintains:
-*   **Position (`x, y`)**: World space coordinates.
-*   **Velocity (`vx, vy`)**: Linear motion vector.
-*   **Mass**: Derived heuristic, not strictly used in $F=ma$ everywhere.
-*   **Degree**: Precalculated for performance (affects inertia & logic).
-*   **State Maps (Engine-side)**:
-    *   `escapeWindow`: Frames remaining to ignore constraints.
-    *   `carrierDir`: Cached direction for curved escape.
-    *   `carrierTimer`: Frames partial to symmetry breaking.
-    *   `deadlockCounter`: Consecutive frames spent in equilibrium.
+> Notes:
+> - `node_modules/` and `.git/` exist locally but are not part of the authored code. They contain third-party dependencies and git metadata, respectively.
 
-## 4. Force & Constraint Layers
+## `engine.ts` Responsibilities
 
-### A. Force Layer (Velocity Driven)
-| Force | Mechanism | Purpose |
-| :--- | :--- | :--- |
-| **Repulsion** | $1/d^2$ | Global "breathing room". |
-| **Springs** | Hooke's Law | Topology structure. **Hubs softened** (15% strength) during expansion. |
-| **Collision** | Linear push | Prevent overlap. High stiffness. |
-| **Boundary** | Exponential | Keep cloud on screen. |
-| **Carrier Flow** | Perpendicular to Centroid | **Symmetry breaker.** Trapped hubs drift orbitally. |
+`src/physics/engine.ts` currently handles the entire physics lifecycle, including:
 
-### B. Constraint Layer (Position Driven)
-Runs after integration to correct geometry.
-| Constraint | Mechanism | Special Rules |
-| :--- | :--- | :--- |
-| **Spacing** | Iterative push | Soft/Hard zones. **Skipped** if node in Escape Window. |
-| **Triangle Area** | Area preservation | Prevents collapse. **Skipped** if node in Escape Window. |
-| **Angle Resistance** | Stiffness | Enforces shape. **Skipped** if node in Escape Window. |
+- **Main loop / scheduling**
+  - Owns `tick(dt)` with the full frame lifecycle, phase gating, and energy envelope.
+  - Handles lifecycle timers (`lifecycle`, `preRollFrames`, `hasFiredImpulse`).
 
-## 5. Phase Behavior
+- **Force computation**
+  - Clears forces, calls force helpers (`applyRepulsion`, `applySprings`, `applyCollision`, `applyBoundaryForce`), and scales them by energy.
+  - Applies drag forces and custom velocity biases (carrier flow, drift).
 
-### Phase 0: Pre-Roll (Frames -5 to 0)
-*   **Goal**: Soft separation before explosion.
-*   **Forces**: Weak springs (10%), Spacing Repulsion.
-*   **Overrides**:
-    *   Constraints: **DISABLED**.
-    *   Damping: **0.995** (Accumulate velocity).
-    *   Velocity Cap: **Soft 8px** (No zeroing).
-    *   **Micro-Carrier**: Rotational drift to prevent crystallization.
+- **Constraints**
+  - Spacing constraints (soft/hard zones, escape windows, hub exceptions).
+  - Triangle area preservation constraints.
+  - Angle resistance constraints and tangential correction logic.
+  - Final correction accumulation, budgeting, and diffusion.
 
-### Phase 1: Impulse (Frame 0)
-*   **Action**: One-shot radial kick based on target spacing.
-*   **Rotation**: Initialize global medium spin.
+- **Phase logic**
+  - Pre-roll phase (soft separation, micro-carrier drift, symmetry breaking).
+  - Impulse phase (one-shot topology kick).
+  - Expansion vs. settling gates based on the energy envelope.
 
-### Phase 2: Expansion (Energy > 0.7)
-*   **Goal**: Rapid, fluid unfolding.
-*   **Hub Softening**: Hub springs reduced to **15%**.
-*   **Hub Inertia**: High-degree nodes accelerate slower.
-*   **Trapped Hub Logic**:
-    *   If $|F| \approx 0$ and $|v| \approx 0$:
-    *   Activate **Carrier Flow** (orbital drift).
-    *   Set **Escape Window** (6 frames).
-    *   Set **Directional Persistence** (20 frames).
+- **Utilities / state management**
+  - Node/link management, wake/sleep, bounds updates, and drag lifecycle.
+  - Global spin/angle tracking for render-time rotation.
+  - Per-node degree calculation and neighbor maps.
 
-### Phase 3: Settling (Energy < 0.7)
-*   **Goal**: Structure hardening.
-*   **Forces**: Full spring strength restores.
-*   **Constraints**: Full geometry constraints activate.
-*   **Damping**: Increases to 0.98.
-*   **Stagnation Detection** (Re-Clustering Prevention):
-    *   **Trigger**: Hub (deg≥3) moving slowly (`v < 0.2px`) for prolonged period.
-    *   **Action**: Apply **Thermal Impulse** ($v += \text{random} \times 0.5$).
-    *   **Why**: Mimics heat ($kT > 0$) to prevent hubs from settling into invalid local minima (clumping).
+- **Special-case hacks**
+  - Symmetry-breaking biases for trapped hubs (carrier flow and directional persistence).
+  - Escape windows to temporarily skip constraints.
+  - Deadlock prevention and biasing via clamps, hysteresis, and correction diffusion.
 
-## 6. Guarantees & Non-Guarantees
-*   **Guaranteed**:
-    *   Nodes will not overlap (Hard collision).
-    *   Center nodes will eventually move (Deadlock nudge).
-    *   Topology will eventually assert shape (Springs restore).
-*   **NOT Guaranteed**:
-    *   Conservation of momentum (Constraints inject/remove energy).
-    *   Perfect symmetry (Deliberately broken).
-    *   Deterministic float paths (Sim is deterministic, but sensitive).
+## Why `engine.ts` Reached ~1500 Lines
 
-## 7. Design Philosophy
-*   **Velocity-First**: Most behavior is force-driven for fluidity.
-*   **Surgical Symmetry Breaking**: We generally trust the physics, but math creates perfect equilibria (deadlocks). We detect these specific states (Trapped Hubs, Deadlocks) and apply targeted, temporary fixes (Carrier Flow, Nudge) rather than adding global noise.
-*   **Hybrid Phases**: Instead of hard state switches, we use an `energy` value ($1.0 \to 0.0$) to blend behaviors, ensuring no jarring transitions.
+The engine grew because the full simulation loop, phase transitions, force application, and a large set of iterative constraint/symmetry-breaking behaviors are all co-located for tuning. Most of the experimental “feel” adjustments (pre-roll logic, energy gating, escape windows, hub exceptions, and diffusion) live inside the tick loop so they can coordinate directly, which has accumulated into a single large module rather than being split into smaller subsystems.

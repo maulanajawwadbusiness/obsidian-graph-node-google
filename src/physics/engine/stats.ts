@@ -12,9 +12,17 @@ export type SafetyStats = {
     correctionBudgetHits: number;
 };
 
+export type ExpansionResistanceStats = {
+    trappedHubCount: number;
+    skippedHubCount: number;
+    avgHubSpeedBefore: number;
+    avgHubSpeedAfter: number;
+};
+
 export type DebugStats = {
     passes: Record<string, PassStats>;
     safety: SafetyStats;
+    expansionResistance: ExpansionResistanceStats;
 };
 
 export const createDebugStats = (): DebugStats => ({
@@ -24,6 +32,12 @@ export const createDebugStats = (): DebugStats => ({
         penetrationTotal: 0,
         penetrationCount: 0,
         correctionBudgetHits: 0,
+    },
+    expansionResistance: {
+        trappedHubCount: 0,
+        skippedHubCount: 0,
+        avgHubSpeedBefore: 0,
+        avgHubSpeedAfter: 0,
     },
 });
 

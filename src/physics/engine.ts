@@ -6,17 +6,18 @@ import { advanceEscapeWindow } from './engine/escapeWindow';
 import { computeEnergyEnvelope } from './engine/energy';
 import { applyForcePass } from './engine/forcePass';
 import { integrateNodes } from './engine/integration';
-import { applyExpansionResistance, computeNodeDegrees } from './engine/degrees';
+import { computeNodeDegrees } from './engine/degrees';
 import {
-    applyAngleResistance,
-    applyDistanceFieldBias,
     applyEdgeRelaxation,
     applySpacingConstraints,
+    applySafetyClamp,
     applyTriangleAreaConstraints,
     initializeCorrectionAccum,
 } from './engine/constraints';
 import { applyCorrectionsWithDiffusion } from './engine/corrections';
+import { applyAngleResistanceVelocity, applyDistanceBiasVelocity, applyDragVelocity, applyExpansionResistance, applyPreRollVelocity } from './engine/velocityPass';
 import { logEnergyDebug } from './engine/debug';
+import { createDebugStats, type DebugStats } from './engine/stats';
 
 export class PhysicsEngine {
     public nodes: Map<string, PhysicsNode> = new Map();
@@ -51,6 +52,7 @@ export class PhysicsEngine {
     // Directional persistence: carrier direction for curved hub escape
     public carrierDir = new Map<string, { x: number, y: number }>();
     public carrierTimer = new Map<string, number>();  // Frames remaining for persistence
+    private lastDebugStats: DebugStats | null = null;
 
     constructor(config: Partial<ForceConfig> = {}) {
         this.config = { ...DEFAULT_PHYSICS_CONFIG, ...config };
@@ -205,11 +207,19 @@ export class PhysicsEngine {
     }
 
     /**
+     * Get the most recent debug stats snapshot (if enabled in the engine loop).
+     */
+    getDebugStats(): DebugStats | null {
+        return this.lastDebugStats;
+    }
+
+    /**
      * Main Physics Tick.
      * @param dt Delta time in seconds (e.g. 0.016 for 60fps)
      */
     tick(dt: number) {
         const nodeList = Array.from(this.nodes.values());
+        const debugStats = createDebugStats();
 
         // Lifecycle Management
         this.lifecycle += dt;
@@ -219,13 +229,13 @@ export class PhysicsEngine {
         // Springs at 10%, spacing on, angle off, velocity-only corrections
         // Runs for ~5 frames before expansion starts
         // =====================================================================
-        if (this.preRollFrames > 0 && !this.hasFiredImpulse) {
-            runPreRollPhase(this, nodeList, dt);
-            return;
+        const preRollActive = this.preRollFrames > 0 && !this.hasFiredImpulse;
+        if (preRollActive) {
+            runPreRollPhase(this, nodeList, debugStats);
         }
 
         // 0. FIRE IMPULSE (One Shot)
-        if (this.lifecycle < 0.1 && !this.hasFiredImpulse) {
+        if (!preRollActive && this.lifecycle < 0.1 && !this.hasFiredImpulse) {
             fireInitialImpulse(this);
         }
 
@@ -237,10 +247,12 @@ export class PhysicsEngine {
         const { energy, forceScale, effectiveDamping, maxVelocityEffective } = computeEnergyEnvelope(this.lifecycle);
 
         // 2. Apply Core Forces (scaled by energy)
-        applyForcePass(this, nodeList, forceScale, dt);
+        applyForcePass(this, nodeList, forceScale, dt, debugStats, preRollActive);
+        applyDragVelocity(this, nodeList, dt, debugStats);
+        applyPreRollVelocity(this, nodeList, preRollActive, debugStats);
 
         // 4. Integrate (always runs, never stops)
-        integrateNodes(this, nodeList, dt, energy, effectiveDamping, maxVelocityEffective);
+        integrateNodes(this, nodeList, dt, energy, effectiveDamping, maxVelocityEffective, debugStats, preRollActive);
 
         // =====================================================================
         // COMPUTE NODE DEGREES (needed early for degree-1 exclusion)
@@ -248,7 +260,7 @@ export class PhysicsEngine {
         // =====================================================================
         const nodeDegreeEarly = computeNodeDegrees(this, nodeList);
 
-        applyExpansionResistance(this, nodeList, nodeDegreeEarly, energy);
+        applyExpansionResistance(this, nodeList, nodeDegreeEarly, energy, debugStats);
 
         // =====================================================================
         // PER-NODE CORRECTION BUDGET SYSTEM
@@ -257,14 +269,17 @@ export class PhysicsEngine {
         // =====================================================================
         const correctionAccum = initializeCorrectionAccum(nodeList);
 
-        applyEdgeRelaxation(this, correctionAccum, nodeDegreeEarly);
-        applySpacingConstraints(this, nodeList, correctionAccum, nodeDegreeEarly, energy);
-        applyTriangleAreaConstraints(this, nodeList, correctionAccum, nodeDegreeEarly, energy);
-        applyAngleResistance(this, nodeList, nodeDegreeEarly, energy);
-        applyDistanceFieldBias(this, nodeList, correctionAccum, nodeDegreeEarly, energy);
-
-        applyCorrectionsWithDiffusion(this, nodeList, correctionAccum, energy);
+        if (!preRollActive) {
+            applyEdgeRelaxation(this, correctionAccum, nodeDegreeEarly, debugStats);
+            applySpacingConstraints(this, nodeList, correctionAccum, nodeDegreeEarly, energy, debugStats);
+            applyTriangleAreaConstraints(this, nodeList, correctionAccum, nodeDegreeEarly, energy, debugStats);
+            applyAngleResistanceVelocity(this, nodeList, nodeDegreeEarly, energy, debugStats);
+            applyDistanceBiasVelocity(this, nodeList, debugStats);
+            applySafetyClamp(this, nodeList, correctionAccum, nodeDegreeEarly, energy, debugStats);
+            applyCorrectionsWithDiffusion(this, nodeList, correctionAccum, energy, debugStats);
+        }
 
         logEnergyDebug(this.lifecycle, energy, effectiveDamping, maxVelocityEffective);
+        this.lastDebugStats = debugStats;
     }
 }

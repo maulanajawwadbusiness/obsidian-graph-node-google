@@ -1,11 +1,13 @@
 import type { PhysicsEngine } from '../engine';
 import type { PhysicsNode } from '../types';
+import { getPassStats, type DebugStats } from './stats';
 
 export const applyCorrectionsWithDiffusion = (
     engine: PhysicsEngine,
     nodeList: PhysicsNode[],
     correctionAccum: Map<string, { dx: number; dy: number }>,
-    energy: number
+    energy: number,
+    stats: DebugStats
 ) => {
     // =====================================================================
     // FINAL PASS: APPLY CLAMPED CORRECTIONS WITH DIFFUSION
@@ -33,6 +35,9 @@ export const applyCorrectionsWithDiffusion = (
         diffusedCorrection.set(node.id, { dx: 0, dy: 0 });
     }
 
+    const passStats = getPassStats(stats, 'Corrections');
+    const affected = new Set<string>();
+
     for (const node of nodeList) {
         if (node.isFixed) continue;
 
@@ -47,6 +52,10 @@ export const applyCorrectionsWithDiffusion = (
         let totalMag = Math.sqrt(accum.dx * accum.dx + accum.dy * accum.dy);
 
         if (totalMag < 0.001) continue;  // Skip tiny corrections
+
+        if (totalMag > nodeBudget) {
+            stats.safety.correctionBudgetHits += 1;
+        }
 
         // Degree-weighted resistance (hubs act heavier)
         const degree = nodeDegree.get(node.id) || 1;
@@ -85,6 +94,8 @@ export const applyCorrectionsWithDiffusion = (
             // Self gets 40%
             node.x += corrDx * selfShare;
             node.y += corrDy * selfShare;
+            passStats.correction += Math.sqrt((corrDx * selfShare) ** 2 + (corrDy * selfShare) ** 2);
+            affected.add(node.id);
 
             // Neighbors get 60% split
             const neighbors = nodeNeighbors.get(node.id) || [];
@@ -100,6 +111,8 @@ export const applyCorrectionsWithDiffusion = (
             // Single connection - apply full correction
             node.x += corrDx;
             node.y += corrDy;
+            passStats.correction += Math.sqrt(corrDx * corrDx + corrDy * corrDy);
+            affected.add(node.id);
         }
 
         // Update lastCorrectionDir via slow lerp (heavy inertia)
@@ -131,5 +144,9 @@ export const applyCorrectionsWithDiffusion = (
         const diffScale = Math.min(1, nodeBudget / diffMag);
         node.x += diff.dx * diffScale;
         node.y += diff.dy * diffScale;
+        passStats.correction += Math.sqrt((diff.dx * diffScale) ** 2 + (diff.dy * diffScale) ** 2);
+        affected.add(node.id);
     }
+
+    passStats.nodes += affected.size;
 };

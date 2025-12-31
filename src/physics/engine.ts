@@ -679,11 +679,31 @@ export class PhysicsEngine {
         }
 
         // =====================================================================
-        // MINIMUM EDGE ANGLE (Geometric constraint, not force)
-        // No two edges at a node should be closer than minEdgeAngle.
-        // Rotate cramped neighbors apart around the node.
+        // CONTINUOUS ANGLE RESISTANCE (Prevents cramped edges before violation)
+        // 5 zones: Free (≥60°) → Pre-tension (45-60°) → Soft (30-45°) → 
+        //          Emergency (20-30°) → Forbidden (<20°)
+        // Applies tangential velocity to push edges apart
         // =====================================================================
-        const minAngle = this.config.minEdgeAngle;
+
+        // Zone boundaries (radians)
+        const DEG_TO_RAD = Math.PI / 180;
+        const ANGLE_FREE = 60 * DEG_TO_RAD;        // No resistance
+        const ANGLE_PRETENSION = 45 * DEG_TO_RAD;  // Start gentle resistance
+        const ANGLE_SOFT = 30 * DEG_TO_RAD;        // Main working zone
+        const ANGLE_EMERGENCY = 20 * DEG_TO_RAD;   // Steep resistance + damping
+        // Below ANGLE_EMERGENCY = Forbidden zone
+
+        // Resistance multipliers by zone
+        const RESIST_PRETENSION_MAX = 0.15;
+        const RESIST_SOFT_MAX = 1.0;
+        const RESIST_EMERGENCY_MAX = 3.5;
+        const RESIST_FORBIDDEN = 8.0;
+
+        // Base force strength
+        const angleForceStrength = 25.0;
+
+        // Expansion phase boost
+        const expansionBoost = energy > 0.7 ? 1.3 : 1.0;
 
         // Build adjacency map: node -> list of neighbors
         const neighbors = new Map<string, string[]>();
@@ -701,13 +721,15 @@ export class PhysicsEngine {
             if (!nbIds || nbIds.length < 2) continue;
 
             // Compute angle of each edge
-            const edges: { id: string; angle: number }[] = [];
+            const edges: { id: string; angle: number; r: number }[] = [];
             for (const nbId of nbIds) {
                 const nb = this.nodes.get(nbId);
                 if (!nb) continue;
                 const dx = nb.x - node.x;
                 const dy = nb.y - node.y;
-                edges.push({ id: nbId, angle: Math.atan2(dy, dx) });
+                const r = Math.sqrt(dx * dx + dy * dy);
+                if (r < 0.1) continue;
+                edges.push({ id: nbId, angle: Math.atan2(dy, dx), r });
             }
 
             // Sort by angle
@@ -719,42 +741,74 @@ export class PhysicsEngine {
                 const next = edges[(i + 1) % edges.length];
 
                 // Angular difference (handle wrap-around)
-                let delta = next.angle - curr.angle;
-                if (delta < 0) delta += 2 * Math.PI;
+                let theta = next.angle - curr.angle;
+                if (theta < 0) theta += 2 * Math.PI;
 
-                if (delta >= minAngle) continue;  // Wide enough
+                // Zone A: Free - no resistance
+                if (theta >= ANGLE_FREE) continue;
 
-                // Deficit to correct
-                const deficit = minAngle - delta;
+                // Compute resistance based on zone (continuous curve)
+                let resistance: number;
+                let localDamping = 1.0;
 
-                // Rotate neighbors apart around the node
+                if (theta >= ANGLE_PRETENSION) {
+                    // Zone B: Pre-tension (45-60°)
+                    const t = (ANGLE_FREE - theta) / (ANGLE_FREE - ANGLE_PRETENSION);
+                    const ease = t * t;  // Quadratic ease-in
+                    resistance = ease * RESIST_PRETENSION_MAX;
+                } else if (theta >= ANGLE_SOFT) {
+                    // Zone C: Soft constraint (30-45°)
+                    const t = (ANGLE_PRETENSION - theta) / (ANGLE_PRETENSION - ANGLE_SOFT);
+                    const ease = t * t * (3 - 2 * t);  // Smoothstep
+                    resistance = RESIST_PRETENSION_MAX + ease * (RESIST_SOFT_MAX - RESIST_PRETENSION_MAX);
+                } else if (theta >= ANGLE_EMERGENCY) {
+                    // Zone D: Emergency (20-30°)
+                    const t = (ANGLE_SOFT - theta) / (ANGLE_SOFT - ANGLE_EMERGENCY);
+                    const ease = t * t * t;  // Cubic ease-in
+                    resistance = RESIST_SOFT_MAX + ease * (RESIST_EMERGENCY_MAX - RESIST_SOFT_MAX);
+                    localDamping = 0.92;  // Add local damping
+                } else {
+                    // Zone E: Forbidden (<20°)
+                    const penetration = ANGLE_EMERGENCY - theta;
+                    const t = Math.min(penetration / (10 * DEG_TO_RAD), 1);
+                    resistance = RESIST_EMERGENCY_MAX + t * (RESIST_FORBIDDEN - RESIST_EMERGENCY_MAX);
+                    localDamping = 0.85;  // Strong local damping
+                }
+
+                // Get neighbor nodes
                 const currNb = this.nodes.get(curr.id);
                 const nextNb = this.nodes.get(next.id);
                 if (!currNb || !nextNb) continue;
 
-                // Compute rotation correction and add to accumulator
-                const rotateNode = (nb: typeof currNb, angleOffset: number) => {
-                    if (nb.isFixed) return;
-                    const dx = nb.x - node.x;
-                    const dy = nb.y - node.y;
-                    const r = Math.sqrt(dx * dx + dy * dy);
-                    const currentAngle = Math.atan2(dy, dx);
-                    const newAngle = currentAngle + angleOffset;
-                    const newX = node.x + r * Math.cos(newAngle);
-                    const newY = node.y + r * Math.sin(newAngle);
+                // Force magnitude
+                const force = resistance * angleForceStrength * expansionBoost;
 
-                    // Request correction via accumulator
-                    // DEGREE-1 EXCLUSION: dangling nodes don't receive positional correction
-                    const nbAccum = correctionAccum.get(nb.id);
+                // Apply tangential force (push edges apart along angle bisector)
+                // currNb rotates clockwise, nextNb rotates counter-clockwise
+                const applyTangentialForce = (nb: typeof currNb, edge: typeof curr, direction: number) => {
+                    if (nb.isFixed) return;
                     const nbDeg = nodeDegreeEarly.get(nb.id) || 0;
-                    if (nbAccum && nbDeg > 1) {
-                        nbAccum.dx += newX - nb.x;
-                        nbAccum.dy += newY - nb.y;
+                    if (nbDeg === 1) return;  // Skip dangling nodes
+
+                    // Tangent direction (perpendicular to radial)
+                    const radialX = (nb.x - node.x) / edge.r;
+                    const radialY = (nb.y - node.y) / edge.r;
+                    const tangentX = -radialY * direction;
+                    const tangentY = radialX * direction;
+
+                    // Apply as velocity (not position)
+                    nb.vx += tangentX * force;
+                    nb.vy += tangentY * force;
+
+                    // Apply local damping in emergency/forbidden zones
+                    if (localDamping < 1.0) {
+                        nb.vx *= localDamping;
+                        nb.vy *= localDamping;
                     }
                 };
 
-                rotateNode(currNb, -deficit * 0.5);
-                rotateNode(nextNb, deficit * 0.5);
+                applyTangentialForce(currNb, curr, -1);  // Clockwise
+                applyTangentialForce(nextNb, next, 1);   // Counter-clockwise
             }
         }
 

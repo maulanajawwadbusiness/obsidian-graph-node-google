@@ -404,6 +404,19 @@ export class PhysicsEngine {
         }
 
         // =====================================================================
+        // COMPUTE NODE DEGREES (needed early for degree-1 exclusion)
+        // Degree-1 nodes (dangling limbs) are excluded from positional corrections
+        // =====================================================================
+        const nodeDegreeEarly = new Map<string, number>();
+        for (const node of nodeList) {
+            nodeDegreeEarly.set(node.id, 0);
+        }
+        for (const link of this.links) {
+            nodeDegreeEarly.set(link.source, (nodeDegreeEarly.get(link.source) || 0) + 1);
+            nodeDegreeEarly.set(link.target, (nodeDegreeEarly.get(link.target) || 0) + 1);
+        }
+
+        // =====================================================================
         // PER-NODE CORRECTION BUDGET SYSTEM
         // All constraints request position corrections via accumulator
         // Total correction magnitude is clamped to prevent multi-constraint pileup
@@ -443,22 +456,25 @@ export class PhysicsEngine {
             const ny = dy / d;
 
             // Request correction via accumulator (split between nodes)
+            // DEGREE-1 EXCLUSION: dangling nodes don't receive positional correction
             const sourceAccum = correctionAccum.get(source.id);
             const targetAccum = correctionAccum.get(target.id);
+            const sourceDeg = nodeDegreeEarly.get(source.id) || 0;
+            const targetDeg = nodeDegreeEarly.get(target.id) || 0;
 
             if (!source.isFixed && !target.isFixed) {
-                if (sourceAccum) {
+                if (sourceAccum && sourceDeg > 1) {
                     sourceAccum.dx += nx * correction * 0.5;
                     sourceAccum.dy += ny * correction * 0.5;
                 }
-                if (targetAccum) {
+                if (targetAccum && targetDeg > 1) {
                     targetAccum.dx -= nx * correction * 0.5;
                     targetAccum.dy -= ny * correction * 0.5;
                 }
-            } else if (!source.isFixed && sourceAccum) {
+            } else if (!source.isFixed && sourceAccum && sourceDeg > 1) {
                 sourceAccum.dx += nx * correction;
                 sourceAccum.dy += ny * correction;
-            } else if (!target.isFixed && targetAccum) {
+            } else if (!target.isFixed && targetAccum && targetDeg > 1) {
                 targetAccum.dx -= nx * correction;
                 targetAccum.dy -= ny * correction;
             }
@@ -520,22 +536,25 @@ export class PhysicsEngine {
                     const corrApplied = Math.min(corr * spacingGate, maxCorr);
 
                     // Request correction via accumulator (equal split)
+                    // DEGREE-1 EXCLUSION: dangling nodes don't receive positional correction
                     const aAccum = correctionAccum.get(a.id);
                     const bAccum = correctionAccum.get(b.id);
+                    const aDeg = nodeDegreeEarly.get(a.id) || 0;
+                    const bDeg = nodeDegreeEarly.get(b.id) || 0;
 
                     if (!a.isFixed && !b.isFixed) {
-                        if (aAccum) {
+                        if (aAccum && aDeg > 1) {
                             aAccum.dx -= nx * corrApplied * 0.5;
                             aAccum.dy -= ny * corrApplied * 0.5;
                         }
-                        if (bAccum) {
+                        if (bAccum && bDeg > 1) {
                             bAccum.dx += nx * corrApplied * 0.5;
                             bAccum.dy += ny * corrApplied * 0.5;
                         }
-                    } else if (!a.isFixed && aAccum) {
+                    } else if (!a.isFixed && aAccum && aDeg > 1) {
                         aAccum.dx -= nx * corrApplied;
                         aAccum.dy -= ny * corrApplied;
-                    } else if (!b.isFixed && bAccum) {
+                    } else if (!b.isFixed && bAccum && bDeg > 1) {
                         bAccum.dx += nx * corrApplied;
                         bAccum.dy += ny * corrApplied;
                     }
@@ -623,8 +642,10 @@ export class PhysicsEngine {
                 const ny = dy / d;
 
                 // Request correction via accumulator
+                // DEGREE-1 EXCLUSION: dangling nodes don't receive positional correction
                 const nodeAccum = correctionAccum.get(node.id);
-                if (nodeAccum) {
+                const nodeDeg = nodeDegreeEarly.get(node.id) || 0;
+                if (nodeAccum && nodeDeg > 1) {
                     nodeAccum.dx += nx * correction;
                     nodeAccum.dy += ny * correction;
                 }
@@ -697,8 +718,10 @@ export class PhysicsEngine {
                     const newY = node.y + r * Math.sin(newAngle);
 
                     // Request correction via accumulator
+                    // DEGREE-1 EXCLUSION: dangling nodes don't receive positional correction
                     const nbAccum = correctionAccum.get(nb.id);
-                    if (nbAccum) {
+                    const nbDeg = nodeDegreeEarly.get(nb.id) || 0;
+                    if (nbAccum && nbDeg > 1) {
                         nbAccum.dx += newX - nb.x;
                         nbAccum.dy += newY - nb.y;
                     }
@@ -801,24 +824,27 @@ export class PhysicsEngine {
                     }
 
                     // SAFETY NET: hard clamp only for deep violations
+                    // DEGREE-1 EXCLUSION: dangling nodes don't receive positional correction
                     if (penetration > 5) {
                         const emergencyCorrection = Math.min(penetration - 5, 0.3);
                         const aAccum = correctionAccum.get(a.id);
                         const bAccum = correctionAccum.get(b.id);
+                        const aDeg = nodeDegreeEarly.get(a.id) || 0;
+                        const bDeg = nodeDegreeEarly.get(b.id) || 0;
 
                         if (!a.isFixed && !b.isFixed) {
-                            if (aAccum) {
+                            if (aAccum && aDeg > 1) {
                                 aAccum.dx -= nx * emergencyCorrection * 0.5;
                                 aAccum.dy -= ny * emergencyCorrection * 0.5;
                             }
-                            if (bAccum) {
+                            if (bAccum && bDeg > 1) {
                                 bAccum.dx += nx * emergencyCorrection * 0.5;
                                 bAccum.dy += ny * emergencyCorrection * 0.5;
                             }
-                        } else if (!a.isFixed && aAccum) {
+                        } else if (!a.isFixed && aAccum && aDeg > 1) {
                             aAccum.dx -= nx * emergencyCorrection;
                             aAccum.dy -= ny * emergencyCorrection;
-                        } else if (!b.isFixed && bAccum) {
+                        } else if (!b.isFixed && bAccum && bDeg > 1) {
                             bAccum.dx += nx * emergencyCorrection;
                             bAccum.dy += ny * emergencyCorrection;
                         }
@@ -864,6 +890,10 @@ export class PhysicsEngine {
 
         for (const node of nodeList) {
             if (node.isFixed) continue;
+
+            // DEGREE-1 EXCLUSION: dangling nodes don't receive positional correction
+            const deg = nodeDegree.get(node.id) || 0;
+            if (deg === 1) continue;
 
             const accum = correctionAccum.get(node.id);
             if (!accum) continue;

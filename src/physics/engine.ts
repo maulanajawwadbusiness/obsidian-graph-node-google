@@ -651,26 +651,60 @@ export class PhysicsEngine {
                 }
 
                 if (deg >= 3) {
-                    // Deterministic hash from node ID
-                    let hash = 0;
-                    for (let i = 0; i < node.id.length; i++) {
-                        hash = ((hash << 5) - hash) + node.id.charCodeAt(i);
-                        hash |= 0;
+                    // TRAPPED HUB CARRIER FLOW
+                    // Detect trapped hub: low net force AND low velocity
+                    const fMag = Math.sqrt(node.fx * node.fx + node.fy * node.fy);
+                    const vMag = Math.sqrt(node.vx * node.vx + node.vy * node.vy);
+                    const forceEpsilon = 1.0;
+                    const velocityThreshold = 0.5;
+
+                    const isTrapped = fMag < forceEpsilon && vMag < velocityThreshold;
+
+                    if (isTrapped) {
+                        // Compute local cluster centroid (nearby hub nodes)
+                        let clusterCx = 0, clusterCy = 0;
+                        let clusterCount = 0;
+
+                        for (const otherNode of nodeList) {
+                            if (otherNode.id === node.id) continue;
+                            const dx = otherNode.x - node.x;
+                            const dy = otherNode.y - node.y;
+                            const dist = Math.sqrt(dx * dx + dy * dy);
+
+                            // Only nearby nodes (within 2x minNodeDistance)
+                            if (dist < this.config.minNodeDistance * 2) {
+                                clusterCx += otherNode.x;
+                                clusterCy += otherNode.y;
+                                clusterCount++;
+                            }
+                        }
+
+                        if (clusterCount > 0) {
+                            clusterCx /= clusterCount;
+                            clusterCy /= clusterCount;
+
+                            // Direction from centroid to node
+                            const toCx = node.x - clusterCx;
+                            const toCy = node.y - clusterCy;
+                            const toD = Math.sqrt(toCx * toCx + toCy * toCy);
+
+                            if (toD > 0.1) {
+                                // Perpendicular direction (tangent to centroid)
+                                const perpX = -toCy / toD;
+                                const perpY = toCx / toD;
+
+                                // Fade: 1.0 at energy=1.0, 0.0 at energy=0.7
+                                const fade = Math.min((energy - 0.7) / 0.3, 1);
+                                const smoothFade = fade * fade * (3 - 2 * fade);
+
+                                // Very small velocity bias
+                                const carrierStrength = 0.05 * smoothFade;
+
+                                node.vx += perpX * carrierStrength;
+                                node.vy += perpY * carrierStrength;
+                            }
+                        }
                     }
-                    // Convert to unit direction
-                    const angle = (hash % 1000) / 1000 * 2 * Math.PI;
-                    const dirX = Math.cos(angle);
-                    const dirY = Math.sin(angle);
-
-                    // Fade: 1.0 at energy=1.0, 0.0 at energy=0.7
-                    const fade = Math.min((energy - 0.7) / 0.3, 1);
-                    const smoothFade = fade * fade * (3 - 2 * fade);  // smoothstep
-
-                    // Tiny bias strength, scaled by degree
-                    const biasStrength = 0.04 * deg * smoothFade;
-
-                    node.vx += dirX * biasStrength;
-                    node.vy += dirY * biasStrength;
                 }
             }
 

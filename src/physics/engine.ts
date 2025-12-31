@@ -26,6 +26,9 @@ export class PhysicsEngine {
     // Hysteresis state for hard clamp (tracks pairs currently in clamped state)
     private clampedPairs = new Set<string>();
 
+    // Pre-roll phase: soft separation before expansion (frames remaining)
+    private preRollFrames: number = 5;  // ~80ms at 60fps
+
     constructor(config: Partial<ForceConfig> = {}) {
         this.config = { ...DEFAULT_PHYSICS_CONFIG, ...config };
     }
@@ -100,6 +103,7 @@ export class PhysicsEngine {
     resetLifecycle() {
         this.lifecycle = 0;
         this.hasFiredImpulse = false;
+        this.preRollFrames = 5;  // Reset pre-roll
         this.wakeAll();
     }
 
@@ -265,6 +269,76 @@ export class PhysicsEngine {
         // Lifecycle Management
         this.lifecycle += dt;
 
+        // =====================================================================
+        // SOFT PRE-ROLL PHASE (Gentle separation before expansion)
+        // Springs at 10%, spacing on, angle off, velocity-only corrections
+        // Runs for ~5 frames before expansion starts
+        // =====================================================================
+        if (this.preRollFrames > 0 && !this.hasFiredImpulse) {
+            this.preRollFrames--;
+
+            // Clear forces
+            for (const node of nodeList) {
+                node.fx = 0;
+                node.fy = 0;
+            }
+
+            // Apply WEAK springs (10% strength)
+            applySprings(this.nodes, this.links, this.config, 0.1, 0.0);
+
+            // Apply spacing repulsion between all pairs
+            const minDist = this.config.minNodeDistance;
+            for (let i = 0; i < nodeList.length; i++) {
+                const a = nodeList[i];
+                for (let j = i + 1; j < nodeList.length; j++) {
+                    const b = nodeList[j];
+                    const dx = b.x - a.x;
+                    const dy = b.y - a.y;
+                    const d = Math.sqrt(dx * dx + dy * dy);
+
+                    if (d < minDist && d > 0.1) {
+                        const overlap = minDist - d;
+                        const nx = dx / d;
+                        const ny = dy / d;
+
+                        // Apply as velocity, not position
+                        const strength = overlap * 2.0;  // Moderate push
+                        if (!a.isFixed) {
+                            a.vx -= nx * strength;
+                            a.vy -= ny * strength;
+                        }
+                        if (!b.isFixed) {
+                            b.vx += nx * strength;
+                            b.vy += ny * strength;
+                        }
+                    }
+                }
+            }
+
+            // Integrate velocities (no damping during pre-roll)
+            for (const node of nodeList) {
+                if (node.isFixed) continue;
+                node.vx += (node.fx / node.mass) * dt;
+                node.vy += (node.fy / node.mass) * dt;
+                node.x += node.vx * dt;
+                node.y += node.vy * dt;
+                // Light damping
+                node.vx *= 0.9;
+                node.vy *= 0.9;
+            }
+
+            // End of pre-roll: zero velocities and start fresh
+            if (this.preRollFrames === 0) {
+                for (const node of nodeList) {
+                    node.vx = 0;
+                    node.vy = 0;
+                }
+                console.log('[PreRoll] Soft separation complete, starting expansion');
+            }
+
+            return;  // Skip main tick during pre-roll
+        }
+
         // 0. FIRE IMPULSE (One Shot)
         if (this.lifecycle < 0.1 && !this.hasFiredImpulse) {
             this.fireInitialImpulse();
@@ -368,8 +442,17 @@ export class PhysicsEngine {
         for (const node of nodeList) {
             if (node.isFixed) continue;
 
-            const ax = node.fx / node.mass;
-            const ay = node.fy / node.mass;
+            // DEGREE-BASED INERTIA: High-degree nodes feel heavier
+            // Prevents hub overshoot → no visible corrections
+            let inertiaDeg = 0;
+            for (const link of this.links) {
+                if (link.source === node.id || link.target === node.id) inertiaDeg++;
+            }
+            const massFactor = 0.4;  // How much degree increases mass
+            const effectiveMass = node.mass * (1 + massFactor * Math.max(inertiaDeg - 1, 0));
+
+            const ax = node.fx / effectiveMass;
+            const ay = node.fy / effectiveMass;
 
             // Update Velocity
             node.vx += ax * dt;

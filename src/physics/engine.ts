@@ -36,10 +36,6 @@ export class PhysicsEngine {
     private carrierDir = new Map<string, { x: number, y: number }>();
     private carrierTimer = new Map<string, number>();  // Frames remaining for persistence
 
-    // Deadlock detection: One-time nudge for symmetry breaking
-    private deadlockCounter = new Map<string, number>();
-    private resolvedDeadlock = new Set<string>();
-
     constructor(config: Partial<ForceConfig> = {}) {
         this.config = { ...DEFAULT_PHYSICS_CONFIG, ...config };
     }
@@ -1497,77 +1493,6 @@ export class PhysicsEngine {
             const diffScale = Math.min(1, nodeBudget / diffMag);
             node.x += diff.dx * diffScale;
             node.y += diff.dy * diffScale;
-        }
-
-        // ONE-TIME DEADLOCK NUDGE (Symmetry breaking for nail-coffin)
-        // Check for deadlocked nodes: high degree, zero force, zero velocity
-        // These nodes sit in perfect equilibrium and need a manual nudge to join the simulation
-        const deadlockForceEps = 0.5;
-        const deadlockVelEps = 0.1;
-        const deadlockCentroidEps = 0.5;
-
-        for (const node of nodeList) {
-            if (node.isFixed || this.resolvedDeadlock.has(node.id)) continue;
-
-            const deg = nodeDegreeEarly.get(node.id) || 0;
-            if (deg < 3) continue;
-
-            const fMag = Math.sqrt(node.fx * node.fx + node.fy * node.fy);
-            const vMag = Math.sqrt(node.vx * node.vx + node.vy * node.vy);
-
-            if (fMag < deadlockForceEps && vMag < deadlockVelEps) {
-                // Potential deadlock - check centroid
-                let cx = 0, cy = 0, count = 0;
-                for (const link of this.links) {
-                    if (link.source === node.id) {
-                        const nb = this.nodes.get(link.target);
-                        if (nb) { cx += nb.x; cy += nb.y; count++; }
-                    } else if (link.target === node.id) {
-                        const nb = this.nodes.get(link.source);
-                        if (nb) { cx += nb.x; cy += nb.y; count++; }
-                    }
-                }
-
-                if (count > 0) {
-                    cx /= count;
-                    cy /= count;
-                    const dx = node.x - cx;
-                    const dy = node.y - cy;
-                    const dist = Math.sqrt(dx * dx + dy * dy);
-
-                    if (dist < deadlockCentroidEps) {
-                        // Deadlocked! Increment counter
-                        const frames = (this.deadlockCounter.get(node.id) || 0) + 1;
-                        this.deadlockCounter.set(node.id, frames);
-
-                        if (frames > 15) {
-                            // RESOLVE DEADLOCK: One-time nudge
-                            // Deterministic hash direction from node ID
-                            let hash = 0;
-                            for (let i = 0; i < node.id.length; i++) {
-                                hash = ((hash << 5) - hash) + node.id.charCodeAt(i);
-                                hash |= 0;
-                            }
-                            const angle = (hash % 1000) / 1000 * 2 * Math.PI;
-                            const nudge = 0.5; // Sub-pixel nudge (~0.3-0.6 px)
-
-                            // Apply ONE tiny positional offset (no force, no velocity)
-                            node.x += Math.cos(angle) * nudge;
-                            node.y += Math.sin(angle) * nudge;
-
-                            this.resolvedDeadlock.add(node.id);
-                            this.deadlockCounter.delete(node.id);
-                            // console.log(`[Deadlock] Resolved ${node.id}`);
-                        }
-                        continue;
-                    }
-                }
-            }
-
-            // If not deadlocked this frame, reset counter
-            if (this.deadlockCounter.has(node.id)) {
-                this.deadlockCounter.delete(node.id);
-            }
         }
 
         // DEBUG: Log energy info every 10 frames (~166ms at 60fps)

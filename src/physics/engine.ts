@@ -417,6 +417,32 @@ export class PhysicsEngine {
         }
 
         // =====================================================================
+        // PHASE-AWARE EXPANSION RESISTANCE (Degree-based velocity damping)
+        // High-degree nodes lose momentum gradually during expansion
+        // Prevents "hitting invisible wall" - feels like mass increasing
+        // =====================================================================
+        if (energy > 0.7) {
+            const expResist = this.config.expansionResistance;
+
+            for (const node of nodeList) {
+                if (node.isFixed) continue;
+
+                const degree = nodeDegreeEarly.get(node.id) || 0;
+                if (degree <= 1) continue;  // Only affects multi-connected nodes
+
+                // Normalize degree: (degree-1)/4 → 0..1
+                const degNorm = Math.min((degree - 1) / 4, 1);
+                // Smoothstep for gradual ramp
+                const resistance = degNorm * degNorm * (3 - 2 * degNorm);
+
+                // Apply as velocity damping (not position correction)
+                const damp = 1 - resistance * expResist;
+                node.vx *= damp;
+                node.vy *= damp;
+            }
+        }
+
+        // =====================================================================
         // PER-NODE CORRECTION BUDGET SYSTEM
         // All constraints request position corrections via accumulator
         // Total correction magnitude is clamped to prevent multi-constraint pileup

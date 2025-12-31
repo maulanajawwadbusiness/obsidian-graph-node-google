@@ -184,21 +184,21 @@ export function applySprings(
         const fx = (dx / d) * forceMagnitude;
         const fy = (dy / d) * forceMagnitude;
 
-        // EARLY-PHASE HUB SPRING SOFTENING
+        // EARLY-PHASE HUB SPRING SOFTENING (More aggressive topology softening)
         // During early expansion, reduce spring force for high-degree nodes
         // Allows hubs to drift and break symmetric equilibrium
         const computeHubScale = (nodeId: string): number => {
-            if (energy <= 0.7) return 1.0;  // Full spring authority
+            if (energy <= 0.5) return 1.0;  // Full spring authority (extended range)
 
             const deg = nodeDegree.get(nodeId) || 0;
-            if (deg < 3) return 1.0;  // Low-degree nodes unaffected
+            if (deg < 2) return 1.0;  // Only single nodes unaffected
 
-            // Hub factor: 0 at deg=3, 1 at deg=6+
-            const hubFactor = Math.min((deg - 3) / 3, 1);
+            // Hub factor: starts at deg=2, peaks at deg=5+
+            const hubFactor = Math.min((deg - 1) / 4, 1);
 
-            // Softening: 0.3 at energy=1.0, lerp to 1.0 at energy=0.7
-            const minScale = 0.3;  // How soft hubs get during peak expansion
-            const energyFade = Math.min((energy - 0.7) / 0.3, 1);  // 0 at 0.7, 1 at 1.0
+            // Softening: 0.15 at energy=1.0, lerp to 1.0 at energy=0.5
+            const minScale = 0.15;  // More aggressive softening
+            const energyFade = Math.min((energy - 0.5) / 0.5, 1);  // 0 at 0.5, 1 at 1.0
             const softening = 1.0 - hubFactor * (1.0 - minScale) * energyFade;
 
             return softening;

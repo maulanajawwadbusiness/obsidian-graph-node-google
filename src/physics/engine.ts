@@ -397,6 +397,34 @@ export class PhysicsEngine {
                 node.vy += tangentY;
             }
 
+            // NULL-FORCE SYMMETRY BREAKING
+            // When hub nodes have near-zero net force, add tiny deterministic bias
+            // Prevents starfish/brick eigenmodes from symmetric force cancellation
+            const epsilon = 0.5;  // Near-zero threshold
+            const biasStrength = 0.3;  // ~1% of typical spring force
+
+            for (const node of nodeList) {
+                if (node.isFixed) continue;
+
+                const deg = preRollDegree.get(node.id) || 0;
+                if (deg < 3) continue;  // Only hubs
+
+                const fMag = Math.sqrt(node.fx * node.fx + node.fy * node.fy);
+                if (fMag >= epsilon) continue;  // Has meaningful force, no bias needed
+
+                // Deterministic bias direction from node ID hash
+                let hash = 0;
+                for (let i = 0; i < node.id.length; i++) {
+                    hash = ((hash << 5) - hash) + node.id.charCodeAt(i);
+                    hash |= 0;
+                }
+                const angle = (hash % 1000) / 1000 * 2 * Math.PI;
+
+                // Apply tiny bias force (adds to acceleration)
+                node.fx += Math.cos(angle) * biasStrength;
+                node.fy += Math.sin(angle) * biasStrength;
+            }
+
             // Integrate velocities with MICRO-ACCUMULATION
             // Reduced damping allows velocity to build up for continuous motion
             const preRollMaxSpeed = 8.0;  // Soft velocity cap during pre-roll

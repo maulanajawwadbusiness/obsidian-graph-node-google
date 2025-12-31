@@ -277,14 +277,63 @@ export class PhysicsEngine {
         if (this.preRollFrames > 0 && !this.hasFiredImpulse) {
             this.preRollFrames--;
 
+            // Compute node degrees for hub detection
+            const preRollDegree = new Map<string, number>();
+            this.nodes.forEach(n => preRollDegree.set(n.id, 0));
+            for (const link of this.links) {
+                preRollDegree.set(link.source, (preRollDegree.get(link.source) || 0) + 1);
+                preRollDegree.set(link.target, (preRollDegree.get(link.target) || 0) + 1);
+            }
+
+            // Pre-roll fade: topology forces ramp from 0 → 1 as pre-roll ends
+            // At frame 5: fade = 0, at frame 0: fade = 1
+            const topologyFade = 1 - (this.preRollFrames / 5);
+
             // Clear forces
             for (const node of nodeList) {
                 node.fx = 0;
                 node.fy = 0;
             }
 
-            // Apply WEAK springs (10% strength)
-            applySprings(this.nodes, this.links, this.config, 0.1, 0.0);
+            // Apply springs with HUB TOPOLOGY SCALING
+            // Hubs (degree >= 3) get much weaker springs during pre-roll
+            const { springStiffness } = this.config;
+            for (const link of this.links) {
+                const source = this.nodes.get(link.source);
+                const target = this.nodes.get(link.target);
+                if (!source || !target) continue;
+
+                let dx = target.x - source.x;
+                let dy = target.y - source.y;
+                if (dx === 0 && dy === 0) {
+                    dx = (Math.random() - 0.5) * 0.1;
+                    dy = (Math.random() - 0.5) * 0.1;
+                }
+                const d = Math.sqrt(dx * dx + dy * dy);
+                const restLength = this.config.linkRestLength;
+                const displacement = d - restLength;
+
+                const baseK = link.strength ?? springStiffness;
+                const forceMagnitude = baseK * displacement * 0.1;  // Base 10% during pre-roll
+
+                const fx = (dx / d) * forceMagnitude;
+                const fy = (dy / d) * forceMagnitude;
+
+                // Hub scaling: degree >= 3 gets 25% of spring force, fading back to 100%
+                const sourceDeg = preRollDegree.get(link.source) || 0;
+                const targetDeg = preRollDegree.get(link.target) || 0;
+                const sourceHubScale = sourceDeg >= 3 ? (0.25 + 0.75 * topologyFade) : 1.0;
+                const targetHubScale = targetDeg >= 3 ? (0.25 + 0.75 * topologyFade) : 1.0;
+
+                if (!source.isFixed) {
+                    source.fx += fx * sourceHubScale;
+                    source.fy += fy * sourceHubScale;
+                }
+                if (!target.isFixed) {
+                    target.fx -= fx * targetHubScale;
+                    target.fy -= fy * targetHubScale;
+                }
+            }
 
             // Apply spacing repulsion between all pairs
             const minDist = this.config.minNodeDistance;
@@ -315,25 +364,65 @@ export class PhysicsEngine {
                 }
             }
 
-            // Integrate velocities (no damping during pre-roll)
+            // Compute centroid for carrier rotation
+            let cx = 0, cy = 0;
+            for (const node of nodeList) {
+                cx += node.x;
+                cy += node.y;
+            }
+            cx /= nodeList.length;
+            cy /= nodeList.length;
+
+            // MICRO CARRIER DRIFT: Prevent crystallization into eigenvector directions
+            // Adds shared rotational motion so separation feels like drifting water
+            // Fades out from frame 5 → 0
+            const carrierOmega = 0.03;  // rad/frame, ~1.8 rad/s at 60fps
+            const fade = this.preRollFrames / 5;  // 1.0 at frame 5, 0.2 at frame 1
+            const effectiveOmega = carrierOmega * fade;
+
+            // Apply carrier rotation to velocities (rotate velocity frame around centroid)
+            for (const node of nodeList) {
+                if (node.isFixed) continue;
+
+                // Position relative to centroid
+                const rx = node.x - cx;
+                const ry = node.y - cy;
+
+                // Tangential velocity from rotation
+                const tangentX = -ry * effectiveOmega;
+                const tangentY = rx * effectiveOmega;
+
+                // Add to velocity (not position)
+                node.vx += tangentX;
+                node.vy += tangentY;
+            }
+
+            // Integrate velocities with MICRO-ACCUMULATION
+            // Reduced damping allows velocity to build up for continuous motion
+            const preRollMaxSpeed = 8.0;  // Soft velocity cap during pre-roll
             for (const node of nodeList) {
                 if (node.isFixed) continue;
                 node.vx += (node.fx / node.mass) * dt;
                 node.vy += (node.fy / node.mass) * dt;
                 node.x += node.vx * dt;
                 node.y += node.vy * dt;
-                // Light damping
-                node.vx *= 0.9;
-                node.vy *= 0.9;
+
+                // Very light damping (0.995) - allows velocity accumulation
+                node.vx *= 0.995;
+                node.vy *= 0.995;
+
+                // Soft velocity cap instead of hard cancellation
+                const vMag = Math.sqrt(node.vx * node.vx + node.vy * node.vy);
+                if (vMag > preRollMaxSpeed) {
+                    const scale = preRollMaxSpeed / vMag;
+                    node.vx *= scale;
+                    node.vy *= scale;
+                }
             }
 
-            // End of pre-roll: zero velocities and start fresh
+            // End of pre-roll: DO NOT zero velocities - let motion continue seamlessly
             if (this.preRollFrames === 0) {
-                for (const node of nodeList) {
-                    node.vx = 0;
-                    node.vy = 0;
-                }
-                console.log('[PreRoll] Soft separation complete, starting expansion');
+                console.log('[PreRoll] Soft separation complete, velocities preserved');
             }
 
             return;  // Skip main tick during pre-roll

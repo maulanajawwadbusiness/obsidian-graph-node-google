@@ -326,7 +326,7 @@ export const GraphPhysicsPlayground: React.FC = () => {
         aspectRatio: 0,
         lifecycleMs: 0
     });
-    const [spawnCount, setSpawnCount] = useState(10);
+    const [spawnCount, setSpawnCount] = useState(20);
     const [seed, setSeed] = useState(Date.now()); // Seed for deterministic generation
 
     // Camera State (for automatic framing)

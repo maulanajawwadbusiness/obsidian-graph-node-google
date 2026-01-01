@@ -161,7 +161,21 @@ export function applySprings(
         // Soft spring with dead zone
         // No force within ±deadZone of rest length (perceptual uniformity)
         const restLength = config.linkRestLength;
-        const deadZone = restLength * config.springDeadZone;
+
+        // EARLY-EXPANSION DEAD-ZONE BYPASS for high-degree nodes
+        // Temporarily disable dead-zone for hubs to break symmetric equilibrium
+        const sourceDeg = nodeDegree.get(link.source) || 0;
+        const targetDeg = nodeDegree.get(link.target) || 0;
+        const sourceIsHub = sourceDeg >= 3;
+        const targetIsHub = targetDeg >= 3;
+        const earlyExpansion = energy > 0.8;
+
+        // Dead-zone is 0 for hubs during early expansion, normal otherwise
+        const sourceDeadZone = (sourceIsHub && earlyExpansion) ? 0 : restLength * config.springDeadZone;
+        const targetDeadZone = (targetIsHub && earlyExpansion) ? 0 : restLength * config.springDeadZone;
+
+        // Use the minimum dead-zone (if either end is a hub, bypass applies to the link)
+        const deadZone = Math.min(sourceDeadZone, targetDeadZone);
 
         const rawDisplacement = d - restLength;
 

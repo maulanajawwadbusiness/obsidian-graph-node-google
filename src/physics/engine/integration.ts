@@ -2,6 +2,8 @@ import type { PhysicsEngine } from '../engine';
 import type { PhysicsNode } from '../types';
 import { getPassStats, type DebugStats } from './stats';
 import { applyCarrierFlowAndPersistence, applyHubVelocityScaling } from './velocityPass';
+import { applyBaseIntegration, clampVelocity } from './velocity/baseIntegration';
+import { applyDamping } from './velocity/damping';
 
 export type IntegrationResult = {
     centroidX: number;
@@ -145,21 +147,14 @@ export const integrateNodes = (
         }
 
         // Update Velocity (with temporal decoherence)
-        node.vx += ax * nodeDt;
-        node.vy += ay * nodeDt;
+        applyBaseIntegration(node, ax, ay, nodeDt);
 
         if (!preRollActive) {
             applyCarrierFlowAndPersistence(engine, nodeList, node, energy, stats);
         }
 
         // Apply unified damping (increases as energy falls) - use nodeDt
-        if (preRollActive) {
-            node.vx *= 0.995;
-            node.vy *= 0.995;
-        } else {
-            node.vx *= (1 - effectiveDamping * nodeDt * 5.0);
-            node.vy *= (1 - effectiveDamping * nodeDt * 5.0);
-        }
+        applyDamping(node, preRollActive, effectiveDamping, nodeDt);
 
         if (!preRollActive) {
             applyHubVelocityScaling(engine, node, stats, energy, nodeList);
@@ -167,11 +162,7 @@ export const integrateNodes = (
 
         // Clamp Velocity
         const velocityCap = preRollActive ? 8.0 : maxVelocityEffective;
-        const vSq = node.vx * node.vx + node.vy * node.vy;
-        if (vSq > velocityCap * velocityCap) {
-            const v = Math.sqrt(vSq);
-            node.vx = (node.vx / v) * velocityCap;
-            node.vy = (node.vy / v) * velocityCap;
+        if (clampVelocity(node, velocityCap)) {
             clampHitCount++;
         }
 

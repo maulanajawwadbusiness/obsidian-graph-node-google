@@ -15,7 +15,7 @@ import {
     initializeCorrectionAccum,
 } from './engine/constraints';
 import { applyCorrectionsWithDiffusion } from './engine/corrections';
-import { applyAngleResistanceVelocity, applyDistanceBiasVelocity, applyDragVelocity, applyExpansionResistance, applyPreRollVelocity } from './engine/velocityPass';
+import { applyAngleResistanceVelocity, applyDistanceBiasVelocity, applyDragVelocity, applyExpansionResistance, applyPreRollVelocity, applyDenseCoreVelocityDeLocking, applyStaticFrictionBypass } from './engine/velocityPass';
 import { logEnergyDebug } from './engine/debug';
 import { createDebugStats, type DebugStats } from './engine/stats';
 
@@ -266,6 +266,12 @@ export class PhysicsEngine {
         const nodeDegreeEarly = computeNodeDegrees(this, nodeList);
 
         applyExpansionResistance(this, nodeList, nodeDegreeEarly, energy, debugStats);
+
+        // Dense-core velocity de-locking (micro-slip) - breaks rigid-body lock
+        applyDenseCoreVelocityDeLocking(this, nodeList, energy, debugStats);
+
+        // Static friction bypass - breaks zero-velocity rest state
+        applyStaticFrictionBypass(this, nodeList, energy, debugStats);
 
         // =====================================================================
         // PER-NODE CORRECTION BUDGET SYSTEM

@@ -34,6 +34,11 @@ export function applyRepulsion(
         }
     }
 
+    // DEBUG: track stats for first 20 frames
+    let debugMaxDensityBoost = 1.0;
+    let debugAvgCenterDensity = 0;
+    let debugCenterCount = 0;
+
     for (let i = 0; i < nodes.length; i++) {
         const nodeA = nodes[i];
         for (let j = i + 1; j < nodes.length; j++) {
@@ -65,15 +70,38 @@ export function applyRepulsion(
                     repulsionScale = 0.1 + smooth * 0.9;  // 10% → 100%
                 }
 
-                // DENSITY BOOST: nodes in dense regions repel more strongly
+                // ENHANCED DENSITY BOOST: stronger at short range
+                // Nodes in dense regions AND close together repel much more strongly
                 let densityBoost = 1.0;
                 if (earlyExpansion) {
                     const densityA = localDensity.get(nodeA.id) || 0;
                     const densityB = localDensity.get(nodeB.id) || 0;
                     const avgDensity = (densityA + densityB) / 2;
+
+                    // Track center-ish nodes (high density)
+                    if (densityA >= 4) { debugAvgCenterDensity += densityA; debugCenterCount++; }
+                    if (densityB >= 4) { debugAvgCenterDensity += densityB; debugCenterCount++; }
+
                     if (avgDensity > 2) {
-                        // +15% repulsion per extra neighbor beyond 2
-                        densityBoost = 1 + 0.15 * (avgDensity - 2);
+                        // Base density boost: +30% per extra neighbor beyond 2
+                        const baseDensityBoost = 0.30 * (avgDensity - 2);
+
+                        // Distance multiplier: stronger when very close (within minNodeDistance)
+                        const minDist = config.minNodeDistance || 30;
+                        let distanceMultiplier = 1.0;
+                        if (d < minDist) {
+                            // Ramp: 2.0 at d=0.5*minDist, 1.0 at d=minDist (smoothstep)
+                            const closeT = Math.max(0, (minDist - d) / (minDist * 0.5));
+                            const closeSmooth = Math.min(closeT, 1);
+                            distanceMultiplier = 1.0 + closeSmooth;  // 1.0 → 2.0
+                        }
+
+                        densityBoost = 1 + baseDensityBoost * distanceMultiplier;
+
+                        // Clamp to prevent explosion (max 3x)
+                        densityBoost = Math.min(densityBoost, 3.0);
+
+                        debugMaxDensityBoost = Math.max(debugMaxDensityBoost, densityBoost);
                     }
                 }
 
@@ -94,6 +122,12 @@ export function applyRepulsion(
                 }
             }
         }
+    }
+
+    // DEBUG: log for first 20 frames (use global counter via config hack)
+    if (earlyExpansion && debugCenterCount > 0) {
+        const avgDensity = debugAvgCenterDensity / debugCenterCount;
+        console.log(`[Repulsion] avgCenterDensity: ${avgDensity.toFixed(1)}, maxDensityBoost: ${debugMaxDensityBoost.toFixed(2)}`);
     }
 }
 
@@ -269,8 +303,11 @@ export function applySprings(
         // TANGENTIAL SOFTENING IN DENSE CORES (early expansion only)
         // Allows nodes to shear/rotate relative to neighbors
         // Dense core "melts" via internal rearrangement, not explosion
+        // NOW: smooth ramp based on density AND compression ratio
         const applyTangentialSoftening = energy > 0.85;
-        const denseTangentialScale = 0.2;  // Keep 20% of tangential in dense regions
+
+        // DEBUG: track min tangent scale
+        let debugMinTangentScale = 1.0;
 
         // Compute local density for source and target
         let sourceDensity = 0, targetDensity = 0;
@@ -290,13 +327,35 @@ export function applySprings(
             }
         }
 
+        // Compute smooth tangent scale based on density AND compression
+        const computeTangentScale = (density: number, springDist: number, restLength: number): number => {
+            if (!applyTangentialSoftening) return 1.0;
+
+            // Density ramp: smoothstep from d0=2 to d1=6
+            const d0 = 2, d1 = 6;
+            const densityT = Math.min(Math.max((density - d0) / (d1 - d0), 0), 1);
+            const densitySmooth = densityT * densityT * (3 - 2 * densityT);  // smoothstep
+
+            // Compression ramp: stronger softening when spring is compressed
+            // 1.0 at dist/rest >= 1.0, 1.5 at dist/rest <= 0.5
+            const compressionRatio = Math.min(springDist / restLength, 1);
+            const compressionBoost = 1 + (1 - compressionRatio) * 0.5;  // 1.0 → 1.5
+
+            // Combined: scale from 1.0 (no softening) to 0.05 (max softening)
+            const minTangent = 0.05;
+            const tangentScale = 1.0 - densitySmooth * compressionBoost * (1.0 - minTangent);
+
+            return Math.max(tangentScale, minTangent);
+        };
+
         // Apply with hub softening (and tangential softening for dense regions)
         if (!source.isFixed) {
             let sfx = fx * sourceScale;
             let sfy = fy * sourceScale;
 
             // Tangential softening: decompose and reduce tangential component
-            if (applyTangentialSoftening && sourceDensity >= 4) {
+            const sourceTangentScale = computeTangentScale(sourceDensity, d, restLength);
+            if (sourceTangentScale < 1.0) {
                 // Unit vector along spring
                 const ux = dx / d;
                 const uy = dy / d;
@@ -311,8 +370,10 @@ export function applySprings(
                 const tangentFy = sfy - radialFy;
 
                 // Recombine with softened tangential
-                sfx = radialFx + tangentFx * denseTangentialScale;
-                sfy = radialFy + tangentFy * denseTangentialScale;
+                sfx = radialFx + tangentFx * sourceTangentScale;
+                sfy = radialFy + tangentFy * sourceTangentScale;
+
+                debugMinTangentScale = Math.min(debugMinTangentScale, sourceTangentScale);
             }
 
             source.fx += sfx;
@@ -323,7 +384,8 @@ export function applySprings(
             let tfy = -fy * targetScale;
 
             // Tangential softening for target
-            if (applyTangentialSoftening && targetDensity >= 4) {
+            const targetTangentScale = computeTangentScale(targetDensity, d, restLength);
+            if (targetTangentScale < 1.0) {
                 const ux = dx / d;
                 const uy = dy / d;
 
@@ -334,12 +396,19 @@ export function applySprings(
                 const tangentFx = tfx - radialFx;
                 const tangentFy = tfy - radialFy;
 
-                tfx = radialFx + tangentFx * denseTangentialScale;
-                tfy = radialFy + tangentFy * denseTangentialScale;
+                tfx = radialFx + tangentFx * targetTangentScale;
+                tfy = radialFy + tangentFy * targetTangentScale;
+
+                debugMinTangentScale = Math.min(debugMinTangentScale, targetTangentScale);
             }
 
             target.fx += tfx;
             target.fy += tfy;
+        }
+
+        // DEBUG: log min tangent scale
+        if (applyTangentialSoftening && debugMinTangentScale < 1.0) {
+            console.log(`[Springs] minTangentScale: ${debugMinTangentScale.toFixed(3)}, srcDensity: ${sourceDensity}, tgtDensity: ${targetDensity}`);
         }
     }
 }

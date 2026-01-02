@@ -7,3 +7,7 @@ export { applyAngleResistanceVelocity } from './velocity/angleResistance';
 export { applyDistanceBiasVelocity } from './velocity/distanceBias';
 export { applyDenseCoreVelocityDeLocking } from './velocity/denseCoreVelocityUnlock';
 export { applyStaticFrictionBypass } from './velocity/staticFrictionBypass';
+export { applyAngularVelocityDecoherence } from './velocity/angularVelocityDecoherence';
+export { applyLocalPhaseDiffusion } from './velocity/localPhaseDiffusion';
+export { applyEdgeShearStagnationEscape } from './velocity/edgeShearStagnationEscape';
+export { applyDenseCoreInertiaRelaxation } from './velocity/denseCoreInertiaRelaxation';

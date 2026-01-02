@@ -204,7 +204,8 @@ export function applySprings(
     links: PhysicsLink[],
     config: ForceConfig,
     stiffnessScale: number = 1.0,
-    energy: number = 0.0  // For early-phase hub softening
+    energy: number = 0.0,  // For early-phase hub softening
+    frameIndex: number = 0  // For temporal force dithering
 ) {
     const { springStiffness } = config;
 
@@ -236,8 +237,9 @@ export function applySprings(
         const d = Math.sqrt(dx * dx + dy * dy);
 
         // Soft spring with dead zone
-        // No force within ±deadZone of rest length (perceptual uniformity)
+        // No force within ±deadZone of rest length (perceptual uniformness)
         const restLength = config.linkRestLength;
+
 
         // EARLY-EXPANSION DEAD-ZONE BYPASS for high-degree nodes
         // Temporarily disable dead-zone for hubs to break symmetric equilibrium
@@ -404,6 +406,48 @@ export function applySprings(
 
             target.fx += tfx;
             target.fy += tfy;
+        }
+
+        // DENSE-CORE FORCE DITHERING (Temporal Null-Gradient Perturbation)
+        // Adds tiny time-varying tangential force to break force equilibrium
+        // Zero-mean over time, no geometric encoding
+        const ditherStrength = 0.02;  // Tiny force magnitude
+        const ditherDensityThreshold = 4;
+        const ditherEnergyGate = energy > 0.85;
+
+        if (ditherEnergyGate && (sourceDensity >= ditherDensityThreshold || targetDensity >= ditherDensityThreshold)) {
+            // Hash edge ID + frameIndex for deterministic time-varying phase
+            const edgeKey = source.id < target.id
+                ? `${source.id}:${target.id}`
+                : `${target.id}:${source.id}`;
+
+            let edgeHash = frameIndex;  // Start with frame (temporal component)
+            for (let i = 0; i < edgeKey.length; i++) {
+                edgeHash = ((edgeHash << 5) - edgeHash) + edgeKey.charCodeAt(i);
+                edgeHash |= 0;
+            }
+
+            // Map to [-1, 1] oscillatory phase (changes every frame)
+            const normalizedHash = ((edgeHash % 2000) + 2000) % 2000 / 1000 - 1;  // -1 to +1
+
+            // Tangential direction (perpendicular to spring)
+            const ux = dx / d;
+            const uy = dy / d;
+            const tangentX = -uy;  // 90° rotation
+            const tangentY = ux;
+
+            // Apply oscillatory tangential perturbation
+            const ditherFx = tangentX * normalizedHash * ditherStrength;
+            const ditherFy = tangentY * normalizedHash * ditherStrength;
+
+            if (!source.isFixed) {
+                source.fx += ditherFx;
+                source.fy += ditherFy;
+            }
+            if (!target.isFixed) {
+                target.fx -= ditherFx;  // Opposite for pairwise symmetry
+                target.fy -= ditherFy;
+            }
         }
 
         // DEBUG: log min tangent scale

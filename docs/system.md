@@ -1,6 +1,6 @@
 # System Architecture – Obsidian-Style Graph Physics Engine
 
-## Repository Structure (Up-to-Date)
+## Repository Structure
 
 ```
 .
@@ -30,7 +30,22 @@
 │   │   │   ├── integration.ts
 │   │   │   ├── preRollPhase.ts
 │   │   │   ├── stats.ts
-│   │   │   └── velocityPass.ts
+│   │   │   ├── velocity/              ← NEW: Modularized velocity passes
+│   │   │   │   ├── angleResistance.ts
+│   │   │   │   ├── baseIntegration.ts
+│   │   │   │   ├── carrierFlow.ts
+│   │   │   │   ├── damping.ts
+│   │   │   │   ├── debugVelocity.ts
+│   │   │   │   ├── denseCoreVelocityUnlock.ts
+│   │   │   │   ├── distanceBias.ts
+│   │   │   │   ├── dragVelocity.ts
+│   │   │   │   ├── energyGates.ts
+│   │   │   │   ├── expansionResistance.ts
+│   │   │   │   ├── hubVelocityScaling.ts
+│   │   │   │   ├── preRollVelocity.ts
+│   │   │   │   ├── relativeVelocityUtils.ts
+│   │   │   │   └── staticFrictionBypass.ts
+│   │   │   └── velocityPass.ts        ← Thin facade re-exporting velocity modules
 │   │   ├── engine.ts
 │   │   ├── forces.ts
 │   │   ├── test-physics.ts
@@ -48,76 +63,232 @@
 └── vite.config.ts
 ```
 
-### File/Folder Purposes
+## Core Physics Architecture
 
-- `docs/`
-  - `docs/physics-engine-audit.md`: Deep audit + sharp-engine proposal (source of truth for refactor intent).
-  - `docs/system.md`: System overview, repo structure, and physics engine responsibilities.
-  - `docs/tuning-guide.md`: Short guide for human tuning and “feels good” checks.
-  - `docs/vision.md`: High-level product/experience vision notes.
-- `public/`
-  - `public/Quicksand-Light.ttf`: Static font asset served by Vite.
-- `src/`
-  - `src/assets/Quicksand-Light.ttf`: App-bundled font asset referenced by CSS.
-  - `src/docs/organic-shape-creation.md`: Research notes on organic shape modeling.
-  - `src/physics/`
-    - `src/physics/config.ts`: Default physics configuration values and tuning constants.
-    - `src/physics/engine.ts`: Orchestrates the tick order and lifecycle.
-    - `src/physics/engine/forcePass.ts`: Force-only accumulation (springs, repulsion, collision, boundary, pre-roll forces).
-    - `src/physics/engine/velocityPass.ts`: Velocity-only shaping (pre-roll drift, carrier flow, angle resistance, expansion resistance).
-    - `src/physics/engine/constraints.ts`: Position correction requests (spacing, triangle area, edge relaxation, safety clamp).
-    - `src/physics/engine/corrections.ts`: Final position writer applying correction budgets and diffusion.
-    - `src/physics/engine/integration.ts`: Integrates forces/velocity into positions and applies damping.
-    - `src/physics/engine/stats.ts`: Per-frame debug stats aggregation (no UI yet).
-    - `src/physics/forces.ts`: Force-application helpers (repulsion, springs, boundaries, collisions).
-    - `src/physics/test-physics.ts`: Local physics sanity checks / debug harness.
-    - `src/physics/types.ts`: Type definitions for physics nodes, links, and config.
-  - `src/playground/GraphPhysicsPlayground.tsx`: React UI + canvas playground for running the simulation.
-  - `src/utils/seededRandom.ts`: Deterministic RNG helper for reproducible layouts.
-  - `src/index.css`: Global styles and font-face definitions.
-  - `src/main.tsx`: React entry point bootstrapping the playground.
-- `index.html`: Vite HTML entry template.
-- `package-lock.json`: NPM dependency lockfile.
-- `package.json`: NPM scripts, dependencies, and metadata.
-- `tsconfig.json`: TypeScript compiler configuration.
-- `vite.config.ts`: Vite build/dev server configuration.
+### `engine.ts` - Tick Orchestrator
 
-> Notes:
-> - `node_modules/` and `.git/` exist locally but are not part of the authored code. They contain third-party dependencies and git metadata, respectively.
+Central coordinator owning the simulation loop and phase gating:
 
-## `engine.ts` Responsibilities
+**Main Loop:**
+- `tick(dt)`: Full frame lifecycle with energy envelope
+- Lifecycle management (`preRollFrames`, `frameIndex`, `hasFiredImpulse`)
+- Energy computation via `computeEnergyEnvelope()`
 
-`src/physics/engine.ts` owns the simulation loop and delegates to the subsystem passes:
+**Subsystem Delegation:**
+1. **Force Pass** → `applyForcePass()`  
+   Springs, repulsion, collision, boundary forces
+   
+2. **Integration** → `integrateNodes()`  
+   Temporal decoherence (dt skew), priority bands, velocity/position updates
+   
+3. **Velocity Shaping** → Early expansion optimizations:
+   - `applyExpansionResistance()` - Multi-connection damping
+   - `applyDenseCoreVelocityDeLocking()` - Rigid-body unlock
+   - `applyStaticFrictionBypass()` - Zero-velocity shear injection
+   
+4. **Constraints** → Position correction requests:
+   - Spacing constraints (soft/hard zones, escape windows)
+   - Triangle area preservation
+   - Edge relaxation
+   - Safety clamp
+   
+5. **Corrections** → `applyCorrectionsWithDiffusion()`  
+   Budget-limited position writes with neighbor diffusion
 
-- **Main loop / scheduling**
-  - Owns `tick(dt)` with the full frame lifecycle, phase gating, and energy envelope.
-  - Handles lifecycle timers (`lifecycle`, `preRollFrames`, `hasFiredImpulse`).
+**State Management:**
+- Node/link CRUD, wake/sleep, bounds
+- Degree calculation, neighbor maps
+- Escape windows, carrier direction persistence
+- Clamped pair hysteresis tracking
 
-- **Force computation**
-  - Calls the force-only pass (`applyForcePass`) which applies springs, repulsion, collision, boundary, and pre-roll forces.
+### Velocity Module Architecture
 
-- **Velocity shaping**
-  - Calls the velocity-only pass (`velocityPass.ts`) for carrier drift, symmetry breaking, expansion resistance, and angle resistance.
+**`engine/velocity/` - Modularized Velocity Passes**
 
-- **Integration**
-  - Integrates forces into velocity and positions (`integrateNodes`), with damping and velocity caps.
+Each file handles one specific velocity concern (~200-400 lines each):
 
-- **Constraints & corrections**
-  - Spacing constraints (soft/hard zones, escape windows, hub exceptions).
-  - Triangle area preservation constraints.
-  - Edge relaxation (post-solve shape uniformity).
-  - Safety clamp (rare, deep penetration only).
-  - Final correction diffusion and budget application.
+| Module | Purpose |
+|--------|---------|
+| `dragVelocity.ts` | User drag interaction velocity |
+| `preRollVelocity.ts` | Initial spacing + micro-rotation carrier |
+| `carrierFlow.ts` | Trapped hub tangential flow + directional persistence |
+| `hubVelocityScaling.ts` | Hub damping (with dense-core bypass) |
+| `expansionResistance.ts` | Multi-connection resistance (with dense-core bypass) |
+| `angleResistance.ts` | Angular constraint enforcement (phase-aware) |
+| `distanceBias.ts` | Min-distance velocity projection + slop zone |
+| `denseCoreVelocityUnlock.ts` | **NEW:** Breaks rigid-body velocity alignment |
+| `staticFrictionBypass.ts` | **NEW:** Zero-velocity rest state unlock |
+| `baseIntegration.ts` | Core velocity integration utilities |
+| `damping.ts` | Unified damping application |
+| `relativeVelocityUtils.ts` | Relative velocity calculations |
+| `debugVelocity.ts` | Debug helpers |
+| `energyGates.ts` | Energy-based gating utilities |
 
-- **Instrumentation**
-  - Generates per-frame `DebugStats` snapshots (force/velocity/correction totals + safety metrics).
+**Benefits:**
+- Single responsibility per module
+- Easier testing and debugging
+- Clear dependency tracking
+- 60-160 lines per file vs 950-line monolith
 
-- **Utilities / state management**
-  - Node/link management, wake/sleep, bounds updates, and drag lifecycle.
-  - Global spin/angle tracking for render-time rotation.
-  - Per-node degree calculation and neighbor maps.
-  - Escape windows and carrier direction persistence.
+### Force Architecture
 
-## Why `engine.ts` Remains Slim
+**`forces.ts` - Force Application**
 
-The engine remains a coordinator: it owns ordering and phase gates, but delegates computation to subsystem passes (`forcePass.ts`, `velocityPass.ts`, `constraints.ts`, `corrections.ts`). This keeps the physics pipeline readable and helps ensure clear ownership of each behavior.
+Core force functions with early expansion optimizations:
+
+**`applyRepulsion()`**
+- Standard 1/r repulsion
+- **Repulsion dead-core:** 10% → 100% strength ramp within 12px (smoothstep)
+- **Density-dependent boost (energy > 0.85):**
+  - Base: +30% per neighbor beyond 2
+  - Distance multiplier: 1.0 → 2.0 when close (within minNodeDistance)
+  - Max clamp: 3.0x normal repulsion
+  - Makes dense cores "higher potential" without centroid logic
+
+**`applySprings()`**
+- Soft spring with dead-zone (perceptual uniformity)
+- Early-expansion dead-zone bypass for hubs
+- **Tangential softening (energy > 0.85, localDensity >= 4):**
+  - Decompose force: radial (100%) + tangential (5%-100%)
+  - Density ramp: smoothstep d0=2 to d1=6
+  - Compression boost: 1.0 → 1.5 when spring compressed
+  - Allows shear without compromising distance constraints
+- Hub spring softening (degree-based fade)
+
+**`applyCollision()`**
+- Hard collision shell with padding
+- Personal space enforcement
+
+**`applyBoundaryForce()`**
+- Repulsive boundary containment
+
+### Integration Architecture
+
+**`integration.ts` - Temporal & Spatial Control**
+
+**Temporal Decoherence (energy > 0.85):**
+```typescript
+// Hash-based dt skew: ±3% variation per node
+nodeDt = dt * (0.97 to 1.03)  // deterministic
+```
+- Breaks time symmetry
+- Prevents equilibrium formation
+- Nodes integrate at slightly different rates
+
+**Persistent Integration Priority Bands:**
+- Hash-derived priority sorting during energy > 0.85
+- Consistent order every frame (no symmetric re-locking)
+- Solver-level asymmetry
+
+**Spawn Micro-Cloud:**
+- One-time deterministic jitter at t=0
+- 2-6px radius disc (sqrt distribution for uniform area)
+- Destroys central singularity before physics starts
+- Zero runtime cost
+
+## Early Expansion Optimization Stack
+
+The "paperglue center cluster" problem was solved through a layered approach:
+
+### Layer 1: Solver Symmetry Breaking
+- ✅ Temporal decoherence (dt skew)
+- ✅ Integration priority bands
+- ✅ Spawn micro-cloud
+
+### Layer 2: Force Field Shaping
+- ✅ Repulsion dead-core (pressure gradient)
+- ✅ Density-dependent repulsion boost
+- ✅ Distance-based multiplier (2x at close range)
+
+### Layer 3: Constraint Softening
+- ✅ Tangential spring softening in dense cores
+- ✅ Smooth density ramp (d0=2, d1=6)
+- ✅ Compression-aware scaling
+
+### Layer 4: Velocity De-locking
+- ✅ Dense-core velocity de-locking (20% parallel reduction)
+- ✅ Static friction bypass (0.02 px/frame perpendicular shear)
+
+**Result:** Center behaves as normal expanding cloud from t=0, zero "sticky" feeling.
+
+## Constraints & Corrections
+
+**`constraints.ts` - Position Correction Requests**
+
+Budget-based position correction system:
+
+- **Spacing Constraints:** Soft → Hard zones with hysteresis
+- **Triangle Area:** Preserve local topology shape
+- **Edge Relaxation:** Post-solve uniformity
+- **Safety Clamp:** Deep penetration recovery (rare)
+
+**Budget System:**
+- Per-node correction accumulator
+- Clamped to prevent multi-constraint pileup
+- Degree-aware scaling (hubs privileged)
+
+**`corrections.ts` - Diffusion & Application**
+
+- Neighbor diffusion (reduces local clustering)
+- Final position writes
+- Escape window management
+
+## Debug & Instrumentation
+
+**`stats.ts` - Per-Frame Aggregation**
+
+Tracks:
+- Force/velocity/correction totals per pass
+- Affected node counts
+- Safety metrics (clamps, escapes, trapped hubs)
+- Pass-specific diagnostics
+
+**Console Logging (Early Expansion):**
+```
+[Frame 3] dt skew: 0.016120 - 0.017160 (base dt: 0.016667)
+[Repulsion] avgCenterDensity: 5.2, maxDensityBoost: 2.34
+[Springs] minTangentScale: 0.087, srcDensity: 5, tgtDensity: 4
+[VelocityDeLocking] affected: 8 nodes
+[StaticFrictionBypass] unlocked: 3 nodes
+```
+
+## Key Design Principles
+
+1. **Solver-Level Over Force-Level:** Break symmetry at integration, not force math
+2. **Local Over Global:** Density-based, no centroid logic
+3. **Deterministic:** Hash-based, reproducible
+4. **Self-Disabling:** Energy/density gating, auto-cleanup
+5. **Smooth Transitions:** Smoothstep ramps, no hard gates
+6. **Minimal & Clean:** Single-purpose modules, clear ownership
+7. **Water-Like Motion:** Fluid dynamics metaphors, not mechanical
+
+## Configuration
+
+**`config.ts` - Tuning Constants**
+
+Key parameters:
+- `repulsionStrength`, `repulsionDistanceMax`
+- `springStiffness`, `linkRestLength`, `springDeadZone`
+- `minNodeDistance`, `contactSlop`, `clampHysteresisMargin`
+- `expansionResistance`
+- `velocitySleepThreshold`, `maxVelocityEarly`, `maxVelocityLate`
+
+## Why This Architecture Works
+
+**Separation of Concerns:**
+- Forces shape acceleration field
+- Velocity passes add controlled motion patterns
+- Integration controls time/space resolution
+- Constraints enforce geometric invariants
+- Corrections apply budgeted position fixes
+
+**Phase-Aware Behavior:**
+- Early expansion (energy > 0.85): Fluid, asymmetric, loose constraints
+- Mid expansion (0.7 < energy < 0.85): Transition
+- Late settling (energy ≤ 0.7): Rigid, symmetric, tight constraints
+
+**Maintainability:**
+- Each module ~60-400 lines
+- Clear imports/exports
+- Testable in isolation
+- Self-documenting structure

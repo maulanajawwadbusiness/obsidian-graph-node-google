@@ -15,7 +15,7 @@ import {
     initializeCorrectionAccum,
 } from './engine/constraints';
 import { applyCorrectionsWithDiffusion } from './engine/corrections';
-import { applyAngleResistanceVelocity, applyDistanceBiasVelocity, applyDragVelocity, applyExpansionResistance, applyPreRollVelocity, applyDenseCoreVelocityDeLocking, applyStaticFrictionBypass } from './engine/velocityPass';
+import { applyAngleResistanceVelocity, applyDistanceBiasVelocity, applyDragVelocity, applyExpansionResistance, applyPreRollVelocity, applyDenseCoreVelocityDeLocking, applyStaticFrictionBypass, applyAngularVelocityDecoherence, applyLocalPhaseDiffusion, applyEdgeShearStagnationEscape, applyDenseCoreInertiaRelaxation } from './engine/velocityPass';
 import { logEnergyDebug } from './engine/debug';
 import { createDebugStats, type DebugStats } from './engine/stats';
 
@@ -252,7 +252,7 @@ export class PhysicsEngine {
         const { energy, forceScale, effectiveDamping, maxVelocityEffective } = computeEnergyEnvelope(this.lifecycle);
 
         // 2. Apply Core Forces (scaled by energy)
-        applyForcePass(this, nodeList, forceScale, dt, debugStats, preRollActive, energy);
+        applyForcePass(this, nodeList, forceScale, dt, debugStats, preRollActive, energy, this.frameIndex);
         applyDragVelocity(this, nodeList, dt, debugStats);
         applyPreRollVelocity(this, nodeList, preRollActive, debugStats);
 
@@ -272,6 +272,18 @@ export class PhysicsEngine {
 
         // Static friction bypass - breaks zero-velocity rest state
         applyStaticFrictionBypass(this, nodeList, energy, debugStats);
+
+        // Angular velocity decoherence - breaks velocity orientation correlation
+        applyAngularVelocityDecoherence(this, nodeList, energy, debugStats);
+
+        // Local phase diffusion - breaks oscillation synchronization (shape memory eraser)
+        applyLocalPhaseDiffusion(this, nodeList, energy, debugStats);
+
+        // Low-force stagnation escape - breaks rest-position preference (edge shear version)
+        applyEdgeShearStagnationEscape(this, nodeList, energy, debugStats);
+
+        // Dense-core inertia relaxation - erases momentum memory in jammed nodes
+        applyDenseCoreInertiaRelaxation(this, nodeList, energy, debugStats);
 
         // =====================================================================
         // PER-NODE CORRECTION BUDGET SYSTEM

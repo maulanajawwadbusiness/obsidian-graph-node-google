@@ -52,6 +52,10 @@ export class PhysicsEngine {
     // Directional persistence: carrier direction for curved hub escape
     public carrierDir = new Map<string, { x: number, y: number }>();
     public carrierTimer = new Map<string, number>();  // Frames remaining for persistence
+
+    // Frame counter for staggered integration
+    public frameIndex: number = 0;
+
     private lastDebugStats: DebugStats | null = null;
 
     constructor(config: Partial<ForceConfig> = {}) {
@@ -223,6 +227,7 @@ export class PhysicsEngine {
 
         // Lifecycle Management
         this.lifecycle += dt;
+        this.frameIndex++;
 
         // =====================================================================
         // SOFT PRE-ROLL PHASE (Gentle separation before expansion)
@@ -247,7 +252,7 @@ export class PhysicsEngine {
         const { energy, forceScale, effectiveDamping, maxVelocityEffective } = computeEnergyEnvelope(this.lifecycle);
 
         // 2. Apply Core Forces (scaled by energy)
-        applyForcePass(this, nodeList, forceScale, dt, debugStats, preRollActive);
+        applyForcePass(this, nodeList, forceScale, dt, debugStats, preRollActive, energy);
         applyDragVelocity(this, nodeList, dt, debugStats);
         applyPreRollVelocity(this, nodeList, preRollActive, debugStats);
 

@@ -7,10 +7,32 @@ import { PhysicsNode, PhysicsLink, ForceConfig } from './types';
  */
 export function applyRepulsion(
     nodes: PhysicsNode[],
-    config: ForceConfig
+    config: ForceConfig,
+    energy?: number
 ) {
     const { repulsionStrength, repulsionDistanceMax } = config;
     const maxDistSq = repulsionDistanceMax * repulsionDistanceMax;
+
+    // DENSITY-DEPENDENT REPULSION (early expansion only)
+    // Nodes in dense regions experience stronger repulsion
+    // Creates "center has higher potential" without explicit centroid
+    const earlyExpansion = energy !== undefined && energy > 0.85;
+    const densityRadius = 25;  // Radius to count neighbors
+    const localDensity = new Map<string, number>();
+
+    if (earlyExpansion) {
+        for (const node of nodes) {
+            let count = 0;
+            for (const other of nodes) {
+                if (other.id === node.id) continue;
+                const dx = other.x - node.x;
+                const dy = other.y - node.y;
+                const d = Math.sqrt(dx * dx + dy * dy);
+                if (d < densityRadius) count++;
+            }
+            localDensity.set(node.id, count);
+        }
+    }
 
     for (let i = 0; i < nodes.length; i++) {
         const nodeA = nodes[i];
@@ -31,11 +53,32 @@ export function applyRepulsion(
             if (d2 < maxDistSq && d2 > 0) {
                 const d = Math.sqrt(d2);
 
-                // Force formula: F = k / d
-                // We can experiment with k / d^2 for stronger close-range repulsion
-                // but often 1/d is smoother for graphs. 
-                // Let's try: F = strength / d
-                const forceMagnitude = repulsionStrength / d;
+                // REPULSION DEAD-CORE: within coreRadius, scale repulsion down
+                // Creates pressure gradient instead of uniform radial blast
+                // Allows close nodes to slide past each other before spacing locks
+                const coreRadius = 12;  // Very close proximity threshold
+                let repulsionScale = 1.0;
+                if (d < coreRadius) {
+                    // Ramp: 0.1 at d=0, 1.0 at d=coreRadius (smoothstep)
+                    const t = d / coreRadius;  // 0 at center, 1 at edge
+                    const smooth = t * t * (3 - 2 * t);
+                    repulsionScale = 0.1 + smooth * 0.9;  // 10% → 100%
+                }
+
+                // DENSITY BOOST: nodes in dense regions repel more strongly
+                let densityBoost = 1.0;
+                if (earlyExpansion) {
+                    const densityA = localDensity.get(nodeA.id) || 0;
+                    const densityB = localDensity.get(nodeB.id) || 0;
+                    const avgDensity = (densityA + densityB) / 2;
+                    if (avgDensity > 2) {
+                        // +15% repulsion per extra neighbor beyond 2
+                        densityBoost = 1 + 0.15 * (avgDensity - 2);
+                    }
+                }
+
+                // Standard repulsion force: F = k / d, scaled by dead-core and density
+                const forceMagnitude = (repulsionStrength / d) * repulsionScale * densityBoost;
 
                 // Vector components
                 const fx = (dx / d) * forceMagnitude;
@@ -190,7 +233,9 @@ export function applySprings(
 
         // Effective Stiffness = Base (or Override) * Bias * Global Scale
         const baseK = link.strength ?? springStiffness;
-        const effectiveK = baseK * (link.stiffnessBias ?? 1.0) * stiffnessScale;
+        let effectiveK = baseK * (link.stiffnessBias ?? 1.0) * stiffnessScale;
+
+        // Spring stiffness is now constant (ramping removed)
 
         const forceMagnitude = effectiveK * displacement;
 
@@ -221,14 +266,80 @@ export function applySprings(
         const sourceScale = computeHubScale(link.source);
         const targetScale = computeHubScale(link.target);
 
-        // Apply with hub softening
+        // TANGENTIAL SOFTENING IN DENSE CORES (early expansion only)
+        // Allows nodes to shear/rotate relative to neighbors
+        // Dense core "melts" via internal rearrangement, not explosion
+        const applyTangentialSoftening = energy > 0.85;
+        const denseTangentialScale = 0.2;  // Keep 20% of tangential in dense regions
+
+        // Compute local density for source and target
+        let sourceDensity = 0, targetDensity = 0;
+        if (applyTangentialSoftening) {
+            const densityRadius = 30;
+            for (const [, other] of nodes) {
+                if (other.id !== source.id) {
+                    const ddx = other.x - source.x;
+                    const ddy = other.y - source.y;
+                    if (Math.sqrt(ddx * ddx + ddy * ddy) < densityRadius) sourceDensity++;
+                }
+                if (other.id !== target.id) {
+                    const ddx = other.x - target.x;
+                    const ddy = other.y - target.y;
+                    if (Math.sqrt(ddx * ddx + ddy * ddy) < densityRadius) targetDensity++;
+                }
+            }
+        }
+
+        // Apply with hub softening (and tangential softening for dense regions)
         if (!source.isFixed) {
-            source.fx += fx * sourceScale;
-            source.fy += fy * sourceScale;
+            let sfx = fx * sourceScale;
+            let sfy = fy * sourceScale;
+
+            // Tangential softening: decompose and reduce tangential component
+            if (applyTangentialSoftening && sourceDensity >= 4) {
+                // Unit vector along spring
+                const ux = dx / d;
+                const uy = dy / d;
+
+                // Radial component (along spring direction)
+                const radialMag = sfx * ux + sfy * uy;
+                const radialFx = radialMag * ux;
+                const radialFy = radialMag * uy;
+
+                // Tangential component (perpendicular)
+                const tangentFx = sfx - radialFx;
+                const tangentFy = sfy - radialFy;
+
+                // Recombine with softened tangential
+                sfx = radialFx + tangentFx * denseTangentialScale;
+                sfy = radialFy + tangentFy * denseTangentialScale;
+            }
+
+            source.fx += sfx;
+            source.fy += sfy;
         }
         if (!target.isFixed) {
-            target.fx -= fx * targetScale;
-            target.fy -= fy * targetScale;
+            let tfx = -fx * targetScale;
+            let tfy = -fy * targetScale;
+
+            // Tangential softening for target
+            if (applyTangentialSoftening && targetDensity >= 4) {
+                const ux = dx / d;
+                const uy = dy / d;
+
+                const radialMag = tfx * ux + tfy * uy;
+                const radialFx = radialMag * ux;
+                const radialFy = radialMag * uy;
+
+                const tangentFx = tfx - radialFx;
+                const tangentFy = tfy - radialFy;
+
+                tfx = radialFx + tangentFx * denseTangentialScale;
+                tfy = radialFy + tangentFy * denseTangentialScale;
+            }
+
+            target.fx += tfx;
+            target.fy += tfy;
         }
     }
 }

@@ -51,13 +51,38 @@ export const integrateNodes = (
     }
 
     // =====================================================================
-    // INTEGRATION: Simple unified damping (no radial/tangent split)
-    // All forces already scaled by energy. Damping increases as energy falls.
     // =====================================================================
+    // INTEGRATION PRIORITY BANDS: Persistent solver asymmetry
+    // During early expansion, nodes integrate in deterministic priority order
+    // Lower priority moves first EVERY frame → symmetry cannot reform
+    // =====================================================================
+    const earlyExpansion = energy > 0.85;
+    let integrationOrder = nodeList;
+
+    if (earlyExpansion && !preRollActive) {
+        // Assign deterministic priority to each node
+        const nodePriorities = nodeList.map((node, originalIndex) => {
+            // Hash-based priority (0-99)
+            let hash = 0;
+            for (let i = 0; i < node.id.length; i++) {
+                hash = ((hash << 5) - hash) + node.id.charCodeAt(i);
+                hash |= 0;
+            }
+            const priority = Math.abs(hash) % 100;
+
+            return { node, priority, originalIndex };
+        });
+
+        // Sort by priority: lower values integrate first
+        nodePriorities.sort((a, b) => a.priority - b.priority);
+        integrationOrder = nodePriorities.map(item => item.node);
+    }
+
+    // Integration loop (in priority order during early expansion)
     const passStats = getPassStats(stats, 'Integration');
     const affected = new Set<string>();
 
-    for (const node of nodeList) {
+    for (const node of integrationOrder) {
         if (node.isFixed) continue;
 
         const beforeVx = node.vx;
@@ -72,28 +97,72 @@ export const integrateNodes = (
         const massFactor = 0.4;  // How much degree increases mass
         const effectiveMass = node.mass * (1 + massFactor * Math.max(inertiaDeg - 1, 0));
 
-        const ax = node.fx / effectiveMass;
-        const ay = node.fy / effectiveMass;
+        // DEGREE-BASED FORCE LOW-PASS FILTER: Hubs perceive delayed forces
+        // Creates temporal asymmetry at force perception level
+        // Low-degree nodes respond instantly, hubs see "ghosted" force field
+        let effectiveFx = node.fx;
+        let effectiveFy = node.fy;
 
-        // Update Velocity
-        node.vx += ax * dt;
-        node.vy += ay * dt;
+        if (!preRollActive && energy > 0.8 && inertiaDeg >= 3) {
+            // Initialize force memory on first use
+            if (node.prevFx === undefined) node.prevFx = 0;
+            if (node.prevFy === undefined) node.prevFy = 0;
+
+            // Low-pass filter: blend current with previous frame
+            const alpha = 0.3;  // 30% previous, 70% current (temporal lag)
+            effectiveFx = alpha * node.prevFx + (1 - alpha) * node.fx;
+            effectiveFy = alpha * node.prevFy + (1 - alpha) * node.fy;
+        }
+
+        // Compute acceleration from effective (possibly lagged) forces
+        const ax = effectiveFx / effectiveMass;
+        const ay = effectiveFy / effectiveMass;
+
+        // Store current forces for next frame (before clearing)
+        node.prevFx = node.fx;
+        node.prevFy = node.fy;
+
+        // TEMPORAL DECOHERENCE: deterministic dt skew during early expansion
+        // Breaks time symmetry so equilibrium cannot form
+        let nodeDt = dt;
+        if (!preRollActive && energy > 0.85) {
+            // Hash-based dt skew: ±3% variation
+            let hash = 0;
+            for (let i = 0; i < node.id.length; i++) {
+                hash = ((hash << 5) - hash) + node.id.charCodeAt(i);
+                hash |= 0;
+            }
+            const skew = (Math.abs(hash) % 100) / 100; // 0-1
+            const dtMultiplier = 0.97 + skew * 0.06;  // 0.97 to 1.03 (±3%)
+            nodeDt = dt * dtMultiplier;
+
+            // Track min/max for debug (first 10 frames)
+            if (engine.frameIndex <= 10) {
+                if (!stats.dtSkew) stats.dtSkew = { min: Infinity, max: -Infinity };
+                stats.dtSkew.min = Math.min(stats.dtSkew.min, nodeDt);
+                stats.dtSkew.max = Math.max(stats.dtSkew.max, nodeDt);
+            }
+        }
+
+        // Update Velocity (with temporal decoherence)
+        node.vx += ax * nodeDt;
+        node.vy += ay * nodeDt;
 
         if (!preRollActive) {
             applyCarrierFlowAndPersistence(engine, nodeList, node, energy, stats);
         }
 
-        // Apply unified damping (increases as energy falls)
+        // Apply unified damping (increases as energy falls) - use nodeDt
         if (preRollActive) {
             node.vx *= 0.995;
             node.vy *= 0.995;
         } else {
-            node.vx *= (1 - effectiveDamping * dt * 5.0);
-            node.vy *= (1 - effectiveDamping * dt * 5.0);
+            node.vx *= (1 - effectiveDamping * nodeDt * 5.0);
+            node.vy *= (1 - effectiveDamping * nodeDt * 5.0);
         }
 
         if (!preRollActive) {
-            applyHubVelocityScaling(engine, node, stats);
+            applyHubVelocityScaling(engine, node, stats, energy, nodeList);
         }
 
         // Clamp Velocity
@@ -106,9 +175,9 @@ export const integrateNodes = (
             clampHitCount++;
         }
 
-        // Update Position
-        node.x += node.vx * dt;
-        node.y += node.vy * dt;
+        // Update Position - use nodeDt for temporal decoherence
+        node.x += node.vx * nodeDt;
+        node.y += node.vy * nodeDt;
 
         // Sleep Check (optional - keeps physics running but zeros micro-motion)
         if (engine.config.velocitySleepThreshold) {
@@ -127,6 +196,11 @@ export const integrateNodes = (
             passStats.velocity += deltaMag;
             affected.add(node.id);
         }
+    }
+
+    // Debug: log dt skew range for first 10 frames
+    if (engine.frameIndex <= 10 && stats.dtSkew) {
+        console.log(`[Frame ${engine.frameIndex}] dt skew: ${stats.dtSkew.min.toFixed(6)} - ${stats.dtSkew.max.toFixed(6)} (base dt: ${dt.toFixed(6)})`);
     }
 
     passStats.nodes += affected.size;

@@ -265,13 +265,41 @@ export const applyCarrierFlowAndPersistence = (
 export const applyHubVelocityScaling = (
     engine: PhysicsEngine,
     node: PhysicsNode,
-    stats: DebugStats
+    stats: DebugStats,
+    energy: number,
+    nodeList: PhysicsNode[]
 ) => {
     let nodeDeg = 0;
     for (const link of engine.links) {
         if (link.source === node.id || link.target === node.id) nodeDeg++;
     }
     if (nodeDeg > 2) {
+        // DENSE-CORE DAMPING BYPASS
+        // During early expansion, skip damping for nodes in dense clusters
+        const earlyExpansion = energy > 0.85;
+        let isDense = false;
+
+        if (earlyExpansion) {
+            // Count neighbors within 0.8 * minNodeDistance
+            const denseRadius = engine.config.minNodeDistance * 0.8;
+            let nearNeighborCount = 0;
+            for (const other of nodeList) {
+                if (other.id === node.id) continue;
+                const dx = other.x - node.x;
+                const dy = other.y - node.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                if (dist < denseRadius) {
+                    nearNeighborCount++;
+                }
+            }
+            isDense = nearNeighborCount >= 3;
+        }
+
+        // Skip damping for dense nodes during early expansion
+        if (earlyExpansion && isDense) {
+            return; // 100% bypass
+        }
+
         const hubFactor = Math.min((nodeDeg - 2) / 4, 1);
         const hubVelocityScale = 0.7;  // How slow hubs respond
         const velScale = 1.0 - hubFactor * (1.0 - hubVelocityScale);
@@ -312,11 +340,40 @@ export const applyExpansionResistance = (
     let trappedHubCount = 0;
     let skippedHubCount = 0;
 
+    // DENSE-CORE DAMPING BYPASS
+    // During early expansion, skip resistance for nodes in dense clusters
+    const earlyExpansion = energy > 0.85;
+    const denseRadius = engine.config.minNodeDistance * 0.8;
+    const denseNodeSet = new Set<string>();
+
+    if (earlyExpansion) {
+        for (const node of nodeList) {
+            let nearNeighborCount = 0;
+            for (const other of nodeList) {
+                if (other.id === node.id) continue;
+                const dx = other.x - node.x;
+                const dy = other.y - node.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                if (dist < denseRadius) {
+                    nearNeighborCount++;
+                }
+            }
+            if (nearNeighborCount >= 3) {
+                denseNodeSet.add(node.id);
+            }
+        }
+    }
+
     for (const node of nodeList) {
         if (node.isFixed) continue;
 
         const degree = nodeDegree.get(node.id) || 0;
         if (degree <= 1) continue;  // Only affects multi-connected nodes
+
+        // Skip resistance for dense nodes during early expansion
+        if (earlyExpansion && denseNodeSet.has(node.id)) {
+            continue; // 100% bypass
+        }
 
         // Normalize degree: (degree-1)/4 → 0..1
         const degNorm = Math.min((degree - 1) / 4, 1);

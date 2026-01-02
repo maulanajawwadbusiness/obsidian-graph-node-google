@@ -29,6 +29,10 @@ export interface PhysicsNode {
 
   // Directional inertia (prevents correction direction churn)
   lastCorrectionDir?: { x: number, y: number }; // Normalized direction of last frame's correction
+
+  // Force memory for temporal lag (early-expansion symmetry breaking)
+  prevFx?: number; // Previous frame's force for low-pass filtering
+  prevFy?: number;
 }
 
 export interface PhysicsLink {

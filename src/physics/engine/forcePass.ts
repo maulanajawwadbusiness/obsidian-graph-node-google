@@ -9,7 +9,8 @@ export const applyForcePass = (
     forceScale: number,
     dt: number,
     stats: DebugStats,
-    preRollActive: boolean
+    preRollActive: boolean,
+    energy?: number
 ) => {
     // 1. Clear forces
     for (const node of nodeList) {
@@ -151,7 +152,7 @@ export const applyForcePass = (
         }
     } else {
         // 2. Apply Core Forces (scaled by energy)
-        applyRepulsion(nodeList, engine.config);
+        applyRepulsion(nodeList, engine.config, energy);
         applyCollision(nodeList, engine.config, 1.0);
         applySprings(engine.nodes, engine.links, engine.config, 1.0, forceScale);
         applyBoundaryForce(nodeList, engine.config, engine.worldWidth, engine.worldHeight);

@@ -141,16 +141,38 @@ function generateRandomGraph(
     const rng = new SeededRandom(seed);
 
     // 0. Helper: Create Node (initially at 0,0, moved later)
-    const createNode = (id: string, roleRadius: number, roleMass: number, role: 'spine' | 'rib' | 'fiber'): PhysicsNode => ({
-        id,
-        x: 0, y: 0, // Will be set by structure
-        vx: 0, vy: 0, fx: 0, fy: 0,
-        mass: roleMass,
-        radius: roleRadius,
-        isFixed: false,
-        warmth: 1.0,
-        role
-    });
+    // SPAWN MICRO-CLOUD: Hash-based disc distribution to destroy symmetry bowl
+    const createNode = (id: string, roleRadius: number, roleMass: number, role: 'spine' | 'rib' | 'fiber'): PhysicsNode => {
+        // Compute deterministic jitter from node ID hash
+        let hash = 0;
+        for (let i = 0; i < id.length; i++) {
+            hash = ((hash << 5) - hash) + id.charCodeAt(i);
+            hash |= 0;
+        }
+
+        // Angle: full circle from hash
+        const jitterAngle = (Math.abs(hash) % 1000) / 1000 * 2 * Math.PI;
+
+        // Radius: 2-6px with sqrt for uniform area distribution
+        // sqrt(uniform) gives uniform area coverage in disc
+        const hashRadius = (Math.abs(hash >> 10) % 1000) / 1000;  // 0-1
+        const sqrtRadius = Math.sqrt(hashRadius);  // Uniform area
+        const jitterRadius = 2 + sqrtRadius * 4;  // 2-6px
+
+        const jitterX = Math.cos(jitterAngle) * jitterRadius;
+        const jitterY = Math.sin(jitterAngle) * jitterRadius;
+
+        return {
+            id,
+            x: jitterX, y: jitterY,  // Start in micro-cloud, not origin
+            vx: 0, vy: 0, fx: 0, fy: 0,
+            mass: roleMass,
+            radius: roleRadius,
+            isFixed: false,
+            warmth: 1.0,
+            role
+        };
+    };
 
     // 1. Roles & Counts
     const spineCount = Math.max(3, Math.min(5, Math.floor(nodeCount * 0.1))); // 3-5 Spine nodes

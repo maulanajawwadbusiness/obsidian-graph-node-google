@@ -198,6 +198,10 @@ nodeDt = dt * (0.97 to 1.03)  // deterministic
 - One-time deterministic jitter at t=0
 - 2-6px radius disc (sqrt distribution for uniform area)
 - Destroys central singularity before physics starts
+
+## Visual Skinning (Playground)
+
+The canvas renderer in `src/playground/GraphPhysicsPlayground.tsx` now supports theme-based styling with a runtime toggle (Normal ↔ Elegant). Themes define palette, node sizing, ring/occlusion styling, and link weights in a single configuration block, keeping rendering changes modular and purely visual.
 - Zero runtime cost
 
 ## Early Expansion Optimization Stack

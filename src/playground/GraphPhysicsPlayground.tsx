@@ -7,7 +7,7 @@ import { SeededRandom } from '../utils/seededRandom';
 // -----------------------------------------------------------------------------
 // Styles (Inline for simplicity, as requested)
 // -----------------------------------------------------------------------------
-const CONTAINER_STYLE: React.CSSProperties = {
+const BASE_CONTAINER_STYLE: React.CSSProperties = {
     display: 'flex',
     width: '100vw',
     height: '100vh',
@@ -55,6 +55,23 @@ const DEBUG_OVERLAY_STYLE: React.CSSProperties = {
 const SIDEBAR_TOGGLE_STYLE: React.CSSProperties = {
     position: 'absolute',
     top: '16px',
+    right: '16px',
+    zIndex: 10,
+    background: 'rgba(0,0,0,0.55)',
+    color: '#eee',
+    border: '1px solid rgba(255,255,255,0.25)',
+    borderRadius: '8px',
+    padding: '8px 10px',
+    cursor: 'pointer',
+    fontFamily: 'inherit',
+    fontSize: '12px',
+    lineHeight: 1,
+    backdropFilter: 'blur(6px)',
+};
+
+const THEME_TOGGLE_STYLE: React.CSSProperties = {
+    position: 'absolute',
+    top: '56px',
     right: '16px',
     zIndex: 10,
     background: 'rgba(0,0,0,0.55)',
@@ -119,6 +136,128 @@ const SIDEBAR_CLOSE_STYLE: React.CSSProperties = {
     fontFamily: 'inherit',
     fontSize: '14px',
     lineHeight: 1,
+};
+
+// -----------------------------------------------------------------------------
+// Themes (palette + sizing knobs live here)
+// -----------------------------------------------------------------------------
+
+type GraphTheme = {
+    name: 'normal' | 'elegant';
+    background: {
+        baseColor: string;
+        vignetteInner: string;
+        vignetteOuter: string;
+    };
+    node: {
+        style: 'filled' | 'ring';
+        radiusScale: number;
+        ringThicknessRatio: number;
+        ringColor: string;
+        innerRimColor: string;
+        glowColor: string;
+        glowBlur: number;
+        occlusionColor: string;
+        occlusionPadding: number;
+        fillColor: string;
+        strokeColor: string;
+        strokeWidth: number;
+    };
+    link: {
+        color: string;
+        thickness: number;
+    };
+};
+
+// Node size knob for the elegant theme (single source of truth).
+const NODE_RADIUS_SCALE_ELEGANT = 1.2;
+
+// Palette knobs live here: tweak colors to tune the feel.
+const themeNormal: GraphTheme = {
+    name: 'normal',
+    background: {
+        baseColor: '#111318',
+        vignetteInner: 'rgba(30, 34, 46, 0.25)',
+        vignetteOuter: 'rgba(5, 6, 10, 0.75)',
+    },
+    node: {
+        style: 'filled',
+        radiusScale: 1.0,
+        ringThicknessRatio: 0.28,
+        ringColor: '#b7d2ff',
+        innerRimColor: 'rgba(255, 255, 255, 0.7)',
+        glowColor: 'rgba(120, 160, 255, 0.0)',
+        glowBlur: 0,
+        occlusionColor: '#111318',
+        occlusionPadding: 1.5,
+        fillColor: '#4488ff',
+        strokeColor: '#ffffff',
+        strokeWidth: 1,
+    },
+    link: {
+        color: 'rgba(255, 255, 255, 0.35)',
+        thickness: 0.4,
+    },
+};
+
+const themeElegant: GraphTheme = {
+    name: 'elegant',
+    background: {
+        baseColor: '#0c101a',
+        vignetteInner: 'rgba(28, 36, 56, 0.35)',
+        vignetteOuter: 'rgba(4, 6, 12, 0.9)',
+    },
+    node: {
+        style: 'ring',
+        radiusScale: NODE_RADIUS_SCALE_ELEGANT,
+        ringThicknessRatio: 0.22,
+        ringColor: 'rgba(142, 168, 220, 0.9)',
+        innerRimColor: 'rgba(188, 206, 242, 0.5)',
+        glowColor: 'rgba(98, 118, 170, 0.35)',
+        glowBlur: 18,
+        occlusionColor: '#0c101a',
+        occlusionPadding: 2.5,
+        fillColor: '#2d3b58',
+        strokeColor: 'rgba(180, 200, 255, 0.6)',
+        strokeWidth: 1,
+    },
+    link: {
+        color: 'rgba(110, 128, 164, 0.18)',
+        thickness: 0.3,
+    },
+};
+
+const getBaseNodeRadius = (node: PhysicsNode, useVariedSize: boolean) =>
+    useVariedSize ? node.radius : 5.0;
+
+const getRenderNodeRadius = (node: PhysicsNode, theme: GraphTheme, useVariedSize: boolean) =>
+    getBaseNodeRadius(node, useVariedSize) * theme.node.radiusScale;
+
+const getRingThickness = (radius: number, theme: GraphTheme) =>
+    Math.max(1, radius * theme.node.ringThicknessRatio);
+
+const getOcclusionRadius = (radius: number, ringThickness: number, theme: GraphTheme) =>
+    // Occlusion size: ring thickness + padding so link lines disappear beneath nodes.
+    radius + ringThickness * 0.6 + theme.node.occlusionPadding;
+
+const drawBackground = (ctx: CanvasRenderingContext2D, width: number, height: number, theme: GraphTheme) => {
+    ctx.save();
+    ctx.fillStyle = theme.background.baseColor;
+    ctx.fillRect(0, 0, width, height);
+
+    const gradient = ctx.createRadialGradient(
+        width * 0.5,
+        height * 0.45,
+        Math.min(width, height) * 0.1,
+        width * 0.5,
+        height * 0.5,
+        Math.max(width, height) * 0.7
+    );
+    gradient.addColorStop(0, theme.background.vignetteInner);
+    gradient.addColorStop(1, theme.background.vignetteOuter);
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, width, height);
+    ctx.restore();
 };
 
 // -----------------------------------------------------------------------------
@@ -336,6 +475,7 @@ export const GraphPhysicsPlayground: React.FC = () => {
     const [useVariedSize, setUseVariedSize] = useState(false); // Toggle State
     const [sidebarOpen, setSidebarOpen] = useState(false); // Hidden by default
     const [debugOpen, setDebugOpen] = useState(true); // Shown by default
+    const [useElegantTheme, setUseElegantTheme] = useState(false);
     const [metrics, setMetrics] = useState({
         nodes: 0,
         links: 0,
@@ -350,6 +490,7 @@ export const GraphPhysicsPlayground: React.FC = () => {
     });
     const [spawnCount, setSpawnCount] = useState(20);
     const [seed, setSeed] = useState(Date.now()); // Seed for deterministic generation
+    const activeTheme = useElegantTheme ? themeElegant : themeNormal;
 
     // Camera State (for automatic framing)
     const cameraRef = useRef({
@@ -363,10 +504,15 @@ export const GraphPhysicsPlayground: React.FC = () => {
 
     // Ref for Loop Access
     const settingsRef = useRef({ useVariedSize: true });
+    const themeRef = useRef<GraphTheme>(themeNormal);
 
     useEffect(() => {
         settingsRef.current.useVariedSize = useVariedSize;
     }, [useVariedSize]);
+
+    useEffect(() => {
+        themeRef.current = useElegantTheme ? themeElegant : themeNormal;
+    }, [useElegantTheme]);
 
     // Keyboard shortcut: "U" toggles both UI panels (sidebar + debug)
     useEffect(() => {
@@ -439,6 +585,7 @@ export const GraphPhysicsPlayground: React.FC = () => {
             const height = canvas.height;
 
             ctx.clearRect(0, 0, width, height);
+            drawBackground(ctx, width, height, themeRef.current);
 
             // CAMERA LEASH CONTAINMENT
             // Calculate node AABB in world space
@@ -501,9 +648,12 @@ export const GraphPhysicsPlayground: React.FC = () => {
             ctx.rotate(globalAngle);
             ctx.translate(-centroid.x, -centroid.y);
 
+            const theme = themeRef.current;
+
             // Draw Links
-            ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
-            ctx.lineWidth = 0.4;
+            ctx.strokeStyle = theme.link.color;
+            ctx.lineWidth = theme.link.thickness;
+            ctx.lineCap = 'round';
             engine.links.forEach((link) => {
                 const source = engine.nodes.get(link.source);
                 const target = engine.nodes.get(link.target);
@@ -515,26 +665,58 @@ export const GraphPhysicsPlayground: React.FC = () => {
                 }
             });
 
+            // Draw Occlusion Disks (to hide links under nodes)
+            engine.nodes.forEach((node) => {
+                const radius = getRenderNodeRadius(node, theme, settingsRef.current.useVariedSize);
+                const ringThickness = getRingThickness(radius, theme);
+                const occlusionRadius = getOcclusionRadius(radius, ringThickness, theme);
+                ctx.beginPath();
+                ctx.arc(node.x, node.y, occlusionRadius, 0, Math.PI * 2);
+                ctx.fillStyle = theme.node.occlusionColor;
+                ctx.fill();
+            });
+
             // Draw Nodes
             engine.nodes.forEach((node) => {
-                ctx.beginPath();
+                const radius = getRenderNodeRadius(node, theme, settingsRef.current.useVariedSize);
 
-                // SIZE TOGGLE LOGIC
-                const radius = settingsRef.current.useVariedSize ? node.radius : 5.0;
+                if (theme.node.style === 'ring') {
+                    const ringThickness = getRingThickness(radius, theme);
 
-                ctx.arc(node.x, node.y, radius, 0, Math.PI * 2);
+                    ctx.beginPath();
+                    ctx.arc(node.x, node.y, radius, 0, Math.PI * 2);
+                    ctx.strokeStyle = theme.node.ringColor;
+                    ctx.lineWidth = ringThickness;
+                    ctx.stroke();
 
-                // Style dependent on state
-                if (node.isFixed) {
-                    ctx.fillStyle = '#ff4444';
+                    if (theme.node.innerRimColor) {
+                        ctx.beginPath();
+                        ctx.arc(node.x, node.y, radius - ringThickness * 0.25, 0, Math.PI * 2);
+                        ctx.strokeStyle = theme.node.innerRimColor;
+                        ctx.lineWidth = Math.max(0.6, ringThickness * 0.35);
+                        ctx.stroke();
+                    }
+
+                    if (theme.node.glowBlur > 0) {
+                        ctx.save();
+                        ctx.shadowBlur = theme.node.glowBlur;
+                        ctx.shadowColor = theme.node.glowColor;
+                        ctx.strokeStyle = theme.node.glowColor;
+                        ctx.lineWidth = ringThickness * 1.1;
+                        ctx.beginPath();
+                        ctx.arc(node.x, node.y, radius, 0, Math.PI * 2);
+                        ctx.stroke();
+                        ctx.restore();
+                    }
                 } else {
-                    ctx.fillStyle = '#4488ff';
+                    ctx.beginPath();
+                    ctx.arc(node.x, node.y, radius, 0, Math.PI * 2);
+                    ctx.fillStyle = node.isFixed ? '#ff4444' : theme.node.fillColor;
+                    ctx.fill();
+                    ctx.strokeStyle = theme.node.strokeColor;
+                    ctx.lineWidth = theme.node.strokeWidth;
+                    ctx.stroke();
                 }
-
-                ctx.fill();
-                ctx.strokeStyle = '#fff';
-                ctx.lineWidth = 1;
-                ctx.stroke();
             });
 
             ctx.restore();
@@ -624,13 +806,15 @@ export const GraphPhysicsPlayground: React.FC = () => {
         // Simple naive search (checking all nodes). Fine for <1000 nodes.
         let hitId: string | null = null;
         let minDist = Infinity;
+        const theme = themeRef.current;
 
         engineRef.current.nodes.forEach((node) => {
             const dx = node.x - x;
             const dy = node.y - y;
             const d = Math.sqrt(dx * dx + dy * dy);
             // Give a bit of fuzzy hit area (radius + 5px padding)
-            if (d < node.radius + 10 && d < minDist) {
+            const hitRadius = getRenderNodeRadius(node, theme, settingsRef.current.useVariedSize) + 10;
+            if (d < hitRadius && d < minDist) {
                 minDist = d;
                 hitId = node.id;
             }
@@ -719,7 +903,7 @@ export const GraphPhysicsPlayground: React.FC = () => {
     };
 
     return (
-        <div style={CONTAINER_STYLE}>
+        <div style={{ ...BASE_CONTAINER_STYLE, background: activeTheme.background.baseColor }}>
             {/* Canvas Area */}
             <div
                 style={MAIN_STYLE}
@@ -764,6 +948,23 @@ export const GraphPhysicsPlayground: React.FC = () => {
                     title={sidebarOpen ? 'Hide controls' : 'Show controls'}
                 >
                     {sidebarOpen ? 'Hide Controls' : 'Controls'}
+                </button>
+
+                {/* Theme Toggle */}
+                <button
+                    type="button"
+                    style={THEME_TOGGLE_STYLE}
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onMouseMove={(e) => e.stopPropagation()}
+                    onMouseUp={(e) => e.stopPropagation()}
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        setUseElegantTheme((value) => !value);
+                    }}
+                    aria-label="Toggle theme"
+                    title="Toggle theme"
+                >
+                    {useElegantTheme ? 'Theme: Elegant' : 'Theme: Normal'}
                 </button>
 
                 {/* Debug Overlay */}

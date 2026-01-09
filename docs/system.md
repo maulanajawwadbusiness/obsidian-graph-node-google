@@ -30,18 +30,23 @@
 │   │   │   ├── integration.ts
 │   │   │   ├── preRollPhase.ts
 │   │   │   ├── stats.ts
-│   │   │   ├── velocity/              ← NEW: Modularized velocity passes
+│   │   │   ├── velocity/              ← Modularized velocity passes
 │   │   │   │   ├── angleResistance.ts
+│   │   │   │   ├── angularVelocityDecoherence.ts
 │   │   │   │   ├── baseIntegration.ts
 │   │   │   │   ├── carrierFlow.ts
 │   │   │   │   ├── damping.ts
 │   │   │   │   ├── debugVelocity.ts
+│   │   │   │   ├── denseCoreInertiaRelaxation.ts
 │   │   │   │   ├── denseCoreVelocityUnlock.ts
 │   │   │   │   ├── distanceBias.ts
 │   │   │   │   ├── dragVelocity.ts
+│   │   │   │   ├── edgeShearStagnationEscape.ts
 │   │   │   │   ├── energyGates.ts
 │   │   │   │   ├── expansionResistance.ts
 │   │   │   │   ├── hubVelocityScaling.ts
+│   │   │   │   ├── localPhaseDiffusion.ts
+│   │   │   │   ├── lowForceStagnationEscape.ts
 │   │   │   │   ├── preRollVelocity.ts
 │   │   │   │   ├── relativeVelocityUtils.ts
 │   │   │   │   └── staticFrictionBypass.ts
@@ -105,7 +110,7 @@ Central coordinator owning the simulation loop and phase gating:
 
 **`engine/velocity/` - Modularized Velocity Passes**
 
-Each file handles one specific velocity concern (~200-400 lines each):
+Each file handles one specific velocity concern (~100-400 lines each):
 
 | Module | Purpose |
 |--------|---------|
@@ -116,8 +121,12 @@ Each file handles one specific velocity concern (~200-400 lines each):
 | `expansionResistance.ts` | Multi-connection resistance (with dense-core bypass) |
 | `angleResistance.ts` | Angular constraint enforcement (phase-aware) |
 | `distanceBias.ts` | Min-distance velocity projection + slop zone |
-| `denseCoreVelocityUnlock.ts` | **NEW:** Breaks rigid-body velocity alignment |
-| `staticFrictionBypass.ts` | **NEW:** Zero-velocity rest state unlock |
+| `denseCoreVelocityUnlock.ts` | Breaks rigid-body velocity alignment (20% parallel reduction) |
+| `staticFrictionBypass.ts` | Zero-velocity rest state unlock (perpendicular shear) |
+| `angularVelocityDecoherence.ts` | **NEW:** Breaks velocity orientation correlation (0.5-1.5° rotation) |
+| `localPhaseDiffusion.ts` | **NEW:** Breaks oscillation synchronization (0.3-0.8° phase shift) |
+| `edgeShearStagnationEscape.ts` | **NEW:** Pairwise perpendicular slip on jammed edges |
+| `denseCoreInertiaRelaxation.ts` | **NEW:** Erases momentum memory via neighbor flow blending |
 | `baseIntegration.ts` | Core velocity integration utilities |
 | `damping.ts` | Unified damping application |
 | `relativeVelocityUtils.ts` | Relative velocity calculations |
@@ -128,7 +137,7 @@ Each file handles one specific velocity concern (~200-400 lines each):
 - Single responsibility per module
 - Easier testing and debugging
 - Clear dependency tracking
-- 60-160 lines per file vs 950-line monolith
+- 60-400 lines per file vs 950-line monolith
 
 ### Force Architecture
 
@@ -153,6 +162,11 @@ Core force functions with early expansion optimizations:
   - Density ramp: smoothstep d0=2 to d1=6
   - Compression boost: 1.0 → 1.5 when spring compressed
   - Allows shear without compromising distance constraints
+- **Temporal force dithering (energy > 0.85, dense cores):**
+  - Time-varying tangential perturbation (±0.02 force)
+  - Hash(edgeId + frameIndex) → oscillatory phase [-1, 1]
+  - Zero-mean over time, breaks force equilibrium
+  - Pairwise symmetric
 - Hub spring softening (degree-based fade)
 
 **`applyCollision()`**
@@ -188,28 +202,37 @@ nodeDt = dt * (0.97 to 1.03)  // deterministic
 
 ## Early Expansion Optimization Stack
 
-The "paperglue center cluster" problem was solved through a layered approach:
+The "paperglue center cluster" problem was addressed through a multi-layered approach:
 
 ### Layer 1: Solver Symmetry Breaking
-- ✅ Temporal decoherence (dt skew)
-- ✅ Integration priority bands
-- ✅ Spawn micro-cloud
+- ✅ Temporal decoherence (dt skew ±3%)
+- ✅ Integration priority bands (hash-based ordering)
+- ✅ Spawn micro-cloud (2-6px initial jitter)
 
 ### Layer 2: Force Field Shaping
-- ✅ Repulsion dead-core (pressure gradient)
-- ✅ Density-dependent repulsion boost
+- ✅ Repulsion dead-core (10% → 100% within 12px)
+- ✅ Density-dependent repulsion boost (+30% per neighbor)
 - ✅ Distance-based multiplier (2x at close range)
+- ✅ Temporal force dithering (±0.02 tangential oscillation)
 
 ### Layer 3: Constraint Softening
-- ✅ Tangential spring softening in dense cores
+- ✅ Tangential spring softening in dense cores (5%-100%)
 - ✅ Smooth density ramp (d0=2, d1=6)
-- ✅ Compression-aware scaling
+- ✅ Compression-aware scaling (1.0 → 1.5)
 
-### Layer 4: Velocity De-locking
+### Layer 4: Velocity Decorrelation
 - ✅ Dense-core velocity de-locking (20% parallel reduction)
 - ✅ Static friction bypass (0.02 px/frame perpendicular shear)
+- ✅ Angular velocity decoherence (0.5-1.5° rotation)
+- ✅ Local phase diffusion (0.3-0.8° phase shift)
 
-**Result:** Center behaves as normal expanding cloud from t=0, zero "sticky" feeling.
+### Layer 5: Stagnation Breaking
+- ✅ Edge shear stagnation escape (pairwise perpendicular slip)
+- ✅ Dense-core inertia relaxation (momentum memory erasure)
+
+**Current Status:** Significant reduction in early-phase stickiness. Center cluster exhibits improved fluidity compared to baseline. Remaining ~10% "coffin nail" nodes under investigation.
+
+**Result:** Center behaves more fluidly during early expansion (t=0-200ms), though some positional anchoring persists in very dense configurations.
 
 ## Constraints & Corrections
 

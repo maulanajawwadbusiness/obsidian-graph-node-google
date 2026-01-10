@@ -3,6 +3,12 @@ import { PhysicsEngine } from '../physics/engine';
 import { PhysicsNode, PhysicsLink, ForceConfig } from '../physics/types';
 import { DEFAULT_PHYSICS_CONFIG } from '../physics/config';
 import { SeededRandom } from '../utils/seededRandom';
+import { SkinMode, getTheme, getNodeRadius, getOcclusionRadius } from '../visual/theme';
+
+// -----------------------------------------------------------------------------
+// Configuration Knobs
+// -----------------------------------------------------------------------------
+const SHOW_THEME_TOGGLE = true; // Set to false to hide theme toggle button
 
 // -----------------------------------------------------------------------------
 // Styles (Inline for simplicity, as requested)
@@ -73,6 +79,23 @@ const DEBUG_TOGGLE_STYLE: React.CSSProperties = {
     position: 'absolute',
     top: '16px',
     left: '16px',
+    zIndex: 11,
+    background: 'rgba(0,0,0,0.55)',
+    color: '#eee',
+    border: '1px solid rgba(255,255,255,0.25)',
+    borderRadius: '8px',
+    padding: '8px 10px',
+    cursor: 'pointer',
+    fontFamily: 'inherit',
+    fontSize: '12px',
+    lineHeight: 1,
+    backdropFilter: 'blur(6px)',
+};
+
+const THEME_TOGGLE_STYLE: React.CSSProperties = {
+    position: 'absolute',
+    top: '16px',
+    left: '80px', // Position after debug toggle
     zIndex: 11,
     background: 'rgba(0,0,0,0.55)',
     color: '#eee',
@@ -350,6 +373,7 @@ export const GraphPhysicsPlayground: React.FC = () => {
     });
     const [spawnCount, setSpawnCount] = useState(20);
     const [seed, setSeed] = useState(Date.now()); // Seed for deterministic generation
+    const [skinMode, setSkinMode] = useState<SkinMode>('elegant'); // Skin toggle (default: elegant)
 
     // Camera State (for automatic framing)
     const cameraRef = useRef({
@@ -361,12 +385,13 @@ export const GraphPhysicsPlayground: React.FC = () => {
         targetZoom: 1.0
     });
 
-    // Ref for Loop Access
-    const settingsRef = useRef({ useVariedSize: true });
+    // Ref for Loop Access (allows render loop to access React state)
+    const settingsRef = useRef({ useVariedSize: true, skinMode: 'normal' as SkinMode });
 
     useEffect(() => {
         settingsRef.current.useVariedSize = useVariedSize;
-    }, [useVariedSize]);
+        settingsRef.current.skinMode = skinMode;
+    }, [useVariedSize, skinMode]);
 
     // Keyboard shortcut: "U" toggles both UI panels (sidebar + debug)
     useEffect(() => {
@@ -501,9 +526,12 @@ export const GraphPhysicsPlayground: React.FC = () => {
             ctx.rotate(globalAngle);
             ctx.translate(-centroid.x, -centroid.y);
 
-            // Draw Links
-            ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
-            ctx.lineWidth = 0.4;
+            // Get current theme based on skin mode
+            const theme = getTheme(settingsRef.current.skinMode);
+
+            // Draw Links (before nodes so occlusion works)
+            ctx.strokeStyle = theme.linkColor;
+            ctx.lineWidth = theme.linkWidth;
             engine.links.forEach((link) => {
                 const source = engine.nodes.get(link.source);
                 const target = engine.nodes.get(link.target);
@@ -517,24 +545,55 @@ export const GraphPhysicsPlayground: React.FC = () => {
 
             // Draw Nodes
             engine.nodes.forEach((node) => {
-                ctx.beginPath();
+                // SIZE TOGGLE LOGIC - apply theme multiplier
+                const baseRadius = settingsRef.current.useVariedSize ? node.radius : 5.0;
+                const radius = getNodeRadius(baseRadius, theme);
 
-                // SIZE TOGGLE LOGIC
-                const radius = settingsRef.current.useVariedSize ? node.radius : 5.0;
+                if (theme.nodeStyle === 'ring') {
+                    // ELEGANT MODE: Occlusion disk + ring + glow
 
-                ctx.arc(node.x, node.y, radius, 0, Math.PI * 2);
+                    // 1. Draw occlusion disk (hides links under node)
+                    const occlusionRadius = getOcclusionRadius(radius, theme);
+                    ctx.beginPath();
+                    ctx.arc(node.x, node.y, occlusionRadius, 0, Math.PI * 2);
+                    ctx.fillStyle = theme.occlusionColor;
+                    ctx.fill();
 
-                // Style dependent on state
-                if (node.isFixed) {
-                    ctx.fillStyle = '#ff4444';
+                    // 2. Draw glow (if enabled)
+                    if (theme.glowEnabled) {
+                        ctx.save();
+                        ctx.beginPath();
+                        ctx.arc(node.x, node.y, radius + theme.glowRadius, 0, Math.PI * 2);
+                        ctx.fillStyle = theme.glowColor;
+                        ctx.filter = `blur(${theme.glowRadius}px)`;
+                        ctx.fill();
+                        ctx.restore();
+                    }
+
+                    // 3. Draw ring stroke (hollow)
+                    ctx.beginPath();
+                    ctx.arc(node.x, node.y, radius, 0, Math.PI * 2);
+                    ctx.strokeStyle = node.isFixed ? theme.nodeFixedColor : theme.ringColor;
+                    ctx.lineWidth = theme.ringWidth;
+                    ctx.stroke();
+
                 } else {
-                    ctx.fillStyle = '#4488ff';
-                }
+                    // NORMAL MODE: Filled circle (original behavior)
+                    ctx.beginPath();
+                    ctx.arc(node.x, node.y, radius, 0, Math.PI * 2);
 
-                ctx.fill();
-                ctx.strokeStyle = '#fff';
-                ctx.lineWidth = 1;
-                ctx.stroke();
+                    // Style dependent on state
+                    if (node.isFixed) {
+                        ctx.fillStyle = theme.nodeFixedColor;
+                    } else {
+                        ctx.fillStyle = theme.nodeFillColor;
+                    }
+
+                    ctx.fill();
+                    ctx.strokeStyle = theme.nodeStrokeColor;
+                    ctx.lineWidth = theme.nodeStrokeWidth;
+                    ctx.stroke();
+                }
             });
 
             ctx.restore();
@@ -718,8 +777,11 @@ export const GraphPhysicsPlayground: React.FC = () => {
         console.log('='.repeat(60));
     };
 
+    // Get theme for container styling
+    const activeTheme = getTheme(skinMode);
+
     return (
-        <div style={CONTAINER_STYLE}>
+        <div style={{ ...CONTAINER_STYLE, background: activeTheme.background }}>
             {/* Canvas Area */}
             <div
                 style={MAIN_STYLE}
@@ -728,7 +790,7 @@ export const GraphPhysicsPlayground: React.FC = () => {
                 onMouseUp={handleMouseUp}
                 onMouseLeave={handleMouseUp}
             >
-                <canvas ref={canvasRef} style={{ width: '100%', height: '100%' }} />
+                <canvas ref={canvasRef} style={{ width: '100%', height: '100%', background: activeTheme.background }} />
 
                 {/* Debug Toggle (when hidden) */}
                 {!debugOpen && (
@@ -746,6 +808,25 @@ export const GraphPhysicsPlayground: React.FC = () => {
                         title="Show debug"
                     >
                         Debug
+                    </button>
+                )}
+
+                {/* Theme Toggle (always visible if enabled) */}
+                {SHOW_THEME_TOGGLE && (
+                    <button
+                        type="button"
+                        style={THEME_TOGGLE_STYLE}
+                        onMouseDown={(e) => e.stopPropagation()}
+                        onMouseMove={(e) => e.stopPropagation()}
+                        onMouseUp={(e) => e.stopPropagation()}
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            setSkinMode(skinMode === 'elegant' ? 'normal' : 'elegant');
+                        }}
+                        aria-label="Toggle theme"
+                        title="Toggle between normal and elegant theme"
+                    >
+                        Theme: {skinMode}
                     </button>
                 )}
 
@@ -923,7 +1004,8 @@ export const GraphPhysicsPlayground: React.FC = () => {
                         );
                     })}
                 </div>
-            )}
-        </div>
+            )
+            }
+        </div >
     );
 };

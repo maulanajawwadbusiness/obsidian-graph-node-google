@@ -198,7 +198,94 @@ nodeDt = dt * (0.97 to 1.03)  // deterministic
 - One-time deterministic jitter at t=0
 - 2-6px radius disc (sqrt distribution for uniform area)
 - Destroys central singularity before physics starts
-- Zero runtime cost
+
+## Visual Skinning (Playground)
+
+The canvas renderer in `src/playground/GraphPhysicsPlayground.tsx` supports theme-based styling with a runtime toggle (Normal ↔ Elegant). Themes define palette, node sizing, ring/occlusion styling, and link weights in a single configuration block, keeping rendering changes modular and purely visual.
+
+### Theme System Architecture
+
+**Theme Configuration Structure:**
+```typescript
+type GraphTheme = {
+    name: 'normal' | 'elegant';
+    background: {
+        baseColor: string;           // Base canvas fill
+        vignetteInner: string;        // Center gradient stop
+        vignetteOuter: string;        // Edge gradient stop
+    };
+    node: {
+        style: 'filled' | 'ring';     // Rendering mode
+        radiusScale: number;          // Size multiplier
+        ringThicknessRatio: number;   // Ring width relative to radius
+        ringColor: string;            // Main ring stroke
+        innerRimColor: string;        // Inner highlight rim
+        glowColor: string;            // Glow/shadow color
+        glowBlur: number;             // Shadow blur radius
+        occlusionColor: string;       // Link-hiding disk color
+        occlusionPadding: number;     // Occlusion disk padding
+        fillColor: string;            // Fill (for 'filled' style)
+        strokeColor: string;          // Stroke (for 'filled' style)
+        strokeWidth: number;
+    };
+    link: {
+        color: string;                // Link line color
+        thickness: number;            // Link line width
+    };
+};
+```
+
+**Available Themes:**
+
+1. **Normal Theme** (`themeNormal`)
+   - Classic filled nodes with bright blue palette
+   - Background: `#111318` with subtle vignette
+   - Nodes: Filled circles, `#4488ff` fill, white stroke
+   - Links: `rgba(255, 255, 255, 0.35)`, thickness `0.4`
+   - Node radius scale: `1.0`
+
+2. **Elegant Theme** (`themeElegant`)
+   - Hollow ring nodes with dark aesthetic
+   - Background: `#060709` (near-black void) with minimal vignette
+   - Nodes: Ring style, violet-shifted palette (`rgba(155, 150, 220, 1.0)`)
+   - Inner rim: Bright violet-white edge for boundary definition
+   - Glow: Violet-shifted (`rgba(140, 120, 210, 0.3)`), tight blur (`10px`)
+   - Links: `rgba(90, 100, 140, 0.32)`, thickness `0.55`
+   - Node radius scale: `1.2` (20% larger)
+   - Ring thickness ratio: `0.26`
+
+**Rendering Pipeline:**
+
+1. **Background Layer:**
+   - Flat fill with `baseColor`
+   - Radial gradient overlay (vignette) for depth perception
+
+2. **Link Layer:**
+   - Drawn first (behind nodes)
+   - Simple line rendering with theme color/thickness
+
+3. **Occlusion Layer:**
+   - Filled disks matching background color
+   - Sized to hide link endpoints beneath nodes
+   - Radius = node radius + ring thickness + padding
+
+4. **Node Layer:**
+   - **Filled style:** Simple circle with fill + stroke
+   - **Ring style:** 
+     - Outer ring (main color, full thickness)
+     - Inner rim (highlight, 35% thickness, inset 25%)
+     - Glow (shadow blur, drawn separately with save/restore)
+
+5. **Camera Transform:**
+   - Automatic framing (AABB-based zoom/pan)
+   - Smooth damping (200-300ms settle)
+   - Global rotation support (rotating reference frame)
+
+**Theme Toggle:**
+- Runtime switch via button (top-right UI)
+- Instant theme swap with no physics reset
+- Theme state persisted in React state
+- Zero performance impact
 
 ## Early Expansion Optimization Stack
 

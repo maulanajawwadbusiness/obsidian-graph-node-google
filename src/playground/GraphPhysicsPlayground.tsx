@@ -203,27 +203,31 @@ const themeNormal: GraphTheme = {
 const themeElegant: GraphTheme = {
     name: 'elegant',
     background: {
-        baseColor: '#0c101a',
-        vignetteInner: 'rgba(28, 36, 56, 0.35)',
-        vignetteOuter: 'rgba(4, 6, 12, 0.9)',
+        // PASS 2: True void. Infinite depth.
+        baseColor: '#060709',  // Near-black with cold undertone
+        vignetteInner: 'rgba(10, 12, 18, 0.08)',  // Ghost of a center
+        vignetteOuter: 'rgba(0, 0, 0, 0.25)',  // Subtle pressure at edges
     },
     node: {
         style: 'ring',
         radiusScale: NODE_RADIUS_SCALE_ELEGANT,
-        ringThicknessRatio: 0.22,
-        ringColor: 'rgba(142, 168, 220, 0.9)',
-        innerRimColor: 'rgba(188, 206, 242, 0.5)',
-        glowColor: 'rgba(98, 118, 170, 0.35)',
-        glowBlur: 18,
-        occlusionColor: '#0c101a',
-        occlusionPadding: 2.5,
-        fillColor: '#2d3b58',
-        strokeColor: 'rgba(180, 200, 255, 0.6)',
+        ringThicknessRatio: 0.26,  // PASS 2: thicker = more authority
+        // PASS 2: Violet is mystery. Push it.
+        ringColor: 'rgba(155, 150, 220, 1.0)',  // Full opacity, violet dominant
+        innerRimColor: 'rgba(210, 200, 255, 0.75)',  // Bright violet-white edge
+        // Glow: tighter, more violet, appears on motion
+        glowColor: 'rgba(140, 120, 210, 0.3)',  // Richer violet
+        glowBlur: 10,  // Tighter = crisper plane separation
+        occlusionColor: '#060709',  // Match void
+        occlusionPadding: 1.8,  // Slightly tighter occlusion
+        fillColor: '#0d0f14',  // Hollow reads as intentional void
+        strokeColor: 'rgba(175, 160, 255, 0.45)',
         strokeWidth: 1,
     },
     link: {
-        color: 'rgba(110, 128, 164, 0.18)',
-        thickness: 0.3,
+        // PASS 2: Quiet skeleton. Present but humble.
+        color: 'rgba(90, 100, 140, 0.32)',  // Pulled back slightly
+        thickness: 0.55,  // Hair thinner
     },
 };
 

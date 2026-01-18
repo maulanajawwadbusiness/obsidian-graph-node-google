@@ -67,6 +67,7 @@ export interface ThemeConfig {
     glowOuterBlurBoost: number;      // Additional blur at nodeEnergy=1 (20)
     glowEnergyGamma: number;         // Response curve (1.0 = linear)
     glowIdleMultiplier: number;      // Multiplier for idle glow baseline (energy=0)
+    glowIdleFadeExponent: number;   // Idle-only lift fade (higher = less effect near hover)
 
     // Links
     linkColor: string;
@@ -81,6 +82,8 @@ export interface ThemeConfig {
 
     // Hover energy system (smooth proximity)
     hoverHaloMultiplier: number;       // Detection radius = nodeRadius * this (1.8)
+    hoverHaloPaddingPx: number;        // Additional halo radius padding in pixels
+    hoverHitPaddingPx: number;         // Additional hit radius padding in pixels
     hoverEnergyTauMs: number;          // Time smoothing constant in ms (120)
     hoverStickyExitMultiplier: number; // Hysteresis for exit (1.05)
     hoverSwitchMarginPx: number;       // Anti ping-pong margin for node switching (8)
@@ -157,6 +160,7 @@ export const NORMAL_THEME: ThemeConfig = {
     glowOuterBlurBoost: 0,
     glowEnergyGamma: 1.0,
     glowIdleMultiplier: 1.0,
+    glowIdleFadeExponent: 1.0,
 
     // Links: white, semi-transparent
     linkColor: 'rgba(255, 255, 255, 0.4)',
@@ -171,6 +175,8 @@ export const NORMAL_THEME: ThemeConfig = {
 
     // Hover energy system (disabled in normal mode)
     hoverHaloMultiplier: 1.0,
+    hoverHaloPaddingPx: 0,
+    hoverHitPaddingPx: 0,
     hoverEnergyTauMs: 120,
     hoverStickyExitMultiplier: 1.0,
     hoverSwitchMarginPx: 0,
@@ -250,7 +256,8 @@ export const ELEGANT_THEME: ThemeConfig = {
     glowOuterBlurBase: 14,           // Ambient outer blur (atmosphere)
     glowOuterBlurBoost: 20,          // Additional outer blur at nodeEnergy=1 (exhale)
     glowEnergyGamma: 1.0,            // Response curve (1.0 = linear, <1 = faster attack)
-    glowIdleMultiplier: 4.0,         // Idle baseline boost (energy=0) while preserving active endpoint
+    glowIdleMultiplier: 8.0,         // Idle baseline boost (energy=0) while preserving active endpoint
+    glowIdleFadeExponent: 4.0,       // Fade idle lift quickly as energy rises
 
     // Links: indigo-tinted, submissive but not dead
     linkColor: 'rgba(99, 140, 200, 0.38)',
@@ -260,11 +267,13 @@ export const ELEGANT_THEME: ThemeConfig = {
     primaryBlueDefault: '#3d4857',  // Dark blue (no hover)
     primaryBlueHover: '#63abff',    // Bright blue (hovered)
     hoverRadiusMultiplier: 2.2,     // DEPRECATED
-    hoverDebugEnabled: false,       // Debug mode (re-enable to see radius/halo circles)
+    hoverDebugEnabled: false,        // Debug mode (re-enable to see radius/halo circles)
     hoverDebugStateSentinel: false, // Extra debug logging (state sentinel)
 
     // Hover energy system (smooth proximity)
     hoverHaloMultiplier: 1.8,       // Detection radius = nodeRadius * 1.8
+    hoverHaloPaddingPx: 24,         // Extra intent halo in pixels (stays forgiving at small scales)
+    hoverHitPaddingPx: 8,           // Extra hit padding in pixels
     hoverEnergyTauMs: 120,          // Smoothing time constant (Apple feel)
     hoverStickyExitMultiplier: 1.05,// Hysteresis for exit
     hoverSwitchMarginPx: 8,         // Anti ping-pong margin

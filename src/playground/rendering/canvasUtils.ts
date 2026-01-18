@@ -1,6 +1,8 @@
 import { lerpColor } from '../../visual/theme';
 import type { ThemeConfig } from '../../visual/theme';
 
+let idleProbeLogged = false;
+
 export function withCtx(ctx: CanvasRenderingContext2D, fn: () => void) {
     ctx.save();
     try {
@@ -100,22 +102,43 @@ export function drawTwoLayerGlow(
     const e = Math.pow(Math.max(0, Math.min(1, nodeEnergy)), theme.glowEnergyGamma);
 
     const idleMultiplier = theme.glowIdleMultiplier;
-    const innerAlphaBase = theme.glowInnerAlphaBase * idleMultiplier;
-    const innerAlphaBoost = Math.max(
-        0,
-        (theme.glowInnerAlphaBase + theme.glowInnerAlphaBoost) - innerAlphaBase
-    );
-    const outerAlphaBase = theme.glowOuterAlphaBase * idleMultiplier;
-    const outerAlphaBoost = Math.max(
-        0,
-        (theme.glowOuterAlphaBase + theme.glowOuterAlphaBoost) - outerAlphaBase
-    );
+    const idleExponent = theme.glowIdleFadeExponent;
+    const idleMask = Math.pow(1 - e, idleExponent);
+    const innerIdleExtra = theme.glowInnerAlphaBase * (idleMultiplier - 1) * idleMask;
+    const outerIdleExtra = theme.glowOuterAlphaBase * (idleMultiplier - 1) * idleMask;
+    const innerAlphaBase = theme.glowInnerAlphaBase;
+    const innerAlphaBoost = theme.glowInnerAlphaBoost;
+    const outerAlphaBase = theme.glowOuterAlphaBase;
+    const outerAlphaBoost = theme.glowOuterAlphaBoost;
 
     // Compute energy-driven values
-    const innerAlpha = innerAlphaBase + e * innerAlphaBoost;
+    const innerAlpha = innerAlphaBase + e * innerAlphaBoost + innerIdleExtra;
     const innerBlur = theme.glowInnerBlurBase + e * theme.glowInnerBlurBoost;
-    const outerAlpha = outerAlphaBase + e * outerAlphaBoost;
+    const outerAlpha = outerAlphaBase + e * outerAlphaBoost + outerIdleExtra;
     const outerBlur = theme.glowOuterBlurBase + e * theme.glowOuterBlurBoost;
+
+    if (theme.hoverDebugEnabled && !idleProbeLogged) {
+        const probe = (probeEnergy: number) => {
+            const probeMask = Math.pow(1 - probeEnergy, idleExponent);
+            const probeInner = innerAlphaBase + probeEnergy * innerAlphaBoost
+                + theme.glowInnerAlphaBase * (idleMultiplier - 1) * probeMask;
+            const probeOuter = outerAlphaBase + probeEnergy * outerAlphaBoost
+                + theme.glowOuterAlphaBase * (idleMultiplier - 1) * probeMask;
+            return { probeInner, probeOuter };
+        };
+        const at0 = probe(0);
+        const at05 = probe(0.5);
+        const at09 = probe(0.9);
+        const at1 = probe(1);
+        // One-time debug probe to verify idle lift fades near active.
+        console.log(
+            `glow probe alpha: e0 i=${at0.probeInner.toFixed(3)} o=${at0.probeOuter.toFixed(3)} | ` +
+            `e0.5 i=${at05.probeInner.toFixed(3)} o=${at05.probeOuter.toFixed(3)} | ` +
+            `e0.9 i=${at09.probeInner.toFixed(3)} o=${at09.probeOuter.toFixed(3)} | ` +
+            `e1 i=${at1.probeInner.toFixed(3)} o=${at1.probeOuter.toFixed(3)}`
+        );
+        idleProbeLogged = true;
+    }
 
     // Outer glow (purple-leaning, wider atmosphere)
     // Use theme.glowOuterColor as base but let alpha vary

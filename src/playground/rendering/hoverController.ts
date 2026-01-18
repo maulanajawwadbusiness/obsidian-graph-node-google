@@ -10,8 +10,6 @@ import type {
     RenderSettingsRef
 } from './renderingTypes';
 
-const HOVER_HIT_PADDING_PX = 2;
-
 type HoverControllerDeps = {
     engineRef: RefObject<PhysicsEngine>;
     settingsRef: MutableRefObject<RenderSettingsRef>;
@@ -43,8 +41,8 @@ export const createHoverController = ({
         const outerRadius = theme.nodeStyle === 'ring'
             ? renderRadius + theme.ringWidth * 0.5
             : renderRadius;
-        const hitRadius = outerRadius + HOVER_HIT_PADDING_PX;
-        const haloRadius = outerRadius * theme.hoverHaloMultiplier;
+        const hitRadius = outerRadius + theme.hoverHitPaddingPx;
+        const haloRadius = outerRadius * theme.hoverHaloMultiplier + theme.hoverHaloPaddingPx;
         return { renderRadius, outerRadius, hitRadius, haloRadius };
     };
 
@@ -453,7 +451,8 @@ export const createHoverController = ({
                 console.log(
                     `hover: ${hoverStateRef.current.lastLoggedId} -> ${newHoveredId} ` +
                     `(dist=${nextDist.toFixed(1)}, r=${nextRenderedRadius.toFixed(1)}, ` +
-                    `halo=${nextHaloRadius.toFixed(1)}, energy=${nextTargetEnergy.toFixed(2)}) ` +
+                    `hit=${nextHitRadius.toFixed(1)}, halo=${nextHaloRadius.toFixed(1)}, ` +
+                    `energy=${nextTargetEnergy.toFixed(2)}) ` +
                     `client=(${clientX.toFixed(1)},${clientY.toFixed(1)}) ` +
                     `sx=${sx.toFixed(1)} sy=${sy.toFixed(1)} ` +
                     `world=(${worldX.toFixed(1)},${worldY.toFixed(1)}) ` +

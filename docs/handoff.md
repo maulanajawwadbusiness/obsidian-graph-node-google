@@ -1,7 +1,7 @@
-# Handoff Document: Dark Power Elegant v2 + Hover System
+# Handoff Document: Dark Power Elegant v2 + Hover Energy System
 
 **Last Updated:** 2026-01-18  
-**Status:** Core features implemented, hover system debugged  
+**Status:** Hover energy system implemented (has bug - visual interpolation not working)  
 **Next Developer:** Claude Sonnet
 
 ---
@@ -13,15 +13,22 @@ Force-directed graph physics playground (similar to Obsidian graph view) with tw
 - **Normal mode:** Blue filled nodes (baseline, unchanged)
 - **Elegant v2 mode:** Dark power aesthetic with hollow gradient rings, two-layer glow, vignette background
 
-### What Runs #1 and #2 Changed
+### What Runs #1, #2, and #3 Changed
 - **Run #1:** Implemented elegant skin foundation (hollow rings, occlusion disks, dark background)
 - **Run #2:** Upgraded to "Dark Power Elegant v2" with:
   - Blue→purple gradient rings (segmented arcs, 48 segments)
   - Rotated gradient orientation (150°, dark purple bottom-left for visual gravity)
   - Two-layer glow system (inner blue, outer purple)
   - Radial vignette background (center lighter, edges near-black)
-  - Hover color switch (#3d4857 default → #63abff bright on hover)
+  - Binary hover color switch (#3d4857 default → #63abff bright on hover)
   - Debug infrastructure (console logs, visual overlay)
+- **Run #3:** Implemented proximity-based hover energy system:
+  - Smooth energy interpolation [0..1] with halo detection
+  - Tau-based time smoothing (120ms, Apple-like feel)
+  - Hysteresis + anti ping-pong switching
+  - Energy-driven color lerp and ring width boost
+  - Debug overlays (radius/halo circles, energy text)
+  - **Known bug:** Visual interpolation not working (blue disappears instead of smooth wake-up)
 
 ---
 
@@ -54,13 +61,23 @@ Force-directed graph physics playground (similar to Obsidian graph view) with tw
 - **Strength:** 0.7
 - **Function:** `drawVignetteBackground()` in `useGraphRendering.ts`
 
-### Hover Color Switch
-- **Default color:** `#3d4857` (dark blue, subdued)
-- **Hovered color:** `#63abff` (bright blue, active)
-- **Hit-test:** Whole disc (rendered radius + 2px padding)
+### Hover Energy System (Proximity-Based)
+- **Energy range:** 0 (asleep, dark blue #3d4857) → 1 (awake, bright blue #63abff)
+- **Proximity model:** Smoothstep with halo detection
+  - Inside node (d ≤ r): energy = 1
+  - In halo zone (r < d ≤ halo): energy = smoothstep((halo-d)/(halo-r))
+  - Outside halo: energy = 0
+- **Halo radius:** `nodeRadius * 1.8` (detection extends beyond node)
+- **Time smoothing:** Tau-based exponential lerp (120ms)
+- **Hit-test:** Whole disc (halo-based, not ring-only)
 - **Architecture:** Handlers returned from `useGraphRendering` hook, camera stays internal
 - **Coordinate transform:** CSS pixels (getBoundingClientRect) → world space via camera inverse
-- **Debug:** Console log on change + yellow dashed hit circle overlay
+- **Anti-flicker:** Sticky exit (1.05x), anti ping-pong (8px margin), pop prevention
+- **Energy-driven rendering:**
+  - Color: `lerpColor(primaryBlueDefault, primaryBlueHover, energy)`
+  - Ring width: `baseWidth * (1 + 0.1 * energy)` (10% max boost)
+- **Debug:** Console log on change + radius/halo circles + energy text overlay
+- **⚠️ Known bug:** Visual interpolation not working - blue color disappears instead of smooth wake-up
 
 ---
 
@@ -76,10 +93,11 @@ Force-directed graph physics playground (similar to Obsidian graph view) with tw
 - Do NOT expose `cameraRef` back to component
 - Pointer handlers returned from hook: `{ handlePointerMove, handlePointerLeave }`
 
-✅ **Hover hit-test must be whole node disc**  
+✅ **Hover hit-test must be whole node disc (halo-based)**  
 - NOT ring-only, NOT pixel sampling, NOT arc-segment dependent
-- Formula: `hitRadius = renderedRadius + 2` (padding for forgiving feel)
-- Distance check: `dist <= hitRadius` where `dist = sqrt((node.x - worldX)^2 + (node.y - worldY)^2)`
+- Formula: `haloRadius = renderedRadius * hoverHaloMultiplier` (1.8x)
+- Distance check: `dist <= haloRadius` where `dist = sqrt((node.x - worldX)^2 + (node.y - worldY)^2)`
+- Proximity model: smoothstep for energy calculation within halo zone
 
 ✅ **Pointer coordinates must use CSS pixel space**  
 - Use `getBoundingClientRect()` for canvas dimensions (NOT canvas.width/height directly)
@@ -132,10 +150,29 @@ vignetteEdgeColor: '#050508',      // Near-black
 vignetteStrength: 0.7,             // 0.0-1.0 (how far gradient extends)
 ```
 
-#### Hover Interaction
+#### Hover Energy System
 ```typescript
-hoverRadiusMultiplier: 2.2,        // NOT USED (deprecated, kept for compatibility)
-hoverDebugEnabled: true,           // Show debug overlay + console logs
+// Basic colors
+primaryBlueDefault: '#3d4857',  // Dark blue (asleep)
+primaryBlueHover: '#63abff',    // Bright blue (awake)
+
+// Proximity detection
+hoverHaloMultiplier: 1.8,       // Detection radius = nodeRadius * 1.8
+hoverRadiusMultiplier: 2.2,     // DEPRECATED (kept for compatibility)
+
+// Time smoothing
+hoverEnergyTauMs: 120,          // Tau constant (Apple-like feel)
+
+// Anti-flicker
+hoverStickyExitMultiplier: 1.05,// Hysteresis for exit (5% buffer)
+hoverSwitchMarginPx: 8,         // Anti ping-pong margin
+
+// Energy-driven effects
+hoverRingWidthBoost: 0.1,       // 10% max ring width boost
+hoverGlowBoost: 0.15,           // Reserved for future
+
+// Debug
+hoverDebugEnabled: true,        // Show radius/halo circles + energy text
 ```
 
 #### Link Style
@@ -211,18 +248,22 @@ linkWidth: 0.6,
 - [ ] Dark purple segment should appear at **bottom-left**
 - [ ] Gradient should be smooth (no banding or gaps)
 
-### Hover Color Switch
-- [ ] Move cursor over a node (anywhere inside the ring)
-- [ ] Node should immediately switch from dark blue (#3d4857) to bright blue (#63abff)
-- [ ] **Test all areas:** blue arc, purple arc, hollow center (all should trigger)
-- [ ] Move cursor away → node returns to dark blue
-- [ ] Pointer leaves canvas → hover clears
+### Hover Energy System
+- [ ] Move cursor **toward** a node (not touching yet)
+- [ ] Node should start **brightening before reaching the ring** (halo detection)
+- [ ] Inside node disc → reaches full bright blue **smoothly** (not instant)
+- [ ] Move cursor away → node **fades back smoothly** (no snap)
+- [ ] Move along boundary → **no flicker** (hysteresis working)
+- [ ] Pointer leaves canvas → hover clears smoothly
+- [ ] **⚠️ Known bug:** Blue may disappear instead of smooth wake-up
 
 ### Debug Features
 - [ ] Open console
-- [ ] Hover nodes → see log: `hover: null -> n0 (dist=X.X, hitR=Y.Y)`
-- [ ] Verify yellow dashed circle appears around hovered node (shows hit radius)
-- [ ] Verify no log spam (only on hover change)
+- [ ] Hover nodes → see log: `hover: null -> n0 (dist=X.X, r=Y.Y, halo=Z.Z, energy=0.XX)`
+- [ ] Verify **cyan solid circle** at node radius
+- [ ] Verify **yellow dashed circle** at halo radius
+- [ ] Verify **energy text** overlay shows `e=0.xx t=0.xx d=XXX`
+- [ ] Verify no log spam (only on node change)
 
 ### Edge Cases
 - [ ] Spawn 5 nodes → verify hover works on all sizes
@@ -234,17 +275,27 @@ linkWidth: 0.6,
 ## 7. Known Issues / Next Tasks
 
 ### Current Bug
-🐛 **Edge line appearing on node circumference**  
-- **Symptom:** Visible line/artifact at the edge of some nodes
-- **Likely cause:** Gap between gradient arc segments, occlusion disk size mismatch, or stroke overlap
-- **Fix needed:** Investigate segment overlap in `drawGradientRing()` or occlusion radius calculation
+🐛 **Hover energy visual interpolation not working**  
+- **Symptom:** Blue color disappears completely instead of smooth energy wake-up
+- **What works:** Proximity detection (debug circles show), energy calculation (console logs show values)
+- **What's broken:** Visual color interpolation - `lerpColor()` may have issue or energy not being applied correctly
+- **Debug enabled:** Set `hoverDebugEnabled: true` to see radius/halo circles and energy values
+- **Status:** Under investigation
+
+### Completed Features (Run #3)
+- ✅ Proximity model with smoothstep
+- ✅ Tau-based time smoothing (120ms)
+- ✅ Hysteresis (sticky exit 1.05x)
+- ✅ Anti ping-pong switching (8px margin)
+- ✅ Pop prevention on node switch
+- ✅ Debug overlays (radius/halo circles, energy text)
+- ✅ Energy-driven ring width boost (10% max)
 
 ### Future Enhancements (Not Yet Implemented)
-- **Fade-based hover energy:** Smooth color transition (not instant switch)
-- **Distance falloff:** Hover intensity based on cursor proximity
-- **Hysteresis:** Prevent flickering when cursor is near edge
-- **Nearest-node smart detection:** Prefer closest even if multiple in range
-- **Hover radius tuning UI:** Slider for `hitRadius` padding
+- **Glow boost:** Use `hoverGlowBoost` knob (currently reserved)
+- **Cursor-field effects:** Multiple nodes respond to cursor proximity
+- **Smart nearest-node:** Prefer closest with better heuristics
+- **Hover radius tuning UI:** Real-time slider for halo multiplier
 
 ---
 

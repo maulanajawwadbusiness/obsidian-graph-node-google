@@ -11,13 +11,18 @@ type RenderSettingsRef = {
     skinMode: SkinMode;
 };
 
-// Hover detection state
+// Hover detection state with energy tracking
 type HoverState = {
     hoveredNodeId: string | null;
     hoveredDistPx: number;
     cursorWorldX: number;
     cursorWorldY: number;
     lastLoggedId: string | null;  // For change detection (avoid log spam)
+    // Energy system
+    energy: number;               // Current energy [0..1] (smoothed)
+    targetEnergy: number;         // Target energy [0..1] (from proximity)
+    renderedRadius: number;       // Cached rendered radius of hovered node
+    haloRadius: number;           // Cached halo radius (detection boundary)
 };
 
 type UseGraphRenderingProps = {
@@ -126,6 +131,21 @@ function drawTwoLayerGlow(
     ctx.restore();
 }
 
+// -----------------------------------------------------------------------------
+// Math Helpers for Hover Energy
+// -----------------------------------------------------------------------------
+
+/** Clamp value between min and max */
+function clamp(value: number, min: number, max: number): number {
+    return Math.max(min, Math.min(max, value));
+}
+
+/** Smoothstep interpolation (S-curve) for natural feel */
+function smoothstep(t: number): number {
+    const x = clamp(t, 0, 1);
+    return x * x * (3 - 2 * x);
+}
+
 export const useGraphRendering = ({
     canvasRef,
     config,
@@ -149,13 +169,18 @@ export const useGraphRendering = ({
     // Ref for Loop Access (allows render loop to access React state)
     const settingsRef = useRef<RenderSettingsRef>({ useVariedSize: true, skinMode: 'normal' });
 
-    // Hover state (for pointer detection)
+    // Hover state (for pointer detection + energy tracking)
     const hoverStateRef = useRef<HoverState>({
         hoveredNodeId: null,
         hoveredDistPx: 0,
         cursorWorldX: 0,
         cursorWorldY: 0,
-        lastLoggedId: null
+        lastLoggedId: null,
+        // Energy system
+        energy: 0,
+        targetEnergy: 0,
+        renderedRadius: 0,
+        haloRadius: 0
     });
 
     useEffect(() => {
@@ -186,16 +211,24 @@ export const useGraphRendering = ({
     };
 
     /**
-     * Find nearest node within hit radius (whole disc, not just ring)
-     * Uses the same scaled radius as rendering for accurate hit detection.
+     * Find nearest node within halo radius (proximity detection)
+     * Uses smoothstep proximity model for natural hover energy.
+     * Returns targetEnergy based on distance within halo.
      */
     const findNearestNode = (worldX: number, worldY: number, theme: ThemeConfig) => {
         const engine = engineRef.current;
-        if (!engine) return { nodeId: null, dist: Infinity, hitRadius: 0 };
+        if (!engine) return {
+            nodeId: null,
+            dist: Infinity,
+            renderedRadius: 0,
+            haloRadius: 0,
+            targetEnergy: 0
+        };
 
         let nearestId: string | null = null;
         let nearestDist = Infinity;
-        let nearestHitRadius = 0;
+        let nearestRenderedRadius = 0;
+        let nearestHaloRadius = 0;
 
         engine.nodes.forEach((node) => {
             const dx = node.x - worldX;
@@ -206,21 +239,42 @@ export const useGraphRendering = ({
             const baseRadius = settingsRef.current.useVariedSize ? node.radius : 5.0;
             const renderedRadius = getNodeRadius(baseRadius, theme);
 
-            // Hit radius = rendered radius + small padding for forgiving feel
-            const hitRadius = renderedRadius + 2;
+            // Halo radius = detection boundary (larger than node for proximity sensing)
+            const haloRadius = renderedRadius * theme.hoverHaloMultiplier;
 
-            if (dist <= hitRadius && dist < nearestDist) {
+            // Only consider nodes within halo
+            if (dist <= haloRadius && dist < nearestDist) {
                 nearestId = node.id;
                 nearestDist = dist;
-                nearestHitRadius = hitRadius;
+                nearestRenderedRadius = renderedRadius;
+                nearestHaloRadius = haloRadius;
             }
         });
 
-        return { nodeId: nearestId, dist: nearestDist, hitRadius: nearestHitRadius };
+        // Calculate targetEnergy based on proximity (smoothstep model)
+        let targetEnergy = 0;
+        if (nearestId !== null) {
+            if (nearestDist <= nearestRenderedRadius) {
+                // Inside node disc: full energy
+                targetEnergy = 1;
+            } else {
+                // In halo zone: smoothstep falloff
+                const t = (nearestHaloRadius - nearestDist) / (nearestHaloRadius - nearestRenderedRadius);
+                targetEnergy = smoothstep(t);
+            }
+        }
+
+        return {
+            nodeId: nearestId,
+            dist: nearestDist,
+            renderedRadius: nearestRenderedRadius,
+            haloRadius: nearestHaloRadius,
+            targetEnergy
+        };
     };
 
     /**
-     * Handle pointer move - update hover state
+     * Handle pointer move - update hover state with hysteresis
      */
     const handlePointerMove = (clientX: number, clientY: number, rect: DOMRect) => {
         const theme = getTheme(settingsRef.current.skinMode);
@@ -229,20 +283,76 @@ export const useGraphRendering = ({
         hoverStateRef.current.cursorWorldX = worldX;
         hoverStateRef.current.cursorWorldY = worldY;
 
-        const { nodeId, dist, hitRadius } = findNearestNode(worldX, worldY, theme);
+        const result = findNearestNode(worldX, worldY, theme);
+        const currentHoveredId = hoverStateRef.current.hoveredNodeId;
+        const currentDist = hoverStateRef.current.hoveredDistPx;
+        const currentHalo = hoverStateRef.current.haloRadius;
 
-        hoverStateRef.current.hoveredNodeId = nodeId;
-        hoverStateRef.current.hoveredDistPx = dist;
+        // Determine if we should switch nodes (hysteresis logic)
+        let newHoveredId = result.nodeId;
+        let shouldSwitch = false;
 
-        // Debug logging (only on change)
-        if (theme.hoverDebugEnabled && nodeId !== hoverStateRef.current.lastLoggedId) {
-            console.log(`hover: ${hoverStateRef.current.lastLoggedId} -> ${nodeId} (dist=${dist.toFixed(1)}, hitR=${hitRadius.toFixed(1)})`);
-            hoverStateRef.current.lastLoggedId = nodeId;
+        if (currentHoveredId === null) {
+            // No current hover - switch to new if found
+            shouldSwitch = result.nodeId !== null;
+        } else if (result.nodeId === currentHoveredId) {
+            // Same node - always keep
+            shouldSwitch = true;
+            newHoveredId = currentHoveredId;
+        } else if (result.nodeId === null) {
+            // New is null - apply sticky exit (only clear if beyond halo * exitMultiplier)
+            const stickyHalo = currentHalo * theme.hoverStickyExitMultiplier;
+            if (currentDist > stickyHalo) {
+                shouldSwitch = true;
+                newHoveredId = null;
+            } else {
+                // Stay with current node
+                shouldSwitch = false;
+            }
+        } else {
+            // Different node found - apply anti ping-pong margin
+            if (result.dist + theme.hoverSwitchMarginPx < currentDist) {
+                shouldSwitch = true;
+            } else {
+                // Keep current node
+                shouldSwitch = false;
+            }
+        }
+
+        if (shouldSwitch) {
+            const prevId = hoverStateRef.current.hoveredNodeId;
+
+            // Prevent pop: when switching nodes, cap initial targetEnergy
+            if (prevId !== null && newHoveredId !== null && prevId !== newHoveredId) {
+                // New node: set energy to minimum of current and new target
+                hoverStateRef.current.energy = Math.min(
+                    hoverStateRef.current.energy,
+                    result.targetEnergy
+                );
+            }
+
+            hoverStateRef.current.hoveredNodeId = newHoveredId;
+            hoverStateRef.current.hoveredDistPx = result.dist;
+            hoverStateRef.current.targetEnergy = result.targetEnergy;
+            hoverStateRef.current.renderedRadius = result.renderedRadius;
+            hoverStateRef.current.haloRadius = result.haloRadius;
+
+            // Debug logging (only on node change)
+            if (theme.hoverDebugEnabled && newHoveredId !== hoverStateRef.current.lastLoggedId) {
+                console.log(`hover: ${hoverStateRef.current.lastLoggedId} -> ${newHoveredId} (dist=${result.dist.toFixed(1)}, r=${result.renderedRadius.toFixed(1)}, halo=${result.haloRadius.toFixed(1)}, energy=${result.targetEnergy.toFixed(2)})`);
+                hoverStateRef.current.lastLoggedId = newHoveredId;
+            }
+        } else {
+            // Update distance and targetEnergy even if not switching (for energy smoothing)
+            if (result.nodeId === currentHoveredId && currentHoveredId !== null) {
+                hoverStateRef.current.hoveredDistPx = result.dist;
+                hoverStateRef.current.targetEnergy = result.targetEnergy;
+            }
         }
     };
 
     /**
-     * Handle pointer leave - clear hover state
+     * Handle pointer leave - clear hover state and trigger fade out
      */
     const handlePointerLeave = () => {
         const theme = getTheme(settingsRef.current.skinMode);
@@ -254,6 +364,8 @@ export const useGraphRendering = ({
         hoverStateRef.current.hoveredNodeId = null;
         hoverStateRef.current.hoveredDistPx = 0;
         hoverStateRef.current.lastLoggedId = null;
+        hoverStateRef.current.targetEnergy = 0;  // Triggers smooth fade out
+        // Note: energy itself will decay via time smoothing in render loop
     };
 
     useEffect(() => {
@@ -306,6 +418,18 @@ export const useGraphRendering = ({
 
             // Get current theme based on skin mode
             const theme = getTheme(settingsRef.current.skinMode);
+
+            // Hover Energy Smoothing (tau-based exponential lerp)
+            const tauMs = theme.hoverEnergyTauMs;
+            if (tauMs > 0) {
+                const tau = tauMs / 1000;  // Convert to seconds
+                const alpha = 1 - Math.exp(-dt / tau);
+                hoverStateRef.current.energy = hoverStateRef.current.energy +
+                    (hoverStateRef.current.targetEnergy - hoverStateRef.current.energy) * alpha;
+            } else {
+                // Instant (no smoothing)
+                hoverStateRef.current.energy = hoverStateRef.current.targetEnergy;
+            }
 
             // Clear and draw background
             ctx.clearRect(0, 0, width, height);
@@ -421,18 +545,25 @@ export const useGraphRendering = ({
 
                     // 3. Draw ring stroke
                     if (theme.useGradientRing) {
-                        // V2: Gradient ring (blue → purple)
-                        // Determine primary blue based on hover state
-                        const isHovered = node.id === hoverStateRef.current.hoveredNodeId;
-                        const primaryBlue = isHovered ? theme.primaryBlueHover : theme.primaryBlueDefault;
+                        // V2: Gradient ring (blue → purple) with energy-driven color
+                        const isHoveredNode = node.id === hoverStateRef.current.hoveredNodeId;
+                        const nodeEnergy = isHoveredNode ? hoverStateRef.current.energy : 0;
+
+                        // Energy-driven primary blue (smooth interpolation)
+                        const primaryBlue = node.isFixed
+                            ? theme.nodeFixedColor
+                            : lerpColor(theme.primaryBlueDefault, theme.primaryBlueHover, nodeEnergy);
+
+                        // Optional: Energy-driven ring width boost (subtle)
+                        const ringWidth = theme.ringWidth * (1 + theme.hoverRingWidthBoost * nodeEnergy);
 
                         drawGradientRing(
                             ctx,
                             node.x,
                             node.y,
                             radius,
-                            theme.ringWidth,
-                            node.isFixed ? theme.nodeFixedColor : primaryBlue,
+                            ringWidth,
+                            primaryBlue,
                             theme.deepPurple,
                             theme.ringGradientSegments,
                             theme.gradientRotationDegrees
@@ -465,23 +596,46 @@ export const useGraphRendering = ({
                 }
             });
 
-            // Debug overlay: draw hit circle around hovered node
+            // Debug overlay: draw radius/halo circles and energy info
             if (theme.hoverDebugEnabled && hoverStateRef.current.hoveredNodeId) {
+                ctx.save();  // CRITICAL: isolate debug drawing to prevent leaks
+
                 const hoveredNode = engine.nodes.get(hoverStateRef.current.hoveredNodeId);
                 if (hoveredNode) {
-                    const baseRadius = settingsRef.current.useVariedSize ? hoveredNode.radius : 5.0;
-                    const renderedRadius = getNodeRadius(baseRadius, theme);
-                    const hitRadius = renderedRadius + 2;
+                    const r = hoverStateRef.current.renderedRadius;
+                    const halo = hoverStateRef.current.haloRadius;
+                    const energy = hoverStateRef.current.energy;
+                    const targetEnergy = hoverStateRef.current.targetEnergy;
+                    const dist = hoverStateRef.current.hoveredDistPx;
 
-                    // Draw faint hit circle
+                    // 1. Draw rendered radius circle (thin solid cyan)
                     ctx.beginPath();
-                    ctx.arc(hoveredNode.x, hoveredNode.y, hitRadius, 0, Math.PI * 2);
-                    ctx.strokeStyle = 'rgba(255, 255, 0, 0.5)';
+                    ctx.arc(hoveredNode.x, hoveredNode.y, r, 0, Math.PI * 2);
+                    ctx.strokeStyle = 'rgba(0, 255, 255, 0.6)';
                     ctx.lineWidth = 1;
-                    ctx.setLineDash([4, 4]);
-                    ctx.stroke();
                     ctx.setLineDash([]);
+                    ctx.stroke();
+
+                    // 2. Draw halo detection radius (thin dashed yellow)
+                    ctx.beginPath();
+                    ctx.arc(hoveredNode.x, hoveredNode.y, halo, 0, Math.PI * 2);
+                    ctx.strokeStyle = 'rgba(255, 255, 0, 0.4)';
+                    ctx.lineWidth = 1;
+                    ctx.setLineDash([6, 4]);
+                    ctx.stroke();
+                    ctx.setLineDash([]);  // Reset line dash
+
+                    // 3. Draw energy info text near node
+                    ctx.font = '10px monospace';
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+                    ctx.fillText(
+                        `e=${energy.toFixed(2)} t=${targetEnergy.toFixed(2)} d=${dist.toFixed(0)}`,
+                        hoveredNode.x + r + 5,
+                        hoveredNode.y - 5
+                    );
                 }
+
+                ctx.restore();  // Restore to prevent state leaks
             }
 
             ctx.restore();

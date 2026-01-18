@@ -60,11 +60,19 @@ export interface ThemeConfig {
     linkColor: string;
     linkWidth: number;
 
-    // Hover interaction
+    // Hover interaction (basic)
     primaryBlueDefault: string;   // Dark blue when not hovered
     primaryBlueHover: string;     // Bright blue when hovered
-    hoverRadiusMultiplier: number; // Hit detection radius = nodeRadius * this
+    hoverRadiusMultiplier: number; // DEPRECATED - use hoverHaloMultiplier
     hoverDebugEnabled: boolean;    // Show debug overlay + console logs
+
+    // Hover energy system (smooth proximity)
+    hoverHaloMultiplier: number;       // Detection radius = nodeRadius * this (1.8)
+    hoverEnergyTauMs: number;          // Time smoothing constant in ms (120)
+    hoverStickyExitMultiplier: number; // Hysteresis for exit (1.05)
+    hoverSwitchMarginPx: number;       // Anti ping-pong margin for node switching (8)
+    hoverRingWidthBoost: number;       // Max ring width boost at full energy (0.1 = 10%)
+    hoverGlowBoost: number;            // Max glow alpha boost at full energy (0.15)
 }
 
 // -----------------------------------------------------------------------------
@@ -134,6 +142,14 @@ export const NORMAL_THEME: ThemeConfig = {
     primaryBlueHover: '#4488ff',
     hoverRadiusMultiplier: 2.0,
     hoverDebugEnabled: false,
+
+    // Hover energy system (disabled in normal mode)
+    hoverHaloMultiplier: 1.0,
+    hoverEnergyTauMs: 120,
+    hoverStickyExitMultiplier: 1.0,
+    hoverSwitchMarginPx: 0,
+    hoverRingWidthBoost: 0,
+    hoverGlowBoost: 0,
 };
 
 // -----------------------------------------------------------------------------
@@ -142,7 +158,7 @@ export const NORMAL_THEME: ThemeConfig = {
 // -----------------------------------------------------------------------------
 
 // TUNING KNOB: Change this to scale nodes and rings proportionally
-const ELEGANT_NODE_SCALE = 4;
+const ELEGANT_NODE_SCALE = 2;
 
 // Base ratios (don't change these, change ELEGANT_NODE_SCALE instead)
 const ELEGANT_BASE_RING_WIDTH_RATIO = 2.08;  // ring width relative to scale
@@ -201,11 +217,19 @@ export const ELEGANT_THEME: ThemeConfig = {
     linkColor: 'rgba(99, 140, 200, 0.38)',
     linkWidth: 0.6,
 
-    // Hover interaction
+    // Hover interaction (basic)
     primaryBlueDefault: '#3d4857',  // Dark blue (no hover)
     primaryBlueHover: '#63abff',    // Bright blue (hovered)
-    hoverRadiusMultiplier: 2.2,     // Hit radius = nodeRadius * 2.2
-    hoverDebugEnabled: false,       // Debug mode disabled (re-enable to see hit radius circle)
+    hoverRadiusMultiplier: 2.2,     // DEPRECATED
+    hoverDebugEnabled: false,       // Debug mode (re-enable to see radius/halo circles)
+
+    // Hover energy system (smooth proximity)
+    hoverHaloMultiplier: 1.8,       // Detection radius = nodeRadius * 1.8
+    hoverEnergyTauMs: 120,          // Smoothing time constant (Apple feel)
+    hoverStickyExitMultiplier: 1.05,// Hysteresis for exit
+    hoverSwitchMarginPx: 8,         // Anti ping-pong margin
+    hoverRingWidthBoost: 0.1,       // 10% max ring width boost
+    hoverGlowBoost: 0.15,           // Max glow alpha boost
 };
 
 // -----------------------------------------------------------------------------
@@ -238,16 +262,36 @@ export function getOcclusionRadius(nodeRadius: number, theme: ThemeConfig): numb
 // Color Utilities for Gradient Ring
 // -----------------------------------------------------------------------------
 
+function clampChannel(value: number): number {
+    return Math.max(0, Math.min(255, value));
+}
+
 /**
  * Parse hex color to RGB object
  */
 export function hexToRgb(hex: string): { r: number; g: number; b: number } {
     const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-    return result ? {
-        r: parseInt(result[1], 16),
-        g: parseInt(result[2], 16),
-        b: parseInt(result[3], 16)
-    } : { r: 0, g: 0, b: 0 };
+    if (result) {
+        return {
+            r: parseInt(result[1], 16),
+            g: parseInt(result[2], 16),
+            b: parseInt(result[3], 16)
+        };
+    }
+
+    const rgbMatch = /^rgba?\(\s*([0-9.]+)\s*,\s*([0-9.]+)\s*,\s*([0-9.]+)(?:\s*,\s*([0-9.]+))?\s*\)$/i.exec(hex);
+    if (rgbMatch) {
+        const r = Math.round(Number(rgbMatch[1]));
+        const g = Math.round(Number(rgbMatch[2]));
+        const b = Math.round(Number(rgbMatch[3]));
+        return {
+            r: clampChannel(r),
+            g: clampChannel(g),
+            b: clampChannel(b)
+        };
+    }
+
+    return { r: 0, g: 0, b: 0 };
 }
 
 /**

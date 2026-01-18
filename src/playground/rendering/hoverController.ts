@@ -231,6 +231,10 @@ export const createHoverController = ({
 
     const clearHover = (label: string, pointerId: number, pointerType: string) => {
         logPointerEvent(label, pointerId, pointerType);
+        const theme = getTheme(settingsRef.current.skinMode);
+        if (theme.hoverDebugEnabled) {
+            console.log(`hover clear: ${label}`);
+        }
         hoverStateRef.current.activePointerId = null;
         hoverStateRef.current.hoveredNodeId = null;
         hoverStateRef.current.hoveredDistPx = 0;
@@ -240,6 +244,11 @@ export const createHoverController = ({
         hoverStateRef.current.nearestCandidateDist = Infinity;
         hoverStateRef.current.targetEnergy = 0;
         hoverStateRef.current.hitRadius = 0;
+        hoverStateRef.current.haloRadius = 0;
+        hoverStateRef.current.hoverHoldUntilMs = 0;
+        hoverStateRef.current.lastInsideMs = 0;
+        hoverStateRef.current.pendingSwitchId = null;
+        hoverStateRef.current.pendingSwitchSinceMs = 0;
         hoverStateRef.current.hasPointer = false;
         pendingPointerRef.current.hasPending = false;
     };
@@ -311,6 +320,7 @@ export const createHoverController = ({
         hoverStateRef.current.cursorClientY = clientY;
         hoverStateRef.current.hasPointer = true;
 
+        const nowMs = performance.now();
         const currentHoveredId = hoverStateRef.current.hoveredNodeId;
         let nodesScanned = 0;
 
@@ -322,6 +332,10 @@ export const createHoverController = ({
         let nextHitRadius = hoverStateRef.current.hitRadius;
         let nextHaloRadius = hoverStateRef.current.haloRadius;
         let nextDist = hoverStateRef.current.hoveredDistPx;
+        let nextHoldUntil = hoverStateRef.current.hoverHoldUntilMs;
+        let nextLastInsideMs = hoverStateRef.current.lastInsideMs;
+        let nextPendingSwitchId = hoverStateRef.current.pendingSwitchId;
+        let nextPendingSinceMs = hoverStateRef.current.pendingSwitchSinceMs;
 
         if (currentHoveredId === null) {
             const result = findNearestNode(worldX, worldY, theme);
@@ -334,6 +348,10 @@ export const createHoverController = ({
                 nextHitRadius = result.hitRadius;
                 nextHaloRadius = result.haloRadius;
                 nextDist = result.dist;
+                nextHoldUntil = nowMs + theme.minHoverHoldMs;
+                nextLastInsideMs = nowMs;
+                nextPendingSwitchId = null;
+                nextPendingSinceMs = 0;
                 decision = 'switched (acquire)';
             }
             hoverStateRef.current.nearestCandidateId = result.nodeId;
@@ -349,7 +367,14 @@ export const createHoverController = ({
                 hoverStateRef.current.nearestCandidateDist = Infinity;
                 nodesScanned = 1;
 
-                if (currentEval.dist > stickyHalo) {
+                if (currentEval.dist <= currentEval.haloRadius) {
+                    nextLastInsideMs = nowMs;
+                }
+
+                const exitGracePassed = !theme.calmModeEnabled ||
+                    nowMs - nextLastInsideMs > theme.exitGraceMs;
+
+                if (currentEval.dist > stickyHalo && exitGracePassed) {
                     const candidate = findNearestNodeExcluding(worldX, worldY, theme, null);
                     nodesScanned = candidate.scanned;
                     hoverStateRef.current.nearestCandidateId = candidate.nodeId;
@@ -362,6 +387,10 @@ export const createHoverController = ({
                         nextHitRadius = candidate.hitRadius;
                         nextHaloRadius = candidate.haloRadius;
                         nextDist = candidate.dist;
+                        nextHoldUntil = nowMs + theme.minHoverHoldMs;
+                        nextLastInsideMs = nowMs;
+                        nextPendingSwitchId = null;
+                        nextPendingSinceMs = 0;
                         decision = 'switched (exited)';
                     } else {
                         shouldSwitch = true;
@@ -371,8 +400,20 @@ export const createHoverController = ({
                         nextHitRadius = 0;
                         nextHaloRadius = 0;
                         nextDist = currentEval.dist;
+                        nextHoldUntil = 0;
+                        nextPendingSwitchId = null;
+                        nextPendingSinceMs = 0;
                         decision = 'exited (beyond halo)';
                     }
+                } else if (currentEval.dist > stickyHalo && !exitGracePassed) {
+                    shouldSwitch = true;
+                    newHoveredId = currentHoveredId;
+                    nextTargetEnergy = currentEval.targetEnergy;
+                    nextRenderedRadius = currentEval.renderedRadius;
+                    nextHitRadius = currentEval.hitRadius;
+                    nextHaloRadius = currentEval.haloRadius;
+                    nextDist = currentEval.dist;
+                    decision = 'kept (exit grace)';
                 } else if (reason === 'pointer') {
                     const candidate = findNearestNodeExcluding(worldX, worldY, theme, currentHoveredId);
                     nodesScanned = candidate.scanned;
@@ -382,14 +423,64 @@ export const createHoverController = ({
                         candidate.nodeId &&
                         candidate.dist + theme.hoverSwitchMarginPx < currentEval.dist
                     ) {
-                        shouldSwitch = true;
-                        newHoveredId = candidate.nodeId;
-                        nextTargetEnergy = candidate.targetEnergy;
-                        nextRenderedRadius = candidate.renderedRadius;
-                        nextHitRadius = candidate.hitRadius;
-                        nextHaloRadius = candidate.haloRadius;
-                        nextDist = candidate.dist;
-                        decision = 'switched (margin)';
+                        if (!theme.calmModeEnabled || theme.switchDebounceMs <= 0) {
+                            shouldSwitch = true;
+                            newHoveredId = candidate.nodeId;
+                            nextTargetEnergy = candidate.targetEnergy;
+                            nextRenderedRadius = candidate.renderedRadius;
+                            nextHitRadius = candidate.hitRadius;
+                            nextHaloRadius = candidate.haloRadius;
+                            nextDist = candidate.dist;
+                            nextHoldUntil = nowMs + theme.minHoverHoldMs;
+                            nextLastInsideMs = nowMs;
+                            nextPendingSwitchId = null;
+                            nextPendingSinceMs = 0;
+                            decision = 'switched (margin)';
+                        } else if (theme.calmModeEnabled && nowMs < nextHoldUntil) {
+                            shouldSwitch = true;
+                            newHoveredId = currentHoveredId;
+                            nextTargetEnergy = currentEval.targetEnergy;
+                            nextRenderedRadius = currentEval.renderedRadius;
+                            nextHitRadius = currentEval.hitRadius;
+                            nextHaloRadius = currentEval.haloRadius;
+                            nextDist = currentEval.dist;
+                            decision = 'kept: hold';
+                        } else {
+                            if (nextPendingSwitchId !== candidate.nodeId) {
+                                nextPendingSwitchId = candidate.nodeId;
+                                nextPendingSinceMs = nowMs;
+                                shouldSwitch = true;
+                                newHoveredId = currentHoveredId;
+                                nextTargetEnergy = currentEval.targetEnergy;
+                                nextRenderedRadius = currentEval.renderedRadius;
+                                nextHitRadius = currentEval.hitRadius;
+                                nextHaloRadius = currentEval.haloRadius;
+                                nextDist = currentEval.dist;
+                                decision = 'kept: debounce';
+                            } else if (nowMs - nextPendingSinceMs >= theme.switchDebounceMs) {
+                                shouldSwitch = true;
+                                newHoveredId = candidate.nodeId;
+                                nextTargetEnergy = candidate.targetEnergy;
+                                nextRenderedRadius = candidate.renderedRadius;
+                                nextHitRadius = candidate.hitRadius;
+                                nextHaloRadius = candidate.haloRadius;
+                                nextDist = candidate.dist;
+                                nextHoldUntil = nowMs + theme.minHoverHoldMs;
+                                nextLastInsideMs = nowMs;
+                                nextPendingSwitchId = null;
+                                nextPendingSinceMs = 0;
+                                decision = 'switched: debounce satisfied';
+                            } else {
+                                shouldSwitch = true;
+                                newHoveredId = currentHoveredId;
+                                nextTargetEnergy = currentEval.targetEnergy;
+                                nextRenderedRadius = currentEval.renderedRadius;
+                                nextHitRadius = currentEval.hitRadius;
+                                nextHaloRadius = currentEval.haloRadius;
+                                nextDist = currentEval.dist;
+                                decision = 'kept: debounce';
+                            }
+                        }
                     } else {
                         shouldSwitch = true;
                         newHoveredId = currentHoveredId;
@@ -398,6 +489,8 @@ export const createHoverController = ({
                         nextHitRadius = currentEval.hitRadius;
                         nextHaloRadius = currentEval.haloRadius;
                         nextDist = currentEval.dist;
+                        nextPendingSwitchId = null;
+                        nextPendingSinceMs = 0;
                         decision = 'kept (active)';
                     }
                 } else {
@@ -408,6 +501,8 @@ export const createHoverController = ({
                     nextHitRadius = currentEval.hitRadius;
                     nextHaloRadius = currentEval.haloRadius;
                     nextDist = currentEval.dist;
+                    nextPendingSwitchId = null;
+                    nextPendingSinceMs = 0;
                     decision = 'kept (active)';
                 }
             } else {
@@ -418,6 +513,9 @@ export const createHoverController = ({
                 nextHitRadius = 0;
                 nextHaloRadius = 0;
                 nextDist = Infinity;
+                nextHoldUntil = 0;
+                nextPendingSwitchId = null;
+                nextPendingSinceMs = 0;
                 decision = 'exited (missing node)';
             }
         }
@@ -441,9 +539,17 @@ export const createHoverController = ({
             hoverStateRef.current.renderedRadius = nextRenderedRadius;
             hoverStateRef.current.hitRadius = nextHitRadius;
             hoverStateRef.current.haloRadius = nextHaloRadius;
+            hoverStateRef.current.hoverHoldUntilMs = nextHoldUntil;
+            hoverStateRef.current.lastInsideMs = nextLastInsideMs;
+            hoverStateRef.current.pendingSwitchId = nextPendingSwitchId;
+            hoverStateRef.current.pendingSwitchSinceMs = nextPendingSinceMs;
             hoverStateRef.current.lastDecision = decision;
 
-            if (theme.hoverDebugEnabled && newHoveredId !== hoverStateRef.current.lastLoggedId) {
+            if (theme.hoverDebugEnabled && (
+                newHoveredId !== hoverStateRef.current.lastLoggedId ||
+                decision.startsWith('switched') ||
+                decision.startsWith('exited')
+            )) {
                 const camera = cameraRef.current;
                 const engine = engineRef.current;
                 const centroid = engine ? engine.getCentroid() : { x: 0, y: 0 };
@@ -453,6 +559,9 @@ export const createHoverController = ({
                     `(dist=${nextDist.toFixed(1)}, r=${nextRenderedRadius.toFixed(1)}, ` +
                     `hit=${nextHitRadius.toFixed(1)}, halo=${nextHaloRadius.toFixed(1)}, ` +
                     `energy=${nextTargetEnergy.toFixed(2)}) ` +
+                    `hold=${Math.max(0, nextHoldUntil - nowMs).toFixed(0)}ms ` +
+                    `pending=${nextPendingSwitchId ?? 'null'} ` +
+                    `pendingAge=${nextPendingSwitchId ? (nowMs - nextPendingSinceMs).toFixed(0) : 0}ms ` +
                     `client=(${clientX.toFixed(1)},${clientY.toFixed(1)}) ` +
                     `sx=${sx.toFixed(1)} sy=${sy.toFixed(1)} ` +
                     `world=(${worldX.toFixed(1)},${worldY.toFixed(1)}) ` +

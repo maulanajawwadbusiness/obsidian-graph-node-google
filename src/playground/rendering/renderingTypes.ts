@@ -51,6 +51,10 @@ export type HoverState = {
     targetEnergy: number;
     renderedRadius: number;
     haloRadius: number;
+    hoverHoldUntilMs: number;
+    lastInsideMs: number;
+    pendingSwitchId: string | null;
+    pendingSwitchSinceMs: number;
     // Debug: glow energy values
     debugGlowInnerAlpha: number;
     debugGlowInnerBlur: number;
@@ -118,6 +122,10 @@ export const createInitialHoverState = (): HoverState => ({
     targetEnergy: 0,
     renderedRadius: 0,
     haloRadius: 0,
+    hoverHoldUntilMs: 0,
+    lastInsideMs: 0,
+    pendingSwitchId: null,
+    pendingSwitchSinceMs: 0,
     // Debug: glow energy values
     debugGlowInnerAlpha: 0,
     debugGlowInnerBlur: 0,

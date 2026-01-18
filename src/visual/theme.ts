@@ -84,6 +84,10 @@ export interface ThemeConfig {
     hoverHaloMultiplier: number;       // Detection radius = nodeRadius * this (1.8)
     hoverHaloPaddingPx: number;        // Additional halo radius padding in pixels
     hoverHitPaddingPx: number;         // Additional hit radius padding in pixels
+    calmModeEnabled: boolean;          // Temporal stabilization for hover selection
+    minHoverHoldMs: number;            // Minimum time to hold a hovered node before switching
+    switchDebounceMs: number;          // Candidate must stay best for this long before switch
+    exitGraceMs: number;               // Grace period outside halo before clearing
     hoverEnergyTauMs: number;          // Time smoothing constant in ms (120)
     hoverStickyExitMultiplier: number; // Hysteresis for exit (1.05)
     hoverSwitchMarginPx: number;       // Anti ping-pong margin for node switching (8)
@@ -177,6 +181,10 @@ export const NORMAL_THEME: ThemeConfig = {
     hoverHaloMultiplier: 1.0,
     hoverHaloPaddingPx: 0,
     hoverHitPaddingPx: 0,
+    calmModeEnabled: false,
+    minHoverHoldMs: 0,
+    switchDebounceMs: 0,
+    exitGraceMs: 0,
     hoverEnergyTauMs: 120,
     hoverStickyExitMultiplier: 1.0,
     hoverSwitchMarginPx: 0,
@@ -260,7 +268,7 @@ export const ELEGANT_THEME: ThemeConfig = {
     glowIdleFadeExponent: 4.0,       // Fade idle lift quickly as energy rises
 
     // Links: indigo-tinted, submissive but not dead
-    linkColor: 'rgba(99, 140, 200, 0.38)',
+    linkColor: 'rgba(61, 72, 87, 0.38)',
     linkWidth: 0.6,
 
     // Hover interaction (basic)
@@ -272,8 +280,12 @@ export const ELEGANT_THEME: ThemeConfig = {
 
     // Hover energy system (smooth proximity)
     hoverHaloMultiplier: 1.8,       // Detection radius = nodeRadius * 1.8
-    hoverHaloPaddingPx: 24,         // Extra intent halo in pixels (stays forgiving at small scales)
-    hoverHitPaddingPx: 8,           // Extra hit padding in pixels
+    hoverHaloPaddingPx: 32,         // Extra intent halo in pixels (stays forgiving at small scales)
+    hoverHitPaddingPx: 10,          // Extra hit padding in pixels
+    calmModeEnabled: true,          // Temporal stabilization for hover selection
+    minHoverHoldMs: 120,            // Hold hovered node for 120ms before switching
+    switchDebounceMs: 60,           // Require sustained candidate for 60ms
+    exitGraceMs: 60,                // Allow brief exits without clearing
     hoverEnergyTauMs: 120,          // Smoothing time constant (Apple feel)
     hoverStickyExitMultiplier: 1.05,// Hysteresis for exit
     hoverSwitchMarginPx: 8,         // Anti ping-pong margin

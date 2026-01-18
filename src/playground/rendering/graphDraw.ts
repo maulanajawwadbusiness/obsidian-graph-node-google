@@ -161,6 +161,11 @@ export const drawHoverDebugOverlay = (
         const decision = hoverStateRef.current.lastDecision;
         const nearestId = hoverStateRef.current.nearestCandidateId;
         const nearestDist = hoverStateRef.current.nearestCandidateDist;
+        const holdRemaining = Math.max(0, hoverStateRef.current.hoverHoldUntilMs - performance.now());
+        const pendingId = hoverStateRef.current.pendingSwitchId;
+        const pendingAge = pendingId
+            ? Math.max(0, performance.now() - hoverStateRef.current.pendingSwitchSinceMs)
+            : 0;
         const dtRaw = hoverStateRef.current.lastDtMs;
         const dtUsed = hoverStateRef.current.lastDtClampedMs;
         const alpha = hoverStateRef.current.lastAlpha;
@@ -221,14 +226,19 @@ export const drawHoverDebugOverlay = (
             hoveredNode.y + 8
         );
         ctx.fillText(
-            `dt=${dtRaw.toFixed(1)}ms clamped=${dtUsed.toFixed(1)}ms a=${alpha.toFixed(3)}`,
+            `hold=${holdRemaining.toFixed(0)}ms pending=${pendingId ?? 'null'} age=${pendingAge.toFixed(0)}ms`,
             hoveredNode.x + r + 5,
             hoveredNode.y + 21
         );
         ctx.fillText(
-            `scan=${hoverStateRef.current.nodesScannedLastSelection} sel/s=${hoverStateRef.current.selectionRunsPerSecond} en/s=${hoverStateRef.current.energyUpdatesPerSecond}`,
+            `dt=${dtRaw.toFixed(1)}ms clamped=${dtUsed.toFixed(1)}ms a=${alpha.toFixed(3)}`,
             hoveredNode.x + r + 5,
             hoveredNode.y + 34
+        );
+        ctx.fillText(
+            `scan=${hoverStateRef.current.nodesScannedLastSelection} sel/s=${hoverStateRef.current.selectionRunsPerSecond} en/s=${hoverStateRef.current.energyUpdatesPerSecond}`,
+            hoveredNode.x + r + 5,
+            hoveredNode.y + 47
         );
         // Glow energy debug
         const iA = hoverStateRef.current.debugGlowInnerAlpha;
@@ -238,7 +248,7 @@ export const drawHoverDebugOverlay = (
         ctx.fillText(
             `glow: iA=${iA.toFixed(2)} iB=${iB.toFixed(0)} oA=${oA.toFixed(2)} oB=${oB.toFixed(0)}`,
             hoveredNode.x + r + 5,
-            hoveredNode.y + 47
+            hoveredNode.y + 60
         );
     });
 };

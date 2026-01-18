@@ -24,6 +24,7 @@ export type HoverState = {
     cursorClientY: number;
     hasPointer: boolean;
     lastLoggedId: string | null;
+    lastGlowLoggedId: string | null;
     lastDecision: string;
     nearestCandidateId: string | null;
     nearestCandidateDist: number;
@@ -86,6 +87,7 @@ export const createInitialHoverState = (): HoverState => ({
     cursorClientY: 0,
     hasPointer: false,
     lastLoggedId: null,
+    lastGlowLoggedId: null,
     lastDecision: '',
     nearestCandidateId: null,
     nearestCandidateDist: Infinity,

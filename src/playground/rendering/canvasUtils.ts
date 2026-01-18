@@ -1,4 +1,4 @@
-import { lerpColor } from '../../visual/theme';
+import { hexToRgb, lerpColor } from '../../visual/theme';
 import type { ThemeConfig } from '../../visual/theme';
 
 export function withCtx(ctx: CanvasRenderingContext2D, fn: () => void) {
@@ -73,13 +73,49 @@ export function drawVignetteBackground(
     ctx.fillRect(0, 0, width, height);
 }
 
+const clampAlpha = (value: number) => {
+    if (!Number.isFinite(value)) return 0;
+    return Math.max(0, Math.min(1, value));
+};
+
+const toRgba = (color: string, alpha: number) => {
+    const { r, g, b } = hexToRgb(color);
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+};
+
+export function getGlowAlphas(theme: ThemeConfig, energy: number) {
+    const innerBase = Number.isFinite(theme.glowInnerAlphaBase)
+        ? theme.glowInnerAlphaBase
+        : theme.glowInnerAlpha;
+    const innerBoost = Number.isFinite(theme.glowInnerAlphaBoost)
+        ? theme.glowInnerAlphaBoost
+        : 0;
+    const outerBase = Number.isFinite(theme.glowOuterAlphaBase)
+        ? theme.glowOuterAlphaBase
+        : theme.glowOuterAlpha;
+    const outerBoost = Number.isFinite(theme.glowOuterAlphaBoost)
+        ? theme.glowOuterAlphaBoost
+        : 0;
+    const inner = innerBase + energy * innerBoost;
+    const outer = outerBase + energy * outerBoost;
+    return {
+        innerAlpha: clampAlpha(inner),
+        outerAlpha: clampAlpha(outer)
+    };
+}
+
 export function drawTwoLayerGlow(
     ctx: CanvasRenderingContext2D,
     x: number,
     y: number,
     radius: number,
-    theme: ThemeConfig
+    theme: ThemeConfig,
+    energy: number = 0  // 0..1 hover energy for alpha scaling
 ) {
+    // Compute dynamic alpha from base + energy * boost
+    const { innerAlpha, outerAlpha } = getGlowAlphas(theme, energy);
+
+    // Outer glow (purple, wider, fainter)
     withCtx(ctx, () => {
         ctx.beginPath();
         ctx.arc(x, y, radius + theme.glowOuterRadius, 0, Math.PI * 2);
@@ -87,11 +123,12 @@ export function drawTwoLayerGlow(
         ctx.globalCompositeOperation = 'source-over';
         ctx.shadowBlur = 0;
         ctx.shadowColor = 'transparent';
-        ctx.fillStyle = theme.glowOuterColor;
+        ctx.fillStyle = toRgba(theme.glowOuterColor, outerAlpha);
         ctx.filter = `blur(${theme.glowOuterRadius}px)`;
         ctx.fill();
     });
 
+    // Inner glow (blue, tighter, brighter)
     withCtx(ctx, () => {
         ctx.beginPath();
         ctx.arc(x, y, radius + theme.glowInnerRadius, 0, Math.PI * 2);
@@ -99,7 +136,7 @@ export function drawTwoLayerGlow(
         ctx.globalCompositeOperation = 'source-over';
         ctx.shadowBlur = 0;
         ctx.shadowColor = 'transparent';
-        ctx.fillStyle = theme.glowInnerColor;
+        ctx.fillStyle = toRgba(theme.glowInnerColor, innerAlpha);
         ctx.filter = `blur(${theme.glowInnerRadius}px)`;
         ctx.fill();
     });

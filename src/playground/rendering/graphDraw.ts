@@ -2,7 +2,7 @@ import type { MutableRefObject } from 'react';
 import type { PhysicsEngine } from '../../physics/engine';
 import { getNodeRadius, getOcclusionRadius, lerpColor } from '../../visual/theme';
 import type { ThemeConfig } from '../../visual/theme';
-import { drawGradientRing, drawTwoLayerGlow, withCtx } from './canvasUtils';
+import { drawGradientRing, drawTwoLayerGlow, getGlowAlphas, withCtx } from './canvasUtils';
 import type { HoverState, RenderSettingsRef } from './renderingTypes';
 
 export const drawLinks = (
@@ -57,8 +57,15 @@ export const drawNodes = (
                 ctx.fillStyle = theme.occlusionColor;
                 ctx.fill();
 
+                // Compute energy BEFORE glow so glow can use it
+                const isHoveredNode = node.id === hoverStateRef.current.hoveredNodeId;
+                const nodeEnergy = isHoveredNode ? hoverStateRef.current.energy : 0;
+                const shouldLogGlow = theme.hoverDebugEnabled
+                    && isHoveredNode
+                    && hoverStateRef.current.hoveredNodeId !== hoverStateRef.current.lastGlowLoggedId;
+
                 if (theme.useTwoLayerGlow) {
-                    drawTwoLayerGlow(ctx, node.x, node.y, radius, theme);
+                    drawTwoLayerGlow(ctx, node.x, node.y, radius, theme, nodeEnergy);
                 } else if (theme.glowEnabled) {
                     withCtx(ctx, () => {
                         ctx.beginPath();
@@ -73,9 +80,25 @@ export const drawNodes = (
                     });
                 }
 
+                if (shouldLogGlow) {
+                    const { innerAlpha, outerAlpha } = getGlowAlphas(theme, nodeEnergy);
+                    console.log('glow', {
+                        energy: Number(nodeEnergy.toFixed(3)),
+                        innerAlpha: Number(innerAlpha.toFixed(3)),
+                        outerAlpha: Number(outerAlpha.toFixed(3)),
+                        useTwoLayerGlow: theme.useTwoLayerGlow
+                    });
+                    hoverStateRef.current.lastGlowLoggedId = hoverStateRef.current.hoveredNodeId;
+
+                    ctx.beginPath();
+                    ctx.arc(node.x, node.y, 2, 0, Math.PI * 2);
+                    ctx.globalAlpha = 1;
+                    ctx.fillStyle = 'rgba(255, 80, 80, 1)';
+                    ctx.fill();
+                }
+
                 if (theme.useGradientRing) {
-                    const isHoveredNode = node.id === hoverStateRef.current.hoveredNodeId;
-                    const nodeEnergy = isHoveredNode ? hoverStateRef.current.energy : 0;
+                    // nodeEnergy already computed above (before glow)
 
                     const primaryBlue = node.isFixed
                         ? theme.nodeFixedColor
@@ -123,7 +146,8 @@ export const drawNodes = (
 export const drawHoverDebugOverlay = (
     ctx: CanvasRenderingContext2D,
     engine: PhysicsEngine,
-    hoverStateRef: MutableRefObject<HoverState>
+    hoverStateRef: MutableRefObject<HoverState>,
+    theme: ThemeConfig
 ) => {
     withCtx(ctx, () => {
         const hoveredNode = engine.nodes.get(hoverStateRef.current.hoveredNodeId ?? '');
@@ -185,10 +209,13 @@ export const drawHoverDebugOverlay = (
             ctx.setLineDash([]);
         }
 
+        // Compute glow alphas for debug display
+        const { innerAlpha, outerAlpha } = getGlowAlphas(theme, energy);
+
         ctx.font = '10px monospace';
         ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
         ctx.fillText(
-            `e=${energy.toFixed(2)} t=${targetEnergy.toFixed(2)} d=${dist.toFixed(0)}`,
+            `e=${energy.toFixed(2)} t=${targetEnergy.toFixed(2)} d=${dist.toFixed(0)} glow: in=${innerAlpha.toFixed(2)} out=${outerAlpha.toFixed(2)}`,
             hoveredNode.x + r + 5,
             hoveredNode.y - 5
         );

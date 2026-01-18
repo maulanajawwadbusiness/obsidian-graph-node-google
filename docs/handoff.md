@@ -43,6 +43,14 @@ Force-directed graph physics playground (similar to Obsidian graph view) with tw
   - Created `src/playground/rendering/` folder with 8 specialized modules
   - Separation of concerns: types, math, canvas utils, hover controller, energy, camera, drawing, metrics
   - Improved testability and maintainability
+- **Run #10:** Energy-driven glow (alpha scaling with hoverEnergy)
+  - Added 4 theme knobs: `glowInnerAlphaBase/Boost`, `glowOuterAlphaBase/Boost`
+  - Glow formula: `alpha = base + energy * boost`
+  - ELEGANT_THEME: inner 0.04→0.22, outer 0.02→0.12 at full energy
+  - Modified `drawTwoLayerGlow()` to accept energy parameter
+  - Updated node drawing to pass `nodeEnergy` to glow before ring draw
+  - Debug overlay shows computed glow alpha values
+  - **Current bug:** Glow disappears entirely (investigating alpha computation)
 
 ---
 
@@ -306,9 +314,18 @@ linkWidth: 0.6,
 ## 7. Known Issues / Next Tasks
 
 ### Current Bug
-None observed in hover energy system after stabilization passes.
+🐛 **Energy-driven glow disappears entirely (Run #10)**  
+- **Symptom:** No glow visible on any nodes after implementing energy-driven alpha
+- **What works:** Energy computation (debug shows correct values), alpha calculation (debug shows `in=0.XX out=0.XX`)
+- **What's broken:** Glow rendering - computed alpha values not producing visible glow
+- **Likely causes:** 
+  - Alpha values too low (0.04/0.02 base may be invisible)
+  - Blend mode issue with dynamic alpha
+  - Filter/blur state leak
+- **Debug:** Set `hoverDebugEnabled: true` to see computed alpha in overlay
+- **Status:** Under investigation (don't fix yet)
 
-### Completed Features (Runs #3-#9)
+### Completed Features (Runs #3-#10)
 - Proximity model with smoothstep
 - Tau-based time smoothing (120ms) + dt clamp
 - Hysteresis (sticky exit 1.05x) + margin switching
@@ -320,12 +337,13 @@ None observed in hover energy system after stabilization passes.
 - Render-state isolation (save/restore boundaries)
 - Selection throttling + perf counters
 - **Rendering modularization** (Run #9): 1300+ lines → 8 modules + ~256 line orchestrator
+- **Energy-driven glow** (Run #10): Alpha scales with hoverEnergy (base + boost model) - currently broken
 
 ### Future Enhancements (Not Yet Implemented)
-- **Glow boost:** Use `hoverGlowBoost` knob (currently reserved)
 - **Cursor-field effects:** Multiple nodes respond to cursor proximity
 - **Smart nearest-node:** Prefer closest with better heuristics
 - **Hover radius tuning UI:** Real-time slider for halo multiplier
+- **Glow blur radius scaling:** Optionally scale blur radius with energy (deferred from Run #10)
 
 ---
 

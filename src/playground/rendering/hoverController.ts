@@ -237,6 +237,7 @@ export const createHoverController = ({
         hoverStateRef.current.hoveredNodeId = null;
         hoverStateRef.current.hoveredDistPx = 0;
         hoverStateRef.current.lastLoggedId = null;
+        hoverStateRef.current.lastGlowLoggedId = null;
         hoverStateRef.current.lastDecision = `exited (${label})`;
         hoverStateRef.current.nearestCandidateId = null;
         hoverStateRef.current.nearestCandidateDist = Infinity;

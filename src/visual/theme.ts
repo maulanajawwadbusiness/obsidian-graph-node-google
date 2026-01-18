@@ -74,6 +74,12 @@ export interface ThemeConfig {
     hoverSwitchMarginPx: number;       // Anti ping-pong margin for node switching (8)
     hoverRingWidthBoost: number;       // Max ring width boost at full energy (0.1 = 10%)
     hoverGlowBoost: number;            // Max glow alpha boost at full energy (0.15)
+
+    // Energy-driven glow alpha (base + boost model)
+    glowInnerAlphaBase: number;    // Alpha at energy=0 (subtle idle glow)
+    glowInnerAlphaBoost: number;   // Additional alpha at energy=1
+    glowOuterAlphaBase: number;    // Alpha at energy=0 (faint idle)
+    glowOuterAlphaBoost: number;   // Additional alpha at energy=1
 }
 
 // -----------------------------------------------------------------------------
@@ -152,6 +158,12 @@ export const NORMAL_THEME: ThemeConfig = {
     hoverSwitchMarginPx: 0,
     hoverRingWidthBoost: 0,
     hoverGlowBoost: 0,
+
+    // Energy-driven glow (disabled in normal mode)
+    glowInnerAlphaBase: 0,
+    glowInnerAlphaBoost: 0,
+    glowOuterAlphaBase: 0,
+    glowOuterAlphaBoost: 0,
 };
 
 // -----------------------------------------------------------------------------
@@ -233,6 +245,12 @@ export const ELEGANT_THEME: ThemeConfig = {
     hoverSwitchMarginPx: 8,         // Anti ping-pong margin
     hoverRingWidthBoost: 0.1,       // 10% max ring width boost
     hoverGlowBoost: 0.15,           // Max glow alpha boost
+
+    // Energy-driven glow alpha (base + boost model)
+    glowInnerAlphaBase: 0.04,      // Subtle idle inner glow
+    glowInnerAlphaBoost: 0.18,     // Additional at full energy (peaks at 0.22)
+    glowOuterAlphaBase: 0.02,      // Faint idle outer glow
+    glowOuterAlphaBoost: 0.10,     // Additional at full energy (peaks at 0.12)
 };
 
 // -----------------------------------------------------------------------------

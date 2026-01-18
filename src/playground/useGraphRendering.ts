@@ -188,7 +188,7 @@ export const useGraphRendering = ({
             drawNodes(ctx, engine, theme, settingsRef, hoverStateRef);
 
             if (theme.hoverDebugEnabled && hoverStateRef.current.hoveredNodeId) {
-                drawHoverDebugOverlay(ctx, engine, hoverStateRef);
+                drawHoverDebugOverlay(ctx, engine, hoverStateRef, theme);
             }
 
             ctx.restore();

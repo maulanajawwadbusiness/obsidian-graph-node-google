@@ -237,11 +237,13 @@ export const createHoverController = ({
         }
         hoverStateRef.current.activePointerId = null;
         hoverStateRef.current.hoveredNodeId = null;
+        hoverStateRef.current.hoverDisplayNodeId = null;
         hoverStateRef.current.hoveredDistPx = 0;
         hoverStateRef.current.lastLoggedId = null;
         hoverStateRef.current.lastDecision = `exited (${label})`;
         hoverStateRef.current.nearestCandidateId = null;
         hoverStateRef.current.nearestCandidateDist = Infinity;
+        hoverStateRef.current.energy = 0;
         hoverStateRef.current.targetEnergy = 0;
         hoverStateRef.current.hitRadius = 0;
         hoverStateRef.current.haloRadius = 0;
@@ -534,6 +536,9 @@ export const createHoverController = ({
             }
 
             hoverStateRef.current.hoveredNodeId = newHoveredId;
+            if (newHoveredId !== null) {
+                hoverStateRef.current.hoverDisplayNodeId = newHoveredId;
+            }
             hoverStateRef.current.hoveredDistPx = nextDist;
             hoverStateRef.current.targetEnergy = nextTargetEnergy;
             hoverStateRef.current.renderedRadius = nextRenderedRadius;

@@ -53,8 +53,9 @@ export const drawNodes = (
             if (theme.nodeStyle === 'ring') {
                 // Calculate nodeEnergy first (needed for both glow and ring)
                 const isHoveredNode = node.id === hoverStateRef.current.hoveredNodeId;
-                const nodeEnergy = isHoveredNode ? hoverStateRef.current.energy : 0;
-                if (isHoveredNode && theme.hoverDebugEnabled) {
+                const isDisplayNode = node.id === hoverStateRef.current.hoverDisplayNodeId;
+                const nodeEnergy = isDisplayNode ? hoverStateRef.current.energy : 0;
+                if (isDisplayNode && theme.hoverDebugEnabled) {
                     hoverStateRef.current.debugNodeEnergy = nodeEnergy;
                 }
 
@@ -152,7 +153,8 @@ export const drawHoverDebugOverlay = (
     hoverStateRef: MutableRefObject<HoverState>
 ) => {
     withCtx(ctx, () => {
-        const hoveredNode = engine.nodes.get(hoverStateRef.current.hoveredNodeId ?? '');
+        const displayId = hoverStateRef.current.hoverDisplayNodeId ?? hoverStateRef.current.hoveredNodeId;
+        const hoveredNode = engine.nodes.get(displayId ?? '');
         if (!hoveredNode) return;
 
         const r = hoverStateRef.current.renderedRadius;
@@ -233,7 +235,7 @@ export const drawHoverDebugOverlay = (
             hoveredNode.y - 5
         );
         ctx.fillText(
-            `id=${hoverStateRef.current.hoveredNodeId} near=${nearestId ?? 'null'} nd=${isFinite(nearestDist) ? nearestDist.toFixed(0) : 'inf'} ${decision}`,
+            `id=${hoverStateRef.current.hoveredNodeId} disp=${displayId ?? 'null'} near=${nearestId ?? 'null'} nd=${isFinite(nearestDist) ? nearestDist.toFixed(0) : 'inf'} ${decision}`,
             hoveredNode.x + r + 5,
             hoveredNode.y + 8
         );

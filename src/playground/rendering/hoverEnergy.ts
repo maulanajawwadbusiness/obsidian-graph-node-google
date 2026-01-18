@@ -4,6 +4,7 @@ import { clamp } from './renderingMath';
 import type { HoverState } from './renderingTypes';
 
 const MAX_HOVER_DT_MS = 40;
+const HOVER_DECAY_EPSILON = 0.01;
 
 export const updateHoverEnergy = (
     hoverStateRef: MutableRefObject<HoverState>,
@@ -36,5 +37,12 @@ export const updateHoverEnergy = (
         hoverStateRef.current.energy = hoverStateRef.current.targetEnergy;
     }
     hoverStateRef.current.energy = clamp(hoverStateRef.current.energy, 0, 1);
+    if (
+        hoverStateRef.current.hoveredNodeId === null &&
+        hoverStateRef.current.targetEnergy === 0 &&
+        hoverStateRef.current.energy <= HOVER_DECAY_EPSILON
+    ) {
+        hoverStateRef.current.hoverDisplayNodeId = null;
+    }
     hoverStateRef.current.energyUpdateCount += 1;
 };

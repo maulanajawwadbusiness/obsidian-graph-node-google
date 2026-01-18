@@ -15,6 +15,7 @@ export type PendingPointerState = {
 
 export type HoverState = {
     hoveredNodeId: string | null;
+    hoverDisplayNodeId: string | null;
     hoveredDistPx: number;
     cursorWorldX: number;
     cursorWorldY: number;
@@ -87,6 +88,7 @@ export const createInitialPendingPointer = (): PendingPointerState => ({
 
 export const createInitialHoverState = (): HoverState => ({
     hoveredNodeId: null,
+    hoverDisplayNodeId: null,
     hoveredDistPx: 0,
     cursorWorldX: 0,
     cursorWorldY: 0,

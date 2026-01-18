@@ -8,6 +8,7 @@ import { SidebarControls } from './components/SidebarControls';
 import { CONTAINER_STYLE, MAIN_STYLE, SHOW_THEME_TOGGLE } from './graphPlaygroundStyles';
 import { PlaygroundMetrics } from './playgroundTypes';
 import { useGraphRendering } from './useGraphRendering';
+import { generateRandomGraph } from './graphRandom';
 
 // -----------------------------------------------------------------------------
 // Main Component
@@ -33,7 +34,7 @@ export const GraphPhysicsPlayground: React.FC = () => {
         aspectRatio: 0,
         lifecycleMs: 0
     });
-    const [spawnCount, setSpawnCount] = useState(20);
+    const [spawnCount, setSpawnCount] = useState(5);
     const [seed, setSeed] = useState(Date.now()); // Seed for deterministic generation
     const [skinMode, setSkinMode] = useState<SkinMode>('elegant'); // Skin toggle (default: elegant)
 
@@ -122,22 +123,26 @@ export const GraphPhysicsPlayground: React.FC = () => {
     const handleConfigChange = (key: keyof ForceConfig, value: number) => {
         const newConfig = { ...config, [key]: value };
         setConfig(newConfig);
-        engineRef.current.updateConfig(newConfig);
+        engineRef.current?.updateConfig(newConfig);
     };
 
     const handleSpawn = () => {
-        engineRef.current.clear();
+        const engine = engineRef.current;
+        if (!engine) return;
+        engine.clear();
         // Generate new random seed for each spawn
         const newSeed = Date.now();
         setSeed(newSeed);
         const { nodes, links } = generateRandomGraph(spawnCount, config.targetSpacing, config.initScale, newSeed);
-        nodes.forEach(n => engineRef.current.addNode(n));
-        links.forEach(l => engineRef.current.addLink(l));
+        nodes.forEach(n => engine.addNode(n));
+        links.forEach(l => engine.addLink(l));
     };
 
     const handleReset = () => {
+        const engine = engineRef.current;
+        if (!engine) return;
         // Just randomize positions of existing nodes
-        engineRef.current.nodes.forEach(n => {
+        engine.nodes.forEach(n => {
             // SINGULARITY RESET
             n.x = (Math.random() - 0.5) * 1.0;
             n.y = (Math.random() - 0.5) * 1.0;
@@ -145,7 +150,7 @@ export const GraphPhysicsPlayground: React.FC = () => {
             n.vy = 0;
             n.warmth = 1.0;
         });
-        engineRef.current.resetLifecycle();
+        engine.resetLifecycle();
     };
 
     const handleLogPreset = () => {

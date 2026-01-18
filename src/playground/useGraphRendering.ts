@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import type { Dispatch, RefObject, SetStateAction } from 'react';
 import { PhysicsEngine } from '../physics/engine';
 import { ForceConfig } from '../physics/types';
-import { getNodeRadius, getOcclusionRadius, getTheme, SkinMode } from '../visual/theme';
+import { getNodeRadius, getOcclusionRadius, getTheme, SkinMode, lerpColor, ThemeConfig } from '../visual/theme';
 import { generateRandomGraph } from './graphRandom';
 import { PlaygroundMetrics } from './playgroundTypes';
 
@@ -21,6 +21,97 @@ type UseGraphRenderingProps = {
     useVariedSize: boolean;
     skinMode: SkinMode;
 };
+
+// -----------------------------------------------------------------------------
+// Gradient Ring Drawing (Segmented Arcs)
+// Rotation controlled by theme.gradientRotationDegrees
+// -----------------------------------------------------------------------------
+function drawGradientRing(
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    radius: number,
+    lineWidth: number,
+    startColor: string,
+    endColor: string,
+    segments: number,
+    rotationDegrees: number
+) {
+    const segmentAngle = (Math.PI * 2) / segments;
+    // Convert degrees to radians
+    const rotationOffset = (rotationDegrees * Math.PI) / 180;
+
+    for (let i = 0; i < segments; i++) {
+        const t = i / segments;
+        const color = lerpColor(startColor, endColor, t);
+
+        ctx.beginPath();
+        // Apply rotation offset to both start and end angles
+        const startAngle = i * segmentAngle + rotationOffset - 0.02;
+        const endAngle = (i + 1) * segmentAngle + rotationOffset + 0.02;
+        ctx.arc(x, y, radius, startAngle, endAngle);
+        ctx.strokeStyle = color;
+        ctx.lineWidth = lineWidth;
+        ctx.lineCap = 'round';
+        ctx.stroke();
+    }
+}
+
+// -----------------------------------------------------------------------------
+// Vignette Background Drawing
+// -----------------------------------------------------------------------------
+function drawVignetteBackground(
+    ctx: CanvasRenderingContext2D,
+    width: number,
+    height: number,
+    theme: ThemeConfig
+) {
+    if (!theme.useVignette) return;
+
+    const centerX = width / 2;
+    const centerY = height / 2;
+    const maxRadius = Math.max(width, height) * 0.75;
+
+    const gradient = ctx.createRadialGradient(
+        centerX, centerY, 0,
+        centerX, centerY, maxRadius
+    );
+    gradient.addColorStop(0, theme.vignetteCenterColor);
+    gradient.addColorStop(theme.vignetteStrength, theme.vignetteEdgeColor);
+    gradient.addColorStop(1, theme.vignetteEdgeColor);
+
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, width, height);
+}
+
+// -----------------------------------------------------------------------------
+// Two-Layer Glow Drawing
+// -----------------------------------------------------------------------------
+function drawTwoLayerGlow(
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    radius: number,
+    theme: ThemeConfig
+) {
+    // Outer glow first (purple, wider, fainter)
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(x, y, radius + theme.glowOuterRadius, 0, Math.PI * 2);
+    ctx.fillStyle = theme.glowOuterColor;
+    ctx.filter = `blur(${theme.glowOuterRadius}px)`;
+    ctx.fill();
+    ctx.restore();
+
+    // Inner glow second (blue, tighter, brighter)
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(x, y, radius + theme.glowInnerRadius, 0, Math.PI * 2);
+    ctx.fillStyle = theme.glowInnerColor;
+    ctx.filter = `blur(${theme.glowInnerRadius}px)`;
+    ctx.fill();
+    ctx.restore();
+}
 
 export const useGraphRendering = ({
     canvasRef,
@@ -62,6 +153,7 @@ export const useGraphRendering = ({
         let lastFpsTime = lastTime;
 
         const engine = engineRef.current;
+        if (!engine) return;
 
         // Initial Spawn if empty
         if (engine.nodes.size === 0) {
@@ -97,7 +189,14 @@ export const useGraphRendering = ({
             const width = canvas.width;
             const height = canvas.height;
 
+            // Get current theme based on skin mode
+            const theme = getTheme(settingsRef.current.skinMode);
+
+            // Clear and draw background
             ctx.clearRect(0, 0, width, height);
+
+            // Draw vignette background (before camera transform)
+            drawVignetteBackground(ctx, width, height, theme);
 
             // CAMERA LEASH CONTAINMENT
             // Calculate node AABB in world space
@@ -160,9 +259,6 @@ export const useGraphRendering = ({
             ctx.rotate(globalAngle);
             ctx.translate(-centroid.x, -centroid.y);
 
-            // Get current theme based on skin mode
-            const theme = getTheme(settingsRef.current.skinMode);
-
             // Draw Links (before nodes so occlusion works)
             ctx.strokeStyle = theme.linkColor;
             ctx.lineWidth = theme.linkWidth;
@@ -184,7 +280,7 @@ export const useGraphRendering = ({
                 const radius = getNodeRadius(baseRadius, theme);
 
                 if (theme.nodeStyle === 'ring') {
-                    // ELEGANT MODE: Occlusion disk + ring + glow
+                    // ELEGANT MODE: Occlusion disk + glow + gradient ring
 
                     // 1. Draw occlusion disk (hides links under node)
                     const occlusionRadius = getOcclusionRadius(radius, theme);
@@ -193,8 +289,12 @@ export const useGraphRendering = ({
                     ctx.fillStyle = theme.occlusionColor;
                     ctx.fill();
 
-                    // 2. Draw glow (if enabled)
-                    if (theme.glowEnabled) {
+                    // 2. Draw glow
+                    if (theme.useTwoLayerGlow) {
+                        // V2: Two-layer glow (purple outer + blue inner)
+                        drawTwoLayerGlow(ctx, node.x, node.y, radius, theme);
+                    } else if (theme.glowEnabled) {
+                        // V1: Single layer glow (fallback)
                         ctx.save();
                         ctx.beginPath();
                         ctx.arc(node.x, node.y, radius + theme.glowRadius, 0, Math.PI * 2);
@@ -204,12 +304,28 @@ export const useGraphRendering = ({
                         ctx.restore();
                     }
 
-                    // 3. Draw ring stroke (hollow)
-                    ctx.beginPath();
-                    ctx.arc(node.x, node.y, radius, 0, Math.PI * 2);
-                    ctx.strokeStyle = node.isFixed ? theme.nodeFixedColor : theme.ringColor;
-                    ctx.lineWidth = theme.ringWidth;
-                    ctx.stroke();
+                    // 3. Draw ring stroke
+                    if (theme.useGradientRing) {
+                        // V2: Gradient ring (blue → purple)
+                        drawGradientRing(
+                            ctx,
+                            node.x,
+                            node.y,
+                            radius,
+                            theme.ringWidth,
+                            node.isFixed ? theme.nodeFixedColor : theme.primaryBlue,
+                            theme.deepPurple,
+                            theme.ringGradientSegments,
+                            theme.gradientRotationDegrees
+                        );
+                    } else {
+                        // V1: Flat ring stroke (fallback)
+                        ctx.beginPath();
+                        ctx.arc(node.x, node.y, radius, 0, Math.PI * 2);
+                        ctx.strokeStyle = node.isFixed ? theme.nodeFixedColor : theme.ringColor;
+                        ctx.lineWidth = theme.ringWidth;
+                        ctx.stroke();
+                    }
 
                 } else {
                     // NORMAL MODE: Filled circle (original behavior)

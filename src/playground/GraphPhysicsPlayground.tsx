@@ -34,11 +34,18 @@ export const GraphPhysicsPlayground: React.FC = () => {
         aspectRatio: 0,
         lifecycleMs: 0
     });
-    const [spawnCount, setSpawnCount] = useState(10);
+    const [spawnCount, setSpawnCount] = useState(5);
     const [seed, setSeed] = useState(Date.now()); // Seed for deterministic generation
     const [skinMode, setSkinMode] = useState<SkinMode>('elegant'); // Skin toggle (default: elegant)
 
-    const { handlePointerMove, handlePointerLeave } = useGraphRendering({
+    const {
+        handlePointerMove,
+        handlePointerEnter,
+        handlePointerLeave,
+        handlePointerCancel,
+        handlePointerUp,
+        clientToWorld
+    } = useGraphRendering({
         canvasRef,
         config,
         engineRef,
@@ -54,11 +61,23 @@ export const GraphPhysicsPlayground: React.FC = () => {
         const canvas = canvasRef.current;
         if (!canvas) return;
         const rect = canvas.getBoundingClientRect();
-        handlePointerMove(e.clientX, e.clientY, rect);
+        handlePointerMove(e.pointerId, e.pointerType, e.clientX, e.clientY, rect);
     };
 
-    const onPointerLeave = () => {
-        handlePointerLeave();
+    const onPointerEnter = (e: React.PointerEvent) => {
+        handlePointerEnter(e.pointerId, e.pointerType);
+    };
+
+    const onPointerLeave = (e: React.PointerEvent) => {
+        handlePointerLeave(e.pointerId, e.pointerType);
+    };
+
+    const onPointerCancel = (e: React.PointerEvent) => {
+        handlePointerCancel(e.pointerId, e.pointerType);
+    };
+
+    const onPointerUp = (e: React.PointerEvent) => {
+        handlePointerUp(e.pointerId, e.pointerType);
     };
 
     // Keyboard shortcut: "U" toggles both UI panels (sidebar + debug)
@@ -90,10 +109,9 @@ export const GraphPhysicsPlayground: React.FC = () => {
         const canvas = canvasRef.current;
         if (!canvas) return { x: 0, y: 0 };
         const rect = canvas.getBoundingClientRect();
-        // Transform screen coords to world coords (considering 0,0 center)
-        const px = e.clientX - rect.left - canvas.width / 2;
-        const py = e.clientY - rect.top - canvas.height / 2;
-        return { x: px, y: py };
+        // Transform screen coords to world coords (camera + rotation aware)
+        const { x, y } = clientToWorld(e.clientX, e.clientY, rect);
+        return { x, y };
     };
 
     const handleMouseDown = (e: React.MouseEvent) => {
@@ -212,8 +230,11 @@ export const GraphPhysicsPlayground: React.FC = () => {
                 onMouseMove={handleMouseMove}
                 onMouseUp={handleMouseUp}
                 onMouseLeave={handleMouseUp}
+                onPointerEnter={onPointerEnter}
                 onPointerMove={onPointerMove}
                 onPointerLeave={onPointerLeave}
+                onPointerCancel={onPointerCancel}
+                onPointerUp={onPointerUp}
             >
                 <canvas ref={canvasRef} style={{ width: '100%', height: '100%', background: activeTheme.background }} />
                 <CanvasOverlays

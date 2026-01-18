@@ -1,7 +1,7 @@
 # Handoff Document: Dark Power Elegant v2 + Hover Energy System
 
 **Last Updated:** 2026-01-18  
-**Status:** Hover energy system implemented (has bug - visual interpolation not working)  
+**Status:** Hover energy system stabilized (color, selection, timing, pointer lifecycle, radius alignment, debug isolation)  
 **Next Developer:** Claude Sonnet
 
 ---
@@ -13,7 +13,7 @@ Force-directed graph physics playground (similar to Obsidian graph view) with tw
 - **Normal mode:** Blue filled nodes (baseline, unchanged)
 - **Elegant v2 mode:** Dark power aesthetic with hollow gradient rings, two-layer glow, vignette background
 
-### What Runs #1, #2, and #3 Changed
+### What Runs #1-#8 Changed
 - **Run #1:** Implemented elegant skin foundation (hollow rings, occlusion disks, dark background)
 - **Run #2:** Upgraded to "Dark Power Elegant v2" with:
   - Blue→purple gradient rings (segmented arcs, 48 segments)
@@ -28,7 +28,21 @@ Force-directed graph physics playground (similar to Obsidian graph view) with tw
   - Hysteresis + anti ping-pong switching
   - Energy-driven color lerp and ring width boost
   - Debug overlays (radius/halo circles, energy text)
-  - **Known bug:** Visual interpolation not working (blue disappears instead of smooth wake-up)
+  - **Bug fixed:** Blue interpolation now stable (rgb/hex parsing)
+- **Run #4:** Coordinate space correctness (CSS pixels + camera + rotation), DPR-safe rendering, and cursor crosshair debug
+- **Run #5:** Selection stability (active candidate, sticky exit, margin switching) + debug decision telemetry
+- **Run #6:** Time smoothing hardening (dt clamp, tau guard, energy clamp, dt debug)
+- **Run #7:** Render-state hygiene (save/restore boundaries, explicit canvas state resets, debug isolation)
+- **Run #8:** Performance + lifecycle fixes
+  - Selection throttled to pointer changes + camera drift
+  - Active pointer tracking (multi-pointer safe)
+  - Hit/halo radius alignment to ring outer edge + small padding
+  - Debug gating (`hoverDebugStateSentinel`)
+- **Run #9:** Rendering hook modularization (refactor only, no behavior changes)
+  - Split `useGraphRendering.ts` from 1300+ lines → ~256 line orchestrator
+  - Created `src/playground/rendering/` folder with 8 specialized modules
+  - Separation of concerns: types, math, canvas utils, hover controller, energy, camera, drawing, metrics
+  - Improved testability and maintainability
 
 ---
 
@@ -43,11 +57,11 @@ Force-directed graph physics playground (similar to Obsidian graph view) with tw
 ### Hollow Ring Nodes (Elegant Mode)
 - **Occlusion disk:** Hides links underneath node, matches background color
 - **Ring stroke:** Gradient from blue→purple or solid fallback
-- **Ring width:** Scales with `nodeScale` master knob (currently `1.2`)
+- **Ring width:** Scales with `nodeScale` master knob (currently `4`)
 
 ### Gradient Ring Implementation
 - **Method:** Segmented arcs (48 segments) for cross-browser compatibility
-- **Rotation:** `gradientRotationDegrees = 150` (dark purple at bottom-left)
+- **Rotation:** `gradientRotationDegrees = 170` (dark purple at bottom-left)
 - **Colors:** `primaryBlue` (#63abff or #3d4857 based on hover) → `deepPurple` (#4a2a6a)
 - **Function:** `drawGradientRing()` in `useGraphRendering.ts`
 
@@ -62,22 +76,25 @@ Force-directed graph physics playground (similar to Obsidian graph view) with tw
 - **Function:** `drawVignetteBackground()` in `useGraphRendering.ts`
 
 ### Hover Energy System (Proximity-Based)
-- **Energy range:** 0 (asleep, dark blue #3d4857) → 1 (awake, bright blue #63abff)
+- **Energy range:** 0 (asleep, dark blue #3d4857) -> 1 (awake, bright blue #63abff)
 - **Proximity model:** Smoothstep with halo detection
-  - Inside node (d ≤ r): energy = 1
-  - In halo zone (r < d ≤ halo): energy = smoothstep((halo-d)/(halo-r))
+  - Inside hit radius (d <= hit): energy = 1
+  - In halo zone (hit < d <= halo): energy = smoothstep((halo - d) / (halo - hit))
   - Outside halo: energy = 0
-- **Halo radius:** `nodeRadius * 1.8` (detection extends beyond node)
+- **Rendered radius:** ring outer edge (renderRadius + ringWidth / 2)
+- **Hit radius:** `outerRadius + 2px` (small padding)
+- **Halo radius:** `outerRadius * 1.8` (detection extends beyond node)
 - **Time smoothing:** Tau-based exponential lerp (120ms)
-- **Hit-test:** Whole disc (halo-based, not ring-only)
+- **Hit-test:** Whole disc (includes hollow interior, not ring-only)
 - **Architecture:** Handlers returned from `useGraphRendering` hook, camera stays internal
-- **Coordinate transform:** CSS pixels (getBoundingClientRect) → world space via camera inverse
+- **Coordinate transform:** CSS pixels (getBoundingClientRect) -> camera inverse -> world space, includes global rotation
 - **Anti-flicker:** Sticky exit (1.05x), anti ping-pong (8px margin), pop prevention
+- **Selection:** Active candidate model, pointer-throttled, O(1) when pointer idle
 - **Energy-driven rendering:**
   - Color: `lerpColor(primaryBlueDefault, primaryBlueHover, energy)`
   - Ring width: `baseWidth * (1 + 0.1 * energy)` (10% max boost)
-- **Debug:** Console log on change + radius/halo circles + energy text overlay
-- **⚠️ Known bug:** Visual interpolation not working - blue color disappears instead of smooth wake-up
+- **Timing hardening:** dt clamp (max 40ms), tau guard, energy clamp + NaN recovery
+- **Debug:** Console log on change + render/hit/halo circles + energy text + crosshair + perf counters
 
 ---
 
@@ -91,13 +108,13 @@ Force-directed graph physics playground (similar to Obsidian graph view) with tw
 ### Architecture Rules
 ✅ **Camera stays internal to `useGraphRendering`**  
 - Do NOT expose `cameraRef` back to component
-- Pointer handlers returned from hook: `{ handlePointerMove, handlePointerLeave }`
+- Pointer handlers returned from hook: `{ handlePointerMove, handlePointerEnter, handlePointerLeave, handlePointerCancel, handlePointerUp }`
 
-✅ **Hover hit-test must be whole node disc (halo-based)**  
+- **Hover hit-test must be whole node disc (hit/halo based)**
 - NOT ring-only, NOT pixel sampling, NOT arc-segment dependent
-- Formula: `haloRadius = renderedRadius * hoverHaloMultiplier` (1.8x)
-- Distance check: `dist <= haloRadius` where `dist = sqrt((node.x - worldX)^2 + (node.y - worldY)^2)`
-- Proximity model: smoothstep for energy calculation within halo zone
+- Formula: `outerRadius = renderRadius + ringWidth/2`, `hitRadius = outerRadius + 2px`
+- Halo: `haloRadius = outerRadius * hoverHaloMultiplier` (1.8x)
+- Distance: `dist <= hitRadius` for full energy, smoothstep in halo zone
 
 ✅ **Pointer coordinates must use CSS pixel space**  
 - Use `getBoundingClientRect()` for canvas dimensions (NOT canvas.width/height directly)
@@ -121,7 +138,7 @@ Force-directed graph physics playground (similar to Obsidian graph view) with tw
 
 #### Master Scale Control
 ```typescript
-const ELEGANT_NODE_SCALE = 1.2;  // Scales both radius and ringWidth proportionally
+const ELEGANT_NODE_SCALE = 4;  // Scales both radius and ringWidth proportionally
 ```
 
 #### Gradient Ring Colors
@@ -129,7 +146,7 @@ const ELEGANT_NODE_SCALE = 1.2;  // Scales both radius and ringWidth proportiona
 primaryBlueDefault: '#3d4857',     // Dark blue (no hover)
 primaryBlueHover: '#63abff',       // Bright blue (hovered)
 deepPurple: '#4a2a6a',             // Rich dark purple
-gradientRotationDegrees: 150,      // Rotation angle (150° = purple bottom-left)
+gradientRotationDegrees: 170,      // Rotation angle (150° = purple bottom-left)
 ringGradientSegments: 48,          // Smoothness (32-64 recommended)
 ```
 
@@ -157,7 +174,7 @@ primaryBlueDefault: '#3d4857',  // Dark blue (asleep)
 primaryBlueHover: '#63abff',    // Bright blue (awake)
 
 // Proximity detection
-hoverHaloMultiplier: 1.8,       // Detection radius = nodeRadius * 1.8
+hoverHaloMultiplier: 1.8,       // Detection radius = outerRadius * 1.8
 hoverRadiusMultiplier: 2.2,     // DEPRECATED (kept for compatibility)
 
 // Time smoothing
@@ -172,8 +189,10 @@ hoverRingWidthBoost: 0.1,       // 10% max ring width boost
 hoverGlowBoost: 0.15,           // Reserved for future
 
 // Debug
-hoverDebugEnabled: true,        // Show radius/halo circles + energy text
+hoverDebugEnabled: false,       // Show radius/hit/halo circles + energy text
+hoverDebugStateSentinel: false, // Log canvas state sentinel once
 ```
+
 
 #### Link Style
 ```typescript
@@ -198,21 +217,30 @@ linkWidth: 0.6,
 - Color utilities: `hexToRgb()`, `lerpColor()`
 
 #### `src/playground/useGraphRendering.ts`
-**Purpose:** Rendering loop, camera, physics, hover state, pointer handlers
+**Purpose:** Thin orchestrator (~256 lines) wiring rendering subsystems
 
 **Key Responsibilities:**
-- Main render loop (RAF-based)
-- Camera state (pan/zoom, auto-framing)
-- Hover state management (`hoverStateRef`)
-- Pointer handlers: `handlePointerMove()`, `handlePointerLeave()`
-- Drawing functions:
-  - `drawGradientRing()` — segmented arc gradient
-  - `drawVignetteBackground()` — radial vignette
-  - `drawTwoLayerGlow()` — layered blur
-- Coordinate transform: `cssToWorld()`
-- Hit-test: `findNearestNode()` — disc-based detection
+- State refs initialization (settings, pointer, hover, camera)
+- Hover controller setup via `createHoverController()`
+- Main render loop (RAF-based): physics tick, energy update, canvas setup, camera containment, selection update, transforms, drawing, metrics
+- Window blur cleanup
 
-**Returns:** `{ handlePointerMove, handlePointerLeave }`
+**Returns:** `{ handlePointerMove, handlePointerEnter, handlePointerLeave, handlePointerCancel, handlePointerUp, clientToWorld }`
+
+#### `src/playground/rendering/` (Modularized Subsystems)
+
+**New in Run #9:** Rendering logic split into 8 specialized modules:
+
+- **renderingTypes.ts** - Shared types + state factories (`HoverState`, `CameraState`, etc.)
+- **renderingMath.ts** - Math helpers (`clamp`, `smoothstep`, `rotateAround`)
+- **canvasUtils.ts** - Canvas isolation + drawing primitives (`withCtx`, vignette, gradient ring, glow)
+- **hoverController.ts** - Pointer lifecycle + hover selection + transforms
+- **hoverEnergy.ts** - Energy smoothing (tau-based, dt clamp)
+- **camera.ts** - Leash containment + camera transforms
+- **graphDraw.ts** - Links, nodes, debug overlays, crosshair
+- **metrics.ts** - FPS/velocity/shape tracking
+
+**Behavior Note:** Pure refactor for code organization. **No behavior changes** to hover, camera, or rendering logic.
 
 #### `src/playground/GraphPhysicsPlayground.tsx`
 **Purpose:** Main component, wires pointer events, hosts controls
@@ -255,15 +283,18 @@ linkWidth: 0.6,
 - [ ] Move cursor away → node **fades back smoothly** (no snap)
 - [ ] Move along boundary → **no flicker** (hysteresis working)
 - [ ] Pointer leaves canvas → hover clears smoothly
-- [ ] **⚠️ Known bug:** Blue may disappear instead of smooth wake-up
 
 ### Debug Features
 - [ ] Open console
-- [ ] Hover nodes → see log: `hover: null -> n0 (dist=X.X, r=Y.Y, halo=Z.Z, energy=0.XX)`
-- [ ] Verify **cyan solid circle** at node radius
+- [ ] Hover nodes and see log: `hover: null -> n0 (dist=..., r=..., halo=..., energy=...)`
+- [ ] Verify **cyan solid circle** at rendered radius
+- [ ] Verify **magenta dashed circle** at hit radius
 - [ ] Verify **yellow dashed circle** at halo radius
+- [ ] Verify **crosshair** sits under cursor
 - [ ] Verify **energy text** overlay shows `e=0.xx t=0.xx d=XXX`
-- [ ] Verify no log spam (only on node change)
+- [ ] Verify **perf text** shows `scan`, `sel/s`, `en/s`
+- [ ] Verify no log spam (only on state change)
+- [ ] Verify dt clamp/spike logs appear only when triggered
 
 ### Edge Cases
 - [ ] Spawn 5 nodes → verify hover works on all sizes
@@ -275,21 +306,20 @@ linkWidth: 0.6,
 ## 7. Known Issues / Next Tasks
 
 ### Current Bug
-🐛 **Hover energy visual interpolation not working**  
-- **Symptom:** Blue color disappears completely instead of smooth energy wake-up
-- **What works:** Proximity detection (debug circles show), energy calculation (console logs show values)
-- **What's broken:** Visual color interpolation - `lerpColor()` may have issue or energy not being applied correctly
-- **Debug enabled:** Set `hoverDebugEnabled: true` to see radius/halo circles and energy values
-- **Status:** Under investigation
+None observed in hover energy system after stabilization passes.
 
-### Completed Features (Run #3)
-- ✅ Proximity model with smoothstep
-- ✅ Tau-based time smoothing (120ms)
-- ✅ Hysteresis (sticky exit 1.05x)
-- ✅ Anti ping-pong switching (8px margin)
-- ✅ Pop prevention on node switch
-- ✅ Debug overlays (radius/halo circles, energy text)
-- ✅ Energy-driven ring width boost (10% max)
+### Completed Features (Runs #3-#9)
+- Proximity model with smoothstep
+- Tau-based time smoothing (120ms) + dt clamp
+- Hysteresis (sticky exit 1.05x) + margin switching
+- Pop prevention on node switch
+- Pointer lifecycle handling (enter/leave/cancel/up + blur)
+- Active pointer tracking (multi-pointer safe)
+- Radius alignment (outer edge + hit padding)
+- Debug overlays (render/hit/halo circles, energy text, crosshair)
+- Render-state isolation (save/restore boundaries)
+- Selection throttling + perf counters
+- **Rendering modularization** (Run #9): 1300+ lines → 8 modules + ~256 line orchestrator
 
 ### Future Enhancements (Not Yet Implemented)
 - **Glow boost:** Use `hoverGlowBoost` knob (currently reserved)
@@ -305,6 +335,7 @@ linkWidth: 0.6,
 ```typescript
 // In src/visual/theme.ts, ELEGANT_THEME:
 hoverDebugEnabled: true,
+hoverDebugStateSentinel: false,
 ```
 
 ### Verify Hover Hit-Test
@@ -327,23 +358,23 @@ const ELEGANT_NODE_SCALE = 1.5;  // Make nodes 50% larger
 
 ### Hover Hit-Test (Disc Logic)
 ```typescript
-// findNearestNode() in useGraphRendering.ts
-const baseRadius = settingsRef.current.useVariedSize ? node.radius : 5.0;
-const renderedRadius = getNodeRadius(baseRadius, theme);
-const hitRadius = renderedRadius + 2;  // +2px padding
-
-if (dist <= hitRadius && dist < nearestDist) {
-  nearestId = node.id;
-}
+// getInteractionRadii() in useGraphRendering.ts
+const renderRadius = getNodeRadius(baseRadius, theme);
+const outerRadius = theme.nodeStyle === 'ring'
+  ? renderRadius + theme.ringWidth * 0.5
+  : renderRadius;
+const hitRadius = outerRadius + 2;  // +2px padding
+const haloRadius = outerRadius * theme.hoverHaloMultiplier;
 ```
 
-### Coordinate Transform (CSS → World)
+### Coordinate Transform (CSS -> World)
 ```typescript
-// cssToWorld() in useGraphRendering.ts
+// clientToWorld() in useGraphRendering.ts
 const cssX = clientX - rect.left - rect.width / 2;
 const cssY = clientY - rect.top - rect.height / 2;
-const worldX = cssX / camera.zoom - camera.panX;
-const worldY = cssY / camera.zoom - camera.panY;
+const unrotatedX = cssX / camera.zoom - camera.panX;
+const unrotatedY = cssY / camera.zoom - camera.panY;
+const world = rotateAround(unrotatedX, unrotatedY, centroid.x, centroid.y, -angle);
 ```
 
 ### Gradient Ring Drawing (Segmented Arcs)
@@ -361,6 +392,49 @@ for (let i = 0; i < segments; i++) {
   // ...stroke
 }
 ```
+
+---
+
+## 9. Validating Run #9 Modularization
+
+**Quick Manual Check (No Behavior Changes Expected):**
+
+Since Run #9 was a pure refactor, verify rendering parity:
+
+1. **Run the app:**
+   ```bash
+   npm run dev
+   ```
+
+2. **Hover energy system:**
+   - [ ] Move pointer toward nodes → smooth color wake-up (dark → bright blue)
+   - [ ] Inside node → full bright blue
+   - [ ] Move away → smooth fade back to dark
+   - [ ] No flicker when moving between close nodes
+
+3. **Debug overlays (if enabled):**
+   - [ ] Set `hoverDebugEnabled: true` in theme.ts
+   - [ ] Verify cyan (render), magenta (hit), yellow (halo) circles appear
+   - [ ] Verify energy text overlay shows values
+   - [ ] Verify crosshair follows cursor
+
+4. **Camera framing:**
+   - [ ] Spawn nodes → camera auto-frames graph
+   - [ ] Graph stays centered and visible
+   - [ ] Smooth camera transitions
+
+5. **Rendering parity:**
+   - [ ] Gradient rings render correctly (blue → purple)
+   - [ ] Two-layer glow visible
+   - [ ] Vignette background in elegant mode
+   - [ ] No visual artifacts or canvas state leaks
+
+6. **Console:**
+   - [ ] No errors or warnings
+   - [ ] Hover logs only on node change (if debug enabled)
+   - [ ] No performance degradation
+
+**Expected Result:** Everything should work exactly as before Run #9. If any behavior changed, the modularization introduced a bug.
 
 ---
 

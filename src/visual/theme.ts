@@ -65,6 +65,7 @@ export interface ThemeConfig {
     primaryBlueHover: string;     // Bright blue when hovered
     hoverRadiusMultiplier: number; // DEPRECATED - use hoverHaloMultiplier
     hoverDebugEnabled: boolean;    // Show debug overlay + console logs
+    hoverDebugStateSentinel: boolean; // Log canvas state sentinel once
 
     // Hover energy system (smooth proximity)
     hoverHaloMultiplier: number;       // Detection radius = nodeRadius * this (1.8)
@@ -142,6 +143,7 @@ export const NORMAL_THEME: ThemeConfig = {
     primaryBlueHover: '#4488ff',
     hoverRadiusMultiplier: 2.0,
     hoverDebugEnabled: false,
+    hoverDebugStateSentinel: false,
 
     // Hover energy system (disabled in normal mode)
     hoverHaloMultiplier: 1.0,
@@ -158,7 +160,7 @@ export const NORMAL_THEME: ThemeConfig = {
 // -----------------------------------------------------------------------------
 
 // TUNING KNOB: Change this to scale nodes and rings proportionally
-const ELEGANT_NODE_SCALE = 2;
+const ELEGANT_NODE_SCALE = 4;
 
 // Base ratios (don't change these, change ELEGANT_NODE_SCALE instead)
 const ELEGANT_BASE_RING_WIDTH_RATIO = 2.08;  // ring width relative to scale
@@ -222,6 +224,7 @@ export const ELEGANT_THEME: ThemeConfig = {
     primaryBlueHover: '#63abff',    // Bright blue (hovered)
     hoverRadiusMultiplier: 2.2,     // DEPRECATED
     hoverDebugEnabled: false,       // Debug mode (re-enable to see radius/halo circles)
+    hoverDebugStateSentinel: false, // Extra debug logging (state sentinel)
 
     // Hover energy system (smooth proximity)
     hoverHaloMultiplier: 1.8,       // Detection radius = nodeRadius * 1.8

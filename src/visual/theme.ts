@@ -59,6 +59,12 @@ export interface ThemeConfig {
     // Links
     linkColor: string;
     linkWidth: number;
+
+    // Hover interaction
+    primaryBlueDefault: string;   // Dark blue when not hovered
+    primaryBlueHover: string;     // Bright blue when hovered
+    hoverRadiusMultiplier: number; // Hit detection radius = nodeRadius * this
+    hoverDebugEnabled: boolean;    // Show debug overlay + console logs
 }
 
 // -----------------------------------------------------------------------------
@@ -122,6 +128,12 @@ export const NORMAL_THEME: ThemeConfig = {
     // Links: white, semi-transparent
     linkColor: 'rgba(255, 255, 255, 0.4)',
     linkWidth: 0.4,
+
+    // Hover interaction (not used in normal mode)
+    primaryBlueDefault: '#4488ff',
+    primaryBlueHover: '#4488ff',
+    hoverRadiusMultiplier: 2.0,
+    hoverDebugEnabled: false,
 };
 
 // -----------------------------------------------------------------------------
@@ -188,6 +200,12 @@ export const ELEGANT_THEME: ThemeConfig = {
     // Links: indigo-tinted, submissive but not dead
     linkColor: 'rgba(99, 140, 200, 0.38)',
     linkWidth: 0.6,
+
+    // Hover interaction
+    primaryBlueDefault: '#3d4857',  // Dark blue (no hover)
+    primaryBlueHover: '#63abff',    // Bright blue (hovered)
+    hoverRadiusMultiplier: 2.2,     // Hit radius = nodeRadius * 2.2
+    hoverDebugEnabled: false,       // Debug mode disabled (re-enable to see hit radius circle)
 };
 
 // -----------------------------------------------------------------------------

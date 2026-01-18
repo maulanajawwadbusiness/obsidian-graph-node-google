@@ -11,6 +11,15 @@ type RenderSettingsRef = {
     skinMode: SkinMode;
 };
 
+// Hover detection state
+type HoverState = {
+    hoveredNodeId: string | null;
+    hoveredDistPx: number;
+    cursorWorldX: number;
+    cursorWorldY: number;
+    lastLoggedId: string | null;  // For change detection (avoid log spam)
+};
+
 type UseGraphRenderingProps = {
     canvasRef: RefObject<HTMLCanvasElement>;
     config: ForceConfig;
@@ -37,6 +46,8 @@ function drawGradientRing(
     segments: number,
     rotationDegrees: number
 ) {
+    ctx.save();  // Save canvas state to prevent leakage
+
     const segmentAngle = (Math.PI * 2) / segments;
     // Convert degrees to radians
     const rotationOffset = (rotationDegrees * Math.PI) / 180;
@@ -52,9 +63,11 @@ function drawGradientRing(
         ctx.arc(x, y, radius, startAngle, endAngle);
         ctx.strokeStyle = color;
         ctx.lineWidth = lineWidth;
-        ctx.lineCap = 'round';
+        ctx.lineCap = 'butt';  // Changed from 'round' to prevent white edge artifacts
         ctx.stroke();
     }
+
+    ctx.restore();  // Restore canvas state
 }
 
 // -----------------------------------------------------------------------------
@@ -136,10 +149,112 @@ export const useGraphRendering = ({
     // Ref for Loop Access (allows render loop to access React state)
     const settingsRef = useRef<RenderSettingsRef>({ useVariedSize: true, skinMode: 'normal' });
 
+    // Hover state (for pointer detection)
+    const hoverStateRef = useRef<HoverState>({
+        hoveredNodeId: null,
+        hoveredDistPx: 0,
+        cursorWorldX: 0,
+        cursorWorldY: 0,
+        lastLoggedId: null
+    });
+
     useEffect(() => {
         settingsRef.current.useVariedSize = useVariedSize;
         settingsRef.current.skinMode = skinMode;
     }, [useVariedSize, skinMode]);
+
+    // -------------------------------------------------------------------------
+    // Pointer Event Handlers (returned for component to wire up)
+    // -------------------------------------------------------------------------
+
+    /**
+     * Transform CSS pixel coordinates to world coordinates
+     * Uses getBoundingClientRect for CSS space (avoids DPR issues)
+     */
+    const cssToWorld = (clientX: number, clientY: number, rect: DOMRect) => {
+        const camera = cameraRef.current;
+
+        // CSS pixel position relative to canvas center
+        const cssX = clientX - rect.left - rect.width / 2;
+        const cssY = clientY - rect.top - rect.height / 2;
+
+        // Invert camera transform: screen → world
+        const worldX = cssX / camera.zoom - camera.panX;
+        const worldY = cssY / camera.zoom - camera.panY;
+
+        return { x: worldX, y: worldY };
+    };
+
+    /**
+     * Find nearest node within hit radius (whole disc, not just ring)
+     * Uses the same scaled radius as rendering for accurate hit detection.
+     */
+    const findNearestNode = (worldX: number, worldY: number, theme: ThemeConfig) => {
+        const engine = engineRef.current;
+        if (!engine) return { nodeId: null, dist: Infinity, hitRadius: 0 };
+
+        let nearestId: string | null = null;
+        let nearestDist = Infinity;
+        let nearestHitRadius = 0;
+
+        engine.nodes.forEach((node) => {
+            const dx = node.x - worldX;
+            const dy = node.y - worldY;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+
+            // Calculate the actual rendered radius (same as in draw loop)
+            const baseRadius = settingsRef.current.useVariedSize ? node.radius : 5.0;
+            const renderedRadius = getNodeRadius(baseRadius, theme);
+
+            // Hit radius = rendered radius + small padding for forgiving feel
+            const hitRadius = renderedRadius + 2;
+
+            if (dist <= hitRadius && dist < nearestDist) {
+                nearestId = node.id;
+                nearestDist = dist;
+                nearestHitRadius = hitRadius;
+            }
+        });
+
+        return { nodeId: nearestId, dist: nearestDist, hitRadius: nearestHitRadius };
+    };
+
+    /**
+     * Handle pointer move - update hover state
+     */
+    const handlePointerMove = (clientX: number, clientY: number, rect: DOMRect) => {
+        const theme = getTheme(settingsRef.current.skinMode);
+        const { x: worldX, y: worldY } = cssToWorld(clientX, clientY, rect);
+
+        hoverStateRef.current.cursorWorldX = worldX;
+        hoverStateRef.current.cursorWorldY = worldY;
+
+        const { nodeId, dist, hitRadius } = findNearestNode(worldX, worldY, theme);
+
+        hoverStateRef.current.hoveredNodeId = nodeId;
+        hoverStateRef.current.hoveredDistPx = dist;
+
+        // Debug logging (only on change)
+        if (theme.hoverDebugEnabled && nodeId !== hoverStateRef.current.lastLoggedId) {
+            console.log(`hover: ${hoverStateRef.current.lastLoggedId} -> ${nodeId} (dist=${dist.toFixed(1)}, hitR=${hitRadius.toFixed(1)})`);
+            hoverStateRef.current.lastLoggedId = nodeId;
+        }
+    };
+
+    /**
+     * Handle pointer leave - clear hover state
+     */
+    const handlePointerLeave = () => {
+        const theme = getTheme(settingsRef.current.skinMode);
+
+        if (theme.hoverDebugEnabled && hoverStateRef.current.hoveredNodeId !== null) {
+            console.log(`hover: ${hoverStateRef.current.hoveredNodeId} -> null (pointer left canvas)`);
+        }
+
+        hoverStateRef.current.hoveredNodeId = null;
+        hoverStateRef.current.hoveredDistPx = 0;
+        hoverStateRef.current.lastLoggedId = null;
+    };
 
     useEffect(() => {
         const canvas = canvasRef.current;
@@ -307,13 +422,17 @@ export const useGraphRendering = ({
                     // 3. Draw ring stroke
                     if (theme.useGradientRing) {
                         // V2: Gradient ring (blue → purple)
+                        // Determine primary blue based on hover state
+                        const isHovered = node.id === hoverStateRef.current.hoveredNodeId;
+                        const primaryBlue = isHovered ? theme.primaryBlueHover : theme.primaryBlueDefault;
+
                         drawGradientRing(
                             ctx,
                             node.x,
                             node.y,
                             radius,
                             theme.ringWidth,
-                            node.isFixed ? theme.nodeFixedColor : theme.primaryBlue,
+                            node.isFixed ? theme.nodeFixedColor : primaryBlue,
                             theme.deepPurple,
                             theme.ringGradientSegments,
                             theme.gradientRotationDegrees
@@ -345,6 +464,25 @@ export const useGraphRendering = ({
                     ctx.stroke();
                 }
             });
+
+            // Debug overlay: draw hit circle around hovered node
+            if (theme.hoverDebugEnabled && hoverStateRef.current.hoveredNodeId) {
+                const hoveredNode = engine.nodes.get(hoverStateRef.current.hoveredNodeId);
+                if (hoveredNode) {
+                    const baseRadius = settingsRef.current.useVariedSize ? hoveredNode.radius : 5.0;
+                    const renderedRadius = getNodeRadius(baseRadius, theme);
+                    const hitRadius = renderedRadius + 2;
+
+                    // Draw faint hit circle
+                    ctx.beginPath();
+                    ctx.arc(hoveredNode.x, hoveredNode.y, hitRadius, 0, Math.PI * 2);
+                    ctx.strokeStyle = 'rgba(255, 255, 0, 0.5)';
+                    ctx.lineWidth = 1;
+                    ctx.setLineDash([4, 4]);
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+                }
+            }
 
             ctx.restore();
 
@@ -412,4 +550,10 @@ export const useGraphRendering = ({
         frameId = requestAnimationFrame(render);
         return () => cancelAnimationFrame(frameId);
     }, []);
+
+    // Return pointer handlers for component to wire up
+    return {
+        handlePointerMove,
+        handlePointerLeave
+    };
 };

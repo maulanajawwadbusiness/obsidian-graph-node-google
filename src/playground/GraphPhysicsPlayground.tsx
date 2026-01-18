@@ -38,7 +38,7 @@ export const GraphPhysicsPlayground: React.FC = () => {
     const [seed, setSeed] = useState(Date.now()); // Seed for deterministic generation
     const [skinMode, setSkinMode] = useState<SkinMode>('elegant'); // Skin toggle (default: elegant)
 
-    useGraphRendering({
+    const { handlePointerMove, handlePointerLeave } = useGraphRendering({
         canvasRef,
         config,
         engineRef,
@@ -48,6 +48,18 @@ export const GraphPhysicsPlayground: React.FC = () => {
         useVariedSize,
         skinMode
     });
+
+    // Wrap hook handlers for pointer events
+    const onPointerMove = (e: React.PointerEvent) => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        const rect = canvas.getBoundingClientRect();
+        handlePointerMove(e.clientX, e.clientY, rect);
+    };
+
+    const onPointerLeave = () => {
+        handlePointerLeave();
+    };
 
     // Keyboard shortcut: "U" toggles both UI panels (sidebar + debug)
     useEffect(() => {
@@ -200,6 +212,8 @@ export const GraphPhysicsPlayground: React.FC = () => {
                 onMouseMove={handleMouseMove}
                 onMouseUp={handleMouseUp}
                 onMouseLeave={handleMouseUp}
+                onPointerMove={onPointerMove}
+                onPointerLeave={onPointerLeave}
             >
                 <canvas ref={canvasRef} style={{ width: '100%', height: '100%', background: activeTheme.background }} />
                 <CanvasOverlays

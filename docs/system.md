@@ -558,9 +558,15 @@ npm run dev  # Vite dev server
 **Testing Hover Energy:**
 1. Set `hoverDebugEnabled: true` in theme.ts
 2. Move cursor toward node -> observe cyan/magenta/yellow circles
+   - Cyan: rendered radius
+   - Magenta: hit radius (outerRadius + hoverHitPaddingPx)
+   - Yellow: halo radius (outerRadius * hoverHaloMultiplier + hoverHaloPaddingPx)
 3. Check console for hover transitions and dt clamp/spike logs
 4. Verify energy text overlay and perf counters
-5. Optional: set `hoverDebugStateSentinel: true` for the state log
+5. Verify calm mode overlay: hold countdown and pending switch info
+6. Verify calm mode decision tags in logs: `kept: hold`, `kept: debounce`, `switched: debounce satisfied`, `exited`
+7. Test calm mode stability: move cursor quickly between nodes -> should not flip-flop rapidly
+8. Optional: set `hoverDebugStateSentinel: true` for the state log
 
 **Tuning Knobs:**
 - Physics: `src/physics/config.ts`

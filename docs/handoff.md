@@ -51,6 +51,21 @@ Force-directed graph physics playground (similar to Obsidian graph view) with tw
   - Gamma curve for response shaping (`glowEnergyGamma`)
   - Ambient glow when idle (quiet but alive, not dead)
   - Debug overlay shows computed glow values (iA, iB, oA, oB)
+- **Run #11:** Hover detection size fix (intent halo with pixel padding)
+  - Issue: detection too small after `ELEGANT_NODE_SCALE` returned to 2
+  - Previous: tiny +2px padding + multiplier only (calibrated for scale 4)
+  - Fix: hybrid approach with multiplier + absolute pixel padding
+  - New knobs: `hoverHitPaddingPx: 10`, `hoverHaloPaddingPx: 32`
+  - Formula: `hitRadius = outerRadius + hitPaddingPx`, `haloRadius = outerRadius * haloMultiplier + haloPaddingPx`
+  - Detection remains forgiving at small scales
+- **Run #12:** Calm mode (temporal stabilization for hover selection)
+  - Goal: stop rapid flip-flops under fast cursor jitter/scramble
+  - Minimum hold: once acquired, hold node for `minHoverHoldMs` (120ms) before switching
+  - Debounce switching: candidate must stay best for `switchDebounceMs` (60ms)
+  - Exit grace: brief exits outside halo tolerated for `exitGraceMs` (60ms)
+  - New state fields: `hoverHoldUntilMs`, `lastInsideMs`, `pendingSwitchId`, `pendingSwitchSinceMs`
+  - Debug overlay shows hold countdown and pending switch info
+  - Debug logs include decision tags: `kept: hold`, `kept: debounce`, `switched: debounce satisfied`, `exited`
 
 ---
 
@@ -100,19 +115,27 @@ Force-directed graph physics playground (similar to Obsidian graph view) with tw
   - In halo zone (hit < d <= halo): energy = smoothstep((halo - d) / (halo - hit))
   - Outside halo: energy = 0
 - **Rendered radius:** ring outer edge (renderRadius + ringWidth / 2)
-- **Hit radius:** `outerRadius + 2px` (small padding)
-- **Halo radius:** `outerRadius * 1.8` (detection extends beyond node)
+- **Hit radius (hybrid):** `outerRadius + hoverHitPaddingPx` (10px padding for forgiving feel)
+- **Halo radius (hybrid):** `outerRadius * hoverHaloMultiplier + hoverHaloPaddingPx` (1.8x + 32px intent halo)
+- **Why hybrid:** Multiplier-only was too small at scale 2; absolute padding keeps detection forgiving at all scales
 - **Time smoothing:** Tau-based exponential lerp (120ms)
 - **Hit-test:** Whole disc (includes hollow interior, not ring-only)
 - **Architecture:** Handlers returned from `useGraphRendering` hook, camera stays internal
 - **Coordinate transform:** CSS pixels (getBoundingClientRect) -> camera inverse -> world space, includes global rotation
 - **Anti-flicker:** Sticky exit (1.05x), anti ping-pong (8px margin), pop prevention
 - **Selection:** Active candidate model, pointer-throttled, O(1) when pointer idle
+- **Calm mode (temporal stabilization):**
+  - **Minimum hold:** Once acquired, hold node for `minHoverHoldMs` (120ms) before allowing switch
+  - **Debounce switching:** Candidate must stay best for `switchDebounceMs` (60ms) before switch
+  - **Exit grace:** Brief exits outside halo tolerated for `exitGraceMs` (60ms) before clearing
+  - **Goal:** Stop rapid flip-flops under fast cursor jitter/scramble
+  - **Debug:** Overlay shows hold countdown and pending switch info; logs include decision tags
 - **Energy-driven rendering:**
   - Color: `lerpColor(primaryBlueDefault, primaryBlueHover, energy)`
-  - Ring width: `baseWidth * (1 + 0.1 * energy)` (10% max boost)
+  - Ring width: `baseWidth * (1 + 0.1 * energy)`
+  - Glow: Base + boost driven by energy (see Two-Layer Glow section)
 - **Timing hardening:** dt clamp (max 40ms), tau guard, energy clamp + NaN recovery
-- **Debug:** Console log on change + render/hit/halo circles + energy text + crosshair + perf counters
+- **Debug:** Console log on change + render/hit/halo circles + energy text + crosshair + perf counters + calm mode state
 
 ---
 
@@ -209,9 +232,17 @@ glowEnergyGamma: 1.0,            // 1.0 = linear, <1 = faster attack
 primaryBlueDefault: '#3d4857',  // Dark blue (asleep)
 primaryBlueHover: '#63abff',    // Bright blue (awake)
 
-// Proximity detection
-hoverHaloMultiplier: 1.8,       // Detection radius = outerRadius * 1.8
+// Proximity detection (hybrid: multiplier + absolute padding)
+hoverHaloMultiplier: 1.8,       // Detection radius multiplier (1.8x)
+hoverHaloPaddingPx: 32,         // Absolute halo padding (intent halo, forgiving at small scales)
+hoverHitPaddingPx: 10,          // Absolute hit padding (forgiving feel)
 hoverRadiusMultiplier: 2.2,     // DEPRECATED (kept for compatibility)
+
+// Calm mode (temporal stabilization)
+calmModeEnabled: true,          // Enable temporal stabilization
+minHoverHoldMs: 120,            // Minimum hold time before allowing switch
+switchDebounceMs: 60,           // Candidate must stay best for this long
+exitGraceMs: 60,                // Grace period outside halo before clearing
 
 // Time smoothing
 hoverEnergyTauMs: 120,          // Tau constant (Apple-like feel)
@@ -338,9 +369,11 @@ linkWidth: 0.6,
 - [ ] Verify **crosshair** sits under cursor
 - [ ] Verify **energy text** overlay shows `e=0.xx t=0.xx d=XXX`
 - [ ] Verify **glow text** shows `glow: iA=0.xx iB=xx oA=0.xx oB=xx`
+- [ ] Verify **calm mode text** shows hold countdown and pending switch info
 - [ ] Verify **perf text** shows `scan`, `sel/s`, `en/s`
 - [ ] Verify no log spam (only on state change)
 - [ ] Verify dt clamp/spike logs appear only when triggered
+- [ ] Verify calm mode decision tags in logs: `kept: hold`, `kept: debounce`, `switched: debounce satisfied`, `exited`
 
 ### Edge Cases
 - [ ] Spawn 5 nodes → verify hover works on all sizes
@@ -354,7 +387,7 @@ linkWidth: 0.6,
 ### Current Bug
 None observed in hover energy system after stabilization passes.
 
-### Completed Features (Runs #3-#10)
+### Completed Features (Runs #3-#12)
 - Proximity model with smoothstep
 - Tau-based time smoothing (120ms) + dt clamp
 - Hysteresis (sticky exit 1.05x) + margin switching
@@ -367,6 +400,8 @@ None observed in hover energy system after stabilization passes.
 - Selection throttling + perf counters
 - **Rendering modularization** (Run #9): 1300+ lines → 8 modules + ~256 line orchestrator
 - **Energy-driven glow** (Run #10): Glow wakes with hoverEnergy (base+boost, gamma curve, ambient alive state)
+- **Intent halo** (Run #11): Hybrid padding (multiplier + absolute px) keeps detection forgiving at all scales
+- **Calm mode** (Run #12): Temporal stabilization (min hold, debounce, exit grace) stops jitter flip-flops
 
 ### Future Enhancements (Not Yet Implemented)
 - **Glow boost:** Use `hoverGlowBoost` knob (currently reserved)

@@ -60,6 +60,7 @@ export type HoverState = {
     debugGlowInnerBlur: number;
     debugGlowOuterAlpha: number;
     debugGlowOuterBlur: number;
+    debugNodeEnergy: number;
 };
 
 export type CameraState = {
@@ -130,5 +131,6 @@ export const createInitialHoverState = (): HoverState => ({
     debugGlowInnerAlpha: 0,
     debugGlowInnerBlur: 0,
     debugGlowOuterAlpha: 0,
-    debugGlowOuterBlur: 0
+    debugGlowOuterBlur: 0,
+    debugNodeEnergy: 0
 });

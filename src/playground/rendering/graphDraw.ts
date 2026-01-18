@@ -54,6 +54,9 @@ export const drawNodes = (
                 // Calculate nodeEnergy first (needed for both glow and ring)
                 const isHoveredNode = node.id === hoverStateRef.current.hoveredNodeId;
                 const nodeEnergy = isHoveredNode ? hoverStateRef.current.energy : 0;
+                if (isHoveredNode && theme.hoverDebugEnabled) {
+                    hoverStateRef.current.debugNodeEnergy = nodeEnergy;
+                }
 
                 // Energy-driven primary blue (smooth interpolation)
                 const primaryBlue = node.isFixed
@@ -156,6 +159,7 @@ export const drawHoverDebugOverlay = (
         const hitR = hoverStateRef.current.hitRadius;
         const halo = hoverStateRef.current.haloRadius;
         const energy = hoverStateRef.current.energy;
+        const nodeEnergy = hoverStateRef.current.debugNodeEnergy;
         const targetEnergy = hoverStateRef.current.targetEnergy;
         const dist = hoverStateRef.current.hoveredDistPx;
         const decision = hoverStateRef.current.lastDecision;
@@ -213,10 +217,18 @@ export const drawHoverDebugOverlay = (
             ctx.setLineDash([]);
         }
 
+        ctx.font = '9px monospace';
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+        ctx.fillText(
+            `e=${energy.toFixed(2)}`,
+            hoveredNode.x + r + 3,
+            hoveredNode.y - r - 4
+        );
+
         ctx.font = '10px monospace';
         ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
         ctx.fillText(
-            `e=${energy.toFixed(2)} t=${targetEnergy.toFixed(2)} d=${dist.toFixed(0)}`,
+            `e=${energy.toFixed(2)} nE=${nodeEnergy.toFixed(2)} t=${targetEnergy.toFixed(2)} d=${dist.toFixed(0)}`,
             hoveredNode.x + r + 5,
             hoveredNode.y - 5
         );

@@ -43,6 +43,14 @@ Force-directed graph physics playground (similar to Obsidian graph view) with tw
   - Created `src/playground/rendering/` folder with 8 specialized modules
   - Separation of concerns: types, math, canvas utils, hover controller, energy, camera, drawing, metrics
   - Improved testability and maintainability
+- **Run #10:** Energy-driven glow mechanism (nerve system, not dead sticker)
+  - Glow now wakes with hoverEnergy: brightens + expands as cursor approaches
+  - Two-layer glow with base + boost parameters (inner blue, outer purple)
+  - Inner glow uses lerped `primaryBlue` for cohesion with ring
+  - Outer glow uses `deepPurple` for atmospheric effect
+  - Gamma curve for response shaping (`glowEnergyGamma`)
+  - Ambient glow when idle (quiet but alive, not dead)
+  - Debug overlay shows computed glow values (iA, iB, oA, oB)
 
 ---
 
@@ -65,10 +73,20 @@ Force-directed graph physics playground (similar to Obsidian graph view) with tw
 - **Colors:** `primaryBlue` (#63abff or #3d4857 based on hover) → `deepPurple` (#4a2a6a)
 - **Function:** `drawGradientRing()` in `useGraphRendering.ts`
 
-### Two-Layer Glow
-- **Outer glow:** Purple, wider, fainter (20px radius, 0.12 alpha)
-- **Inner glow:** Blue, tighter, brighter (8px radius, 0.22 alpha)
+### Two-Layer Glow (Energy-Driven)
+- **Behavior:** Glow wakes with hoverEnergy — brightens + expands as cursor approaches (nerve system, not dead sticker)
+- **Outer glow (purple atmosphere):**
+  - Base: 14px blur, 0.02 alpha (ambient whisper)
+  - Boost: +20px blur, +0.10 alpha at full energy (exhale)
+  - Color: `deepPurple` (#4a2a6a)
+- **Inner glow (blue cohesion):**
+  - Base: 6px blur, 0.04 alpha (quiet but alive)
+  - Boost: +10px blur, +0.14 alpha at full energy (clearly stronger)
+  - Color: Lerped `primaryBlue` (matches ring color for cohesion)
+- **Formula:** `value = base + nodeEnergy^gamma * boost`
+- **Gamma:** 1.0 (linear response, <1 = faster attack)
 - **Draw order:** Outer first, then inner (creates depth)
+- **Idle state:** Minimal ambient glow (not dead, just resting)
 
 ### Vignette Background
 - **Radial gradient:** Center (#0f0f1a) → Edge (#050508)
@@ -165,6 +183,24 @@ glowOuterAlpha: 0.12,
 vignetteCenterColor: '#0f0f1a',    // Lighter indigo
 vignetteEdgeColor: '#050508',      // Near-black
 vignetteStrength: 0.7,             // 0.0-1.0 (how far gradient extends)
+```
+
+#### Energy-Driven Glow (Two-Layer)
+```typescript
+// Inner glow (blue cohesion with ring)
+glowInnerAlphaBase: 0.04,        // Ambient alpha (quiet but alive)
+glowInnerAlphaBoost: 0.14,       // Additional alpha at nodeEnergy=1
+glowInnerBlurBase: 6,            // Ambient blur radius
+glowInnerBlurBoost: 10,          // Additional blur at nodeEnergy=1
+
+// Outer glow (purple atmosphere)
+glowOuterAlphaBase: 0.02,        // Ambient alpha (whisper)
+glowOuterAlphaBoost: 0.10,       // Additional alpha at nodeEnergy=1
+glowOuterBlurBase: 14,           // Ambient blur radius
+glowOuterBlurBoost: 20,          // Additional blur at nodeEnergy=1 (exhale)
+
+// Response curve
+glowEnergyGamma: 1.0,            // 1.0 = linear, <1 = faster attack
 ```
 
 #### Hover Energy System
@@ -284,6 +320,15 @@ linkWidth: 0.6,
 - [ ] Move along boundary → **no flicker** (hysteresis working)
 - [ ] Pointer leaves canvas → hover clears smoothly
 
+### Energy-Driven Glow (Breathing)
+- [ ] **Idle nodes:** Minimal ambient glow visible (quiet but alive, not dead)
+- [ ] **Approach cursor:** Glow starts to **brighten + expand** before contact (halo region)
+- [ ] **Inside node:** Glow clearly **stronger + larger** (still soft, not neon)
+- [ ] **Leaving:** Glow **exhales smoothly** (fades + shrinks, no snap)
+- [ ] **Inner glow:** Blue-tinted, matches ring color cohesively
+- [ ] **Outer glow:** Purple atmosphere, wider than inner
+- [ ] **No harsh rim, no state leaks**
+
 ### Debug Features
 - [ ] Open console
 - [ ] Hover nodes and see log: `hover: null -> n0 (dist=..., r=..., halo=..., energy=...)`
@@ -292,6 +337,7 @@ linkWidth: 0.6,
 - [ ] Verify **yellow dashed circle** at halo radius
 - [ ] Verify **crosshair** sits under cursor
 - [ ] Verify **energy text** overlay shows `e=0.xx t=0.xx d=XXX`
+- [ ] Verify **glow text** shows `glow: iA=0.xx iB=xx oA=0.xx oB=xx`
 - [ ] Verify **perf text** shows `scan`, `sel/s`, `en/s`
 - [ ] Verify no log spam (only on state change)
 - [ ] Verify dt clamp/spike logs appear only when triggered
@@ -308,7 +354,7 @@ linkWidth: 0.6,
 ### Current Bug
 None observed in hover energy system after stabilization passes.
 
-### Completed Features (Runs #3-#9)
+### Completed Features (Runs #3-#10)
 - Proximity model with smoothstep
 - Tau-based time smoothing (120ms) + dt clamp
 - Hysteresis (sticky exit 1.05x) + margin switching
@@ -320,6 +366,7 @@ None observed in hover energy system after stabilization passes.
 - Render-state isolation (save/restore boundaries)
 - Selection throttling + perf counters
 - **Rendering modularization** (Run #9): 1300+ lines → 8 modules + ~256 line orchestrator
+- **Energy-driven glow** (Run #10): Glow wakes with hoverEnergy (base+boost, gamma curve, ambient alive state)
 
 ### Future Enhancements (Not Yet Implemented)
 - **Glow boost:** Use `hoverGlowBoost` knob (currently reserved)

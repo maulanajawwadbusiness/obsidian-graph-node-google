@@ -99,10 +99,22 @@ export function drawTwoLayerGlow(
     // Apply gamma curve to energy for response shaping
     const e = Math.pow(Math.max(0, Math.min(1, nodeEnergy)), theme.glowEnergyGamma);
 
+    const idleMultiplier = theme.glowIdleMultiplier;
+    const innerAlphaBase = theme.glowInnerAlphaBase * idleMultiplier;
+    const innerAlphaBoost = Math.max(
+        0,
+        (theme.glowInnerAlphaBase + theme.glowInnerAlphaBoost) - innerAlphaBase
+    );
+    const outerAlphaBase = theme.glowOuterAlphaBase * idleMultiplier;
+    const outerAlphaBoost = Math.max(
+        0,
+        (theme.glowOuterAlphaBase + theme.glowOuterAlphaBoost) - outerAlphaBase
+    );
+
     // Compute energy-driven values
-    const innerAlpha = theme.glowInnerAlphaBase + e * theme.glowInnerAlphaBoost;
+    const innerAlpha = innerAlphaBase + e * innerAlphaBoost;
     const innerBlur = theme.glowInnerBlurBase + e * theme.glowInnerBlurBoost;
-    const outerAlpha = theme.glowOuterAlphaBase + e * theme.glowOuterAlphaBoost;
+    const outerAlpha = outerAlphaBase + e * outerAlphaBoost;
     const outerBlur = theme.glowOuterBlurBase + e * theme.glowOuterBlurBoost;
 
     // Outer glow (purple-leaning, wider atmosphere)

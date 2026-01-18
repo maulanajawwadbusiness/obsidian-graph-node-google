@@ -66,6 +66,7 @@ export interface ThemeConfig {
     glowOuterBlurBase: number;       // Ambient blur radius (14)
     glowOuterBlurBoost: number;      // Additional blur at nodeEnergy=1 (20)
     glowEnergyGamma: number;         // Response curve (1.0 = linear)
+    glowIdleMultiplier: number;      // Multiplier for idle glow baseline (energy=0)
 
     // Links
     linkColor: string;
@@ -155,6 +156,7 @@ export const NORMAL_THEME: ThemeConfig = {
     glowOuterBlurBase: 0,
     glowOuterBlurBoost: 0,
     glowEnergyGamma: 1.0,
+    glowIdleMultiplier: 1.0,
 
     // Links: white, semi-transparent
     linkColor: 'rgba(255, 255, 255, 0.4)',
@@ -248,6 +250,7 @@ export const ELEGANT_THEME: ThemeConfig = {
     glowOuterBlurBase: 14,           // Ambient outer blur (atmosphere)
     glowOuterBlurBoost: 20,          // Additional outer blur at nodeEnergy=1 (exhale)
     glowEnergyGamma: 1.0,            // Response curve (1.0 = linear, <1 = faster attack)
+    glowIdleMultiplier: 4.0,         // Idle baseline boost (energy=0) while preserving active endpoint
 
     // Links: indigo-tinted, submissive but not dead
     linkColor: 'rgba(99, 140, 200, 0.38)',

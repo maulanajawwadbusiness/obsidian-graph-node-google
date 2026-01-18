@@ -51,6 +51,11 @@ export type HoverState = {
     targetEnergy: number;
     renderedRadius: number;
     haloRadius: number;
+    // Debug: glow energy values
+    debugGlowInnerAlpha: number;
+    debugGlowInnerBlur: number;
+    debugGlowOuterAlpha: number;
+    debugGlowOuterBlur: number;
 };
 
 export type CameraState = {
@@ -112,5 +117,10 @@ export const createInitialHoverState = (): HoverState => ({
     energy: 0,
     targetEnergy: 0,
     renderedRadius: 0,
-    haloRadius: 0
+    haloRadius: 0,
+    // Debug: glow energy values
+    debugGlowInnerAlpha: 0,
+    debugGlowInnerBlur: 0,
+    debugGlowOuterAlpha: 0,
+    debugGlowOuterBlur: 0
 });

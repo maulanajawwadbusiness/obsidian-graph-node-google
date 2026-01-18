@@ -73,34 +73,68 @@ export function drawVignetteBackground(
     ctx.fillRect(0, 0, width, height);
 }
 
+/**
+ * Draw two-layer glow with energy-driven intensity and blur.
+ * As nodeEnergy rises (0→1), glow brightens and expands.
+ * As nodeEnergy falls, glow exhales smoothly.
+ *
+ * @param ctx Canvas context
+ * @param x Node center x
+ * @param y Node center y
+ * @param radius Node rendered radius
+ * @param nodeEnergy Hover energy [0..1] for this node
+ * @param primaryBlue Current lerped primary color (for inner glow tint)
+ * @param theme Theme configuration
+ * @returns Computed glow parameters for debug overlay
+ */
 export function drawTwoLayerGlow(
     ctx: CanvasRenderingContext2D,
     x: number,
     y: number,
     radius: number,
+    nodeEnergy: number,
+    primaryBlue: string,
     theme: ThemeConfig
-) {
+): { innerAlpha: number; innerBlur: number; outerAlpha: number; outerBlur: number } {
+    // Apply gamma curve to energy for response shaping
+    const e = Math.pow(Math.max(0, Math.min(1, nodeEnergy)), theme.glowEnergyGamma);
+
+    // Compute energy-driven values
+    const innerAlpha = theme.glowInnerAlphaBase + e * theme.glowInnerAlphaBoost;
+    const innerBlur = theme.glowInnerBlurBase + e * theme.glowInnerBlurBoost;
+    const outerAlpha = theme.glowOuterAlphaBase + e * theme.glowOuterAlphaBoost;
+    const outerBlur = theme.glowOuterBlurBase + e * theme.glowOuterBlurBoost;
+
+    // Outer glow (purple-leaning, wider atmosphere)
+    // Use theme.glowOuterColor as base but let alpha vary
     withCtx(ctx, () => {
         ctx.beginPath();
-        ctx.arc(x, y, radius + theme.glowOuterRadius, 0, Math.PI * 2);
-        ctx.globalAlpha = 1;
+        ctx.arc(x, y, radius + outerBlur, 0, Math.PI * 2);
+        ctx.globalAlpha = outerAlpha;
         ctx.globalCompositeOperation = 'source-over';
         ctx.shadowBlur = 0;
         ctx.shadowColor = 'transparent';
-        ctx.fillStyle = theme.glowOuterColor;
-        ctx.filter = `blur(${theme.glowOuterRadius}px)`;
+        // Use deep purple for outer glow atmosphere
+        ctx.fillStyle = theme.deepPurple;
+        ctx.filter = `blur(${outerBlur}px)`;
         ctx.fill();
     });
 
+    // Inner glow (blue-leaning, closer to ring)
+    // Tint toward current primaryBlue for cohesion
     withCtx(ctx, () => {
         ctx.beginPath();
-        ctx.arc(x, y, radius + theme.glowInnerRadius, 0, Math.PI * 2);
-        ctx.globalAlpha = 1;
+        ctx.arc(x, y, radius + innerBlur, 0, Math.PI * 2);
+        ctx.globalAlpha = innerAlpha;
         ctx.globalCompositeOperation = 'source-over';
         ctx.shadowBlur = 0;
         ctx.shadowColor = 'transparent';
-        ctx.fillStyle = theme.glowInnerColor;
-        ctx.filter = `blur(${theme.glowInnerRadius}px)`;
+        // Use lerped primaryBlue for inner glow cohesion with ring
+        ctx.fillStyle = primaryBlue;
+        ctx.filter = `blur(${innerBlur}px)`;
         ctx.fill();
     });
+
+    return { innerAlpha, innerBlur, outerAlpha, outerBlur };
 }
+

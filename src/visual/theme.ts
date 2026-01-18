@@ -56,6 +56,17 @@ export interface ThemeConfig {
     glowOuterRadius: number;
     glowOuterAlpha: number;
 
+    // Energy-driven glow (hoverEnergy modulates glow intensity + blur)
+    glowInnerAlphaBase: number;      // Ambient alpha when nodeEnergy=0 (0.04)
+    glowInnerAlphaBoost: number;     // Additional alpha at nodeEnergy=1 (0.14)
+    glowInnerBlurBase: number;       // Ambient blur radius (6)
+    glowInnerBlurBoost: number;      // Additional blur at nodeEnergy=1 (10)
+    glowOuterAlphaBase: number;      // Ambient alpha when nodeEnergy=0 (0.02)
+    glowOuterAlphaBoost: number;     // Additional alpha at nodeEnergy=1 (0.10)
+    glowOuterBlurBase: number;       // Ambient blur radius (14)
+    glowOuterBlurBoost: number;      // Additional blur at nodeEnergy=1 (20)
+    glowEnergyGamma: number;         // Response curve (1.0 = linear)
+
     // Links
     linkColor: string;
     linkWidth: number;
@@ -134,6 +145,17 @@ export const NORMAL_THEME: ThemeConfig = {
     glowOuterRadius: 16,
     glowOuterAlpha: 0.1,
 
+    // Energy-driven glow (disabled for normal mode)
+    glowInnerAlphaBase: 0,
+    glowInnerAlphaBoost: 0,
+    glowInnerBlurBase: 0,
+    glowInnerBlurBoost: 0,
+    glowOuterAlphaBase: 0,
+    glowOuterAlphaBoost: 0,
+    glowOuterBlurBase: 0,
+    glowOuterBlurBoost: 0,
+    glowEnergyGamma: 1.0,
+
     // Links: white, semi-transparent
     linkColor: 'rgba(255, 255, 255, 0.4)',
     linkWidth: 0.4,
@@ -160,7 +182,7 @@ export const NORMAL_THEME: ThemeConfig = {
 // -----------------------------------------------------------------------------
 
 // TUNING KNOB: Change this to scale nodes and rings proportionally
-const ELEGANT_NODE_SCALE = 4;
+const ELEGANT_NODE_SCALE = 2;
 
 // Base ratios (don't change these, change ELEGANT_NODE_SCALE instead)
 const ELEGANT_BASE_RING_WIDTH_RATIO = 2.08;  // ring width relative to scale
@@ -214,6 +236,18 @@ export const ELEGANT_THEME: ThemeConfig = {
     glowOuterColor: 'rgba(100, 60, 160, 0.12)',   // purple, wider
     glowOuterRadius: 20,
     glowOuterAlpha: 0.12,
+
+    // Energy-driven glow (hoverEnergy modulates glow intensity + blur)
+    // TUNING KNOBS: adjust for "breathing" feel
+    glowInnerAlphaBase: 0.04,        // Ambient alpha when nodeEnergy=0 (quiet but alive)
+    glowInnerAlphaBoost: 0.14,       // Additional alpha at nodeEnergy=1 (clearly stronger)
+    glowInnerBlurBase: 6,            // Ambient blur radius (soft base)
+    glowInnerBlurBoost: 10,          // Additional blur at nodeEnergy=1 (expands)
+    glowOuterAlphaBase: 0.02,        // Ambient outer alpha (whisper)
+    glowOuterAlphaBoost: 0.10,       // Additional outer alpha at nodeEnergy=1
+    glowOuterBlurBase: 14,           // Ambient outer blur (atmosphere)
+    glowOuterBlurBoost: 20,          // Additional outer blur at nodeEnergy=1 (exhale)
+    glowEnergyGamma: 1.0,            // Response curve (1.0 = linear, <1 = faster attack)
 
     // Links: indigo-tinted, submissive but not dead
     linkColor: 'rgba(99, 140, 200, 0.38)',

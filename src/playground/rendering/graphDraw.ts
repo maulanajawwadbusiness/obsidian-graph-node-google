@@ -51,15 +51,43 @@ export const drawNodes = (
             ctx.filter = 'none';
 
             if (theme.nodeStyle === 'ring') {
+                // Calculate nodeEnergy first (needed for both glow and ring)
+                const isHoveredNode = node.id === hoverStateRef.current.hoveredNodeId;
+                const nodeEnergy = isHoveredNode ? hoverStateRef.current.energy : 0;
+
+                // Energy-driven primary blue (smooth interpolation)
+                const primaryBlue = node.isFixed
+                    ? theme.nodeFixedColor
+                    : lerpColor(theme.primaryBlueDefault, theme.primaryBlueHover, nodeEnergy);
+
+                // 1. Occlusion disk (hides links under node)
                 const occlusionRadius = getOcclusionRadius(radius, theme);
                 ctx.beginPath();
                 ctx.arc(node.x, node.y, occlusionRadius, 0, Math.PI * 2);
                 ctx.fillStyle = theme.occlusionColor;
                 ctx.fill();
 
+                // 2. Glow (energy-driven: brightens + expands as hover energy rises)
                 if (theme.useTwoLayerGlow) {
-                    drawTwoLayerGlow(ctx, node.x, node.y, radius, theme);
+                    const glowParams = drawTwoLayerGlow(
+                        ctx,
+                        node.x,
+                        node.y,
+                        radius,
+                        nodeEnergy,
+                        primaryBlue,
+                        theme
+                    );
+
+                    // Store glow debug values for hovered node
+                    if (isHoveredNode) {
+                        hoverStateRef.current.debugGlowInnerAlpha = glowParams.innerAlpha;
+                        hoverStateRef.current.debugGlowInnerBlur = glowParams.innerBlur;
+                        hoverStateRef.current.debugGlowOuterAlpha = glowParams.outerAlpha;
+                        hoverStateRef.current.debugGlowOuterBlur = glowParams.outerBlur;
+                    }
                 } else if (theme.glowEnabled) {
+                    // Legacy single-layer glow (static)
                     withCtx(ctx, () => {
                         ctx.beginPath();
                         ctx.arc(node.x, node.y, radius + theme.glowRadius, 0, Math.PI * 2);
@@ -73,14 +101,9 @@ export const drawNodes = (
                     });
                 }
 
+                // 3. Ring stroke
                 if (theme.useGradientRing) {
-                    const isHoveredNode = node.id === hoverStateRef.current.hoveredNodeId;
-                    const nodeEnergy = isHoveredNode ? hoverStateRef.current.energy : 0;
-
-                    const primaryBlue = node.isFixed
-                        ? theme.nodeFixedColor
-                        : lerpColor(theme.primaryBlueDefault, theme.primaryBlueHover, nodeEnergy);
-
+                    // Energy-driven ring width boost
                     const ringWidth = theme.ringWidth * (1 + theme.hoverRingWidthBoost * nodeEnergy);
 
                     drawGradientRing(
@@ -206,6 +229,16 @@ export const drawHoverDebugOverlay = (
             `scan=${hoverStateRef.current.nodesScannedLastSelection} sel/s=${hoverStateRef.current.selectionRunsPerSecond} en/s=${hoverStateRef.current.energyUpdatesPerSecond}`,
             hoveredNode.x + r + 5,
             hoveredNode.y + 34
+        );
+        // Glow energy debug
+        const iA = hoverStateRef.current.debugGlowInnerAlpha;
+        const iB = hoverStateRef.current.debugGlowInnerBlur;
+        const oA = hoverStateRef.current.debugGlowOuterAlpha;
+        const oB = hoverStateRef.current.debugGlowOuterBlur;
+        ctx.fillText(
+            `glow: iA=${iA.toFixed(2)} iB=${iB.toFixed(0)} oA=${oA.toFixed(2)} oB=${oB.toFixed(0)}`,
+            hoveredNode.x + r + 5,
+            hoveredNode.y + 47
         );
     });
 };

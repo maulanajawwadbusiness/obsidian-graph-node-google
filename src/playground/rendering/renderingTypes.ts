@@ -62,6 +62,11 @@ export type HoverState = {
     debugGlowOuterAlpha: number;
     debugGlowOuterBlur: number;
     debugNodeEnergy: number;
+    // Debug: occlusion disk sizing
+    debugNodeRadius: number;
+    debugOuterRadius: number;
+    debugOcclusionRadius: number;
+    debugShrinkPct: number;
 };
 
 export type CanvasStateDebug = {
@@ -155,7 +160,12 @@ export const createInitialHoverState = (): HoverState => ({
     debugGlowInnerBlur: 0,
     debugGlowOuterAlpha: 0,
     debugGlowOuterBlur: 0,
-    debugNodeEnergy: 0
+    debugNodeEnergy: 0,
+    // Debug: occlusion disk sizing
+    debugNodeRadius: 0,
+    debugOuterRadius: 0,
+    debugOcclusionRadius: 0,
+    debugShrinkPct: 0
 });
 
 export const createInitialRenderDebug = (): RenderDebugInfo => ({

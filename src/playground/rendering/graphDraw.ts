@@ -80,14 +80,8 @@ export const drawNodes = (
                     ? theme.nodeFixedColor
                     : lerpColor(theme.primaryBlueDefault, theme.primaryBlueHover, nodeEnergy);
 
-                // 1. Occlusion disk (hides links under node)
-                const occlusionRadius = getOcclusionRadius(radius, theme);
-                ctx.beginPath();
-                ctx.arc(node.x, node.y, occlusionRadius, 0, Math.PI * 2);
-                ctx.fillStyle = theme.occlusionColor;
-                ctx.fill();
+                // 1. Glow (energy-driven: brightens + expands as hover energy rises)
 
-                // 2. Glow (energy-driven: brightens + expands as hover energy rises)
                 if (theme.useTwoLayerGlow) {
                     if (sampleIdle && renderDebug) {
                         renderDebug.idleGlowPassIndex = glowPassIndex;
@@ -134,6 +128,23 @@ export const drawNodes = (
                         ctx.fill();
                     });
                 }
+
+                // 2. Occlusion disk (hides links under node)
+                const occlusionRadius = getOcclusionRadius(radius, theme);
+
+                // Store debug values for hovered node
+                if (isHoveredNode && theme.hoverDebugEnabled) {
+                    const outerRadius = radius + theme.ringWidth * 0.5;
+                    hoverStateRef.current.debugNodeRadius = radius;
+                    hoverStateRef.current.debugOuterRadius = outerRadius;
+                    hoverStateRef.current.debugOcclusionRadius = occlusionRadius;
+                    hoverStateRef.current.debugShrinkPct = theme.occlusionShrinkPct;
+                }
+
+                ctx.beginPath();
+                ctx.arc(node.x, node.y, occlusionRadius, 0, Math.PI * 2);
+                ctx.fillStyle = theme.occlusionColor;
+                ctx.fill();
 
                 // 3. Ring stroke
                 if (sampleIdle && renderDebug) {
@@ -419,6 +430,16 @@ export const drawHoverDebugOverlay = (
             `glow: iA=${iA.toFixed(2)} iB=${iB.toFixed(0)} oA=${oA.toFixed(2)} oB=${oB.toFixed(0)}`,
             hoveredNode.x + r + 5,
             hoveredNode.y + 60
+        );
+        // Occlusion disk sizing debug
+        const nodeR = hoverStateRef.current.debugNodeRadius;
+        const outerR = hoverStateRef.current.debugOuterRadius;
+        const occlR = hoverStateRef.current.debugOcclusionRadius;
+        const shrinkPct = hoverStateRef.current.debugShrinkPct;
+        ctx.fillText(
+            `occlusion: nodeR=${nodeR.toFixed(1)} outerR=${outerR.toFixed(1)} occlR=${occlR.toFixed(1)} shrink=${(shrinkPct * 100).toFixed(0)}%`,
+            hoveredNode.x + r + 5,
+            hoveredNode.y + 73
         );
     });
 };

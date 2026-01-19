@@ -27,6 +27,7 @@ export interface ThemeConfig {
     ringWidth: number;  // Derived from nodeScale
     ringColor: string;
     occlusionColor: string;       // Same as background to hide links under nodes
+    occlusionShrinkPct: number;   // How much smaller occlusion disk is vs node outer radius (0.10 = 10% smaller)
 
     // V2 Gradient Ring
     useGradientRing: boolean;
@@ -142,6 +143,7 @@ export const NORMAL_THEME: ThemeConfig = {
     ringWidth: 1,  // = nodeScale * 1.0
     ringColor: '#ffffff',
     occlusionColor: '#111111',
+    occlusionShrinkPct: 0.10,  // 10% smaller than outer radius
 
     // Gradient ring (disabled)
     useGradientRing: false,
@@ -260,6 +262,7 @@ export const ELEGANT_THEME: ThemeConfig = {
     ringWidth: ELEGANT_NODE_SCALE * ELEGANT_BASE_RING_WIDTH_RATIO,
     ringColor: '#63abff',
     occlusionColor: '#0a0a12',    // Match background
+    occlusionShrinkPct: 0.10,     // Occlusion disk is 10% smaller than node outer radius (adaptive)
 
     // Gradient ring: blue → purple
     useGradientRing: true,
@@ -366,11 +369,22 @@ export function getNodeRadius(baseRadius: number, theme: ThemeConfig): number {
 }
 
 /**
- * Get occlusion disk radius (slightly larger than node to hide links cleanly)
+ * Get occlusion disk radius (adaptively sized to be slightly smaller than node)
+ * Formula: occlusionR = outerR * (1 - shrinkPct)
+ * where outerR = nodeRadius + ringWidth * 0.5
  */
 export function getOcclusionRadius(nodeRadius: number, theme: ThemeConfig): number {
-    // Add small padding to ensure links don't peek through
-    return nodeRadius + theme.ringWidth * 0.5 + 1;
+    // Calculate node's outer radius (center to ring outer edge)
+    const outerRadius = nodeRadius + theme.ringWidth * 0.5;
+
+    // Shrink occlusion disk by configured percentage (default 10%)
+    const shrinkPct = Math.max(0, Math.min(0.35, theme.occlusionShrinkPct)); // Clamp [0, 0.35]
+    const occlusionRadius = outerRadius * (1 - shrinkPct);
+
+    // Safety floor: ensure it's at least big enough to hide center links
+    const minRadius = nodeRadius * 0.55;
+
+    return Math.max(occlusionRadius, minRadius);
 }
 
 

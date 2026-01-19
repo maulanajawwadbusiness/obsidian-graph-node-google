@@ -21,7 +21,7 @@ export const GraphPhysicsPlayground: React.FC = () => {
     const [config, setConfig] = useState<ForceConfig>(DEFAULT_PHYSICS_CONFIG);
     const [useVariedSize, setUseVariedSize] = useState(false); // Toggle State
     const [sidebarOpen, setSidebarOpen] = useState(false); // Hidden by default
-    const [debugOpen, setDebugOpen] = useState(true); // Shown by default
+    const [debugOpen, setDebugOpen] = useState(false); // Hidden by default
     const [metrics, setMetrics] = useState<PlaygroundMetrics>({
         nodes: 0,
         links: 0,

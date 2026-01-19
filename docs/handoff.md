@@ -82,6 +82,15 @@ Force-directed graph physics playground (similar to Obsidian graph view) with tw
 - **Ring stroke:** Gradient from blue→purple or solid fallback
 - **Ring width:** Scales with `nodeScale` master knob (currently `4`)
 
+### Node Rendering Order (Elegant Mode)
+The rendering sequence determines visual layering (first drawn = bottom layer):
+1. **Occlusion disk** - Hides links under node, slightly smaller than ring footprint
+2. **Ring stroke** - Gradient ring (blue→purple)
+3. **Glow layers** - Two-layer glow (outer purple + inner blue), drawn last so it appears on top
+
+**Note:** Glow is drawn after the ring, so it appears as an overlay on top of the node structure.
+
+
 ### Gradient Ring Implementation
 - **Method:** Segmented arcs (48 segments) for cross-browser compatibility
 - **Rotation:** `gradientRotationDegrees = 170` (dark purple at bottom-left)

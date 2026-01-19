@@ -80,8 +80,69 @@ export const drawNodes = (
                     ? theme.nodeFixedColor
                     : lerpColor(theme.primaryBlueDefault, theme.primaryBlueHover, nodeEnergy);
 
-                // 1. Glow (energy-driven: brightens + expands as hover energy rises)
+                // 1. Occlusion disk (hides links under node)
+                const occlusionRadius = getOcclusionRadius(radius, theme);
 
+                // Store debug values for hovered node
+                if (isHoveredNode && theme.hoverDebugEnabled) {
+                    const outerRadius = radius + theme.ringWidth * 0.5;
+                    hoverStateRef.current.debugNodeRadius = radius;
+                    hoverStateRef.current.debugOuterRadius = outerRadius;
+                    hoverStateRef.current.debugOcclusionRadius = occlusionRadius;
+                    hoverStateRef.current.debugShrinkPct = theme.occlusionShrinkPct;
+                }
+
+                ctx.beginPath();
+                ctx.arc(node.x, node.y, occlusionRadius, 0, Math.PI * 2);
+                ctx.fillStyle = theme.occlusionColor;
+                ctx.fill();
+
+                // 2. Ring stroke
+                if (sampleIdle && renderDebug) {
+                    renderDebug.idleRingStateBefore = captureCanvasState(ctx);
+                }
+                if (sampleActive && renderDebug) {
+                    renderDebug.activeRingStateBefore = captureCanvasState(ctx);
+                }
+                ctx.globalAlpha = 1;
+                ctx.globalCompositeOperation = 'source-over';
+                ctx.setLineDash([]);
+                ctx.shadowBlur = 0;
+                ctx.shadowColor = 'transparent';
+                ctx.filter = 'none';
+
+                if (theme.useGradientRing) {
+                    // Energy-driven ring width boost
+                    const ringWidth = theme.ringWidth * (1 + theme.hoverRingWidthBoost * nodeEnergy);
+
+                    drawGradientRing(
+                        ctx,
+                        node.x,
+                        node.y,
+                        radius,
+                        ringWidth,
+                        primaryBlue,
+                        theme.deepPurple,
+                        theme.ringGradientSegments,
+                        theme.gradientRotationDegrees
+                    );
+                } else {
+                    ctx.beginPath();
+                    ctx.arc(node.x, node.y, radius, 0, Math.PI * 2);
+                    ctx.strokeStyle = node.isFixed ? theme.nodeFixedColor : theme.ringColor;
+                    ctx.lineWidth = theme.ringWidth;
+                    ctx.stroke();
+                }
+                if (sampleIdle && renderDebug) {
+                    renderDebug.ringPassIndex = ringPassIndex;
+                    renderDebug.idleRingStateAfter = captureCanvasState(ctx);
+                }
+                if (sampleActive && renderDebug) {
+                    renderDebug.ringPassIndex = ringPassIndex;
+                    renderDebug.activeRingStateAfter = captureCanvasState(ctx);
+                }
+
+                // 3. Glow (energy-driven: brightens + expands as hover energy rises)
                 if (theme.useTwoLayerGlow) {
                     if (sampleIdle && renderDebug) {
                         renderDebug.idleGlowPassIndex = glowPassIndex;
@@ -127,68 +188,6 @@ export const drawNodes = (
                         ctx.filter = `blur(${theme.glowRadius}px)`;
                         ctx.fill();
                     });
-                }
-
-                // 2. Occlusion disk (hides links under node)
-                const occlusionRadius = getOcclusionRadius(radius, theme);
-
-                // Store debug values for hovered node
-                if (isHoveredNode && theme.hoverDebugEnabled) {
-                    const outerRadius = radius + theme.ringWidth * 0.5;
-                    hoverStateRef.current.debugNodeRadius = radius;
-                    hoverStateRef.current.debugOuterRadius = outerRadius;
-                    hoverStateRef.current.debugOcclusionRadius = occlusionRadius;
-                    hoverStateRef.current.debugShrinkPct = theme.occlusionShrinkPct;
-                }
-
-                ctx.beginPath();
-                ctx.arc(node.x, node.y, occlusionRadius, 0, Math.PI * 2);
-                ctx.fillStyle = theme.occlusionColor;
-                ctx.fill();
-
-                // 3. Ring stroke
-                if (sampleIdle && renderDebug) {
-                    renderDebug.idleRingStateBefore = captureCanvasState(ctx);
-                }
-                if (sampleActive && renderDebug) {
-                    renderDebug.activeRingStateBefore = captureCanvasState(ctx);
-                }
-                ctx.globalAlpha = 1;
-                ctx.globalCompositeOperation = 'source-over';
-                ctx.setLineDash([]);
-                ctx.shadowBlur = 0;
-                ctx.shadowColor = 'transparent';
-                ctx.filter = 'none';
-
-                if (theme.useGradientRing) {
-                    // Energy-driven ring width boost
-                    const ringWidth = theme.ringWidth * (1 + theme.hoverRingWidthBoost * nodeEnergy);
-
-                    drawGradientRing(
-                        ctx,
-                        node.x,
-                        node.y,
-                        radius,
-                        ringWidth,
-                        primaryBlue,
-                        theme.deepPurple,
-                        theme.ringGradientSegments,
-                        theme.gradientRotationDegrees
-                    );
-                } else {
-                    ctx.beginPath();
-                    ctx.arc(node.x, node.y, radius, 0, Math.PI * 2);
-                    ctx.strokeStyle = node.isFixed ? theme.nodeFixedColor : theme.ringColor;
-                    ctx.lineWidth = theme.ringWidth;
-                    ctx.stroke();
-                }
-                if (sampleIdle && renderDebug) {
-                    renderDebug.ringPassIndex = ringPassIndex;
-                    renderDebug.idleRingStateAfter = captureCanvasState(ctx);
-                }
-                if (sampleActive && renderDebug) {
-                    renderDebug.ringPassIndex = ringPassIndex;
-                    renderDebug.activeRingStateAfter = captureCanvasState(ctx);
                 }
             } else {
                 // Normal mode: no scaling

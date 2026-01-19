@@ -241,7 +241,7 @@ export const NORMAL_THEME: ThemeConfig = {
 // -----------------------------------------------------------------------------
 
 // TUNING KNOB: Change this to scale nodes and rings proportionally
-const ELEGANT_NODE_SCALE = 1.5;
+const ELEGANT_NODE_SCALE = 1.2;
 
 // Base ratios (don't change these, change ELEGANT_NODE_SCALE instead)
 const ELEGANT_BASE_RING_WIDTH_RATIO = 2.08;  // ring width relative to scale
@@ -299,13 +299,13 @@ export const ELEGANT_THEME: ThemeConfig = {
 
     // Energy-driven glow (hoverEnergy modulates glow intensity + blur)
     // TUNING KNOBS: adjust for "breathing" feel
-    glowInnerAlphaBase: 0.04,        // Ambient alpha when nodeEnergy=0 (quiet but alive)
-    glowInnerAlphaBoost: 0.14,       // Additional alpha at nodeEnergy=1 (clearly stronger)
-    glowInnerBlurBase: 6,            // Ambient blur radius (soft base)
+    glowInnerAlphaBase: 0.025,       // Ambient alpha when nodeEnergy=0 (quiet but alive) - increased 25%
+    glowInnerAlphaBoost: 0.175,      // Additional alpha at nodeEnergy=1 (clearly stronger) - increased 25%
+    glowInnerBlurBase: 9,            // Ambient blur radius (soft base) - increased 50%
     glowInnerBlurBoost: 10,          // Additional blur at nodeEnergy=1 (expands)
-    glowOuterAlphaBase: 0.02,        // Ambient outer alpha (whisper)
-    glowOuterAlphaBoost: 0.10,       // Additional outer alpha at nodeEnergy=1
-    glowOuterBlurBase: 14,           // Ambient outer blur (atmosphere)
+    glowOuterAlphaBase: 0.0125,      // Ambient outer alpha (whisper) - increased 25%
+    glowOuterAlphaBoost: 0.125,      // Additional outer alpha at nodeEnergy=1 - increased 25%
+    glowOuterBlurBase: 21,           // Ambient outer blur (atmosphere) - increased 50%
     glowOuterBlurBoost: 20,          // Additional outer blur at nodeEnergy=1 (exhale)
     glowEnergyGamma: 1.0,            // Response curve (1.0 = linear, <1 = faster attack)
     glowIdleMultiplier: 8.0,         // Idle baseline boost (energy=0) while preserving active endpoint

@@ -198,9 +198,9 @@ export function drawNodeLabel(
 
         // Debug: show rotation angle being canceled
         if (theme.labelDebugEnabled && theme.labelForceHorizontal && globalAngle !== 0) {
-            ctx.fillStyle = ''rgba(100, 200, 255, 0.9)'';
-            ctx.font = ''8px monospace'';
-            ctx.fillText("rot: ${(globalAngle * 180 / Math.PI).toFixed(1)}", labelX, labelY + theme.labelFontSize + 2);
+            ctx.fillStyle = 'rgba(100, 200, 255, 0.9)';
+            ctx.font = '8px monospace';
+            ctx.fillText(`rot: ${(globalAngle * 180 / Math.PI).toFixed(1)}°`, labelX, labelY + theme.labelFontSize + 2);
         }
 
         // Debug: draw anchor cross + bbox estimate

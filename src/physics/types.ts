@@ -24,6 +24,9 @@ export interface PhysicsNode {
   warmth?: number; // 0.0 (Cold) to 1.0 (Hot). Defaults to 1.0 if undefined.
   role?: 'spine' | 'rib' | 'fiber'; // Topology role for directed impulse weighting
 
+
+  // Display (optional)
+  label?: string; // Text label to show below node
   // Orbital Drift (captured at equilibrium time)
   equilibrium?: { x: number, y: number }; // Settled position for anisotropic damping
 

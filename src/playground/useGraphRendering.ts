@@ -9,7 +9,7 @@ import { applyCameraTransform, updateCameraContainment } from './rendering/camer
 import { drawVignetteBackground, withCtx } from './rendering/canvasUtils';
 import { createHoverController } from './rendering/hoverController';
 import { updateHoverEnergy } from './rendering/hoverEnergy';
-import { drawHoverDebugOverlay, drawLinks, drawNodes, drawPointerCrosshair } from './rendering/graphDraw';
+import { drawHoverDebugOverlay, drawLabels, drawLinks, drawNodes, drawPointerCrosshair } from './rendering/graphDraw';
 import { createMetricsTracker } from './rendering/metrics';
 import {
     createInitialHoverState,

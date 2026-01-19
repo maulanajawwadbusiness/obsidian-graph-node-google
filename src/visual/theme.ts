@@ -98,6 +98,18 @@ export interface ThemeConfig {
     nodeScaleIdle: number;             // Scale multiplier at energy=0 (1.0)
     nodeScaleHover: number;            // Scale multiplier at energy=1 (1.2)
     glowBlurScaleBoost: number;        // Glow blur expansion factor at energy=1 (0.2 = 20% wider)
+
+    // Text labels
+    labelEnabled: boolean;
+    labelFontSize: number;             // Font size in px
+    labelFontFamily: string;           // Font family
+    labelColor: string;                // Label text color
+    labelOffsetBasePx: number;         // Base offset below node at energy=0
+    labelOffsetHoverPx: number;        // Additional offset at energy=1
+    labelAlphaBase: number;            // Alpha at energy=0
+    labelAlphaHover: number;           // Alpha at energy=1
+    labelEnergyGamma: number;          // Response curve (1.0 = linear)
+    labelDebugEnabled: boolean;        // Show anchor cross + bbox
 }
 
 // -----------------------------------------------------------------------------
@@ -200,6 +212,18 @@ export const NORMAL_THEME: ThemeConfig = {
     nodeScaleIdle: 1.0,
     nodeScaleHover: 1.0,
     glowBlurScaleBoost: 0,
+
+    // Text labels (disabled in normal mode)
+    labelEnabled: false,
+    labelFontSize: 11,
+    labelFontFamily: 'sans-serif',
+    labelColor: 'rgba(255,255,255,0.7)',
+    labelOffsetBasePx: 6,
+    labelOffsetHoverPx: 0,
+    labelAlphaBase: 0.7,
+    labelAlphaHover: 0.7,
+    labelEnergyGamma: 1.0,
+    labelDebugEnabled: false,
 };
 
 // -----------------------------------------------------------------------------
@@ -306,6 +330,18 @@ export const ELEGANT_THEME: ThemeConfig = {
     nodeScaleIdle: 1.0,
     nodeScaleHover: 1.2,            // 20% larger on hover
     glowBlurScaleBoost: 0.2,        // Glow breathes 20% wider at full energy
+
+    // Text labels (Obsidian-style)
+    labelEnabled: true,
+    labelFontSize: 11,
+    labelFontFamily: 'system-ui, -apple-system, sans-serif',
+    labelColor: 'rgba(180, 190, 210, 0.85)',
+    labelOffsetBasePx: 8,
+    labelOffsetHoverPx: 4,
+    labelAlphaBase: 0.6,
+    labelAlphaHover: 1.0,
+    labelEnergyGamma: 1.0,
+    labelDebugEnabled: false,
 };
 
 // -----------------------------------------------------------------------------

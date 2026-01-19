@@ -153,6 +153,92 @@ export const drawNodes = (
     });
 };
 
+/**
+ * Draw text label below a node.
+ * Position is energy-driven: moves down slightly when active.
+ */
+export function drawNodeLabel(
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    renderRadius: number,
+    label: string,
+    nodeEnergy: number,
+    theme: ThemeConfig
+) {
+    if (!theme.labelEnabled || !label) return;
+
+    const e = Math.pow(Math.max(0, Math.min(1, nodeEnergy)), theme.labelEnergyGamma);
+
+    // Compute label offset: base + energy-driven hover offset
+    const offsetY = renderRadius + theme.labelOffsetBasePx + e * theme.labelOffsetHoverPx;
+
+    // Compute alpha: interpolate from base to hover
+    const alpha = theme.labelAlphaBase + (theme.labelAlphaHover - theme.labelAlphaBase) * e;
+
+    const labelX = x;
+    const labelY = y + offsetY;
+
+    withCtx(ctx, () => {
+        ctx.globalAlpha = alpha;
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.font = `${theme.labelFontSize}px ${theme.labelFontFamily}`;
+        ctx.fillStyle = theme.labelColor;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        ctx.fillText(label, labelX, labelY);
+
+        // Debug: draw anchor cross + bbox estimate
+        if (theme.labelDebugEnabled) {
+            const metrics = ctx.measureText(label);
+            const textWidth = metrics.width;
+            const textHeight = theme.labelFontSize;
+
+            // Anchor cross
+            ctx.strokeStyle = 'rgba(255, 100, 100, 0.8)';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(labelX - 4, labelY);
+            ctx.lineTo(labelX + 4, labelY);
+            ctx.moveTo(labelX, labelY - 4);
+            ctx.lineTo(labelX, labelY + 4);
+            ctx.stroke();
+
+            // Bounding box
+            ctx.strokeStyle = 'rgba(100, 255, 100, 0.5)';
+            ctx.setLineDash([2, 2]);
+            ctx.strokeRect(labelX - textWidth / 2, labelY, textWidth, textHeight);
+            ctx.setLineDash([]);
+        }
+    });
+}
+
+/**
+ * Draw labels for all nodes (called after drawNodes).
+ */
+export const drawLabels = (
+    ctx: CanvasRenderingContext2D,
+    engine: PhysicsEngine,
+    theme: ThemeConfig,
+    settingsRef: MutableRefObject<RenderSettingsRef>,
+    hoverStateRef: MutableRefObject<HoverState>
+) => {
+    if (!theme.labelEnabled) return;
+
+    engine.nodes.forEach((node) => {
+        const baseRadius = settingsRef.current.useVariedSize ? node.radius : 5.0;
+        const baseRenderRadius = getNodeRadius(baseRadius, theme);
+        const isDisplayNode = node.id === hoverStateRef.current.hoverDisplayNodeId;
+        const nodeEnergy = isDisplayNode ? hoverStateRef.current.energy : 0;
+        const nodeScale = getNodeScale(nodeEnergy, theme);
+        const renderRadius = baseRenderRadius * nodeScale;
+
+        const label = node.label || node.id;  // Fallback to node ID
+
+        drawNodeLabel(ctx, node.x, node.y, renderRadius, label, nodeEnergy, theme);
+    });
+};
+
 export const drawHoverDebugOverlay = (
     ctx: CanvasRenderingContext2D,
     engine: PhysicsEngine,

@@ -198,7 +198,7 @@ export const NORMAL_THEME: ThemeConfig = {
 // -----------------------------------------------------------------------------
 
 // TUNING KNOB: Change this to scale nodes and rings proportionally
-const ELEGANT_NODE_SCALE = 2;
+const ELEGANT_NODE_SCALE = 1.5;
 
 // Base ratios (don't change these, change ELEGANT_NODE_SCALE instead)
 const ELEGANT_BASE_RING_WIDTH_RATIO = 2.08;  // ring width relative to scale
@@ -272,7 +272,7 @@ export const ELEGANT_THEME: ThemeConfig = {
     linkWidth: 0.6,
 
     // Hover interaction (basic)
-    primaryBlueDefault: '#3d4857',  // Dark blue (no hover)
+    primaryBlueDefault: '#63abff',  // Dark blue (no hover)
     primaryBlueHover: '#63abff',    // Bright blue (hovered)
     hoverRadiusMultiplier: 2.2,     // DEPRECATED
     hoverDebugEnabled: false,        // Debug mode (re-enable to see radius/halo circles)

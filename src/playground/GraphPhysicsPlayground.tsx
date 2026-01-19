@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { PhysicsEngine } from '../physics/engine';
 import { ForceConfig } from '../physics/types';
 import { DEFAULT_PHYSICS_CONFIG } from '../physics/config';
-import { SkinMode, getTheme } from '../visual/theme';
+import { DRAG_ENABLED, SkinMode, getTheme } from '../visual/theme';
 import { CanvasOverlays } from './components/CanvasOverlays';
 import { SidebarControls } from './components/SidebarControls';
 import { CONTAINER_STYLE, MAIN_STYLE, SHOW_THEME_TOGGLE } from './graphPlaygroundStyles';
@@ -102,6 +102,12 @@ export const GraphPhysicsPlayground: React.FC = () => {
         return () => window.removeEventListener('keydown', onKeyDown);
     }, []);
 
+    useEffect(() => {
+        if (!DRAG_ENABLED) {
+            engineRef.current.releaseNode();
+        }
+    }, [DRAG_ENABLED]);
+
     // ---------------------------------------------------------------------------
     // Interaction Handlers (Drag & Drop)
     // ---------------------------------------------------------------------------
@@ -115,6 +121,10 @@ export const GraphPhysicsPlayground: React.FC = () => {
     };
 
     const handleMouseDown = (e: React.MouseEvent) => {
+        if (!DRAG_ENABLED) {
+            engineRef.current.releaseNode();
+            return;
+        }
         const { x, y } = getWorldPos(e);
 
         // Find node under cursor
@@ -139,6 +149,10 @@ export const GraphPhysicsPlayground: React.FC = () => {
     };
 
     const handleMouseMove = (e: React.MouseEvent) => {
+        if (!DRAG_ENABLED) {
+            engineRef.current.releaseNode();
+            return;
+        }
         const { x, y } = getWorldPos(e);
         engineRef.current.moveDrag({ x, y });
     };

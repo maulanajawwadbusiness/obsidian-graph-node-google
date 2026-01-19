@@ -164,7 +164,8 @@ export function drawNodeLabel(
     renderRadius: number,
     label: string,
     nodeEnergy: number,
-    theme: ThemeConfig
+    theme: ThemeConfig,
+    globalAngle: number
 ) {
     if (!theme.labelEnabled || !label) return;
 

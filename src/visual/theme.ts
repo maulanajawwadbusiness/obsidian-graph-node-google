@@ -110,6 +110,7 @@ export interface ThemeConfig {
     labelAlphaHover: number;           // Alpha at energy=1
     labelEnergyGamma: number;          // Response curve (1.0 = linear)
     labelDebugEnabled: boolean;        // Show anchor cross + bbox
+    labelForceHorizontal: boolean;     // Force labels to be screen-horizontal (cancel rotation)
 }
 
 // -----------------------------------------------------------------------------
@@ -224,6 +225,7 @@ export const NORMAL_THEME: ThemeConfig = {
     labelAlphaHover: 0.7,
     labelEnergyGamma: 1.0,
     labelDebugEnabled: false,
+    labelForceHorizontal: true,
 };
 
 // -----------------------------------------------------------------------------
@@ -342,6 +344,7 @@ export const ELEGANT_THEME: ThemeConfig = {
     labelAlphaHover: 1.0,
     labelEnergyGamma: 1.0,
     labelDebugEnabled: false,
+    labelForceHorizontal: true,
 };
 
 // -----------------------------------------------------------------------------

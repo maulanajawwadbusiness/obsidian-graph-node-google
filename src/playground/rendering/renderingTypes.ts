@@ -64,6 +64,27 @@ export type HoverState = {
     debugNodeEnergy: number;
 };
 
+export type CanvasStateDebug = {
+    globalCompositeOperation: string;
+    globalAlpha: number;
+    filter: string;
+};
+
+export type RenderDebugInfo = {
+    drawOrder: string[];
+    idleGlowPassIndex: number;
+    activeGlowPassIndex: number;
+    ringPassIndex: number;
+    idleGlowStateBefore: CanvasStateDebug;
+    idleGlowStateAfter: CanvasStateDebug;
+    idleRingStateBefore: CanvasStateDebug;
+    idleRingStateAfter: CanvasStateDebug;
+    activeGlowStateBefore: CanvasStateDebug;
+    activeGlowStateAfter: CanvasStateDebug;
+    activeRingStateBefore: CanvasStateDebug;
+    activeRingStateAfter: CanvasStateDebug;
+};
+
 export type CameraState = {
     panX: number;
     panY: number;
@@ -135,4 +156,19 @@ export const createInitialHoverState = (): HoverState => ({
     debugGlowOuterAlpha: 0,
     debugGlowOuterBlur: 0,
     debugNodeEnergy: 0
+});
+
+export const createInitialRenderDebug = (): RenderDebugInfo => ({
+    drawOrder: [],
+    idleGlowPassIndex: -1,
+    activeGlowPassIndex: -1,
+    ringPassIndex: -1,
+    idleGlowStateBefore: { globalCompositeOperation: 'source-over', globalAlpha: 1, filter: 'none' },
+    idleGlowStateAfter: { globalCompositeOperation: 'source-over', globalAlpha: 1, filter: 'none' },
+    idleRingStateBefore: { globalCompositeOperation: 'source-over', globalAlpha: 1, filter: 'none' },
+    idleRingStateAfter: { globalCompositeOperation: 'source-over', globalAlpha: 1, filter: 'none' },
+    activeGlowStateBefore: { globalCompositeOperation: 'source-over', globalAlpha: 1, filter: 'none' },
+    activeGlowStateAfter: { globalCompositeOperation: 'source-over', globalAlpha: 1, filter: 'none' },
+    activeRingStateBefore: { globalCompositeOperation: 'source-over', globalAlpha: 1, filter: 'none' },
+    activeRingStateAfter: { globalCompositeOperation: 'source-over', globalAlpha: 1, filter: 'none' }
 });

@@ -1,11 +1,13 @@
 import type { Dispatch, SetStateAction } from 'react';
 import type { PhysicsEngine } from '../../physics/engine';
 import type { PlaygroundMetrics } from '../playgroundTypes';
+import type { RenderDebugInfo } from './renderingTypes';
 
 type MetricsUpdater = (now: number, engine: PhysicsEngine) => void;
 
 export const createMetricsTracker = (
-    setMetrics: Dispatch<SetStateAction<PlaygroundMetrics>>
+    setMetrics: Dispatch<SetStateAction<PlaygroundMetrics>>,
+    getRenderDebug?: () => RenderDebugInfo
 ): MetricsUpdater => {
     let frameCount = 0;
     let lastFpsTime = performance.now();
@@ -64,7 +66,8 @@ export const createMetricsTracker = (
             avgDist,
             stdDist,
             aspectRatio: aspect,
-            lifecycleMs: Math.round(engine.lifecycle * 1000)
+            lifecycleMs: Math.round(engine.lifecycle * 1000),
+            renderDebug: getRenderDebug ? getRenderDebug() : undefined
         });
 
         frameCount = 0;

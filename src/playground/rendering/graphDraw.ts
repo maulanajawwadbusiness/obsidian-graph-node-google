@@ -3,7 +3,13 @@ import type { PhysicsEngine } from '../../physics/engine';
 import { getNodeRadius, getNodeScale, getOcclusionRadius, lerpColor } from '../../visual/theme';
 import type { ThemeConfig } from '../../visual/theme';
 import { drawGradientRing, drawTwoLayerGlow, withCtx } from './canvasUtils';
-import type { HoverState, RenderSettingsRef } from './renderingTypes';
+import type { HoverState, RenderDebugInfo, RenderSettingsRef } from './renderingTypes';
+
+const captureCanvasState = (ctx: CanvasRenderingContext2D) => ({
+    globalCompositeOperation: ctx.globalCompositeOperation,
+    globalAlpha: ctx.globalAlpha,
+    filter: ctx.filter || 'none'
+});
 
 export const drawLinks = (
     ctx: CanvasRenderingContext2D,
@@ -37,7 +43,8 @@ export const drawNodes = (
     engine: PhysicsEngine,
     theme: ThemeConfig,
     settingsRef: MutableRefObject<RenderSettingsRef>,
-    hoverStateRef: MutableRefObject<HoverState>
+    hoverStateRef: MutableRefObject<HoverState>,
+    renderDebugRef?: MutableRefObject<RenderDebugInfo>
 ) => {
     engine.nodes.forEach((node) => {
         withCtx(ctx, () => {
@@ -58,6 +65,11 @@ export const drawNodes = (
                 if (isDisplayNode && theme.hoverDebugEnabled) {
                     hoverStateRef.current.debugNodeEnergy = nodeEnergy;
                 }
+                const renderDebug = renderDebugRef?.current;
+                const sampleIdle = !!renderDebug && nodeEnergy === 0 && renderDebug.idleGlowPassIndex < 0;
+                const sampleActive = !!renderDebug && nodeEnergy > 0 && renderDebug.activeGlowPassIndex < 0;
+                const glowPassIndex = 1;
+                const ringPassIndex = 2;
 
                 // Energy-driven scale for node rendering (smooth growth on hover)
                 const nodeScale = getNodeScale(nodeEnergy, theme);
@@ -77,6 +89,14 @@ export const drawNodes = (
 
                 // 2. Glow (energy-driven: brightens + expands as hover energy rises)
                 if (theme.useTwoLayerGlow) {
+                    if (sampleIdle && renderDebug) {
+                        renderDebug.idleGlowPassIndex = glowPassIndex;
+                        renderDebug.idleGlowStateBefore = captureCanvasState(ctx);
+                    }
+                    if (sampleActive && renderDebug) {
+                        renderDebug.activeGlowPassIndex = glowPassIndex;
+                        renderDebug.activeGlowStateBefore = captureCanvasState(ctx);
+                    }
                     const glowParams = drawTwoLayerGlow(
                         ctx,
                         node.x,
@@ -94,6 +114,12 @@ export const drawNodes = (
                         hoverStateRef.current.debugGlowOuterAlpha = glowParams.outerAlpha;
                         hoverStateRef.current.debugGlowOuterBlur = glowParams.outerBlur;
                     }
+                    if (sampleIdle && renderDebug) {
+                        renderDebug.idleGlowStateAfter = captureCanvasState(ctx);
+                    }
+                    if (sampleActive && renderDebug) {
+                        renderDebug.activeGlowStateAfter = captureCanvasState(ctx);
+                    }
                 } else if (theme.glowEnabled) {
                     // Legacy single-layer glow (static)
                     withCtx(ctx, () => {
@@ -110,6 +136,19 @@ export const drawNodes = (
                 }
 
                 // 3. Ring stroke
+                if (sampleIdle && renderDebug) {
+                    renderDebug.idleRingStateBefore = captureCanvasState(ctx);
+                }
+                if (sampleActive && renderDebug) {
+                    renderDebug.activeRingStateBefore = captureCanvasState(ctx);
+                }
+                ctx.globalAlpha = 1;
+                ctx.globalCompositeOperation = 'source-over';
+                ctx.setLineDash([]);
+                ctx.shadowBlur = 0;
+                ctx.shadowColor = 'transparent';
+                ctx.filter = 'none';
+
                 if (theme.useGradientRing) {
                     // Energy-driven ring width boost
                     const ringWidth = theme.ringWidth * (1 + theme.hoverRingWidthBoost * nodeEnergy);
@@ -131,6 +170,14 @@ export const drawNodes = (
                     ctx.strokeStyle = node.isFixed ? theme.nodeFixedColor : theme.ringColor;
                     ctx.lineWidth = theme.ringWidth;
                     ctx.stroke();
+                }
+                if (sampleIdle && renderDebug) {
+                    renderDebug.ringPassIndex = ringPassIndex;
+                    renderDebug.idleRingStateAfter = captureCanvasState(ctx);
+                }
+                if (sampleActive && renderDebug) {
+                    renderDebug.ringPassIndex = ringPassIndex;
+                    renderDebug.activeRingStateAfter = captureCanvasState(ctx);
                 }
             } else {
                 // Normal mode: no scaling

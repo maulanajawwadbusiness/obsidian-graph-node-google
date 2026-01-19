@@ -14,12 +14,14 @@ import { createMetricsTracker } from './rendering/metrics';
 import {
     createInitialHoverState,
     createInitialPendingPointer,
+    createInitialRenderDebug,
     createInitialRenderSettings
 } from './rendering/renderingTypes';
 import type {
     CameraState,
     HoverState,
     PendingPointerState,
+    RenderDebugInfo,
     RenderSettingsRef
 } from './rendering/renderingTypes';
 
@@ -56,6 +58,7 @@ export const useGraphRendering = ({
     const settingsRef = useRef<RenderSettingsRef>(createInitialRenderSettings());
     const pendingPointerRef = useRef<PendingPointerState>(createInitialPendingPointer());
     const hoverStateRef = useRef<HoverState>(createInitialHoverState());
+    const renderDebugRef = useRef<RenderDebugInfo>(createInitialRenderDebug());
 
     const {
         clientToWorld,
@@ -92,7 +95,7 @@ export const useGraphRendering = ({
         const engine = engineRef.current;
         if (!engine) return;
 
-        const trackMetrics = createMetricsTracker(setMetrics);
+        const trackMetrics = createMetricsTracker(setMetrics, () => renderDebugRef.current);
 
         if (engine.nodes.size === 0) {
             const { nodes, links } = generateRandomGraph(spawnCount, config.targetSpacing, config.initScale, seed);
@@ -184,8 +187,23 @@ export const useGraphRendering = ({
             const globalAngle = engine.getGlobalAngle();
             applyCameraTransform(ctx, camera, width, height, centroid, globalAngle);
 
+            const renderDebug = renderDebugRef.current;
+            const defaultState = { globalCompositeOperation: 'source-over', globalAlpha: 1, filter: 'none' };
+            renderDebug.drawOrder = ['links', 'glow', 'ring', 'labels', 'hoverDebug'];
+            renderDebug.idleGlowPassIndex = -1;
+            renderDebug.activeGlowPassIndex = -1;
+            renderDebug.ringPassIndex = 2;
+            renderDebug.idleGlowStateBefore = defaultState;
+            renderDebug.idleGlowStateAfter = defaultState;
+            renderDebug.idleRingStateBefore = defaultState;
+            renderDebug.idleRingStateAfter = defaultState;
+            renderDebug.activeGlowStateBefore = defaultState;
+            renderDebug.activeGlowStateAfter = defaultState;
+            renderDebug.activeRingStateBefore = defaultState;
+            renderDebug.activeRingStateAfter = defaultState;
+
             drawLinks(ctx, engine, theme);
-            drawNodes(ctx, engine, theme, settingsRef, hoverStateRef);
+            drawNodes(ctx, engine, theme, settingsRef, hoverStateRef, renderDebugRef);
             drawLabels(ctx, engine, theme, settingsRef, hoverStateRef, globalAngle);
 
             if (

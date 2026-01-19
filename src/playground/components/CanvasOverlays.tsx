@@ -9,6 +9,8 @@ import {
 } from '../graphPlaygroundStyles';
 
 const stopPropagation = (e: React.MouseEvent) => e.stopPropagation();
+const formatState = (state: { globalAlpha: number; globalCompositeOperation: string; filter: string }) =>
+    `a=${state.globalAlpha.toFixed(2)} comp=${state.globalCompositeOperation} filter=${state.filter}`;
 
 type CanvasOverlaysProps = {
     debugOpen: boolean;
@@ -133,6 +135,25 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
                 Irregularity (R_std): {metrics.stdDist.toFixed(2)} px <br />
                 CV (Std/Mean): {(metrics.avgDist > 0 ? (metrics.stdDist / metrics.avgDist) : 0).toFixed(3)} <br />
                 Aspect Ratio (W/H): {metrics.aspectRatio.toFixed(3)}
+                {metrics.renderDebug && (
+                    <>
+                        <br />
+                        <br />
+                        <strong style={{ fontWeight: 700 }}>Render Debug</strong><br />
+                        Draw Order: {metrics.renderDebug.drawOrder.join(' > ')} <br />
+                        Idle Glow Pass: {metrics.renderDebug.idleGlowPassIndex} <br />
+                        Active Glow Pass: {metrics.renderDebug.activeGlowPassIndex} <br />
+                        Ring Pass: {metrics.renderDebug.ringPassIndex} <br />
+                        Idle Glow (pre): {formatState(metrics.renderDebug.idleGlowStateBefore)} <br />
+                        Idle Glow (post): {formatState(metrics.renderDebug.idleGlowStateAfter)} <br />
+                        Idle Ring (pre): {formatState(metrics.renderDebug.idleRingStateBefore)} <br />
+                        Idle Ring (post): {formatState(metrics.renderDebug.idleRingStateAfter)} <br />
+                        Active Glow (pre): {formatState(metrics.renderDebug.activeGlowStateBefore)} <br />
+                        Active Glow (post): {formatState(metrics.renderDebug.activeGlowStateAfter)} <br />
+                        Active Ring (pre): {formatState(metrics.renderDebug.activeRingStateBefore)} <br />
+                        Active Ring (post): {formatState(metrics.renderDebug.activeRingStateAfter)}
+                    </>
+                )}
             </div>
         )}
     </>

@@ -38,7 +38,7 @@ export const SIDEBAR_STYLE: React.CSSProperties = {
 };
 
 export const DEBUG_OVERLAY_STYLE: React.CSSProperties = {
-    position: 'absolute',
+    position: 'fixed',
     top: '16px',
     left: '16px',
     padding: '8px 12px',
@@ -50,7 +50,7 @@ export const DEBUG_OVERLAY_STYLE: React.CSSProperties = {
     fontFamily: 'inherit',
     // Allow synthetic bold (root disables it via `font-synthesis: none`)
     fontSynthesis: 'weight',
-    zIndex: 10,
+    zIndex: 999999,
 };
 
 export const SIDEBAR_TOGGLE_STYLE: React.CSSProperties = {

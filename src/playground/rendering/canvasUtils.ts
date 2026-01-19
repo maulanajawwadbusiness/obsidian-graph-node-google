@@ -111,11 +111,16 @@ export function drawTwoLayerGlow(
     const outerAlphaBase = theme.glowOuterAlphaBase;
     const outerAlphaBoost = theme.glowOuterAlphaBoost;
 
+
     // Compute energy-driven values
     const innerAlpha = innerAlphaBase + e * innerAlphaBoost + innerIdleExtra;
-    const innerBlur = theme.glowInnerBlurBase + e * theme.glowInnerBlurBoost;
     const outerAlpha = outerAlphaBase + e * outerAlphaBoost + outerIdleExtra;
-    const outerBlur = theme.glowOuterBlurBase + e * theme.glowOuterBlurBoost;
+
+    // Blur scales mildly with energy for natural breathing (not too foggy)
+    const blurScale = 1 + e * theme.glowBlurScaleBoost;
+    const innerBlur = (theme.glowInnerBlurBase + e * theme.glowInnerBlurBoost) * blurScale;
+    const outerBlur = (theme.glowOuterBlurBase + e * theme.glowOuterBlurBoost) * blurScale;
+
 
     if (theme.hoverDebugEnabled && !idleProbeLogged) {
         const probe = (probeEnergy: number) => {

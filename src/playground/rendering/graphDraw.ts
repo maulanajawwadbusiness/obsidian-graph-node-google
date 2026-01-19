@@ -1,6 +1,6 @@
 import type { MutableRefObject } from 'react';
 import type { PhysicsEngine } from '../../physics/engine';
-import { getNodeRadius, getOcclusionRadius, lerpColor } from '../../visual/theme';
+import { getNodeRadius, getNodeScale, getOcclusionRadius, lerpColor } from '../../visual/theme';
 import type { ThemeConfig } from '../../visual/theme';
 import { drawGradientRing, drawTwoLayerGlow, withCtx } from './canvasUtils';
 import type { HoverState, RenderSettingsRef } from './renderingTypes';
@@ -42,7 +42,7 @@ export const drawNodes = (
     engine.nodes.forEach((node) => {
         withCtx(ctx, () => {
             const baseRadius = settingsRef.current.useVariedSize ? node.radius : 5.0;
-            const radius = getNodeRadius(baseRadius, theme);
+            const baseRenderRadius = getNodeRadius(baseRadius, theme);
             ctx.globalAlpha = 1;
             ctx.globalCompositeOperation = 'source-over';
             ctx.setLineDash([]);
@@ -58,6 +58,10 @@ export const drawNodes = (
                 if (isDisplayNode && theme.hoverDebugEnabled) {
                     hoverStateRef.current.debugNodeEnergy = nodeEnergy;
                 }
+
+                // Energy-driven scale for node rendering (smooth growth on hover)
+                const nodeScale = getNodeScale(nodeEnergy, theme);
+                const radius = baseRenderRadius * nodeScale;
 
                 // Energy-driven primary blue (smooth interpolation)
                 const primaryBlue = node.isFixed
@@ -129,6 +133,8 @@ export const drawNodes = (
                     ctx.stroke();
                 }
             } else {
+                // Normal mode: no scaling
+                const radius = baseRenderRadius;
                 ctx.beginPath();
                 ctx.arc(node.x, node.y, radius, 0, Math.PI * 2);
 

@@ -1,6 +1,6 @@
 import type { RefObject, MutableRefObject } from 'react';
 import type { PhysicsEngine } from '../../physics/engine';
-import { getNodeRadius, getTheme } from '../../visual/theme';
+import { getNodeRadius, getNodeScale, getTheme } from '../../visual/theme';
 import type { ThemeConfig } from '../../visual/theme';
 import { rotateAround, smoothstep } from './renderingMath';
 import type {
@@ -38,12 +38,17 @@ export const createHoverController = ({
         theme: ThemeConfig
     ) => {
         const renderRadius = getRenderedNodeRadius(node, theme);
+        // Use maximum scale (at energy=1) for interaction radii
+        // This ensures hit-test grows with visual size and provides forgiving interaction
+        const maxScale = getNodeScale(1.0, theme);
+        const scaledRenderRadius = renderRadius * maxScale;
+
         const outerRadius = theme.nodeStyle === 'ring'
-            ? renderRadius + theme.ringWidth * 0.5
-            : renderRadius;
+            ? scaledRenderRadius + theme.ringWidth * 0.5
+            : scaledRenderRadius;
         const hitRadius = outerRadius + theme.hoverHitPaddingPx;
         const haloRadius = outerRadius * theme.hoverHaloMultiplier + theme.hoverHaloPaddingPx;
-        return { renderRadius, outerRadius, hitRadius, haloRadius };
+        return { renderRadius: scaledRenderRadius, outerRadius, hitRadius, haloRadius };
     };
 
     const evaluateNode = (

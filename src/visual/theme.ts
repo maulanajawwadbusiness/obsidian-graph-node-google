@@ -93,6 +93,11 @@ export interface ThemeConfig {
     hoverSwitchMarginPx: number;       // Anti ping-pong margin for node switching (8)
     hoverRingWidthBoost: number;       // Max ring width boost at full energy (0.1 = 10%)
     hoverGlowBoost: number;            // Max glow alpha boost at full energy (0.15)
+
+    // Hover scale (energy-driven node size growth)
+    nodeScaleIdle: number;             // Scale multiplier at energy=0 (1.0)
+    nodeScaleHover: number;            // Scale multiplier at energy=1 (1.2)
+    glowBlurScaleBoost: number;        // Glow blur expansion factor at energy=1 (0.2 = 20% wider)
 }
 
 // -----------------------------------------------------------------------------
@@ -190,6 +195,11 @@ export const NORMAL_THEME: ThemeConfig = {
     hoverSwitchMarginPx: 0,
     hoverRingWidthBoost: 0,
     hoverGlowBoost: 0,
+
+    // Hover scale (disabled in normal mode)
+    nodeScaleIdle: 1.0,
+    nodeScaleHover: 1.0,
+    glowBlurScaleBoost: 0,
 };
 
 // -----------------------------------------------------------------------------
@@ -291,6 +301,11 @@ export const ELEGANT_THEME: ThemeConfig = {
     hoverSwitchMarginPx: 8,         // Anti ping-pong margin
     hoverRingWidthBoost: 0.1,       // 10% max ring width boost
     hoverGlowBoost: 0.15,           // Max glow alpha boost
+
+    // Hover scale (Apple-smooth enlargement)
+    nodeScaleIdle: 1.0,
+    nodeScaleHover: 1.2,            // 20% larger on hover
+    glowBlurScaleBoost: 0.2,        // Glow breathes 20% wider at full energy
 };
 
 // -----------------------------------------------------------------------------
@@ -319,6 +334,15 @@ export function getOcclusionRadius(nodeRadius: number, theme: ThemeConfig): numb
     return nodeRadius + theme.ringWidth * 0.5 + 1;
 }
 
+
+/**
+ * Get energy-driven scale multiplier for node rendering.
+ * Linear interpolation from idle to hover scale.
+ */
+export function getNodeScale(nodeEnergy: number, theme: ThemeConfig): number {
+    const e = Math.max(0, Math.min(1, nodeEnergy));
+    return theme.nodeScaleIdle + (theme.nodeScaleHover - theme.nodeScaleIdle) * e;
+}
 // -----------------------------------------------------------------------------
 // Color Utilities for Gradient Ring
 // -----------------------------------------------------------------------------

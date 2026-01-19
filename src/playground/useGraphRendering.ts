@@ -186,6 +186,7 @@ export const useGraphRendering = ({
 
             drawLinks(ctx, engine, theme);
             drawNodes(ctx, engine, theme, settingsRef, hoverStateRef);
+            drawLabels(ctx, engine, theme, settingsRef, hoverStateRef);
 
             if (
                 theme.hoverDebugEnabled &&

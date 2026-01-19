@@ -50,7 +50,8 @@ export function generateRandomGraph(
             radius: roleRadius,
             isFixed: false,
             warmth: 1.0,
-            role
+            role,
+            label: `Node ${id.substring(1)}`
         };
     };
 

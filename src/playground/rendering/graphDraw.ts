@@ -186,7 +186,22 @@ export function drawNodeLabel(
         ctx.fillStyle = theme.labelColor;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'top';
+
+        // Counter-rotate to force horizontal text (cancels camera rotation)
+        if (theme.labelForceHorizontal && globalAngle !== 0) {
+            ctx.translate(labelX, labelY);
+            ctx.rotate(-globalAngle);
+            ctx.translate(-labelX, -labelY);
+        }
+
         ctx.fillText(label, labelX, labelY);
+
+        // Debug: show rotation angle being canceled
+        if (theme.labelDebugEnabled && theme.labelForceHorizontal && globalAngle !== 0) {
+            ctx.fillStyle = ''rgba(100, 200, 255, 0.9)'';
+            ctx.font = ''8px monospace'';
+            ctx.fillText("rot: ${(globalAngle * 180 / Math.PI).toFixed(1)}", labelX, labelY + theme.labelFontSize + 2);
+        }
 
         // Debug: draw anchor cross + bbox estimate
         if (theme.labelDebugEnabled) {
@@ -221,7 +236,8 @@ export const drawLabels = (
     engine: PhysicsEngine,
     theme: ThemeConfig,
     settingsRef: MutableRefObject<RenderSettingsRef>,
-    hoverStateRef: MutableRefObject<HoverState>
+    hoverStateRef: MutableRefObject<HoverState>,
+    globalAngle: number  // Camera rotation angle to counter-rotate
 ) => {
     if (!theme.labelEnabled) return;
 
@@ -235,7 +251,7 @@ export const drawLabels = (
 
         const label = node.label || node.id;  // Fallback to node ID
 
-        drawNodeLabel(ctx, node.x, node.y, renderRadius, label, nodeEnergy, theme);
+        drawNodeLabel(ctx, node.x, node.y, renderRadius, label, nodeEnergy, theme, globalAngle);
     });
 };
 

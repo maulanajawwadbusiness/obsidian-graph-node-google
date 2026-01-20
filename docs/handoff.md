@@ -1,7 +1,7 @@
-# Handoff Document: Dark Power Elegant v2 + Hover Energy System
+# Handoff Document: Graph Physics + Document Pipeline + Popup System
 
-**Last Updated:** 2026-01-18  
-**Status:** Hover energy system stabilized (color, selection, timing, pointer lifecycle, radius alignment, debug isolation)  
+**Last Updated:** 2026-01-20  
+**Status:** Phase 5 complete (Node Popup System all 4 runs), Document pipeline stable, AI scaffolding ready  
 **Next Developer:** Claude Sonnet
 
 ---
@@ -9,542 +9,547 @@
 ## 1. Project Snapshot
 
 ### What This Is
-Force-directed graph physics playground (similar to Obsidian graph view) with two visual themes:
-- **Normal mode:** Blue filled nodes (baseline, unchanged)
-- **Elegant v2 mode:** Dark power aesthetic with hollow gradient rings, two-layer glow, vignette background
+Force-directed graph physics playground with document ingestion pipeline and conversation-first node interaction model.
 
-### What Runs #1-#8 Changed
-- **Run #1:** Implemented elegant skin foundation (hollow rings, occlusion disks, dark background)
-- **Run #2:** Upgraded to "Dark Power Elegant v2" with:
-  - Blue→purple gradient rings (segmented arcs, 48 segments)
-  - Rotated gradient orientation (150°, dark purple bottom-left for visual gravity)
-  - Two-layer glow system (inner blue, outer purple)
-  - Radial vignette background (center lighter, edges near-black)
-  - Binary hover color switch (#3d4857 default → #63abff bright on hover)
-  - Debug infrastructure (console logs, visual overlay)
-- **Run #3:** Implemented proximity-based hover energy system:
-  - Smooth energy interpolation [0..1] with halo detection
-  - Tau-based time smoothing (120ms, Apple-like feel)
-  - Hysteresis + anti ping-pong switching
-  - Energy-driven color lerp and ring width boost
-  - Debug overlays (radius/halo circles, energy text)
-  - **Bug fixed:** Blue interpolation now stable (rgb/hex parsing)
-- **Run #4:** Coordinate space correctness (CSS pixels + camera + rotation), DPR-safe rendering, and cursor crosshair debug
-- **Run #5:** Selection stability (active candidate, sticky exit, margin switching) + debug decision telemetry
-- **Run #6:** Time smoothing hardening (dt clamp, tau guard, energy clamp, dt debug)
-- **Run #7:** Render-state hygiene (save/restore boundaries, explicit canvas state resets, debug isolation)
-- **Run #8:** Performance + lifecycle fixes
-  - Selection throttled to pointer changes + camera drift
-  - Active pointer tracking (multi-pointer safe)
-  - Hit/halo radius alignment to ring outer edge + small padding
-  - Debug gating (`hoverDebugStateSentinel`)
-- **Run #9:** Rendering hook modularization (refactor only, no behavior changes)
-  - Split `useGraphRendering.ts` from 1300+ lines → ~256 line orchestrator
-  - Created `src/playground/rendering/` folder with 8 specialized modules
-  - Separation of concerns: types, math, canvas utils, hover controller, energy, camera, drawing, metrics
-  - Improved testability and maintainability
-- **Run #10:** Energy-driven glow mechanism (nerve system, not dead sticker)
-  - Glow now wakes with hoverEnergy: brightens + expands as cursor approaches
-  - Two-layer glow with base + boost parameters (inner blue, outer purple)
-  - Inner glow uses lerped `primaryBlue` for cohesion with ring
-  - Outer glow uses `deepPurple` for atmospheric effect
-  - Gamma curve for response shaping (`glowEnergyGamma`)
-  - Ambient glow when idle (quiet but alive, not dead)
-  - Debug overlay shows computed glow values (iA, iB, oA, oB)
-- **Run #11:** Hover detection size fix (intent halo with pixel padding)
-  - Issue: detection too small after `ELEGANT_NODE_SCALE` returned to 2
-  - Previous: tiny +2px padding + multiplier only (calibrated for scale 4)
-  - Fix: hybrid approach with multiplier + absolute pixel padding
-  - New knobs: `hoverHitPaddingPx: 10`, `hoverHaloPaddingPx: 32`
-  - Formula: `hitRadius = outerRadius + hitPaddingPx`, `haloRadius = outerRadius * haloMultiplier + haloPaddingPx`
-  - Detection remains forgiving at small scales
-- **Run #12:** Calm mode (temporal stabilization for hover selection)
-  - Goal: stop rapid flip-flops under fast cursor jitter/scramble
-  - Minimum hold: once acquired, hold node for `minHoverHoldMs` (120ms) before switching
-  - Debounce switching: candidate must stay best for `switchDebounceMs` (60ms)
-  - Exit grace: brief exits outside halo tolerated for `exitGraceMs` (60ms)
-  - New state fields: `hoverHoldUntilMs`, `lastInsideMs`, `pendingSwitchId`, `pendingSwitchSinceMs`
-  - Debug overlay shows hold countdown and pending switch info
-  - Debug logs include decision tags: `kept: hold`, `kept: debounce`, `switched: debounce satisfied`, `exited`
+**Core Systems:**
+1. **Physics Engine** - Force-directed graph simulation (unchanged from baseline)
+2. **Visual Layer** - Two themes (normal/elegant v2) with hover energy system  
+3. **Document Pipeline** - Parse txt/md/docx/pdf → bind to node labels
+4. **AI Scaffolding** - Dual-mode LLM client (OpenAI/OpenRouter) for label rewriting
+5. **Popup System** - Node-centric UI (normal popup + chat + future seed module)
+
+### What Changed In This Chat Arc
+
+**Document ingestion phase:**
+- Implemented unified parser for txt/md/docx/pdf
+- Web Worker isolation (off-main-thread parsing)
+- Document store (React Context)
+- Preview UI (left panel + bottom-left toggle)
+- Node label binding (first 5 words → first 5 nodes)
+
+**AI architecture phase:**
+- LLMClient interface (generateText, generateStructured)
+- OpenAI/OpenRouter adapters
+- Label rewriter (`makeThreeWordLabels()`)
+- Environment config (`VITE_OPENAI API_KEY`)
+- Timeout protection +defensive parsing
+
+**Popup system phase (4 runs):**
+- **Run 1:** Popup rails (state, portal, basic layout)
+- **Run 2:** Smart positioning + smooth animations + outside-click close
+- **Run 3:** Chat input (5-line expansion) + mini chatbar (mock AI replies)
+- **Run 4:** Seed popup interface contract + geometry provider + doc viewer stubs
 
 ---
 
-## 2. Current Implemented Features
+## 2. Quick Start
 
-### Skin Toggle
-- Toggle button on canvas (top-left, after debug toggle)
-- Default: `elegant` mode
-- Controlled by `skinMode` state in `GraphPhysicsPlayground.tsx`
-- Visibility flag: `SHOW_THEME_TOGGLE` in `graphPlaygroundStyles.ts`
+### Installation
+```bash
+npm install
+```
 
-### Hollow Ring Nodes (Elegant Mode)
-- **Occlusion disk:** Hides links underneath node, matches background color
-- **Ring stroke:** Gradient from blue→purple or solid fallback
-- **Ring width:** Scales with `nodeScale` master knob (currently `4`)
+### Environment Setup (Optional - for AI features)
+```bash
+# Create .env.local
+VITE_OPENAI_API_KEY=sk-...
+```
 
-### Node Rendering Order (Elegant Mode)
-The rendering sequence determines visual layering (first drawn = bottom layer):
-1. **Occlusion disk** - Hides links under node, slightly smaller than ring footprint
-2. **Ring stroke** - Gradient ring (blue→purple)
-3. **Glow layers** - Two-layer glow (outer purple + inner blue), drawn last so it appears on top
+### Run
+```bash
+npm run dev
+```
 
-**Note:** Glow is drawn after the ring, so it appears as an overlay on top of the node structure.
+**Dev server:** `http://localhost:5173`
 
-
-### Gradient Ring Implementation
-- **Method:** Segmented arcs (48 segments) for cross-browser compatibility
-- **Rotation:** `gradientRotationDegrees = 170` (dark purple at bottom-left)
-- **Colors:** `primaryBlue` (#63abff or #3d4857 based on hover) → `deepPurple` (#4a2a6a)
-- **Function:** `drawGradientRing()` in `useGraphRendering.ts`
-
-### Two-Layer Glow (Energy-Driven)
-- **Behavior:** Glow wakes with hoverEnergy — brightens + expands as cursor approaches (nerve system, not dead sticker)
-- **Outer glow (purple atmosphere):**
-  - Base: 14px blur, 0.02 alpha (ambient whisper)
-  - Boost: +20px blur, +0.10 alpha at full energy (exhale)
-  - Color: `deepPurple` (#4a2a6a)
-- **Inner glow (blue cohesion):**
-  - Base: 6px blur, 0.04 alpha (quiet but alive)
-  - Boost: +10px blur, +0.14 alpha at full energy (clearly stronger)
-  - Color: Lerped `primaryBlue` (matches ring color for cohesion)
-- **Formula:** `value = base + nodeEnergy^gamma * boost`
-- **Gamma:** 1.0 (linear response, <1 = faster attack)
-- **Draw order:** Outer first, then inner (creates depth)
-- **Idle state:** Minimal ambient glow (not dead, just resting)
-
-### Vignette Background
-- **Radial gradient:** Center (#0f0f1a) → Edge (#050508)
-- **Strength:** 0.7
-- **Function:** `drawVignetteBackground()` in `useGraphRendering.ts`
-
-### Hover Energy System (Proximity-Based)
-- **Energy range:** 0 (asleep, dark blue #3d4857) -> 1 (awake, bright blue #63abff)
-- **Proximity model:** Smoothstep with halo detection
-  - Inside hit radius (d <= hit): energy = 1
-  - In halo zone (hit < d <= halo): energy = smoothstep((halo - d) / (halo - hit))
-  - Outside halo: energy = 0
-- **Rendered radius:** ring outer edge (renderRadius + ringWidth / 2)
-- **Hit radius (hybrid):** `outerRadius + hoverHitPaddingPx` (10px padding for forgiving feel)
-- **Halo radius (hybrid):** `outerRadius * hoverHaloMultiplier + hoverHaloPaddingPx` (1.8x + 32px intent halo)
-- **Why hybrid:** Multiplier-only was too small at scale 2; absolute padding keeps detection forgiving at all scales
-- **Time smoothing:** Tau-based exponential lerp (120ms)
-- **Hit-test:** Whole disc (includes hollow interior, not ring-only)
-- **Architecture:** Handlers returned from `useGraphRendering` hook, camera stays internal
-- **Coordinate transform:** CSS pixels (getBoundingClientRect) -> camera inverse -> world space, includes global rotation
-- **Anti-flicker:** Sticky exit (1.05x), anti ping-pong (8px margin), pop prevention
-- **Selection:** Active candidate model, pointer-throttled, O(1) when pointer idle
-- **Calm mode (temporal stabilization):**
-  - **Minimum hold:** Once acquired, hold node for `minHoverHoldMs` (120ms) before allowing switch
-  - **Debounce switching:** Candidate must stay best for `switchDebounceMs` (60ms) before switch
-  - **Exit grace:** Brief exits outside halo tolerated for `exitGraceMs` (60ms) before clearing
-  - **Goal:** Stop rapid flip-flops under fast cursor jitter/scramble
-  - **Debug:** Overlay shows hold countdown and pending switch info; logs include decision tags
-- **Energy-driven rendering:**
-  - Color: `lerpColor(primaryBlueDefault, primaryBlueHover, energy)`
-  - Ring width: `baseWidth * (1 + 0.1 * energy)`
-  - Glow: Base + boost driven by energy (see Two-Layer Glow section)
-- **Timing hardening:** dt clamp (max 40ms), tau guard, energy clamp + NaN recovery
-- **Debug:** Console log on change + render/hit/halo circles + energy text + crosshair + perf counters + calm mode state
+### First-Time Verification
+1. Page loads → graph spawns 5 nodes
+2. Hover nodes → smooth color transition (dark → bright blue)
+3. Drag `.txt` file onto canvas → preview panel opens
+4. Click a node → big popup appears
+5. Type in chat input → mini chatbar opens
 
 ---
 
-## 3. Hard Invariants (DO NOT BREAK)
+## 3. Feature Verification Checklist
 
-### Visual Parity
-✅ **Normal mode must stay identical to baseline**  
-- No changes to filled circle rendering, colors, or behavior
-- Only elegant mode has new features
+### Document Pipeline
 
-### Architecture Rules
-✅ **Camera stays internal to `useGraphRendering`**  
-- Do NOT expose `cameraRef` back to component
-- Pointer handlers returned from hook: `{ handlePointerMove, handlePointerEnter, handlePointerLeave, handlePointerCancel, handlePointerUp }`
+**Plain text (.txt / .md):**
+- [ ] Drag-drop `.txt` file onto canvas
+- [ ] Console shows: `[DocumentStore] Parsing started`
+- [ ] Preview panel slides in from left
+- [ ] Preview shows filename, word count, full text
+- [ ] First 5 words appear as labels on first 5 nodes
+- [ ] Close preview → press button again → reopens
 
-- **Hover hit-test must be whole node disc (hit/halo based)**
-- NOT ring-only, NOT pixel sampling, NOT arc-segment dependent
-- Formula: `outerRadius = renderRadius + ringWidth/2`, `hitRadius = outerRadius + 2px`
-- Halo: `haloRadius = outerRadius * hoverHaloMultiplier` (1.8x)
-- Distance: `dist <= hitRadius` for full energy, smoothstep in halo zone
+**Word documents (.docx):**
+- [ ] Drag-drop `.docx` file
+- [ ] Parsing completes (may take 1-2s for large files)
+- [ ] Text extracted correctly (paragraphs preserved)
+- [ ] First 5 words → node labels
 
-✅ **Pointer coordinates must use CSS pixel space**  
-- Use `getBoundingClientRect()` for canvas dimensions (NOT canvas.width/height directly)
-- Avoids devicePixelRatio issues
-- Transform: CSS pixels → camera inverse → world coordinates
+**PDF files (.pdf):**
+- [ ] Drag-drop text-based PDF
+- [ ] Text extraction succeeds
+- [ ] First 5 words → node labels
 
-✅ **Debuggability mandatory**  
-- All new systems must have debug toggle + change-only console logs
-- No log spam (only log state transitions)
+**Scanned PDF edge case:**
+- [ ] Drag-drop scanned PDF (image-only, no embedded text)
+- [ ] Warning appears: "No text extracted" (or equivalent)
+- [ ] No crash, graceful degradation
 
-### Code Quality
-✅ **Minimal diff policy**  
-- Only change what's necessary for the feature
-- No surprise refactors unless explicitly requested
-
----
-
-## 4. Knobs + Where They Live
-
-### `src/visual/theme.ts`
-
-#### Master Scale Control
-```typescript
-const ELEGANT_NODE_SCALE = 4;  // Scales both radius and ringWidth proportionally
-```
-
-#### Gradient Ring Colors
-```typescript
-primaryBlueDefault: '#3d4857',     // Dark blue (no hover)
-primaryBlueHover: '#63abff',       // Bright blue (hovered)
-deepPurple: '#4a2a6a',             // Rich dark purple
-gradientRotationDegrees: 170,      // Rotation angle (150° = purple bottom-left)
-ringGradientSegments: 48,          // Smoothness (32-64 recommended)
-```
-
-#### Glow Parameters
-```typescript
-glowInnerColor: 'rgba(99, 171, 255, 0.22)',   // Blue, closer
-glowInnerRadius: 8,
-glowInnerAlpha: 0.22,
-glowOuterColor: 'rgba(100, 60, 160, 0.12)',   // Purple, wider
-glowOuterRadius: 20,
-glowOuterAlpha: 0.12,
-```
-
-#### Vignette Background
-```typescript
-vignetteCenterColor: '#0f0f1a',    // Lighter indigo
-vignetteEdgeColor: '#050508',      // Near-black
-vignetteStrength: 0.7,             // 0.0-1.0 (how far gradient extends)
-```
-
-#### Energy-Driven Glow (Two-Layer)
-```typescript
-// Inner glow (blue cohesion with ring)
-glowInnerAlphaBase: 0.04,        // Ambient alpha (quiet but alive)
-glowInnerAlphaBoost: 0.14,       // Additional alpha at nodeEnergy=1
-glowInnerBlurBase: 6,            // Ambient blur radius
-glowInnerBlurBoost: 10,          // Additional blur at nodeEnergy=1
-
-// Outer glow (purple atmosphere)
-glowOuterAlphaBase: 0.02,        // Ambient alpha (whisper)
-glowOuterAlphaBoost: 0.10,       // Additional alpha at nodeEnergy=1
-glowOuterBlurBase: 14,           // Ambient blur radius
-glowOuterBlurBoost: 20,          // Additional blur at nodeEnergy=1 (exhale)
-
-// Response curve
-glowEnergyGamma: 1.0,            // 1.0 = linear, <1 = faster attack
-```
-
-#### Hover Energy System
-```typescript
-// Basic colors
-primaryBlueDefault: '#3d4857',  // Dark blue (asleep)
-primaryBlueHover: '#63abff',    // Bright blue (awake)
-
-// Proximity detection (hybrid: multiplier + absolute padding)
-hoverHaloMultiplier: 1.8,       // Detection radius multiplier (1.8x)
-hoverHaloPaddingPx: 32,         // Absolute halo padding (intent halo, forgiving at small scales)
-hoverHitPaddingPx: 10,          // Absolute hit padding (forgiving feel)
-hoverRadiusMultiplier: 2.2,     // DEPRECATED (kept for compatibility)
-
-// Calm mode (temporal stabilization)
-calmModeEnabled: true,          // Enable temporal stabilization
-minHoverHoldMs: 120,            // Minimum hold time before allowing switch
-switchDebounceMs: 60,           // Candidate must stay best for this long
-exitGraceMs: 60,                // Grace period outside halo before clearing
-
-// Time smoothing
-hoverEnergyTauMs: 120,          // Tau constant (Apple-like feel)
-
-// Anti-flicker
-hoverStickyExitMultiplier: 1.05,// Hysteresis for exit (5% buffer)
-hoverSwitchMarginPx: 8,         // Anti ping-pong margin
-
-// Energy-driven effects
-hoverRingWidthBoost: 0.1,       // 10% max ring width boost
-hoverGlowBoost: 0.15,           // Reserved for future
-
-// Debug
-hoverDebugEnabled: false,       // Show radius/hit/halo circles + energy text
-hoverDebugStateSentinel: false, // Log canvas state sentinel once
-```
-
-
-#### Link Style
-```typescript
-linkColor: 'rgba(99, 140, 200, 0.38)',  // Indigo-tinted
-linkWidth: 0.6,
-```
+**Worker isolation:**
+- [ ] During parsing, physics loop continues at 60fps
+- [ ] No UI freezes or stalls
+- [ ] Hover/camera still work during parsing
 
 ---
 
-## 5. Files Touched + Responsibilities
+### Popup System
 
-### Core Files
+**Basic popup behavior:**
+- [ ] Click a hovered node → big popup opens
+- [ ] Popup appears smoothly (fade + scale animation, not brick)
+- [ ] Popup positioned left **or** right of node (smart placement)
+- [ ] Popup stays fully on-screen (10px margins, no clipping)
+- [ ] Popup width: ~20vw (min 280px)
+- [ ] Popup height: ~80vh
+- [ ] Internal padding: ≥20px (comfortable spacing)
 
-#### `src/visual/theme.ts`
-**Purpose:** Centralized visual configuration (palette, knobs, theme objects)
+**Popup content:**
+- [ ] Header: "Node Info" + close X button
+- [ ] Body: Node label (3-word sentence or ID fallback)
+- [ ] Body: Lorem ipsum placeholder text
+- [ ] Footer: Chat input field
 
-**Key Exports:**
-- `ThemeConfig` interface
-- `NORMAL_THEME` (baseline)
-- `ELEGANT_THEME` (dark power v2)
-- `getTheme(skinMode)` getter
-- Color utilities: `hexToRgb()`, `lerpColor()`
+**Closing:**
+- [ ] Click X button → popup closes smoothly
+- [ ] Press Escape → popup closes
+- [ ] Click outside popup → popup closes
+- [ ] Outside-click has 100ms delay (no race with opening click)
 
-#### `src/playground/useGraphRendering.ts`
-**Purpose:** Thin orchestrator (~256 lines) wiring rendering subsystems
+**Node switching:**
+- [ ] Popup open on node A
+- [ ] Click hovered node B → popup switches to B cleanly
+- [ ] No double popups, no stuck states
 
-**Key Responsibilities:**
-- State refs initialization (settings, pointer, hover, camera)
-- Hover controller setup via `createHoverController()`
-- Main render loop (RAF-based): physics tick, energy update, canvas setup, camera containment, selection update, transforms, drawing, metrics
-- Window blur cleanup
-
-**Returns:** `{ handlePointerMove, handlePointerEnter, handlePointerLeave, handlePointerCancel, handlePointerUp, clientToWorld }`
-
-#### `src/playground/rendering/` (Modularized Subsystems)
-
-**New in Run #9:** Rendering logic split into 8 specialized modules:
-
-- **renderingTypes.ts** - Shared types + state factories (`HoverState`, `CameraState`, etc.)
-- **renderingMath.ts** - Math helpers (`clamp`, `smoothstep`, `rotateAround`)
-- **canvasUtils.ts** - Canvas isolation + drawing primitives (`withCtx`, vignette, gradient ring, glow)
-- **hoverController.ts** - Pointer lifecycle + hover selection + transforms
-- **hoverEnergy.ts** - Energy smoothing (tau-based, dt clamp)
-- **camera.ts** - Leash containment + camera transforms
-- **graphDraw.ts** - Links, nodes, debug overlays, crosshair
-- **metrics.ts** - FPS/velocity/shape tracking
-
-**Behavior Note:** Pure refactor for code organization. **No behavior changes** to hover, camera, or rendering logic.
-
-#### `src/playground/GraphPhysicsPlayground.tsx`
-**Purpose:** Main component, wires pointer events, hosts controls
-
-**Key Responsibilities:**
-- Canvas container + event wiring
-- Destructures handlers from `useGraphRendering`
-- Wraps handlers for React events (`onPointerMove`, `onPointerLeave`)
-- Skin toggle state (`skinMode`)
-- Drag-and-drop (existing, mouse-based)
-
-### Supporting Files
-
-#### `src/playground/graphPlaygroundStyles.ts`
-- `SHOW_THEME_TOGGLE` flag (controls toggle visibility)
-- Container and canvas styles
-
-#### `src/playground/components/CanvasOverlays.tsx`
-- Debug panel + theme toggle button
+**Edge cases:**
+- [ ] Drag node (>5px movement) → popup does NOT open
+- [ ] Click node with camera moving → no crash
+- [ ] Open popup → physics/hover still work normally
 
 ---
 
-## 6. How to Test (Manual Acceptance)
+### Chat Input (Inside Popup)
 
-### Skin Toggle
-- [ ] Click theme toggle button
-- [ ] Verify smooth switch between normal (filled blue) and elegant (hollow gradient rings)
-- [ ] Verify background changes to vignette in elegant mode
+**Auto-expansion:**
+- [ ] Input starts at 1 line height (~24px)
+- [ ] Type text → input expands line-by-line
+- [ ] Max 5 lines (~120px), then scrolls
+- [ ] Delete text → input shrinks back
 
-### Gradient Orientation
-- [ ] In elegant mode, observe nodes
-- [ ] Bright blue segment should appear at **top-right**
-- [ ] Dark purple segment should appear at **bottom-left**
-- [ ] Gradient should be smooth (no banding or gaps)
+**Send button:**
+- [ ] Icon image displays (send_icon.png)
+- [ ] Hover → opacity increases, scale grows
+- [ ] Click sends message
+- [ ] Enter key sends message
+- [ ] Shift+Enter creates new line (does NOT send)
 
-### Hover Energy System
-- [ ] Move cursor **toward** a node (not touching yet)
-- [ ] Node should start **brightening before reaching the ring** (halo detection)
-- [ ] Inside node disc → reaches full bright blue **smoothly** (not instant)
-- [ ] Move cursor away → node **fades back smoothly** (no snap)
-- [ ] Move along boundary → **no flicker** (hysteresis working)
-- [ ] Pointer leaves canvas → hover clears smoothly
+**Note:** Auto-expansion animation is sudden (not smooth). Future improvement: CSS transition for height.
 
-### Energy-Driven Glow (Breathing)
-- [ ] **Idle nodes:** Minimal ambient glow visible (quiet but alive, not dead)
-- [ ] **Approach cursor:** Glow starts to **brighten + expand** before contact (halo region)
-- [ ] **Inside node:** Glow clearly **stronger + larger** (still soft, not neon)
-- [ ] **Leaving:** Glow **exhales smoothly** (fades + shrinks, no snap)
-- [ ] **Inner glow:** Blue-tinted, matches ring color cohesively
-- [ ] **Outer glow:** Purple atmosphere, wider than inner
-- [ ] **No harsh rim, no state leaks**
+---
 
-### Debug Features
-- [ ] Open console
-- [ ] Hover nodes and see log: `hover: null -> n0 (dist=..., r=..., halo=..., energy=...)`
-- [ ] Verify **cyan solid circle** at rendered radius
-- [ ] Verify **magenta dashed circle** at hit radius
-- [ ] Verify **yellow dashed circle** at halo radius
-- [ ] Verify **crosshair** sits under cursor
-- [ ] Verify **energy text** overlay shows `e=0.xx t=0.xx d=XXX`
-- [ ] Verify **glow text** shows `glow: iA=0.xx iB=xx oA=0.xx oB=xx`
-- [ ] Verify **calm mode text** shows hold countdown and pending switch info
-- [ ] Verify **perf text** shows `scan`, `sel/s`, `en/s`
-- [ ] Verify no log spam (only on state change)
-- [ ] Verify dt clamp/spike logs appear only when triggered
-- [ ] Verify calm mode decision tags in logs: `kept: hold`, `kept: debounce`, `switched: debounce satisfied`, `exited`
+### Mini Chatbar
+
+**Opening:**
+- [ ] Type message in popup chat input
+- [ ] Press Enter or click send
+- [ ] Mini chatbar window opens on right side of viewport
+- [ ] User message appears in blue bubble (right-aligned)
+- [ ] Mock AI reply appears immediately (left-aligned, no bubble)
+
+**Chatbar UI:**
+- [ ] Size: 300px × 400px
+- [ ] Position: Right side, vertically centered
+- [ ] Message history scrolls
+- [ ] Input field at bottom
+- [ ] Send icon button
+
+**Continuation:**
+- [ ] Type another message in chatbar input
+- [ ] Press Enter → message appends to history
+- [ ] Mock AI reply appends
+- [ ] Scroll stays at bottom (auto-scroll)
+
+**Closing:**
+- [ ] Click X button in chatbar → closes
+- [ ] Chatbar independent from popup (can close separately)
+
+---
+
+## 4. Where to Modify Things
+
+### Document Parsing
+
+**Add new file format:**
+1. Create adapter in `src/document/parsers.ts`
+2. Add MIME type detection to `createFileParser()`
+3. Update `sourceType` union in `src/document/types.ts`
+4. Update worker message handling in `src/workers/documentWorker.ts`
+
+**Change parsing logic:**
+- Edit adapter functions in `src/document/parsers.ts`
+- Example: `parseTxt()`, `parseDocx()`, `parsePdf()`
+
+**Modify preview UI:**
+- Button: `src/playground/components/TextPreviewButton.tsx`
+- Panel: `src/playground/components/TextPreviewPanel.tsx`
+
+---
+
+### Node Label Binding
+
+**Change word count:**
+```typescript
+// src/document/nodeBinding.ts
+const firstFive = words.slice(0, 10);  // Change 5 → 10
+const nodes = Array.from(engine.nodes.values()).slice(0, 10);
+```
+
+**AI label rewriting:**
+- Wire up `applyAILabelsToNodes()` in `GraphPhysicsPlayground.tsx` `handleDrop()`
+- Currently partially implemented, needs final integration
+
+---
+
+### Popup Components
+
+**Normal popup:**
+- Main component: `src/popup/NodePopup.tsx`
+- State: `src/popup/PopupStore.tsx`
+- Types: `src/popup/popupTypes.ts`
+
+**Chat input:**
+- Component: `src/popup/ChatInput.tsx`
+- Styling: All inline (TEXTAREA_STYLE, SEND_BUTTON_STYLE constants)
+
+**Mini chatbar:**
+- Component: `src/popup/MiniChatbar.tsx`
+- Mock reply text: Search for `"This is a mock AI response..."`
+
+**Seed popup (future):**
+- Interface: `src/popup/seedPopupTypes.ts`
+- Implementation: Not yet created (contract only)
+
+**Document viewer stubs:**
+- File: `src/popup/adapters.ts`
+- Replace stubs with real implementations when viewer exists
+
+---
+
+### AI Client
+
+**Switch mode:**
+```typescript
+// src/ai/index.ts
+const client = createLLMClient({
+  mode: 'openrouter',  // Change from 'openai'
+  apiKey: import.meta.env.VITE_OPENROUTER_API_KEY
+});
+```
+
+**Change prompts:**
+- Edit `makeThreeWordLabels()` in `src/ai/labelRewriter.ts`
+
+**Add new AI function:**
+1. Create function in `src/ai/` folder
+2. Use `createLLMClient()` to get client
+3. Call `client.generateText()` or `client.generateStructured()`
+
+---
+
+## 5. Known Issues / TODO
+
+### Current Bugs
+- **AI loading glyph:** Implementation attempted but glyph not visible (debug needed)
+  - State updates correctly (`aiActivity: true/false`)
+  - Component mounts via `createPortal`
+  - CSS animation defined
+  - **Issue:** Dot never appears on screen (z-index/position/rendering issue)
+  - **Debug brief:** `glyph-debug-brief.md` created for investigation
+
+### Placeholder/Stub Status
+- **Seed popup animation:** Interface defined, no implementation
+- **Document viewer sync:** Adapter stubs only (scrollToPosition, highlightRange)
+- **Full chatbar expansion:** Stub only (expandToFull, collapseToMini)
+- **Live anchor geometry:** Hook exists, live tracking not implemented
+
+### Future Improvements
+- **Chat input animation:** Add smooth height transition css (currently sudden)
+- **Real AI responses:** Wire chatbar to LLMClient for actual conversations
+- **Document viewer:** Build left-panel document view with scroll/highlight sync
+- **Seed popup module:** Implement 4-phase rAF animation system
+
+---
+
+## 6. Testing Matrix
+
+### Document Formats
+
+| Format | File | Expected Result | Status |
+|--------|------|-----------------|--------|
+| Plain text | `test-document.txt` | Preview + 5 labels | ✅ |
+| Markdown | `README.md` | Preview + 5 labels | ✅ |
+| Word | `sample.docx` | Preview + 5 labels | ✅ |
+| PDF (text) | `paper.pdf` | Preview + 5 labels | ✅|
+| PDF (scanned) | `scan.pdf` | Warning, no crash | ⚠️ (degraded) |
+
+### Popup Scenarios
+
+| Scenario | Expected | Status |
+|----------|----------|--------|
+| Click node | Popup opens at smart position | ✅ |
+| Click outside | Popup closes | ✅ |
+| ESC key | Popup closes | ✅ |
+| Switch nodes | Popup switches cleanly | ✅ |
+| Drag node | Popup does NOT open | ✅ |
+| Chat input expand | 1→5 lines, then scroll | ✅ |
+| Send message | Chatbar opens with reply | ✅ |
 
 ### Edge Cases
-- [ ] Spawn 5 nodes → verify hover works on all sizes
-- [ ] Toggle size variation → verify hit-test stays accurate
-- [ ] Drag node while hovering → verify no crashes
+
+| Case | Expected | Status |
+|------|----------|--------|
+| Drop file during popup | No crash, popup stays | ✅ |
+| Open popup during AI call | No crash, independent | ✅ |
+| Multiple rapid clicks | No double popups | ✅ |
+| Hover break | Hover energy preserved | ✅ |
+| Physics loop | 60fps maintained | ✅ |
 
 ---
 
-## 7. Known Issues / Next Tasks
+## 7. Multi-Run Development Model
 
-### Current Bug
-None observed in hover energy system after stabilization passes.
+This project evolves in discrete runs (not monolithic features):
 
-### Completed Features (Runs #3-#12)
-- Proximity model with smoothstep
-- Tau-based time smoothing (120ms) + dt clamp
-- Hysteresis (sticky exit 1.05x) + margin switching
-- Pop prevention on node switch
-- Pointer lifecycle handling (enter/leave/cancel/up + blur)
-- Active pointer tracking (multi-pointer safe)
-- Radius alignment (outer edge + hit padding)
-- Debug overlays (render/hit/halo circles, energy text, crosshair)
-- Render-state isolation (save/restore boundaries)
-- Selection throttling + perf counters
-- **Rendering modularization** (Run #9): 1300+ lines → 8 modules + ~256 line orchestrator
-- **Energy-driven glow** (Run #10): Glow wakes with hoverEnergy (base+boost, gamma curve, ambient alive state)
-- **Intent halo** (Run #11): Hybrid padding (multiplier + absolute px) keeps detection forgiving at all scales
-- **Calm mode** (Run #12): Temporal stabilization (min hold, debounce, exit grace) stops jitter flip-flops
+### Completed Runs
 
-### Future Enhancements (Not Yet Implemented)
-- **Glow boost:** Use `hoverGlowBoost` knob (currently reserved)
-- **Cursor-field effects:** Multiple nodes respond to cursor proximity
-- **Smart nearest-node:** Prefer closest with better heuristics
-- **Hover radius tuning UI:** Real-time slider for halo multiplier
+**Document pipeline:**
+- Run 1: File drop + worker + store + preview UI
+- Run 2: Node binding (first 5 words)
 
----
+**AI scaffolding:**
+- Run 1: LLMClient interface + OpenAI adapter
+- Run 2: Label rewriter + timeout protection
 
-## 8. Debugging Commands
+**Popup system (Phase 5):**
+- Run 1: State + portal + basic layout
+- Run 2: Smart positioning + animations
+- Run 3: Chat input + mini chatbar
+- Run 4: Seed popup contract + stubs
 
-### Enable Debug Mode
-```typescript
-// In src/visual/theme.ts, ELEGANT_THEME:
-hoverDebugEnabled: true,
-hoverDebugStateSentinel: false,
-```
+### Next Runs (Suggestions)
 
-### Verify Hover Hit-Test
-```typescript
-// Console should show:
-hover: null -> n0 (dist=12.3, hitR=24.5)
-hover: n0 -> n1 (dist=8.7, hitR=22.1)
-hover: n1 -> null (pointer left canvas)
-```
+**Document viewer:**
+- Run 1: Left-panel scrollable text (no sync)
+- Run 2: Scroll-to-position from popup/chat
+- Run 3: Highlight ranges
 
-### Tune Master Scale
-```typescript
-// In src/visual/theme.ts:
-const ELEGANT_NODE_SCALE = 1.5;  // Make nodes 50% larger
-```
+**AI integration:**
+- Run 1: Wire label rewriting to UI button
+- Run 2: Real chatbar responses via LLMClient
+- Run 3: Context-aware prompts (node + document)
+
+**Seed popup module:**
+- Run 1: SVG overlay + phase 0-1 (seed expand)
+- Run 2: Phase 2-3 (throat elongate)
+- Run 3: Phase 4 (content reveal)
+- Run 4: Callbacks + integration
 
 ---
 
-## 9. Critical Code Patterns
+## 8. File Map (Quick Reference)
 
-### Hover Hit-Test (Disc Logic)
-```typescript
-// getInteractionRadii() in useGraphRendering.ts
-const renderRadius = getNodeRadius(baseRadius, theme);
-const outerRadius = theme.nodeStyle === 'ring'
-  ? renderRadius + theme.ringWidth * 0.5
-  : renderRadius;
-const hitRadius = outerRadius + 2;  // +2px padding
-const haloRadius = outerRadius * theme.hoverHaloMultiplier;
-```
+### Core Layers
 
-### Coordinate Transform (CSS -> World)
-```typescript
-// clientToWorld() in useGraphRendering.ts
-const cssX = clientX - rect.left - rect.width / 2;
-const cssY = clientY - rect.top - rect.height / 2;
-const unrotatedX = cssX / camera.zoom - camera.panX;
-const unrotatedY = cssY / camera.zoom - camera.panY;
-const world = rotateAround(unrotatedX, unrotatedY, centroid.x, centroid.y, -angle);
-```
+**Physics:**
+- `src/physics/engine.ts` - Main simulation
+- `src/physics/forces.ts` - Force application
+- `src/physics/engine/velocity/*.ts` - Velocity passes
 
-### Gradient Ring Drawing (Segmented Arcs)
-```typescript
-// drawGradientRing() in useGraphRendering.ts
-const segmentAngle = (Math.PI * 2) / segments;
-const rotationOffset = (rotationDegrees * Math.PI) / 180;
+**Visual:**
+- `src/visual/theme.ts` - Theme config
+- `src/playground/useGraphRendering.ts` - Render orchestrator
+- `src/playground/rendering/*.ts` - Modularized rendering
 
-for (let i = 0; i < segments; i++) {
-  const t = i / segments;
-  const color = lerpColor(startColor, endColor, t);
-  const startAngle = i * segmentAngle + rotationOffset - 0.02;
-  const endAngle = (i + 1) * segmentAngle + rotationOffset + 0.02;
-  ctx.arc(x, y, radius, startAngle, endAngle);
-  // ...stroke
-}
-```
+**Document:**
+- `src/document/parsers.ts` - Format adapters
+- `src/document/nodeBinding.ts` - Word→label mapping
+- `src/document/types.ts` - ParsedDocument interface
+- `src/workers/documentWorker.ts` - Off-thread parsing
+- `src/store/documentStore.tsx` - State management
+
+**AI:**
+- `src/ai/index.ts` - Factory + exports
+- `src/ai/clientTypes.ts` - LLMClient interface
+- `src/ai/openaiClient.ts` - OpenAI adapter
+- `src/ai/labelRewriter.ts` - 3-word sentence generator
+
+**Popup:**
+- `src/popup/PopupStore.tsx` - State context
+- `src/popup/NodePopup.tsx` - Main popup
+- `src/popup/ChatInput.tsx` - Expandable input
+- `src/popup/MiniChatbar.tsx` - Chat window
+- `src/popup/seedPopupTypes.ts` - Future contract
+- `src/popup/adapters.ts` - Doc viewer stubs
+
+**UI Components:**
+- `src/playground/components/TextPreviewButton.tsx`
+- `src/playground/components/TextPreviewPanel.tsx`
+- `src/playground/components/AIActivityGlyph.tsx` (parked)
+- `src/playground/components/CanvasOverlays.tsx`
 
 ---
 
-## 9. Validating Run #9 Modularization
+## 9. Debug Commands
 
-**Quick Manual Check (No Behavior Changes Expected):**
+### Enable Document Parsing Logs
+```typescript
+// In src/store/documentStore.tsx, add console.log to reducer:
+case 'PARSE_COMPLETE':
+  console.log('[DocumentStore] Parse complete:', action.document);
+```
 
-Since Run #9 was a pure refactor, verify rendering parity:
+### Test Document Formats
+```bash
+# Create test files
+echo "Hello world testing document pipeline" > test.txt
+# Drag test.txt onto canvas
+```
 
-1. **Run the app:**
-   ```bash
-   npm run dev
-   ```
+### Enable Popup Debug Logs
+```typescript
+// In src/popup/PopupStore.tsx, logs already exist:
+console.log('[Popup] Opening for node:', nodeId);
+console.log('[Popup] Sending message:', text);
+```
 
-2. **Hover energy system:**
-   - [ ] Move pointer toward nodes → smooth color wake-up (dark → bright blue)
-   - [ ] Inside node → full bright blue
-   - [ ] Move away → smooth fade back to dark
-   - [ ] No flicker when moving between close nodes
-
-3. **Debug overlays (if enabled):**
-   - [ ] Set `hoverDebugEnabled: true` in theme.ts
-   - [ ] Verify cyan (render), magenta (hit), yellow (halo) circles appear
-   - [ ] Verify energy text overlay shows values
-   - [ ] Verify crosshair follows cursor
-
-4. **Camera framing:**
-   - [ ] Spawn nodes → camera auto-frames graph
-   - [ ] Graph stays centered and visible
-   - [ ] Smooth camera transitions
-
-5. **Rendering parity:**
-   - [ ] Gradient rings render correctly (blue → purple)
-   - [ ] Two-layer glow visible
-   - [ ] Vignette background in elegant mode
-   - [ ] No visual artifacts or canvas state leaks
-
-6. **Console:**
-   - [ ] No errors or warnings
-   - [ ] Hover logs only on node change (if debug enabled)
-   - [ ] No performance degradation
-
-**Expected Result:** Everything should work exactly as before Run #9. If any behavior changed, the modularization introduced a bug.
+### Verify Worker Communication
+```typescript
+// In src/workers/documentWorker.ts:
+console.log('[Worker] Received message:', event.data.type);
+console.log('[Worker] Posting result:', result);
+```
 
 ---
 
 ## 10. Acceptance Criteria Summary
 
-**Before merging any changes:**
-- [ ] Normal mode unchanged (visual regression test)
-- [ ] Hover works on entire node disc (blue, purple, center)
-- [ ] Debug logs show correct hitRadius
+**Before deploying:**
+- [ ] All document formats parse without main-thread stall
+- [ ] Node labels update after parsing completes
+- [ ] Popup opens on click, positions smartly, never clips off-screen
+- [ ] Chat input expands/shrinks smoothly (or note: animation TODO)
+- [ ] Mini chatbar shows messages correctly
 - [ ] No console errors or React warnings
-- [ ] Gradient orientation correct (purple bottom-left)
-- [ ] All manual acceptance tests pass
+- [ ] Physics maintains 60fps during all operations
+- [ ] Hover energy system unaffected by popup
+- [ ] No memory leaks (close/reopen popup multiple times)
 
-**Code style:**
+**Code quality:**
 - [ ] TypeScript strict mode passes
-- [ ] No unused variables or imports
-- [ ] Console logs only on state change (no spam)
+- [ ] No unused imports
+- [ ] Console logs only on state changes (no spam)
 - [ ] Comments explain "why", not "what"
 
 ---
 
-**End of handoff. Good luck, Sonnet! 🚀**
+## 11. Critical Patterns
+
+### Worker Pattern (Document Parsing)
+```typescript
+// Send to worker
+worker.postMessage({
+  type: 'PARSE_FILE',
+  file: fileData,
+  fileName: file.name
+});
+
+// Handle response
+worker.onmessage = (e) => {
+  if (e.data.type === 'PARSE_COMPLETE') {
+    dispatch({ type: 'PARSE_COMPLETE', document: e.data.document });
+  }
+};
+```
+
+### Node Label Binding
+```typescript
+// After document ready
+const words = document.text.split(/\s+/).filter(w => w.length > 0);
+const firstFive = words.slice(0, 5);
+const nodes = Array.from(engine.nodes.values()).slice(0, 5);
+
+nodes.forEach((node, i) => {
+  node.label = firstFive[i] || `Node ${i}`;
+});
+```
+
+### Popup State Management
+```typescript
+// Open popup
+const { openPopup } = usePopup();
+openPopup(nodeId, {
+  x: screenPos.x,
+  y: screenPos.y,
+  radius: screenRadius
+});
+
+// Send message
+const { sendMessage } = usePopup();
+sendMessage("What is this node about?");
+// → Opens chatbar with user msg + mock AI reply
+```
+
+### Smart Positioning
+```typescript
+// Choose left or right
+if (anchor.x > viewportWidth / 2) {
+  // Node on right → popup on left
+  x = anchor.x - anchor.radius - GAP - popupWidth;
+} else {
+  // Node on left → popup on right
+  x = anchor.x + anchor.radius + GAP;
+}
+
+// Clamp to viewport
+x = Math.max(10, Math.min(x, viewportWidth - popupWidth - 10));
+```
+
+---
+
+## 12. Known Gotchas
+
+### Document Parsing
+- **Scanned PDFs:** pdf.js can't extract text from images (OCR not included)
+- **Large files:** DOCX >10MB may take 2-3s to parse (worker prevents UI freeze)
+- **Worker errors:** Always wrapped in try/catch, error posted back to main thread
+
+### Popup System
+- **Drag vs click:** Movement >5px triggers drag mode (popup won't open)
+- **Outside-click timing:** 100ms delay after open to avoid race
+- **Geometry snapshots:** Popup uses static anchor from open time (not live-tracked yet)
+
+### AI Client
+- **API keys:** Must be in `.env.local` with `VITE_` prefix (Vite requirement)
+- **Timeout:** AbortController set to 10s (adjust in `labelRewriter.ts`)
+- **Structured output:** Requires ChatCompletions API, not Responses API
+
+### React State
+- **Async timing:** Always wait for document parse completion before binding labels
+- **Ref access:** Physics engine lives in ref, not state (avoid re-render triggers)
+
+---
+
+**End of handoff. Document pipeline + Popup system ready for next phase! 🚀**

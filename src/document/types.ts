@@ -24,4 +24,5 @@ export interface DocumentState {
     status: DocumentStatus;
     errorMessage: string | null;
     previewOpen: boolean;
+    aiActivity: boolean;           // True while AI is generating labels
 }

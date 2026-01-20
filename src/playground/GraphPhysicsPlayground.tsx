@@ -7,12 +7,13 @@ import { CanvasOverlays } from './components/CanvasOverlays';
 import { SidebarControls } from './components/SidebarControls';
 import { TextPreviewButton } from './components/TextPreviewButton';
 import { TextPreviewPanel } from './components/TextPreviewPanel';
+import { AIActivityGlyph } from './components/AIActivityGlyph';
 import { CONTAINER_STYLE, MAIN_STYLE, SHOW_THEME_TOGGLE } from './graphPlaygroundStyles';
 import { PlaygroundMetrics } from './playgroundTypes';
 import { useGraphRendering } from './useGraphRendering';
 import { generateRandomGraph } from './graphRandom';
 import { DocumentProvider, useDocument } from '../store/documentStore';
-import { applyFirstWordsToNodes } from '../document/nodeBinding';
+import { applyFirstWordsToNodes, applyAILabelsToNodes } from '../document/nodeBinding';
 
 // -----------------------------------------------------------------------------
 // Main Component (Internal)
@@ -194,9 +195,21 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
         // Parse file in worker and get document immediately
         const document = await documentContext.parseFile(file);
 
-        // Apply first 5 words to node labels
+        // Apply first 5 words to node labels (fast, synchronous)
         if (document) {
             applyFirstWordsToNodes(engineRef.current, document);
+
+            // Trigger AI label rewrite (async, non-blocking)
+            // Capture docId now to avoid races with documentContext updates.
+            const docId = document.id;
+            const words = document.text.trim().split(/\s+/).slice(0, 5);
+            applyAILabelsToNodes(
+                engineRef.current,
+                words,
+                docId,
+                () => docId,
+                documentContext.setAIActivity
+            );
         }
     };
 
@@ -305,6 +318,7 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
                 />
                 <TextPreviewButton />
                 <TextPreviewPanel />
+                <AIActivityGlyph />
             </div>
 
             {sidebarOpen && (

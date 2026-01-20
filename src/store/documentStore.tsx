@@ -14,7 +14,8 @@ type DocumentAction =
     | { type: 'SET_ERROR'; error: string }
     | { type: 'TOGGLE_PREVIEW' }
     | { type: 'SET_PREVIEW'; open: boolean }
-    | { type: 'CLEAR_DOCUMENT' };
+    | { type: 'CLEAR_DOCUMENT' }
+    | { type: 'SET_AI_ACTIVITY'; active: boolean };
 
 // Initial state
 const initialState: DocumentState = {
@@ -22,6 +23,7 @@ const initialState: DocumentState = {
     status: 'idle',
     errorMessage: null,
     previewOpen: false,
+    aiActivity: false,
 };
 
 // Reducer
@@ -48,6 +50,8 @@ function documentReducer(state: DocumentState, action: DocumentAction): Document
             return { ...state, previewOpen: action.open };
         case 'CLEAR_DOCUMENT':
             return { ...initialState, previewOpen: state.previewOpen };
+        case 'SET_AI_ACTIVITY':
+            return { ...state, aiActivity: action.active };
         default:
             return state;
     }
@@ -63,6 +67,7 @@ interface DocumentContextValue {
     setPreviewOpen: (open: boolean) => void;
     clearDocument: () => void;
     parseFile: (file: File) => Promise<ParsedDocument | null>;
+    setAIActivity: (active: boolean) => void;
 }
 
 const DocumentContext = createContext<DocumentContextValue | null>(null);
@@ -113,7 +118,8 @@ export function DocumentProvider({ children }: { children: ReactNode }) {
         togglePreview: () => dispatch({ type: 'TOGGLE_PREVIEW' }),
         setPreviewOpen: (open) => dispatch({ type: 'SET_PREVIEW', open }),
         clearDocument: () => dispatch({ type: 'CLEAR_DOCUMENT' }),
-        parseFile
+        parseFile,
+        setAIActivity: (active) => dispatch({ type: 'SET_AI_ACTIVITY', active })
     };
 
     return (

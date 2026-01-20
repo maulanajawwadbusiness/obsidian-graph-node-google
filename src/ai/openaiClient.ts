@@ -1,6 +1,6 @@
 /**
  * OpenAI Client Implementation
- * Uses OpenAI's Responses API for text and ChatCompletions API for structured output
+ * Uses OpenAI's Chat Completions API for text generation
  */
 
 import type { LLMClient } from './clientTypes';
@@ -8,6 +8,7 @@ import type { LLMClient } from './clientTypes';
 export class OpenAIClient implements LLMClient {
     private apiKey: string;
     private defaultModel: string;
+    private baseUrl = 'https://api.openai.com/v1';
 
     constructor(apiKey: string, defaultModel: string = 'gpt-4o') {
         this.apiKey = apiKey;
@@ -22,13 +23,43 @@ export class OpenAIClient implements LLMClient {
         const temperature = opts?.temperature ?? 0.7;
         const maxTokens = opts?.maxTokens ?? 1000;
 
-        // TODO: Implement OpenAI API call
-        // Use fetch() to call OpenAI's API endpoint
-        console.log('[OpenAIClient] generateText called:', { model, temperature, maxTokens });
-        console.log('[OpenAIClient] Prompt:', prompt);
+        try {
+            const response = await fetch(`${this.baseUrl}/chat/completions`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${this.apiKey}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    model,
+                    messages: [
+                        {
+                            role: 'user',
+                            content: prompt
+                        }
+                    ],
+                    temperature,
+                    max_tokens: maxTokens
+                })
+            });
 
-        // Stub: return placeholder
-        return `[OpenAI ${model} response to: ${prompt.substring(0, 50)}...]`;
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`OpenAI API error (${response.status}): ${errorText}`);
+            }
+
+            const data = await response.json();
+            const content = data.choices?.[0]?.message?.content;
+
+            if (!content) {
+                throw new Error('No content in OpenAI response');
+            }
+
+            return content;
+        } catch (error) {
+            console.error('[OpenAIClient] generateText failed:', error);
+            throw error;
+        }
     }
 
     async generateStructured<T>(

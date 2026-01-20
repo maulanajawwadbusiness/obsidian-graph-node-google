@@ -69,7 +69,7 @@ const MESSAGES_STYLE: React.CSSProperties = {
     fontSize: '13px',
     lineHeight: '1.5',
     paddingLeft: '4px',      // Visual balance
-    paddingRight: '12px',    // Reserve lane for scrollbar
+    paddingRight: 'var(--scrollbar-gutter, 12px)',    // Reserve lane for scrollbar
 };
 
 const MESSAGE_STYLE_USER: React.CSSProperties = {
@@ -198,6 +198,7 @@ export const MiniChatbar: React.FC<MiniChatbarProps> = ({ messages, onSend, onCl
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const messagesRef = useRef<HTMLDivElement>(null);  // Scroll container ref
     const fadeWrapperRef = useRef<HTMLDivElement>(null);  // Fade wrapper ref
+    const scrollTimeoutRef = useRef<number | null>(null);
     const chatbarRef = useRef<HTMLDivElement>(null);
     const { popupRect } = usePopup();
 
@@ -265,6 +266,15 @@ export const MiniChatbar: React.FC<MiniChatbarProps> = ({ messages, onSend, onCl
         const onScroll = () => {
             cancelAnimationFrame(rafId);
             rafId = requestAnimationFrame(updateFades);
+
+            // Keep scroll activity in the DOM to avoid re-renders during rapid scrolling.
+            scroller.classList.add('is-scrolling');
+            if (scrollTimeoutRef.current) {
+                window.clearTimeout(scrollTimeoutRef.current);
+            }
+            scrollTimeoutRef.current = window.setTimeout(() => {
+                scroller.classList.remove('is-scrolling');
+            }, 400);
         };
 
         scroller.addEventListener('scroll', onScroll, { passive: true });
@@ -275,6 +285,9 @@ export const MiniChatbar: React.FC<MiniChatbarProps> = ({ messages, onSend, onCl
         return () => {
             scroller.removeEventListener('scroll', onScroll);
             cancelAnimationFrame(rafId);
+            if (scrollTimeoutRef.current) {
+                window.clearTimeout(scrollTimeoutRef.current);
+            }
         };
     }, []);
 

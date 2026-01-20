@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, ReactNode } from 'react';
-import type { PopupState, PopupContextValue, AnchorGeometry } from './popupTypes';
+import type { PopupState, PopupContextValue, AnchorGeometry, PopupRect } from './popupTypes';
 
 /**
  * Popup Store - React Context for managing popup state
@@ -10,6 +10,7 @@ const initialState: PopupState = {
     mode: 'normal',
     selectedNodeId: null,
     anchorGeometry: null,
+    popupRect: null,
     chatbarOpen: false,
     messages: [],
 };
@@ -26,6 +27,7 @@ export function PopupProvider({ children }: { children: ReactNode }) {
             mode: 'normal',
             selectedNodeId: nodeId,
             anchorGeometry: geometry,
+            popupRect: null,
             chatbarOpen: false,
             messages: [],
         });
@@ -68,6 +70,10 @@ export function PopupProvider({ children }: { children: ReactNode }) {
         });
     };
 
+    const setPopupRect = (rect: PopupRect | null) => {
+        setState(prev => ({ ...prev, popupRect: rect }));
+    };
+
     const contextValue: PopupContextValue = {
         ...state,
         openPopup,
@@ -75,6 +81,7 @@ export function PopupProvider({ children }: { children: ReactNode }) {
         switchToNode,
         sendMessage,
         closeChatbar,
+        setPopupRect,
     };
 
     return (

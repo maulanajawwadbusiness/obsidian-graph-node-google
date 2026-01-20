@@ -13,7 +13,7 @@ const POPUP_STYLE: React.CSSProperties = {
     minWidth: '280px',
     height: '80vh',
     backgroundColor: 'rgba(20, 20, 30, 0.95)',
-    border: '1px solid rgba(99, 171, 255, 0)',
+    border: 'none',
     borderRadius: '8px',
     padding: '20px',
     color: 'rgba(180, 190, 210, 0.9)',
@@ -43,7 +43,6 @@ const POPUP_VISIBLE_STYLE: React.CSSProperties = {
     opacity: 1,
     transform: 'scale(1)',
     filter: 'blur(0px)',
-    borderColor: 'rgba(99, 171, 255, 0.3)',
     backdropFilter: 'blur(12px)',
     boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)',
 };
@@ -52,8 +51,8 @@ const HEADER_STYLE: React.CSSProperties = {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingBottom: '12px',
-    borderBottom: '1px solid rgba(99, 171, 255, 0.2)',
+    paddingBottom: '16px',
+    marginBottom: '4px',
 };
 
 const CLOSE_BUTTON_STYLE: React.CSSProperties = {
@@ -112,7 +111,7 @@ function computePopupPosition(
 }
 
 export const NodePopup: React.FC = () => {
-    const { selectedNodeId, anchorGeometry, closePopup, sendMessage } = usePopup();
+    const { selectedNodeId, anchorGeometry, closePopup, sendMessage, setPopupRect } = usePopup();
     const popupRef = useRef<HTMLDivElement>(null);
     const [isVisible, setIsVisible] = useState(false);
     const [contentVisible, setContentVisible] = useState(false);
@@ -159,6 +158,42 @@ export const NodePopup: React.FC = () => {
             document.removeEventListener('mousedown', handleClickOutside);
         };
     }, [closePopup]);
+
+    // Report popup rect for chatbar positioning
+    useEffect(() => {
+        if (!isVisible) {
+            setPopupRect(null);
+            return;
+        }
+        if (!popupRef.current) return;
+
+        const reportRect = () => {
+            if (!popupRef.current) return;
+            const rect = popupRef.current.getBoundingClientRect();
+            setPopupRect({
+                left: rect.left,
+                top: rect.top,
+                width: rect.width,
+                height: rect.height,
+            });
+        };
+
+        reportRect();
+        const settleTimer = window.setTimeout(reportRect, 450);
+        const handleTransitionEnd = (event: TransitionEvent) => {
+            if (event.propertyName === 'transform' || event.propertyName === 'opacity') {
+                reportRect();
+            }
+        };
+
+        const node = popupRef.current;
+        node.addEventListener('transitionend', handleTransitionEnd);
+
+        return () => {
+            window.clearTimeout(settleTimer);
+            node.removeEventListener('transitionend', handleTransitionEnd);
+        };
+    }, [isVisible, position.left, position.top, setPopupRect]);
 
     const nodeLabel = selectedNodeId ? `Node ${selectedNodeId.slice(0, 8)}` : 'Unknown';
 

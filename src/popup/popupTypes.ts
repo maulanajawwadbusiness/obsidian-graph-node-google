@@ -11,11 +11,19 @@ export interface AnchorGeometry {
     radius: number; // Screen radius
 }
 
+export interface PopupRect {
+    left: number;
+    top: number;
+    width: number;
+    height: number;
+}
+
 export interface PopupState {
     isOpen: boolean;
     mode: PopupMode;
     selectedNodeId: string | null;
     anchorGeometry: AnchorGeometry | null;
+    popupRect: PopupRect | null;  // Computed popup position/size
     chatbarOpen: boolean;
     messages: Array<{ role: 'user' | 'ai'; text: string }>;
 }
@@ -26,6 +34,7 @@ export interface PopupActions {
     switchToNode: (nodeId: string, geometry: AnchorGeometry) => void;
     sendMessage: (text: string) => void;
     closeChatbar: () => void;
+    setPopupRect: (rect: PopupRect | null) => void;
 }
 
 export type PopupContextValue = PopupState & PopupActions;

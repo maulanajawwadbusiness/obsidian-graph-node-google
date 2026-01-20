@@ -36,3 +36,27 @@ body {
 .gp-sidebar textarea {
   font-family: inherit;
 }
+
+/* Arnvoid scrollbar styling - premium, thin, membrane-native */
+.arnvoid-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+
+.arnvoid-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.arnvoid-scroll::-webkit-scrollbar-thumb {
+  background: rgba(99, 171, 255, 0.2);
+  border-radius: 3px;
+}
+
+.arnvoid-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(99, 171, 255, 0.4);
+}
+
+/* Firefox fallback */
+.arnvoid-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(99, 171, 255, 0.2) transparent;
+}

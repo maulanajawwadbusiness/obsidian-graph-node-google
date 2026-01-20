@@ -16,12 +16,16 @@ export interface PopupState {
     mode: PopupMode;
     selectedNodeId: string | null;
     anchorGeometry: AnchorGeometry | null;
+    chatbarOpen: boolean;
+    messages: Array<{ role: 'user' | 'ai'; text: string }>;
 }
 
 export interface PopupActions {
     openPopup: (nodeId: string, geometry: AnchorGeometry) => void;
     closePopup: () => void;
     switchToNode: (nodeId: string, geometry: AnchorGeometry) => void;
+    sendMessage: (text: string) => void;
+    closeChatbar: () => void;
 }
 
 export type PopupContextValue = PopupState & PopupActions;

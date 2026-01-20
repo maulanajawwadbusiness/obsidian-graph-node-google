@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { usePopup } from './PopupStore';
+import { ChatInput } from './ChatInput';
 
 const stopPropagation = (e: React.MouseEvent) => e.stopPropagation();
 
@@ -18,7 +19,7 @@ const POPUP_STYLE: React.CSSProperties = {
     color: 'rgba(180, 190, 210, 0.9)',
     fontFamily: 'system-ui, -apple-system, sans-serif',
     backdropFilter: 'blur(0px)',
-    boxShadow: '0 0 80px 40px rgba(99, 171, 255, 0.4)',  // BIG GLOW - light arrives first
+    boxShadow: '0 8px 32px rgba(0, 0, 0, 0)',
     pointerEvents: 'auto',
     zIndex: 1001,
     display: 'flex',
@@ -30,7 +31,7 @@ const POPUP_STYLE: React.CSSProperties = {
     filter 350ms cubic-bezier(0.16, 1, 0.3, 1),
     border-color 300ms ease-out 100ms,
     backdrop-filter 300ms ease-out,
-    box-shadow 500ms cubic-bezier(0.16, 1, 0.3, 1)
+    box-shadow 400ms ease-out 50ms
   `,
     opacity: 0,
     transform: 'scale(0.8)',
@@ -111,7 +112,7 @@ function computePopupPosition(
 }
 
 export const NodePopup: React.FC = () => {
-    const { selectedNodeId, anchorGeometry, closePopup } = usePopup();
+    const { selectedNodeId, anchorGeometry, closePopup, sendMessage } = usePopup();
     const popupRef = useRef<HTMLDivElement>(null);
     const [isVisible, setIsVisible] = useState(false);
     const [contentVisible, setContentVisible] = useState(false);
@@ -204,14 +205,12 @@ export const NodePopup: React.FC = () => {
                 </p>
             </div>
 
-            <div style={{
-                fontSize: '12px',
-                opacity: contentVisible ? 0.5 : 0,
-                paddingTop: '12px',
-                borderTop: '1px solid rgba(99, 171, 255, 0.2)',
-                transition: 'opacity 300ms ease-out 100ms'
-            }}>
-                Chat input will go here...
+            <div style={
+                contentVisible
+                    ? { transition: 'opacity 300ms ease-out 150ms' }
+                    : { opacity: 0, transition: 'opacity 300ms ease-out 150ms' }
+            }>
+                <ChatInput onSend={sendMessage} placeholder="Ask about this node..." />
             </div>
         </div>
     );

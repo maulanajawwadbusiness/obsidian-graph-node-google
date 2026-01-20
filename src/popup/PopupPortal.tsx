@@ -1,33 +1,34 @@
 import React from 'react';
-import { createPortal } from 'react-dom';
 import { NodePopup } from './NodePopup';
+import { MiniChatbar } from './MiniChatbar';
+import { PopupOverlayContainer } from './PopupOverlayContainer';
 import { usePopup } from './PopupStore';
 
 /**
- * Popup Portal - Renders popup in document.body for z-index control
+ * Popup Portal - Renders popup system using shared overlay container
+ * 
+ * This now uses PopupOverlayContainer for consistent portal management.
+ * Future: Can be extended to support seed popup mode.
  */
 
-const PORTAL_CONTAINER_STYLE: React.CSSProperties = {
-    position: 'fixed',
-    top: 0,
-    left: 0,
-    width: '100%',
-    height: '100%',
-    pointerEvents: 'none',  // Allow clicks through to canvas
-    zIndex: 1000,
-};
-
 export const PopupPortal: React.FC = () => {
-    const { isOpen } = usePopup();
+    const { isOpen, chatbarOpen, messages, sendMessage, closeChatbar } = usePopup();
 
-    if (!isOpen) {
+    // Don't render portal if nothing is open
+    if (!isOpen && !chatbarOpen) {
         return null;
     }
 
-    return createPortal(
-        <div style={PORTAL_CONTAINER_STYLE}>
-            <NodePopup />
-        </div>,
-        document.body
+    return (
+        <PopupOverlayContainer>
+            {isOpen && <NodePopup />}
+            {chatbarOpen && (
+                <MiniChatbar
+                    messages={messages}
+                    onSend={sendMessage}
+                    onClose={closeChatbar}
+                />
+            )}
+        </PopupOverlayContainer>
     );
 };

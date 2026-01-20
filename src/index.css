@@ -19,6 +19,13 @@
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+
+  /* Panel background as RGB for gradient use (matches rgba(20, 20, 30, 0.95)) */
+  --panel-bg-rgb: 20, 20, 30;
+  --panel-bg-opacity: 0.95;
+
+  /* Scrollbar gutter width (shared with message scroller paddingRight) */
+  --scrollbar-gutter: 12px;
 }
 
 body {
@@ -53,6 +60,78 @@ body {
 
 .arnvoid-scroll::-webkit-scrollbar-thumb:hover {
   background: rgba(99, 171, 255, 0.4);
+}
+
+/* Kill arrow buttons at scrollbar ends — hardened for Chromium */
+.arnvoid-scroll::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
+  background: transparent;
+  border: 0;
+}
+
+.arnvoid-scroll::-webkit-scrollbar-button:single-button {
+  display: none;
+  width: 0;
+  height: 0;
+  background: transparent;
+  border: 0;
+}
+
+.arnvoid-scroll::-webkit-scrollbar-button:start:decrement,
+.arnvoid-scroll::-webkit-scrollbar-button:end:increment {
+  display: none;
+}
+
+/* Thumb brightens while actively scrolling */
+.arnvoid-scroll.is-scrolling::-webkit-scrollbar-thumb {
+  background: rgba(99, 171, 255, 0.35);
+}
+
+/* Edge fades for scrollable chat content */
+.arnvoid-scroll-fades {
+  position: relative;
+  border-radius: inherit;
+}
+
+.arnvoid-scroll-fades::before,
+.arnvoid-scroll-fades::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 18px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 120ms ease-out;
+  border-radius: inherit;
+}
+
+.arnvoid-scroll-fades::before {
+  top: 0;
+  background: linear-gradient(
+    to bottom,
+    rgba(var(--panel-bg-rgb), var(--panel-bg-opacity)),
+    rgba(var(--panel-bg-rgb), 0)
+  );
+}
+
+.arnvoid-scroll-fades::after {
+  bottom: 0;
+  background: linear-gradient(
+    to top,
+    rgba(var(--panel-bg-rgb), var(--panel-bg-opacity)),
+    rgba(var(--panel-bg-rgb), 0)
+  );
+}
+
+.arnvoid-scroll-fades.fade-top::before {
+  opacity: 1;
+}
+
+.arnvoid-scroll-fades.fade-bottom::after {
+  opacity: 1;
 }
 
 /* Firefox fallback */

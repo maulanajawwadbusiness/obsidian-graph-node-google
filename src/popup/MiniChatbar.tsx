@@ -61,6 +61,7 @@ const HEADER_STYLE: React.CSSProperties = {
 
 const MESSAGES_STYLE: React.CSSProperties = {
     flex: 1,
+    minHeight: 0,
     overflowY: 'auto',
     display: 'flex',
     flexDirection: 'column',
@@ -195,6 +196,8 @@ export const MiniChatbar: React.FC<MiniChatbarProps> = ({ messages, onSend, onCl
     const [inputText, setInputText] = useState('');
     const [chatbarSize, setChatbarSize] = useState<ChatbarSize | null>(null);
     const messagesEndRef = useRef<HTMLDivElement>(null);
+    const messagesRef = useRef<HTMLDivElement>(null);  // Scroll container ref
+    const fadeWrapperRef = useRef<HTMLDivElement>(null);  // Fade wrapper ref
     const chatbarRef = useRef<HTMLDivElement>(null);
     const { popupRect } = usePopup();
 
@@ -226,7 +229,54 @@ export const MiniChatbar: React.FC<MiniChatbarProps> = ({ messages, onSend, onCl
     // Auto-scroll to bottom on new messages
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+
+        // Re-evaluate fades when messages change
+        const scroller = messagesRef.current;
+        const wrapper = fadeWrapperRef.current;
+        if (!scroller || !wrapper) return;
+
+        requestAnimationFrame(() => {
+            const { scrollTop, scrollHeight, clientHeight } = scroller;
+
+            wrapper.classList.toggle('fade-top', scrollTop > 8);
+            wrapper.classList.toggle('fade-bottom', scrollTop + clientHeight < scrollHeight - 8);
+        });
     }, [messages]);
+
+    // RAF-throttled scroll listener using classList — avoids React re-render
+    useEffect(() => {
+        const scroller = messagesRef.current;
+        const wrapper = fadeWrapperRef.current;
+        if (!scroller || !wrapper) return;
+
+        let rafId = 0;
+
+        const updateFades = () => {
+            const { scrollTop, scrollHeight, clientHeight } = scroller;
+
+            const hasTop = scrollTop > 8;
+            const hasBottom = scrollTop + clientHeight < scrollHeight - 8;
+
+            // Toggle classes directly on DOM — no React state update
+            wrapper.classList.toggle('fade-top', hasTop);
+            wrapper.classList.toggle('fade-bottom', hasBottom);
+        };
+
+        const onScroll = () => {
+            cancelAnimationFrame(rafId);
+            rafId = requestAnimationFrame(updateFades);
+        };
+
+        scroller.addEventListener('scroll', onScroll, { passive: true });
+
+        // Initial evaluation
+        updateFades();
+
+        return () => {
+            scroller.removeEventListener('scroll', onScroll);
+            cancelAnimationFrame(rafId);
+        };
+    }, []);
 
     const handleSend = () => {
         if (inputText.trim()) {
@@ -277,16 +327,33 @@ export const MiniChatbar: React.FC<MiniChatbarProps> = ({ messages, onSend, onCl
                 </button>
             </div>
 
-            <div className="arnvoid-scroll" style={MESSAGES_STYLE}>
-                {messages.map((msg, i) => (
-                    <div
-                        key={i}
-                        style={msg.role === 'user' ? MESSAGE_STYLE_USER : MESSAGE_STYLE_AI}
-                    >
-                        {msg.text}
-                    </div>
-                ))}
-                <div ref={messagesEndRef} />
+            <div
+                ref={fadeWrapperRef}
+                className="arnvoid-scroll-fades"
+                style={{
+                    position: 'relative',
+                    flex: 1,
+                    minHeight: 0,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    borderRadius: '8px',  // Match chatbar inner rounding
+                }}
+            >
+                <div
+                    ref={messagesRef}
+                    className="arnvoid-scroll"
+                    style={MESSAGES_STYLE}
+                >
+                    {messages.map((msg, i) => (
+                        <div
+                            key={i}
+                            style={msg.role === 'user' ? MESSAGE_STYLE_USER : MESSAGE_STYLE_AI}
+                        >
+                            {msg.text}
+                        </div>
+                    ))}
+                    <div ref={messagesEndRef} />
+                </div>
             </div>
 
             <div style={INPUT_STYLE}>

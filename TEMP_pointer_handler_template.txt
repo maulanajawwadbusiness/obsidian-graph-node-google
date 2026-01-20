@@ -1,0 +1,39 @@
+// Add onPointerDown handler after onPointerUp (around line 90)
+
+import { usePopup } from '../popup/PopupStore';
+
+// Inside GraphPhysicsPlaygroundInternal component:
+const documentContext = useDocument();
+const popupContext = usePopup();  // ADD THIS
+
+// Add this handler after onPointerUp handler (around line 88):
+const onPointerDown = (e: React.PointerEvent) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    // Check if a node is currently hovered
+    const hoveredId = hoverStateRef.current.hoveredNodeId;
+    if (!hoveredId) return;
+
+    // Get node screen position for popup anchor
+    const engine = engineRef.current;
+    if (!engine) return;
+
+    const node = engine.nodes.get(hoveredId);
+    if (!node) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const screenPos = worldToScreen(node.x, node.y, rect);
+    const screenRadius = node.radius * cameraRef.current.zoom;
+
+    // Open popup at node position
+    popupContext.openPopup(hoveredId, {
+        x: screenPos.x,
+        y: screenPos.y,
+        radius: screenRadius
+    });
+
+    console.log('[Popup] Opened for node:', hoveredId);
+};
+
+// Add to the main div onPointerDown={onPointerDown} (around line 305)

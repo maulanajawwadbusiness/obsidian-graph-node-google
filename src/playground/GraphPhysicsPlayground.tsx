@@ -14,6 +14,8 @@ import { useGraphRendering } from './useGraphRendering';
 import { generateRandomGraph } from './graphRandom';
 import { DocumentProvider, useDocument } from '../store/documentStore';
 import { applyFirstWordsToNodes, applyAILabelsToNodes } from '../document/nodeBinding';
+import { PopupProvider, usePopup } from '../popup/PopupStore';
+import { PopupPortal } from '../popup/PopupPortal';
 
 // -----------------------------------------------------------------------------
 // Main Component (Internal)
@@ -22,6 +24,7 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const engineRef = useRef<PhysicsEngine>(new PhysicsEngine());
     const documentContext = useDocument();
+    const popupContext = usePopup();
 
     // State for React UI
     const [config, setConfig] = useState<ForceConfig>(DEFAULT_PHYSICS_CONFIG);
@@ -50,7 +53,9 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
         handlePointerLeave,
         handlePointerCancel,
         handlePointerUp,
-        clientToWorld
+        clientToWorld,
+        worldToScreen,
+        hoverStateRef
     } = useGraphRendering({
         canvasRef,
         config,
@@ -84,6 +89,35 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
 
     const onPointerUp = (e: React.PointerEvent) => {
         handlePointerUp(e.pointerId, e.pointerType);
+    };
+
+    const onPointerDown = (e: React.PointerEvent) => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+
+        // Check if a node is currently hovered
+        const hoveredId = hoverStateRef.current.hoveredNodeId;
+        if (!hoveredId) return;
+
+        // Get node screen position for popup anchor
+        const engine = engineRef.current;
+        if (!engine) return;
+
+        const node = engine.nodes.get(hoveredId);
+        if (!node) return;
+
+        const rect = canvas.getBoundingClientRect();
+        const screenPos = worldToScreen(node.x, node.y, rect);
+        const screenRadius = node.radius * 5;  // Approximate screen radius
+
+        // Open popup at node position
+        popupContext.openPopup(hoveredId, {
+            x: screenPos.x,
+            y: screenPos.y,
+            radius: screenRadius
+        });
+
+        console.log('[Popup] Opened for node:', hoveredId);
     };
 
     // Keyboard shortcut: "U" toggles both UI panels (sidebar + debug)
@@ -296,6 +330,7 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
                 onMouseMove={handleMouseMove}
                 onMouseUp={handleMouseUp}
                 onMouseLeave={handleMouseUp}
+                onPointerDown={onPointerDown}
                 onPointerEnter={onPointerEnter}
                 onPointerMove={onPointerMove}
                 onPointerLeave={onPointerLeave}
@@ -319,6 +354,7 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
                 <TextPreviewButton />
                 <TextPreviewPanel />
                 <AIActivityGlyph />
+                <PopupPortal />
             </div>
 
             {sidebarOpen && (
@@ -341,9 +377,11 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
     );
 };
 
-// Wrapper with DocumentProvider
+// Wrapper with DocumentProvider and PopupProvider
 export const GraphPhysicsPlayground: React.FC = () => (
     <DocumentProvider>
-        <GraphPhysicsPlaygroundInternal />
+        <PopupProvider>
+            <GraphPhysicsPlaygroundInternal />
+        </PopupProvider>
     </DocumentProvider>
 );

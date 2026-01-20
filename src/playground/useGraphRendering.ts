@@ -275,6 +275,8 @@ export const useGraphRendering = ({
         handlePointerLeave,
         handlePointerCancel,
         handlePointerUp,
-        clientToWorld
+        clientToWorld,
+        worldToScreen,
+        hoverStateRef
     };
 };

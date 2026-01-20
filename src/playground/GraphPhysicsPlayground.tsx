@@ -5,17 +5,22 @@ import { DEFAULT_PHYSICS_CONFIG } from '../physics/config';
 import { DRAG_ENABLED, SkinMode, getTheme } from '../visual/theme';
 import { CanvasOverlays } from './components/CanvasOverlays';
 import { SidebarControls } from './components/SidebarControls';
+import { TextPreviewButton } from './components/TextPreviewButton';
+import { TextPreviewPanel } from './components/TextPreviewPanel';
 import { CONTAINER_STYLE, MAIN_STYLE, SHOW_THEME_TOGGLE } from './graphPlaygroundStyles';
 import { PlaygroundMetrics } from './playgroundTypes';
 import { useGraphRendering } from './useGraphRendering';
 import { generateRandomGraph } from './graphRandom';
+import { DocumentProvider, useDocument } from '../store/documentStore';
+import { applyFirstWordsToNodes } from '../document/nodeBinding';
 
 // -----------------------------------------------------------------------------
-// Main Component
+// Main Component (Internal)
 // -----------------------------------------------------------------------------
-export const GraphPhysicsPlayground: React.FC = () => {
+const GraphPhysicsPlaygroundInternal: React.FC = () => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const engineRef = useRef<PhysicsEngine>(new PhysicsEngine());
+    const documentContext = useDocument();
 
     // State for React UI
     const [config, setConfig] = useState<ForceConfig>(DEFAULT_PHYSICS_CONFIG);
@@ -162,6 +167,40 @@ export const GraphPhysicsPlayground: React.FC = () => {
     };
 
     // ---------------------------------------------------------------------------
+    // Drag & Drop Handlers (Document Upload)
+    // ---------------------------------------------------------------------------
+    const handleDragOver = (e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+    };
+
+    const handleDrop = async (e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+
+        const files = Array.from(e.dataTransfer.files);
+        if (files.length === 0) return;
+
+        const file = files[0];
+        console.log('[Drop] File dropped:', file.name, file.type);
+
+        // Convert drop coordinates to world space
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        const rect = canvas.getBoundingClientRect();
+        const world = clientToWorld(e.clientX, e.clientY, rect);
+        console.log('[Drop] World position:', world.x.toFixed(2), world.y.toFixed(2));
+
+        // Parse file in worker and get document immediately
+        const document = await documentContext.parseFile(file);
+
+        // Apply first 5 words to node labels
+        if (document) {
+            applyFirstWordsToNodes(engineRef.current, document);
+        }
+    };
+
+    // ---------------------------------------------------------------------------
     // Config Updates
     // ---------------------------------------------------------------------------
     const handleConfigChange = (key: keyof ForceConfig, value: number) => {
@@ -249,6 +288,8 @@ export const GraphPhysicsPlayground: React.FC = () => {
                 onPointerLeave={onPointerLeave}
                 onPointerCancel={onPointerCancel}
                 onPointerUp={onPointerUp}
+                onDragOver={handleDragOver}
+                onDrop={handleDrop}
             >
                 <canvas ref={canvasRef} style={{ width: '100%', height: '100%', background: activeTheme.background }} />
                 <CanvasOverlays
@@ -262,6 +303,8 @@ export const GraphPhysicsPlayground: React.FC = () => {
                     sidebarOpen={sidebarOpen}
                     skinMode={skinMode}
                 />
+                <TextPreviewButton />
+                <TextPreviewPanel />
             </div>
 
             {sidebarOpen && (
@@ -283,3 +326,10 @@ export const GraphPhysicsPlayground: React.FC = () => {
         </div>
     );
 };
+
+// Wrapper with DocumentProvider
+export const GraphPhysicsPlayground: React.FC = () => (
+    <DocumentProvider>
+        <GraphPhysicsPlaygroundInternal />
+    </DocumentProvider>
+);

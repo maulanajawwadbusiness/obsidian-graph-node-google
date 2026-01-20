@@ -5,6 +5,7 @@ import type { ThemeConfig } from '../../visual/theme';
 import { drawGradientRing, drawTwoLayerGlow, withCtx } from './canvasUtils';
 import type { HoverState, RenderDebugInfo, RenderSettingsRef } from './renderingTypes';
 
+
 const captureCanvasState = (ctx: CanvasRenderingContext2D) => ({
     globalCompositeOperation: ctx.globalCompositeOperation,
     globalAlpha: ctx.globalAlpha,

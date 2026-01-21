@@ -24,7 +24,6 @@ export const DocumentViewerPanel: React.FC = () => {
     const pendingScrollRef = useRef<number | null>(null);
 
     const isPeek = state.viewerMode === 'peek';
-    const hasDocument = !!state.activeDocument;
 
     // Get current theme
     const currentTheme = getDocTheme(state.docThemeMode);
@@ -172,8 +171,8 @@ export const DocumentViewerPanel: React.FC = () => {
         flexShrink: 0,
         width: isPeek ? '44px' : '400px',
         height: '100%',
-        backgroundColor: 'rgba(var(--panel-bg-rgb), var(--panel-bg-opacity))',
-        backdropFilter: 'blur(12px)',
+        backgroundColor: isPeek ? 'transparent' : 'rgba(var(--panel-bg-rgb), var(--panel-bg-opacity))',
+        backdropFilter: isPeek ? 'none' : 'blur(12px)',
         transition: isPeek
             ? 'width 180ms cubic-bezier(0.22, 1, 0.36, 1)'  // Peek (collapse)
             : 'width 220ms cubic-bezier(0.22, 1, 0.36, 1)', // Open (expand)
@@ -184,22 +183,14 @@ export const DocumentViewerPanel: React.FC = () => {
 
     const sliverStyle: React.CSSProperties = {
         position: 'absolute',
-        top: 0,
-        left: '12px',  // After dock strip
-        bottom: 0,
-        right: 0,
-        backgroundColor: isPeek && hasDocument
-            ? 'rgba(var(--panel-bg-rgb), 0.25)'  // Faint sheet edge when peeking with doc
-            : currentTheme.sheetBg,
+        inset: 0,
+        backgroundColor: isPeek ? 'transparent' : currentTheme.sheetBg,
         pointerEvents: isPeek ? 'none' : 'auto',
         display: 'flex',
         flexDirection: 'column',
-        opacity: isPeek ? 0.3 : 1,
+        opacity: isPeek ? 0 : 1,
         transition: 'opacity 180ms ease-out, background-color 180ms ease-out',
-        // Subtle texture/depth for sheet edge
-        boxShadow: isPeek && hasDocument
-            ? 'inset 1px 0 2px rgba(0, 0, 0, 0.15), inset 0 0 8px rgba(var(--panel-bg-rgb), 0.3)'
-            : 'none',
+        boxShadow: isPeek ? 'none' : 'inset 1px 0 2px rgba(0, 0, 0, 0.12)',
     };
 
     const headerStyle: React.CSSProperties = {

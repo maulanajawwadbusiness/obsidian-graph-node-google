@@ -1,0 +1,152 @@
+.doc-dock-root {
+  --dock-spine-width: 12px;
+  --dock-handle-width: 22px;
+  --dock-handle-height: 64px;
+  --dock-peek-width: 32px;
+  --dock-edge-line: rgba(99, 171, 255, 0.2);
+  --dock-spine-glow: rgba(99, 171, 255, 0.12);
+  --dock-handle-bg: rgba(255, 255, 255, 0.06);
+  --dock-handle-bg-hover: rgba(255, 255, 255, 0.1);
+  --dock-handle-border: rgba(255, 255, 255, 0.12);
+  --dock-handle-border-hover: rgba(255, 255, 255, 0.18);
+  --dock-dot-loaded: rgba(116, 181, 255, 0.9);
+  --dock-dot-warning: rgba(255, 188, 94, 0.95);
+  --dock-dot-idle: rgba(255, 255, 255, 0.18);
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: calc(var(--dock-spine-width) + var(--dock-peek-width));
+  pointer-events: none;
+  z-index: 210;
+}
+
+.doc-dock-spine {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: var(--dock-spine-width);
+  background:
+    linear-gradient(90deg,
+      rgba(var(--panel-bg-rgb), 0),
+      rgba(var(--panel-bg-rgb), 0.34) 60%,
+      rgba(var(--panel-bg-rgb), 0.45));
+  border: none;
+  border-right: 1px solid var(--dock-edge-line);
+  box-shadow: inset -1px 0 2px var(--dock-spine-glow);
+  cursor: ew-resize;
+  transition: filter 120ms ease-out, box-shadow 120ms ease-out;
+  pointer-events: auto;
+  padding: 0;
+  appearance: none;
+}
+
+.doc-dock-root:hover .doc-dock-spine,
+.doc-dock-spine:hover {
+  filter: brightness(1.35);
+  box-shadow: inset -1px 0 3px rgba(99, 171, 255, 0.2);
+}
+
+.doc-dock-handle {
+  position: absolute;
+  top: 50%;
+  left: 2px;
+  transform: translateY(-50%);
+  width: var(--dock-handle-width);
+  height: var(--dock-handle-height);
+  border-radius: 999px;
+  background: var(--dock-handle-bg);
+  border: 1px solid var(--dock-handle-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  cursor: pointer;
+  transition: background 120ms ease-out, border 120ms ease-out, box-shadow 120ms ease-out;
+  box-shadow:
+    0 2px 8px rgba(0, 0, 0, 0.22),
+    0 0.5px 2px rgba(0, 0, 0, 0.2);
+  pointer-events: auto;
+  padding: 0;
+  appearance: none;
+}
+
+.doc-dock-handle:hover {
+  background: var(--dock-handle-bg-hover);
+  border-color: var(--dock-handle-border-hover);
+  box-shadow:
+    0 3px 10px rgba(0, 0, 0, 0.28),
+    0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.doc-dock-chevron {
+  width: 10px;
+  height: 10px;
+  border-top: 1.5px solid rgba(255, 255, 255, 0.65);
+  border-right: 1.5px solid rgba(255, 255, 255, 0.65);
+  transition: transform 160ms ease-out, border-color 120ms ease-out;
+}
+
+.doc-dock-root[data-viewer-mode='peek'] .doc-dock-chevron {
+  transform: rotate(45deg);
+  margin-left: -2px;
+}
+
+.doc-dock-root[data-viewer-mode='open'] .doc-dock-chevron {
+  transform: rotate(-135deg);
+  margin-left: 2px;
+}
+
+.doc-dock-handle:hover .doc-dock-chevron {
+  border-color: rgba(255, 255, 255, 0.85);
+}
+
+.doc-dock-dot {
+  position: absolute;
+  top: 7px;
+  right: 4px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--dock-dot-idle);
+  box-shadow: 0 0 6px rgba(0, 0, 0, 0.2);
+  pointer-events: none;
+  transition: background 160ms ease-out, opacity 160ms ease-out;
+}
+
+.doc-dock-root[data-indicator='loaded'] .doc-dock-dot {
+  background: var(--dock-dot-loaded);
+  opacity: 1;
+}
+
+.doc-dock-root[data-indicator='warning'] .doc-dock-dot {
+  background: var(--dock-dot-warning);
+  opacity: 1;
+}
+
+.doc-dock-root[data-indicator='idle'] .doc-dock-dot {
+  opacity: 0.35;
+}
+
+.doc-dock-peek {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: var(--dock-spine-width);
+  width: var(--dock-peek-width);
+  background:
+    linear-gradient(90deg,
+      rgba(var(--panel-bg-rgb), 0.18),
+      rgba(var(--panel-bg-rgb), 0.3));
+  box-shadow:
+    inset 1px 0 0 rgba(255, 255, 255, 0.05),
+    inset -1px 0 2px rgba(0, 0, 0, 0.2);
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+.doc-dock-peek::after {
+  content: '';
+  position: absolute;
+  inset: 12px 6px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0));
+}

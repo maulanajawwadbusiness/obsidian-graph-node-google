@@ -26,6 +26,19 @@
 
   /* Scrollbar gutter width (shared with message scroller paddingRight) */
   --scrollbar-gutter: 12px;
+
+  --panel-width: 400px;
+  --transition-panel: 320ms cubic-bezier(0.32, 0.72, 0, 1);
+  --strip-highlight: hsl(42, 30%, 60%);
+  --strip-highlight-dim: hsl(42, 20%, 40%);
+  --strip-shadow-color: hsla(0, 0%, 0%, 0.5);
+  --strip-warning: hsl(35, 70%, 55%);
+  --color-void: hsl(220, 20%, 6%);
+  --color-surface: hsl(220, 18%, 10%);
+  --color-surface-raised: hsl(220, 16%, 14%);
+  --text-primary: hsl(220, 10%, 90%);
+  --text-secondary: hsl(220, 10%, 60%);
+  --text-muted: hsl(220, 10%, 40%);
 }
 
 body {

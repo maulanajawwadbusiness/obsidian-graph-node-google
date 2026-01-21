@@ -15,6 +15,7 @@ import { applyFirstWordsToNodes, applyAILabelsToNodes } from '../document/nodeBi
 import { PopupProvider, usePopup } from '../popup/PopupStore';
 import { PopupPortal } from '../popup/PopupPortal';
 import { DocumentViewerPanel } from '../document/viewer/DocumentViewerPanel';
+import { PresenceStrip } from '../PresenceStrip/PresenceStrip';
 
 // -----------------------------------------------------------------------------
 // Main Component (Internal)
@@ -24,6 +25,10 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
     const engineRef = useRef<PhysicsEngine>(new PhysicsEngine());
     const documentContext = useDocument();
     const popupContext = usePopup();
+    const tabRef = useRef<HTMLButtonElement>(null);
+    const [tabMode, setTabMode] = useState<'presence' | 'peek' | 'open'>('presence');
+    const [tabHovering, setTabHovering] = useState(false);
+    const [tabProximity, setTabProximity] = useState<'far' | 'near' | 'close'>('far');
 
     // State for React UI
     const [config, setConfig] = useState<ForceConfig>(DEFAULT_PHYSICS_CONFIG);
@@ -146,6 +151,36 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
             engineRef.current.releaseNode();
         }
     }, [DRAG_ENABLED]);
+
+    useEffect(() => {
+        if (documentContext.state.viewerMode === 'open') {
+            setTabMode('open');
+            return;
+        }
+        setTabMode(tabHovering ? 'peek' : 'presence');
+    }, [documentContext.state.viewerMode, tabHovering]);
+
+    useEffect(() => {
+        const handleMouseMove = (e: MouseEvent) => {
+            if (documentContext.state.viewerMode === 'open') {
+                setTabProximity('far');
+                return;
+            }
+
+            const tab = tabRef.current;
+            if (!tab) return;
+
+            const rect = tab.getBoundingClientRect();
+            const centerX = rect.left + rect.width / 2;
+            const centerY = rect.top + rect.height / 2;
+            const distance = Math.hypot(e.clientX - centerX, e.clientY - centerY);
+            const nextProximity = distance <= 50 ? 'close' : distance <= 100 ? 'near' : 'far';
+            setTabProximity((prev) => (prev === nextProximity ? prev : nextProximity));
+        };
+
+        window.addEventListener('mousemove', handleMouseMove);
+        return () => window.removeEventListener('mousemove', handleMouseMove);
+    }, [documentContext.state.viewerMode]);
 
     // ---------------------------------------------------------------------------
     // Interaction Handlers (Drag & Drop)
@@ -318,11 +353,31 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
         console.log('='.repeat(60));
     };
 
+    const documentState =
+        documentContext.state.errorMessage ||
+        (documentContext.state.activeDocument?.warnings?.length ?? 0) > 0
+            ? 'warning'
+            : documentContext.state.activeDocument
+                ? 'loaded'
+                : 'empty';
+
     // Get theme for container styling
     const activeTheme = getTheme(skinMode);
 
     return (
         <div style={{ ...CONTAINER_STYLE, background: activeTheme.background, flexDirection: 'row' }}>
+            <PresenceStrip
+                viewerMode={tabMode}
+                documentState={documentState}
+                proximity={tabProximity}
+                onHover={setTabHovering}
+                onClick={() => {
+                    documentContext.setViewerMode(
+                        documentContext.state.viewerMode === 'open' ? 'peek' : 'open'
+                    );
+                }}
+                tabRef={tabRef}
+            />
             <DocumentViewerPanel />
 
             <div

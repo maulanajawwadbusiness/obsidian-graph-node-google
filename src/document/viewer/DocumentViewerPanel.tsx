@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useDocument } from '../../store/documentStore';
-import { DocumentDockStrip } from './DocumentDockStrip';
 import { DocumentContent } from './DocumentContent';
 import { SearchBar } from './SearchBar';
 import { getDocTheme, docThemeToCssVars } from './docTheme';
@@ -170,7 +169,7 @@ export const DocumentViewerPanel: React.FC = () => {
     const panelStyle: React.CSSProperties = {
         position: 'relative',
         flexShrink: 0,
-        width: isPeek ? '44px' : '400px',
+        width: isPeek ? '0px' : 'var(--panel-width)',
         height: '100%',
         backgroundColor: 'rgba(var(--panel-bg-rgb), var(--panel-bg-opacity))',
         backdropFilter: 'blur(12px)',
@@ -185,7 +184,7 @@ export const DocumentViewerPanel: React.FC = () => {
     const sliverStyle: React.CSSProperties = {
         position: 'absolute',
         top: 0,
-        left: '12px',  // After dock strip
+        left: 0,
         bottom: 0,
         right: 0,
         backgroundColor: isPeek && hasDocument
@@ -240,8 +239,6 @@ export const DocumentViewerPanel: React.FC = () => {
             onMouseMove={stopPropagation}
             onMouseUp={stopPropagation}
         >
-            <DocumentDockStrip />
-
             <div style={sliverStyle}>
                 {!isPeek && (
                     <>

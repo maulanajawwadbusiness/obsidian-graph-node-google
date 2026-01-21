@@ -5,6 +5,7 @@ import { DocumentContent } from './DocumentContent';
 import { SearchBar } from './SearchBar';
 import { getDocTheme, docThemeToCssVars } from './docTheme';
 import { createSearchSession, navigateMatch, getActiveMatch, type SearchSession } from './searchSession';
+import { findSpanContaining } from './selectionMapping';
 import type { HighlightRange } from '../types';
 
 /**
@@ -16,10 +17,11 @@ import type { HighlightRange } from '../types';
 const stopPropagation = (e: React.MouseEvent) => e.stopPropagation();
 
 export const DocumentViewerPanel: React.FC = () => {
-    const { state, setDocTheme, setViewerMode, setHighlights } = useDocument();
+    const { state, setDocTheme, setViewerMode, setHighlights, viewerApiRef } = useDocument();
     const [searchSession, setSearchSession] = useState<SearchSession | null>(null);
     const [showSearch, setShowSearch] = useState(false);
     const contentRef = useRef<HTMLDivElement>(null);
+    const pendingScrollRef = useRef<number | null>(null);
 
     const isPeek = state.viewerMode === 'peek';
 
@@ -54,6 +56,13 @@ export const DocumentViewerPanel: React.FC = () => {
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, [isPeek, showSearch, setViewerMode]);
+
+    // Clear search state when document changes
+    useEffect(() => {
+        setShowSearch(false);
+        setSearchSession(null);
+        setHighlights([]);
+    }, [state.activeDocument?.id, setHighlights]);
 
     // Handle search query change
     const handleSearch = useCallback((query: string) => {
@@ -129,15 +138,33 @@ export const DocumentViewerPanel: React.FC = () => {
     }, [setHighlights]);
 
     // Scroll to character offset
-    const scrollToOffset = (offset: number) => {
-        if (!contentRef.current) return;
+    const scrollToOffset = useCallback((offset: number) => {
+        if (!contentRef.current) {
+            pendingScrollRef.current = offset;
+            return;
+        }
 
         // Find the element containing this offset
-        const span = contentRef.current.querySelector(`[data-start="${offset}"]`) as HTMLElement;
+        const span = findSpanContaining(contentRef.current, offset);
         if (span) {
             span.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
-    };
+    }, []);
+
+    useEffect(() => {
+        viewerApiRef.current = { scrollToOffset };
+        return () => {
+            viewerApiRef.current = null;
+        };
+    }, [scrollToOffset, viewerApiRef]);
+
+    useEffect(() => {
+        if (isPeek) return;
+        if (pendingScrollRef.current === null) return;
+        const pendingOffset = pendingScrollRef.current;
+        pendingScrollRef.current = null;
+        scrollToOffset(pendingOffset);
+    }, [isPeek, scrollToOffset]);
 
     const panelStyle: React.CSSProperties = {
         position: 'relative',
@@ -246,6 +273,7 @@ export const DocumentViewerPanel: React.FC = () => {
                                 <DocumentContent
                                     text={state.activeDocument.text}
                                     highlights={state.highlightRanges}
+                                    containerRef={contentRef}
                                 />
                             ) : (
                                 <div style={{ color: currentTheme.mutedText, fontStyle: 'italic' }}>

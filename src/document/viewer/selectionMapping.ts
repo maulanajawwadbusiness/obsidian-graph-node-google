@@ -17,7 +17,7 @@ function findSpanAncestor(node: Node): HTMLElement | null {
 /**
  * Find the element containing a specific character offset
  */
-function findSpanContaining(container: HTMLElement, offset: number): HTMLElement | null {
+export function findSpanContaining(container: HTMLElement, offset: number): HTMLElement | null {
     const spans = container.querySelectorAll('[data-start]');
     for (const span of spans) {
         const start = parseInt((span as HTMLElement).dataset.start!, 10);

@@ -137,3 +137,17 @@ body {
 }
 
 /* Document Viewer - Highlight styles (no layout shift) */
+.doc-viewer-root ::selection {
+  background: var(--doc-selection-bg);
+  color: var(--doc-selection-text);
+}
+
+.highlight-active {
+  background: var(--doc-highlight-active-bg);
+  border-radius: 2px;
+}
+
+.highlight-other {
+  background: var(--doc-highlight-other-bg);
+  border-radius: 2px;
+}

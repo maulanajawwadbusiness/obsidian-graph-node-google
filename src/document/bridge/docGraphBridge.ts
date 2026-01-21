@@ -92,6 +92,8 @@ export function createDocGraphBridge(
             }]);
         }
 
+        documentStore.viewerApiRef?.current?.scrollToOffset(ref.range.start);
+
         console.log(`[Reveal] node ref @ offset ${ref.range.start} result=success`);
 
         return { success: true };

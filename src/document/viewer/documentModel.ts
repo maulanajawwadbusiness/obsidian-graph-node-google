@@ -24,7 +24,7 @@ export function buildBlocks(text: string): TextBlock[] {
 
     for (const line of lines) {
         const start = offset;
-        const end = offset + line.length + 1; // +1 for the newline
+        const end = offset + line.length;
 
         blocks.push({
             blockId: `b${id++}`,
@@ -33,7 +33,7 @@ export function buildBlocks(text: string): TextBlock[] {
             text: line,
         });
 
-        offset = end;
+        offset = end + 1;
     }
 
     return blocks;

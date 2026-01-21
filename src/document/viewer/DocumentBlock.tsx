@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import type { HighlightRange } from '../types';
 
 /**
@@ -78,7 +78,10 @@ export const DocumentBlock: React.FC<DocumentBlockProps> = ({
     text,
     highlights
 }) => {
-    const runs = buildRuns(text, start, end, highlights);
+    const runs = useMemo(
+        () => buildRuns(text, start, end, highlights),
+        [text, start, end, highlights]
+    );
 
     const blockStyle: React.CSSProperties = {
         marginBottom: 'var(--doc-paragraph-gap, 0.75em)',

@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { buildBlocks } from './documentModel';
 import { DocumentBlock } from './DocumentBlock';
 import type { HighlightRange } from '../types';
+import { useVirtualBlocks } from './useVirtualBlocks';
 
 /**
  * DocumentContent - Renders the document text as blocks
@@ -11,10 +12,12 @@ import type { HighlightRange } from '../types';
 export interface DocumentContentProps {
     text: string;
     highlights?: HighlightRange[];
+    containerRef: React.RefObject<HTMLElement>;
 }
 
-export const DocumentContent: React.FC<DocumentContentProps> = ({ text, highlights }) => {
+export const DocumentContent: React.FC<DocumentContentProps> = ({ text, highlights, containerRef }) => {
     const blocks = useMemo(() => buildBlocks(text), [text]);
+    const { blocks: visibleBlocks, topSpacerHeight, bottomSpacerHeight } = useVirtualBlocks(blocks, containerRef);
 
     const contentWrapperStyle: React.CSSProperties = {
         fontFamily: 'var(--doc-font-family)',
@@ -29,7 +32,8 @@ export const DocumentContent: React.FC<DocumentContentProps> = ({ text, highligh
 
     return (
         <div style={contentWrapperStyle}>
-            {blocks.map(block => (
+            {topSpacerHeight > 0 && <div style={{ height: topSpacerHeight }} />}
+            {visibleBlocks.map(block => (
                 <DocumentBlock
                     key={block.blockId}
                     blockId={block.blockId}
@@ -39,6 +43,7 @@ export const DocumentContent: React.FC<DocumentContentProps> = ({ text, highligh
                     highlights={highlights}
                 />
             ))}
+            {bottomSpacerHeight > 0 && <div style={{ height: bottomSpacerHeight }} />}
         </div>
     );
 };

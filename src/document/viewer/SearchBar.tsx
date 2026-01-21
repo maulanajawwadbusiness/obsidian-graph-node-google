@@ -24,6 +24,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({
 }) => {
     const [query, setQuery] = useState('');
     const inputRef = useRef<HTMLInputElement>(null);
+    const debounceTimerRef = useRef<number | null>(null);
 
     const containerStyle: React.CSSProperties = {
         padding: '12px 20px',
@@ -67,7 +68,12 @@ export const SearchBar: React.FC<SearchBarProps> = ({
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const newQuery = e.target.value;
         setQuery(newQuery);
-        onSearch(newQuery);
+        if (debounceTimerRef.current !== null) {
+            window.clearTimeout(debounceTimerRef.current);
+        }
+        debounceTimerRef.current = window.setTimeout(() => {
+            onSearch(newQuery);
+        }, 300);
     };
 
     const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -87,6 +93,11 @@ export const SearchBar: React.FC<SearchBarProps> = ({
     // Focus input when component mounts
     useEffect(() => {
         inputRef.current?.focus();
+        return () => {
+            if (debounceTimerRef.current !== null) {
+                window.clearTimeout(debounceTimerRef.current);
+            }
+        };
     }, []);
 
     return (

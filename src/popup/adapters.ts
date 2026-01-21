@@ -49,6 +49,7 @@ export function createDocumentViewerAdapter(
                 id: 'active',
             }]);
 
+            documentContext.viewerApiRef.current?.scrollToOffset(charOffset);
             console.log(`[DocAdapter] Scrolled to offset ${charOffset}`);
         },
 

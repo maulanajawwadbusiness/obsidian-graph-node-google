@@ -1,12 +1,6 @@
-import { createContext, useContext, useReducer, ReactNode, useRef, useEffect } from 'react';
-import type { DocumentState, DocumentStatus, ParsedDocument, ViewerMode, DocThemeMode } from '../document/types';
+import { createContext, useContext, useReducer, ReactNode, useRef, useEffect, type MutableRefObject } from 'react';
+import type { DocumentState, DocumentStatus, ParsedDocument, ViewerMode, DocThemeMode, HighlightRange } from '../document/types';
 import { WorkerClient } from '../document/workerClient';
-
-export interface HighlightRange {
-    start: number;
-    end: number;
-    id?: string;
-}
 
 /**
  * Document Store - React Context for managing parsed document state
@@ -80,6 +74,10 @@ function documentReducer(state: DocumentState, action: DocumentAction): Document
 }
 
 // Context value type
+export interface DocumentViewerApi {
+    scrollToOffset: (offset: number) => void;
+}
+
 export interface DocumentContextValue {
     state: DocumentState;
     setStatus: (status: DocumentStatus) => void;
@@ -92,6 +90,7 @@ export interface DocumentContextValue {
     clearDocument: () => void;
     parseFile: (file: File) => Promise<ParsedDocument | null>;
     setAIActivity: (active: boolean) => void;
+    viewerApiRef: MutableRefObject<DocumentViewerApi | null>;
 }
 
 const DocumentContext = createContext<DocumentContextValue | null>(null);
@@ -100,6 +99,7 @@ const DocumentContext = createContext<DocumentContextValue | null>(null);
 export function DocumentProvider({ children }: { children: ReactNode }) {
     const [state, dispatch] = useReducer(documentReducer, initialState);
     const workerClientRef = useRef<WorkerClient | null>(null);
+    const viewerApiRef = useRef<DocumentViewerApi | null>(null);
 
     // Initialize worker on mount
     useEffect(() => {
@@ -145,7 +145,8 @@ export function DocumentProvider({ children }: { children: ReactNode }) {
         setHighlights: (ranges) => dispatch({ type: 'SET_HIGHLIGHTS', ranges }),
         clearDocument: () => dispatch({ type: 'CLEAR_DOCUMENT' }),
         parseFile,
-        setAIActivity: (active) => dispatch({ type: 'SET_AI_ACTIVITY', active })
+        setAIActivity: (active) => dispatch({ type: 'SET_AI_ACTIVITY', active }),
+        viewerApiRef
     };
 
     return (

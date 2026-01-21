@@ -25,9 +25,23 @@
 │   ├── docs/
 │   │   └── organic-shape-creation.md
 │   ├── document/                    ← Document pipeline
-│   │   ├── nodeBinding.ts          ← Word→node label mapping
+│   │   ├── bridge/
+│   │   │   ├── docGraphBridge.ts   ← Document↔graph bridge API
+│   │   │   └── nodeDocRef.ts       ← NodeDocRefV1 types + validation
+│   │   ├── viewer/
+│   │   │   ├── docTheme.ts         ← Theme tokens (light/dark)
+│   │   │   ├── documentModel.ts    ← Block builder (text→blocks)
+│   │   │   ├── DocumentBlock.tsx   ← Single block renderer
+│   │   │   ├── DocumentContent.tsx ← Block list + virtualization
+│   │   │   ├── DocumentDockStrip.tsx ← Presence strip (spine+handle)
+│   │   │   ├── DocumentViewerPanel.tsx ← Main viewer container
+│   │   │   ├── SearchBar.tsx       ← Search input + navigation
+│   │   │   ├── searchSession.ts    ← Match computation
+│   │   │   ├── selectionMapping.ts ← DOM↔offset conversion
+│   │   │   └── useVirtualBlocks.ts ← Virtualization hook
+│   │   ├── nodeBinding.ts          ← Word→node label + ref attachment
 │   │   ├── parsers.ts              ← Unified parser adapters
-│   │   └── types.ts                ← ParsedDocument interface
+│   │   └── types.ts                ← ParsedDocument + ViewerMode
 │   ├── physics/
 │   │   ├── config.ts
 │   │   ├── engine/
@@ -72,9 +86,7 @@
 │   │   │   ├── AIActivityGlyph.tsx  ← AI loading indicator
 │   │   │   ├── CanvasOverlays.tsx
 │   │   │   ├── DebugPanel.tsx
-│   │ │   ├── SidebarControls.tsx
-│   │   │   ├── TextPreviewButton.tsx ← Document preview toggle
-│   │   │   └── TextPreviewPanel.tsx  ← Document viewer (left panel)
+│   │   │   └── SidebarControls.tsx
 │   │   ├── rendering/
 │   │   │   ├── camera.ts
 │   │   │   ├── canvasUtils.ts
@@ -88,7 +100,7 @@
 │   │   ├── graphRandom.ts
 │   │   └── useGraphRendering.ts
 │   ├── popup/                       ← Node popup system
-│   │   ├── adapters.ts              ← Document viewer + chatbar stubs
+│   │   ├── adapters.ts              ← Document viewer adapter (real)
 │   │   ├── ChatInput.tsx            ← Expandable chat input (5 lines max)
 │   │   ├── MiniChatbar.tsx          ← Mini chat window
 │   │   ├── NodePopup.tsx            ← Main popup component
@@ -127,13 +139,16 @@
 - **Plain text:** `.txt`, `.md` (direct UTF-8 decode)
 - **Word documents:** `.docx` (mammoth.js library, extracts paragraphs)
 - **PDF files:** `.pdf` (pdf.js library, text-based extraction)
-  - **Limitation:** Scanned PDFs with no embedded text → "No text extracted" warning (no OCR yet)
+  - **Limitation:** Scanned/image-only PDFs → "No text extracted" warning (no OCR)
+
+**Not Supported (Yet):**
+- **Legacy Word:** `.doc` requires server-side conversion (LibreOffice/Antiword) or user conversion to `.docx`
 
 **UX Flow:**
 1. Drag-drop file anywhere on canvas
 2. File sent to Web Worker for parsing (non-blocking)
 3. Progress tracked via `DocumentStore` status (idle → parsing → ready → error)
-4. On completion: text available to consumers (node binding, preview UI)
+4. On completion: text available to consumers (node binding, document viewer)
 
 **Dataflow:**
 ```
@@ -148,7 +163,7 @@ ParsedDocument object
 DocumentStore.activeDocument
     ↓ consumed by
 Node Binding (nodeBinding.ts)
-Preview UI (TextPreviewPanel.tsx)
+Document Viewer (DocumentViewerPanel.tsx)
 ```
 
 **ParsedDocument Interface:**
@@ -189,83 +204,378 @@ interface DocumentState {
   status: 'idle' | 'parsing' | 'ready' | 'error';
   activeDocument: ParsedDocument | null;
   errorMessage?: string;
-  previewOpen: boolean;  // Left panel visibility
-  aiActivity: boolean;   // AI request in progress
+  viewerMode: 'peek' | 'open';     // Viewer is always visible (organ, not modal)
+  docThemeMode: 'light' | 'dark';  // Independent from graph skin
+  highlightRanges: HighlightRange[]; // Active highlights
+  aiActivity: boolean;             // AI request in progress
+}
+
+interface HighlightRange {
+  start: number;   // Character offset (inclusive)
+  end: number;     // Character offset (exclusive)
+  id?: string;     // 'active' | 'other-N' for styling
 }
 ```
 
 **Actions:**
-- `PARSE_START` - Set status to parsing
-- `PARSE_COMPLETE` - Store document, set status to ready
-- `PARSE_ERROR` - Store error message
-- `TOGGLE_PREVIEW` - Show/hide preview panel
+- `SET_STATUS` - Update parsing status
+- `SET_DOCUMENT` - Store parsed document
+- `SET_ERROR` - Store error message
+- `TOGGLE_VIEWER` - Toggle between peek ↔ open
+- `SET_VIEWER_MODE` - Explicit peek/open
+- `SET_DOC_THEME` - Switch light/dark theme
+- `SET_HIGHLIGHTS` - Update highlight ranges
 - `SET_AI_ACTIVITY` - Track AI request lifecycle
+- `CLEAR_DOCUMENT` - Reset to idle state
 
 **File:** `src/store/documentStore.tsx`
 
 **Usage:**
 ```typescript
-const { state, parseFile, togglePreview } = useDocument();
+const { state, parseFile, toggleViewer, setHighlights, viewerApiRef } = useDocument();
 ```
+
+**Viewer API Ref:**
+- `viewerApiRef.current?.scrollToOffset(charOffset)` - Programmatic scroll
+- Used by adapters and bridge for reveal functionality
 
 ---
 
-### Preview UI ("Background Box")
+### Document Viewer v1 ("Organ, Not Modal")
 
-**Components:**
-- **TextPreviewButton** - Bottom-left toggle (20px from edges)
-- **TextPreviewPanel** - Left-side slide-out panel (400px wide, full height)
+**Philosophy:** The viewer is a permanent left-edge presence (like an organ), never fully hidden.
 
-**Behavior:**
-- Opens automatically when document parsing completes
-- Shows: filename (header), word count, full text (scrollable)
-- Close button + click-outside-to-close
-- Smooth slide animation (200ms ease-out)
-- zIndex: 100 (above canvas, below debug/popups)
+**State Model:**
+- `viewerMode: 'peek' | 'open'` — No "closed" state
+- `peek`: 44px total width (12px spine + 32px sliver)
+- `open`: 400px full panel
+- Viewer **pushes** canvas content (flex-row sibling, not overlay)
 
-**File Ownership:**
-- `src/playground/components/TextPreviewButton.tsx`
-- `src/playground/components/TextPreviewPanel.tsx`
+**Presence Strip (Always Visible):**
 
-**Design Notes:**
-- Non-blocking: uses separate stacking layer
-- Pointer events isolated via `stopPropagation`
-- No canvas interference during drag/zoom
+**Layer 1 - Spine (12px):**
+- Gradient: `linear-gradient(to right, rgba(0,0,0,0), rgba(..., 0.42))`
+- Hairline border: `1px solid rgba(99, 171, 255, 0.22)`
+- Subtle inner glow on hover
+- Cursor: `ew-resize`
+- Click: toggles viewer
+
+**Layer 2 - Handle Pill (22px × 64px):**
+- Pill-shaped (`border-radius: 999px`)
+- Always visible, vertically centered
+- Chevron icon: → (peek) | ← (open)
+- Loaded indicator dot (6px, blue when doc present)
+- Cursor: `pointer`
+- Click: toggles viewer
+
+**Layer 3 - Peek Sliver (32px effective):**
+- Only visible when `viewerMode === 'peek' && activeDocument !== null`
+- Faint sheet edge texture
+- `pointer-events: none` (non-interactive)
+
+**Files:**
+- `src/document/viewer/DocumentDockStrip.tsx` - Presence strip
+- `src/document/viewer/DocumentViewerPanel.tsx` - Main container
+
+---
+
+**Panel Animation:**
+- **Expand (peek → open):** 220ms `cubic-bezier(0.22, 1, 0.36, 1)`
+- **Collapse (open → peek):** 180ms `cubic-bezier(0.22, 1, 0.36, 1)`
+- No bounce, no text scaling
+
+**Keyboard Shortcuts:**
+- `Ctrl+F` - Opens search (also opens viewer if peek)
+- `Ctrl+\` - Toggles peek ↔ open
+- `Esc` - Returns to peek (when not in search)
+
+---
+
+**Independent Doc Theme:**
+- `docThemeMode: 'light' | 'dark'` — Separate from graph `SkinMode`
+- **Dark mode:** Quicksand font (weight 300), dark sheet
+- **Light mode:** System font (weight 400), light sheet
+- Theme tokens exposed as CSS variables (`--doc-*`)
+
+**Typography Contract:**
+- Base size: `15px`
+- Line height: `1.6`
+- Paragraph gap: `0.75em`
+- Max line width: `68ch`
+
+**File:** `src/document/viewer/docTheme.ts`
+
+---
+
+**Viewer Internal Data Model:**
+
+**Block Model:**
+- Text split into blocks (paragraphs) at newline boundaries
+- Each block has `[start, end)` character offset range (half-open)
+- Offsets are global to `activeDocument.text`
+- **Newline handling:** Newlines excluded from block text, offset advances by `line.length + 1`
+
+```typescript
+interface TextBlock {
+  blockId: string;   // React key ('b0', 'b1', ...)
+  start: number;     // Global char offset (inclusive)
+  end: number;       // Global char offset (exclusive)
+  text: string;      // Line content (no trailing \n)
+}
+```
+
+**Run Model:**
+- Each block split into "runs" (spans) when highlights present
+- Each `<span>` has `data-start` and `data-end` attributes
+- Used for DOM ↔ offset mapping
+
+**Highlight Model:**
+- `HighlightRange { start, end, id? }`
+- `id === 'active'` → `.highlight-active` class (search result / reveal)
+- `id !== 'active'` or missing → `.highlight-other` class
+- Highlights are **background-only** (no layout shift)
+
+**Files:**
+- `src/document/viewer/documentModel.ts` - Block builder
+- `src/document/viewer/DocumentBlock.tsx` - Block + run renderer
+- `src/document/viewer/DocumentContent.tsx` - Block list
+
+---
+
+**Offset ↔ DOM Mapping Strategy:**
+
+**Problem:** Need to scroll to/select text by character offset without full-text walk.
+
+**Solution:**
+- Each rendered `<span>` carries `data-start` and optionally `data-end`
+- `selectionToOffsets(selection)` - Finds nearest span ancestors, reads data-* attrs
+- `offsetsToRange(container, start, end)` - Queries spans, creates DOM Range
+- `findSpanContaining(container, offset)` - Binary search via querySelectorAll
+
+**No per-frame coupling:** All offset work is event-driven (search, click, reveal).
+
+**File:** `src/document/viewer/selectionMapping.ts`
+
+---
+
+**Rendering Strategy v1:**
+
+**No Virtualization for Small Docs:**
+- Threshold: 50 blocks
+- Below threshold: Render all blocks (simple, fast)
+
+**Virtualization for Large Docs (50+ blocks):**
+- RAF-throttled scroll handler
+- Overscan: ±3 blocks
+- Height cache: `Map<blockId, height>` persisted in `useRef`
+- Spacer divs: `topSpacerHeight` + `bottomSpacerHeight`
+- Measured via element `clientHeight` (no ResizeObserver in v1)
+
+**Current Status:** Virtualization wired but threshold set high (50 blocks). Works well for moderate docs.
+
+**File:** `src/document/viewer/useVirtualBlocks.ts`
+
+**Hard Invariant:** No per-frame coupling to physics loop. Viewer is fully event-driven.
+
+---
+
+**Search Session Internals v1:**
+
+**Debounce:** 300ms after last keystroke
+**Match Logic:** Case-insensitive substring search, overlapping allowed
+**Data Structure:**
+```typescript
+interface SearchSession {
+  query: string;
+  matches: SearchMatch[];  // { start, end }[]
+  activeIndex: number;     // -1 when no matches
+}
+```
+
+**Navigation:**
+- `Enter` - Next match (wraps around)
+- `Shift+Enter` - Previous match (wraps around)
+- Active match highlighted with `id: 'active'`
+- Other matches highlighted with `id: 'other-N'`
+
+**Reset Triggers:**
+- Document change (`activeDocument.id` change)
+- Search close (Esc)
+
+**File:** `src/document/viewer/searchSession.ts`
+
+---
+
+**Document ↔ Graph Bridge v1:**
+
+**NodeDocRefV1 Structure:**
+```typescript
+interface NodeDocRefV1 {
+  refId: string;              // UUID
+  docId: string;              // References ParsedDocument.id
+  normVersion: 1;             // Schema version
+  range: { start, end };      // Character offsets
+  kind: 'label' | 'snippet' | 'citation' | 'selection';
+  excerpt?: {                 // Optional validation
+    text: string;             // First 32 chars
+    hash: string;             // DJB2 hash of full range
+  };
+  createdAtMs: number;
+}
+```
+
+**Where Refs Live:**
+- `PhysicsNode.docRefs?: NodeDocRefV1[]`
+- `PhysicsNode.primaryDocRefId?: string`
+
+**Bridge API:**
+```typescript
+// src/document/bridge/docGraphBridge.ts
+const bridge = createDocGraphBridge(engine, documentStore);
+
+bridge.bindRef(nodeId, ref);       // Attach ref to node
+bridge.unbindRef(nodeId, refId);  // Remove ref
+bridge.getRefs(nodeId);           // Get all refs for node
+bridge.getPrimaryRef(nodeId);     // Get primary ref
+bridge.reveal(ref, options);      // Reveal ref in viewer
+```
+
+**Reveal Behavior:**
+1. Check `ref.docId === activeDocument.id` (no cross-doc jumps)
+2. Optional: validate `ref.excerpt.hash` against live text (stale detection)
+3. Open viewer if in peek mode
+4. Set `highlightRanges` to target range (`id: 'active'`)
+5. Call `viewerApiRef.current.scrollToOffset(ref.range.start)`
+6. Smooth scroll, center alignment
+
+**Adapter Surface:**
+```typescript
+// src/popup/adapters.ts
+interface DocumentViewerAdapter {
+  scrollToPosition(charOffset: number): void;
+  highlightRange(start: number, end: number): void;
+  clearHighlight(): void;
+  getCurrentPosition(): number;  // Stub (returns 0)
+  isVisible(): boolean;
+}
+```
+
+**Integration:** Real adapter created via `createDocumentViewerAdapter(documentContext)`, wired to popup/chatbar.
+
+**Files:**
+- `src/document/bridge/nodeDocRef.ts` - Types + excerpt utils
+- `src/document/bridge/docGraphBridge.ts` - Bridge API
+- `src/popup/adapters.ts` - Adapter implementation
+
+---
+
+**Event + State Choreography v1:**
+
+**File Drop → Document Loaded:**
+```
+User drops file onto canvas
+  ↓
+GraphPhysicsPlayground.handleDrop()
+  ↓
+documentStore.parseFile(file)
+  ↓ dispatch SET_STATUS('parsing')
+Web Worker parses file
+  ↓ postMessage({ type: 'PARSE_COMPLETE', document })
+  ↓ dispatch SET_DOCUMENT(document)
+  ↓ dispatch SET_STATUS('ready')
+applyFirstWordsToNodes() binds refs
+  ↓
+Viewer shows document (stays in current peek/open mode)
+```
+
+**Node Click Reveal:**
+```
+User clicks node
+  ↓
+Popup opens, "Reveal in Doc" button visible
+  ↓
+User clicks "Reveal in Doc"
+  ↓
+bridge.reveal(primaryRef)
+  ↓ Check docId, validate excerpt (optional)
+  ↓ setViewerMode('open')
+  ↓ setHighlights([{ start, end, id: 'active' }])
+  ↓ viewerApiRef.current.scrollToOffset(start)
+  ↓
+Viewer glides open (220ms), scrolls smooth to target, highlights range
+```
+
+**Search Typing:**
+```
+User opens search (Ctrl+F)
+  ↓ setViewerMode('open')
+  ↓ setShowSearch(true)
+SearchBar mounts, focuses input
+  ↓
+User types query
+  ↓ debounce 300ms
+createSearchSession(text, query)
+  ↓ returns { matches, activeIndex }
+  ↓ setHighlights(matches as HighlightRange[])
+  ↓ scrollToOffset(matches[activeIndex].start)
+  ↓
+Highlights appear, active match centered
+```
 
 ---
 
 ### Node Label Binding Layer
 
-** Purpose:** Map document content to graph node labels
+**Purpose:** Map document content to graph node labels + attach document references
 
-**Algorithm (First 5 Words →5 Nodes):**
+**Algorithm (First 5 Words → 5 Nodes):**
 ```typescript
-function applyFirstWordsToNodes(text: string, engine: PhysicsEngine) {
-  const words = text.split(/\s+/).filter(w => w.length > 0);
-  const firstFive = words.slice(0, 5);
+function applyFirstWordsToNodes(document: ParsedDocument, engine: PhysicsEngine) {
+  const wordMatches = [...document.text.matchAll(/\S+/g)].slice(0, 5);
   const nodes = Array.from(engine.nodes.values()).slice(0, 5);
   
   nodes.forEach((node, i) => {
-    node.label = firstFive[i] || `Node ${i}`;
+    const match = wordMatches[i];
+    if (!match) return;
+    
+    const word = match[0];
+    const start = match.index!;
+    const end = start + word.length;
+    
+    // Set label
+    node.label = word;
+    
+    // Attach NodeDocRefV1
+    const ref: NodeDocRefV1 = {
+      refId: generateUUID(),
+      docId: document.id,
+      normVersion: 1,
+      range: { start, end },
+      kind: 'label',
+      excerpt: computeExcerpt(document.text, start, end),
+      createdAtMs: Date.now(),
+    };
+    
+    node.docRefs = [ref];
+    node.primaryDocRefId = ref.refId;
   });
 }
 ```
 
 **Timing:**
 - Applied **after** document parsing completes  
-- Reason: Avoid React async timing pitfalls, ensure stable node array
 - Call site: `GraphPhysicsPlayground.tsx` `handleDrop()` callback
 
-**Label Storage:**
-- Lives directly on `PhysicsNode.label?: string`
-- Rendered below node in canvas draw loop (`graphDraw.ts`)
-- Horizontal rotation fix applied (labels always screen-aligned, not rotated with camera)
+**Data Attached:**
+- `PhysicsNode.label` - Word text for display
+- `PhysicsNode.docRefs` - Array of `NodeDocRefV1` references
+- `PhysicsNode.primaryDocRefId` - ID of primary ref
 
 **File:** `src/document/nodeBinding.ts`
 
-**Future Extension:**
+**AI Extension:**
 - `applyAILabelsToNodes()` - Rewrite labels via AI (3-word sentences)
-- Currently partially implemented, not fully wired
+- Implemented, guards against stale doc changes during async AI call
 
 ---
 
@@ -535,28 +845,6 @@ interface SeedPopupCallbacks {
 
 ---
 
-### Document Viewer Integration (Placeholders)
-
-**Interface Stubs:**
-```typescript
-interface DocumentViewerAdapter {
-  scrollToPosition(charOffset: number): void;
-  highlightRange(start: number, end: number): void;
-  clearHighlight(): void;
-  getCurrentPosition(): number;
-  isVisible(): boolean;
-}
-```
-
-**Future Behavior:**
-- Node popup can auto-scroll document viewer to relevant section
-- Mini chatbar can highlight text ranges when referencing passages
-- Click references in chat → document scrolls
-
-**File:** `src/popup/adapters.ts` (stubs log to console for now)
-
----
-
 ### Popup State Management
 
 **State Shape:**
@@ -694,16 +982,35 @@ VITE_OPENAI_API_KEY=sk-...
 - ✅ Popup system (normal mode, 4 runs complete)
 - ✅ Chat input + mini chatbar
 - ✅ Seed popup interface contracts
+- ✅ **Document Viewer v1** (runs 1–9 complete)
+  - Organ-style presence strip (spine + handle + sliver)
+  - Peek/open modes with smooth glide animation
+  - Independent theme (light/dark)
+  - Search + highlights (debounced, with navigation)
+  - Offset-based mapping (selection ↔ DOM)
+  - Document ↔ graph bridge (NodeDocRefV1 + reveal)
+  - Real adapter (popup/chatbar integration)
+  - Virtualization (50-block threshold)
+
+### Known Limitations (v1)
+- **Legacy .doc format** - Not supported (requires server-side conversion or user upgrade to .docx)
+- **Scanned/image-only PDFs** - No text extraction (no OCR)
+- **Excerpt validation** - Hash checking exists but not enforced in reveal (soft validation)
+- **Virtualization** - Wired but conservative threshold (50 blocks); works well for moderate docs
+- **Warning dot** -Code exists but not wired to `document.warnings` display
 
 ### In Progress
 - ⏳ AI loading indicator (glyph implementation parked, needs debug)
 
-### Future Work
+### Future Work (v1.1+)
 - 🔮 Seed popup animation module implementation
-- 🔮 Document viewer integration (scroll/highlight sync)
 - 🔮 Full chatbar expansion
 - 🔮 Real AI responses in chatbar
 - 🔮 Live geometry tracking for popups
+- 🔮 Viewer virtualization optimization (binary-search indexing, dynamic overscan)
+- 🔮 Warning UI (badge + tooltip for scanned PDF / extraction warnings)
+- 🔮 Selection → node creation pipeline
+- 🔮 Multi-document workspace
 
 ---
 

@@ -23,9 +23,10 @@ Force-directed graph physics playground with document ingestion pipeline and con
 **Document ingestion phase:**
 - Implemented unified parser for txt/md/docx/pdf
 - Web Worker isolation (off-main-thread parsing)
-- Document store (React Context)
-- Preview UI (left panel + bottom-left toggle)
-- Node label binding (first 5 words → first 5 nodes)
+- Document store (React Context) with viewerMode
+- Document Viewer v1 (presence strip, peek/open, search, highlights)
+- Node label binding (first 5 words + NodeDocRefV1)
+- Document ↔ Graph Bridge (reveal in doc)
 
 **AI architecture phase:**
 - LLMClient interface (generateText, generateStructured)
@@ -47,6 +48,11 @@ Force-directed graph physics playground with document ingestion pipeline and con
 - **Run 7-8:** Scrollbar gutter + arnvoid scrollbar styling
 - **Run 9-11:** Hardened arrow removal + edge fades + thumb polish
 - **Known issue:** Edge fade wiring broken (scrollbar not appearing after wrapper implementation)
+
+**Document Viewer v1 (9 runs):**
+- **Run 1-3:** State management, theming, basic layout (Dock Strip, Panel)
+- **Run 4-6:** Selection mapping, search debouncing, highlight rendering
+- **Run 7-9:** Virtualization scaffolding, bridge wiring (NodeDocRefV1), real adapters
 
 ---
 
@@ -73,7 +79,7 @@ npm run dev
 ### First-Time Verification
 1. Page loads → graph spawns 5 nodes
 2. Hover nodes → smooth color transition (dark → bright blue)
-3. Drag `.txt` file onto canvas → preview panel opens
+3. Drag `.txt` file onto canvas → viewer opens via handle strip
 4. Click a node → big popup appears
 5. Type in chat input → mini chatbar opens
 
@@ -86,10 +92,11 @@ npm run dev
 **Plain text (.txt / .md):**
 - [ ] Drag-drop `.txt` file onto canvas
 - [ ] Console shows: `[DocumentStore] Parsing started`
-- [ ] Preview panel slides in from left
-- [ ] Preview shows filename, word count, full text
-- [ ] First 5 words appear as labels on first 5 nodes
-- [ ] Close preview → press button again → reopens
+- [ ] Left presence strip indicates doc loaded (blue dot)
+- [ ] Click handle/spine → Viewer opens (smooth glide)
+- [ ] Viewer shows filename, word count, full text (quicksand/system font)
+- [ ] First 5 words appear as labels on nodes
+- [ ] Ctrl+Enter/Esc toggles viewer peek/open
 
 **Word documents (.docx):**
 - [ ] Drag-drop `.docx` file
@@ -146,6 +153,7 @@ npm run dev
 - [ ] Drag node (>5px movement) → popup does NOT open
 - [ ] Click node with camera moving → no crash
 - [ ] Open popup → physics/hover still work normally
+- [ ] Click "Reveal in Doc" → viewer opens, scrolls to reference, highlights text
 
 ---
 
@@ -242,9 +250,10 @@ npm run dev
 - Edit adapter functions in `src/document/parsers.ts`
 - Example: `parseTxt()`, `parseDocx()`, `parsePdf()`
 
-**Modify preview UI:**
-- Button: `src/playground/components/TextPreviewButton.tsx`
-- Panel: `src/playground/components/TextPreviewPanel.tsx`
+**Modify Document Viewer:**
+- Presence/Shell: `src/document/viewer/DocumentDockStrip.tsx`, `DocumentViewerPanel.tsx`
+- Content/Blocks: `src/document/viewer/DocumentContent.tsx`, `DocumentBlock.tsx`
+- Logic: `src/document/viewer/documentModel.ts`, `searchSession.ts`
 
 ---
 
@@ -293,9 +302,10 @@ const nodes = Array.from(engine.nodes.values()).slice(0, 10);
 - Interface: `src/popup/seedPopupTypes.ts`
 - Implementation: Not yet created (contract only)
 
-**Document viewer stubs:**
-- File: `src/popup/adapters.ts`
-- Replace stubs with real implementations when viewer exists
+**Document viewer integration:**
+- File: `src/popup/adapters.ts` (Real adapter)
+- Bridge: `src/document/bridge/docGraphBridge.ts`
+- Usage: `bridge.reveal(ref)`
 
 ---
 
@@ -332,14 +342,15 @@ const client = createLLMClient({
 
 ### Placeholder/Stub Status
 - **Seed popup animation:** Interface defined, no implementation
-- **Document viewer sync:** Adapter stubs only (scrollToPosition, highlightRange)
+
 - **Full chatbar expansion:** Stub only (expandToFull, collapseToMini)
 - **Live anchor geometry:** Hook exists, live tracking not implemented
 
-### Future Improvements
-- **Chat input animation:** Add smooth height transition css (currently sudden)
-- **Real AI responses:** Wire chatbar to LLMClient for actual conversations
-- **Document viewer:** Build left-panel document view with scroll/highlight sync
+### Future Improvements / v1.1
+- **Real Virtualization:** Enable threshold <50 blocks, add spacer divs
+- **Excerpt Validation:** Enforce hash check in reveal()
+- **Warning UI:** Show amber dot for warnings (scanned PDFs)
+- **Chatbar Integration:** Wire "cite" clicks to doc viewer reveal
 - **Seed popup module:** Implement 4-phase rAF animation system
 
 ---
@@ -387,7 +398,7 @@ This project evolves in discrete runs (not monolithic features):
 ### Completed Runs
 
 **Document pipeline:**
-- Run 1: File drop + worker + store + preview UI
+- Run 1: File drop + worker + store + viewer UI foundation
 - Run 2: Node binding (first 5 words)
 
 **AI scaffolding:**
@@ -402,10 +413,10 @@ This project evolves in discrete runs (not monolithic features):
 
 ### Next Runs (Suggestions)
 
-**Document viewer:**
-- Run 1: Left-panel scrollable text (no sync)
-- Run 2: Scroll-to-position from popup/chat
-- Run 3: Highlight ranges
+**Document Viewer Polish (v1.1):**
+- Run 1: Implement spacers in `useVirtualBlocks` to fix scrollbar height
+- Run 2: Wire warning dot to `document.warnings`
+- Run 3: Hardened excerpt validation in `docGraphBridge`
 
 **AI integration:**
 - Run 1: Wire label rewriting to UI button
@@ -456,8 +467,7 @@ This project evolves in discrete runs (not monolithic features):
 - `src/popup/adapters.ts` - Doc viewer stubs
 
 **UI Components:**
-- `src/playground/components/TextPreviewButton.tsx`
-- `src/playground/components/TextPreviewPanel.tsx`
+- `src/document/viewer/*` (All viewer components)
 - `src/playground/components/AIActivityGlyph.tsx` (parked)
 - `src/playground/components/CanvasOverlays.tsx`
 

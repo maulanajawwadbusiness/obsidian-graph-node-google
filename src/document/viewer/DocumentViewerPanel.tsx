@@ -24,6 +24,7 @@ export const DocumentViewerPanel: React.FC = () => {
     const pendingScrollRef = useRef<number | null>(null);
 
     const isPeek = state.viewerMode === 'peek';
+    const hasDocument = !!state.activeDocument;
 
     // Get current theme
     const currentTheme = getDocTheme(state.docThemeMode);
@@ -187,12 +188,18 @@ export const DocumentViewerPanel: React.FC = () => {
         left: '12px',  // After dock strip
         bottom: 0,
         right: 0,
-        backgroundColor: currentTheme.sheetBg,
+        backgroundColor: isPeek && hasDocument
+            ? 'rgba(var(--panel-bg-rgb), 0.25)'  // Faint sheet edge when peeking with doc
+            : currentTheme.sheetBg,
         pointerEvents: isPeek ? 'none' : 'auto',
         display: 'flex',
         flexDirection: 'column',
         opacity: isPeek ? 0.3 : 1,
-        transition: 'opacity 180ms ease-out',
+        transition: 'opacity 180ms ease-out, background-color 180ms ease-out',
+        // Subtle texture/depth for sheet edge
+        boxShadow: isPeek && hasDocument
+            ? 'inset 1px 0 2px rgba(0, 0, 0, 0.15), inset 0 0 8px rgba(var(--panel-bg-rgb), 0.3)'
+            : 'none',
     };
 
     const headerStyle: React.CSSProperties = {

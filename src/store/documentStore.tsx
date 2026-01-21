@@ -1,6 +1,12 @@
 import { createContext, useContext, useReducer, ReactNode, useRef, useEffect } from 'react';
-import type { DocumentState, DocumentStatus, ParsedDocument } from '../document/types';
+import type { DocumentState, DocumentStatus, ParsedDocument, ViewerMode, DocThemeMode } from '../document/types';
 import { WorkerClient } from '../document/workerClient';
+
+export interface HighlightRange {
+    start: number;
+    end: number;
+    id?: string;
+}
 
 /**
  * Document Store - React Context for managing parsed document state
@@ -12,8 +18,10 @@ type DocumentAction =
     | { type: 'SET_STATUS'; status: DocumentStatus }
     | { type: 'SET_DOCUMENT'; document: ParsedDocument }
     | { type: 'SET_ERROR'; error: string }
-    | { type: 'TOGGLE_PREVIEW' }
-    | { type: 'SET_PREVIEW'; open: boolean }
+    | { type: 'TOGGLE_VIEWER' }
+    | { type: 'SET_VIEWER_MODE'; mode: ViewerMode }
+    | { type: 'SET_DOC_THEME'; mode: DocThemeMode }
+    | { type: 'SET_HIGHLIGHTS'; ranges: HighlightRange[] }
     | { type: 'CLEAR_DOCUMENT' }
     | { type: 'SET_AI_ACTIVITY'; active: boolean };
 
@@ -22,7 +30,9 @@ const initialState: DocumentState = {
     activeDocument: null,
     status: 'idle',
     errorMessage: null,
-    previewOpen: false,
+    viewerMode: 'peek',  // Always visible (organ, not modal)
+    docThemeMode: 'dark',  // Default to dark (arnvoid aesthetic)
+    highlightRanges: [],  // No highlights initially
     aiActivity: false,
 };
 
@@ -44,12 +54,24 @@ function documentReducer(state: DocumentState, action: DocumentAction): Document
                 status: 'error',
                 errorMessage: action.error,
             };
-        case 'TOGGLE_PREVIEW':
-            return { ...state, previewOpen: !state.previewOpen };
-        case 'SET_PREVIEW':
-            return { ...state, previewOpen: action.open };
+        case 'TOGGLE_VIEWER':
+            const newMode = state.viewerMode === 'peek' ? 'open' : 'peek';
+            console.log(`[Viewer] ${state.viewerMode} → ${newMode}`);
+            return { ...state, viewerMode: newMode };
+        case 'SET_VIEWER_MODE':
+            if (action.mode !== state.viewerMode) {
+                console.log(`[Viewer] ${state.viewerMode} → ${action.mode}`);
+            }
+            return { ...state, viewerMode: action.mode };
+        case 'SET_DOC_THEME':
+            if (action.mode !== state.docThemeMode) {
+                console.log(`[DocTheme] ${state.docThemeMode} → ${action.mode}`);
+            }
+            return { ...state, docThemeMode: action.mode };
+        case 'SET_HIGHLIGHTS':
+            return { ...state, highlightRanges: action.ranges };
         case 'CLEAR_DOCUMENT':
-            return { ...initialState, previewOpen: state.previewOpen };
+            return { ...initialState, viewerMode: state.viewerMode };
         case 'SET_AI_ACTIVITY':
             return { ...state, aiActivity: action.active };
         default:
@@ -58,13 +80,15 @@ function documentReducer(state: DocumentState, action: DocumentAction): Document
 }
 
 // Context value type
-interface DocumentContextValue {
+export interface DocumentContextValue {
     state: DocumentState;
     setStatus: (status: DocumentStatus) => void;
     setDocument: (document: ParsedDocument) => void;
     setError: (error: string) => void;
-    togglePreview: () => void;
-    setPreviewOpen: (open: boolean) => void;
+    toggleViewer: () => void;
+    setViewerMode: (mode: ViewerMode) => void;
+    setDocTheme: (mode: DocThemeMode) => void;
+    setHighlights: (ranges: HighlightRange[]) => void;
     clearDocument: () => void;
     parseFile: (file: File) => Promise<ParsedDocument | null>;
     setAIActivity: (active: boolean) => void;
@@ -115,8 +139,10 @@ export function DocumentProvider({ children }: { children: ReactNode }) {
         setStatus: (status) => dispatch({ type: 'SET_STATUS', status }),
         setDocument: (document) => dispatch({ type: 'SET_DOCUMENT', document }),
         setError: (error) => dispatch({ type: 'SET_ERROR', error }),
-        togglePreview: () => dispatch({ type: 'TOGGLE_PREVIEW' }),
-        setPreviewOpen: (open) => dispatch({ type: 'SET_PREVIEW', open }),
+        toggleViewer: () => dispatch({ type: 'TOGGLE_VIEWER' }),
+        setViewerMode: (mode) => dispatch({ type: 'SET_VIEWER_MODE', mode }),
+        setDocTheme: (mode) => dispatch({ type: 'SET_DOC_THEME', mode }),
+        setHighlights: (ranges) => dispatch({ type: 'SET_HIGHLIGHTS', ranges }),
         clearDocument: () => dispatch({ type: 'CLEAR_DOCUMENT' }),
         parseFile,
         setAIActivity: (active) => dispatch({ type: 'SET_AI_ACTIVITY', active })

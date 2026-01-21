@@ -1,7 +1,7 @@
 # Handoff Document: Graph Physics + Document Pipeline + Popup System
 
-**Last Updated:** 2026-01-20  
-**Status:** Phase 5 complete (Node Popup System all 4 runs), Document pipeline stable, AI scaffolding ready  
+**Last Updated:** 2026-01-21  
+**Status:** Phase 6 in progress (Popup Membrane UI - 11 runs complete, edge fades wiring issue), Document pipeline stable, AI scaffolding ready  
 **Next Developer:** Claude Sonnet
 
 ---
@@ -39,6 +39,14 @@ Force-directed graph physics playground with document ingestion pipeline and con
 - **Run 2:** Smart positioning + smooth animations + outside-click close
 - **Run 3:** Chat input (5-line expansion) + mini chatbar (mock AI replies)
 - **Run 4:** Seed popup interface contract + geometry provider + doc viewer stubs
+
+**Popup membrane UI phase (11 runs):**
+- **Run 1-3:** Border purge + 1-line textarea baseline + smooth expansion
+- **Run 4:** Intelligent chatbar positioning (adjacent to popup, collision-aware)
+- **Run 5-6:** Overlap fix + true 1-line textarea enforcement
+- **Run 7-8:** Scrollbar gutter + arnvoid scrollbar styling
+- **Run 9-11:** Hardened arrow removal + edge fades + thumb polish
+- **Known issue:** Edge fade wiring broken (scrollbar not appearing after wrapper implementation)
 
 ---
 
@@ -188,6 +196,38 @@ npm run dev
 
 ---
 
+### Popup Membrane UI (Visual Polish)
+
+**Border removal:**
+- [ ] Node popup has no visible borders (depth via shadow only)
+- [ ] Chat input has no borders (subtle background only)
+- [ ] Mini chatbar has no borders
+
+**Chat input baseline:**
+- [ ] Empty chat input = exactly 1 line tall (~40px)
+- [ ] Type text → expands smoothly line by line
+- [ ] Clear text → shrinks back to 1 line
+
+**Intelligent chatbar positioning:**
+- [ ] Chatbar appears adjacent to popup (left or right side)
+- [ ] Maintains 20px gap from popup
+- [ ] Never overlaps popup content
+- [ ] Stays fully on-screen (viewport clamping)
+- [ ] Tries 4 positions: right, left, below, above (in preference order)
+
+**Scrollbar styling:**
+- [ ] Scrollbar is thin (6px), blue-gray color
+- [ ] **⚠️ KNOWN BUG:** Scrollbar not appearing (edge fade wrapper issue)
+- [ ] Arrow buttons removed (should have no up/down arrows)
+- [ ] Thumb brightens on hover
+
+**Edge fades (currently broken):**
+- [ ] **⚠️ NOT WORKING:** Top/bottom gradient fades should appear based on scroll position
+- [ ] **Issue:** Wrapper with `overflow: hidden` blocking scrollbar visibility
+- [ ] **Debug guide:** See `codex-debug-brief.md` for diagnosis
+
+---
+
 ## 4. Where to Modify Things
 
 ### Document Parsing
@@ -229,16 +269,27 @@ const nodes = Array.from(engine.nodes.values()).slice(0, 10);
 - Main component: `src/popup/NodePopup.tsx`
 - State: `src/popup/PopupStore.tsx`
 - Types: `src/popup/popupTypes.ts`
+- Styling: Inline constants (POPUP_STYLE, HEADER_STYLE)
+- **Recent:** Borders removed, uses boxShadow for depth
 
 **Chat input:**
 - Component: `src/popup/ChatInput.tsx`
 - Styling: All inline (TEXTAREA_STYLE, SEND_BUTTON_STYLE constants)
+- **Recent:** `rows={1}` attribute, smooth height transition, overflow handling
 
 **Mini chatbar:**
 - Component: `src/popup/MiniChatbar.tsx`
 - Mock reply text: Search for `"This is a mock AI response..."`
+- **Recent:** Intelligent positioning via `computeChatbarPosition()`, collision detection
+- **Known bug:** Scrollbar not visible after edge fade wrapper implementation
 
-**Seed popup (future):**
+**Scrollbar styling:**
+- Global CSS: `src/index.css` — `.arnvoid-scroll` class
+- CSS vars: `--panel-bg-rgb`, `--panel-bg-opacity`, `--scrollbar-gutter`
+- Effect: Thin (6px), blue-gray, no arrow buttons
+- **Known bug:** `.arnvoid-scroll-fades` wrapper with `overflow: hidden` breaks scrollbar visibility
+
+**Seed popup (future):
 - Interface: `src/popup/seedPopupTypes.ts`
 - Implementation: Not yet created (contract only)
 

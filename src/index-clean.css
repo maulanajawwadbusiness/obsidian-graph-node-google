@@ -1,4 +1,4 @@
-@font-face {
+﻿@font-face {
   font-family: 'Quicksand';
   src: url('./assets/Quicksand-Light.ttf') format('truetype');
   font-weight: 300;
@@ -135,5 +135,3 @@ body {
   scrollbar-width: thin;
   scrollbar-color: rgba(99, 171, 255, 0.2) transparent;
 }
-
-/* Document Viewer - Highlight styles (no layout shift) */

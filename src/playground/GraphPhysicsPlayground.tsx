@@ -5,8 +5,6 @@ import { DEFAULT_PHYSICS_CONFIG } from '../physics/config';
 import { DRAG_ENABLED, SkinMode, getTheme } from '../visual/theme';
 import { CanvasOverlays } from './components/CanvasOverlays';
 import { SidebarControls } from './components/SidebarControls';
-import { TextPreviewButton } from './components/TextPreviewButton';
-import { TextPreviewPanel } from './components/TextPreviewPanel';
 import { AIActivityGlyph } from './components/AIActivityGlyph';
 import { CONTAINER_STYLE, MAIN_STYLE, SHOW_THEME_TOGGLE } from './graphPlaygroundStyles';
 import { PlaygroundMetrics } from './playgroundTypes';
@@ -16,6 +14,7 @@ import { DocumentProvider, useDocument } from '../store/documentStore';
 import { applyFirstWordsToNodes, applyAILabelsToNodes } from '../document/nodeBinding';
 import { PopupProvider, usePopup } from '../popup/PopupStore';
 import { PopupPortal } from '../popup/PopupPortal';
+import { DocumentViewerPanel } from '../document/viewer/DocumentViewerPanel';
 
 // -----------------------------------------------------------------------------
 // Main Component (Internal)
@@ -323,7 +322,9 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
     const activeTheme = getTheme(skinMode);
 
     return (
-        <div style={{ ...CONTAINER_STYLE, background: activeTheme.background }}>
+        <div style={{ ...CONTAINER_STYLE, background: activeTheme.background, flexDirection: 'row' }}>
+            <DocumentViewerPanel />
+
             <div
                 style={MAIN_STYLE}
                 onMouseDown={handleMouseDown}
@@ -351,8 +352,6 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
                     sidebarOpen={sidebarOpen}
                     skinMode={skinMode}
                 />
-                <TextPreviewButton />
-                <TextPreviewPanel />
                 <AIActivityGlyph />
                 <PopupPortal />
             </div>

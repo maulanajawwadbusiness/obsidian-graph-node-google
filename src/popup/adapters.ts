@@ -1,15 +1,16 @@
 /**
- * Document Viewer Adapter - Stub Interfaces
+ * Document Viewer Adapter - Real Implementation
  * 
- * These interfaces define how popups will interact with
- * the document viewer in the future. For now, they're stubs
- * that log to console.
+ * These interfaces define how popups interact with
+ * the document viewer.
  * 
- * Future integration:
+ * Integration points:
  * - Node popup can auto-scroll to relevant document section
  * - Mini chatbar can highlight text ranges
  * - Clicking references in chat scrolls document
  */
+
+import type { DocumentContextValue } from '../store/documentStore';
 
 export interface DocumentViewerAdapter {
     /** Scroll to character offset in document */
@@ -29,9 +30,61 @@ export interface DocumentViewerAdapter {
 }
 
 /**
- * Stub Implementation
- * 
- * Replace this with real implementation when document viewer exists.
+ * Create real document viewer adapter
+ */
+export function createDocumentViewerAdapter(
+    documentContext: DocumentContextValue
+): DocumentViewerAdapter {
+    return {
+        scrollToPosition: (charOffset: number) => {
+            // Open viewer if in peek mode
+            if (documentContext.state.viewerMode === 'peek') {
+                documentContext.setViewerMode('open');
+            }
+
+            // Set highlight at position (single character)
+            documentContext.setHighlights([{
+                start: charOffset,
+                end: charOffset + 1,
+                id: 'active',
+            }]);
+
+            console.log(`[DocAdapter] Scrolled to offset ${charOffset}`);
+        },
+
+        highlightRange: (start: number, end: number) => {
+            // Open viewer if in peek mode
+            if (documentContext.state.viewerMode === 'peek') {
+                documentContext.setViewerMode('open');
+            }
+
+            documentContext.setHighlights([{
+                start,
+                end,
+                id: 'active',
+            }]);
+
+            console.log(`[DocAdapter] Highlighted range ${start}-${end}`);
+        },
+
+        clearHighlight: () => {
+            documentContext.setHighlights([]);
+            console.log('[DocAdapter] Cleared highlights');
+        },
+
+        getCurrentPosition: () => {
+            // For now, return 0 (would need scroll tracking to implement fully)
+            return 0;
+        },
+
+        isVisible: () => {
+            return documentContext.state.viewerMode === 'open';
+        },
+    };
+}
+
+/**
+ * Stub Implementation (deprecated - for backward compatibility)
  */
 export const documentViewerStub: DocumentViewerAdapter = {
     scrollToPosition: (charOffset: number) => {
@@ -53,41 +106,6 @@ export const documentViewerStub: DocumentViewerAdapter = {
 
     isVisible: () => {
         console.log('[DocViewer Stub] isVisible');
-        return false;
-    },
-};
-
-/**
- * Future: Full Chatbar Expansion
- * 
- * The mini chatbar can expand into a full chatbar.
- * This interface defines the expansion contract.
- */
-export interface ChatbarExpansionAdapter {
-    /** Expand mini chatbar to full chatbar */
-    expandToFull(): void;
-
-    /** Collapse full chatbar to mini */
-    collapseToMini(): void;
-
-    /** Check current state */
-    isExpanded(): boolean;
-}
-
-/**
- * Stub Implementation
- */
-export const chatbarExpansionStub: ChatbarExpansionAdapter = {
-    expandToFull: () => {
-        console.log('[Chatbar Expansion Stub] expandToFull');
-    },
-
-    collapseToMini: () => {
-        console.log('[Chatbar Expansion Stub] collapseToMini');
-    },
-
-    isExpanded: () => {
-        console.log('[Chatbar Expansion Stub] isExpanded');
         return false;
     },
 };

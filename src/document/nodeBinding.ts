@@ -1,32 +1,64 @@
 /**
  * Node Binding - Apply parsed text to node labels
  * Takes first 5 words from document and sets them as node labels
+ * Attaches document references for reveal functionality
  */
 
 import type { PhysicsEngine } from '../physics/engine';
 import type { ParsedDocument } from './types';
 import { makeThreeWordLabels } from '../ai/labelRewriter';
+import { computeExcerpt, type NodeDocRefV1 } from './bridge/nodeDocRef';
+
+// Generate simple UUID (v4-like)
+function generateUUID(): string {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = Math.random() * 16 | 0;
+    const v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+}
 
 export function applyFirstWordsToNodes(
   engine: PhysicsEngine,
   document: ParsedDocument
 ): void {
-  const words = document.text
-    .trim()
-    .split(/\s+/)
-    .filter(w => w.length > 0)
-    .slice(0, 5);
-
+  const text = document.text;
+  const wordMatches = [...text.matchAll(/\S+/g)].slice(0, 5);
   const nodes = Array.from(engine.nodes.values()).slice(0, 5);
 
   nodes.forEach((node, i) => {
-    if (words[i]) {
-      node.label = words[i];
-      console.log(`[NodeBinding] Node ${i}: "${words[i]}"`);
+    const match = wordMatches[i];
+    if (!match) return;
+
+    const word = match[0];
+    const start = match.index!;
+    const end = start + word.length;
+
+    // Set label
+    node.label = word;
+
+    // Create doc ref
+    const ref: NodeDocRefV1 = {
+      refId: generateUUID(),
+      docId: document.id,
+      normVersion: 1,
+      range: { start, end },
+      kind: 'label',
+      excerpt: computeExcerpt(text, start, end),
+      createdAtMs: Date.now(),
+    };
+
+    // Attach to node
+    if (!node.docRefs) {
+      node.docRefs = [];
     }
+    node.docRefs = [ref];
+    node.primaryDocRefId = ref.refId;
+
+    console.log(`[NodeBinding] Node ${i}: "${word}" @ offset ${start}`);
   });
 
-  console.log(`[NodeBinding] Applied ${words.length} words to ${nodes.length} nodes`);
+  console.log(`[NodeBinding] Applied ${wordMatches.length} words to ${nodes.length} nodes`);
 }
 
 /**

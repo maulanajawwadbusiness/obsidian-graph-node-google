@@ -420,10 +420,74 @@ reply based on the node and document context."
 
 **File:** `src/popup/MiniChatbar.tsx`
 
+**Recent (Phase 6 - Membrane UI):**
+- Intelligent positioning: `computeChatbarPosition()` tries 4 positions (right, left, below, above)
+- Collision detection: Never overlaps popup, maintains 20px gap
+- Uses `popupRect` from PopupStore for dynamic placement
+- **Known bug:** Scrollbar not appearing after edge fade wrapper implementation
+
 **Future Integration:**
 - Expand to full chatbar (placeholder hook)
 - Real AI responses via LLMClient
 - Document viewer sync (scroll to relevant section)
+
+---
+
+### Popup Membrane UI (Visual Polish)
+
+**Goal:** "Apple-level" membrane aesthetic — depth via shadow/gradient, no visible borders.
+
+**Border Removal:**
+- NodePopup: No `border` property, depth via `boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)'`
+- ChatInput: No borders, subtle `backgroundColor: 'rgba(99, 171, 255, 0.05)'`
+- MiniChatbar: No borders, depth via shadow + backdrop filter
+
+**Chat Input Baseline:**
+- Enforced 1-line default height via `rows={1}` attribute
+- Skip auto-resize for empty text to prevent 2-line default
+- Smooth expansion: RAF-throttled useEffect with height transition
+
+**Intelligent Chatbar Positioning:**
+```typescript
+// MiniChatbar.tsx - computeChatbarPosition()
+const tryRight = () => popupRight + GAP;
+const tryLeft = () => popupLeft - CHATBAR_WIDTH - GAP;
+const tryBelow = () => popupBottom + GAP;
+const tryAbove = () => popupTop - CHATBAR_HEIGHT - GAP;
+
+// Priority order based on popup center position
+const candidates = preferRight
+  ? [tryRight, tryLeft, tryBelow, tryAbove]
+  : [tryLeft, tryRight, tryBelow, tryAbove];
+```
+
+**Scrollbar Styling (`.arnvoid-scroll` class):**
+- Location: `src/index.css`
+- Webkit: 6px thin thumb, transparent track, blue-gray color (`rgba(99, 171, 255, 0.2)`)
+- Firefox: `scrollbar-width: thin`, `scrollbar-color` fallback
+- Arrow buttons: Hardened removal via `::-webkit-scrollbar-button` + `:single-button` variants
+- Hover effect: Thumb brightens to 0.4 opacity
+
+**CSS Variables:**
+```css
+:root {
+  --panel-bg-rgb: 20, 20, 30;
+  --panel-bg-opacity: 0.95;
+  --scrollbar-gutter: 12px;
+}
+```
+
+**Edge Fades (⚠️ Currently Broken):**
+- **Design:** `.arnvoid-scroll-fades` wrapper with `::before/::after` gradient overlays
+- **Behavior:** Top fade appears when `scrollTop > 8`, bottom fade when not at bottom
+- **Implementation:** RAF-throttled scroll listener using `classList.toggle` (no React re-render)
+- **Bug:** Wrapper `overflow: hidden` blocks scrollbar visibility
+- **Debug:** See `codex-debug-brief.md` for root cause analysis
+
+**File Ownership:**
+- Popup styles: Inline constants in `NodePopup.tsx`, `ChatInput.tsx`, `MiniChatbar.tsx`
+- Scrollbar CSS: `src/index.css` (`.arnvoid-scroll`, `.arnvoid-scroll-fades`)
+- Positioning logic: `MiniChatbar.tsx` `computeChatbarPosition()`
 
 ---
 

@@ -25,7 +25,7 @@ const TEXT_BUTTON_STYLE: React.CSSProperties = {
 };
 
 export const TextPreviewButton: React.FC = () => {
-    const { state, togglePreview } = useDocument();
+    const { state, toggleViewer } = useDocument();
 
     // Show button only when document is ready
     if (state.status !== 'ready' || !state.activeDocument) {
@@ -41,7 +41,7 @@ export const TextPreviewButton: React.FC = () => {
             onMouseUp={stopPropagation}
             onClick={(e) => {
                 stopPropagation(e);
-                togglePreview();
+                toggleViewer();
             }}
             aria-label="Toggle text preview"
             title="Show extracted text"

@@ -3,6 +3,9 @@ export interface Vector2 {
   y: number;
 }
 
+/**
+ * Physics node (immutable in this design)
+ */
 export interface PhysicsNode {
   id: string;
   // Position
@@ -36,6 +39,10 @@ export interface PhysicsNode {
   // Force memory for temporal lag (early-expansion symmetry breaking)
   prevFx?: number; // Previous frame's force for low-pass filtering
   prevFy?: number;
+
+  // Doc viewer integration (v1)
+  docRefs?: import('../document/bridge/nodeDocRef').NodeDocRefV1[];
+  primaryDocRefId?: string;
 }
 
 export interface PhysicsLink {

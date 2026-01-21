@@ -61,9 +61,9 @@ const META_STYLE: React.CSSProperties = {
 };
 
 export const TextPreviewPanel: React.FC = () => {
-    const { state, setPreviewOpen } = useDocument();
+    const { state, setViewerMode } = useDocument();
 
-    if (!state.previewOpen || !state.activeDocument) {
+    if (state.viewerMode !== 'open' || !state.activeDocument) {
         return null;
     }
 
@@ -83,7 +83,7 @@ export const TextPreviewPanel: React.FC = () => {
                 <button
                     type="button"
                     style={CLOSE_BUTTON_STYLE}
-                    onClick={() => setPreviewOpen(false)}
+                    onClick={() => setViewerMode('peek')}
                     aria-label="Close preview"
                     title="Close"
                 >

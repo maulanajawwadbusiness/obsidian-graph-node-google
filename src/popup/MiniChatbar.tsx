@@ -69,7 +69,7 @@ const MESSAGES_STYLE: React.CSSProperties = {
     fontSize: '13px',
     lineHeight: '1.5',
     paddingLeft: '4px',      // Visual balance
-    paddingRight: '12px',    // Reserve lane for scrollbar
+    paddingRight: 'var(--scrollbar-gutter, 12px)',    // Reserve lane for scrollbar
 };
 
 const MESSAGE_STYLE_USER: React.CSSProperties = {
@@ -198,6 +198,7 @@ export const MiniChatbar: React.FC<MiniChatbarProps> = ({ messages, onSend, onCl
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const messagesRef = useRef<HTMLDivElement>(null);  // Scroll container ref
     const fadeWrapperRef = useRef<HTMLDivElement>(null);  // Fade wrapper ref
+    const scrollTimeoutRef = useRef<number | null>(null);
     const chatbarRef = useRef<HTMLDivElement>(null);
     const { popupRect } = usePopup();
 
@@ -243,7 +244,7 @@ export const MiniChatbar: React.FC<MiniChatbarProps> = ({ messages, onSend, onCl
         });
     }, [messages]);
 
-    // RAF-throttled scroll listener using classList — avoids React re-render
+    // RAF-throttled scroll listener using classList + timeout to avoid React re-render on scroll
     useEffect(() => {
         const scroller = messagesRef.current;
         const wrapper = fadeWrapperRef.current;
@@ -265,6 +266,14 @@ export const MiniChatbar: React.FC<MiniChatbarProps> = ({ messages, onSend, onCl
         const onScroll = () => {
             cancelAnimationFrame(rafId);
             rafId = requestAnimationFrame(updateFades);
+
+            scroller.classList.add('is-scrolling');
+            if (scrollTimeoutRef.current !== null) {
+                window.clearTimeout(scrollTimeoutRef.current);
+            }
+            scrollTimeoutRef.current = window.setTimeout(() => {
+                scroller.classList.remove('is-scrolling');
+            }, 420);
         };
 
         scroller.addEventListener('scroll', onScroll, { passive: true });
@@ -275,6 +284,9 @@ export const MiniChatbar: React.FC<MiniChatbarProps> = ({ messages, onSend, onCl
         return () => {
             scroller.removeEventListener('scroll', onScroll);
             cancelAnimationFrame(rafId);
+            if (scrollTimeoutRef.current !== null) {
+                window.clearTimeout(scrollTimeoutRef.current);
+            }
         };
     }, []);
 

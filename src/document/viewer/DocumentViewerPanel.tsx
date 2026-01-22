@@ -173,7 +173,7 @@ export const DocumentViewerPanel: React.FC = () => {
         flexShrink: 0,
         width: isPeek ? '0px' : 'var(--panel-width)',
         height: '100%',
-        backgroundColor: 'rgba(var(--panel-bg-rgb), var(--panel-bg-opacity))',
+        backgroundColor: 'rgb(var(--panel-bg-rgb))',
         backdropFilter: 'blur(12px)',
         transition: isPeek
             ? 'width 180ms cubic-bezier(0.22, 1, 0.36, 1)'  // Peek (collapse)
@@ -201,7 +201,7 @@ export const DocumentViewerPanel: React.FC = () => {
         boxShadow: isPeek && hasDocument
             ? 'inset 1px 0 2px rgba(0, 0, 0, 0.15), inset 0 0 8px rgba(var(--panel-bg-rgb), 0.3)'
             : !isPeek
-                ? 'inset 0 1px 3px rgba(0, 0, 0, 0.1), inset 0 0 12px rgba(0, 0, 0, 0.05)'
+                ? 'inset 0 1px 3px rgba(6, 8, 18, 0.18), inset 0 0 12px rgba(6, 8, 18, 0.08)'
                 : 'none',
     };
 

@@ -20,17 +20,20 @@
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 
-  /* Panel background as RGB for gradient use (matches rgba(20, 20, 30, 0.95)) */
-  --panel-bg-rgb: 20, 20, 30;
+  /* Panel background as RGB for gradient use (matches #13131D family) */
+  --panel-bg-rgb: 19, 19, 29;
   --panel-bg-opacity: 0.95;
 
   /* Scrollbar gutter width (shared with message scroller paddingRight) */
   --scrollbar-gutter: 12px;
 
-  --dv-sheet-width: 68ch;
-  --dv-content-padding-x: 20px;
+  --dv-panel-scale: 0.8;
+  --dv-panel-base-width: 648px;
+  --dv-panel-width: calc(var(--dv-panel-base-width) * var(--dv-panel-scale));
+  --dv-sheet-width: calc(var(--dv-panel-width) - (var(--dv-content-padding-x) + var(--dv-sheet-padding)) * 2);
+  --dv-content-padding-x: 16px;
   --dv-sheet-padding: 12px;
-  --panel-width: calc(var(--dv-sheet-width) + (var(--dv-content-padding-x) + var(--dv-sheet-padding)) * 2);
+  --panel-width: var(--dv-panel-width);
   --transition-panel: 320ms cubic-bezier(0.32, 0.72, 0, 1);
   --strip-highlight: hsl(42, 30%, 60%);
   --strip-highlight-dim: hsl(42, 20%, 40%);

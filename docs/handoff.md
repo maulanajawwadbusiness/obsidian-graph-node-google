@@ -614,3 +614,26 @@ x = Math.max(10, Math.min(x, viewportWidth - popupWidth - 10));
 ---
 
 **End of handoff. Document pipeline + Popup system ready for next phase! 🚀**
+
+
+---
+
+## Document Viewer v1 + Bookmark Tab (Current State)
+
+### What Is Now True
+- Viewer width is controlled by a single knob: `--dv-panel-scale` in `src/index.css`.
+- Panel width and tab position both derive from `--panel-width`.
+- Horizontal scroll in the viewer is forbidden and actively enforced.
+- Sheet width is always smaller than panel width (breathing room).
+
+### Regression Traps (Do Not Break)
+- Do not remove or override `overflow-x: hidden` in `.dv-content`.
+- Do not decouple tab `left` from `--panel-width`.
+- Do not set `docTheme.maxLineWidth` to a fixed value that ignores `--dv-sheet-width`.
+- Do not reduce `min-width: 0` on viewer flex children.
+
+### Debug Pointers
+- Panel/tab width mismatch: `src/index.css`, `src/PresenceStrip/PresenceStrip.css`.
+- Horizontal scroll or clipping: `src/document/viewer/viewerTokens.css`.
+- Sheet width rules: `src/index.css`, `src/document/viewer/docTheme.ts`.
+

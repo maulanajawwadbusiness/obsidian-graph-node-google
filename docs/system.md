@@ -1015,3 +1015,36 @@ VITE_OPENAI_API_KEY=sk-...
 ---
 
 **End of System Architecture Document**
+
+
+---
+
+## Document Viewer v1 and Bookmark Tab Addendum
+
+### Document Viewer - Current Contract
+- Viewer is a persistent reading surface with two states: `peek` and `open`.
+- No fully closed state; the viewer is always present as an organ on the left.
+- Search, highlights, and reveal are supported and event-driven.
+
+### Width Model (Single Knob)
+- Primary knob: `--dv-panel-scale` in `src/index.css`.
+- `--dv-panel-width = --dv-panel-base-width * --dv-panel-scale`.
+- `--panel-width = --dv-panel-width` (shared by panel and tab).
+- `--dv-sheet-width = --dv-panel-width - ( --dv-content-padding-x + --dv-sheet-padding ) * 2`.
+- `docTheme.maxLineWidth` uses `var(--dv-sheet-width, 68ch)` to keep sheet width aligned.
+
+### No Horizontal Scroll (Hard Invariant)
+- `.dv-content` enforces `overflow-x: hidden` and `min-width: 0`.
+- `.dv-document` and `.dv-document-body` enforce `min-width: 0`, `max-width: 100%`, and `box-sizing: border-box`.
+- Paragraphs enforce `white-space: normal`, `overflow-wrap: anywhere`, `word-break: break-word`.
+
+### Bookmark Presence Tab Integration
+- Closed: `.presence-strip-container` sits at `left: 0`.
+- Open: `.presence-strip-container.mode-open` moves to `left: var(--panel-width)`.
+- The tab uses the same `--panel-width` token as the viewer for synchronized motion.
+- The tab container has higher `z-index` than the panel so it is never buried.
+
+### Viewer Styling Ownership
+- Layout, wrapping, and spacing rules live in `src/document/viewer/viewerTokens.css`.
+- Theme tokens and sheet width linkage live in `src/document/viewer/docTheme.ts`.
+

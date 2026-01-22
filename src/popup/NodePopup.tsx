@@ -12,7 +12,7 @@ const POPUP_STYLE: React.CSSProperties = {
     width: '20vw',
     minWidth: '280px',
     height: '80vh',
-    backgroundColor: 'rgba(20, 20, 30, 0.95)',
+    backgroundColor: 'rgb(var(--panel-bg-rgb))',
     border: 'none',
     borderRadius: '8px',
     padding: '20px',

@@ -34,7 +34,7 @@ export const DOC_THEME_DARK: DocThemeTokens = {
     maxLineWidth: 'var(--dv-sheet-width, 68ch)',
     panelBg: 'rgba(19, 19, 29, 1)',
     sheetBg: 'rgba(21, 21, 32, 1)',
-    text: 'rgba(200, 210, 225, 0.92)',
+    text: 'rgba(215, 225, 255, 0.84)',
     mutedText: 'rgba(140, 155, 175, 0.7)',
     selectionBg: 'rgba(99, 171, 255, 0.3)',
     selectionText: 'inherit',

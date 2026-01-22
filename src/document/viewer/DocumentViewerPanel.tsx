@@ -179,8 +179,6 @@ export const DocumentViewerPanel: React.FC = () => {
         flexShrink: 0,
         width: isPeek ? '0px' : 'var(--panel-width)',
         height: '100%',
-        backgroundColor: 'rgb(var(--panel-bg-rgb))',
-        backdropFilter: perfFlatVisuals ? 'none' : 'blur(12px)',
         transition: isPeek
             ? 'width 180ms cubic-bezier(0.22, 1, 0.36, 1)'  // Peek (collapse)
             : 'width 220ms cubic-bezier(0.22, 1, 0.36, 1)', // Open (expand)
@@ -211,6 +209,7 @@ export const DocumentViewerPanel: React.FC = () => {
         transition: 'opacity 180ms ease-out, background-color 180ms ease-out',
         // Subtle texture/depth for sheet edge
         boxShadow: perfFlatVisuals ? 'none' : sliverShadow,
+        zIndex: 1,
     };
 
     const contentStyle: React.CSSProperties = {
@@ -230,6 +229,7 @@ export const DocumentViewerPanel: React.FC = () => {
             onMouseMove={stopPropagation}
             onMouseUp={stopPropagation}
         >
+            <div className="dv-panel-backdrop" aria-hidden="true" />
             <div style={sliverStyle}>
                 {!isPeek && (
                     <>

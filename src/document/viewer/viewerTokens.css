@@ -36,6 +36,21 @@
     font-size: var(--dv-font-size);
 }
 
+.dv-panel-backdrop {
+    position: absolute;
+    inset: 0;
+    background-color: rgb(var(--panel-bg-rgb));
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    pointer-events: none;
+    z-index: 0;
+}
+
+.doc-viewer-root[data-perf-visuals="flat"] .dv-panel-backdrop {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+}
+
 .dv-header-title {
     font-weight: 500;
     text-transform: none;
@@ -140,6 +155,7 @@
 
 .dv-document-body {
     margin: 0;
+    text-shadow: 0 0 0.6px rgba(120, 160, 255, 0.12);
     max-width: 100%;
     min-width: 0;
 }

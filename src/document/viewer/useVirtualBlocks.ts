@@ -6,7 +6,10 @@
 import { useMemo, useState, useEffect, useRef, useLayoutEffect, useCallback } from 'react';
 import type { TextBlock } from './documentModel';
 
-const OVERSCAN_BLOCKS = 8;  // Blocks to render above/below viewport
+const BASE_OVERSCAN_PX = 1400;  // Base pixel overscan above/below viewport
+const FAST_OVERSCAN_PX = 2400;  // Overscan during fast scroll
+const FAST_SCROLL_PX_PER_MS = 1.5;  // Velocity threshold for fast scroll
+const SCROLL_IDLE_MS = 140;
 const ESTIMATED_BLOCK_HEIGHT = 60;  // Rough estimate for initial layout
 const VIRTUALIZE_THRESHOLD = 50;
 
@@ -26,6 +29,34 @@ export function useVirtualBlocks(
     const [heightVersion, setHeightVersion] = useState(0);
     const perfEnabled = typeof window !== 'undefined' && Boolean((window as typeof window & { __DOC_VIEWER_PROFILE__?: boolean }).__DOC_VIEWER_PROFILE__);
     const rangeUpdateCount = useRef(0);
+    const lastScrollTop = useRef(0);
+    const lastScrollTs = useRef<number | null>(null);
+    const isScrolling = useRef(false);
+    const idleTimeoutId = useRef<number | null>(null);
+    const pendingMeasure = useRef(false);
+    const lastOverscanTier = useRef<'base' | 'fast'>('base');
+
+    const measureHeights = useCallback(() => {
+        if (!shouldVirtualize) return;
+        const container = containerRef.current;
+        if (!container) return;
+
+        const blocks = container.querySelectorAll('[data-block-id]');
+        let changed = false;
+        blocks.forEach(block => {
+            const blockId = (block as HTMLElement).dataset.blockId;
+            if (blockId) {
+                const measured = block.clientHeight;
+                if (blockHeights.current.get(blockId) !== measured) {
+                    blockHeights.current.set(blockId, measured);
+                    changed = true;
+                }
+            }
+        });
+        if (changed) {
+            setHeightVersion(version => version + 1);
+        }
+    }, [containerRef, shouldVirtualize]);
 
     const measuredHeights = useMemo(() => {
         return allBlocks.map(block => blockHeights.current.get(block.blockId) ?? ESTIMATED_BLOCK_HEIGHT);
@@ -54,6 +85,18 @@ export function useVirtualBlocks(
         return low;
     }, [prefixHeights]);
 
+    const updateRange = useCallback((scrollTop: number, viewportHeight: number, overscanPx: number) => {
+        const startIndex = findIndexForOffset(Math.max(0, scrollTop - overscanPx));
+        const endIndex = Math.min(allBlocks.length, findIndexForOffset(scrollTop + viewportHeight + overscanPx) + 1);
+
+        setVisibleRange(prev => {
+            if (prev.start === startIndex && prev.end === endIndex) {
+                return prev;
+            }
+            return { start: startIndex, end: endIndex };
+        });
+    }, [allBlocks.length, findIndexForOffset]);
+
     useEffect(() => {
         if (!shouldVirtualize) {
             setVisibleRange({ start: 0, end: allBlocks.length });
@@ -65,19 +108,41 @@ export function useVirtualBlocks(
         const handleScroll = () => {
             const scrollTop = container.scrollTop;
             const viewportHeight = container.clientHeight;
-            const startIndex = findIndexForOffset(scrollTop);
-            const endIndex = Math.min(allBlocks.length, findIndexForOffset(scrollTop + viewportHeight) + 1);
+            const now = performance.now();
+            const lastTs = lastScrollTs.current ?? now;
+            const dt = Math.max(1, now - lastTs);
+            const distance = Math.abs(scrollTop - lastScrollTop.current);
+            const velocity = distance / dt;
+            const overscanPx = velocity > FAST_SCROLL_PX_PER_MS ? FAST_OVERSCAN_PX : BASE_OVERSCAN_PX;
+            const overscanTier = overscanPx === FAST_OVERSCAN_PX ? 'fast' : 'base';
 
-            // Apply overscan
-            const finalStart = Math.max(0, startIndex - OVERSCAN_BLOCKS);
-            const finalEnd = Math.min(allBlocks.length, endIndex + OVERSCAN_BLOCKS);
+            if (perfEnabled && overscanTier !== lastOverscanTier.current) {
+                lastOverscanTier.current = overscanTier;
+                console.debug('[DocViewer] overscan tier', {
+                    tier: overscanTier,
+                    velocityPxPerMs: Number(velocity.toFixed(2)),
+                });
+            }
 
-            setVisibleRange(prev => {
-                if (prev.start === finalStart && prev.end === finalEnd) {
-                    return prev;
+            lastScrollTop.current = scrollTop;
+            lastScrollTs.current = now;
+            isScrolling.current = true;
+
+            if (idleTimeoutId.current) {
+                clearTimeout(idleTimeoutId.current);
+            }
+            idleTimeoutId.current = window.setTimeout(() => {
+                isScrolling.current = false;
+                if (pendingMeasure.current) {
+                    pendingMeasure.current = false;
+                    measureHeights();
                 }
-                return { start: finalStart, end: finalEnd };
-            });
+                const currentScrollTop = container.scrollTop;
+                const currentViewportHeight = container.clientHeight;
+                updateRange(currentScrollTop, currentViewportHeight, BASE_OVERSCAN_PX);
+            }, SCROLL_IDLE_MS);
+
+            updateRange(scrollTop, viewportHeight, overscanPx);
         };
 
         // Initial calculation
@@ -98,31 +163,21 @@ export function useVirtualBlocks(
         return () => {
             container.removeEventListener('scroll', throttledScroll);
             if (rafId) cancelAnimationFrame(rafId);
+            if (idleTimeoutId.current) {
+                clearTimeout(idleTimeoutId.current);
+            }
         };
-    }, [allBlocks, containerRef, findIndexForOffset, shouldVirtualize]);
+    }, [allBlocks, containerRef, findIndexForOffset, measureHeights, perfEnabled, shouldVirtualize, updateRange]);
 
     // Measure block heights when they render
     useLayoutEffect(() => {
         if (!shouldVirtualize) return;
-        const container = containerRef.current;
-        if (!container) return;
-
-        const blocks = container.querySelectorAll('[data-block-id]');
-        let changed = false;
-        blocks.forEach(block => {
-            const blockId = (block as HTMLElement).dataset.blockId;
-            if (blockId) {
-                const measured = block.clientHeight;
-                if (blockHeights.current.get(blockId) !== measured) {
-                    blockHeights.current.set(blockId, measured);
-                    changed = true;
-                }
-            }
-        });
-        if (changed) {
-            setHeightVersion(version => version + 1);
+        if (isScrolling.current) {
+            pendingMeasure.current = true;
+            return;
         }
-    }, [containerRef, shouldVirtualize, visibleRange]);
+        measureHeights();
+    }, [measureHeights, shouldVirtualize, visibleRange]);
 
     useEffect(() => {
         if (!perfEnabled) return;

@@ -1,4 +1,4 @@
-import { createContext, useContext, useReducer, ReactNode, useRef, useEffect, type MutableRefObject } from 'react';
+import { createContext, useContext, useReducer, ReactNode, useRef, useEffect, useCallback, useMemo, type MutableRefObject } from 'react';
 import type { DocumentState, DocumentStatus, ParsedDocument, ViewerMode, DocThemeMode, HighlightRange } from '../document/types';
 import { WorkerClient } from '../document/workerClient';
 
@@ -109,7 +109,7 @@ export function DocumentProvider({ children }: { children: ReactNode }) {
         };
     }, []);
 
-    const parseFile = async (file: File): Promise<ParsedDocument | null> => {
+    const parseFile = useCallback(async (file: File): Promise<ParsedDocument | null> => {
         if (!workerClientRef.current) {
             dispatch({ type: 'SET_ERROR', error: 'Worker not initialized' });
             return null;
@@ -141,22 +141,45 @@ export function DocumentProvider({ children }: { children: ReactNode }) {
             dispatch({ type: 'SET_ERROR', error: errorMessage });
             return null;
         }
-    };
+    }, []);
 
-    const contextValue: DocumentContextValue = {
+    const setStatus = useCallback((status: DocumentStatus) => dispatch({ type: 'SET_STATUS', status }), []);
+    const setDocument = useCallback((document: ParsedDocument) => dispatch({ type: 'SET_DOCUMENT', document }), []);
+    const setError = useCallback((error: string) => dispatch({ type: 'SET_ERROR', error }), []);
+    const toggleViewer = useCallback(() => dispatch({ type: 'TOGGLE_VIEWER' }), []);
+    const setViewerMode = useCallback((mode: ViewerMode) => dispatch({ type: 'SET_VIEWER_MODE', mode }), []);
+    const setDocTheme = useCallback((mode: DocThemeMode) => dispatch({ type: 'SET_DOC_THEME', mode }), []);
+    const setHighlights = useCallback((ranges: HighlightRange[]) => dispatch({ type: 'SET_HIGHLIGHTS', ranges }), []);
+    const clearDocument = useCallback(() => dispatch({ type: 'CLEAR_DOCUMENT' }), []);
+    const setAIActivity = useCallback((active: boolean) => dispatch({ type: 'SET_AI_ACTIVITY', active }), []);
+
+    const contextValue = useMemo<DocumentContextValue>(() => ({
         state,
-        setStatus: (status) => dispatch({ type: 'SET_STATUS', status }),
-        setDocument: (document) => dispatch({ type: 'SET_DOCUMENT', document }),
-        setError: (error) => dispatch({ type: 'SET_ERROR', error }),
-        toggleViewer: () => dispatch({ type: 'TOGGLE_VIEWER' }),
-        setViewerMode: (mode) => dispatch({ type: 'SET_VIEWER_MODE', mode }),
-        setDocTheme: (mode) => dispatch({ type: 'SET_DOC_THEME', mode }),
-        setHighlights: (ranges) => dispatch({ type: 'SET_HIGHLIGHTS', ranges }),
-        clearDocument: () => dispatch({ type: 'CLEAR_DOCUMENT' }),
+        setStatus,
+        setDocument,
+        setError,
+        toggleViewer,
+        setViewerMode,
+        setDocTheme,
+        setHighlights,
+        clearDocument,
         parseFile,
-        setAIActivity: (active) => dispatch({ type: 'SET_AI_ACTIVITY', active }),
+        setAIActivity,
         viewerApiRef
-    };
+    }), [
+        state,
+        setStatus,
+        setDocument,
+        setError,
+        toggleViewer,
+        setViewerMode,
+        setDocTheme,
+        setHighlights,
+        clearDocument,
+        parseFile,
+        setAIActivity,
+        viewerApiRef,
+    ]);
 
     return (
         <DocumentContext.Provider value={contextValue}>

@@ -23,6 +23,7 @@ export const DocumentViewerPanel: React.FC = () => {
     const [showSearch, setShowSearch] = useState(false);
     const contentRef = useRef<HTMLDivElement>(null);
     const pendingScrollRef = useRef<number | null>(null);
+    const lastDocIdRef = useRef<string | null>(null);
 
     const isPeek = state.viewerMode === 'peek';
     const hasDocument = !!state.activeDocument;
@@ -61,6 +62,9 @@ export const DocumentViewerPanel: React.FC = () => {
 
     // Clear search state when document changes
     useEffect(() => {
+        const docId = state.activeDocument?.id ?? null;
+        if (lastDocIdRef.current === docId) return;
+        lastDocIdRef.current = docId;
         setShowSearch(false);
         setSearchSession(null);
         setHighlights([]);

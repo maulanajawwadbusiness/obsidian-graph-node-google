@@ -115,25 +115,28 @@ function validateAndParseLabels(output: string, originalWords: string[]): string
         .map(line => line.trim())
         .filter(line => line.length > 0);
 
-    // Must have exactly 5 lines
-    if (lines.length !== 5) {
-        console.warn('[LabelRewriter] Expected 5 lines, got', lines.length);
-        return originalWords;
-    }
-
-    // Validate each line is exactly 3 words
+    // Collect the first 5 valid 3-word lines, ignoring extra chatter.
     const labels: string[] = [];
     for (const line of lines) {
         // Remove any leading numbers or punctuation (e.g., "1. " or "- ")
         const cleaned = line.replace(/^[\d\.\-\s]+/, '').trim();
         const wordCount = cleaned.split(/\s+/).length;
 
-        if (wordCount !== 3) {
-            console.warn(`[LabelRewriter] Line "${cleaned}" has ${wordCount} words, expected 3`);
-            return originalWords;
+        if (wordCount === 3) {
+            labels.push(cleaned);
+            if (labels.length === 5) {
+                break;
+            }
         }
+    }
 
-        labels.push(cleaned);
+    if (labels.length !== 5) {
+        console.warn('[LabelRewriter] Expected 5 valid lines, got', labels.length);
+        return originalWords;
+    }
+
+    if (lines.length !== 5) {
+        console.warn('[LabelRewriter] Extra lines from model, using first 5 valid lines', lines.length);
     }
 
     return labels;

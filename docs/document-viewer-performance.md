@@ -31,6 +31,10 @@ This adds:
 3. **Overly small overscan → pop-in**  
    - Overscan was too small for smooth scroll, causing text "pop in."  
    - Overscan increased to stabilize block mount/unmount boundaries.
+4. **Edge flicker under rapid scroll**  
+   - Fast scroll would update the visible range with small overscan while height corrections landed mid-scroll.  
+   - Result: boundary blocks churned at the top/bottom edge and briefly re-rasterized.
+
 
 ## Fix Plan (Implemented)
 ### Memoization Strategy
@@ -48,6 +52,14 @@ This adds:
 ### Scroll Strategy
 - Scroll events only update visible range when necessary.
 - No per-frame state churn beyond range changes.
+- Overscan is pixel-based with a larger buffer during fast scroll.
+- Height corrections are deferred while scrolling and applied on idle.
+
+## Edge Flicker Guardrail
+- Use pixel overscan (base + fast tier) so the buffer scales with velocity.
+- Defer block height re-measurements until scroll idle (140ms) to prevent boundary jitter.
+- Log overscan tier changes with `__DOC_VIEWER_PROFILE__` to verify fast-scroll behavior.
+
 
 ## Performance Invariants (Must Hold)
 - Viewer must **not** rebuild blocks on scroll.

@@ -1,6 +1,23 @@
 import { PhysicsNode, PhysicsLink, ForceConfig } from './types';
 import { DEFAULT_PHYSICS_CONFIG } from './config';
-import { applyRepulsion, applySprings, applyCenterGravity, applyBoundaryForce, applyCollision } from './forces';
+import { runPreRollPhase } from './engine/preRollPhase';
+import { fireInitialImpulse } from './engine/impulse';
+import { advanceEscapeWindow } from './engine/escapeWindow';
+import { computeEnergyEnvelope } from './engine/energy';
+import { applyForcePass } from './engine/forcePass';
+import { integrateNodes } from './engine/integration';
+import { computeNodeDegrees } from './engine/degrees';
+import {
+    applyEdgeRelaxation,
+    applySpacingConstraints,
+    applySafetyClamp,
+    applyTriangleAreaConstraints,
+    initializeCorrectionAccum,
+} from './engine/constraints';
+import { applyCorrectionsWithDiffusion } from './engine/corrections';
+import { applyAngleResistanceVelocity, applyDistanceBiasVelocity, applyDragVelocity, applyExpansionResistance, applyPreRollVelocity, applyDenseCoreVelocityDeLocking, applyStaticFrictionBypass, applyAngularVelocityDecoherence, applyLocalPhaseDiffusion, applyEdgeShearStagnationEscape, applyDenseCoreInertiaRelaxation } from './engine/velocityPass';
+import { logEnergyDebug } from './engine/debug';
+import { createDebugStats, type DebugStats } from './engine/stats';
 
 export class PhysicsEngine {
     public nodes: Map<string, PhysicsNode> = new Map();
@@ -8,16 +25,38 @@ export class PhysicsEngine {
     public config: ForceConfig;
 
     // World Bounds for Containment
-    private worldWidth: number = 2000;
-    private worldHeight: number = 2000;
+    public worldWidth: number = 2000;
+    public worldHeight: number = 2000;
 
     // Interaction State
-    private draggedNodeId: string | null = null;
-    private dragTarget: { x: number, y: number } | null = null;
+    public draggedNodeId: string | null = null;
+    public dragTarget: { x: number, y: number } | null = null;
 
     // Lifecycle State (Startup Animation)
     public lifecycle: number = 0;
     public hasFiredImpulse: boolean = false;
+
+    // Rotating Reference Frame (The Medium - initialized at impulse, decays with energy)
+    public globalAngle: number = 0;       // Accumulated rotation (radians)
+    public globalAngularVel: number = 0;  // Angular velocity (rad/s, + = CCW)
+
+    // Hysteresis state for hard clamp (tracks pairs currently in clamped state)
+    public clampedPairs = new Set<string>();
+
+    // Pre-roll phase: soft separation before expansion (frames remaining)
+    public preRollFrames: number = 5;  // ~80ms at 60fps
+
+    // Escape window: frames remaining for trapped nodes to skip constraints
+    public escapeWindow = new Map<string, number>();
+
+    // Directional persistence: carrier direction for curved hub escape
+    public carrierDir = new Map<string, { x: number, y: number }>();
+    public carrierTimer = new Map<string, number>();  // Frames remaining for persistence
+
+    // Frame counter for staggered integration
+    public frameIndex: number = 0;
+
+    private lastDebugStats: DebugStats | null = null;
 
     constructor(config: Partial<ForceConfig> = {}) {
         this.config = { ...DEFAULT_PHYSICS_CONFIG, ...config };
@@ -48,6 +87,8 @@ export class PhysicsEngine {
         this.links = [];
         this.lifecycle = 0;
         this.hasFiredImpulse = false;
+        this.globalAngle = 0;
+        this.globalAngularVel = 0;
     }
 
     /**
@@ -58,12 +99,40 @@ export class PhysicsEngine {
         this.wakeAll();
     }
 
+    // =========================================================================
+    // ROTATING FRAME: Public Access
+    // =========================================================================
+
+    /**
+     * Get the accumulated global rotation angle (radians).
+     * Apply this at render time to rotate all nodes around centroid.
+     */
+    getGlobalAngle(): number {
+        return this.globalAngle;
+    }
+
+    /**
+     * Get the current centroid of all nodes.
+     */
+    getCentroid(): { x: number, y: number } {
+        const nodeList = Array.from(this.nodes.values());
+        if (nodeList.length === 0) return { x: 0, y: 0 };
+
+        let cx = 0, cy = 0;
+        for (const node of nodeList) {
+            cx += node.x;
+            cy += node.y;
+        }
+        return { x: cx / nodeList.length, y: cy / nodeList.length };
+    }
+
     /**
      * Restart the lifecycle (Explosion effect).
      */
     resetLifecycle() {
         this.lifecycle = 0;
         this.hasFiredImpulse = false;
+        this.preRollFrames = 5;  // Reset pre-roll
         this.wakeAll();
     }
 
@@ -114,6 +183,11 @@ export class PhysicsEngine {
             this.dragTarget = { ...position };
             this.wakeNode(nodeId);
             this.wakeNeighbors(nodeId);
+
+            // Note: We don't change restState when dragging
+            // The node is marked isFixed and will move with cursor
+            // On release, it stays where dropped (no elastic rebound)
+            // The hard stop check allows drag to bypass (checks draggedNodeId)
         }
     }
 
@@ -137,54 +211,10 @@ export class PhysicsEngine {
     }
 
     /**
-     * Fire One-Shot Directional Impulse based on Topology.
-     * Calculated from spring vectors to "shoot" nodes toward their destinations.
+     * Get the most recent debug stats snapshot (if enabled in the engine loop).
      */
-    private fireInitialImpulse() {
-        // Map to store accumulated impulses
-        const impulses = new Map<string, { x: number, y: number }>();
-        this.nodes.forEach(n => impulses.set(n.id, { x: 0, y: 0 }));
-
-        // Accumulate spring vectors
-        for (const link of this.links) {
-            const source = this.nodes.get(link.source);
-            const target = this.nodes.get(link.target);
-            if (!source || !target) continue;
-
-            const dx = target.x - source.x;
-            const dy = target.y - source.y;
-            const dist = Math.sqrt(dx * dx + dy * dy) || 1; // Avoid zero div
-
-            // Normalized direction
-            const nx = dx / dist;
-            const ny = dy / dist;
-
-            // IMPULSE MAGNITUDE
-            // Boosted to 1500 to ensure screen-crossing speed in <200ms
-            const forceBase = 1500.0;
-
-            impulses.get(source.id)!.x += nx * forceBase;
-            impulses.get(source.id)!.y += ny * forceBase;
-
-            impulses.get(target.id)!.x -= nx * forceBase;
-            impulses.get(target.id)!.y -= ny * forceBase;
-        }
-
-        // Apply to Velocity with Role Weighting
-        this.nodes.forEach(node => {
-            const imp = impulses.get(node.id);
-            if (!imp) return;
-
-            let roleWeight = 1.0;
-            if (node.role === 'spine') roleWeight = 1.5; // Spine kicks harder
-            if (node.role === 'rib') roleWeight = 1.0;
-            if (node.role === 'fiber') roleWeight = 0.5; // Fibers are lighter, drift
-
-            node.vx += imp.x * roleWeight;
-            node.vy += imp.y * roleWeight;
-        });
-
-        this.hasFiredImpulse = true;
+    getDebugStats(): DebugStats | null {
+        return this.lastDebugStats;
     }
 
     /**
@@ -193,113 +223,86 @@ export class PhysicsEngine {
      */
     tick(dt: number) {
         const nodeList = Array.from(this.nodes.values());
-        const { maxVelocity } = this.config;
+        const debugStats = createDebugStats();
 
         // Lifecycle Management
         this.lifecycle += dt;
+        this.frameIndex++;
 
-        // 0. FIRE IMPULSE (One Shot at t=0)
-        if (this.lifecycle < 0.1 && !this.hasFiredImpulse) {
-            this.fireInitialImpulse();
+        // =====================================================================
+        // SOFT PRE-ROLL PHASE (Gentle separation before expansion)
+        // Springs at 10%, spacing on, angle off, velocity-only corrections
+        // Runs for ~5 frames before expansion starts
+        // =====================================================================
+        const preRollActive = this.preRollFrames > 0 && !this.hasFiredImpulse;
+        if (preRollActive) {
+            runPreRollPhase(this, nodeList, debugStats);
         }
 
-        // NEW LIFECYCLE: TIME-GATED SNAP
-        // 0ms   - 200ms: FLIGHT (Impulse Driven, Less Damping)
-        // 200ms - 300ms: FREEZE (Authority Revoked, Zero Velocity, Springs Off)
-        // 300ms +      : SETTLE (High Damping, Springs On)
-
-        const T_FLIGHT = 0.20; // 200ms snap window
-        const T_FREEZE = 0.30; // 100ms freeze duration (Pause)
-
-        const isFlight = this.lifecycle < T_FLIGHT;
-        const isFreeze = this.lifecycle >= T_FLIGHT && this.lifecycle < T_FREEZE;
-        // Settle is implicit after Freeze
-
-        // 1. Clear forces
-        for (const node of nodeList) {
-            node.fx = 0;
-            node.fy = 0;
+        // 0. FIRE IMPULSE (One Shot)
+        if (!preRollActive && this.lifecycle < 0.1 && !this.hasFiredImpulse) {
+            fireInitialImpulse(this);
         }
 
-        // 2. Apply Core Forces
-        // Always apply Repulsion/Collision to prevent collapse/overlap
-        applyRepulsion(nodeList, this.config);
-        applyCollision(nodeList, this.config, 1.0);
-        applyCenterGravity(nodeList, this.config);
-        applyBoundaryForce(nodeList, this.config, this.worldWidth, this.worldHeight);
+        advanceEscapeWindow(this);
 
-        // Springs: Disabled during Freeze to prevent "Bounce Back"
-        if (!isFreeze) {
-            applySprings(this.nodes, this.links, this.config, 1.0);
+        // =====================================================================
+        // EXPONENTIAL COOLING: Energy decays asymptotically, never stops
+        // =====================================================================
+        const { energy, forceScale, effectiveDamping, maxVelocityEffective } = computeEnergyEnvelope(this.lifecycle);
+
+        // 2. Apply Core Forces (scaled by energy)
+        applyForcePass(this, nodeList, forceScale, dt, debugStats, preRollActive, energy, this.frameIndex);
+        applyDragVelocity(this, nodeList, dt, debugStats);
+        applyPreRollVelocity(this, nodeList, preRollActive, debugStats);
+
+        // 4. Integrate (always runs, never stops)
+        integrateNodes(this, nodeList, dt, energy, effectiveDamping, maxVelocityEffective, debugStats, preRollActive);
+
+        // =====================================================================
+        // COMPUTE NODE DEGREES (needed early for degree-1 exclusion)
+        // Degree-1 nodes (dangling limbs) are excluded from positional corrections
+        // =====================================================================
+        const nodeDegreeEarly = computeNodeDegrees(this, nodeList);
+
+        applyExpansionResistance(this, nodeList, nodeDegreeEarly, energy, debugStats);
+
+        // Dense-core velocity de-locking (micro-slip) - breaks rigid-body lock
+        applyDenseCoreVelocityDeLocking(this, nodeList, energy, debugStats);
+
+        // Static friction bypass - breaks zero-velocity rest state
+        applyStaticFrictionBypass(this, nodeList, energy, debugStats);
+
+        // Angular velocity decoherence - breaks velocity orientation correlation
+        applyAngularVelocityDecoherence(this, nodeList, energy, debugStats);
+
+        // Local phase diffusion - breaks oscillation synchronization (shape memory eraser)
+        applyLocalPhaseDiffusion(this, nodeList, energy, debugStats);
+
+        // Low-force stagnation escape - breaks rest-position preference (edge shear version)
+        applyEdgeShearStagnationEscape(this, nodeList, energy, debugStats);
+
+        // Dense-core inertia relaxation - erases momentum memory in jammed nodes
+        applyDenseCoreInertiaRelaxation(this, nodeList, energy, debugStats);
+
+        // =====================================================================
+        // PER-NODE CORRECTION BUDGET SYSTEM
+        // All constraints request position corrections via accumulator
+        // Total correction magnitude is clamped to prevent multi-constraint pileup
+        // =====================================================================
+        const correctionAccum = initializeCorrectionAccum(nodeList);
+
+        if (!preRollActive) {
+            applyEdgeRelaxation(this, correctionAccum, nodeDegreeEarly, debugStats);
+            applySpacingConstraints(this, nodeList, correctionAccum, nodeDegreeEarly, energy, debugStats);
+            applyTriangleAreaConstraints(this, nodeList, correctionAccum, nodeDegreeEarly, energy, debugStats);
+            applyAngleResistanceVelocity(this, nodeList, nodeDegreeEarly, energy, debugStats);
+            applyDistanceBiasVelocity(this, nodeList, debugStats);
+            applySafetyClamp(this, nodeList, correctionAccum, nodeDegreeEarly, energy, debugStats);
+            applyCorrectionsWithDiffusion(this, nodeList, correctionAccum, energy, debugStats);
         }
 
-        // 3. Apply Mouse Drag Force (Always active)
-        if (this.draggedNodeId && this.dragTarget) {
-            const node = this.nodes.get(this.draggedNodeId);
-            if (node) {
-                const dx = this.dragTarget.x - node.x;
-                const dy = this.dragTarget.y - node.y;
-                const dragStrength = 200.0;
-                node.fx += dx * dragStrength;
-                node.fy += dy * dragStrength;
-                node.vx += dx * 2.0 * dt;
-                node.vy += dy * 2.0 * dt;
-            }
-        }
-
-        // 4. Integrate
-        for (const node of nodeList) {
-            if (node.isFixed) continue;
-
-            if (isFreeze) {
-                // ABSOLUTE ARREST
-                node.vx = 0;
-                node.vy = 0;
-                // No position update. Static.
-                continue;
-            }
-
-            const ax = node.fx / node.mass;
-            const ay = node.fy / node.mass;
-
-            // Update Velocity
-            node.vx += ax * dt;
-            node.vy += ay * dt;
-
-            // Damping Schedule
-            let effectiveDamping = 0.90; // Default Settle
-            if (isFlight) {
-                effectiveDamping = 0.30; // Low drag during flight (Let it fly!)
-            }
-
-            // Apply Damping
-            node.vx *= (1 - effectiveDamping * dt * 5.0);
-            node.vy *= (1 - effectiveDamping * dt * 5.0);
-
-            // Clamp Velocity
-            // IGNORE MAX VELOCITY DURING FLIGHT to ensure Snap speed
-            if (!isFlight) {
-                const vSq = node.vx * node.vx + node.vy * node.vy;
-                if (vSq > maxVelocity * maxVelocity) {
-                    const v = Math.sqrt(vSq);
-                    node.vx = (node.vx / v) * maxVelocity;
-                    node.vy = (node.vy / v) * maxVelocity;
-                }
-            }
-
-            // Update Position
-            node.x += node.vx * dt;
-            node.y += node.vy * dt;
-
-            // Sleep Check
-            if (this.config.velocitySleepThreshold) {
-                const velSq = node.vx * node.vx + node.vy * node.vy;
-                const threshSq = this.config.velocitySleepThreshold * this.config.velocitySleepThreshold;
-                if (velSq < threshSq) {
-                    node.vx = 0;
-                    node.vy = 0;
-                }
-            }
-        }
+        logEnergyDebug(this.lifecycle, energy, effectiveDamping, maxVelocityEffective);
+        this.lastDebugStats = debugStats;
     }
 }

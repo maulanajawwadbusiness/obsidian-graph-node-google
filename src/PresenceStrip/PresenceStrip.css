@@ -1,0 +1,248 @@
+/* ============================================
+   Ephemeral Bookmark Tab — The Ghost Handle
+   ============================================ */
+
+/* Container: positions the tab at 80% from top */
+.presence-strip-container {
+    position: fixed;
+    top: 80%;
+    left: 0;
+    transform: translateY(-50%);
+    z-index: 100;
+
+    /* Ensure it doesn't interfere with panel layout */
+    pointer-events: none;
+
+    /* Smooth slide with panel */
+    transition: left 320ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+/* When panel is open, move tab to right edge of panel */
+.presence-strip-container.mode-open {
+    left: var(--panel-width);
+}
+
+/* ─────────────────────────────────────────────
+   The Bookmark Tab
+   ───────────────────────────────────────────── */
+.bookmark-tab {
+    --tab-scale: var(--bookmark-tab-scale, 1);
+
+    /* Reset button styles */
+    border: none;
+    background: none;
+    padding: 0;
+    margin: 0;
+    font: inherit;
+    cursor: pointer;
+    pointer-events: auto;
+    outline: none;
+    box-shadow: 0 calc(4px * var(--tab-scale)) calc(24px * var(--tab-scale)) hsla(42, 40%, 45%, 0);
+
+    /* Dimensions */
+    width: calc(44px * var(--tab-scale));
+    height: calc(52px * var(--tab-scale));
+
+    /* D-shape: rounded only on right side */
+    border-radius: 0 calc(20px * var(--tab-scale)) calc(20px * var(--tab-scale)) 0;
+
+    /* Background: same hue as void, barely lifted */
+    background: linear-gradient(135deg,
+            hsl(220, 15%, 13%) 0%,
+            hsl(220, 15%, 11%) 100%);
+
+    /* Ephemeral ghost: 80% opacity at rest */
+    opacity: 0.8;
+
+    /* Micro-scale on idle (will grow on hover) */
+    transform: scale(0.98);
+
+    /* Flexbox for icon centering */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    /* Position relative for pseudo-elements */
+    position: relative;
+    overflow: visible;
+
+    /* Concave fillets via mask cutouts (top-left & bottom-left) */
+    --fillet-size: calc(16px * var(--tab-scale));
+    --fillet-enabled: 0;
+    --fillet-mask: none;
+    -webkit-mask-image: var(--fillet-mask);
+    -webkit-mask-composite: destination-out, destination-out;
+    mask-image: var(--fillet-mask);
+    mask-composite: subtract, subtract;
+
+    /* Unified easing - one curve for everything */
+    transition:
+        opacity 280ms cubic-bezier(0.25, 0.46, 0.45, 0.94),
+        transform 280ms cubic-bezier(0.25, 0.46, 0.45, 0.94),
+        background 280ms cubic-bezier(0.25, 0.46, 0.45, 0.94),
+        box-shadow 280ms cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+/* Toggle concave fillets on when ready */
+.bookmark-tab.fillet-on {
+    --fillet-mask:
+        linear-gradient(#000 0 0),
+        radial-gradient(circle var(--fillet-size) at 0 0,
+            transparent 99%,
+            #000 100%),
+        radial-gradient(circle var(--fillet-size) at 0 100%,
+            transparent 99%,
+            #000 100%);
+}
+
+/* ─────────────────────────────────────────────
+   Feathered Edge Overlay
+   ───────────────────────────────────────────── */
+.tab-feather {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: calc(14px * var(--tab-scale));
+    height: 100%;
+    border-radius: 0 calc(20px * var(--tab-scale)) calc(20px * var(--tab-scale)) 0;
+    background: linear-gradient(to right,
+            transparent 0%,
+            hsla(220, 20%, 6%, 0.65) 100%);
+    opacity: 0.8;
+    filter: blur(0.6px);
+    pointer-events: none;
+    z-index: 0;
+}
+
+/* ─────────────────────────────────────────────
+   Document Icon
+   ───────────────────────────────────────────── */
+.tab-icon {
+    width: calc(18px * var(--tab-scale));
+    height: calc(18px * var(--tab-scale));
+
+    /* Ghost: blurred and dim on idle */
+    opacity: 0.8;
+    filter: blur(0.5px) brightness(0.85);
+    position: relative;
+    z-index: 1;
+
+    /* Icon transitions synchronized with tab */
+    transition:
+        opacity 280ms cubic-bezier(0.25, 0.46, 0.45, 0.94),
+        filter 280ms cubic-bezier(0.25, 0.46, 0.45, 0.94),
+        transform 280ms cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+/* ─────────────────────────────────────────────
+   STATE: Document Loaded (slightly more visible)
+   ───────────────────────────────────────────── */
+.bookmark-tab.doc-loaded {
+    opacity: 0.8;
+}
+
+.bookmark-tab.doc-loaded .tab-icon {
+    opacity: 0.8;
+}
+
+/* STATE: Proximity (pre-reveal) */
+.bookmark-tab.proximity-near:not(.mode-open):not(.mode-peek):not(:hover) {
+    opacity: 0.8;
+    transform: scale(1.01);
+}
+
+.bookmark-tab.proximity-near:not(.mode-open):not(.mode-peek):not(:hover) .tab-icon {
+    opacity: 0.8;
+    filter: blur(0.2px) brightness(0.9);
+}
+
+.bookmark-tab.proximity-close:not(.mode-open):not(.mode-peek):not(:hover) {
+    opacity: 1;
+    transform: scale(1.02);
+}
+
+.bookmark-tab.proximity-close:not(.mode-open):not(.mode-peek):not(:hover) .tab-icon {
+    opacity: 0.95;
+    filter: blur(0) brightness(1);
+}
+
+/* ─────────────────────────────────────────────
+   STATE: Warning (amber tint)
+   ───────────────────────────────────────────── */
+.bookmark-tab.doc-warning .tab-icon {
+    filter: blur(0.5px) brightness(0.8) sepia(0.3) hue-rotate(-10deg);
+}
+
+/* ─────────────────────────────────────────────
+   STATE: Hover (Peek) — Full Materialization
+   ───────────────────────────────────────────── */
+.bookmark-tab.mode-peek,
+.bookmark-tab:hover {
+    opacity: 1;
+    transform: scale(1.04);
+
+    /* Warm glow appears (delayed 100ms) */
+    box-shadow:
+        0 calc(4px * var(--tab-scale)) calc(24px * var(--tab-scale)) hsla(42, 40%, 45%, 0.20);
+
+    /* Background warms up slightly */
+    background: linear-gradient(135deg,
+            hsl(220, 14%, 16%) 0%,
+            hsl(220, 14%, 13%) 100%);
+}
+
+.bookmark-tab.mode-peek .tab-icon,
+.bookmark-tab:hover .tab-icon {
+    opacity: 0.95;
+    filter: blur(0) brightness(1);
+    transform: scale(1.02);
+}
+
+/* Keep a faint feather on hover to avoid a hard edge */
+.bookmark-tab.mode-peek .tab-feather,
+.bookmark-tab:hover .tab-feather {
+    opacity: 0.4;
+}
+
+/* ─────────────────────────────────────────────
+   STATE: Open — Tab as Close Handle
+   ───────────────────────────────────────────── */
+.bookmark-tab.mode-open {
+    opacity: 0.85;
+    transform: scale(1);
+
+    /* Subtle constant glow */
+    box-shadow:
+        0 0 calc(16px * var(--tab-scale)) hsla(42, 40%, 45%, 0.12);
+
+    background: linear-gradient(135deg,
+            hsl(220, 14%, 16%) 0%,
+            hsl(220, 14%, 13%) 100%);
+}
+
+.bookmark-tab.mode-open .tab-icon {
+    opacity: 0.90;
+    filter: blur(0) brightness(1);
+}
+
+.bookmark-tab.mode-open .tab-feather {
+    opacity: 0;
+}
+
+/* Hover on open tab (for closing) */
+.bookmark-tab.mode-open:hover {
+    opacity: 1;
+    transform: scale(1.02);
+    box-shadow:
+        0 calc(4px * var(--tab-scale)) calc(24px * var(--tab-scale)) hsla(42, 40%, 45%, 0.25);
+}
+
+/* ─────────────────────────────────────────────
+   Focus State (Keyboard Navigation)
+   ───────────────────────────────────────────── */
+.bookmark-tab:focus-visible {
+    outline: none;
+    opacity: 1;
+    box-shadow:
+        0 calc(4px * var(--tab-scale)) calc(24px * var(--tab-scale)) hsla(42, 40%, 45%, 0.25);
+}

@@ -1,26 +1,43 @@
 import { PhysicsNode, PhysicsLink, ForceConfig } from './types';
 
 /**
- * Calculates the distance squared between two points.
- * Easier on CPU than distance (no sqrt).
- */
-function distSq(x1: number, y1: number, x2: number, y2: number): number {
-    const dx = x1 - x2;
-    const dy = y1 - y2;
-    return dx * dx + dy * dy;
-}
-
-/**
  * Apply repulsion efficiently.
  * UX Anchor: "Cluster" & "Idle Spacing".
  * Nodes should push away from each other.
  */
 export function applyRepulsion(
     nodes: PhysicsNode[],
-    config: ForceConfig
+    config: ForceConfig,
+    energy?: number
 ) {
     const { repulsionStrength, repulsionDistanceMax } = config;
     const maxDistSq = repulsionDistanceMax * repulsionDistanceMax;
+
+    // DENSITY-DEPENDENT REPULSION (early expansion only)
+    // Nodes in dense regions experience stronger repulsion
+    // Creates "center has higher potential" without explicit centroid
+    const earlyExpansion = energy !== undefined && energy > 0.85;
+    const densityRadius = 25;  // Radius to count neighbors
+    const localDensity = new Map<string, number>();
+
+    if (earlyExpansion) {
+        for (const node of nodes) {
+            let count = 0;
+            for (const other of nodes) {
+                if (other.id === node.id) continue;
+                const dx = other.x - node.x;
+                const dy = other.y - node.y;
+                const d = Math.sqrt(dx * dx + dy * dy);
+                if (d < densityRadius) count++;
+            }
+            localDensity.set(node.id, count);
+        }
+    }
+
+    // DEBUG: track stats for first 20 frames
+    let debugMaxDensityBoost = 1.0;
+    let debugAvgCenterDensity = 0;
+    let debugCenterCount = 0;
 
     for (let i = 0; i < nodes.length; i++) {
         const nodeA = nodes[i];
@@ -41,11 +58,55 @@ export function applyRepulsion(
             if (d2 < maxDistSq && d2 > 0) {
                 const d = Math.sqrt(d2);
 
-                // Force formula: F = k / d
-                // We can experiment with k / d^2 for stronger close-range repulsion
-                // but often 1/d is smoother for graphs. 
-                // Let's try: F = strength / d
-                const forceMagnitude = repulsionStrength / d;
+                // REPULSION DEAD-CORE: within coreRadius, scale repulsion down
+                // Creates pressure gradient instead of uniform radial blast
+                // Allows close nodes to slide past each other before spacing locks
+                const coreRadius = 12;  // Very close proximity threshold
+                let repulsionScale = 1.0;
+                if (d < coreRadius) {
+                    // Ramp: 0.1 at d=0, 1.0 at d=coreRadius (smoothstep)
+                    const t = d / coreRadius;  // 0 at center, 1 at edge
+                    const smooth = t * t * (3 - 2 * t);
+                    repulsionScale = 0.1 + smooth * 0.9;  // 10% → 100%
+                }
+
+                // ENHANCED DENSITY BOOST: stronger at short range
+                // Nodes in dense regions AND close together repel much more strongly
+                let densityBoost = 1.0;
+                if (earlyExpansion) {
+                    const densityA = localDensity.get(nodeA.id) || 0;
+                    const densityB = localDensity.get(nodeB.id) || 0;
+                    const avgDensity = (densityA + densityB) / 2;
+
+                    // Track center-ish nodes (high density)
+                    if (densityA >= 4) { debugAvgCenterDensity += densityA; debugCenterCount++; }
+                    if (densityB >= 4) { debugAvgCenterDensity += densityB; debugCenterCount++; }
+
+                    if (avgDensity > 2) {
+                        // Base density boost: +30% per extra neighbor beyond 2
+                        const baseDensityBoost = 0.30 * (avgDensity - 2);
+
+                        // Distance multiplier: stronger when very close (within minNodeDistance)
+                        const minDist = config.minNodeDistance || 30;
+                        let distanceMultiplier = 1.0;
+                        if (d < minDist) {
+                            // Ramp: 2.0 at d=0.5*minDist, 1.0 at d=minDist (smoothstep)
+                            const closeT = Math.max(0, (minDist - d) / (minDist * 0.5));
+                            const closeSmooth = Math.min(closeT, 1);
+                            distanceMultiplier = 1.0 + closeSmooth;  // 1.0 → 2.0
+                        }
+
+                        densityBoost = 1 + baseDensityBoost * distanceMultiplier;
+
+                        // Clamp to prevent explosion (max 3x)
+                        densityBoost = Math.min(densityBoost, 3.0);
+
+                        debugMaxDensityBoost = Math.max(debugMaxDensityBoost, densityBoost);
+                    }
+                }
+
+                // Standard repulsion force: F = k / d, scaled by dead-core and density
+                const forceMagnitude = (repulsionStrength / d) * repulsionScale * densityBoost;
 
                 // Vector components
                 const fx = (dx / d) * forceMagnitude;
@@ -61,6 +122,12 @@ export function applyRepulsion(
                 }
             }
         }
+    }
+
+    // DEBUG: log for first 20 frames (use global counter via config hack)
+    if (earlyExpansion && debugCenterCount > 0) {
+        const avgDensity = debugAvgCenterDensity / debugCenterCount;
+        console.log(`[Repulsion] avgCenterDensity: ${avgDensity.toFixed(1)}, maxDensityBoost: ${debugMaxDensityBoost.toFixed(2)}`);
     }
 }
 
@@ -136,9 +203,21 @@ export function applySprings(
     nodes: Map<string, PhysicsNode>,
     links: PhysicsLink[],
     config: ForceConfig,
-    stiffnessScale: number = 1.0
+    stiffnessScale: number = 1.0,
+    energy: number = 0.0,  // For early-phase hub softening
+    frameIndex: number = 0  // For temporal force dithering
 ) {
-    const { springStiffness, springLength } = config;
+    const { springStiffness } = config;
+
+    // Precompute node degrees for hub softening
+    const nodeDegree = new Map<string, number>();
+    for (const [id] of nodes) {
+        nodeDegree.set(id, 0);
+    }
+    for (const link of links) {
+        nodeDegree.set(link.source, (nodeDegree.get(link.source) || 0) + 1);
+        nodeDegree.set(link.target, (nodeDegree.get(link.target) || 0) + 1);
+    }
 
     for (const link of links) {
         const source = nodes.get(link.source);
@@ -157,18 +236,42 @@ export function applySprings(
 
         const d = Math.sqrt(dx * dx + dy * dy);
 
-        // Hooke's Law: F = k * (current_distance - rest_length)
-        // We want the force to act to RESTORE the length.
+        // Soft spring with dead zone
+        // No force within ±deadZone of rest length (perceptual uniformness)
+        const restLength = config.linkRestLength;
 
-        // Effective Length = Base (or Override) * Bias
-        const baseLen = link.length ?? springLength;
-        const effectiveLength = baseLen * (link.lengthBias ?? 1.0);
 
-        const displacement = d - effectiveLength;
+        // EARLY-EXPANSION DEAD-ZONE BYPASS for high-degree nodes
+        // Temporarily disable dead-zone for hubs to break symmetric equilibrium
+        const sourceDeg = nodeDegree.get(link.source) || 0;
+        const targetDeg = nodeDegree.get(link.target) || 0;
+        const sourceIsHub = sourceDeg >= 3;
+        const targetIsHub = targetDeg >= 3;
+        const earlyExpansion = energy > 0.8;
+
+        // Dead-zone is 0 for hubs during early expansion, normal otherwise
+        const sourceDeadZone = (sourceIsHub && earlyExpansion) ? 0 : restLength * config.springDeadZone;
+        const targetDeadZone = (targetIsHub && earlyExpansion) ? 0 : restLength * config.springDeadZone;
+
+        // Use the minimum dead-zone (if either end is a hub, bypass applies to the link)
+        const deadZone = Math.min(sourceDeadZone, targetDeadZone);
+
+        const rawDisplacement = d - restLength;
+
+        // Apply dead zone: only apply force outside the band
+        let displacement = 0;
+        if (rawDisplacement > deadZone) {
+            displacement = rawDisplacement - deadZone;  // Stretched beyond band
+        } else if (rawDisplacement < -deadZone) {
+            displacement = rawDisplacement + deadZone;  // Compressed beyond band
+        }
+        // else: within dead zone, displacement = 0, no force
 
         // Effective Stiffness = Base (or Override) * Bias * Global Scale
         const baseK = link.strength ?? springStiffness;
-        const effectiveK = baseK * (link.stiffnessBias ?? 1.0) * stiffnessScale;
+        let effectiveK = baseK * (link.stiffnessBias ?? 1.0) * stiffnessScale;
+
+        // Spring stiffness is now constant (ramping removed)
 
         const forceMagnitude = effectiveK * displacement;
 
@@ -176,14 +279,180 @@ export function applySprings(
         const fx = (dx / d) * forceMagnitude;
         const fy = (dy / d) * forceMagnitude;
 
-        // Apply
+        // EARLY-PHASE HUB SPRING SOFTENING (More aggressive topology softening)
+        // During early expansion, reduce spring force for high-degree nodes
+        // Allows hubs to drift and break symmetric equilibrium
+        const computeHubScale = (nodeId: string): number => {
+            if (energy <= 0.5) return 1.0;  // Full spring authority (extended range)
+
+            const deg = nodeDegree.get(nodeId) || 0;
+            if (deg < 2) return 1.0;  // Only single nodes unaffected
+
+            // Hub factor: starts at deg=2, peaks at deg=5+
+            const hubFactor = Math.min((deg - 1) / 4, 1);
+
+            // Softening: 0.15 at energy=1.0, lerp to 1.0 at energy=0.5
+            const minScale = 0.15;  // More aggressive softening
+            const energyFade = Math.min((energy - 0.5) / 0.5, 1);  // 0 at 0.5, 1 at 1.0
+            const softening = 1.0 - hubFactor * (1.0 - minScale) * energyFade;
+
+            return softening;
+        };
+
+        const sourceScale = computeHubScale(link.source);
+        const targetScale = computeHubScale(link.target);
+
+        // TANGENTIAL SOFTENING IN DENSE CORES (early expansion only)
+        // Allows nodes to shear/rotate relative to neighbors
+        // Dense core "melts" via internal rearrangement, not explosion
+        // NOW: smooth ramp based on density AND compression ratio
+        const applyTangentialSoftening = energy > 0.85;
+
+        // DEBUG: track min tangent scale
+        let debugMinTangentScale = 1.0;
+
+        // Compute local density for source and target
+        let sourceDensity = 0, targetDensity = 0;
+        if (applyTangentialSoftening) {
+            const densityRadius = 30;
+            for (const [, other] of nodes) {
+                if (other.id !== source.id) {
+                    const ddx = other.x - source.x;
+                    const ddy = other.y - source.y;
+                    if (Math.sqrt(ddx * ddx + ddy * ddy) < densityRadius) sourceDensity++;
+                }
+                if (other.id !== target.id) {
+                    const ddx = other.x - target.x;
+                    const ddy = other.y - target.y;
+                    if (Math.sqrt(ddx * ddx + ddy * ddy) < densityRadius) targetDensity++;
+                }
+            }
+        }
+
+        // Compute smooth tangent scale based on density AND compression
+        const computeTangentScale = (density: number, springDist: number, restLength: number): number => {
+            if (!applyTangentialSoftening) return 1.0;
+
+            // Density ramp: smoothstep from d0=2 to d1=6
+            const d0 = 2, d1 = 6;
+            const densityT = Math.min(Math.max((density - d0) / (d1 - d0), 0), 1);
+            const densitySmooth = densityT * densityT * (3 - 2 * densityT);  // smoothstep
+
+            // Compression ramp: stronger softening when spring is compressed
+            // 1.0 at dist/rest >= 1.0, 1.5 at dist/rest <= 0.5
+            const compressionRatio = Math.min(springDist / restLength, 1);
+            const compressionBoost = 1 + (1 - compressionRatio) * 0.5;  // 1.0 → 1.5
+
+            // Combined: scale from 1.0 (no softening) to 0.05 (max softening)
+            const minTangent = 0.05;
+            const tangentScale = 1.0 - densitySmooth * compressionBoost * (1.0 - minTangent);
+
+            return Math.max(tangentScale, minTangent);
+        };
+
+        // Apply with hub softening (and tangential softening for dense regions)
         if (!source.isFixed) {
-            source.fx += fx;
-            source.fy += fy;
+            let sfx = fx * sourceScale;
+            let sfy = fy * sourceScale;
+
+            // Tangential softening: decompose and reduce tangential component
+            const sourceTangentScale = computeTangentScale(sourceDensity, d, restLength);
+            if (sourceTangentScale < 1.0) {
+                // Unit vector along spring
+                const ux = dx / d;
+                const uy = dy / d;
+
+                // Radial component (along spring direction)
+                const radialMag = sfx * ux + sfy * uy;
+                const radialFx = radialMag * ux;
+                const radialFy = radialMag * uy;
+
+                // Tangential component (perpendicular)
+                const tangentFx = sfx - radialFx;
+                const tangentFy = sfy - radialFy;
+
+                // Recombine with softened tangential
+                sfx = radialFx + tangentFx * sourceTangentScale;
+                sfy = radialFy + tangentFy * sourceTangentScale;
+
+                debugMinTangentScale = Math.min(debugMinTangentScale, sourceTangentScale);
+            }
+
+            source.fx += sfx;
+            source.fy += sfy;
         }
         if (!target.isFixed) {
-            target.fx -= fx;
-            target.fy -= fy;
+            let tfx = -fx * targetScale;
+            let tfy = -fy * targetScale;
+
+            // Tangential softening for target
+            const targetTangentScale = computeTangentScale(targetDensity, d, restLength);
+            if (targetTangentScale < 1.0) {
+                const ux = dx / d;
+                const uy = dy / d;
+
+                const radialMag = tfx * ux + tfy * uy;
+                const radialFx = radialMag * ux;
+                const radialFy = radialMag * uy;
+
+                const tangentFx = tfx - radialFx;
+                const tangentFy = tfy - radialFy;
+
+                tfx = radialFx + tangentFx * targetTangentScale;
+                tfy = radialFy + tangentFy * targetTangentScale;
+
+                debugMinTangentScale = Math.min(debugMinTangentScale, targetTangentScale);
+            }
+
+            target.fx += tfx;
+            target.fy += tfy;
+        }
+
+        // DENSE-CORE FORCE DITHERING (Temporal Null-Gradient Perturbation)
+        // Adds tiny time-varying tangential force to break force equilibrium
+        // Zero-mean over time, no geometric encoding
+        const ditherStrength = 0.02;  // Tiny force magnitude
+        const ditherDensityThreshold = 4;
+        const ditherEnergyGate = energy > 0.85;
+
+        if (ditherEnergyGate && (sourceDensity >= ditherDensityThreshold || targetDensity >= ditherDensityThreshold)) {
+            // Hash edge ID + frameIndex for deterministic time-varying phase
+            const edgeKey = source.id < target.id
+                ? `${source.id}:${target.id}`
+                : `${target.id}:${source.id}`;
+
+            let edgeHash = frameIndex;  // Start with frame (temporal component)
+            for (let i = 0; i < edgeKey.length; i++) {
+                edgeHash = ((edgeHash << 5) - edgeHash) + edgeKey.charCodeAt(i);
+                edgeHash |= 0;
+            }
+
+            // Map to [-1, 1] oscillatory phase (changes every frame)
+            const normalizedHash = ((edgeHash % 2000) + 2000) % 2000 / 1000 - 1;  // -1 to +1
+
+            // Tangential direction (perpendicular to spring)
+            const ux = dx / d;
+            const uy = dy / d;
+            const tangentX = -uy;  // 90° rotation
+            const tangentY = ux;
+
+            // Apply oscillatory tangential perturbation
+            const ditherFx = tangentX * normalizedHash * ditherStrength;
+            const ditherFy = tangentY * normalizedHash * ditherStrength;
+
+            if (!source.isFixed) {
+                source.fx += ditherFx;
+                source.fy += ditherFy;
+            }
+            if (!target.isFixed) {
+                target.fx -= ditherFx;  // Opposite for pairwise symmetry
+                target.fy -= ditherFy;
+            }
+        }
+
+        // DEBUG: log min tangent scale
+        if (applyTangentialSoftening && debugMinTangentScale < 1.0) {
+            console.log(`[Springs] minTangentScale: ${debugMinTangentScale.toFixed(3)}, srcDensity: ${sourceDensity}, tgtDensity: ${targetDensity}`);
         }
     }
 }
@@ -199,7 +468,6 @@ export function applySpringConstraint(
     config: ForceConfig,
     strength: number = 0.5 // How much of the error to correct per frame (0.0 - 1.0)
 ) {
-    const { springLength } = config;
 
     for (const link of links) {
         const source = nodes.get(link.source);
@@ -219,9 +487,8 @@ export function applySpringConstraint(
 
         const d = Math.sqrt(dx * dx + dy * dy);
 
-        // Target Distance
-        const baseLen = link.length ?? springLength;
-        const targetLen = baseLen * (link.lengthBias ?? 1.0);
+        // Uniform rest length for all springs
+        const targetLen = config.linkRestLength;
 
         // Difference
         const diff = d - targetLen;

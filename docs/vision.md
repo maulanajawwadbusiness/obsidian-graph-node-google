@@ -1,13 +1,13 @@
-# graph physics vision – “obsidian feel” for sitasiai map
+# graph physics vision – “obsidian feel” for knowledge interface map
 
 ## 1. purpose
 
-this document defines the **experience vision** for the 2d graph physics used in the sitasiai map.
+this document defines the **experience vision** for the 2d graph physics used in the knowledge interface map.
 
 we are not building a generic graph layout.
 
 we are building a **feel-engine**:
-a small universe where nodes behave like a living jelly of ideas,
+a small universe where nodes behave like a living organism of ideas,
 inspired by obsidian’s graph view but tuned for our own product.
 
 the physics exists to make users *feel* their paper as a living structure,

@@ -1,239 +1,41 @@
-import React, { useRef, useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { PhysicsEngine } from '../physics/engine';
-import { PhysicsNode, PhysicsLink, ForceConfig } from '../physics/types';
+import { ForceConfig } from '../physics/types';
 import { DEFAULT_PHYSICS_CONFIG } from '../physics/config';
+import { DRAG_ENABLED, SkinMode, getTheme } from '../visual/theme';
+import { CanvasOverlays } from './components/CanvasOverlays';
+import { SidebarControls } from './components/SidebarControls';
+import { AIActivityGlyph } from './components/AIActivityGlyph';
+import { CONTAINER_STYLE, MAIN_STYLE, SHOW_THEME_TOGGLE } from './graphPlaygroundStyles';
+import { PlaygroundMetrics } from './playgroundTypes';
+import { useGraphRendering } from './useGraphRendering';
+import { generateRandomGraph } from './graphRandom';
+import { DocumentProvider, useDocument } from '../store/documentStore';
+import { applyFirstWordsToNodes, applyAILabelsToNodes } from '../document/nodeBinding';
+import { PopupProvider, usePopup } from '../popup/PopupStore';
+import { PopupPortal } from '../popup/PopupPortal';
+import { DocumentViewerPanel } from '../document/viewer/DocumentViewerPanel';
+import { PresenceStrip } from '../PresenceStrip/PresenceStrip';
 
 // -----------------------------------------------------------------------------
-// Styles (Inline for simplicity, as requested)
+// Main Component (Internal)
 // -----------------------------------------------------------------------------
-const CONTAINER_STYLE: React.CSSProperties = {
-    display: 'flex',
-    width: '100vw',
-    height: '100vh',
-    overflow: 'hidden',
-    fontFamily: 'sans-serif',
-    background: '#111',
-    color: '#eee',
-};
-
-const MAIN_STYLE: React.CSSProperties = {
-    flex: 1,
-    position: 'relative',
-    cursor: 'grab',
-};
-
-const SIDEBAR_STYLE: React.CSSProperties = {
-    width: '320px',
-    padding: '20px',
-    background: '#222',
-    borderLeft: '1px solid #444',
-    overflowY: 'auto',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '16px',
-};
-
-const DEBUG_OVERLAY_STYLE: React.CSSProperties = {
-    position: 'absolute',
-    top: '16px',
-    left: '16px',
-    padding: '8px 12px',
-    background: 'rgba(0, 0, 0, 0.7)',
-    borderRadius: '4px',
-    pointerEvents: 'none',
-    fontSize: '12px',
-    fontFamily: 'monospace',
-};
-
-// -----------------------------------------------------------------------------
-// Helper: Random Graph Generator
-// -----------------------------------------------------------------------------
-
-/**
- * Simple string hash for deterministic "randomness".
- */
-function simpleHash(str: string): number {
-    let hash = 0;
-    for (let i = 0; i < str.length; i++) {
-        hash = ((hash << 5) - hash) + str.charCodeAt(i);
-        hash |= 0; // Convert to 32bit integer
-    }
-    return Math.abs(hash);
-}
-
-// Generate a "Spine-Rib-Fiber" Topology
-// KEY UPDATE: "Structural Seeding". Nodes are placed relative to their parents
-// to break radial symmetry at t=0.
-function generateRandomGraph(nodeCount: number, connectivity: number) {
-    const nodes: PhysicsNode[] = [];
-    const links: PhysicsLink[] = [];
-
-    // 0. Helper: Create Node (initially at 0,0, moved later)
-    const createNode = (id: string, roleRadius: number, roleMass: number, role: 'spine' | 'rib' | 'fiber'): PhysicsNode => ({
-        id,
-        x: 0, y: 0, // Will be set by structure
-        vx: 0, vy: 0, fx: 0, fy: 0,
-        mass: roleMass,
-        radius: roleRadius,
-        role: role,
-        isFixed: false,
-    });
-
-    // 1. Roles & Counts
-    const spineCount = Math.max(3, Math.min(5, Math.floor(nodeCount * 0.1))); // 3-5 Spine nodes
-    const remaining = nodeCount - spineCount;
-    const ribRatio = 0.6 + Math.random() * 0.15; // 60-75% Ribs
-    const ribCount = Math.floor(remaining * ribRatio);
-    const fiberCount = remaining - ribCount;
-
-    // Arrays to track indices
-    const spineIndices: number[] = [];
-    const ribIndices: number[] = [];
-    const fiberIndices: number[] = [];
-
-    let globalIdx = 0;
-
-    // 2. Build Spine (The Axis)
-    // Intentional Asymmetry: Diagonal Axis (1, 0.5)
-    // Start offset
-    const currentPos = {
-        x: (Math.random() - 0.5) * 50,
-        y: (Math.random() - 0.5) * 50
-    };
-
-    const spineStep = { x: 12, y: 6 }; // "Crooked" step vector (small px)
-
-    for (let i = 0; i < spineCount; i++) {
-        const id = `n${globalIdx}`;
-        spineIndices.push(globalIdx);
-        globalIdx++;
-
-        const node = createNode(id, 8.0, 4.0, 'spine'); // Heavy, Big
-
-        // PLACEMENT: Sequential
-        if (i === 0) {
-            node.x = currentPos.x;
-            node.y = currentPos.y;
-        } else {
-            // Move "forward" along axis
-            currentPos.x += spineStep.x + (Math.random() - 0.5) * 4; // Slight jitter
-            currentPos.y += spineStep.y + (Math.random() - 0.5) * 4;
-            node.x = currentPos.x;
-            node.y = currentPos.y;
-        }
-
-        nodes.push(node);
-
-        // LINKING
-        if (i > 0) {
-            // Crooked Chain: Occasional branching (Y-shape)
-            let targetStep = 1;
-            if (i > 1 && Math.random() < 0.2) targetStep = 2; // Connect to grandparent
-
-            const prevIdx = spineIndices[i - targetStep];
-            links.push({
-                source: `n${prevIdx}`,
-                target: id,
-                lengthBias: 0.5, // SHORT
-                stiffnessBias: 1.0 // STIFF
-            });
-        }
-    }
-
-    // 3. Build Ribs (The Body)
-    // Anchored to Spine
-    for (let i = 0; i < ribCount; i++) {
-        const id = `n${globalIdx}`;
-        ribIndices.push(globalIdx);
-        globalIdx++;
-
-        const node = createNode(id, 6.0, 2.0, 'rib'); // Medium
-
-        // Pick Anchor
-        const spineAnchorIdx = spineIndices[Math.floor(Math.random() * spineIndices.length)];
-        const spineAnchor = nodes[spineAnchorIdx];
-
-        // PLACEMENT: Offset from Normal
-        // "Normal" to (1, 0.5) is (-0.5, 1) or (0.5, -1).
-        // Let's alternate sides based on index parity to create "volume"
-        const side = (i % 2 === 0) ? 1 : -1;
-        const ribOffset = { x: -3 * side, y: 6 * side };
-
-        node.x = spineAnchor.x + ribOffset.x + (Math.random() - 0.5) * 4;
-        node.y = spineAnchor.y + ribOffset.y + (Math.random() - 0.5) * 4;
-
-        nodes.push(node);
-
-        // LINKING
-        links.push({
-            source: spineAnchor.id,
-            target: id,
-            lengthBias: 1.0, // NORMAL
-            stiffnessBias: 0.8 // FIRM
-        });
-
-        // Cage (20% chance double link)
-        if (Math.random() < 0.2) {
-            const anchor2Idx = spineIndices[Math.floor(Math.random() * spineIndices.length)];
-            if (anchor2Idx !== spineAnchorIdx) {
-                links.push({
-                    source: `n${anchor2Idx}`,
-                    target: id,
-                    lengthBias: 1.0,
-                    stiffnessBias: 0.8
-                });
-            }
-        }
-    }
-
-    // 4. Build Fibers (The Detail)
-    // Anchored to Ribs
-    for (let i = 0; i < fiberCount; i++) {
-        const id = `n${globalIdx}`;
-        fiberIndices.push(globalIdx);
-        globalIdx++;
-
-        const node = createNode(id, 4.0, 1.0, 'fiber'); // Light
-
-        // Pick Anchor
-        const ribAnchorIdx = ribIndices[Math.floor(Math.random() * ribIndices.length)];
-        const ribAnchor = nodes[ribAnchorIdx];
-
-        // PLACEMENT: Small outward offset
-        // Just extend further out
-        const fiberOffset = {
-            x: (Math.random() - 0.5) * 8,
-            y: (Math.random() - 0.5) * 8
-        };
-
-        node.x = ribAnchor.x + fiberOffset.x;
-        node.y = ribAnchor.y + fiberOffset.y;
-
-        nodes.push(node);
-
-        // LINKING
-        links.push({
-            source: ribAnchor.id,
-            target: id,
-            lengthBias: 1.5, // LONG
-            stiffnessBias: 0.4 // LOOSE (Soft)
-        });
-    }
-
-    return { nodes, links };
-}
-
-// -----------------------------------------------------------------------------
-// Main Component
-// -----------------------------------------------------------------------------
-export const GraphPhysicsPlayground: React.FC = () => {
+const GraphPhysicsPlaygroundInternal: React.FC = () => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const engineRef = useRef<PhysicsEngine>(new PhysicsEngine());
+    const documentContext = useDocument();
+    const popupContext = usePopup();
+    const tabRef = useRef<HTMLButtonElement>(null);
+    const [tabMode, setTabMode] = useState<'presence' | 'peek' | 'open'>('presence');
+    const [tabHovering, setTabHovering] = useState(false);
+    const [tabProximity, setTabProximity] = useState<'far' | 'near' | 'close'>('far');
 
     // State for React UI
     const [config, setConfig] = useState<ForceConfig>(DEFAULT_PHYSICS_CONFIG);
-    const [useVariedSize, setUseVariedSize] = useState(true); // Toggle State
-    const [metrics, setMetrics] = useState({
+    const [useVariedSize, setUseVariedSize] = useState(false); // Toggle State
+    const [sidebarOpen, setSidebarOpen] = useState(false); // Hidden by default
+    const [debugOpen, setDebugOpen] = useState(false); // Hidden by default
+    const [metrics, setMetrics] = useState<PlaygroundMetrics>({
         nodes: 0,
         links: 0,
         fps: 0,
@@ -245,171 +47,140 @@ export const GraphPhysicsPlayground: React.FC = () => {
         aspectRatio: 0,
         lifecycleMs: 0
     });
-    const [spawnCount, setSpawnCount] = useState(20);
+    const [spawnCount, setSpawnCount] = useState(5);
+    const [seed, setSeed] = useState(Date.now()); // Seed for deterministic generation
+    const [skinMode, setSkinMode] = useState<SkinMode>('elegant'); // Skin toggle (default: elegant)
 
-    // Ref for Loop Access
-    const settingsRef = useRef({ useVariedSize: true });
+    const {
+        handlePointerMove,
+        handlePointerEnter,
+        handlePointerLeave,
+        handlePointerCancel,
+        handlePointerUp,
+        clientToWorld,
+        worldToScreen,
+        hoverStateRef
+    } = useGraphRendering({
+        canvasRef,
+        config,
+        engineRef,
+        seed,
+        setMetrics,
+        spawnCount,
+        useVariedSize,
+        skinMode
+    });
 
-    useEffect(() => {
-        settingsRef.current.useVariedSize = useVariedSize;
-    }, [useVariedSize]);
-
-    // Rendering Loop
-    useEffect(() => {
+    // Wrap hook handlers for pointer events
+    const onPointerMove = (e: React.PointerEvent) => {
         const canvas = canvasRef.current;
         if (!canvas) return;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) return;
+        const rect = canvas.getBoundingClientRect();
+        handlePointerMove(e.pointerId, e.pointerType, e.clientX, e.clientY, rect);
+    };
 
-        let frameId = 0;
-        let lastTime = performance.now();
-        let frameCount = 0;
-        let lastFpsTime = lastTime;
+    const onPointerEnter = (e: React.PointerEvent) => {
+        handlePointerEnter(e.pointerId, e.pointerType);
+    };
 
+    const onPointerLeave = (e: React.PointerEvent) => {
+        handlePointerLeave(e.pointerId, e.pointerType);
+    };
+
+    const onPointerCancel = (e: React.PointerEvent) => {
+        handlePointerCancel(e.pointerId, e.pointerType);
+    };
+
+    const onPointerUp = (e: React.PointerEvent) => {
+        handlePointerUp(e.pointerId, e.pointerType);
+    };
+
+    const onPointerDown = (e: React.PointerEvent) => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+
+        // Check if a node is currently hovered
+        const hoveredId = hoverStateRef.current.hoveredNodeId;
+        if (!hoveredId) return;
+
+        // Get node screen position for popup anchor
         const engine = engineRef.current;
+        if (!engine) return;
 
-        // Initial Spawn if empty
-        if (engine.nodes.size === 0) {
-            const { nodes, links } = generateRandomGraph(20, 0.05);
-            nodes.forEach(n => engine.addNode(n));
-            links.forEach(l => engine.addLink(l));
-        }
+        const node = engine.nodes.get(hoveredId);
+        if (!node) return;
 
-        // Init bounds
-        if (canvas) {
-            engine.updateBounds(canvas.width, canvas.height);
-        }
+        const rect = canvas.getBoundingClientRect();
+        const screenPos = worldToScreen(node.x, node.y, rect);
+        const screenRadius = node.radius * 5;  // Approximate screen radius
 
-        const render = () => {
-            const now = performance.now();
+        // Open popup at node position
+        popupContext.openPopup(hoveredId, {
+            x: screenPos.x,
+            y: screenPos.y,
+            radius: screenRadius
+        });
 
-            // 1. Calc Delta Time
-            const dtMs = now - lastTime;
-            const dt = Math.min(dtMs / 1000, 0.1); // Cap at 100ms
-            lastTime = now;
+        console.log('[Popup] Opened for node:', hoveredId);
+    };
 
-            // 2. Physics Tick
-            engine.tick(dt);
-
-            // 3. Draw
-            // Resize canvas to window (simple approach)
-            if (canvas.width !== canvas.offsetWidth || canvas.height !== canvas.offsetHeight) {
-                canvas.width = canvas.offsetWidth;
-                canvas.height = canvas.offsetHeight;
-                engine.updateBounds(canvas.width, canvas.height); // Sync bounds
-            }
-
-            const width = canvas.width;
-            const height = canvas.height;
-
-            ctx.clearRect(0, 0, width, height);
-
-            // Camera: Center (0,0) at screen center
-            ctx.save();
-            ctx.translate(width / 2, height / 2);
-
-            // Draw Links
-            ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
-            ctx.lineWidth = 0.4;
-            engine.links.forEach((link) => {
-                const source = engine.nodes.get(link.source);
-                const target = engine.nodes.get(link.target);
-                if (source && target) {
-                    ctx.beginPath();
-                    ctx.moveTo(source.x, source.y);
-                    ctx.lineTo(target.x, target.y);
-                    ctx.stroke();
-                }
-            });
-
-            // Draw Nodes
-            engine.nodes.forEach((node) => {
-                ctx.beginPath();
-
-                // SIZE TOGGLE LOGIC
-                const radius = settingsRef.current.useVariedSize ? node.radius : 5.0;
-
-                ctx.arc(node.x, node.y, radius, 0, Math.PI * 2);
-
-                // Style dependent on state
-                if (node.isFixed) {
-                    ctx.fillStyle = '#ff4444';
-                } else {
-                    ctx.fillStyle = '#4488ff';
-                }
-
-                ctx.fill();
-                ctx.strokeStyle = '#fff';
-                ctx.lineWidth = 1;
-                ctx.stroke();
-            });
-
-            ctx.restore();
-
-            // FPS & Stats Calc
-            frameCount++;
-            const fpsDelta = now - lastFpsTime;
-
-            if (fpsDelta >= 100) { // Update every 100ms
-                const fps = Math.round((frameCount * 1000) / fpsDelta);
-
-                // Calc Average Kinetic Energy / Velocity
-                let totalVel = 0;
-                let activeNodes = 0;
-                engine.nodes.forEach(n => {
-                    const v = Math.sqrt(n.vx * n.vx + n.vy * n.vy);
-                    totalVel += v;
-                    if (v > 0) activeNodes++;
-                });
-                const avgVel = engine.nodes.size > 0 ? totalVel / engine.nodes.size : 0;
-
-                // Shape Analysis
-                let distSum = 0;
-                let distSqSum = 0;
-                let minX = Infinity, maxX = -Infinity;
-                let minY = Infinity, maxY = -Infinity;
-
-                engine.nodes.forEach(n => {
-                    const d = Math.sqrt(n.x * n.x + n.y * n.y);
-                    distSum += d;
-                    distSqSum += d * d;
-                    minX = Math.min(minX, n.x);
-                    maxX = Math.max(maxX, n.x);
-                    minY = Math.min(minY, n.y);
-                    maxY = Math.max(maxY, n.y);
-                });
-
-                const count = engine.nodes.size;
-                const avgDist = count > 0 ? distSum / count : 0;
-                const variance = count > 0 ? (distSqSum / count) - (avgDist * avgDist) : 0;
-                const stdDist = Math.sqrt(Math.max(0, variance));
-
-                const shapeW = maxX - minX;
-                const shapeH = maxY - minY;
-                const aspect = (shapeH > 0.1) ? shapeW / shapeH : 1.0;
-
-                setMetrics({
-                    nodes: engine.nodes.size,
-                    links: engine.links.length,
-                    fps: isNaN(fps) ? 0 : fps,
-                    avgVel: avgVel,
-                    activeNodes: activeNodes,
-                    avgDist,
-                    stdDist,
-                    aspectRatio: aspect,
-                    lifecycleMs: Math.round(engine.lifecycle * 1000)
-                });
-
-                frameCount = 0;
-                lastFpsTime = now;
-            }
-
-            frameId = requestAnimationFrame(render);
+    // Keyboard shortcut: "U" toggles both UI panels (sidebar + debug)
+    useEffect(() => {
+        const isTypingTarget = (target: EventTarget | null) => {
+            const el = target as HTMLElement | null;
+            if (!el) return false;
+            const tag = el.tagName?.toLowerCase();
+            return tag === 'input' || tag === 'textarea' || tag === 'select' || el.isContentEditable;
         };
 
-        frameId = requestAnimationFrame(render);
-        return () => cancelAnimationFrame(frameId);
-    }, []); // Run once on mount
+        const onKeyDown = (e: KeyboardEvent) => {
+            if (isTypingTarget(e.target)) return;
+            if (e.key !== 'u' && e.key !== 'U') return;
+
+            e.preventDefault();
+            setSidebarOpen((v) => !v);
+            setDebugOpen((v) => !v);
+        };
+
+        window.addEventListener('keydown', onKeyDown);
+        return () => window.removeEventListener('keydown', onKeyDown);
+    }, []);
+
+    useEffect(() => {
+        if (!DRAG_ENABLED) {
+            engineRef.current.releaseNode();
+        }
+    }, [DRAG_ENABLED]);
+
+    useEffect(() => {
+        if (documentContext.state.viewerMode === 'open') {
+            setTabMode('open');
+            return;
+        }
+        setTabMode(tabHovering ? 'peek' : 'presence');
+    }, [documentContext.state.viewerMode, tabHovering]);
+
+    useEffect(() => {
+        const handleMouseMove = (e: MouseEvent) => {
+            if (documentContext.state.viewerMode === 'open') {
+                setTabProximity('far');
+                return;
+            }
+
+            const tab = tabRef.current;
+            if (!tab) return;
+
+            const rect = tab.getBoundingClientRect();
+            const centerX = rect.left + rect.width / 2;
+            const centerY = rect.top + rect.height / 2;
+            const distance = Math.hypot(e.clientX - centerX, e.clientY - centerY);
+            const nextProximity = distance <= 200 ? 'close' : distance <= 400 ? 'near' : 'far';
+            setTabProximity((prev) => (prev === nextProximity ? prev : nextProximity));
+        };
+
+        window.addEventListener('mousemove', handleMouseMove);
+        return () => window.removeEventListener('mousemove', handleMouseMove);
+    }, [documentContext.state.viewerMode]);
 
     // ---------------------------------------------------------------------------
     // Interaction Handlers (Drag & Drop)
@@ -418,13 +189,16 @@ export const GraphPhysicsPlayground: React.FC = () => {
         const canvas = canvasRef.current;
         if (!canvas) return { x: 0, y: 0 };
         const rect = canvas.getBoundingClientRect();
-        // Transform screen coords to world coords (considering 0,0 center)
-        const px = e.clientX - rect.left - canvas.width / 2;
-        const py = e.clientY - rect.top - canvas.height / 2;
-        return { x: px, y: py };
+        // Transform screen coords to world coords (camera + rotation aware)
+        const { x, y } = clientToWorld(e.clientX, e.clientY, rect);
+        return { x, y };
     };
 
     const handleMouseDown = (e: React.MouseEvent) => {
+        if (!DRAG_ENABLED) {
+            engineRef.current.releaseNode();
+            return;
+        }
         const { x, y } = getWorldPos(e);
 
         // Find node under cursor
@@ -449,6 +223,10 @@ export const GraphPhysicsPlayground: React.FC = () => {
     };
 
     const handleMouseMove = (e: React.MouseEvent) => {
+        if (!DRAG_ENABLED) {
+            engineRef.current.releaseNode();
+            return;
+        }
         const { x, y } = getWorldPos(e);
         engineRef.current.moveDrag({ x, y });
     };
@@ -458,24 +236,77 @@ export const GraphPhysicsPlayground: React.FC = () => {
     };
 
     // ---------------------------------------------------------------------------
+    // Drag & Drop Handlers (Document Upload)
+    // ---------------------------------------------------------------------------
+    const handleDragOver = (e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+    };
+
+    const handleDrop = async (e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+
+        const files = Array.from(e.dataTransfer.files);
+        if (files.length === 0) return;
+
+        const file = files[0];
+        console.log('[Drop] File dropped:', file.name, file.type);
+
+        // Convert drop coordinates to world space
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        const rect = canvas.getBoundingClientRect();
+        const world = clientToWorld(e.clientX, e.clientY, rect);
+        console.log('[Drop] World position:', world.x.toFixed(2), world.y.toFixed(2));
+
+        // Parse file in worker and get document immediately
+        const document = await documentContext.parseFile(file);
+
+        // Apply first 5 words to node labels (fast, synchronous)
+        if (document) {
+            applyFirstWordsToNodes(engineRef.current, document);
+
+            // Trigger AI label rewrite (async, non-blocking)
+            // Capture docId now to avoid races with documentContext updates.
+            const docId = document.id;
+            const words = document.text.trim().split(/\s+/).slice(0, 5);
+            applyAILabelsToNodes(
+                engineRef.current,
+                words,
+                docId,
+                () => docId,
+                documentContext.setAIActivity
+            );
+        }
+    };
+
+    // ---------------------------------------------------------------------------
     // Config Updates
     // ---------------------------------------------------------------------------
     const handleConfigChange = (key: keyof ForceConfig, value: number) => {
         const newConfig = { ...config, [key]: value };
         setConfig(newConfig);
-        engineRef.current.updateConfig(newConfig);
+        engineRef.current?.updateConfig(newConfig);
     };
 
     const handleSpawn = () => {
-        engineRef.current.clear();
-        const { nodes, links } = generateRandomGraph(spawnCount, 0.05);
-        nodes.forEach(n => engineRef.current.addNode(n));
-        links.forEach(l => engineRef.current.addLink(l));
+        const engine = engineRef.current;
+        if (!engine) return;
+        engine.clear();
+        // Generate new random seed for each spawn
+        const newSeed = Date.now();
+        setSeed(newSeed);
+        const { nodes, links } = generateRandomGraph(spawnCount, config.targetSpacing, config.initScale, newSeed);
+        nodes.forEach(n => engine.addNode(n));
+        links.forEach(l => engine.addLink(l));
     };
 
     const handleReset = () => {
+        const engine = engineRef.current;
+        if (!engine) return;
         // Just randomize positions of existing nodes
-        engineRef.current.nodes.forEach(n => {
+        engine.nodes.forEach(n => {
             // SINGULARITY RESET
             n.x = (Math.random() - 0.5) * 1.0;
             n.y = (Math.random() - 0.5) * 1.0;
@@ -483,118 +314,128 @@ export const GraphPhysicsPlayground: React.FC = () => {
             n.vy = 0;
             n.warmth = 1.0;
         });
-        engineRef.current.resetLifecycle();
+        engine.resetLifecycle();
     };
 
+    const handleLogPreset = () => {
+        const preset = {
+            // Core spacing
+            targetSpacing: config.targetSpacing,
+            initScale: config.initScale,
+            snapImpulseScale: config.snapImpulseScale,
+
+            // Physics timing
+            dampingSnap: 0.30,     // From engine.ts Flight phase
+            dampingSettle: 0.90,   // From engine.ts Settle phase
+            maxVelocity: config.maxVelocity,
+            sleepThreshold: config.velocitySleepThreshold,
+
+            // Springs
+            springStiffness: config.springStiffness,
+
+            // Collision
+            collisionPadding: config.collisionPadding,
+            collisionStrength: config.collisionStrength,
+
+            // Repulsion
+            repulsionStrength: config.repulsionStrength,
+            repulsionDistanceMax: config.repulsionDistanceMax,
+
+            // Generation
+            seed: seed,
+            nodeCount: spawnCount
+        };
+
+        console.log('='.repeat(60));
+        console.log('PRESET CAPTURE');
+        console.log('='.repeat(60));
+        console.log(JSON.stringify(preset, null, 2));
+        console.log('='.repeat(60));
+    };
+
+    const documentState =
+        documentContext.state.errorMessage ||
+        (documentContext.state.activeDocument?.warnings?.length ?? 0) > 0
+            ? 'warning'
+            : documentContext.state.activeDocument
+                ? 'loaded'
+                : 'empty';
+
+    // Get theme for container styling
+    const activeTheme = getTheme(skinMode);
+
     return (
-        <div style={CONTAINER_STYLE}>
-            {/* Canvas Area */}
+        <div style={{ ...CONTAINER_STYLE, background: activeTheme.background, flexDirection: 'row' }}>
+            <PresenceStrip
+                viewerMode={tabMode}
+                documentState={documentState}
+                proximity={tabProximity}
+                onHover={setTabHovering}
+                onClick={() => {
+                    documentContext.setViewerMode(
+                        documentContext.state.viewerMode === 'open' ? 'peek' : 'open'
+                    );
+                }}
+                tabRef={tabRef}
+            />
+            <DocumentViewerPanel />
+
             <div
                 style={MAIN_STYLE}
                 onMouseDown={handleMouseDown}
                 onMouseMove={handleMouseMove}
                 onMouseUp={handleMouseUp}
                 onMouseLeave={handleMouseUp}
+                onPointerDown={onPointerDown}
+                onPointerEnter={onPointerEnter}
+                onPointerMove={onPointerMove}
+                onPointerLeave={onPointerLeave}
+                onPointerCancel={onPointerCancel}
+                onPointerUp={onPointerUp}
+                onDragOver={handleDragOver}
+                onDrop={handleDrop}
             >
-                <canvas ref={canvasRef} style={{ width: '100%', height: '100%' }} />
-
-                {/* Debug Overlay */}
-                <div style={DEBUG_OVERLAY_STYLE}>
-                    <strong>Time: T+{metrics.lifecycleMs}ms</strong><br />
-                    <br />
-                    <strong>Performance</strong><br />
-                    FPS: {metrics.fps} <br />
-                    Nodes: {metrics.nodes} (Active: {metrics.activeNodes}) <br />
-                    Links: {metrics.links} <br />
-                    Avg Vel: {metrics.avgVel.toFixed(4)} <br />
-                    <br />
-                    <strong>Shape Diagnostics</strong><br />
-                    Spread (R_mean): {metrics.avgDist.toFixed(2)} px <br />
-                    Irregularity (R_std): {metrics.stdDist.toFixed(2)} px <br />
-                    CV (Std/Mean): {(metrics.avgDist > 0 ? (metrics.stdDist / metrics.avgDist) : 0).toFixed(3)} <br />
-                    Aspect Ratio (W/H): {metrics.aspectRatio.toFixed(3)}
-                </div>
+                <canvas ref={canvasRef} style={{ width: '100%', height: '100%', background: activeTheme.background }} />
+                <CanvasOverlays
+                    debugOpen={debugOpen}
+                    metrics={metrics}
+                    onCloseDebug={() => setDebugOpen(false)}
+                    onShowDebug={() => setDebugOpen(true)}
+                    onToggleSidebar={() => setSidebarOpen((v) => !v)}
+                    onToggleTheme={() => setSkinMode(skinMode === 'elegant' ? 'normal' : 'elegant')}
+                    showThemeToggle={SHOW_THEME_TOGGLE}
+                    sidebarOpen={sidebarOpen}
+                    skinMode={skinMode}
+                />
+                <AIActivityGlyph />
+                <PopupPortal />
             </div>
 
-            {/* Sidebar Controls */}
-            <div style={SIDEBAR_STYLE}>
-                <h3>Physics Playground</h3>
-
-                {/* Actions */}
-                <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
-                    <button onClick={handleSpawn}>Spawn New</button>
-                    <button onClick={handleReset}>Explode</button>
-                </div>
-
-                {/* Size Toggle */}
-                <div style={{ marginBottom: '16px' }}>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <input
-                            type="checkbox"
-                            checked={useVariedSize}
-                            onChange={(e) => setUseVariedSize(e.target.checked)}
-                        />
-                        Varied Node Sizes
-                    </label>
-                </div>
-
-                <div>
-                    <label>Node Count: {spawnCount}</label>
-                    <input
-                        type="range" min="10" max="400" step="10"
-                        value={spawnCount}
-                        onChange={(e) => setSpawnCount(Number(e.target.value))}
-                        style={{ width: '100%' }}
-                    />
-                </div>
-
-                <hr style={{ border: '0', borderTop: '1px solid #444', width: '100%' }} />
-
-                {/* Sliders */}
-                {Object.keys(DEFAULT_PHYSICS_CONFIG).map((key) => {
-                    const k = key as keyof ForceConfig;
-                    const val = config[k];
-
-                    // Define ranges broadly for testing
-                    let min = 0;
-                    let max = 100;
-                    let step = 1;
-
-                    if (k === 'springStiffness' || k === 'damping' || k === 'gravityCenterStrength' || k === 'restForceScale') {
-                        max = 1.0;
-                        step = 0.01;
-                    }
-                    if (k === 'formingTime') {
-                        max = 10.0;
-                        step = 0.1;
-                    }
-                    if (k === 'repulsionStrength' || k === 'boundaryStrength' || k === 'collisionStrength') {
-                        max = 10000;
-                        step = 100;
-                    }
-                    if (k === 'repulsionDistanceMax' || k === 'springLength' || k === 'boundaryMargin' || k === 'gravityBaseRadius') {
-                        max = 500;
-                    }
-
-                    return (
-                        <div key={k}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: '4px' }}>
-                                <span>{k}</span>
-                                <span>{val}</span>
-                            </div>
-                            <input
-                                type="range"
-                                min={min}
-                                max={max}
-                                step={step}
-                                value={val}
-                                onChange={(e) => handleConfigChange(k, Number(e.target.value))}
-                                style={{ width: '100%' }}
-                            />
-                        </div>
-                    );
-                })}
-            </div>
+            {sidebarOpen && (
+                <SidebarControls
+                    config={config}
+                    onClose={() => setSidebarOpen(false)}
+                    onConfigChange={handleConfigChange}
+                    onLogPreset={handleLogPreset}
+                    onReset={handleReset}
+                    onSpawn={handleSpawn}
+                    onToggleVariedSize={setUseVariedSize}
+                    seed={seed}
+                    setSeed={setSeed}
+                    setSpawnCount={setSpawnCount}
+                    spawnCount={spawnCount}
+                    useVariedSize={useVariedSize}
+                />
+            )}
         </div>
     );
 };
+
+// Wrapper with DocumentProvider and PopupProvider
+export const GraphPhysicsPlayground: React.FC = () => (
+    <DocumentProvider>
+        <PopupProvider>
+            <GraphPhysicsPlaygroundInternal />
+        </PopupProvider>
+    </DocumentProvider>
+);

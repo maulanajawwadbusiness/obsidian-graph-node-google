@@ -95,7 +95,7 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
         handlePointerUp(e.pointerId, e.pointerType);
     };
 
-    const onPointerDown = (e: React.PointerEvent) => {
+    const onPointerDown = () => {
         const canvas = canvasRef.current;
         if (!canvas) return;
 

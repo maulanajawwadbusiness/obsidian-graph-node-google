@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { AnchorGeometry } from './popupTypes';
 
 /**
@@ -24,7 +24,7 @@ export function useAnchorGeometry(
     staticGeometry: AnchorGeometry | null,
     options: UseAnchorGeometryOptions = {}
 ): AnchorGeometry | null {
-    const { liveTracking = false, updateInterval = 16 } = options;
+    const { liveTracking = false } = options;
     const [geometry, setGeometry] = useState<AnchorGeometry | null>(staticGeometry);
 
     useEffect(() => {
@@ -73,6 +73,7 @@ export function createGeometryProvider() {
         },
         subscribe: (callback: () => void) => {
             console.warn('[GeometryProvider] subscribe - stub');
+            void callback;
             return () => { }; // Unsubscribe function
         },
     };

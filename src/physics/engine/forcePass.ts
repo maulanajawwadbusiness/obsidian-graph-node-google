@@ -7,7 +7,6 @@ export const applyForcePass = (
     engine: PhysicsEngine,
     nodeList: PhysicsNode[],
     forceScale: number,
-    dt: number,
     stats: DebugStats,
     preRollActive: boolean,
     energy?: number,

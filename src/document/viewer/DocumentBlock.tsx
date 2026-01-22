@@ -94,7 +94,7 @@ export const DocumentBlock: React.FC<DocumentBlockProps> = ({
             data-end={end}
             style={blockStyle}
         >
-            {runs.map((run, idx) => (
+            {runs.map((run) => (
                 <span
                     key={`${blockId}-${run.start}`}
                     data-start={start + run.start}

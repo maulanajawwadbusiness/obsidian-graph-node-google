@@ -71,7 +71,7 @@ export function createDocGraphBridge(
     };
 
     const reveal = (ref: NodeDocRefV1, options: RevealOptions = {}): RevealResult => {
-        const { skipIfTyping = true, scrollBehavior = 'smooth', highlightPulse = true } = options;
+        const { highlightPulse = true } = options;
 
         // Check if document matches
         if (documentStore.state.activeDocument?.id !== ref.docId) {

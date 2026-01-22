@@ -118,9 +118,18 @@ export function DocumentProvider({ children }: { children: ReactNode }) {
         try {
             dispatch({ type: 'SET_STATUS', status: 'parsing' });
             console.log('[DocumentStore] Starting parse:', file.name);
+            const perfEnabled = typeof window !== 'undefined' && Boolean((window as typeof window & { __DOC_VIEWER_PROFILE__?: boolean }).__DOC_VIEWER_PROFILE__);
+            const parseStart = performance.now();
 
             const document = await workerClientRef.current.parseFile(file);
 
+            const parseDuration = performance.now() - parseStart;
+            if (perfEnabled) {
+                console.debug('[DocumentStore] parse timing', {
+                    fileName: document.fileName,
+                    durationMs: Number(parseDuration.toFixed(2)),
+                });
+            }
             console.log('[DocumentStore] Parse complete:', document.fileName, document.meta.wordCount, 'words');
             dispatch({ type: 'SET_DOCUMENT', document });
 

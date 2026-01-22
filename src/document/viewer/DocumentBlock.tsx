@@ -74,7 +74,7 @@ function buildRuns(text: string, blockStart: number, blockEnd: number, highlight
     return runs;
 }
 
-export const DocumentBlock: React.FC<DocumentBlockProps> = ({
+const DocumentBlockComponent: React.FC<DocumentBlockProps> = ({
     blockId,
     start,
     end,
@@ -114,3 +114,5 @@ export const DocumentBlock: React.FC<DocumentBlockProps> = ({
         </p>
     );
 };
+
+export const DocumentBlock = React.memo(DocumentBlockComponent);

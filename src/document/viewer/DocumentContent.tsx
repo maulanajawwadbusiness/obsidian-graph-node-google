@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useRef, useEffect } from 'react';
 import { buildBlocks } from './documentModel';
 import { DocumentBlock } from './DocumentBlock';
 import type { HighlightRange } from '../types';
@@ -16,7 +16,25 @@ export interface DocumentContentProps {
 }
 
 export const DocumentContent: React.FC<DocumentContentProps> = ({ text, highlights, containerRef }) => {
-    const blocks = useMemo(() => buildBlocks(text), [text]);
+    const perfEnabled = typeof window !== 'undefined' && Boolean((window as typeof window & { __DOC_VIEWER_PROFILE__?: boolean }).__DOC_VIEWER_PROFILE__);
+    const renderCountRef = useRef(0);
+    const buildCountRef = useRef(0);
+    renderCountRef.current += 1;
+
+    const blocks = useMemo(() => {
+        const start = performance.now();
+        const nextBlocks = buildBlocks(text);
+        const duration = performance.now() - start;
+        buildCountRef.current += 1;
+        if (perfEnabled) {
+            console.debug('[DocViewer] buildBlocks', {
+                count: buildCountRef.current,
+                blocks: nextBlocks.length,
+                durationMs: Number(duration.toFixed(2)),
+            });
+        }
+        return nextBlocks;
+    }, [perfEnabled, text]);
     const { blocks: visibleBlocks, topSpacerHeight, bottomSpacerHeight } = useVirtualBlocks(blocks, containerRef);
 
     const contentWrapperStyle: React.CSSProperties = {
@@ -29,6 +47,14 @@ export const DocumentContent: React.FC<DocumentContentProps> = ({ text, highligh
         WebkitFontSmoothing: 'antialiased',
         MozOsxFontSmoothing: 'grayscale',
     };
+
+    useEffect(() => {
+        if (!perfEnabled) return;
+        console.debug('[DocViewer] DocumentContent render', {
+            count: renderCountRef.current,
+            visibleBlocks: visibleBlocks.length,
+        });
+    }, [perfEnabled, visibleBlocks.length]);
 
     return (
         <div style={contentWrapperStyle}>

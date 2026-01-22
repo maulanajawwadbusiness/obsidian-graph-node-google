@@ -27,9 +27,9 @@ export interface DocThemeTokens {
 
 export const DOC_THEME_DARK: DocThemeTokens = {
     fontFamily: "'Quicksand', 'Inter', system-ui, sans-serif",
-    fontSize: '15px',
-    lineHeight: 1.6,
-    fontWeight: 300,
+    fontSize: '13px',
+    lineHeight: 1.65,
+    fontWeight: 400,
     paragraphGap: '0.75em',
     maxLineWidth: '68ch',
     panelBg: 'rgba(15, 15, 26, 0.98)',
@@ -44,8 +44,8 @@ export const DOC_THEME_DARK: DocThemeTokens = {
 
 export const DOC_THEME_LIGHT: DocThemeTokens = {
     fontFamily: "system-ui, -apple-system, 'Segoe UI', sans-serif",
-    fontSize: '15px',
-    lineHeight: 1.6,
+    fontSize: '13px',
+    lineHeight: 1.65,
     fontWeight: 400,
     paragraphGap: '0.75em',
     maxLineWidth: '68ch',

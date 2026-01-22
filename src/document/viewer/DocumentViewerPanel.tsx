@@ -6,6 +6,8 @@ import { getDocTheme, docThemeToCssVars } from './docTheme';
 import { createSearchSession, navigateMatch, getActiveMatch, type SearchSession } from './searchSession';
 import { findSpanContaining } from './selectionMapping';
 import type { HighlightRange } from '../types';
+import './viewerTokens.css';
+import documentModeIcon from '../../assets/document_mode_icon.png';
 
 /**
  * Document Viewer Panel - Main container
@@ -201,32 +203,8 @@ export const DocumentViewerPanel: React.FC = () => {
             : 'none',
     };
 
-    const headerStyle: React.CSSProperties = {
-        padding: '16px 20px',
-        borderBottom: `1px solid rgba(99, 171, 255, 0.15)`,
-        flexShrink: 0,
-        display: isPeek ? 'none' : 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        color: currentTheme.text,
-        fontSize: '13px',
-        fontFamily: currentTheme.fontFamily,
-    };
-
-    const themeToggleStyle: React.CSSProperties = {
-        background: 'none',
-        border: 'none',
-        color: currentTheme.mutedText,
-        cursor: 'pointer',
-        fontSize: '16px',
-        padding: '4px 8px',
-        transition: 'filter 120ms ease-out',
-        filter: 'brightness(1)',
-    };
-
     const contentStyle: React.CSSProperties = {
         flex: 1,
-        padding: '20px',
         overflowY: 'auto',
         display: isPeek ? 'none' : 'block',
     };
@@ -242,24 +220,22 @@ export const DocumentViewerPanel: React.FC = () => {
             <div style={sliverStyle}>
                 {!isPeek && (
                     <>
-                        <div style={headerStyle}>
-                            <div>
-                                {state.activeDocument
-                                    ? `📄 ${state.activeDocument.fileName}`
-                                    : '📄 No Document'}
+                        <header className="dv-header">
+                            <span className="dv-header-title">DOCUMENT VIEWER</span>
+                            <div className="dv-header-actions">
+                                <button
+                                    type="button"
+                                    className="dv-persona-toggle"
+                                    data-mode={state.docThemeMode}
+                                    onClick={() => setDocTheme(state.docThemeMode === 'dark' ? 'light' : 'dark')}
+                                    aria-label="Switch document mode"
+                                    title="Switch document mode"
+                                >
+                                    <img className="dv-persona-icon" src={documentModeIcon} alt="" />
+                                    <span className="dv-persona-label">Mode</span>
+                                </button>
                             </div>
-                            <button
-                                type="button"
-                                style={themeToggleStyle}
-                                onClick={() => setDocTheme(state.docThemeMode === 'dark' ? 'light' : 'dark')}
-                                onMouseEnter={(e) => e.currentTarget.style.filter = 'brightness(1.4)'}
-                                onMouseLeave={(e) => e.currentTarget.style.filter = 'brightness(1)'}
-                                aria-label="Toggle theme"
-                                title={`Switch to ${state.docThemeMode === 'dark' ? 'light' : 'dark'} mode`}
-                            >
-                                {state.docThemeMode === 'dark' ? '☀' : '🌙'}
-                            </button>
-                        </div>
+                        </header>
 
                         {showSearch && (
                             <SearchBar
@@ -272,18 +248,27 @@ export const DocumentViewerPanel: React.FC = () => {
                             />
                         )}
 
-                        <div className="arnvoid-scroll" style={contentStyle} ref={contentRef}>
-                            {state.activeDocument ? (
-                                <DocumentContent
-                                    text={state.activeDocument.text}
-                                    highlights={state.highlightRanges}
-                                    containerRef={contentRef}
-                                />
-                            ) : (
-                                <div style={{ color: currentTheme.mutedText, fontStyle: 'italic' }}>
-                                    Drop a document onto the canvas to view it here
+                        <div className="arnvoid-scroll dv-content" style={contentStyle} ref={contentRef}>
+                            <div className="dv-document">
+                                <div className="dv-document-title">
+                                    {state.activeDocument ? state.activeDocument.fileName : 'No Document'}
                                 </div>
-                            )}
+                                <div className="dv-document-body">
+                                    {state.activeDocument ? (
+                                        <DocumentContent
+                                            text={state.activeDocument.text}
+                                            highlights={state.highlightRanges}
+                                            containerRef={contentRef}
+                                        />
+                                    ) : (
+                                        <div className="dv-empty-state">
+                                            <p className="dv-empty-instruction">
+                                                Drop a document onto the canvas to view it here
+                                            </p>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
                         </div>
                     </>
                 )}

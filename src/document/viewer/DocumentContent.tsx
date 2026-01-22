@@ -21,8 +21,8 @@ export const DocumentContent: React.FC<DocumentContentProps> = ({ text, highligh
 
     const contentWrapperStyle: React.CSSProperties = {
         fontFamily: 'var(--doc-font-family)',
-        fontSize: 'var(--doc-font-size, 15px)',
-        lineHeight: 'var(--doc-line-height, 1.6)',
+        fontSize: 'var(--doc-font-size, 13px)',
+        lineHeight: 'var(--doc-line-height, 1.65)',
         fontWeight: 'var(--doc-font-weight)',
         color: 'var(--doc-text)',
         maxWidth: 'var(--doc-max-line-width, 68ch)',

@@ -26,45 +26,6 @@ export const SearchBar: React.FC<SearchBarProps> = ({
     const inputRef = useRef<HTMLInputElement>(null);
     const debounceTimerRef = useRef<number | null>(null);
 
-    const containerStyle: React.CSSProperties = {
-        padding: '12px 20px',
-        borderBottom: '1px solid rgba(99, 171, 255, 0.15)',
-        display: 'flex',
-        alignItems: 'center',
-        gap: '8px',
-        backgroundColor: 'rgba(var(--panel-bg-rgb), 0.5)',
-    };
-
-    const inputStyle: React.CSSProperties = {
-        flex: 1,
-        background: 'rgba(0, 0, 0, 0.3)',
-        border: '1px solid rgba(99, 171, 255, 0.2)',
-        borderRadius: '4px',
-        padding: '6px 10px',
-        color: 'var(--doc-text)',
-        fontSize: '13px',
-        fontFamily: 'var(--doc-font-family)',
-    };
-
-    const buttonStyle: React.CSSProperties = {
-        background: 'rgba(0, 0, 0, 0.3)',
-        border: '1px solid rgba(99, 171, 255, 0.2)',
-        borderRadius: '4px',
-        padding: '6px 10px',
-        color: 'var(--doc-text)',
-        fontSize: '11px',
-        cursor: 'pointer',
-        fontFamily: 'var(--doc-font-family)',
-    };
-
-    const counterStyle: React.CSSProperties = {
-        fontSize: '11px',
-        color: 'var(--doc-muted-text)',
-        fontFamily: 'var(--doc-font-family)',
-        minWidth: '60px',
-        textAlign: 'center',
-    };
-
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const newQuery = e.target.value;
         setQuery(newQuery);
@@ -101,17 +62,17 @@ export const SearchBar: React.FC<SearchBarProps> = ({
     }, []);
 
     return (
-        <div style={containerStyle}>
+        <div className="dv-search-bar">
             <input
                 ref={inputRef}
                 type="text"
-                style={inputStyle}
+                className="dv-search-input"
                 placeholder="Search in document..."
                 value={query}
                 onChange={handleChange}
                 onKeyDown={handleKeyDown}
             />
-            <div style={counterStyle}>
+            <div className="dv-search-counter">
                 {matchCount > 0
                     ? `${activeIndex + 1}/${matchCount}`
                     : query ? '0/0' : ''
@@ -119,7 +80,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({
             </div>
             <button
                 type="button"
-                style={buttonStyle}
+                className="dv-search-button"
                 onClick={onPrev}
                 disabled={matchCount === 0}
                 title="Previous match (Shift+Enter)"
@@ -128,7 +89,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({
             </button>
             <button
                 type="button"
-                style={buttonStyle}
+                className="dv-search-button"
                 onClick={onNext}
                 disabled={matchCount === 0}
                 title="Next match (Enter)"
@@ -137,7 +98,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({
             </button>
             <button
                 type="button"
-                style={buttonStyle}
+                className="dv-search-button"
                 onClick={onClose}
                 title="Close search (Esc)"
             >

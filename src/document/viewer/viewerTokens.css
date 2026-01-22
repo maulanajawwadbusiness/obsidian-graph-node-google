@@ -1,0 +1,181 @@
+.doc-viewer-root {
+    /* Typography */
+    --dv-font-size: 12px;
+    --dv-font-weight-normal: 400;
+    --dv-font-weight-medium: 500;
+    --dv-opacity-primary: 0.9;
+    --dv-opacity-secondary: 0.75;
+    --dv-opacity-muted: 0.5;
+    --dv-opacity-subtle: 0.35;
+
+    /* Spacing */
+    --dv-space-xs: 4px;
+    --dv-space-sm: 8px;
+    --dv-space-md: 12px;
+    --dv-space-lg: 16px;
+    --dv-space-xl: 24px;
+
+    /* Header */
+    --dv-header-padding-y: 15px;
+    --dv-divider: rgba(90, 95, 105, 0.22);
+}
+
+.dv-header {
+    padding: var(--dv-header-padding-y) 20px;
+    border-bottom: 1px solid var(--dv-divider);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    color: var(--doc-text);
+    font-family: var(--doc-font-family);
+    font-size: var(--dv-font-size);
+}
+
+.dv-header-title {
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    opacity: 0.6;
+}
+
+.dv-header-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--dv-space-sm);
+}
+
+.dv-persona-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--dv-space-xs);
+    height: 28px;
+    padding: 0 var(--dv-space-sm);
+    border-radius: 6px;
+    border: none;
+    cursor: pointer;
+    transition: border-color 180ms ease-out, box-shadow 180ms ease-out, background 180ms ease-out;
+}
+
+.dv-persona-toggle img {
+    width: 11px;
+    height: 11px;
+    display: block;
+}
+
+.dv-persona-label {
+    font-family: var(--doc-font-family);
+    font-size: var(--dv-font-size);
+    font-weight: var(--dv-font-weight-medium);
+    opacity: var(--dv-opacity-primary);
+    color: var(--doc-text);
+}
+
+.dv-persona-toggle[data-mode="dark"] {
+    background: rgba(0, 0, 0, 0.9);
+}
+
+.dv-persona-toggle[data-mode="dark"]:hover {
+    box-shadow:
+        0 0 8px 1px rgba(255, 255, 255, 0.08),
+        0 0 14px rgba(255, 255, 255, 0.06),
+        inset 0 0 6px rgba(255, 255, 255, 0.1);
+}
+
+.dv-persona-toggle[data-mode="light"] {
+    background: rgba(220, 224, 230, 0.9);
+}
+
+.dv-persona-toggle[data-mode="light"] .dv-persona-icon {
+    filter: invert(1);
+}
+
+.dv-persona-toggle[data-mode="light"]:hover {
+    box-shadow:
+        0 0 8px 1px rgba(0, 0, 0, 0.05),
+        0 0 14px rgba(0, 0, 0, 0.04),
+        inset 0 1px 4px rgba(0, 0, 0, 0.08);
+}
+
+.dv-content {
+    flex: 1;
+    padding: 20px;
+    overflow-y: auto;
+}
+
+.dv-document {
+    max-width: var(--doc-max-line-width);
+    width: 100%;
+}
+
+.dv-document-title {
+    margin: 0;
+    font-family: var(--doc-font-family);
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--doc-text);
+    opacity: 0.95;
+}
+
+.dv-document-body {
+    margin-top: var(--dv-space-sm);
+}
+
+.dv-empty-state {
+    margin-top: var(--dv-space-md);
+    text-align: left;
+}
+
+.dv-empty-instruction {
+    margin: 0;
+    font-family: var(--doc-font-family);
+    font-size: var(--dv-font-size);
+    font-weight: var(--dv-font-weight-normal);
+    opacity: var(--dv-opacity-muted);
+    color: var(--doc-muted-text);
+}
+
+.dv-search-bar {
+    padding: var(--dv-space-md) var(--dv-space-lg);
+    border-bottom: 1px solid var(--dv-divider);
+    display: flex;
+    align-items: center;
+    gap: var(--dv-space-sm);
+    background-color: rgba(var(--panel-bg-rgb), 0.5);
+    font-family: var(--doc-font-family);
+    font-size: var(--dv-font-size);
+}
+
+.dv-search-input {
+    flex: 1;
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(99, 171, 255, 0.2);
+    border-radius: 4px;
+    padding: 6px 10px;
+    color: var(--doc-text);
+    font-size: var(--dv-font-size);
+    font-family: var(--doc-font-family);
+}
+
+.dv-search-button {
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(99, 171, 255, 0.2);
+    border-radius: 4px;
+    padding: 6px 10px;
+    color: var(--doc-text);
+    font-size: var(--dv-font-size);
+    cursor: pointer;
+    font-family: var(--doc-font-family);
+}
+
+.dv-search-button:disabled {
+    cursor: not-allowed;
+    opacity: var(--dv-opacity-subtle);
+}
+
+.dv-search-counter {
+    font-size: var(--dv-font-size);
+    color: var(--doc-muted-text);
+    min-width: 60px;
+    text-align: center;
+    opacity: var(--dv-opacity-muted);
+}

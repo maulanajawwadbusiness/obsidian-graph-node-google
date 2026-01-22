@@ -6,7 +6,8 @@
 import { useMemo, useState, useEffect, useRef, useLayoutEffect, useCallback } from 'react';
 import type { TextBlock } from './documentModel';
 
-const OVERSCAN_BLOCKS = 8;  // Blocks to render above/below viewport
+const OVERSCAN_PX = 1000;
+const RANGE_IDLE_RESET_MS = 120;
 const ESTIMATED_BLOCK_HEIGHT = 60;  // Rough estimate for initial layout
 const VIRTUALIZE_THRESHOLD = 50;
 
@@ -26,6 +27,11 @@ export function useVirtualBlocks(
     const [heightVersion, setHeightVersion] = useState(0);
     const perfEnabled = typeof window !== 'undefined' && Boolean((window as typeof window & { __DOC_VIEWER_PROFILE__?: boolean }).__DOC_VIEWER_PROFILE__);
     const rangeUpdateCount = useRef(0);
+    const lastRangeRef = useRef(visibleRange);
+    const scrollingRef = useRef(false);
+    const idleTimerRef = useRef<number | null>(null);
+    const heightUpdateRafRef = useRef<number | null>(null);
+    const hasLoggedEmptyRef = useRef(false);
 
     const measuredHeights = useMemo(() => {
         return allBlocks.map(block => blockHeights.current.get(block.blockId) ?? ESTIMATED_BLOCK_HEIGHT);
@@ -65,19 +71,51 @@ export function useVirtualBlocks(
         const handleScroll = () => {
             const scrollTop = container.scrollTop;
             const viewportHeight = container.clientHeight;
-            const startIndex = findIndexForOffset(scrollTop);
-            const endIndex = Math.min(allBlocks.length, findIndexForOffset(scrollTop + viewportHeight) + 1);
+            const overscanStart = Math.max(0, scrollTop - OVERSCAN_PX);
+            const overscanEnd = scrollTop + viewportHeight + OVERSCAN_PX;
+            const startIndex = findIndexForOffset(overscanStart);
+            const endIndex = Math.min(allBlocks.length, findIndexForOffset(overscanEnd) + 1);
 
-            // Apply overscan
-            const finalStart = Math.max(0, startIndex - OVERSCAN_BLOCKS);
-            const finalEnd = Math.min(allBlocks.length, endIndex + OVERSCAN_BLOCKS);
+            const nextRange = { start: startIndex, end: endIndex };
+            const previousRange = lastRangeRef.current;
+            const unionRange = {
+                start: Math.min(previousRange.start, nextRange.start),
+                end: Math.max(previousRange.end, nextRange.end),
+            };
+
+            scrollingRef.current = true;
+            if (idleTimerRef.current) {
+                window.clearTimeout(idleTimerRef.current);
+            }
+            idleTimerRef.current = window.setTimeout(() => {
+                scrollingRef.current = false;
+                setVisibleRange(current => {
+                    const settled = lastRangeRef.current;
+                    if (current.start === settled.start && current.end === settled.end) {
+                        return current;
+                    }
+                    return settled;
+                });
+            }, RANGE_IDLE_RESET_MS);
+
+            const renderRange = scrollingRef.current ? unionRange : nextRange;
+            lastRangeRef.current = nextRange;
 
             setVisibleRange(prev => {
-                if (prev.start === finalStart && prev.end === finalEnd) {
+                if (prev.start === renderRange.start && prev.end === renderRange.end) {
                     return prev;
                 }
-                return { start: finalStart, end: finalEnd };
+                return renderRange;
             });
+
+            if (perfEnabled) {
+                console.debug('[DocViewer] range compute', {
+                    scrollTop,
+                    rangeStart: renderRange.start,
+                    rangeEnd: renderRange.end,
+                    renderedCount: renderRange.end - renderRange.start,
+                });
+            }
         };
 
         // Initial calculation
@@ -98,8 +136,14 @@ export function useVirtualBlocks(
         return () => {
             container.removeEventListener('scroll', throttledScroll);
             if (rafId) cancelAnimationFrame(rafId);
+            if (idleTimerRef.current) {
+                window.clearTimeout(idleTimerRef.current);
+            }
+            if (heightUpdateRafRef.current) {
+                cancelAnimationFrame(heightUpdateRafRef.current);
+            }
         };
-    }, [allBlocks, containerRef, findIndexForOffset, shouldVirtualize]);
+    }, [allBlocks, containerRef, findIndexForOffset, perfEnabled, shouldVirtualize]);
 
     // Measure block heights when they render
     useLayoutEffect(() => {
@@ -120,17 +164,41 @@ export function useVirtualBlocks(
             }
         });
         if (changed) {
-            setHeightVersion(version => version + 1);
+            if (heightUpdateRafRef.current) {
+                cancelAnimationFrame(heightUpdateRafRef.current);
+            }
+            heightUpdateRafRef.current = requestAnimationFrame(() => {
+                heightUpdateRafRef.current = null;
+                if (scrollingRef.current) {
+                    if (idleTimerRef.current) {
+                        window.clearTimeout(idleTimerRef.current);
+                    }
+                    idleTimerRef.current = window.setTimeout(() => {
+                        setHeightVersion(version => version + 1);
+                    }, RANGE_IDLE_RESET_MS);
+                    return;
+                }
+                setHeightVersion(version => version + 1);
+            });
         }
     }, [containerRef, shouldVirtualize, visibleRange]);
 
     useEffect(() => {
         if (!perfEnabled) return;
         rangeUpdateCount.current += 1;
+        const renderedCount = visibleRange.end - visibleRange.start;
         console.debug('[DocViewer] visible range update', {
             count: rangeUpdateCount.current,
             range: visibleRange,
         });
+        if (renderedCount === 0 && !hasLoggedEmptyRef.current) {
+            console.warn('[DocViewer] empty render window detected', {
+                range: visibleRange,
+            });
+            hasLoggedEmptyRef.current = true;
+        } else if (renderedCount > 0) {
+            hasLoggedEmptyRef.current = false;
+        }
     }, [perfEnabled, visibleRange]);
 
     return useMemo(() => {

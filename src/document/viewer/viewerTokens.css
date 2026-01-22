@@ -86,7 +86,7 @@
 .dv-persona-label {
     font-family: var(--doc-font-family);
     font-size: var(--dv-font-size);
-    font-weight: var(--dv-font-weight-medium);
+    font-weight: var(--dv-font-weight-normal);
     opacity: var(--dv-opacity-primary);
     color: var(--doc-text);
 }

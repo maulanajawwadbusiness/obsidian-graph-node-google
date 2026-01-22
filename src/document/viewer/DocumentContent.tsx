@@ -38,14 +38,14 @@ export const DocumentContent: React.FC<DocumentContentProps> = ({ text, highligh
     }, [perfEnabled, text]);
     const { blocks: visibleBlocks, topSpacerHeight, bottomSpacerHeight } = useVirtualBlocks(blocks, containerRef);
 
-    const contentWrapperStyle: React.CSSProperties = {
+    const contentWrapperStyle = useMemo<React.CSSProperties>(() => ({
         fontFamily: 'var(--doc-font-family)',
         fontSize: 'var(--doc-font-size, 13px)',
         lineHeight: 'var(--doc-line-height, 1.65)',
         fontWeight: 'var(--doc-font-weight)',
         color: 'var(--doc-text)',
         maxWidth: 'var(--doc-max-line-width, 68ch)',
-    };
+    }), []);
 
     useEffect(() => {
         if (!perfEnabled) return;

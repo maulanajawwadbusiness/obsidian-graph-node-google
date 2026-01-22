@@ -109,8 +109,8 @@ Dark mode:
 - Sheet is a small luma lift of the base.
 
 Typography:
-- UI labels use 12px base sizing.
-- Body text defaults to 13px with a line height of 1.65.
+- UI labels use 13px base sizing.
+- Body text defaults to 14px with a line height of 1.65.
 - Paragraph spacing is controlled by `--dv-paragraph-gap`.
 
 Key files:
@@ -161,6 +161,37 @@ Key files:
 
 Canonical reference:
 - `docs/color-tone-grammar.md`
+
+## Ink-in-Water Recipe (Authoritative)
+- Size: 14px
+- Weight: 400
+- Color (dark): `rgba(210, 222, 255, 0.82)`
+- Text shadow: `0 0 0.6px rgba(120, 160, 255, 0.12)`
+- Line height: 1.65
+
+## What Makes Text Look Crunchy (Root Causes)
+- Forced OS smoothing in JS (`WebkitFontSmoothing` / `MozOsxFontSmoothing`) can destabilize glyph rasterization during scroll. We removed it from the document body wrapper to avoid platform-specific artifacts.
+- Small sizes with medium weights on dark backgrounds can make edges bite and amplify contrast shimmer. The viewer header and title now use 13px and weight 400.
+
+## Invariants (Do-Not-Break List)
+- No transform/filter/backdrop-filter/opacity tricks on the scrolling text container (only on sibling/backdrop layers).
+- No heavy shadows on the scrolling layer (micro AA shadow only).
+- No horizontal scroll; wrapping rules remain enforced.
+- Blue-ink family only (avoid green or neutral drift).
+
+## Where the Contract Lives
+- `src/document/viewer/docTheme.ts`: authoritative size, weight, color, and line-height tokens.
+- `src/document/viewer/viewerTokens.css`: viewer UI sizing and micro AA text-shadow.
+- `src/document/viewer/DocumentContent.tsx`: body wrapper styles for document text.
+- `src/popup/NodePopup.tsx` and `src/popup/ChatInput.tsx`: node popup typography alignment.
+
+## Troubleshooting
+If scrolling becomes crunchy again, check these first:
+1. No `WebkitFontSmoothing` or `MozOsxFontSmoothing` added to the document body wrapper.
+2. The scrolling container has no transform/filter/backdrop-filter/opacity < 1.
+3. Body size is 14px and weight is 400; no 500+ weights on 13px UI text.
+4. Only the micro AA text-shadow is applied on the scrolling layer.
+5. Blue-ink colors are preserved (no green/neutral drift).
 
 ## Non-Negotiable Invariants
 - No horizontal scroll in the viewer.

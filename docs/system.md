@@ -1048,3 +1048,30 @@ VITE_OPENAI_API_KEY=sk-...
 - Layout, wrapping, and spacing rules live in `src/document/viewer/viewerTokens.css`.
 - Theme tokens and sheet width linkage live in `src/document/viewer/docTheme.ts`.
 
+---
+
+## Performance and Smoothness Laws (Document Viewer)
+
+- BUTTER SCROLL CONTRACT: scroll must feel continuous, without blanking or popping.
+- NO-BLANK invariant: scrolling must never reveal empty gaps while content is in range.
+- Virtualization is required for large docs and must use pixel-based overscan.
+- Range updates are rAF-throttled and event-driven only.
+- Height measurement should happen idle or on demand, not per-frame.
+- Heavy shadows or blur must not be applied on the scrolling layer.
+
+---
+
+## Visual and Color Tone Grammar (Summary)
+
+- Sacred base tone for dark panels is the blue-ink family (#13131D).
+- Green-leaning grays are forbidden for panel bases or sheets.
+- Document viewer panel and node popup must share the same tone language.
+- Borders and shadows must stay in the same ink family (cool, subdued).
+- Canonical reference lives in `docs/color-tone-grammar.md`.
+
+---
+
+## System Mental Model
+
+- Viewer panel, node popup, and graph are peers inside one membrane.
+- UX goal: obviously there, never intrusive.

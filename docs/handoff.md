@@ -637,3 +637,36 @@ x = Math.max(10, Math.min(x, viewportWidth - popupWidth - 10));
 - Horizontal scroll or clipping: `src/document/viewer/viewerTokens.css`.
 - Sheet width rules: `src/index.css`, `src/document/viewer/docTheme.ts`.
 
+---
+
+## Current Stable State (Document Viewer + Tab)
+
+- Document viewer v1 is stable: peek/open, search, highlights, reveal.
+- Bookmark tab is unified with panel width and always visible.
+- BUTTER SCROLL CONTRACT is in effect for viewer scrolling.
+- No horizontal scroll is enforced at the CSS layer.
+
+---
+
+## Sacred Invariants (Do Not Break)
+
+- No horizontal scrollbar inside the document viewer.
+- No blank pop-in during scroll (NO-BLANK invariant).
+- No per-frame state updates for viewer range changes.
+- No green-leaning tones for panel bases or sheets.
+
+---
+
+## Danger Zones
+
+- Scrolling layer visuals: heavy shadows or blur can break smoothness.
+- Virtualization range logic: overscan and spacing must remain stable.
+- Unstable function references in hooks can cause scroll churn.
+
+---
+
+## Debugging Feel Issues
+
+- If visuals feel flat, compare against `docs/color-tone-grammar.md`.
+- If scroll stutters, inspect rAF-throttling and range updates.
+- Separate React state from paint work; do not bind layout to per-frame updates.

@@ -45,8 +45,6 @@ export const DocumentContent: React.FC<DocumentContentProps> = ({ text, highligh
         fontWeight: 'var(--doc-font-weight)',
         color: 'var(--doc-text)',
         maxWidth: 'var(--doc-max-line-width, 68ch)',
-        WebkitFontSmoothing: 'antialiased',
-        MozOsxFontSmoothing: 'grayscale',
     };
 
     useEffect(() => {

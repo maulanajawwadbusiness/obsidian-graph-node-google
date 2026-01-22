@@ -16,8 +16,10 @@ const POPUP_STYLE: React.CSSProperties = {
     border: 'none',
     borderRadius: '8px',
     padding: '20px',
-    color: 'rgba(180, 190, 210, 0.9)',
-    fontFamily: 'system-ui, -apple-system, sans-serif',
+    color: 'rgba(210, 222, 255, 0.82)',
+    fontFamily: "'Quicksand', 'Inter', system-ui, sans-serif",
+    fontWeight: 400,
+    textShadow: '0 0 0.6px rgba(120, 160, 255, 0.12)',
     backdropFilter: 'blur(0px)',
     boxShadow: '0 8px 32px rgba(0, 0, 0, 0)',
     pointerEvents: 'auto',
@@ -58,7 +60,7 @@ const HEADER_STYLE: React.CSSProperties = {
 const CLOSE_BUTTON_STYLE: React.CSSProperties = {
     background: 'transparent',
     border: 'none',
-    color: 'rgba(180, 190, 210, 0.7)',
+    color: 'rgba(142, 156, 184, 0.68)',
     fontSize: '20px',
     cursor: 'pointer',
     padding: '4px 8px',
@@ -70,11 +72,12 @@ const CONTENT_STYLE: React.CSSProperties = {
     overflowY: 'auto',
     fontSize: '14px',
     lineHeight: '1.6',
+    fontWeight: 400,
 };
 
 const LABEL_STYLE: React.CSSProperties = {
     fontSize: '16px',
-    fontWeight: '600',
+    fontWeight: 500,
     marginBottom: '12px',
     color: 'rgba(99, 171, 255, 0.9)',
 };
@@ -223,8 +226,8 @@ export const NodePopup: React.FC = () => {
                 <button
                     style={CLOSE_BUTTON_STYLE}
                     onClick={closePopup}
-                    onMouseEnter={(e) => (e.currentTarget.style.color = 'rgba(255, 255, 255, 0.9)')}
-                    onMouseLeave={(e) => (e.currentTarget.style.color = 'rgba(180, 190, 210, 0.7)')}
+                    onMouseEnter={(e) => (e.currentTarget.style.color = 'rgba(210, 222, 255, 0.85)')}
+                    onMouseLeave={(e) => (e.currentTarget.style.color = 'rgba(142, 156, 184, 0.68)')}
                     title="Close (ESC)"
                 >
                     ×

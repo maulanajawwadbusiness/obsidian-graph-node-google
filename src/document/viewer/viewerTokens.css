@@ -1,6 +1,6 @@
 .doc-viewer-root {
     /* Typography */
-    --dv-font-size: 12px;
+    --dv-font-size: 13px;
     --dv-font-weight-normal: 400;
     --dv-font-weight-medium: 500;
     --dv-opacity-primary: 0.9;
@@ -52,7 +52,7 @@
 }
 
 .dv-header-title {
-    font-weight: 500;
+    font-weight: var(--dv-font-weight-normal);
     text-transform: none;
     letter-spacing: 0.02em;
     opacity: 0.45;
@@ -147,15 +147,16 @@
     margin: 0 0 var(--dv-space-lg) 0;
     font-family: var(--doc-font-family);
     font-size: var(--dv-font-size);
-    font-weight: var(--dv-font-weight-medium);
+    font-weight: var(--dv-font-weight-normal);
     color: var(--doc-text);
-    opacity: 0.6;
+    opacity: var(--dv-opacity-secondary);
     letter-spacing: 0.01em;
 }
 
 .dv-document-body {
     margin: 0;
     text-shadow: 0 0 0.6px rgba(120, 160, 255, 0.12);
+    text-rendering: optimizeLegibility;
     max-width: 100%;
     min-width: 0;
 }

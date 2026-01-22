@@ -25,24 +25,31 @@ interface TextRun {
     className?: string;
 }
 
-function buildRuns(text: string, blockStart: number, blockEnd: number, highlights?: HighlightRange[]): TextRun[] {
-    if (!highlights || highlights.length === 0) {
-        return [{ start: 0, end: text.length }];
+const MAX_RUN_CHARS = 1800;
+
+function pushRun(
+    runs: TextRun[],
+    start: number,
+    end: number,
+    className?: string
+) {
+    for (let pos = start; pos < end; pos += MAX_RUN_CHARS) {
+        const chunkEnd = Math.min(end, pos + MAX_RUN_CHARS);
+        runs.push({ start: pos, end: chunkEnd, className });
     }
+}
 
-    // Find highlights that intersect this block
-    const relevant = highlights.filter(h =>
-        h.start < blockEnd && h.end > blockStart
-    );
-
-    if (relevant.length === 0) {
-        return [{ start: 0, end: text.length }];
+function buildRuns(text: string, blockStart: number, highlights?: HighlightRange[]): TextRun[] {
+    if (!highlights || highlights.length === 0) {
+        const runs: TextRun[] = [];
+        pushRun(runs, 0, text.length);
+        return runs;
     }
 
     // Build runs by splitting at highlight boundaries
     const boundaries = new Set<number>([0, text.length]);
 
-    for (const highlight of relevant) {
+    for (const highlight of highlights) {
         const localStart = Math.max(0, highlight.start - blockStart);
         const localEnd = Math.min(text.length, highlight.end - blockStart);
         boundaries.add(localStart);
@@ -51,6 +58,7 @@ function buildRuns(text: string, blockStart: number, blockEnd: number, highlight
 
     const sorted = Array.from(boundaries).sort((a, b) => a - b);
     const runs: TextRun[] = [];
+    let highlightIndex = 0;
 
     for (let i = 0; i < sorted.length - 1; i++) {
         const runStart = sorted[i];
@@ -58,18 +66,26 @@ function buildRuns(text: string, blockStart: number, blockEnd: number, highlight
         const globalStart = blockStart + runStart;
         const globalEnd = blockStart + runEnd;
 
-        // Find if this run is highlighted
-        const highlight = relevant.find(h =>
-            h.start <= globalStart && h.end >= globalEnd
-        );
+        while (highlightIndex < highlights.length && highlights[highlightIndex].end <= globalStart) {
+            highlightIndex += 1;
+        }
 
-        runs.push({
-            start: runStart,
-            end: runEnd,
-            className: highlight
-                ? (highlight.id === 'active' ? 'highlight-active' : 'highlight-other')
-                : undefined,
-        });
+        let activeHighlight: HighlightRange | undefined;
+        for (let scan = highlightIndex; scan < highlights.length && highlights[scan].start <= globalStart; scan += 1) {
+            const candidate = highlights[scan];
+            if (candidate.end >= globalEnd) {
+                if (!activeHighlight || candidate.id === 'active') {
+                    activeHighlight = candidate;
+                    if (candidate.id === 'active') break;
+                }
+            }
+        }
+
+        const className = activeHighlight
+            ? (activeHighlight.id === 'active' ? 'highlight-active' : 'highlight-other')
+            : undefined;
+
+        pushRun(runs, runStart, runEnd, className);
     }
 
     return runs;
@@ -84,8 +100,8 @@ const DocumentBlockComponent: React.FC<DocumentBlockProps> = ({
 }) => {
     const perfEnabled = isDocViewerPerfEnabled();
     const runs = useMemo(
-        () => buildRuns(text, start, end, highlights),
-        [text, start, end, highlights]
+        () => buildRuns(text, start, highlights),
+        [text, start, highlights]
     );
 
     const isListItem = LIST_ITEM_PATTERN.test(text);

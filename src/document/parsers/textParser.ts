@@ -3,7 +3,7 @@
  * Handles plain text files (.txt, .md, and other text-based formats)
  */
 
-import type { DocumentParser } from './types';
+import type { DocumentParser, ParserTimingCallback } from './types';
 import type { ParsedDocument } from '../types';
 
 export class TextParser implements DocumentParser {
@@ -16,8 +16,10 @@ export class TextParser implements DocumentParser {
         return ext === 'txt' || ext === 'md' || ext === 'markdown';
     }
 
-    async parse(file: File): Promise<ParsedDocument> {
+    async parse(file: File, onTiming?: ParserTimingCallback): Promise<ParsedDocument> {
         const text = await file.text();
+        onTiming?.('file_read_done');
+        onTiming?.('text_extract_done');
         const words = text.trim().split(/\s+/).filter(w => w.length > 0);
 
         return {

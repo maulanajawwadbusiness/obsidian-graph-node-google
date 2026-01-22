@@ -10,6 +10,15 @@ export interface TextBlock {
     text: string;              // Slice of canonicalText[start:end]
 }
 
+export interface BlockBuildChunk {
+    blocks: TextBlock[];
+    done: boolean;
+}
+
+export interface BlockBuilder {
+    nextChunk: (maxBlocks: number, timeBudgetMs: number) => BlockBuildChunk;
+}
+
 /**
  * Split canonicalText into blocks (paragraphs).
  * Blocks are defined by newline boundaries.
@@ -20,14 +29,12 @@ export function buildBlocks(text: string): TextBlock[] {
     const blocks: TextBlock[] = [];
     const lines = text.split('\n');
     let offset = 0;
-    let id = 0;
-
     for (const line of lines) {
         const start = offset;
         const end = offset + line.length;
 
         blocks.push({
-            blockId: `b${id++}`,
+            blockId: `b${start}`,
             start,
             end: Math.min(end, text.length), // Don't exceed text length
             text: line,
@@ -37,4 +44,49 @@ export function buildBlocks(text: string): TextBlock[] {
     }
 
     return blocks;
+}
+
+/**
+ * Progressive block builder for large documents.
+ * Processes the text incrementally to avoid long main-thread stalls.
+ */
+export function createBlockBuilder(text: string): BlockBuilder {
+    let cursor = 0;
+    let offset = 0;
+    const length = text.length;
+
+    const nextChunk = (maxBlocks: number, timeBudgetMs: number): BlockBuildChunk => {
+        const blocks: TextBlock[] = [];
+        const startTime = performance.now();
+
+        while (cursor <= length && blocks.length < maxBlocks) {
+            if (performance.now() - startTime > timeBudgetMs) {
+                break;
+            }
+
+            const lineEnd = text.indexOf('\n', cursor);
+            const endIndex = lineEnd === -1 ? length : lineEnd;
+            const lineText = text.slice(cursor, endIndex);
+            const start = offset;
+            const end = offset + lineText.length;
+
+            blocks.push({
+                blockId: `b${start}`,
+                start,
+                end: Math.min(end, length),
+                text: lineText,
+            });
+
+            offset = end + 1;
+            if (lineEnd === -1) {
+                cursor = length + 1;
+                break;
+            }
+            cursor = lineEnd + 1;
+        }
+
+        return { blocks, done: cursor > length };
+    };
+
+    return { nextChunk };
 }

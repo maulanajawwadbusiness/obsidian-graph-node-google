@@ -4,7 +4,7 @@
  */
 
 import mammoth from 'mammoth';
-import type { DocumentParser } from './types';
+import type { DocumentParser, ParserTimingCallback } from './types';
 import type { ParsedDocument } from '../types';
 
 export class DocxParser implements DocumentParser {
@@ -19,14 +19,16 @@ export class DocxParser implements DocumentParser {
         return ext === 'docx';
     }
 
-    async parse(file: File): Promise<ParsedDocument> {
+    async parse(file: File, onTiming?: ParserTimingCallback): Promise<ParsedDocument> {
         // Convert File to ArrayBuffer for mammoth
         const arrayBuffer = await file.arrayBuffer();
+        onTiming?.('file_read_done');
 
         // Extract raw text using mammoth
         const result = await mammoth.extractRawText({ arrayBuffer });
 
         const text = result.value;
+        onTiming?.('text_extract_done');
         const warnings: string[] = result.messages
             .filter(msg => msg.type === 'warning')
             .map(msg => msg.message);

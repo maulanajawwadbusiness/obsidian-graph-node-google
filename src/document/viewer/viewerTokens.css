@@ -40,15 +40,8 @@
     position: absolute;
     inset: 0;
     background-color: rgb(var(--panel-bg-rgb));
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
     pointer-events: none;
     z-index: 0;
-}
-
-.doc-viewer-root[data-perf-visuals="flat"] .dv-panel-backdrop {
-    backdrop-filter: none;
-    -webkit-backdrop-filter: none;
 }
 
 .dv-header-title {
@@ -155,9 +148,16 @@
 
 .dv-document-body {
     margin: 0;
-    text-shadow: 0 0 0.6px rgba(120, 160, 255, 0.12);
     max-width: 100%;
     min-width: 0;
+}
+
+.dv-document-loading {
+    font-family: var(--doc-font-family);
+    font-size: var(--dv-font-size);
+    color: var(--doc-muted-text);
+    opacity: 0.7;
+    padding: var(--dv-space-md) 0;
 }
 
 .doc-viewer-root[data-sheet="true"][data-theme="dark"] .dv-document {
@@ -191,6 +191,7 @@
     white-space: normal;
     overflow-wrap: anywhere;
     word-break: break-word;
+    line-break: anywhere;
 }
 
 .dv-document-body p.dv-list-item {

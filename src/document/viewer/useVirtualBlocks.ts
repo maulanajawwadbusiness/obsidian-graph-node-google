@@ -5,6 +5,12 @@
 
 import { useMemo, useState, useEffect, useRef, useLayoutEffect, useCallback } from 'react';
 import type { TextBlock } from './documentModel';
+import {
+    flushDocViewerPerf,
+    isDocViewerPerfEnabled,
+    recordDocViewerRangeUpdate,
+    setDocViewerScrolling,
+} from './docViewerPerf';
 
 const BASE_OVERSCAN_PX = 1400;  // Base pixel overscan above/below viewport
 const FAST_OVERSCAN_PX = 2400;  // Overscan during fast scroll
@@ -25,9 +31,10 @@ export function useVirtualBlocks(
 ): VirtualBlocksResult {
     const shouldVirtualize = allBlocks.length >= VIRTUALIZE_THRESHOLD;
     const [visibleRange, setVisibleRange] = useState({ start: 0, end: Math.min(20, allBlocks.length) });
+    const visibleRangeRef = useRef(visibleRange);
     const blockHeights = useRef(new Map<string, number>());
     const [heightVersion, setHeightVersion] = useState(0);
-    const perfEnabled = typeof window !== 'undefined' && Boolean((window as typeof window & { __DOC_VIEWER_PROFILE__?: boolean }).__DOC_VIEWER_PROFILE__);
+    const perfEnabled = isDocViewerPerfEnabled();
     const rangeUpdateCount = useRef(0);
     const lastScrollTop = useRef(0);
     const lastScrollTs = useRef<number | null>(null);
@@ -35,6 +42,14 @@ export function useVirtualBlocks(
     const idleTimeoutId = useRef<number | null>(null);
     const pendingMeasure = useRef(false);
     const lastOverscanTier = useRef<'base' | 'fast'>('base');
+    const frameIdRef = useRef(0);
+    const frameUpdateCountRef = useRef(0);
+    const lastRangeFrameRef = useRef(0);
+    const hasLoggedEmptyRef = useRef(false);
+
+    useEffect(() => {
+        visibleRangeRef.current = visibleRange;
+    }, [visibleRange]);
 
     const measureHeights = useCallback(() => {
         if (!shouldVirtualize) return;
@@ -85,27 +100,42 @@ export function useVirtualBlocks(
         return low;
     }, [prefixHeights]);
 
-    const updateRange = useCallback((scrollTop: number, viewportHeight: number, overscanPx: number) => {
+    const updateRange = useCallback((scrollTop: number, viewportHeight: number, overscanPx: number, frameId?: number) => {
         const startIndex = findIndexForOffset(Math.max(0, scrollTop - overscanPx));
         const endIndex = Math.min(allBlocks.length, findIndexForOffset(scrollTop + viewportHeight + overscanPx) + 1);
+        const nextRange = { start: startIndex, end: endIndex };
+        const prevRange = visibleRangeRef.current;
+        if (prevRange.start === nextRange.start && prevRange.end === nextRange.end) {
+            return false;
+        }
+        visibleRangeRef.current = nextRange;
+        setVisibleRange(nextRange);
+        rangeUpdateCount.current += 1;
 
-        setVisibleRange(prev => {
-            if (prev.start === startIndex && prev.end === endIndex) {
-                return prev;
+        if (perfEnabled) {
+            const frameKey = frameId ?? 0;
+            if (frameKey !== lastRangeFrameRef.current) {
+                lastRangeFrameRef.current = frameKey;
+                frameUpdateCountRef.current = 0;
             }
-            return { start: startIndex, end: endIndex };
-        });
-    }, [allBlocks.length, findIndexForOffset]);
+            frameUpdateCountRef.current += 1;
+            recordDocViewerRangeUpdate(frameUpdateCountRef.current);
+        }
+
+        return true;
+    }, [allBlocks.length, findIndexForOffset, perfEnabled]);
 
     useEffect(() => {
         if (!shouldVirtualize) {
-            setVisibleRange({ start: 0, end: allBlocks.length });
+            const fullRange = { start: 0, end: allBlocks.length };
+            visibleRangeRef.current = fullRange;
+            setVisibleRange(fullRange);
             return;
         }
         const container = containerRef.current;
         if (!container) return;
 
-        const handleScroll = () => {
+        const handleScroll = (frameId?: number) => {
             const scrollTop = container.scrollTop;
             const viewportHeight = container.clientHeight;
             const now = performance.now();
@@ -126,13 +156,17 @@ export function useVirtualBlocks(
 
             lastScrollTop.current = scrollTop;
             lastScrollTs.current = now;
-            isScrolling.current = true;
+            if (!isScrolling.current) {
+                isScrolling.current = true;
+                setDocViewerScrolling(true);
+            }
 
             if (idleTimeoutId.current) {
                 clearTimeout(idleTimeoutId.current);
             }
             idleTimeoutId.current = window.setTimeout(() => {
                 isScrolling.current = false;
+                setDocViewerScrolling(false);
                 if (pendingMeasure.current) {
                     pendingMeasure.current = false;
                     measureHeights();
@@ -140,9 +174,12 @@ export function useVirtualBlocks(
                 const currentScrollTop = container.scrollTop;
                 const currentViewportHeight = container.clientHeight;
                 updateRange(currentScrollTop, currentViewportHeight, BASE_OVERSCAN_PX);
+                if (perfEnabled) {
+                    flushDocViewerPerf('scroll-idle');
+                }
             }, SCROLL_IDLE_MS);
 
-            updateRange(scrollTop, viewportHeight, overscanPx);
+            updateRange(scrollTop, viewportHeight, overscanPx, frameId);
         };
 
         // Initial calculation
@@ -154,7 +191,8 @@ export function useVirtualBlocks(
             if (rafId) return;
             rafId = requestAnimationFrame(() => {
                 rafId = null;
-                handleScroll();
+                frameIdRef.current += 1;
+                handleScroll(frameIdRef.current);
             });
         };
 
@@ -166,8 +204,12 @@ export function useVirtualBlocks(
             if (idleTimeoutId.current) {
                 clearTimeout(idleTimeoutId.current);
             }
+            if (isScrolling.current) {
+                setDocViewerScrolling(false);
+                isScrolling.current = false;
+            }
         };
-    }, [allBlocks, containerRef, findIndexForOffset, measureHeights, perfEnabled, shouldVirtualize, updateRange]);
+    }, [allBlocks, containerRef, measureHeights, perfEnabled, shouldVirtualize, updateRange]);
 
     // Measure block heights when they render
     useLayoutEffect(() => {
@@ -181,11 +223,20 @@ export function useVirtualBlocks(
 
     useEffect(() => {
         if (!perfEnabled) return;
-        rangeUpdateCount.current += 1;
+        const renderedCount = visibleRange.end - visibleRange.start;
         console.debug('[DocViewer] visible range update', {
             count: rangeUpdateCount.current,
             range: visibleRange,
+            renderedCount,
         });
+        if (renderedCount === 0 && !hasLoggedEmptyRef.current) {
+            console.warn('[DocViewer] empty render window detected', {
+                range: visibleRange,
+            });
+            hasLoggedEmptyRef.current = true;
+        } else if (renderedCount > 0) {
+            hasLoggedEmptyRef.current = false;
+        }
     }, [perfEnabled, visibleRange]);
 
     return useMemo(() => {

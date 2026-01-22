@@ -1,5 +1,6 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useEffect } from 'react';
 import type { HighlightRange } from '../types';
+import { isDocViewerPerfEnabled, recordDocViewerRender } from './docViewerPerf';
 
 const LIST_ITEM_PATTERN = /^(\s*)(\d+\.|[-*])\s+/;
 const LIST_INTRO_PATTERN = /:\s*$/;
@@ -81,6 +82,7 @@ const DocumentBlockComponent: React.FC<DocumentBlockProps> = ({
     text,
     highlights
 }) => {
+    const perfEnabled = isDocViewerPerfEnabled();
     const runs = useMemo(
         () => buildRuns(text, start, end, highlights),
         [text, start, end, highlights]
@@ -93,6 +95,11 @@ const DocumentBlockComponent: React.FC<DocumentBlockProps> = ({
         isListItem && 'dv-list-item',
         isListIntro && 'dv-list-intro',
     ].filter(Boolean).join(' ') || undefined;
+
+    useEffect(() => {
+        if (!perfEnabled) return;
+        recordDocViewerRender('block');
+    });
 
     return (
         <p

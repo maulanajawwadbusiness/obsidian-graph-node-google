@@ -1,6 +1,7 @@
 import { createContext, useContext, useReducer, ReactNode, useRef, useEffect, useCallback, useMemo, type MutableRefObject } from 'react';
 import type { DocumentState, DocumentStatus, ParsedDocument, ViewerMode, DocThemeMode, HighlightRange } from '../document/types';
 import { WorkerClient } from '../document/workerClient';
+import { isDocViewerPerfEnabled, recordDocViewerStoreUpdate } from '../document/viewer/docViewerPerf';
 
 /**
  * Document Store - React Context for managing parsed document state
@@ -100,6 +101,7 @@ export function DocumentProvider({ children }: { children: ReactNode }) {
     const [state, dispatch] = useReducer(documentReducer, initialState);
     const workerClientRef = useRef<WorkerClient | null>(null);
     const viewerApiRef = useRef<DocumentViewerApi | null>(null);
+    const perfEnabled = isDocViewerPerfEnabled();
 
     // Initialize worker on mount
     useEffect(() => {
@@ -108,6 +110,11 @@ export function DocumentProvider({ children }: { children: ReactNode }) {
             workerClientRef.current?.terminate();
         };
     }, []);
+
+    useEffect(() => {
+        if (!perfEnabled) return;
+        recordDocViewerStoreUpdate();
+    }, [perfEnabled, state]);
 
     const parseFile = useCallback(async (file: File): Promise<ParsedDocument | null> => {
         if (!workerClientRef.current) {

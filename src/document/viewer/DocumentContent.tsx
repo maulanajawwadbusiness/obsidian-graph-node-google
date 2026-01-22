@@ -3,6 +3,7 @@ import { buildBlocks } from './documentModel';
 import { DocumentBlock } from './DocumentBlock';
 import type { HighlightRange } from '../types';
 import { useVirtualBlocks } from './useVirtualBlocks';
+import { isDocViewerPerfEnabled, recordDocViewerRender } from './docViewerPerf';
 
 /**
  * DocumentContent - Renders the document text as blocks
@@ -16,7 +17,7 @@ export interface DocumentContentProps {
 }
 
 export const DocumentContent: React.FC<DocumentContentProps> = ({ text, highlights, containerRef }) => {
-    const perfEnabled = typeof window !== 'undefined' && Boolean((window as typeof window & { __DOC_VIEWER_PROFILE__?: boolean }).__DOC_VIEWER_PROFILE__);
+    const perfEnabled = isDocViewerPerfEnabled();
     const renderCountRef = useRef(0);
     const buildCountRef = useRef(0);
     renderCountRef.current += 1;
@@ -50,6 +51,7 @@ export const DocumentContent: React.FC<DocumentContentProps> = ({ text, highligh
 
     useEffect(() => {
         if (!perfEnabled) return;
+        recordDocViewerRender('content');
         console.debug('[DocViewer] DocumentContent render', {
             count: renderCountRef.current,
             visibleBlocks: visibleBlocks.length,

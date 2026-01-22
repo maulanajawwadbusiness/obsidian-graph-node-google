@@ -24,6 +24,8 @@ export const DocumentViewerPanel: React.FC = () => {
     const contentRef = useRef<HTMLDivElement>(null);
     const pendingScrollRef = useRef<number | null>(null);
     const lastDocIdRef = useRef<string | null>(null);
+    const perfFlatVisuals = typeof window !== 'undefined'
+        && Boolean((window as typeof window & { __DOC_VIEWER_FLAT_VISUALS__?: boolean }).__DOC_VIEWER_FLAT_VISUALS__);
 
     const isPeek = state.viewerMode === 'peek';
     const hasDocument = !!state.activeDocument;
@@ -178,7 +180,7 @@ export const DocumentViewerPanel: React.FC = () => {
         width: isPeek ? '0px' : 'var(--panel-width)',
         height: '100%',
         backgroundColor: 'rgb(var(--panel-bg-rgb))',
-        backdropFilter: 'blur(12px)',
+        backdropFilter: perfFlatVisuals ? 'none' : 'blur(12px)',
         transition: isPeek
             ? 'width 180ms cubic-bezier(0.22, 1, 0.36, 1)'  // Peek (collapse)
             : 'width 220ms cubic-bezier(0.22, 1, 0.36, 1)', // Open (expand)
@@ -186,6 +188,12 @@ export const DocumentViewerPanel: React.FC = () => {
         zIndex: 100,
         ...themeVars,
     };
+
+    const sliverShadow = isPeek && hasDocument
+        ? 'inset 1px 0 2px rgba(0, 0, 0, 0.15), inset 0 0 8px rgba(var(--panel-bg-rgb), 0.3)'
+        : !isPeek
+            ? 'inset 0 1px 3px rgba(6, 8, 18, 0.18), inset 0 0 12px rgba(6, 8, 18, 0.08)'
+            : 'none';
 
     const sliverStyle: React.CSSProperties = {
         position: 'absolute',
@@ -202,11 +210,7 @@ export const DocumentViewerPanel: React.FC = () => {
         opacity: isPeek ? 0.3 : 1,
         transition: 'opacity 180ms ease-out, background-color 180ms ease-out',
         // Subtle texture/depth for sheet edge
-        boxShadow: isPeek && hasDocument
-            ? 'inset 1px 0 2px rgba(0, 0, 0, 0.15), inset 0 0 8px rgba(var(--panel-bg-rgb), 0.3)'
-            : !isPeek
-                ? 'inset 0 1px 3px rgba(6, 8, 18, 0.18), inset 0 0 12px rgba(6, 8, 18, 0.08)'
-                : 'none',
+        boxShadow: perfFlatVisuals ? 'none' : sliverShadow,
     };
 
     const contentStyle: React.CSSProperties = {
@@ -220,6 +224,7 @@ export const DocumentViewerPanel: React.FC = () => {
             className="doc-viewer-root"
             data-sheet={isPeek ? 'false' : 'true'}
             data-theme={state.docThemeMode}
+            data-perf-visuals={perfFlatVisuals ? 'flat' : 'rich'}
             style={panelStyle}
             onMouseDown={stopPropagation}
             onMouseMove={stopPropagation}

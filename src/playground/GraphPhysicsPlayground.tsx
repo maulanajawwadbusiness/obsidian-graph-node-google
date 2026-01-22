@@ -174,7 +174,7 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
             const centerX = rect.left + rect.width / 2;
             const centerY = rect.top + rect.height / 2;
             const distance = Math.hypot(e.clientX - centerX, e.clientY - centerY);
-            const nextProximity = distance <= 50 ? 'close' : distance <= 100 ? 'near' : 'far';
+            const nextProximity = distance <= 200 ? 'close' : distance <= 400 ? 'near' : 'far';
             setTabProximity((prev) => (prev === nextProximity ? prev : nextProximity));
         };
 

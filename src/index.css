@@ -39,6 +39,7 @@
   --text-primary: hsl(220, 10%, 90%);
   --text-secondary: hsl(220, 10%, 60%);
   --text-muted: hsl(220, 10%, 40%);
+  --bookmark-tab-scale: 1.2;
 }
 
 body {

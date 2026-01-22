@@ -42,6 +42,7 @@ export function PresenceStrip({
                 onClick={onClick}
                 aria-label={viewerMode === 'open' ? 'Close document panel' : 'Open document panel'}
                 aria-expanded={viewerMode === 'open'}
+                title="Open Document Viewer"
             >
                 {/* Document icon */}
                 <img

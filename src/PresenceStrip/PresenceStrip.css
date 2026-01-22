@@ -26,6 +26,8 @@
    The Bookmark Tab
    ───────────────────────────────────────────── */
 .bookmark-tab {
+    --tab-scale: var(--bookmark-tab-scale, 1);
+
     /* Reset button styles */
     border: none;
     background: none;
@@ -35,14 +37,14 @@
     cursor: pointer;
     pointer-events: auto;
     outline: none;
-    box-shadow: 0 4px 24px hsla(42, 40%, 45%, 0);
+    box-shadow: 0 calc(4px * var(--tab-scale)) calc(24px * var(--tab-scale)) hsla(42, 40%, 45%, 0);
 
     /* Dimensions */
-    width: 44px;
-    height: 52px;
+    width: calc(44px * var(--tab-scale));
+    height: calc(52px * var(--tab-scale));
 
     /* D-shape: rounded only on right side */
-    border-radius: 0 20px 20px 0;
+    border-radius: 0 calc(20px * var(--tab-scale)) calc(20px * var(--tab-scale)) 0;
 
     /* Background: same hue as void, barely lifted */
     background: linear-gradient(135deg,
@@ -65,7 +67,7 @@
     overflow: visible;
 
     /* Concave fillets via mask cutouts (top-left & bottom-left) */
-    --fillet-size: 16px;
+    --fillet-size: calc(16px * var(--tab-scale));
     --fillet-enabled: 0;
     --fillet-mask: none;
     -webkit-mask-image: var(--fillet-mask);
@@ -100,9 +102,9 @@
     position: absolute;
     top: 0;
     right: 0;
-    width: 14px;
+    width: calc(14px * var(--tab-scale));
     height: 100%;
-    border-radius: 0 20px 20px 0;
+    border-radius: 0 calc(20px * var(--tab-scale)) calc(20px * var(--tab-scale)) 0;
     background: linear-gradient(to right,
             transparent 0%,
             hsla(220, 20%, 6%, 0.65) 100%);
@@ -116,8 +118,8 @@
    Document Icon
    ───────────────────────────────────────────── */
 .tab-icon {
-    width: 18px;
-    height: 18px;
+    width: calc(18px * var(--tab-scale));
+    height: calc(18px * var(--tab-scale));
 
     /* Ghost: blurred and dim on idle */
     opacity: 0.8;
@@ -181,7 +183,7 @@
 
     /* Warm glow appears (delayed 100ms) */
     box-shadow:
-        0 4px 24px hsla(42, 40%, 45%, 0.20);
+        0 calc(4px * var(--tab-scale)) calc(24px * var(--tab-scale)) hsla(42, 40%, 45%, 0.20);
 
     /* Background warms up slightly */
     background: linear-gradient(135deg,
@@ -211,7 +213,7 @@
 
     /* Subtle constant glow */
     box-shadow:
-        0 0 16px hsla(42, 40%, 45%, 0.12);
+        0 0 calc(16px * var(--tab-scale)) hsla(42, 40%, 45%, 0.12);
 
     background: linear-gradient(135deg,
             hsl(220, 14%, 16%) 0%,
@@ -232,7 +234,7 @@
     opacity: 1;
     transform: scale(1.02);
     box-shadow:
-        0 4px 24px hsla(42, 40%, 45%, 0.25);
+        0 calc(4px * var(--tab-scale)) calc(24px * var(--tab-scale)) hsla(42, 40%, 45%, 0.25);
 }
 
 /* ─────────────────────────────────────────────
@@ -242,5 +244,5 @@
     outline: none;
     opacity: 1;
     box-shadow:
-        0 4px 24px hsla(42, 40%, 45%, 0.25);
+        0 calc(4px * var(--tab-scale)) calc(24px * var(--tab-scale)) hsla(42, 40%, 45%, 0.25);
 }

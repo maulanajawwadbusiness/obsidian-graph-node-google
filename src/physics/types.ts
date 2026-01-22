@@ -49,6 +49,7 @@ export interface PhysicsLink {
   source: string; // Node ID
   target: string; // Node ID
   length?: number; // Optional override for resting length
+  restLength?: number; // Optional override for resting length
   strength?: number; // Optional override for stiffness
 
   // Organic Variation (Multipliers)

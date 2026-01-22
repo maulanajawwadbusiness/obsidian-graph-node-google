@@ -1,4 +1,3 @@
-import type { PhysicsEngine } from '../../engine';
 import type { PhysicsNode } from '../../types';
 import { getPassStats, type DebugStats } from '../stats';
 import { logVelocityDeLocking } from './debugVelocity';
@@ -17,7 +16,6 @@ import {
  * Allows nodes to slide relative to each other during early expansion.
  */
 export const applyDenseCoreVelocityDeLocking = (
-    engine: PhysicsEngine,
     nodeList: PhysicsNode[],
     energy: number,
     stats: DebugStats

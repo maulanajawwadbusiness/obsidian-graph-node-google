@@ -252,8 +252,8 @@ export class PhysicsEngine {
         const { energy, forceScale, effectiveDamping, maxVelocityEffective } = computeEnergyEnvelope(this.lifecycle);
 
         // 2. Apply Core Forces (scaled by energy)
-        applyForcePass(this, nodeList, forceScale, dt, debugStats, preRollActive, energy, this.frameIndex);
-        applyDragVelocity(this, nodeList, dt, debugStats);
+        applyForcePass(this, nodeList, forceScale, debugStats, preRollActive, energy, this.frameIndex);
+        applyDragVelocity(this, dt, debugStats);
         applyPreRollVelocity(this, nodeList, preRollActive, debugStats);
 
         // 4. Integrate (always runs, never stops)
@@ -268,22 +268,22 @@ export class PhysicsEngine {
         applyExpansionResistance(this, nodeList, nodeDegreeEarly, energy, debugStats);
 
         // Dense-core velocity de-locking (micro-slip) - breaks rigid-body lock
-        applyDenseCoreVelocityDeLocking(this, nodeList, energy, debugStats);
+        applyDenseCoreVelocityDeLocking(nodeList, energy, debugStats);
 
         // Static friction bypass - breaks zero-velocity rest state
         applyStaticFrictionBypass(this, nodeList, energy, debugStats);
 
         // Angular velocity decoherence - breaks velocity orientation correlation
-        applyAngularVelocityDecoherence(this, nodeList, energy, debugStats);
+        applyAngularVelocityDecoherence(nodeList, energy, debugStats);
 
         // Local phase diffusion - breaks oscillation synchronization (shape memory eraser)
-        applyLocalPhaseDiffusion(this, nodeList, energy, debugStats);
+        applyLocalPhaseDiffusion(nodeList, energy, debugStats);
 
         // Low-force stagnation escape - breaks rest-position preference (edge shear version)
         applyEdgeShearStagnationEscape(this, nodeList, energy, debugStats);
 
         // Dense-core inertia relaxation - erases momentum memory in jammed nodes
-        applyDenseCoreInertiaRelaxation(this, nodeList, energy, debugStats);
+        applyDenseCoreInertiaRelaxation(nodeList, energy, debugStats);
 
         // =====================================================================
         // PER-NODE CORRECTION BUDGET SYSTEM

@@ -1,10 +1,8 @@
 import type { PhysicsEngine } from '../../engine';
-import type { PhysicsNode } from '../../types';
 import { getPassStats, type DebugStats } from '../stats';
 
 export const applyDragVelocity = (
     engine: PhysicsEngine,
-    nodeList: PhysicsNode[],
     dt: number,
     stats: DebugStats
 ) => {

@@ -1,4 +1,3 @@
-import type { PhysicsEngine } from '../../engine';
 import type { PhysicsNode } from '../../types';
 import { getPassStats, type DebugStats } from '../stats';
 
@@ -18,7 +17,6 @@ import { getPassStats, type DebugStats } from '../stats';
  * Result: Dense core shears and swirls instead of drifting as a unit.
  */
 export const applyAngularVelocityDecoherence = (
-    engine: PhysicsEngine,
     nodeList: PhysicsNode[],
     energy: number,
     stats: DebugStats

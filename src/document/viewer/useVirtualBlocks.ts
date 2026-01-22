@@ -135,6 +135,9 @@ export function useVirtualBlocks(
         const container = containerRef.current;
         if (!container) return;
 
+        // PERF GUARD: avoid adding new state updates in this scroll path.
+        // Keep scroll work to range calculation only. Heavy work should happen
+        // on doc load, search submit, or idle callbacks.
         const handleScroll = (frameId?: number) => {
             const scrollTop = container.scrollTop;
             const viewportHeight = container.clientHeight;

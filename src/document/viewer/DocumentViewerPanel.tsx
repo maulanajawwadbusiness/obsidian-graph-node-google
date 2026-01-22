@@ -200,7 +200,9 @@ export const DocumentViewerPanel: React.FC = () => {
         // Subtle texture/depth for sheet edge
         boxShadow: isPeek && hasDocument
             ? 'inset 1px 0 2px rgba(0, 0, 0, 0.15), inset 0 0 8px rgba(var(--panel-bg-rgb), 0.3)'
-            : 'none',
+            : !isPeek
+                ? 'inset 0 1px 3px rgba(0, 0, 0, 0.1), inset 0 0 12px rgba(0, 0, 0, 0.05)'
+                : 'none',
     };
 
     const contentStyle: React.CSSProperties = {
@@ -212,6 +214,8 @@ export const DocumentViewerPanel: React.FC = () => {
     return (
         <div
             className="doc-viewer-root"
+            data-sheet={isPeek ? 'false' : 'true'}
+            data-theme={state.docThemeMode}
             style={panelStyle}
             onMouseDown={stopPropagation}
             onMouseMove={stopPropagation}
@@ -221,7 +225,7 @@ export const DocumentViewerPanel: React.FC = () => {
                 {!isPeek && (
                     <>
                         <header className="dv-header">
-                            <span className="dv-header-title">DOCUMENT VIEWER</span>
+                            <span className="dv-header-title">Document Viewer</span>
                             <div className="dv-header-actions">
                                 <button
                                     type="button"

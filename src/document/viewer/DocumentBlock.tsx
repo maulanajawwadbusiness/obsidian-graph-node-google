@@ -1,6 +1,9 @@
 import React, { useMemo } from 'react';
 import type { HighlightRange } from '../types';
 
+const LIST_ITEM_PATTERN = /^(\s*)(\d+\.|[-*])\s+/;
+const LIST_INTRO_PATTERN = /:\s*$/;
+
 /**
  * DocumentBlock - Individual paragraph/block renderer with highlight support
  * Renders a single TextBlock with data-start and data-end attributes
@@ -83,16 +86,20 @@ export const DocumentBlock: React.FC<DocumentBlockProps> = ({
         [text, start, end, highlights]
     );
 
-    const blockStyle: React.CSSProperties = {
-        marginBottom: 'var(--doc-paragraph-gap, 0.75em)',
-    };
+    const isListItem = LIST_ITEM_PATTERN.test(text);
+    const isListIntro = !isListItem && LIST_INTRO_PATTERN.test(text);
+
+    const blockClassName = [
+        isListItem && 'dv-list-item',
+        isListIntro && 'dv-list-intro',
+    ].filter(Boolean).join(' ') || undefined;
 
     return (
         <p
             data-block-id={blockId}
             data-start={start}
             data-end={end}
-            style={blockStyle}
+            className={blockClassName}
         >
             {runs.map((run) => (
                 <span

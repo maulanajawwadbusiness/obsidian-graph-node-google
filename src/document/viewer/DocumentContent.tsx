@@ -1,8 +1,8 @@
-import React, { useMemo, useRef, useEffect, useState } from 'react';
+import React, { useMemo, useRef, useEffect, useState, useCallback } from 'react';
 import { createBlockBuilder, type TextBlock } from './documentModel';
 import { DocumentBlock } from './DocumentBlock';
 import type { HighlightRange } from '../types';
-import { useVirtualBlocks } from './useVirtualBlocks';
+import { useVirtualBlocks, type VirtualizedBlock } from './useVirtualBlocks';
 import { isDocViewerPerfEnabled, markDocViewerPerf, recordDocViewerRender, reportDocViewerPerf } from './docViewerPerf';
 
 /**
@@ -25,6 +25,10 @@ const FIRST_CHUNK_MIN_BLOCKS = 30;
 const CHUNK_BLOCK_LIMIT = 300;
 const FIRST_CHUNK_TIME_BUDGET_MS = 10;
 const HYDRATE_CHUNK_TIME_BUDGET_MS = 12;
+const PRIORITY_CHUNK_BLOCK_LIMIT = 700;
+const PRIORITY_CHUNK_TIME_BUDGET_MS = 28;
+const PRIORITY_BUILD_WINDOW_MS = 1800;
+const PLACEHOLDER_SEGMENT_BLOCKS = 20;
 
 const docBlockCache = new Map<string, TextBlock[]>();
 
@@ -43,8 +47,19 @@ export const DocumentContent: React.FC<DocumentContentProps> = ({
     const firstPaintMarkedRef = useRef(false);
     const blocksRef = useRef<TextBlock[]>([]);
     const buildTokenRef = useRef(0);
-    const [blocks, setBlocks] = useState<TextBlock[]>([]);
-    const [isHydrating, setIsHydrating] = useState(false);
+    const priorityUntilRef = useRef(0);
+    const scheduleChunkRef = useRef<((isFirstChunk: boolean, forcePriority?: boolean) => void) | null>(null);
+    const estimatedTotalBlocksRef = useRef<number | null>(null);
+    const [hydrationState, setHydrationState] = useState<{
+        blocks: TextBlock[];
+        isHydrating: boolean;
+        estimatedTotalBlocks: number | null;
+    }>({
+        blocks: [],
+        isHydrating: false,
+        estimatedTotalBlocks: null,
+    });
+    const { blocks, isHydrating, estimatedTotalBlocks } = hydrationState;
     renderCountRef.current += 1;
 
     useEffect(() => {
@@ -52,11 +67,25 @@ export const DocumentContent: React.FC<DocumentContentProps> = ({
     }, [blocks]);
 
     useEffect(() => {
+        estimatedTotalBlocksRef.current = estimatedTotalBlocks;
+    }, [estimatedTotalBlocks]);
+
+    const requestHydrationPriority = useCallback(() => {
+        priorityUntilRef.current = performance.now() + PRIORITY_BUILD_WINDOW_MS;
+        scheduleChunkRef.current?.(false, true);
+    }, []);
+
+    useEffect(() => {
         buildTokenRef.current += 1;
         if (!text) {
             builderRef.current = null;
-            setBlocks([]);
-            setIsHydrating(false);
+            setHydrationState({
+                blocks: [],
+                isHydrating: false,
+                estimatedTotalBlocks: null,
+            });
+            priorityUntilRef.current = 0;
+            scheduleChunkRef.current = null;
             firstChunkDoneRef.current = false;
             firstPaintMarkedRef.current = false;
             return;
@@ -66,8 +95,13 @@ export const DocumentContent: React.FC<DocumentContentProps> = ({
 
         const cached = docId ? docBlockCache.get(docId) : null;
         if (cached) {
-            setBlocks(cached);
-            setIsHydrating(false);
+            setHydrationState({
+                blocks: cached,
+                isHydrating: false,
+                estimatedTotalBlocks: cached.length,
+            });
+            priorityUntilRef.current = 0;
+            scheduleChunkRef.current = null;
             firstChunkDoneRef.current = true;
             firstPaintMarkedRef.current = false;
             markDocViewerPerf('block_build_first_chunk_done');
@@ -80,10 +114,14 @@ export const DocumentContent: React.FC<DocumentContentProps> = ({
         buildScheduledRef.current = false;
         firstChunkDoneRef.current = false;
         firstPaintMarkedRef.current = false;
-        setBlocks([]);
-        setIsHydrating(true);
+        setHydrationState({
+            blocks: [],
+            isHydrating: true,
+            estimatedTotalBlocks: null,
+        });
+        priorityUntilRef.current = 0;
 
-        const scheduleChunk = (isFirstChunk: boolean) => {
+        const scheduleChunk = (isFirstChunk: boolean, forcePriority = false) => {
             if (buildScheduledRef.current) return;
             buildScheduledRef.current = true;
             const buildToken = buildTokenRef.current;
@@ -103,51 +141,111 @@ export const DocumentContent: React.FC<DocumentContentProps> = ({
                 const estimatedBlocks = viewportHeight
                     ? Math.ceil(viewportHeight / ESTIMATED_BLOCK_HEIGHT) + FIRST_CHUNK_MIN_BLOCKS
                     : FIRST_CHUNK_MIN_BLOCKS;
-                const maxBlocks = isFirstChunk ? estimatedBlocks : CHUNK_BLOCK_LIMIT;
-                const budget = isFirstChunk ? FIRST_CHUNK_TIME_BUDGET_MS : HYDRATE_CHUNK_TIME_BUDGET_MS;
+                const isPriority = forcePriority || performance.now() < priorityUntilRef.current;
+                const maxBlocks = isFirstChunk
+                    ? estimatedBlocks
+                    : (isPriority ? PRIORITY_CHUNK_BLOCK_LIMIT : CHUNK_BLOCK_LIMIT);
+                const budget = isFirstChunk
+                    ? FIRST_CHUNK_TIME_BUDGET_MS
+                    : (isPriority ? PRIORITY_CHUNK_TIME_BUDGET_MS : HYDRATE_CHUNK_TIME_BUDGET_MS);
                 const chunk = builder.nextChunk(maxBlocks, budget);
-
-                if (chunk.blocks.length > 0) {
-                    setBlocks(prev => {
-                        const nextBlocks = prev.concat(chunk.blocks);
-                        return nextBlocks;
-                    });
-                }
+                const nextBlocks = chunk.blocks.length > 0
+                    ? blocksRef.current.concat(chunk.blocks)
+                    : blocksRef.current;
+                let nextEstimate = estimatedTotalBlocksRef.current;
 
                 if (!firstChunkDoneRef.current && chunk.blocks.length > 0) {
                     firstChunkDoneRef.current = true;
                     markDocViewerPerf('block_build_first_chunk_done');
+                    const totalChars = text.length + 1;
+                    const totalSampled = chunk.blocks.reduce((sum, block) => sum + Math.max(1, block.text.length + 1), 0);
+                    const avgChars = totalSampled > 0 ? totalSampled / chunk.blocks.length : Math.max(1, totalChars);
+                    const estimate = Math.max(chunk.blocks.length, Math.ceil(totalChars / avgChars));
+                    nextEstimate = Math.max(estimate, nextBlocks.length);
+                }
+                if (nextEstimate === null || nextBlocks.length > nextEstimate) {
+                    nextEstimate = nextBlocks.length;
+                }
+                if (chunk.done) {
+                    nextEstimate = nextBlocks.length;
                 }
 
+                setHydrationState({
+                    blocks: nextBlocks,
+                    isHydrating: !chunk.done,
+                    estimatedTotalBlocks: nextEstimate,
+                });
+
                 if (chunk.done) {
-                    setIsHydrating(false);
                     if (docId) {
-                        const finalBlocks = blocksRef.current.concat(chunk.blocks);
-                        docBlockCache.set(docId, finalBlocks);
+                        docBlockCache.set(docId, nextBlocks);
                     }
                     markDocViewerPerf('hydrate_done');
                     reportDocViewerPerf();
                     buildScheduledRef.current = false;
                 } else {
                     buildScheduledRef.current = false;
-                    scheduleChunk(false);
+                    scheduleChunk(false, isPriority);
                 }
             };
 
             const win = window as Window & { requestIdleCallback?: typeof requestIdleCallback };
-            if (win.requestIdleCallback) {
+            if (!forcePriority && win.requestIdleCallback) {
                 win.requestIdleCallback(runChunk);
             } else {
                 win.setTimeout(runChunk, 0);
             }
         };
 
+        scheduleChunkRef.current = scheduleChunk;
         scheduleChunk(true);
     }, [containerRef, docId, text]);
+    const renderBlocks = useMemo<VirtualizedBlock[]>(() => {
+        if (!isHydrating || !estimatedTotalBlocks || blocks.length === 0) {
+            return blocks;
+        }
+        const remaining = estimatedTotalBlocks - blocks.length;
+        if (remaining <= 0) {
+            return blocks;
+        }
+        const segmentSize = PLACEHOLDER_SEGMENT_BLOCKS;
+        const placeholders: VirtualizedBlock[] = [];
+        const firstSegmentIndex = Math.floor(blocks.length / segmentSize);
+        const firstSegmentStart = blocks.length;
+        const firstSegmentEnd = Math.min(estimatedTotalBlocks, (firstSegmentIndex + 1) * segmentSize);
+        const firstSegmentCount = Math.max(0, firstSegmentEnd - firstSegmentStart);
+        if (firstSegmentCount > 0) {
+            placeholders.push({
+                blockId: `ph-${firstSegmentIndex}`,
+                start: -1,
+                end: -1,
+                text: '',
+                kind: 'placeholder',
+                estimatedHeight: Math.max(ESTIMATED_BLOCK_HEIGHT, firstSegmentCount * ESTIMATED_BLOCK_HEIGHT),
+            });
+        }
+        for (let segmentIndex = firstSegmentIndex + 1; segmentIndex * segmentSize < estimatedTotalBlocks; segmentIndex += 1) {
+            const segmentStart = segmentIndex * segmentSize;
+            const segmentEnd = Math.min(estimatedTotalBlocks, segmentStart + segmentSize);
+            const segmentCount = Math.max(0, segmentEnd - segmentStart);
+            if (segmentCount <= 0) continue;
+            placeholders.push({
+                blockId: `ph-${segmentIndex}`,
+                start: -1,
+                end: -1,
+                text: '',
+                kind: 'placeholder',
+                estimatedHeight: Math.max(ESTIMATED_BLOCK_HEIGHT, segmentCount * ESTIMATED_BLOCK_HEIGHT),
+            });
+        }
+        return blocks.concat(placeholders);
+    }, [blocks, estimatedTotalBlocks, isHydrating]);
+
     const { blocks: visibleBlocks, topSpacerHeight, bottomSpacerHeight } = useVirtualBlocks(
-        blocks,
+        renderBlocks,
         containerRef,
-        layoutVersion
+        layoutVersion,
+        { isHydrating, onSeekIntent: requestHydrationPriority }
     );
 
     const sortedHighlights = useMemo(() => {
@@ -222,14 +320,23 @@ export const DocumentContent: React.FC<DocumentContentProps> = ({
             )}
             {topSpacerHeight > 0 && <div style={{ height: topSpacerHeight }} />}
             {visibleBlocks.map(block => (
-                <DocumentBlock
-                    key={block.blockId}
-                    blockId={block.blockId}
-                    start={block.start}
-                    end={block.end}
-                    text={block.text}
-                    highlights={blockHighlights?.get(block.blockId)}
-                />
+                block.kind === 'placeholder' ? (
+                    <div
+                        key={block.blockId}
+                        className="dv-block-placeholder"
+                        data-block-id={block.blockId}
+                        style={{ height: block.estimatedHeight ?? ESTIMATED_BLOCK_HEIGHT }}
+                    />
+                ) : (
+                    <DocumentBlock
+                        key={block.blockId}
+                        blockId={block.blockId}
+                        start={block.start}
+                        end={block.end}
+                        text={block.text}
+                        highlights={blockHighlights?.get(block.blockId)}
+                    />
+                )
             ))}
             {bottomSpacerHeight > 0 && <div style={{ height: bottomSpacerHeight }} />}
         </div>

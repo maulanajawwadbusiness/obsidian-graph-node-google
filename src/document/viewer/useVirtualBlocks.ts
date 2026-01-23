@@ -24,15 +24,26 @@ const BASE_OVERSCAN_VIEWPORT_MULTIPLIER = 1.5;
 const FAST_OVERSCAN_VIEWPORT_MULTIPLIER = 2.5;
 
 export interface VirtualBlocksResult {
-    blocks: TextBlock[];
+    blocks: VirtualizedBlock[];
     topSpacerHeight: number;
     bottomSpacerHeight: number;
 }
 
+export interface VirtualizedBlock extends TextBlock {
+    kind?: 'placeholder';
+    estimatedHeight?: number;
+}
+
+export interface VirtualBlocksOptions {
+    isHydrating?: boolean;
+    onSeekIntent?: () => void;
+}
+
 export function useVirtualBlocks(
-    allBlocks: TextBlock[],
+    allBlocks: VirtualizedBlock[],
     containerRef: React.RefObject<HTMLElement>,
-    layoutVersion?: string
+    layoutVersion?: string,
+    options?: VirtualBlocksOptions
 ): VirtualBlocksResult {
     const shouldVirtualize = allBlocks.length >= VIRTUALIZE_THRESHOLD;
     const [visibleRange, setVisibleRange] = useState({ start: 0, end: Math.min(20, allBlocks.length) });
@@ -50,6 +61,7 @@ export function useVirtualBlocks(
     const frameIdRef = useRef(0);
     const frameUpdateCountRef = useRef(0);
     const lastRangeFrameRef = useRef(0);
+    const pendingRangeRafRef = useRef<number | null>(null);
     const hasLoggedEmptyRef = useRef(false);
     const viewportHeightRef = useRef(0);
     const prevPrefixHeightsRef = useRef<number[]>([]);
@@ -59,6 +71,17 @@ export function useVirtualBlocks(
     const resizeRafIdRef = useRef<number | null>(null);
     const isResizing = useRef(false);
     const lastLayoutVersionRef = useRef<string | undefined>(layoutVersion);
+    const bottomLockRef = useRef(false);
+    const bottomLockRafRef = useRef<number | null>(null);
+    const totalHeightRef = useRef(0);
+    const scrollPaddingRef = useRef(0);
+    const pendingScrollPaddingRef = useRef(false);
+    const bottomIntentRef = useRef(false);
+    const bottomLockThresholdPx = 8;
+    const isHydrating = options?.isHydrating ?? false;
+    const onSeekIntent = options?.onSeekIntent;
+    const lastSeekTsRef = useRef(0);
+    const seekCooldownMs = 260;
 
     useEffect(() => {
         visibleRangeRef.current = visibleRange;
@@ -93,7 +116,11 @@ export function useVirtualBlocks(
     }, []);
 
     const measuredHeights = useMemo(() => {
-        return allBlocks.map(block => blockHeights.current.get(block.blockId) ?? ESTIMATED_BLOCK_HEIGHT);
+        return allBlocks.map(block => (
+            blockHeights.current.get(block.blockId)
+            ?? block.estimatedHeight
+            ?? ESTIMATED_BLOCK_HEIGHT
+        ));
     }, [allBlocks, heightVersion]);
 
     const prefixHeights = useMemo(() => {
@@ -155,6 +182,13 @@ export function useVirtualBlocks(
             }
             pendingMeasure.current = false;
             measureHeights();
+            if (pendingScrollPaddingRef.current) {
+                pendingScrollPaddingRef.current = false;
+                const container = containerRef.current;
+                if (container) {
+                    scrollPaddingRef.current = Math.max(0, container.scrollHeight - totalHeightRef.current);
+                }
+            }
             const container = containerRef.current;
             if (container) {
                 const viewportHeight = viewportHeightRef.current || container.clientHeight;
@@ -221,15 +255,51 @@ export function useVirtualBlocks(
                     pendingMeasure.current = false;
                     measureHeights();
                 }
+                if (pendingScrollPaddingRef.current) {
+                    pendingScrollPaddingRef.current = false;
+                    scrollPaddingRef.current = Math.max(0, container.scrollHeight - totalHeightRef.current);
+                }
                 const currentScrollTop = container.scrollTop;
                 const currentViewportHeight = viewportHeightRef.current || container.clientHeight;
                 updateRange(currentScrollTop, currentViewportHeight, getOverscanPx(0, currentViewportHeight));
+                const maxScrollTop = Math.max(
+                    0,
+                    totalHeightRef.current + scrollPaddingRef.current - currentViewportHeight
+                );
+                const atBottom = currentScrollTop >= maxScrollTop - bottomLockThresholdPx;
+                if (isHydrating && atBottom) {
+                    bottomLockRef.current = true;
+                    if (!bottomIntentRef.current && onSeekIntent) {
+                        bottomIntentRef.current = true;
+                        onSeekIntent();
+                    }
+                } else {
+                    bottomLockRef.current = false;
+                    bottomIntentRef.current = false;
+                }
                 if (perfEnabled) {
                     flushDocViewerPerf('scroll-idle');
                 }
             }, SCROLL_IDLE_MS);
 
             updateRange(scrollTop, viewportHeight, overscanPx, frameId);
+
+            const maxScrollTop = Math.max(0, totalHeightRef.current + scrollPaddingRef.current - viewportHeight);
+            const atBottom = scrollTop >= maxScrollTop - bottomLockThresholdPx;
+            if (isHydrating && atBottom) {
+                bottomLockRef.current = true;
+            } else if (!atBottom) {
+                bottomLockRef.current = false;
+            }
+
+            if (isHydrating && onSeekIntent) {
+                const nowTs = performance.now();
+                const isSeeking = distance > viewportHeight * 2.2;
+                if (isSeeking && nowTs - lastSeekTsRef.current > seekCooldownMs) {
+                    lastSeekTsRef.current = nowTs;
+                    onSeekIntent();
+                }
+            }
         };
 
         viewportHeightRef.current = container.clientHeight;
@@ -252,6 +322,7 @@ export function useVirtualBlocks(
                     return;
                 }
                 measureHeights();
+                scrollPaddingRef.current = Math.max(0, container.scrollHeight - totalHeightRef.current);
                 updateRange(container.scrollTop, nextHeight, getOverscanPx(0, nextHeight));
             }, RESIZE_IDLE_MS);
 
@@ -295,13 +366,40 @@ export function useVirtualBlocks(
             if (resizeRafIdRef.current) {
                 cancelAnimationFrame(resizeRafIdRef.current);
             }
+            if (pendingRangeRafRef.current) {
+                cancelAnimationFrame(pendingRangeRafRef.current);
+            }
             resizeObserver.disconnect();
             if (isScrolling.current) {
                 setDocViewerScrolling(false);
                 isScrolling.current = false;
             }
         };
-    }, [allBlocks, containerRef, getOverscanPx, measureHeights, perfEnabled, shouldVirtualize, updateRange]);
+    }, [
+        allBlocks,
+        containerRef,
+        getOverscanPx,
+        isHydrating,
+        measureHeights,
+        onSeekIntent,
+        perfEnabled,
+        shouldVirtualize,
+        updateRange,
+    ]);
+
+    useEffect(() => {
+        if (!shouldVirtualize) return;
+        const container = containerRef.current;
+        if (!container) return;
+        if (pendingRangeRafRef.current) {
+            cancelAnimationFrame(pendingRangeRafRef.current);
+        }
+        pendingRangeRafRef.current = requestAnimationFrame(() => {
+            pendingRangeRafRef.current = null;
+            const viewportHeight = viewportHeightRef.current || container.clientHeight;
+            updateRange(container.scrollTop, viewportHeight, getOverscanPx(0, viewportHeight));
+        });
+    }, [allBlocks.length, containerRef, getOverscanPx, shouldVirtualize, updateRange]);
 
     useEffect(() => {
         if (!shouldVirtualize) return;
@@ -323,6 +421,17 @@ export function useVirtualBlocks(
     }, [measureHeights, shouldVirtualize, visibleRange]);
 
     useLayoutEffect(() => {
+        const totalHeight = prefixHeights[prefixHeights.length - 1] ?? 0;
+        totalHeightRef.current = totalHeight;
+        const container = containerRef.current;
+        if (container) {
+            if (isScrolling.current || isResizing.current) {
+                pendingScrollPaddingRef.current = true;
+            } else {
+                scrollPaddingRef.current = Math.max(0, container.scrollHeight - totalHeight);
+            }
+        }
+
         if (!shouldVirtualize) {
             prevPrefixHeightsRef.current = prefixHeights;
             return;
@@ -331,8 +440,19 @@ export function useVirtualBlocks(
             prevPrefixHeightsRef.current = prefixHeights;
             return;
         }
-        const container = containerRef.current;
         if (!container) {
+            prevPrefixHeightsRef.current = prefixHeights;
+            return;
+        }
+        if (bottomLockRef.current && isHydrating) {
+            if (bottomLockRafRef.current) {
+                cancelAnimationFrame(bottomLockRafRef.current);
+            }
+            bottomLockRafRef.current = requestAnimationFrame(() => {
+                bottomLockRafRef.current = null;
+                const nextScrollTop = Math.max(0, container.scrollHeight - container.clientHeight);
+                container.scrollTop = nextScrollTop;
+            });
             prevPrefixHeightsRef.current = prefixHeights;
             return;
         }
@@ -344,7 +464,7 @@ export function useVirtualBlocks(
             container.scrollTop += delta;
         }
         prevPrefixHeightsRef.current = prefixHeights;
-    }, [containerRef, prefixHeights, shouldVirtualize, visibleRange.start]);
+    }, [containerRef, isHydrating, prefixHeights, shouldVirtualize, visibleRange.start]);
 
     useEffect(() => {
         if (!perfEnabled) return;
@@ -363,6 +483,13 @@ export function useVirtualBlocks(
             hasLoggedEmptyRef.current = false;
         }
     }, [perfEnabled, visibleRange]);
+
+    useEffect(() => {
+        if (!isHydrating) {
+            bottomLockRef.current = false;
+            bottomIntentRef.current = false;
+        }
+    }, [isHydrating]);
 
     return useMemo(() => {
         if (!shouldVirtualize) {

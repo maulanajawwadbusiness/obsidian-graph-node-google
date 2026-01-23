@@ -109,6 +109,9 @@ Perf marks (gated by `__DOC_VIEWER_PERF_MARKS__` or `__DOC_VIEWER_PROFILE__`):
 - `doc_open_start`, `file_read_done`, `text_extract_done`, `normalize_done`
 - `block_build_first_chunk_done`, `first_paint_committed`, `hydrate_done`, `font_ready`
 
+Jump stability report (Veils A–D):
+- `docs/doc-open-jump-stability-a-d.md`
+
 Key files:
 - `src/document/viewer/DocumentContent.tsx`
 - `src/document/viewer/docViewerPerf.ts`

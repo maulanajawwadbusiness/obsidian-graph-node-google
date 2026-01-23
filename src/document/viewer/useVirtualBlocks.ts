@@ -23,6 +23,14 @@ const VIRTUALIZE_THRESHOLD = 50;
 const BASE_OVERSCAN_VIEWPORT_MULTIPLIER = 1.5;
 const FAST_OVERSCAN_VIEWPORT_MULTIPLIER = 2.5;
 
+type PrefixReason = 'hydrate' | 'measure' | 'resize' | 'toggle';
+type AnchorRestoreType = 'bottom-lock' | 'top-lock' | 'measure-correction';
+
+const isDebugCountersEnabled = () => (
+    typeof window !== 'undefined'
+    && (window as Window & { __DV_DEBUG_COUNTERS__?: boolean }).__DV_DEBUG_COUNTERS__ === true
+);
+
 export interface VirtualBlocksResult {
     blocks: VirtualizedBlock[];
     topSpacerHeight: number;
@@ -37,6 +45,7 @@ export interface VirtualizedBlock extends TextBlock {
 export interface VirtualBlocksOptions {
     isHydrating?: boolean;
     onSeekIntent?: () => void;
+    hydrationCommitTsRef?: React.RefObject<number>;
 }
 
 export function useVirtualBlocks(
@@ -82,12 +91,26 @@ export function useVirtualBlocks(
     const onSeekIntent = options?.onSeekIntent;
     const lastSeekTsRef = useRef(0);
     const seekCooldownMs = 260;
+    const lastScrollEventTsRef = useRef(0);
+    const lastWheelTsRef = useRef(0);
+    const pointerDownRef = useRef(false);
+    const pendingPrefixReasonRef = useRef<PrefixReason | null>(null);
+    const lastPrefixReasonRef = useRef<PrefixReason>('measure');
+    const pendingMeasureReasonRef = useRef<PrefixReason | null>(null);
+    const perfCountersRef = useRef({
+        scrollTopWrites: 0,
+        scrollTopReason: '',
+        prefixRebuilds: 0,
+        prefixReason: '',
+        anchorRestores: 0,
+        anchorType: '',
+    });
 
     useEffect(() => {
         visibleRangeRef.current = visibleRange;
     }, [visibleRange]);
 
-    const measureHeights = useCallback(() => {
+    const measureHeights = useCallback((reason: PrefixReason = 'measure') => {
         if (!shouldVirtualize) return;
         const container = containerRef.current;
         if (!container) return;
@@ -105,6 +128,9 @@ export function useVirtualBlocks(
             }
         });
         if (changed) {
+            if (isDebugCountersEnabled()) {
+                pendingPrefixReasonRef.current = reason;
+            }
             setHeightVersion(version => version + 1);
         }
     }, [containerRef, shouldVirtualize]);
@@ -124,6 +150,10 @@ export function useVirtualBlocks(
     }, [allBlocks, heightVersion]);
 
     const prefixHeights = useMemo(() => {
+        if (isDebugCountersEnabled()) {
+            lastPrefixReasonRef.current = pendingPrefixReasonRef.current ?? 'measure';
+            pendingPrefixReasonRef.current = null;
+        }
         const prefix: number[] = new Array(measuredHeights.length + 1);
         prefix[0] = 0;
         for (let i = 0; i < measuredHeights.length; i++) {
@@ -171,17 +201,19 @@ export function useVirtualBlocks(
         return true;
     }, [allBlocks.length, findIndexForOffset, perfEnabled]);
 
-    const scheduleIdleRemeasure = useCallback((idleTimeoutRef: { current: number | null }) => {
+    const scheduleIdleRemeasure = useCallback((idleTimeoutRef: { current: number | null }, reason: PrefixReason) => {
         if (idleTimeoutRef.current) {
             clearTimeout(idleTimeoutRef.current);
         }
         idleTimeoutRef.current = window.setTimeout(() => {
             if (isScrolling.current || isResizing.current) {
                 pendingMeasure.current = true;
+                pendingMeasureReasonRef.current = reason;
                 return;
             }
             pendingMeasure.current = false;
-            measureHeights();
+            pendingMeasureReasonRef.current = null;
+            measureHeights(reason);
             if (pendingScrollPaddingRef.current) {
                 pendingScrollPaddingRef.current = false;
                 const container = containerRef.current;
@@ -196,6 +228,27 @@ export function useVirtualBlocks(
             }
         }, LAYOUT_IDLE_MS);
     }, [containerRef, getOverscanPx, measureHeights, updateRange]);
+
+    const bumpScrollTopWrite = useCallback((reason: string) => {
+        if (!isDebugCountersEnabled()) return;
+        const counters = perfCountersRef.current;
+        counters.scrollTopWrites += 1;
+        counters.scrollTopReason = reason;
+    }, []);
+
+    const bumpPrefixRebuild = useCallback((reason: string) => {
+        if (!isDebugCountersEnabled()) return;
+        const counters = perfCountersRef.current;
+        counters.prefixRebuilds += 1;
+        counters.prefixReason = reason;
+    }, []);
+
+    const bumpAnchorRestore = useCallback((anchorType: AnchorRestoreType) => {
+        if (!isDebugCountersEnabled()) return;
+        const counters = perfCountersRef.current;
+        counters.anchorRestores += 1;
+        counters.anchorType = anchorType;
+    }, []);
 
     useEffect(() => {
         if (!shouldVirtualize) return;
@@ -223,6 +276,7 @@ export function useVirtualBlocks(
             const scrollTop = container.scrollTop;
             const viewportHeight = viewportHeightRef.current || container.clientHeight;
             const now = performance.now();
+            lastScrollEventTsRef.current = now;
             const lastTs = lastScrollTs.current ?? now;
             const dt = Math.max(1, now - lastTs);
             const distance = Math.abs(scrollTop - lastScrollTop.current);
@@ -253,7 +307,8 @@ export function useVirtualBlocks(
                 setDocViewerScrolling(false);
                 if (pendingMeasure.current) {
                     pendingMeasure.current = false;
-                    measureHeights();
+                    measureHeights(pendingMeasureReasonRef.current ?? 'measure');
+                    pendingMeasureReasonRef.current = null;
                 }
                 if (pendingScrollPaddingRef.current) {
                     pendingScrollPaddingRef.current = false;
@@ -319,9 +374,10 @@ export function useVirtualBlocks(
                 isResizing.current = false;
                 if (pendingMeasure.current || isScrolling.current) {
                     pendingMeasure.current = true;
+                    pendingMeasureReasonRef.current = 'resize';
                     return;
                 }
-                measureHeights();
+                measureHeights('resize');
                 scrollPaddingRef.current = Math.max(0, container.scrollHeight - totalHeightRef.current);
                 updateRange(container.scrollTop, nextHeight, getOverscanPx(0, nextHeight));
             }, RESIZE_IDLE_MS);
@@ -350,9 +406,26 @@ export function useVirtualBlocks(
         };
 
         container.addEventListener('scroll', throttledScroll, { passive: true });
+        const handleWheel = () => {
+            lastWheelTsRef.current = performance.now();
+        };
+        const handlePointerDown = () => {
+            pointerDownRef.current = true;
+        };
+        const handlePointerUp = () => {
+            pointerDownRef.current = false;
+        };
+        container.addEventListener('wheel', handleWheel, { passive: true });
+        container.addEventListener('pointerdown', handlePointerDown, { passive: true });
+        window.addEventListener('pointerup', handlePointerUp);
+        window.addEventListener('pointercancel', handlePointerUp);
 
         return () => {
             container.removeEventListener('scroll', throttledScroll);
+            container.removeEventListener('wheel', handleWheel);
+            container.removeEventListener('pointerdown', handlePointerDown);
+            window.removeEventListener('pointerup', handlePointerUp);
+            window.removeEventListener('pointercancel', handlePointerUp);
             if (rafId) cancelAnimationFrame(rafId);
             if (idleTimeoutId.current) {
                 clearTimeout(idleTimeoutId.current);
@@ -407,7 +480,7 @@ export function useVirtualBlocks(
         if (layoutVersion === lastLayoutVersionRef.current) return;
         lastLayoutVersionRef.current = layoutVersion;
         pendingMeasure.current = true;
-        scheduleIdleRemeasure(layoutIdleTimeoutId);
+        scheduleIdleRemeasure(layoutIdleTimeoutId, 'toggle');
     }, [layoutVersion, scheduleIdleRemeasure, shouldVirtualize]);
 
     // Measure block heights when they render
@@ -415,10 +488,13 @@ export function useVirtualBlocks(
         if (!shouldVirtualize) return;
         if (isScrolling.current || isResizing.current) {
             pendingMeasure.current = true;
+            if (!pendingMeasureReasonRef.current) {
+                pendingMeasureReasonRef.current = isHydrating ? 'hydrate' : 'measure';
+            }
             return;
         }
-        measureHeights();
-    }, [measureHeights, shouldVirtualize, visibleRange]);
+        measureHeights(isHydrating ? 'hydrate' : 'measure');
+    }, [isHydrating, measureHeights, shouldVirtualize, visibleRange]);
 
     useLayoutEffect(() => {
         const totalHeight = prefixHeights[prefixHeights.length - 1] ?? 0;
@@ -451,6 +527,8 @@ export function useVirtualBlocks(
             bottomLockRafRef.current = requestAnimationFrame(() => {
                 bottomLockRafRef.current = null;
                 const nextScrollTop = Math.max(0, container.scrollHeight - container.clientHeight);
+                bumpAnchorRestore('bottom-lock');
+                bumpScrollTopWrite('bottom-lock');
                 container.scrollTop = nextScrollTop;
             });
             prevPrefixHeightsRef.current = prefixHeights;
@@ -461,10 +539,56 @@ export function useVirtualBlocks(
         const nextStartOffset = prefixHeights[visibleRange.start] ?? 0;
         const delta = nextStartOffset - previousStartOffset;
         if (delta !== 0) {
+            const anchorType = isHydrating ? 'top-lock' : 'measure-correction';
+            bumpAnchorRestore(anchorType);
+            bumpScrollTopWrite(anchorType);
             container.scrollTop += delta;
         }
         prevPrefixHeightsRef.current = prefixHeights;
     }, [containerRef, isHydrating, prefixHeights, shouldVirtualize, visibleRange.start]);
+
+    useEffect(() => {
+        if (!isDebugCountersEnabled()) return;
+        bumpPrefixRebuild(lastPrefixReasonRef.current);
+    }, [bumpPrefixRebuild, prefixHeights]);
+
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        const intervalId = window.setInterval(() => {
+            if (!isDebugCountersEnabled()) return;
+            const counters = perfCountersRef.current;
+            const scrollIdle = lastScrollEventTsRef.current === 0
+                || performance.now() - lastScrollEventTsRef.current > 150;
+            const wheelIdle = lastWheelTsRef.current === 0
+                || performance.now() - lastWheelTsRef.current > 150;
+            const pointerIdle = !pointerDownRef.current;
+            const lastHydrationCommitTs = options?.hydrationCommitTsRef?.current ?? 0;
+            const hydrationIdle = lastHydrationCommitTs === 0
+                || performance.now() - lastHydrationCommitTs > 150;
+            const isIdle = scrollIdle && wheelIdle && pointerIdle && hydrationIdle;
+
+            const scrollReason = counters.scrollTopReason || 'n/a';
+            const prefixReason = counters.prefixReason || 'n/a';
+            const anchorType = counters.anchorType || 'n/a';
+            const idleTag = isIdle ? 'idle' : 'active';
+            console.log(
+                `[DV PERF] (${idleTag}) scrollTopWrites=${counters.scrollTopWrites} (${scrollReason}) ` +
+                `prefixRebuilds=${counters.prefixRebuilds} (${prefixReason}) ` +
+                `anchorRestores=${counters.anchorRestores} (${anchorType})`
+            );
+
+            counters.scrollTopWrites = 0;
+            counters.scrollTopReason = '';
+            counters.prefixRebuilds = 0;
+            counters.prefixReason = '';
+            counters.anchorRestores = 0;
+            counters.anchorType = '';
+        }, 1000);
+
+        return () => {
+            clearInterval(intervalId);
+        };
+    }, [options?.hydrationCommitTsRef]);
 
     useEffect(() => {
         if (!perfEnabled) return;

@@ -5,6 +5,8 @@
 
 import { createLLMClient } from './index';
 
+const ENABLE_LABEL_REWRITER_LOGS = false;
+
 /**
  * Convert 5 words into 5 three-word sentences using AI
  * @param words - Array of 5 words to transform
@@ -13,7 +15,9 @@ import { createLLMClient } from './index';
 export async function makeThreeWordLabels(words: string[]): Promise<string[]> {
     // Validate input
     if (words.length !== 5) {
-        console.warn('[LabelRewriter] Expected 5 words, got', words.length);
+        if (ENABLE_LABEL_REWRITER_LOGS) {
+            console.warn('[LabelRewriter] Expected 5 words, got', words.length);
+        }
         return words;
     }
 
@@ -21,7 +25,9 @@ export async function makeThreeWordLabels(words: string[]): Promise<string[]> {
         // Get API key from environment
         const apiKey = import.meta.env.VITE_OPENAI_API_KEY as string;
         if (!apiKey) {
-            console.error('[LabelRewriter] Missing VITE_OPENAI_API_KEY in environment');
+            if (ENABLE_LABEL_REWRITER_LOGS) {
+                console.error('[LabelRewriter] Missing VITE_OPENAI_API_KEY in environment');
+            }
             return words;
         }
 
@@ -39,7 +45,9 @@ export async function makeThreeWordLabels(words: string[]): Promise<string[]> {
         const controller = new AbortController();
         const timeout = setTimeout(() => {
             controller.abort();
-            console.warn('[LabelRewriter] Request timeout after 10s');
+            if (ENABLE_LABEL_REWRITER_LOGS) {
+                console.warn('[LabelRewriter] Request timeout after 10s');
+            }
         }, 10000);
 
         let output: string;
@@ -59,18 +67,26 @@ export async function makeThreeWordLabels(words: string[]): Promise<string[]> {
         const labels = validateAndParseLabels(output, words);
 
         if (labels.length === 5) {
-            console.log('[LabelRewriter] Successfully generated AI labels:', labels);
+            if (ENABLE_LABEL_REWRITER_LOGS) {
+                console.log('[LabelRewriter] Successfully generated AI labels:', labels);
+            }
             return labels;
         } else {
-            console.warn('[LabelRewriter] Validation failed, using original words');
+            if (ENABLE_LABEL_REWRITER_LOGS) {
+                console.warn('[LabelRewriter] Validation failed, using original words');
+            }
             return words;
         }
     } catch (error) {
         // Check if it was an abort error (timeout)
         if (error instanceof Error && error.name === 'AbortError') {
-            console.error('[LabelRewriter] Request timed out, using original words');
+            if (ENABLE_LABEL_REWRITER_LOGS) {
+                console.error('[LabelRewriter] Request timed out, using original words');
+            }
         } else {
-            console.error('[LabelRewriter] Error generating labels:', error);
+            if (ENABLE_LABEL_REWRITER_LOGS) {
+                console.error('[LabelRewriter] Error generating labels:', error);
+            }
         }
         return words; // Graceful fallback
     }
@@ -131,12 +147,16 @@ function validateAndParseLabels(output: string, originalWords: string[]): string
     }
 
     if (labels.length !== 5) {
-        console.warn('[LabelRewriter] Expected 5 valid lines, got', labels.length);
+        if (ENABLE_LABEL_REWRITER_LOGS) {
+            console.warn('[LabelRewriter] Expected 5 valid lines, got', labels.length);
+        }
         return originalWords;
     }
 
     if (lines.length !== 5) {
-        console.warn('[LabelRewriter] Extra lines from model, using first 5 valid lines', lines.length);
+        if (ENABLE_LABEL_REWRITER_LOGS) {
+            console.warn('[LabelRewriter] Extra lines from model, using first 5 valid lines', lines.length);
+        }
     }
 
     return labels;

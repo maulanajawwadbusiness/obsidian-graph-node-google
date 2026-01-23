@@ -50,6 +50,7 @@ export const DocumentContent: React.FC<DocumentContentProps> = ({
     const priorityUntilRef = useRef(0);
     const scheduleChunkRef = useRef<((isFirstChunk: boolean, forcePriority?: boolean) => void) | null>(null);
     const estimatedTotalBlocksRef = useRef<number | null>(null);
+    const hydrationCommitTsRef = useRef(0);
     const [hydrationState, setHydrationState] = useState<{
         blocks: TextBlock[];
         isHydrating: boolean;
@@ -170,6 +171,7 @@ export const DocumentContent: React.FC<DocumentContentProps> = ({
                     nextEstimate = nextBlocks.length;
                 }
 
+                hydrationCommitTsRef.current = performance.now();
                 setHydrationState({
                     blocks: nextBlocks,
                     isHydrating: !chunk.done,
@@ -245,7 +247,7 @@ export const DocumentContent: React.FC<DocumentContentProps> = ({
         renderBlocks,
         containerRef,
         layoutVersion,
-        { isHydrating, onSeekIntent: requestHydrationPriority }
+        { isHydrating, onSeekIntent: requestHydrationPriority, hydrationCommitTsRef }
     );
 
     const sortedHighlights = useMemo(() => {

@@ -5,6 +5,8 @@ import { applyCarrierFlowAndPersistence, applyHubVelocityScaling } from './veloc
 import { applyBaseIntegration, clampVelocity } from './velocity/baseIntegration';
 import { applyDamping } from './velocity/damping';
 
+const ENABLE_PHYSICS_DEBUG_LOGS = false;
+
 export type IntegrationResult = {
     centroidX: number;
     centroidY: number;
@@ -190,7 +192,7 @@ export const integrateNodes = (
     }
 
     // Debug: log dt skew range for first 10 frames
-    if (engine.frameIndex <= 10 && stats.dtSkew) {
+    if (engine.frameIndex <= 10 && stats.dtSkew && ENABLE_PHYSICS_DEBUG_LOGS) {
         console.log(`[Frame ${engine.frameIndex}] dt skew: ${stats.dtSkew.min.toFixed(6)} - ${stats.dtSkew.max.toFixed(6)} (base dt: ${dt.toFixed(6)})`);
     }
 

@@ -1,5 +1,7 @@
 import type { PhysicsEngine } from '../engine';
 
+const ENABLE_PHYSICS_DEBUG_LOGS = false;
+
 export const fireInitialImpulse = (engine: PhysicsEngine) => {
     const { targetSpacing, snapImpulseScale } = engine.config;
 
@@ -71,5 +73,7 @@ export const fireInitialImpulse = (engine: PhysicsEngine) => {
     engine.globalAngularVel = (Math.random() - 0.5) * 0.3; // ±0.15 rad/s
 
     engine.hasFiredImpulse = true;
-    console.log(`[LotusLeaf] Medium initialized: ω=${engine.globalAngularVel.toFixed(4)} rad/s`);
+    if (ENABLE_PHYSICS_DEBUG_LOGS) {
+        console.log(`[LotusLeaf] Medium initialized: ω=${engine.globalAngularVel.toFixed(4)} rad/s`);
+    }
 };

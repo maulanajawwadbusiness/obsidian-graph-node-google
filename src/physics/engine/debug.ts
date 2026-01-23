@@ -1,4 +1,5 @@
 const LOG_INTERVAL_MS = 4000;
+const ENABLE_PHYSICS_DEBUG_LOGS = false;
 let lastLogTime = 0;
 
 export const logEnergyDebug = (_lifecycle: number, energy: number, effectiveDamping: number, maxVelocityEffective: number) => {
@@ -7,5 +8,7 @@ export const logEnergyDebug = (_lifecycle: number, energy: number, effectiveDamp
         return;
     }
     lastLogTime = now;
-    console.log(`[Physics] Energy: ${(energy * 100).toFixed(1)}% | Damping: ${effectiveDamping.toFixed(2)} | MaxV: ${maxVelocityEffective.toFixed(0)}`);
+    if (ENABLE_PHYSICS_DEBUG_LOGS) {
+        console.log(`[Physics] Energy: ${(energy * 100).toFixed(1)}% | Damping: ${effectiveDamping.toFixed(2)} | MaxV: ${maxVelocityEffective.toFixed(0)}`);
+    }
 };

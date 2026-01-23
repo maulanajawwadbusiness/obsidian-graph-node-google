@@ -18,6 +18,15 @@ import documentModeIcon from '../../assets/document_mode_icon.png';
 
 const stopPropagation = (e: React.MouseEvent) => e.stopPropagation();
 
+const isEditableTarget = (target: EventTarget | null) => {
+    if (!(target instanceof HTMLElement)) return false;
+    const tagName = target.tagName.toLowerCase();
+    if (tagName === 'input' || tagName === 'textarea' || tagName === 'select') {
+        return true;
+    }
+    return target.isContentEditable;
+};
+
 export const DocumentViewerPanel: React.FC = () => {
     const { state, setDocTheme, setViewerMode, setHighlights, viewerApiRef } = useDocument();
     const [searchSession, setSearchSession] = useState<SearchSession | null>(null);
@@ -63,6 +72,11 @@ export const DocumentViewerPanel: React.FC = () => {
                 if (e.key === 'f') {
                     setShowSearch(true);
                 }
+            }
+
+            if (!e.ctrlKey && !e.metaKey && !e.altKey && !e.repeat && (e.key === 'v' || e.key === 'V')) {
+                if (isEditableTarget(e.target)) return;
+                setViewerMode(isPeek ? 'open' : 'peek');
             }
 
             // Esc key collapses to peek if search is not showing

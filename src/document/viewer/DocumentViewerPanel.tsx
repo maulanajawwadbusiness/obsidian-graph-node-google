@@ -6,6 +6,7 @@ import { getDocTheme, docThemeToCssVars } from './docTheme';
 import { createSearchSession, navigateMatch, getActiveMatch, type SearchSession } from './searchSession';
 import { findSpanContaining } from './selectionMapping';
 import type { HighlightRange } from '../types';
+import { markDocViewerPerf } from './docViewerPerf';
 import './viewerTokens.css';
 import documentModeIcon from '../../assets/document_mode_icon.png';
 
@@ -17,6 +18,15 @@ import documentModeIcon from '../../assets/document_mode_icon.png';
 
 const stopPropagation = (e: React.MouseEvent) => e.stopPropagation();
 
+const isEditableTarget = (target: EventTarget | null) => {
+    if (!(target instanceof HTMLElement)) return false;
+    const tagName = target.tagName.toLowerCase();
+    if (tagName === 'input' || tagName === 'textarea' || tagName === 'select') {
+        return true;
+    }
+    return target.isContentEditable;
+};
+
 export const DocumentViewerPanel: React.FC = () => {
     const { state, setDocTheme, setViewerMode, setHighlights, viewerApiRef } = useDocument();
     const [searchSession, setSearchSession] = useState<SearchSession | null>(null);
@@ -24,6 +34,7 @@ export const DocumentViewerPanel: React.FC = () => {
     const contentRef = useRef<HTMLDivElement>(null);
     const pendingScrollRef = useRef<number | null>(null);
     const lastDocIdRef = useRef<string | null>(null);
+    const fontReadyRef = useRef(false);
     const perfFlatVisuals = typeof window !== 'undefined'
         && Boolean((window as typeof window & { __DOC_VIEWER_FLAT_VISUALS__?: boolean }).__DOC_VIEWER_FLAT_VISUALS__);
 
@@ -33,6 +44,17 @@ export const DocumentViewerPanel: React.FC = () => {
     // Get current theme
     const currentTheme = getDocTheme(state.docThemeMode);
     const themeVars = docThemeToCssVars(currentTheme);
+    const layoutVersion = `${state.docThemeMode}-${state.viewerMode}`;
+
+    useEffect(() => {
+        if (fontReadyRef.current) return;
+        if (typeof document === 'undefined' || !('fonts' in document)) return;
+        document.fonts.ready.then(() => {
+            if (fontReadyRef.current) return;
+            fontReadyRef.current = true;
+            markDocViewerPerf('font_ready');
+        });
+    }, []);
 
     // Ctrl+F handler
     useEffect(() => {
@@ -50,6 +72,11 @@ export const DocumentViewerPanel: React.FC = () => {
                 if (e.key === 'f') {
                     setShowSearch(true);
                 }
+            }
+
+            if (!e.ctrlKey && !e.metaKey && !e.altKey && !e.repeat && (e.key === 'v' || e.key === 'V')) {
+                if (isEditableTarget(e.target)) return;
+                setViewerMode(isPeek ? 'open' : 'peek');
             }
 
             // Esc key collapses to peek if search is not showing
@@ -272,6 +299,8 @@ export const DocumentViewerPanel: React.FC = () => {
                                             text={state.activeDocument.text}
                                             highlights={state.highlightRanges}
                                             containerRef={contentRef}
+                                            layoutVersion={layoutVersion}
+                                            docId={state.activeDocument.id}
                                         />
                                     ) : (
                                         <div className="dv-empty-state">

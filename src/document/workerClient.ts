@@ -4,6 +4,7 @@
  */
 
 import type { ParsedDocument } from './types';
+import { markDocViewerPerf } from './viewer/docViewerPerf';
 
 type WorkerRequest = {
     type: 'PARSE';
@@ -13,6 +14,7 @@ type WorkerRequest = {
 
 type WorkerResponse =
     | { type: 'PROGRESS'; requestId: string; percent: number }
+    | { type: 'TIMING'; requestId: string; stage: 'file_read_done' | 'text_extract_done' }
     | { type: 'COMPLETE'; requestId: string; document: ParsedDocument }
     | { type: 'ERROR'; requestId: string; error: string };
 
@@ -44,6 +46,9 @@ export class WorkerClient {
                 case 'PROGRESS':
                     // TODO: Could emit progress events if needed
                     console.log(`[WorkerClient] Progress: ${response.percent}%`);
+                    break;
+                case 'TIMING':
+                    markDocViewerPerf(response.stage);
                     break;
 
                 case 'COMPLETE':

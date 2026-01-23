@@ -17,6 +17,7 @@ type WorkerRequest = {
 
 type WorkerResponse =
     | { type: 'PROGRESS'; requestId: string; percent: number }
+    | { type: 'TIMING'; requestId: string; stage: 'file_read_done' | 'text_extract_done' }
     | { type: 'COMPLETE'; requestId: string; document: ParsedDocument }
     | { type: 'ERROR'; requestId: string; error: string };
 
@@ -50,7 +51,9 @@ self.onmessage = async (e: MessageEvent<WorkerRequest>) => {
         }
 
         // Parse the file
-        const document = await parser.parse(file);
+        const document = await parser.parse(file, (stage) => {
+            postResponse({ type: 'TIMING', requestId, stage });
+        });
 
         // Send completion
         postResponse({ type: 'COMPLETE', requestId, document });

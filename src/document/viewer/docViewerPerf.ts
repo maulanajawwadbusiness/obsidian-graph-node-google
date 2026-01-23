@@ -14,6 +14,7 @@ type DocViewerPerfWindow = typeof window & {
     __DOC_VIEWER_PROFILE__?: boolean;
     __DOC_VIEWER_SCROLLING__?: boolean;
     __DOC_VIEWER_PERF__?: DocViewerPerfCounters;
+    __DOC_VIEWER_PERF_MARKS__?: boolean;
 };
 
 const fallbackCounters: DocViewerPerfCounters = {
@@ -35,6 +36,12 @@ function isBrowser(): boolean {
 export function isDocViewerPerfEnabled(): boolean {
     if (!isBrowser()) return false;
     return Boolean((window as DocViewerPerfWindow).__DOC_VIEWER_PROFILE__);
+}
+
+function isDocViewerPerfMarksEnabled(): boolean {
+    if (!isBrowser()) return false;
+    const perfWindow = window as DocViewerPerfWindow;
+    return Boolean(perfWindow.__DOC_VIEWER_PERF_MARKS__ ?? perfWindow.__DOC_VIEWER_PROFILE__);
 }
 
 export function setDocViewerScrolling(isScrolling: boolean): void {
@@ -115,4 +122,48 @@ export function flushDocViewerPerf(reason: string): void {
     counters.rangeUpdates = 0;
     counters.rangeUpdatesDuringScroll = 0;
     counters.rangeUpdatesThisFrameMax = 0;
+}
+
+export function markDocViewerPerf(mark: string): void {
+    if (!isDocViewerPerfMarksEnabled()) return;
+    if (typeof performance === 'undefined') return;
+    performance.mark(mark);
+}
+
+export function reportDocViewerPerf(): void {
+    if (!isDocViewerPerfMarksEnabled()) return;
+    if (typeof performance === 'undefined') return;
+    const marks = [
+        'doc_open_start',
+        'file_read_done',
+        'text_extract_done',
+        'normalize_done',
+        'block_build_first_chunk_done',
+        'first_paint_committed',
+        'hydrate_done',
+        'font_ready',
+    ];
+
+    const times: Record<string, number | null> = {};
+    for (const mark of marks) {
+        const entry = performance.getEntriesByName(mark).slice(-1)[0];
+        times[mark] = entry ? entry.startTime : null;
+    }
+
+    const base = times.doc_open_start ?? null;
+    const delta = (mark: string) => (base !== null && times[mark] !== null)
+        ? Math.round((times[mark]! - base) * 10) / 10
+        : null;
+
+    console.debug('[DocViewer] open perf', {
+        docOpenToFileReadMs: delta('file_read_done'),
+        docOpenToTextExtractMs: delta('text_extract_done'),
+        docOpenToNormalizeMs: delta('normalize_done'),
+        docOpenToFirstChunkMs: delta('block_build_first_chunk_done'),
+        docOpenToFirstPaintMs: delta('first_paint_committed'),
+        docOpenToHydrateMs: delta('hydrate_done'),
+        docOpenToFontReadyMs: delta('font_ready'),
+    });
+
+    marks.forEach(mark => performance.clearMarks(mark));
 }

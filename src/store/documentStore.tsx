@@ -1,7 +1,7 @@
 import { createContext, useContext, useReducer, ReactNode, useRef, useEffect, useCallback, useMemo, type MutableRefObject } from 'react';
 import type { DocumentState, DocumentStatus, ParsedDocument, ViewerMode, DocThemeMode, HighlightRange } from '../document/types';
 import { WorkerClient } from '../document/workerClient';
-import { isDocViewerPerfEnabled, recordDocViewerStoreUpdate } from '../document/viewer/docViewerPerf';
+import { isDocViewerPerfEnabled, markDocViewerPerf, recordDocViewerStoreUpdate } from '../document/viewer/docViewerPerf';
 
 /**
  * Document Store - React Context for managing parsed document state
@@ -123,6 +123,7 @@ export function DocumentProvider({ children }: { children: ReactNode }) {
         }
 
         try {
+            markDocViewerPerf('doc_open_start');
             dispatch({ type: 'SET_STATUS', status: 'parsing' });
             console.log('[DocumentStore] Starting parse:', file.name);
             const perfEnabled = typeof window !== 'undefined' && Boolean((window as typeof window & { __DOC_VIEWER_PROFILE__?: boolean }).__DOC_VIEWER_PROFILE__);

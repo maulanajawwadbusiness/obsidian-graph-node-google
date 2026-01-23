@@ -198,6 +198,41 @@ npm run dev
 - [ ] Mock AI reply appends
 - [ ] Scroll stays at bottom (auto-scroll)
 
+---
+
+## 4. Document Viewer Performance Contracts (Current Stable State)
+The viewer is now performance-critical. Treat these as sacred invariants.
+
+### Sacred Invariants Checklist
+- Butter scroll + NO-BLANK invariant.
+- No layout reads during scroll (measure idle only).
+- No filters/blur/large shadows on the scroll subtree.
+- rAF-throttled range updates with pixel overscan.
+- Stable block keys (offset-based).
+- Background rAF loops throttle during viewer scroll.
+- Doc open pipeline: shell → first content → hydrate → idle measure.
+
+### Danger Zones
+- Scroll handlers (no state updates or layout reads).
+- Measurement code (`getBoundingClientRect`, `clientHeight`).
+- Shadows/filters/transforms on scroll layers.
+- Store selectors that trigger viewer rerenders.
+- Highlight/search computations during scroll or first paint.
+
+### If Butter Breaks (Quick Diagnosis)
+- Toggle `__DOC_VIEWER_FLAT_VISUALS__` and compare scroll smoothness.
+- Enable `__DOC_VIEWER_PROFILE__` and check render counts during scroll.
+- Verify range updates are rAF-throttled and not firing per wheel tick.
+- Confirm measurements only run after idle (no scroll-time reads).
+- Check background loops respect `__DOC_VIEWER_SCROLLING__`.
+
+### What Not To Do
+- Do not build all blocks synchronously before first paint.
+- Do not attach ResizeObservers to every block.
+- Do not add large shadows or filters on the scrolling subtree.
+- Do not recompute highlights per scroll frame.
+- Do not remount the viewer on mode/theme toggles.
+
 **Closing:**
 - [ ] Click X button in chatbar → closes
 - [ ] Chatbar independent from popup (can close separately)

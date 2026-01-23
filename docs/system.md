@@ -194,6 +194,32 @@ interface ParsedDocument {
 
 ---
 
+## Document Viewer Performance Laws (Canon)
+The document viewer is a first-class subsystem with explicit performance contracts.
+
+**Pipeline Stages (Doc Open):**
+1. Shell (instant header + placeholder)
+2. First content (viewport + overscan only)
+3. Hydrate (progressive chunks)
+4. Idle measure (single batch, anchor preserved)
+
+**Core Contracts:**
+- BUTTER SCROLL + NO-BLANK invariant
+- PAINT-SAFE: no filters/blur/large shadows on scrolling layer
+- MEASUREMENT: no layout reads during scroll; idle-only
+- RANGE: rAF-throttled range updates + pixel overscan + stable block keys
+- MAIN THREAD BUDGET: background loops throttle while viewer scrolls
+
+**Subsystem Boundaries:**
+- Viewer panel is a flex sibling to the graph canvas (no overlay).
+- Bookmark tab shares `--panel-width` with the viewer panel.
+- Background animation loops must yield when the viewer is actively scrolling.
+
+**Canon Reference:**
+- `docs/document-viewer.md` (source of truth for performance contracts)
+
+---
+
 ### Document Store (State Management)
 
 **Architecture:** React Context + reducer pattern

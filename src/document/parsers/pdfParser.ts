@@ -4,7 +4,7 @@
  */
 
 import * as pdfjsLib from 'pdfjs-dist';
-import type { DocumentParser } from './types';
+import type { DocumentParser, ParserTimingCallback } from './types';
 import type { ParsedDocument } from '../types';
 
 // Configure worker source (using CDN for worker in browser environment)
@@ -22,9 +22,10 @@ export class PdfParser implements DocumentParser {
         return ext === 'pdf';
     }
 
-    async parse(file: File): Promise<ParsedDocument> {
+    async parse(file: File, onTiming?: ParserTimingCallback): Promise<ParsedDocument> {
         // Convert File to ArrayBuffer for pdfjs
         const arrayBuffer = await file.arrayBuffer();
+        onTiming?.('file_read_done');
 
         // Load PDF document
         const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
@@ -50,6 +51,7 @@ export class PdfParser implements DocumentParser {
         }
 
         const text = textParts.join('\n\n');
+        onTiming?.('text_extract_done');
 
         // Warn if no text was extracted (likely scanned PDF)
         if (text.trim().length === 0) {

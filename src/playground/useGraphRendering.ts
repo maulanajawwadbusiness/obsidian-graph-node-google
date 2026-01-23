@@ -3,6 +3,7 @@ import type { Dispatch, RefObject, SetStateAction } from 'react';
 import { PhysicsEngine } from '../physics/engine';
 import { ForceConfig } from '../physics/types';
 import { getTheme, SkinMode } from '../visual/theme';
+import { isDocViewerScrolling } from '../document/viewer/docViewerPerf';
 import { generateRandomGraph } from './graphRandom';
 import { PlaygroundMetrics } from './playgroundTypes';
 import { applyCameraTransform, updateCameraContainment } from './rendering/camera';
@@ -91,6 +92,8 @@ export const useGraphRendering = ({
 
         let frameId = 0;
         let lastTime = performance.now();
+        let lastRenderTime = lastTime;
+        const viewerScrollThrottleMs = 1000 / 30;
 
         const engine = engineRef.current;
         if (!engine) return;
@@ -109,6 +112,14 @@ export const useGraphRendering = ({
 
         const render = () => {
             const now = performance.now();
+            const viewerScrolling = isDocViewerScrolling();
+
+            if (viewerScrolling && now - lastRenderTime < viewerScrollThrottleMs) {
+                lastTime = now;
+                frameId = requestAnimationFrame(render);
+                return;
+            }
+            lastRenderTime = now;
 
             const dtMs = now - lastTime;
             const dt = Math.min(dtMs / 1000, 0.1);

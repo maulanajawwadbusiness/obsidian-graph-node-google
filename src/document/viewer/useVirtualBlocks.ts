@@ -22,6 +22,9 @@ const ESTIMATED_BLOCK_HEIGHT = 60;  // Rough estimate for initial layout
 const VIRTUALIZE_THRESHOLD = 50;
 const BASE_OVERSCAN_VIEWPORT_MULTIPLIER = 1.5;
 const FAST_OVERSCAN_VIEWPORT_MULTIPLIER = 2.5;
+const MEASURE_EPSILON_PX = 1;
+const MEASURE_COOLDOWN_MS = 280;
+const HYDRATION_IDLE_MS = 250;
 
 type PrefixReason = 'hydrate' | 'measure' | 'resize' | 'toggle';
 type AnchorRestoreType = 'bottom-lock' | 'top-lock' | 'measure-correction';
@@ -65,7 +68,6 @@ export function useVirtualBlocks(
     const lastScrollTs = useRef<number | null>(null);
     const isScrolling = useRef(false);
     const idleTimeoutId = useRef<number | null>(null);
-    const pendingMeasure = useRef(false);
     const lastOverscanTier = useRef<'base' | 'fast'>('base');
     const frameIdRef = useRef(0);
     const frameUpdateCountRef = useRef(0);
@@ -96,7 +98,12 @@ export function useVirtualBlocks(
     const pointerDownRef = useRef(false);
     const pendingPrefixReasonRef = useRef<PrefixReason | null>(null);
     const lastPrefixReasonRef = useRef<PrefixReason>('measure');
-    const pendingMeasureReasonRef = useRef<PrefixReason | null>(null);
+    const measureStateRef = useRef({
+        status: 'idle' as 'idle' | 'pending' | 'running',
+        pendingReasons: new Set<PrefixReason>(),
+        lastRunTs: 0,
+        timeoutId: null as number | null,
+    });
     const perfCountersRef = useRef({
         scrollTopWrites: 0,
         scrollTopReason: '',
@@ -110,30 +117,112 @@ export function useVirtualBlocks(
         visibleRangeRef.current = visibleRange;
     }, [visibleRange]);
 
-    const measureHeights = useCallback((reason: PrefixReason = 'measure') => {
+    const pickMeasureReason = useCallback((pendingReasons: Set<PrefixReason>) => {
+        if (pendingReasons.has('resize')) return 'resize';
+        if (pendingReasons.has('toggle')) return 'toggle';
+        if (pendingReasons.has('hydrate')) return 'hydrate';
+        return 'measure';
+    }, []);
+
+    const runMeasurement = useCallback((reason: PrefixReason) => {
         if (!shouldVirtualize) return;
         const container = containerRef.current;
         if (!container) return;
 
         const blocks = container.querySelectorAll('[data-block-id]');
-        let changed = false;
+        const updates = new Map<string, number>();
         blocks.forEach(block => {
             const blockId = (block as HTMLElement).dataset.blockId;
-            if (blockId) {
-                const measured = block.clientHeight;
-                if (blockHeights.current.get(blockId) !== measured) {
-                    blockHeights.current.set(blockId, measured);
-                    changed = true;
-                }
+            if (!blockId) return;
+            const measured = block.clientHeight;
+            const previous = blockHeights.current.get(blockId);
+            if (previous !== undefined && Math.abs(measured - previous) < MEASURE_EPSILON_PX) {
+                return;
+            }
+            const snapped = Math.round(measured);
+            if (previous !== snapped) {
+                updates.set(blockId, snapped);
             }
         });
-        if (changed) {
-            if (isDebugCountersEnabled()) {
-                pendingPrefixReasonRef.current = reason;
-            }
-            setHeightVersion(version => version + 1);
+
+        if (updates.size === 0) {
+            return;
         }
+
+        updates.forEach((value, key) => {
+            blockHeights.current.set(key, value);
+        });
+
+        if (isDebugCountersEnabled()) {
+            pendingPrefixReasonRef.current = reason;
+        }
+        setHeightVersion(version => version + 1);
     }, [containerRef, shouldVirtualize]);
+
+    const getHydrationDelay = useCallback((now: number) => {
+        if (!isHydrating) return 0;
+        const lastHydrationCommitTs = options?.hydrationCommitTsRef?.current ?? 0;
+        if (lastHydrationCommitTs === 0) {
+            return HYDRATION_IDLE_MS;
+        }
+        const elapsed = now - lastHydrationCommitTs;
+        return elapsed >= HYDRATION_IDLE_MS ? 0 : HYDRATION_IDLE_MS - elapsed;
+    }, [isHydrating, options?.hydrationCommitTsRef]);
+
+    const scheduleMeasureNow = useCallback(() => {
+        const state = measureStateRef.current;
+        if (state.status === 'running') return;
+        const pendingReasons = state.pendingReasons;
+        if (pendingReasons.size === 0) {
+            state.status = 'idle';
+            return;
+        }
+
+        const reason = pickMeasureReason(pendingReasons);
+        const hasRealTrigger = reason !== 'measure';
+        const now = performance.now();
+        const sinceLast = now - state.lastRunTs;
+        let delay = 0;
+
+        if (!hasRealTrigger && sinceLast < MEASURE_COOLDOWN_MS) {
+            delay = MEASURE_COOLDOWN_MS - sinceLast;
+        }
+
+        delay = Math.max(delay, getHydrationDelay(now));
+
+        if (delay > 0) {
+            state.status = 'pending';
+            if (state.timeoutId) {
+                clearTimeout(state.timeoutId);
+            }
+            state.timeoutId = window.setTimeout(() => {
+                state.timeoutId = null;
+                state.status = 'idle';
+                scheduleMeasureNow();
+            }, delay);
+            return;
+        }
+
+        state.status = 'running';
+        pendingReasons.clear();
+        runMeasurement(reason);
+        state.lastRunTs = performance.now();
+        state.status = 'idle';
+        if (pendingReasons.size > 0) {
+            scheduleMeasureNow();
+        }
+    }, [getHydrationDelay, pickMeasureReason, runMeasurement]);
+
+    const requestMeasure = useCallback((reason: PrefixReason) => {
+        const state = measureStateRef.current;
+        state.pendingReasons.add(reason);
+        if (state.status === 'running') return;
+        if (isScrolling.current || isResizing.current) {
+            state.status = 'pending';
+            return;
+        }
+        scheduleMeasureNow();
+    }, [scheduleMeasureNow]);
 
     const getOverscanPx = useCallback((velocity: number, viewportHeight: number) => {
         const baseOverscan = Math.max(BASE_OVERSCAN_PX, viewportHeight * BASE_OVERSCAN_VIEWPORT_MULTIPLIER);
@@ -206,14 +295,7 @@ export function useVirtualBlocks(
             clearTimeout(idleTimeoutRef.current);
         }
         idleTimeoutRef.current = window.setTimeout(() => {
-            if (isScrolling.current || isResizing.current) {
-                pendingMeasure.current = true;
-                pendingMeasureReasonRef.current = reason;
-                return;
-            }
-            pendingMeasure.current = false;
-            pendingMeasureReasonRef.current = null;
-            measureHeights(reason);
+            requestMeasure(reason);
             if (pendingScrollPaddingRef.current) {
                 pendingScrollPaddingRef.current = false;
                 const container = containerRef.current;
@@ -227,7 +309,7 @@ export function useVirtualBlocks(
                 updateRange(container.scrollTop, viewportHeight, getOverscanPx(0, viewportHeight));
             }
         }, LAYOUT_IDLE_MS);
-    }, [containerRef, getOverscanPx, measureHeights, updateRange]);
+    }, [containerRef, getOverscanPx, requestMeasure, updateRange]);
 
     const bumpScrollTopWrite = useCallback((reason: string) => {
         if (!isDebugCountersEnabled()) return;
@@ -305,10 +387,8 @@ export function useVirtualBlocks(
             idleTimeoutId.current = window.setTimeout(() => {
                 isScrolling.current = false;
                 setDocViewerScrolling(false);
-                if (pendingMeasure.current) {
-                    pendingMeasure.current = false;
-                    measureHeights(pendingMeasureReasonRef.current ?? 'measure');
-                    pendingMeasureReasonRef.current = null;
+                if (measureStateRef.current.status === 'pending') {
+                    scheduleMeasureNow();
                 }
                 if (pendingScrollPaddingRef.current) {
                     pendingScrollPaddingRef.current = false;
@@ -372,12 +452,11 @@ export function useVirtualBlocks(
             }
             resizeIdleTimeoutId.current = window.setTimeout(() => {
                 isResizing.current = false;
-                if (pendingMeasure.current || isScrolling.current) {
-                    pendingMeasure.current = true;
-                    pendingMeasureReasonRef.current = 'resize';
+                if (measureStateRef.current.status === 'pending' || isScrolling.current) {
+                    requestMeasure('resize');
                     return;
                 }
-                measureHeights('resize');
+                requestMeasure('resize');
                 scrollPaddingRef.current = Math.max(0, container.scrollHeight - totalHeightRef.current);
                 updateRange(container.scrollTop, nextHeight, getOverscanPx(0, nextHeight));
             }, RESIZE_IDLE_MS);
@@ -442,6 +521,10 @@ export function useVirtualBlocks(
             if (pendingRangeRafRef.current) {
                 cancelAnimationFrame(pendingRangeRafRef.current);
             }
+            if (measureStateRef.current.timeoutId) {
+                clearTimeout(measureStateRef.current.timeoutId);
+                measureStateRef.current.timeoutId = null;
+            }
             resizeObserver.disconnect();
             if (isScrolling.current) {
                 setDocViewerScrolling(false);
@@ -453,9 +536,10 @@ export function useVirtualBlocks(
         containerRef,
         getOverscanPx,
         isHydrating,
-        measureHeights,
         onSeekIntent,
         perfEnabled,
+        requestMeasure,
+        scheduleMeasureNow,
         shouldVirtualize,
         updateRange,
     ]);
@@ -479,22 +563,14 @@ export function useVirtualBlocks(
         if (layoutVersion === undefined) return;
         if (layoutVersion === lastLayoutVersionRef.current) return;
         lastLayoutVersionRef.current = layoutVersion;
-        pendingMeasure.current = true;
         scheduleIdleRemeasure(layoutIdleTimeoutId, 'toggle');
     }, [layoutVersion, scheduleIdleRemeasure, shouldVirtualize]);
 
     // Measure block heights when they render
     useLayoutEffect(() => {
         if (!shouldVirtualize) return;
-        if (isScrolling.current || isResizing.current) {
-            pendingMeasure.current = true;
-            if (!pendingMeasureReasonRef.current) {
-                pendingMeasureReasonRef.current = isHydrating ? 'hydrate' : 'measure';
-            }
-            return;
-        }
-        measureHeights(isHydrating ? 'hydrate' : 'measure');
-    }, [isHydrating, measureHeights, shouldVirtualize, visibleRange]);
+        requestMeasure(isHydrating ? 'hydrate' : 'measure');
+    }, [isHydrating, requestMeasure, shouldVirtualize, visibleRange]);
 
     useLayoutEffect(() => {
         const totalHeight = prefixHeights[prefixHeights.length - 1] ?? 0;

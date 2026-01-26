@@ -31,6 +31,7 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
     const [useVariedSize, setUseVariedSize] = useState(false); // Toggle State
     const [sidebarOpen, setSidebarOpen] = useState(false); // Hidden by default
     const [debugOpen, setDebugOpen] = useState(false); // Hidden by default
+    const [lastDroppedFile, setLastDroppedFile] = useState<File | null>(null);
     const [metrics, setMetrics] = useState<PlaygroundMetrics>({
         nodes: 0,
         links: 0,
@@ -219,6 +220,7 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
 
         const file = files[0];
         console.log('[Drop] File dropped:', file.name, file.type);
+        setLastDroppedFile(file);
 
         // Convert drop coordinates to world space
         const canvas = canvasRef.current;
@@ -336,6 +338,7 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
                     clearHover('viewer close', -1, 'unknown');
                     documentContext.setPreviewOpen(false);
                 }}
+                rawFile={lastDroppedFile}
             />
             <div
                 style={MAIN_STYLE}

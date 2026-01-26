@@ -1,9 +1,12 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { useDocument } from '../../store/documentStore';
+import { ArnvoidDocumentViewer } from '../../ArnvoidDocumentViewer';
+import type { ViewerSource } from '../../ArnvoidDocumentViewer';
 
 type HalfLeftWindowProps = {
     open: boolean;
     onClose: () => void;
+    rawFile: File | null;
 };
 
 const PANEL_STYLE: React.CSSProperties = {
@@ -52,23 +55,22 @@ const CLOSE_BUTTON_STYLE: React.CSSProperties = {
 
 const BODY_STYLE: React.CSSProperties = {
     flex: 1,
-    overflow: 'auto',
+    overflow: 'hidden',
     overscrollBehavior: 'contain',
-    padding: '18px 18px 24px 18px',
-    lineHeight: 1.55,
-    fontSize: '13px',
+    padding: 0,
 };
 
-const EMPTY_STYLE: React.CSSProperties = {
-    padding: '18px',
-    border: '1px dashed rgba(99, 171, 255, 0.25)',
-    borderRadius: '10px',
-    color: 'rgba(180, 190, 210, 0.75)',
-    background: 'rgba(0,0,0,0.12)',
-};
-
-export const HalfLeftWindow: React.FC<HalfLeftWindowProps> = ({ open, onClose }) => {
+export const HalfLeftWindow: React.FC<HalfLeftWindowProps> = ({ open, onClose, rawFile }) => {
     const { state } = useDocument();
+    const source = useMemo<ViewerSource | null>(() => {
+        if (rawFile) {
+            return { kind: 'file', file: rawFile };
+        }
+        const doc = state.activeDocument;
+        if (!doc) return null;
+        const formatHint = doc.sourceType === 'md' ? 'md' : 'txt';
+        return { kind: 'text', text: doc.text, formatHint };
+    }, [rawFile, state.activeDocument]);
 
     if (!open) return null;
 
@@ -88,8 +90,6 @@ export const HalfLeftWindow: React.FC<HalfLeftWindowProps> = ({ open, onClose })
             e.dataTransfer.dropEffect = 'none';
         }
     };
-
-    const doc = state.activeDocument;
 
     return (
         <div
@@ -114,26 +114,7 @@ export const HalfLeftWindow: React.FC<HalfLeftWindowProps> = ({ open, onClose })
             </div>
 
             <div style={BODY_STYLE}>
-                {!doc ? (
-                    <div style={EMPTY_STYLE}>
-                        <strong style={{ display: 'block', marginBottom: '6px', color: 'rgba(220, 228, 245, 0.9)' }}>
-                            No document loaded
-                        </strong>
-                        <div>Drop a file onto the canvas (right side) to parse it.</div>
-                    </div>
-                ) : (
-                    <div style={EMPTY_STYLE}>
-                        <strong style={{ display: 'block', marginBottom: '6px', color: 'rgba(220, 228, 245, 0.9)' }}>
-                            Viewer placeholder
-                        </strong>
-                        <div style={{ marginBottom: '10px' }}>
-                            Loaded: <span style={{ color: 'rgba(99, 171, 255, 0.9)' }}>{doc.fileName}</span>
-                        </div>
-                        <div style={{ opacity: 0.8 }}>
-                            This panel will later host the multi-engine document viewer (TXT/MD/DOCX/PDF) and adapter wiring.
-                        </div>
-                    </div>
-                )}
+                <ArnvoidDocumentViewer source={source} />
             </div>
         </div>
     );

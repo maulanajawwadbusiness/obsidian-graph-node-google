@@ -2,16 +2,21 @@ import React from 'react';
 import { useDocument } from '../../store/documentStore';
 
 /**
- * Bottom-left button to toggle text preview panel
+ * Bottom-left button to toggle the left viewer window.
+ * Must work even with no document loaded (opens empty state).
  */
+
+type TextPreviewButtonProps = {
+    onToggle?: () => void;
+};
 
 const stopPropagation = (e: React.MouseEvent) => e.stopPropagation();
 
-const TEXT_BUTTON_STYLE: React.CSSProperties = {
+const BUTTON_STYLE: React.CSSProperties = {
     position: 'absolute',
     bottom: '20px',
     left: '20px',
-    padding: '8px 16px',
+    padding: '8px 14px',
     fontSize: '13px',
     backgroundColor: 'rgba(20, 20, 30, 0.85)',
     color: 'rgba(180, 190, 210, 0.9)',
@@ -24,29 +29,25 @@ const TEXT_BUTTON_STYLE: React.CSSProperties = {
     zIndex: 100,
 };
 
-export const TextPreviewButton: React.FC = () => {
+export const TextPreviewButton: React.FC<TextPreviewButtonProps> = ({ onToggle }) => {
     const { state, togglePreview } = useDocument();
-
-    // Show button only when document is ready
-    if (state.status !== 'ready' || !state.activeDocument) {
-        return null;
-    }
+    const open = state.previewOpen;
 
     return (
         <button
             type="button"
-            style={TEXT_BUTTON_STYLE}
+            style={BUTTON_STYLE}
             onMouseDown={stopPropagation}
             onMouseMove={stopPropagation}
             onMouseUp={stopPropagation}
             onClick={(e) => {
                 stopPropagation(e);
-                togglePreview();
+                (onToggle ?? togglePreview)();
             }}
-            aria-label="Toggle text preview"
-            title="Show extracted text"
+            aria-label={open ? 'Close document viewer' : 'Open document viewer'}
+            title={open ? 'Close document viewer' : 'Open document viewer'}
         >
-            📄 Text Preview
+            {open ? '✕ Close Viewer' : '📄 Open Viewer'}
         </button>
     );
 };

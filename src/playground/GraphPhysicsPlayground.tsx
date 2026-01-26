@@ -6,7 +6,7 @@ import { DRAG_ENABLED, SkinMode, getTheme } from '../visual/theme';
 import { CanvasOverlays } from './components/CanvasOverlays';
 import { SidebarControls } from './components/SidebarControls';
 import { TextPreviewButton } from './components/TextPreviewButton';
-import { TextPreviewPanel } from './components/TextPreviewPanel';
+import { HalfLeftWindow } from './components/HalfLeftWindow';
 import { AIActivityGlyph } from './components/AIActivityGlyph';
 import { CONTAINER_STYLE, MAIN_STYLE, SHOW_THEME_TOGGLE } from './graphPlaygroundStyles';
 import { PlaygroundMetrics } from './playgroundTypes';
@@ -53,6 +53,7 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
         handlePointerLeave,
         handlePointerCancel,
         handlePointerUp,
+        clearHover,
         clientToWorld,
         worldToScreen,
         hoverStateRef
@@ -91,7 +92,7 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
         handlePointerUp(e.pointerId, e.pointerType);
     };
 
-    const onPointerDown = (e: React.PointerEvent) => {
+    const onPointerDown = (_e: React.PointerEvent) => {
         const canvas = canvasRef.current;
         if (!canvas) return;
 
@@ -322,8 +323,20 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
     // Get theme for container styling
     const activeTheme = getTheme(skinMode);
 
+    const toggleViewer = () => {
+        clearHover('viewer toggle', -1, 'unknown');
+        documentContext.togglePreview();
+    };
+
     return (
         <div style={{ ...CONTAINER_STYLE, background: activeTheme.background }}>
+            <HalfLeftWindow
+                open={documentContext.state.previewOpen}
+                onClose={() => {
+                    clearHover('viewer close', -1, 'unknown');
+                    documentContext.setPreviewOpen(false);
+                }}
+            />
             <div
                 style={MAIN_STYLE}
                 onMouseDown={handleMouseDown}
@@ -350,9 +363,9 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
                     showThemeToggle={SHOW_THEME_TOGGLE}
                     sidebarOpen={sidebarOpen}
                     skinMode={skinMode}
+                    viewerOpen={documentContext.state.previewOpen}
                 />
-                <TextPreviewButton />
-                <TextPreviewPanel />
+                <TextPreviewButton onToggle={toggleViewer} />
                 <AIActivityGlyph />
                 <PopupPortal />
             </div>

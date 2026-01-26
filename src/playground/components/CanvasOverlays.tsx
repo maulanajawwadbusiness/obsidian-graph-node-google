@@ -19,6 +19,7 @@ type CanvasOverlaysProps = {
     showThemeToggle: boolean;
     sidebarOpen: boolean;
     skinMode: string;
+    viewerOpen: boolean;
 };
 
 export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
@@ -30,7 +31,8 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
     onToggleTheme,
     showThemeToggle,
     sidebarOpen,
-    skinMode
+    skinMode,
+    viewerOpen
 }) => (
     <>
         {!debugOpen && (
@@ -87,7 +89,10 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
 
         {debugOpen && (
             <div
-                style={DEBUG_OVERLAY_STYLE}
+                style={{
+                    ...DEBUG_OVERLAY_STYLE,
+                    left: viewerOpen ? 'calc(50vw + 16px)' : DEBUG_OVERLAY_STYLE.left,
+                }}
                 onMouseDown={stopPropagation}
                 onMouseMove={stopPropagation}
                 onMouseUp={stopPropagation}

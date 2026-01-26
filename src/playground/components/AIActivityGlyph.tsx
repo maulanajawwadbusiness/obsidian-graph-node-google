@@ -9,13 +9,13 @@ import { useDocument } from '../../store/documentStore';
 
 const stopPropagation = (e: React.MouseEvent) => e.stopPropagation();
 
-const GLYPH_CONTAINER_STYLE: React.CSSProperties = {
+const getGlyphContainerStyle = (viewerOpen: boolean): React.CSSProperties => ({
     position: 'fixed',
     bottom: '26px',
-    left: '160px',  // Right of TextPreviewButton
+    left: viewerOpen ? 'calc(50vw + 160px)' : '160px', // Right of the toggle; shift into right region when viewer is open
     pointerEvents: 'none',  // Never block canvas interaction
     zIndex: 9999,  // Always on top
-};
+});
 
 const DOT_STYLE: React.CSSProperties = {
     width: '6px',
@@ -58,7 +58,7 @@ export const AIActivityGlyph: React.FC = () => {
 
     return createPortal(
         <div
-            style={GLYPH_CONTAINER_STYLE}
+            style={getGlyphContainerStyle(state.previewOpen)}
             onMouseDown={stopPropagation}
             onMouseMove={stopPropagation}
             onMouseUp={stopPropagation}

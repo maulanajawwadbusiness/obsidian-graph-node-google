@@ -26,6 +26,7 @@ const SHOW_TOOLBAR =
   import.meta.env.DEV && import.meta.env.VITE_PDFJS_ENGINE_TOOLBAR === "1";
 
 export default function PdfViewer({ source, scrollContainerRef }: PdfViewerProps) {
+  const viewerRef = useRef<HTMLDivElement>(null);
   const pdfDocRef = useRef<PDFDocumentProxy | null>(null);
   const loadingTaskRef = useRef<PDFDocumentLoadingTask | null>(null);
   const loadTokenRef = useRef(0);
@@ -283,9 +284,13 @@ export default function PdfViewer({ source, scrollContainerRef }: PdfViewerProps
     renderScaleRef,
   ]);
 
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
+  const handleKeyDown = useCallback(
+    (event: KeyboardEvent) => {
       if (event.defaultPrevented) return;
+      const root = viewerRef.current;
+      if (!root) return;
+      const active = document.activeElement;
+      if (!active || !root.contains(active)) return;
       const target = event.target as HTMLElement | null;
       if (
         target &&
@@ -306,14 +311,24 @@ export default function PdfViewer({ source, scrollContainerRef }: PdfViewerProps
         event.preventDefault();
         setPageNum((p) => Math.min(numPages || 1, p + 1));
       }
-    };
+    },
+    [numPages]
+  );
 
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [numPages]);
+  useEffect(() => {
+    window.addEventListener("keydown", handleKeyDown, { capture: true });
+    return () => window.removeEventListener("keydown", handleKeyDown, { capture: true });
+  }, [handleKeyDown]);
 
   return (
-    <div className="pdf-engine viewer">
+    <div
+      className="pdf-engine viewer"
+      ref={viewerRef}
+      tabIndex={0}
+      onPointerDown={() => {
+        viewerRef.current?.focus({ preventScroll: true });
+      }}
+    >
       {SHOW_TOOLBAR && (
         <PdfToolbar
           pageNum={pageNum}

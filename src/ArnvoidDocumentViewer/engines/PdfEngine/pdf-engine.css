@@ -1,0 +1,261 @@
+.pdf-engine {
+  font-family: var(--font-sans, "Segoe UI", Tahoma, Geneva, Verdana, sans-serif);
+  line-height: 1.4;
+  font-weight: 400;
+  color: var(--color-text-main, #1b1f23);
+  background: transparent;
+  width: 100%;
+  height: 100%;
+}
+
+.pdf-engine * {
+  box-sizing: border-box;
+}
+
+.pdf-engine.viewer {
+  min-height: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+.pdf-engine .toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  padding: 12px 16px;
+  background: var(--color-surface, rgba(26, 29, 35, 0.85));
+  border-bottom: 1px solid var(--color-border, rgba(255, 255, 255, 0.1));
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+.pdf-engine .toolbar button,
+.pdf-engine .toolbar input[type="file"] {
+  font-size: 14px;
+}
+
+.pdf-engine button {
+  border-radius: 6px;
+  border: 1px solid #c8d0d8;
+  padding: 6px 10px;
+  background: #f7f9fb;
+  cursor: pointer;
+}
+
+.pdf-engine button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.pdf-engine .status {
+  font-size: 14px;
+  color: #4d5b6b;
+}
+
+.pdf-engine .error {
+  padding: 8px 16px;
+  color: #b42318;
+  background: #fef3f2;
+  border-bottom: 1px solid #f5c2c7;
+}
+
+.pdf-engine .status-banner {
+  padding: 8px 16px;
+  color: #1f2937;
+  background: #eef2ff;
+  border-bottom: 1px solid #c7d2fe;
+}
+
+.pdf-engine .page-nav {
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-surface, #1a1d23) 85%, transparent);
+  border: 1px solid var(--color-border, rgba(255, 255, 255, 0.1));
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(8px);
+  z-index: 5;
+}
+
+.pdf-engine .page-label {
+  font-size: 12px;
+  color: var(--color-text-main, #e5e7eb);
+  white-space: nowrap;
+}
+
+.pdf-engine .page-controls {
+  display: flex;
+  gap: 6px;
+}
+
+.pdf-engine .page-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(17, 24, 39, 0.8);
+  color: var(--color-text-main, #e5e7eb);
+  font-size: 13px;
+  line-height: 1;
+  display: grid;
+  place-items: center;
+  padding: 0;
+}
+
+.pdf-engine .page-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.pdf-engine .canvas-wrap {
+  flex: 1;
+  overflow: auto;
+  padding: 16px;
+}
+
+.pdf-engine .canvas-stage {
+  position: relative;
+  margin: 0 auto;
+}
+
+.pdf-engine .canvas-stage-content {
+  position: relative;
+  width: 0;
+  height: 0;
+  transform-origin: top left;
+}
+
+.pdf-engine .pdf-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: block;
+  opacity: 0;
+  pointer-events: none;
+  background: #ffffff;
+  box-shadow: 0 12px 30px rgba(19, 34, 53, 0.15);
+  transform-origin: top left;
+}
+
+.pdf-engine .canvas-front {
+  z-index: 2;
+  opacity: 1;
+}
+
+.pdf-engine .canvas-back {
+  z-index: 1;
+}
+
+.pdf-engine .textLayer {
+  position: absolute;
+  left: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  overflow: hidden;
+  transform-origin: 0 0;
+  line-height: 1.0;
+  pointer-events: auto;
+  z-index: 10;
+}
+
+.pdf-engine .textLayer > span {
+  position: absolute;
+  white-space: pre;
+  color: transparent;
+  pointer-events: auto;
+  user-select: text;
+}
+
+.pdf-engine .textLayer > span::selection {
+  background: rgba(0, 100, 255, 0.3);
+}
+
+.pdf-engine .textLayer span.highlight {
+  background: transparent;
+}
+
+.pdf-engine .textLayer span.highlight.current {
+  background: transparent;
+}
+
+.pdf-engine .textLayer .pdf-hit {
+  position: relative;
+  display: inline;
+  background-color: rgba(255, 230, 0, 0.5);
+  border-radius: 2px;
+  box-shadow: 0 0 2px rgba(255, 200, 0, 0.3);
+  mix-blend-mode: multiply;
+}
+
+.pdf-engine .textLayer .pdf-hit.current {
+  background-color: rgba(255, 150, 0, 0.7);
+  box-shadow: 0 0 4px rgba(255, 150, 0, 0.5);
+}
+
+.pdf-engine ::highlight(search-match) {
+  color: transparent !important;
+  background-color: rgba(253, 224, 71, 0.5) !important;
+}
+
+.pdf-engine .search-box {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.pdf-engine .search-input {
+  width: 180px;
+  padding: 6px 8px;
+  border: 1px solid #c8d0d8;
+  border-radius: 6px;
+}
+
+.pdf-engine .search-count {
+  font-size: 12px;
+  color: #666;
+  min-width: 50px;
+  text-align: center;
+}
+
+.pdf-engine .search-status {
+  margin-left: auto;
+  padding: 4px 8px;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 12px;
+  border: 1px solid transparent;
+}
+
+.pdf-engine .status-idle {
+  color: #6b7280;
+  background: #f3f4f6;
+  border-color: #d1d5db;
+}
+
+.pdf-engine .status-building {
+  color: #1d4ed8;
+  background: #dbeafe;
+  border-color: #93c5fd;
+}
+
+.pdf-engine .status-ready {
+  color: #065f46;
+  background: #d1fae5;
+  border-color: #6ee7b7;
+}
+
+.pdf-engine .status-error {
+  color: #991b1b;
+  background: #fee2e2;
+  border-color: #fca5a5;
+}

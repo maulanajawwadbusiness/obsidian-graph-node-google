@@ -1,0 +1,56 @@
+.arnvoid-viewer {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+  background: var(--color-bg, #0f1115);
+  color: var(--color-text-main, #ededed);
+}
+
+.arnvoid-viewer-body {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  position: relative;
+}
+
+.arnvoid-viewer-scroll {
+  height: 100%;
+  width: 100%;
+  overflow: auto;
+  padding: 18px;
+  content-visibility: auto;
+  contain-intrinsic-size: 1000px;
+}
+
+.arnvoid-text {
+  white-space: pre-wrap;
+  font-family: var(--font-mono, "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace);
+}
+
+.arnvoid-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--color-text-muted, #a1a1aa);
+}
+
+.arnvoid-error {
+  padding: 8px 12px;
+  margin-bottom: 12px;
+  background: rgba(185, 28, 28, 0.2);
+  border: 1px solid rgba(185, 28, 28, 0.4);
+  border-radius: 6px;
+  color: #fca5a5;
+}
+
+.arnvoid-viewer ::highlight(arnvoid-range) {
+  background-color: rgba(59, 130, 246, 0.35);
+  color: inherit;
+}
+
+.arnvoid-viewer ::highlight(search-match) {
+  background-color: #fde047;
+  color: black;
+}

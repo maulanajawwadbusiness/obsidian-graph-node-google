@@ -4,41 +4,43 @@ import chatbarIcon from '../assets/chatbar_icon.png';
 
 /**
  * FullChatToggle - Bottom-right toggle button for Full Chatbar
- * Matches the "Open Viewer" button style: rounded rectangle, 6px radius.
+ * Dark elegance: energy button with subtle luminous gradient, no border.
  * Hidden when chatbar is open (chatbar has its own close button).
  */
 
+// Arnvoid energy blue family (based on #56C4FF node tone)
+const ENERGY_GRADIENT = 'linear-gradient(135deg, rgba(56, 160, 220, 0.85) 0%, rgba(86, 196, 255, 0.9) 50%, rgba(100, 180, 240, 0.8) 100%)';
+
 const TOGGLE_STYLE: React.CSSProperties = {
     position: 'fixed',
-    bottom: '20px',
-    right: '20px',
+    bottom: '24px',
+    right: '24px',
     zIndex: 100,
-    // Rounded rectangle matching Open Viewer button (6px radius)
-    padding: '8px 14px',
-    borderRadius: '6px',
-    minWidth: '44px',
-    minHeight: '36px',
-    // Professional dark background
-    backgroundColor: 'rgba(20, 20, 30, 0.85)',
-    border: '1px solid rgba(99, 171, 255, 0.3)',
-    color: 'rgba(180, 190, 210, 0.9)',
+    // 2x larger visual weight — intentional, not tiny
+    width: '56px',
+    height: '56px',
+    padding: 0,
+    borderRadius: '12px',
+    // Energy gradient — subtle luminous depth
+    background: ENERGY_GRADIENT,
+    // NO border — clean energy button
+    border: 'none',
+    // Soft glow shadow for luminous feel
+    boxShadow: '0 4px 20px rgba(86, 196, 255, 0.25), 0 2px 8px rgba(0, 0, 0, 0.3)',
     cursor: 'pointer',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: '8px',
-    backdropFilter: 'blur(8px)',
-    fontFamily: 'system-ui, -apple-system, sans-serif',
-    fontSize: '13px',
     // NO transitions in v1
 };
 
 const ICON_STYLE: React.CSSProperties = {
-    width: '18px',
-    height: '18px',
-    opacity: 0.9,
-    // Invert to white for dark background
-    filter: 'invert(1)',
+    // Sized for line icon replacement later — clean, not cramped
+    width: '24px',
+    height: '24px',
+    opacity: 1,
+    // White icon on blue gradient
+    filter: 'invert(1) brightness(1.1)',
 };
 
 export const FullChatToggle: React.FC = () => {
@@ -55,12 +57,10 @@ export const FullChatToggle: React.FC = () => {
             aria-label="Open Chat"
             title="Open Chat"
             onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = 'rgba(30, 30, 42, 0.95)';
-                e.currentTarget.style.borderColor = 'rgba(99, 171, 255, 0.45)';
+                e.currentTarget.style.boxShadow = '0 6px 28px rgba(86, 196, 255, 0.4), 0 3px 12px rgba(0, 0, 0, 0.35)';
             }}
             onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = 'rgba(20, 20, 30, 0.85)';
-                e.currentTarget.style.borderColor = 'rgba(99, 171, 255, 0.3)';
+                e.currentTarget.style.boxShadow = '0 4px 20px rgba(86, 196, 255, 0.25), 0 2px 8px rgba(0, 0, 0, 0.3)';
             }}
         >
             <img src={chatbarIcon} alt="" style={ICON_STYLE} />

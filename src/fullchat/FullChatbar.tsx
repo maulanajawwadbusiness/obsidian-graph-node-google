@@ -5,134 +5,110 @@ import type { PhysicsEngine } from '../physics/engine';
 
 /**
  * FullChatbar - Right-docked reasoning panel
- * Dark Elegance: deep navy base, intelligent blue energy accents,
- * spacious minimalism, calm analyst room for 20-hour thinking.
+ * 
+ * DARK ELEGANCE:
+ * - Near-black void as base (not gray, not navy — BLACK)
+ * - Blue is rare energy escaping from depth
+ * - Mesmerizing, restrained, beautiful in its darkness
  */
 
 interface FullChatbarProps {
     engineRef: React.RefObject<PhysicsEngine>;
 }
 
-// Safe stop — propagation only, never preventDefault
-const stop = (e: React.SyntheticEvent) => {
-    e.stopPropagation();
-};
-
-// Safe wheel — stop canvas zoom, but allow chat scroll
-const stopWheel = (e: React.WheelEvent) => {
-    e.stopPropagation();
-};
+const stop = (e: React.SyntheticEvent) => e.stopPropagation();
+const stopWheel = (e: React.WheelEvent) => e.stopPropagation();
 
 // =============================================================================
-// DARK ELEGANCE DESIGN TOKENS
-// Matches the canonical Node Popup identity: deep navy, intelligent blue energy
+// DARK ELEGANCE TOKENS — The Void with Energy Leaking Through
 // =============================================================================
-const TOKENS = {
-    // Navy family (not ash/gray) — matches NodePopup rgba(20, 20, 30, 0.95)
-    bgPanel: 'rgba(20, 20, 30, 0.98)',
-    bgSurface: 'rgba(26, 26, 38, 0.95)',
-    bgInput: 'rgba(32, 32, 46, 0.9)',
-    bgUserMessage: 'rgba(38, 40, 54, 0.95)',
+const VOID = {
+    // The abyss — near black, deep, mesmerizing
+    deepest: '#08080c',
+    deep: '#0c0c12',
+    surface: '#101016',
+    elevated: '#14141c',
 
-    // Borders — subtle navy separation
-    borderSubtle: 'rgba(50, 52, 70, 0.5)',
-    borderAccent: 'rgba(99, 171, 255, 0.2)',
+    // Text — soft glow against the void
+    textBright: 'rgba(255, 255, 255, 0.92)',
+    textSoft: 'rgba(200, 210, 225, 0.7)',
+    textDim: 'rgba(140, 150, 170, 0.5)',
 
-    // Text — clean white/soft-white hierarchy
-    textPrimary: 'rgba(220, 225, 235, 0.95)',
-    textSecondary: 'rgba(180, 190, 210, 0.85)',
-    textMuted: 'rgba(130, 140, 160, 0.7)',
+    // The energy that escapes — use SPARINGLY
+    energy: '#56C4FF',
+    energyGlow: 'rgba(86, 196, 255, 0.8)',
+    energySubtle: 'rgba(86, 196, 255, 0.15)',
+    energyFaint: 'rgba(86, 196, 255, 0.06)',
 
-    // Blue energy — use sparingly, where meaning is highest
-    accentBlue: 'rgba(99, 171, 255, 0.9)',
-    accentBlueMuted: 'rgba(99, 171, 255, 0.6)',
-
-    // Spacing — generous breathing room
-    spacingXs: '4px',
-    spacingSm: '8px',
-    spacingMd: '12px',
-    spacingLg: '16px',
-    spacingXl: '20px',
-    spacing2xl: '24px',
-
-    // Radii
-    radiusSm: '4px',
-    radiusMd: '6px',
-    radiusLg: '8px',
-
-    // Typography
-    fontFamily: "system-ui, -apple-system, sans-serif",
-    fontSizeXs: '11px',
-    fontSizeSm: '12px',
-    fontSizeMd: '14px',
-    fontSizeLg: '16px',
-    lineHeight: '1.6',
+    // Borders — barely visible lines in the dark
+    line: 'rgba(255, 255, 255, 0.04)',
+    lineEnergy: 'rgba(86, 196, 255, 0.12)',
 };
 
 // =============================================================================
-// STYLES — Dark Elegance, Spacious Minimalism
+// STYLES — Depth and Darkness
 // =============================================================================
 
 const PANEL_STYLE: React.CSSProperties = {
-    // Exactly 30% width as required
     flex: '0 0 30%',
     minWidth: '320px',
     maxWidth: '480px',
     height: '100%',
-    backgroundColor: TOKENS.bgPanel,
-    borderLeft: `1px solid ${TOKENS.borderSubtle}`,
+    // The void — gradient creates depth
+    background: `linear-gradient(180deg, ${VOID.deep} 0%, ${VOID.deepest} 100%)`,
+    // Faint energy line on the left edge — light escaping
+    borderLeft: `1px solid ${VOID.lineEnergy}`,
+    boxShadow: `inset 1px 0 20px ${VOID.energyFaint}`,
     zIndex: 500,
     display: 'flex',
     flexDirection: 'column',
-    fontFamily: TOKENS.fontFamily,
-    color: TOKENS.textPrimary,
+    fontFamily: "system-ui, -apple-system, sans-serif",
+    color: VOID.textSoft,
     position: 'relative',
     pointerEvents: 'auto',
-    // NO transitions in v1
 };
 
 const HEADER_STYLE: React.CSSProperties = {
     height: '56px',
-    padding: `0 ${TOKENS.spacingXl}`,
+    padding: '0 24px',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
-    // No border — clean navy separation via background
+    borderBottom: `1px solid ${VOID.line}`,
     flexShrink: 0,
 };
 
 const TITLE_STYLE: React.CSSProperties = {
-    fontSize: TOKENS.fontSizeMd,
-    fontWeight: 400,
-    letterSpacing: '0.2px',
-    // Blue accent on title — the "essence beam"
-    color: TOKENS.accentBlue,
-    opacity: 0.9,
+    fontSize: '13px',
+    fontWeight: 500,
+    letterSpacing: '0.5px',
+    textTransform: 'uppercase' as const,
+    // The energy leaking through — this is THE accent
+    color: VOID.energyGlow,
+    textShadow: `0 0 20px ${VOID.energySubtle}`,
 };
 
 const CLOSE_BUTTON_STYLE: React.CSSProperties = {
     background: 'transparent',
     border: 'none',
-    color: TOKENS.textMuted,
+    color: VOID.textDim,
     cursor: 'pointer',
-    borderRadius: TOKENS.radiusSm,
     width: '28px',
     height: '28px',
     display: 'inline-flex',
     alignItems: 'center',
     justifyContent: 'center',
     fontSize: '18px',
-    lineHeight: 1,
+    borderRadius: '4px',
 };
 
 const CONTEXT_BADGE_STYLE: React.CSSProperties = {
-    padding: `${TOKENS.spacingMd} ${TOKENS.spacingXl}`,
-    backgroundColor: TOKENS.bgSurface,
-    borderBottom: `1px solid ${TOKENS.borderSubtle}`,
-    fontSize: TOKENS.fontSizeXs,
+    padding: '12px 24px',
+    background: VOID.surface,
+    borderBottom: `1px solid ${VOID.line}`,
     display: 'flex',
     alignItems: 'center',
-    gap: TOKENS.spacingSm,
+    gap: '10px',
 };
 
 const MESSAGES_CONTAINER_STYLE: React.CSSProperties = {
@@ -141,71 +117,70 @@ const MESSAGES_CONTAINER_STYLE: React.CSSProperties = {
     overflowY: 'auto',
     display: 'flex',
     flexDirection: 'column',
-    gap: TOKENS.spacing2xl,
-    fontSize: TOKENS.fontSizeMd,
-    lineHeight: TOKENS.lineHeight,
-    padding: TOKENS.spacing2xl,
+    gap: '24px',
+    fontSize: '14px',
+    lineHeight: '1.65',
+    padding: '24px',
 };
 
 const MESSAGE_STYLE_USER: React.CSSProperties = {
     alignSelf: 'flex-end',
-    backgroundColor: TOKENS.bgUserMessage,
-    padding: `${TOKENS.spacingMd} ${TOKENS.spacingLg}`,
-    borderRadius: TOKENS.radiusMd,
+    // Elevated surface — slightly visible against void
+    background: VOID.elevated,
+    padding: '14px 18px',
+    borderRadius: '8px',
     maxWidth: '85%',
-    color: TOKENS.textPrimary,
-    fontSize: TOKENS.fontSizeMd,
-    lineHeight: TOKENS.lineHeight,
+    color: VOID.textBright,
+    fontSize: '14px',
+    lineHeight: '1.6',
+    // Subtle inner glow
+    boxShadow: `inset 0 1px 0 ${VOID.line}`,
 };
 
 const MESSAGE_STYLE_AI: React.CSSProperties = {
     alignSelf: 'flex-start',
-    padding: `${TOKENS.spacingSm} 0`,
+    padding: '8px 0',
     maxWidth: '90%',
-    color: TOKENS.textSecondary,
-    fontSize: TOKENS.fontSizeMd,
-    lineHeight: TOKENS.lineHeight,
+    color: VOID.textSoft,
+    fontSize: '14px',
+    lineHeight: '1.65',
 };
 
 const INPUT_CONTAINER_STYLE: React.CSSProperties = {
-    padding: TOKENS.spacingXl,
-    borderTop: `1px solid ${TOKENS.borderSubtle}`,
+    padding: '20px 24px',
+    borderTop: `1px solid ${VOID.line}`,
     display: 'flex',
-    gap: TOKENS.spacingMd,
+    gap: '12px',
     alignItems: 'flex-end',
-    backgroundColor: TOKENS.bgSurface,
+    background: VOID.surface,
 };
 
 const INPUT_FIELD_STYLE: React.CSSProperties = {
     flex: 1,
-    padding: `${TOKENS.spacingMd} ${TOKENS.spacingLg}`,
-    fontSize: TOKENS.fontSizeMd,
-    backgroundColor: TOKENS.bgInput,
-    border: `1px solid ${TOKENS.borderSubtle}`,
-    borderRadius: TOKENS.radiusMd,
-    color: TOKENS.textPrimary,
+    padding: '14px 18px',
+    fontSize: '14px',
+    background: VOID.deep,
+    border: `1px solid ${VOID.line}`,
+    borderRadius: '8px',
+    color: VOID.textBright,
     outline: 'none',
     resize: 'none',
-    overflow: 'hidden', // No scrollbar ever
-    fontFamily: TOKENS.fontFamily,
-    lineHeight: TOKENS.lineHeight,
+    overflow: 'hidden',
+    fontFamily: 'inherit',
+    lineHeight: '1.5',
 };
 
 const SEND_BUTTON_STYLE: React.CSSProperties = {
     background: 'transparent',
     border: 'none',
-    borderRadius: TOKENS.radiusSm,
-    padding: TOKENS.spacingSm,
-    // Blue accent for primary action
-    color: TOKENS.accentBlueMuted,
+    borderRadius: '6px',
+    padding: '8px',
     cursor: 'pointer',
-    fontSize: '20px',
-    lineHeight: 1,
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    width: '36px',
-    height: '36px',
+    width: '40px',
+    height: '40px',
     flexShrink: 0,
 };
 
@@ -215,28 +190,14 @@ const EMPTY_STATE_STYLE: React.CSSProperties = {
     flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: TOKENS.spacing2xl,
+    padding: '32px',
     textAlign: 'center',
-    gap: TOKENS.spacingLg,
+    gap: '16px',
 };
 
-const EMPTY_ICON_STYLE: React.CSSProperties = {
-    width: '40px',
-    height: '40px',
-    // Blue accent for empty state icon
-    color: TOKENS.accentBlueMuted,
-    opacity: 0.4,
-    marginBottom: TOKENS.spacingSm,
-};
-
-// =============================================================================
-// AUTO-EXPANDING TEXTAREA LOGIC
-// Grows with content up to 5 lines, no internal scrollbar
-// =============================================================================
-const LINE_HEIGHT_PX = 22; // approx line height at 14px font with 1.6 line-height
-const MAX_LINES = 5;
-const MIN_HEIGHT = 44; // single line with padding
-const MAX_HEIGHT = MIN_HEIGHT + (LINE_HEIGHT_PX * (MAX_LINES - 1));
+// Auto-expand constants
+const MIN_HEIGHT = 48;
+const MAX_HEIGHT = 140;
 
 // =============================================================================
 // COMPONENT
@@ -249,7 +210,6 @@ export const FullChatbar: React.FC<FullChatbarProps> = ({ engineRef }) => {
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-    // Only show Active Context (current popup), not "Last Selected"
     const currentFocusNodeId = popupContext.isOpen ? popupContext.selectedNodeId : null;
 
     const getNodeLabel = (nodeId: string | null): string | null => {
@@ -259,7 +219,6 @@ export const FullChatbar: React.FC<FullChatbarProps> = ({ engineRef }) => {
 
     const focusLabel = getNodeLabel(currentFocusNodeId);
 
-    // Handle pending context from mini chat handoff
     useEffect(() => {
         if (fullChat.pendingContext && textareaRef.current) {
             setInputText(fullChat.pendingContext.suggestedPrompt);
@@ -268,25 +227,16 @@ export const FullChatbar: React.FC<FullChatbarProps> = ({ engineRef }) => {
         }
     }, [fullChat.pendingContext, fullChat.clearPendingContext]);
 
-    // Auto-scroll to bottom on new messages
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [fullChat.messages]);
 
-    // Auto-expand textarea height
     const adjustTextareaHeight = useCallback(() => {
         const textarea = textareaRef.current;
         if (!textarea) return;
-
-        // Reset to min to get accurate scrollHeight
         textarea.style.height = `${MIN_HEIGHT}px`;
-
-        // Calculate new height (clamped to max)
         const newHeight = Math.min(textarea.scrollHeight, MAX_HEIGHT);
         textarea.style.height = `${newHeight}px`;
-
-        // Never show scrollbar — if at max, just stop growing
-        textarea.style.overflowY = 'hidden';
     }, []);
 
     useEffect(() => {
@@ -297,7 +247,6 @@ export const FullChatbar: React.FC<FullChatbarProps> = ({ engineRef }) => {
         if (inputText.trim()) {
             fullChat.sendMessage(inputText.trim());
             setInputText('');
-            // Reset height after send
             if (textareaRef.current) {
                 textareaRef.current.style.height = `${MIN_HEIGHT}px`;
             }
@@ -309,7 +258,6 @@ export const FullChatbar: React.FC<FullChatbarProps> = ({ engineRef }) => {
             e.preventDefault();
             handleSend();
         }
-        // Shift+Enter allows newline (default textarea behavior)
     };
 
     if (!fullChat.isOpen) return null;
@@ -326,40 +274,34 @@ export const FullChatbar: React.FC<FullChatbarProps> = ({ engineRef }) => {
             onWheelCapture={stopWheel}
             onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); }}
         >
-            {/* Header — blue title accent */}
+            {/* Header */}
             <div style={HEADER_STYLE}>
                 <div style={TITLE_STYLE}>Reasoning</div>
                 <button
                     type="button"
                     style={CLOSE_BUTTON_STYLE}
                     onClick={fullChat.closeFullChat}
-                    aria-label="Close panel"
+                    aria-label="Close"
                     title="Close"
-                    onMouseEnter={(e) => {
-                        e.currentTarget.style.color = TOKENS.textSecondary;
-                    }}
-                    onMouseLeave={(e) => {
-                        e.currentTarget.style.color = TOKENS.textMuted;
-                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.color = VOID.textSoft}
+                    onMouseLeave={(e) => e.currentTarget.style.color = VOID.textDim}
                 >
                     ×
                 </button>
             </div>
 
-            {/* Context Badge — only Active Context (popup open), no "Last Selected" */}
+            {/* Context — only when popup is open */}
             {focusLabel && (
                 <div style={CONTEXT_BADGE_STYLE}>
+                    {/* Energy dot — the only blue accent here */}
                     <span style={{
-                        color: TOKENS.accentBlue,
-                        fontSize: TOKENS.fontSizeXs,
-                        fontWeight: 500,
-                    }}>
-                        ●
-                    </span>
-                    <span style={{
-                        color: TOKENS.textSecondary,
-                        fontSize: TOKENS.fontSizeSm,
-                    }}>
+                        width: '6px',
+                        height: '6px',
+                        borderRadius: '50%',
+                        background: VOID.energy,
+                        boxShadow: `0 0 8px ${VOID.energyGlow}`,
+                    }} />
+                    <span style={{ color: VOID.textSoft, fontSize: '13px' }}>
                         {focusLabel}
                     </span>
                 </div>
@@ -380,42 +322,32 @@ export const FullChatbar: React.FC<FullChatbarProps> = ({ engineRef }) => {
                 </div>
             ) : (
                 <div style={EMPTY_STATE_STYLE}>
-                    {/* Quiet geometric icon with blue accent */}
-                    <svg
-                        style={EMPTY_ICON_STYLE}
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="1.2"
-                    >
-                        <circle cx="12" cy="12" r="10" />
-                        <path d="M12 8v4l2 2" />
-                    </svg>
+                    {/* Minimal — just a faint ring with energy glow */}
                     <div style={{
-                        color: TOKENS.textSecondary,
-                        fontSize: TOKENS.fontSizeMd,
-                        fontWeight: 400,
+                        width: '48px',
+                        height: '48px',
+                        borderRadius: '50%',
+                        border: `1px solid ${VOID.energySubtle}`,
+                        boxShadow: `0 0 30px ${VOID.energyFaint}, inset 0 0 20px ${VOID.energyFaint}`,
+                        marginBottom: '8px',
+                    }} />
+                    <div style={{
+                        color: VOID.textSoft,
+                        fontSize: '14px',
                     }}>
-                        {focusLabel
-                            ? `Thinking about ${focusLabel}`
-                            : 'A quiet space for reasoning'
-                        }
+                        {focusLabel ? `Thinking about ${focusLabel}` : 'A quiet space for reasoning'}
                     </div>
                     <div style={{
-                        color: TOKENS.textMuted,
-                        fontSize: TOKENS.fontSizeSm,
-                        maxWidth: '240px',
-                        lineHeight: '1.5',
+                        color: VOID.textDim,
+                        fontSize: '12px',
+                        maxWidth: '220px',
                     }}>
-                        {focusLabel
-                            ? 'Trace your thoughts here.'
-                            : 'Select a node for context, or begin directly.'
-                        }
+                        {focusLabel ? 'Trace your thoughts here.' : 'Select a node, or begin directly.'}
                     </div>
                 </div>
             )}
 
-            {/* Input Area — premium auto-expanding, no scrollbar */}
+            {/* Input */}
             <div style={INPUT_CONTAINER_STYLE}>
                 <textarea
                     ref={textareaRef}
@@ -423,16 +355,15 @@ export const FullChatbar: React.FC<FullChatbarProps> = ({ engineRef }) => {
                     onChange={(e) => setInputText(e.target.value)}
                     onKeyDown={handleKeyDown}
                     placeholder="Trace the thought here…"
-                    style={{
-                        ...INPUT_FIELD_STYLE,
-                        height: `${MIN_HEIGHT}px`, // Initial, adjusted by effect
-                    }}
+                    style={{ ...INPUT_FIELD_STYLE, height: `${MIN_HEIGHT}px` }}
                     rows={1}
                     onFocus={(e) => {
-                        e.currentTarget.style.borderColor = TOKENS.borderAccent;
+                        e.currentTarget.style.borderColor = VOID.lineEnergy;
+                        e.currentTarget.style.boxShadow = `0 0 0 1px ${VOID.energyFaint}`;
                     }}
                     onBlur={(e) => {
-                        e.currentTarget.style.borderColor = TOKENS.borderSubtle;
+                        e.currentTarget.style.borderColor = VOID.line;
+                        e.currentTarget.style.boxShadow = 'none';
                     }}
                 />
                 <button
@@ -440,23 +371,30 @@ export const FullChatbar: React.FC<FullChatbarProps> = ({ engineRef }) => {
                     disabled={!inputText.trim()}
                     style={{
                         ...SEND_BUTTON_STYLE,
-                        opacity: inputText.trim() ? 1 : 0.4,
+                        opacity: inputText.trim() ? 1 : 0.3,
                         cursor: inputText.trim() ? 'pointer' : 'default',
-                        color: inputText.trim() ? TOKENS.accentBlue : TOKENS.textMuted,
                     }}
                     aria-label="Send"
-                    title="Send (Enter)"
+                    title="Send"
                     onMouseEnter={(e) => {
                         if (inputText.trim()) {
-                            e.currentTarget.style.color = TOKENS.textPrimary;
+                            e.currentTarget.style.background = VOID.energyFaint;
                         }
                     }}
                     onMouseLeave={(e) => {
-                        e.currentTarget.style.color = inputText.trim() ? TOKENS.accentBlue : TOKENS.textMuted;
+                        e.currentTarget.style.background = 'transparent';
                     }}
                 >
-                    {/* Minimal upward arrow — like NodePopup send button */}
-                    <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+                    {/* Energy arrow — the send action glows */}
+                    <svg
+                        viewBox="0 0 24 24"
+                        width="22"
+                        height="22"
+                        fill={inputText.trim() ? VOID.energy : VOID.textDim}
+                        style={{
+                            filter: inputText.trim() ? `drop-shadow(0 0 6px ${VOID.energySubtle})` : 'none',
+                        }}
+                    >
                         <path d="M12 4l-1.41 1.41L16.17 11H4v2h12.17l-5.58 5.59L12 20l8-8z" />
                     </svg>
                 </button>

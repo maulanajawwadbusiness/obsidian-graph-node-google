@@ -36,6 +36,10 @@
   color: var(--color-text-muted, #a1a1aa);
 }
 
+.arnvoid-left-window .arnvoid-empty {
+  display: none;
+}
+
 .arnvoid-error {
   padding: 8px 12px;
   margin-bottom: 12px;

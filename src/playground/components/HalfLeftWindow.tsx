@@ -67,6 +67,8 @@ const EMPTY_STYLE: React.CSSProperties = {
     borderRadius: '10px',
     color: 'rgba(180, 190, 210, 0.75)',
     background: 'rgba(0,0,0,0.12)',
+    fontSize: '13px',
+    lineHeight: 1.55,
 };
 
 export const HalfLeftWindow: React.FC<HalfLeftWindowProps> = ({ open, onClose, rawFile }) => {
@@ -122,7 +124,7 @@ export const HalfLeftWindow: React.FC<HalfLeftWindowProps> = ({ open, onClose, r
                 </button>
             </div>
 
-            <div style={BODY_STYLE}>
+            <div style={BODY_STYLE} className="arnvoid-left-window">
                 <ArnvoidDocumentViewer source={source} />
                 {!source && (
                     <div

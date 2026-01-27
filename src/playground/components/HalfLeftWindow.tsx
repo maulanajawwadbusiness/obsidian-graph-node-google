@@ -58,6 +58,15 @@ const BODY_STYLE: React.CSSProperties = {
     overflow: 'hidden',
     overscrollBehavior: 'contain',
     padding: 0,
+    position: 'relative',
+};
+
+const EMPTY_STYLE: React.CSSProperties = {
+    padding: '18px',
+    border: '1px dashed rgba(99, 171, 255, 0.25)',
+    borderRadius: '10px',
+    color: 'rgba(180, 190, 210, 0.75)',
+    background: 'rgba(0,0,0,0.12)',
 };
 
 export const HalfLeftWindow: React.FC<HalfLeftWindowProps> = ({ open, onClose, rawFile }) => {
@@ -115,6 +124,25 @@ export const HalfLeftWindow: React.FC<HalfLeftWindowProps> = ({ open, onClose, r
 
             <div style={BODY_STYLE}>
                 <ArnvoidDocumentViewer source={source} />
+                {!source && (
+                    <div
+                        style={{
+                            position: 'absolute',
+                            top: 0,
+                            left: 0,
+                            right: 0,
+                            padding: '18px 18px 24px 18px',
+                            pointerEvents: 'none',
+                        }}
+                    >
+                        <div style={EMPTY_STYLE}>
+                            <strong style={{ display: 'block', marginBottom: '6px', color: 'rgba(220, 228, 245, 0.9)' }}>
+                                No document loaded
+                            </strong>
+                            <div>Drop a file onto the canvas (right side) to parse it.</div>
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
     );

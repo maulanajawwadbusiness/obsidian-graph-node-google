@@ -16,6 +16,7 @@ import { DocumentProvider, useDocument } from '../store/documentStore';
 import { applyFirstWordsToNodes, applyAILabelsToNodes } from '../document/nodeBinding';
 import { PopupProvider, usePopup } from '../popup/PopupStore';
 import { PopupPortal } from '../popup/PopupPortal';
+import { FullChatProvider, FullChatbar, FullChatToggle, useFullChat } from '../fullchat';
 
 // -----------------------------------------------------------------------------
 // Main Component (Internal)
@@ -25,6 +26,8 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
     const engineRef = useRef<PhysicsEngine>(new PhysicsEngine());
     const documentContext = useDocument();
     const popupContext = usePopup();
+    const fullChatContext = useFullChat();
+    const fullChatOpen = fullChatContext.isOpen;
 
     // State for React UI
     const [config, setConfig] = useState<ForceConfig>(DEFAULT_PHYSICS_CONFIG);
@@ -371,9 +374,10 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
                 <TextPreviewButton onToggle={toggleViewer} />
                 <AIActivityGlyph />
                 <PopupPortal />
+                <FullChatToggle />
             </div>
 
-            {sidebarOpen && (
+            {sidebarOpen && !fullChatOpen && (
                 <SidebarControls
                     config={config}
                     onClose={() => setSidebarOpen(false)}
@@ -389,15 +393,21 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
                     useVariedSize={useVariedSize}
                 />
             )}
+
+            {fullChatOpen && (
+                <FullChatbar engineRef={engineRef} />
+            )}
         </div>
     );
 };
 
-// Wrapper with DocumentProvider and PopupProvider
+// Wrapper with DocumentProvider, PopupProvider, and FullChatProvider
 export const GraphPhysicsPlayground: React.FC = () => (
     <DocumentProvider>
         <PopupProvider>
-            <GraphPhysicsPlaygroundInternal />
+            <FullChatProvider>
+                <GraphPhysicsPlaygroundInternal />
+            </FullChatProvider>
         </PopupProvider>
     </DocumentProvider>
 );

@@ -7,6 +7,7 @@ import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
 
 import sendIcon from '../assets/send_icon.png';
 import { usePopup } from './PopupStore';
+import { useFullChat } from '../fullchat';
 import type { PopupRect } from './popupTypes';
 
 interface Message {
@@ -305,6 +306,28 @@ export const MiniChatbar: React.FC<MiniChatbarProps> = ({ messages, onSend, onCl
         }
     };
 
+    // Handoff to full chatbar
+    const fullChat = useFullChat();
+    const popupContext = usePopup();
+
+    const handleSendToFullChat = () => {
+        const nodeLabel = popupContext.selectedNodeId
+            ? `Node ${popupContext.selectedNodeId.slice(0, 8)}`
+            : 'this node';
+
+        const themeHint = messages.length > 0
+            ? `Continuing discussion about "${nodeLabel}": ${messages[messages.length - 1].text.slice(0, 50)}...`
+            : `Tell me more about "${nodeLabel}"`;
+
+        fullChat.receiveFromMiniChat({
+            miniChatMessages: messages,
+            nodeLabel,
+            suggestedPrompt: themeHint,
+        });
+
+        console.log('[MiniChat] Sent context to Full Chat');
+    };
+
     const position = computeChatbarPosition(popupRect, chatbarSize);
 
     const finalStyle = {
@@ -379,6 +402,30 @@ export const MiniChatbar: React.FC<MiniChatbarProps> = ({ messages, onSend, onCl
                     style={INPUT_FIELD_STYLE}
                 />
                 <button
+                    onClick={handleSendToFullChat}
+                    title="Expand to Full Chat"
+                    aria-label="Send to Full Chat"
+                    style={{
+                        background: 'transparent',
+                        border: 'none',
+                        width: '28px',
+                        height: '28px',
+                        borderRadius: '50%',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        cursor: 'pointer',
+                        opacity: 0.5,
+                        fontSize: '14px',
+                        color: 'rgba(180, 190, 210, 0.9)',
+                        flexShrink: 0,
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.opacity = '0.85'}
+                    onMouseLeave={(e) => e.currentTarget.style.opacity = '0.5'}
+                >
+                    ↗
+                </button>
+                <button
                     onClick={handleSend}
                     disabled={!inputText.trim()}
                     style={{
@@ -387,7 +434,6 @@ export const MiniChatbar: React.FC<MiniChatbarProps> = ({ messages, onSend, onCl
                         cursor: 'pointer',
                         padding: '4px',
                         opacity: 0.6,
-                        transition: 'opacity 0.2s, transform 0.2s',
                     }}
                     onMouseEnter={(e) => {
                         if (inputText.trim()) {

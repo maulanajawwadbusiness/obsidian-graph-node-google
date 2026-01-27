@@ -9,6 +9,8 @@ const initialState: PopupState = {
     isOpen: false,
     mode: 'normal',
     selectedNodeId: null,
+    lastClickedNodeId: null,
+    lastClickedNodeLabel: null,
     anchorGeometry: null,
     popupRect: null,
     chatbarOpen: false,
@@ -26,6 +28,8 @@ export function PopupProvider({ children }: { children: ReactNode }) {
             isOpen: true,
             mode: 'normal',
             selectedNodeId: nodeId,
+            lastClickedNodeId: nodeId,
+            lastClickedNodeLabel: null,  // Label will be looked up by consumers from engine
             anchorGeometry: geometry,
             popupRect: null,
             chatbarOpen: false,
@@ -35,7 +39,12 @@ export function PopupProvider({ children }: { children: ReactNode }) {
 
     const closePopup = () => {
         console.log('[Popup] Closing');
-        setState(initialState);
+        // Preserve lastClickedNodeId after popup closes
+        setState(prev => ({
+            ...initialState,
+            lastClickedNodeId: prev.selectedNodeId,
+            lastClickedNodeLabel: prev.lastClickedNodeLabel,
+        }));
     };
 
     const switchToNode = (nodeId: string, geometry: AnchorGeometry) => {

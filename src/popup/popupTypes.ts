@@ -22,6 +22,8 @@ export interface PopupState {
     isOpen: boolean;
     mode: PopupMode;
     selectedNodeId: string | null;
+    lastClickedNodeId: string | null;      // Persists after popup closes
+    lastClickedNodeLabel: string | null;
     anchorGeometry: AnchorGeometry | null;
     popupRect: PopupRect | null;  // Computed popup position/size
     chatbarOpen: boolean;

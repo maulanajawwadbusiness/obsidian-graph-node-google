@@ -286,12 +286,20 @@ export const FullChatbar: React.FC<FullChatbarProps> = ({ engineRef }) => {
     const isProgrammaticSetRef = useRef<boolean>(false);
     const rafRef = useRef<number | null>(null);
 
+    // Strict Mode Guards (Unset = -1, or active runId)
+    const lastSeedStartRunIdRef = useRef<number>(-1);
+    const lastRefineStartRunIdRef = useRef<number>(-1);
+
     // Performance Counters
     const perfCountersRef = useRef({
         seedTicks: 0,
         maxTickMs: 0,
         maxResizeMs: 0,
         lastResizeTime: 0,
+        seedUpdates: 0,
+        refineUpdates: 0,
+        autosizeCalls: 0,
+        scrollWrites: 0,
     });
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -331,7 +339,7 @@ export const FullChatbar: React.FC<FullChatbarProps> = ({ engineRef }) => {
         // 3. Reset phase
         phaseRef.current = 'idle';
 
-        // Note: We do NOT clear currentRunIdRef here, as we might be cancelling 
+        // Note: We do NOT clear currentRunIdRef here, as we might be cancelling
         // to prepare for the *same* run or just stopping activity.
     }, []);
 
@@ -351,9 +359,17 @@ export const FullChatbar: React.FC<FullChatbarProps> = ({ engineRef }) => {
         const myToken = streamTokenRef.current;
         const startTime = performance.now();
 
-        // Reset counters for seed phase (approximation)
+        // Reset counters for phase start
         if (phaseRef.current === 'seed') {
-            perfCountersRef.current = { ...perfCountersRef.current, seedTicks: 0, maxTickMs: 0, maxResizeMs: 0 };
+            perfCountersRef.current = {
+                ...perfCountersRef.current,
+                seedTicks: 0, maxTickMs: 0, maxResizeMs: 0, seedUpdates: 0, autosizeCalls: 0
+            };
+        } else if (phaseRef.current === 'refine') {
+            perfCountersRef.current = {
+                ...perfCountersRef.current,
+                refineUpdates: 0
+            };
         }
 
         let lastLen = 0; // optimization: only touch DOM if length changed
@@ -373,7 +389,7 @@ export const FullChatbar: React.FC<FullChatbarProps> = ({ engineRef }) => {
             // -----------------------------------------------------------------
 
             const tickStart = performance.now();
-            perfCountersRef.current.seedTicks++;
+            if (phaseRef.current === 'seed') perfCountersRef.current.seedTicks++;
 
             const now = performance.now();
             const elapsed = now - startTime;
@@ -391,14 +407,15 @@ export const FullChatbar: React.FC<FullChatbarProps> = ({ engineRef }) => {
                     isProgrammaticSetRef.current = true;
                     textareaRef.current.value = nextVal;
 
-                    // Layout Thrashing Prevention
                     if (phaseRef.current === 'seed') {
+                        perfCountersRef.current.seedUpdates++;
                         // Seed: Fixed height to prevent jitter
                         textareaRef.current.style.height = `${MIN_HEIGHT}px`;
                     } else {
+                        perfCountersRef.current.refineUpdates++;
                         // Refine: Throttled Autosize
-                        // Don't resize on every tick. 50ms throttle is plenty for visual smoothness.
                         if (now - perfCountersRef.current.lastResizeTime > 50) {
+                            perfCountersRef.current.autosizeCalls++;
                             const resizeStart = performance.now();
                             textareaRef.current.style.height = 'auto';
                             const scrollHeight = textareaRef.current.scrollHeight;
@@ -417,7 +434,13 @@ export const FullChatbar: React.FC<FullChatbarProps> = ({ engineRef }) => {
                 lastLen = nextLen;
             }
 
-            perfCountersRef.current.maxTickMs = Math.max(perfCountersRef.current.maxTickMs, performance.now() - tickStart);
+            const tickTime = performance.now() - tickStart;
+            perfCountersRef.current.maxTickMs = Math.max(perfCountersRef.current.maxTickMs, tickTime);
+
+            // Perf Budget Warning (Dev Only helpful)
+            if (tickTime > 12) {
+                // console.warn(`[PrefillPerfWarn] slow tick ${tickTime.toFixed(1)}ms phase=${phaseRef.current}`);
+            }
 
             if (progress < 1) {
                 rafRef.current = requestAnimationFrame(tick);
@@ -440,9 +463,11 @@ export const FullChatbar: React.FC<FullChatbarProps> = ({ engineRef }) => {
                 // Sync React state at the end
                 setInputText(targetText);
 
-                // Log Perf if Seed
+                // Log Perf Summary
                 if (phaseRef.current === 'seed') {
-                    console.log(`[PrefillPerf] seed ticks=${perfCountersRef.current.seedTicks} maxTickMs=${perfCountersRef.current.maxTickMs.toFixed(2)}`);
+                    console.log(`[PrefillPerf] phase=seed updates=${perfCountersRef.current.seedUpdates} maxTickMs=${perfCountersRef.current.maxTickMs.toFixed(2)} autosize=${perfCountersRef.current.autosizeCalls}`);
+                } else if (phaseRef.current === 'refine') {
+                    console.log(`[PrefillPerf] phase=refine updates=${perfCountersRef.current.refineUpdates} maxTickMs=${perfCountersRef.current.maxTickMs.toFixed(2)} autosize=${perfCountersRef.current.autosizeCalls}`);
                 }
 
                 onDone();
@@ -464,6 +489,13 @@ export const FullChatbar: React.FC<FullChatbarProps> = ({ engineRef }) => {
             console.log(`[Prefill] refine_blocked reason=dirty runId=${runId}`);
             return;
         }
+
+        // Strict Mode Guard: Prevent duplicate start
+        if (lastRefineStartRunIdRef.current === runId) {
+            console.log(`[StrictGuard] prevented duplicate refine start runId=${runId}`);
+            return;
+        }
+        lastRefineStartRunIdRef.current = runId;
 
         console.log(`[Prefill] phase refine runId=${runId}`);
         phaseRef.current = 'refine';
@@ -497,47 +529,59 @@ export const FullChatbar: React.FC<FullChatbarProps> = ({ engineRef }) => {
             console.log(`[Prefill] run_start runId=${runId}`);
 
             if (seed) {
-                console.log(`[Prefill] phase seed runId=${runId}`);
-                phaseRef.current = 'seed';
+                // Strict Mode Guard: Prevent duplicate start for same runId
+                if (lastSeedStartRunIdRef.current === runId) {
+                    console.log(`[StrictGuard] prevented duplicate seed start runId=${runId}`);
+                    // If we skipped start, we assume the previous effect instance is handling it.
+                    // IMPORTANT: To support StrictMode unmount killing the stream, strictly guarding
+                    // against restart might be wrong IF the cleanup killed it.
+                    // However, we consciously chose NOT to clean up the store effect on unmount,
+                    // so the previous stream persists. Thus, guarding here is correct to prevent doubling.
+                } else {
+                    lastSeedStartRunIdRef.current = runId;
 
-                // Clear input first
-                if (textareaRef.current) {
-                    isProgrammaticSetRef.current = true;
-                    textareaRef.current.value = '';
-                    setInputText('');
-                    textareaRef.current.focus();
-                    queueMicrotask(() => { isProgrammaticSetRef.current = false; });
-                }
+                    console.log(`[Prefill] phase seed runId=${runId}`);
+                    phaseRef.current = 'seed';
 
-                // Stream Seed (500ms)
-                streamToText(runId, seed, 500, () => {
-                    // Callback Guard
-                    if (currentRunIdRef.current !== runId || dirtySincePrefill) return;
+                    // Clear input first
+                    if (textareaRef.current) {
+                        isProgrammaticSetRef.current = true;
+                        textareaRef.current.value = '';
+                        setInputText('');
+                        textareaRef.current.focus();
+                        queueMicrotask(() => { isProgrammaticSetRef.current = false; });
+                    }
 
-                    console.log(`[Prefill] phase breath runId=${runId}`);
-                    phaseRef.current = 'breath';
-
-                    // Breath Timer (500ms pause)
-                    breathTimerRef.current = window.setTimeout(() => {
-                        breathDoneRef.current = true;
-                        breathTimerRef.current = null;
-
-                        // Strict Callback Guard inside Timeout
+                    // Stream Seed (500ms)
+                    streamToText(runId, seed, 500, () => {
+                        // Callback Guard
                         if (currentRunIdRef.current !== runId || dirtySincePrefill) return;
 
-                        // Breath done. If we already have refined text, go!
-                        if (refinedTextRef.current) {
-                            startRefine();
-                        } else {
-                            // Wait in idle, but marked breathDone
-                            // We do NOT set phase='idle' here, we stay in 'breath' waiting for refine?
-                            // Actually 'idle' is safer to prevent confusing logic.
-                            // But we need to know we are "ready for refine".
-                            // Let's rely on breathDoneRef + idle check in the other effect.
-                            phaseRef.current = 'idle';
-                        }
-                    }, 500);
-                });
+                        console.log(`[Prefill] phase breath runId=${runId}`);
+                        phaseRef.current = 'breath';
+
+                        // Breath Timer (500ms pause)
+                        breathTimerRef.current = window.setTimeout(() => {
+                            breathDoneRef.current = true;
+                            breathTimerRef.current = null;
+
+                            // Strict Callback Guard inside Timeout
+                            if (currentRunIdRef.current !== runId || dirtySincePrefill) return;
+
+                            // Breath done. If we already have refined text, go!
+                            if (refinedTextRef.current) {
+                                startRefine();
+                            } else {
+                                // Wait in idle, but marked breathDone
+                                // We do NOT set phase='idle' here, we stay in 'breath' waiting for refine?
+                                // Actually 'idle' is safer to prevent confusing logic.
+                                // But we need to know we are "ready for refine".
+                                // Let's rely on breathDoneRef + idle check in the other effect.
+                                phaseRef.current = 'idle';
+                            }
+                        }, 500);
+                    });
+                }
             }
         }
 

@@ -54,8 +54,25 @@ export const AnalysisOverlay: React.FC = () => {
         // (In a real app, use CSS module or styled-components)
     } catch (e) { }
 
+    const blockEvent = (e: React.SyntheticEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+    };
+
     return (
-        <div style={OVERLAY_STYLE}>
+        <div
+            style={OVERLAY_STYLE}
+            onWheel={blockEvent}
+            onMouseDown={blockEvent}
+            onMouseMove={blockEvent}
+            onMouseUp={blockEvent}
+            onClick={blockEvent}
+            onContextMenu={blockEvent}
+            onDragStart={blockEvent}
+            onDrop={blockEvent}
+            onTouchStart={blockEvent}
+            onTouchMove={blockEvent}
+        >
             <style>{keyframes}</style>
             <img src={loadingIcon} style={SPINNER_STYLE} alt="Analyzing..." />
             <div style={TEXT_STYLE}>Analyzing Document...</div>

@@ -286,6 +286,13 @@ export const FullChatbar: React.FC<FullChatbarProps> = ({ engineRef }) => {
     const isProgrammaticSetRef = useRef<boolean>(false);
     const rafRef = useRef<number | null>(null);
 
+    // Performance Counters
+    const perfCountersRef = useRef({
+        seedTicks: 0,
+        maxTickMs: 0,
+        maxResizeMs: 0,
+    });
+
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const messagesContainerRef = useRef<HTMLDivElement>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -317,7 +324,11 @@ export const FullChatbar: React.FC<FullChatbarProps> = ({ engineRef }) => {
 
         // 3. Reset phase
         phaseRef.current = 'idle';
-        // Note: We do NOT clear the input text. Destructive actions are bad.
+
+        // 4. Sync state to ensure consistency (e.g. if we cancelled mid-stream, keep text)
+        // If cancellation is due to user typing, handleInputChange already handled it.
+        // If cancellation is due to new run, we typically clear anyway.
+        // So explicit sync here is handled by specific triggers (new run clears, user type updates).
     }, []);
 
     // --- Helper: Ease Out Cubic ---
@@ -330,11 +341,19 @@ export const FullChatbar: React.FC<FullChatbarProps> = ({ engineRef }) => {
         const myToken = streamTokenRef.current;
         const startTime = performance.now();
 
+        // Reset counters for seed phase (approximation)
+        if (phaseRef.current === 'seed') {
+            perfCountersRef.current = { seedTicks: 0, maxTickMs: 0, maxResizeMs: 0 };
+        }
+
         let lastLen = 0; // optimization: only touch DOM if length changed
 
         const tick = () => {
             // Check invalidation
             if (myToken !== streamTokenRef.current || targetRunId !== currentRunIdRef.current) return;
+
+            const tickStart = performance.now();
+            perfCountersRef.current.seedTicks++;
 
             const now = performance.now();
             const elapsed = now - startTime;
@@ -351,13 +370,24 @@ export const FullChatbar: React.FC<FullChatbarProps> = ({ engineRef }) => {
                 if (textareaRef.current) {
                     isProgrammaticSetRef.current = true;
                     textareaRef.current.value = nextVal;
-                    // Fix height
-                    textareaRef.current.style.height = 'auto';
-                    textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, MAX_HEIGHT) + 'px';
 
-                    // React Sync (keep it controlled, but delayed slightly to avoid conflict?)
-                    // Actually, for immediate feedback, we should sync state.
-                    setInputText(nextVal);
+                    // Layout Thrashing Fix:
+                    // During 'seed' (short, predictable), we SKIP autosize measurements entirely.
+                    // During 'refine' (longer, variable), we allow it.
+                    if (phaseRef.current !== 'seed') {
+                        const resizeStart = performance.now();
+                        textareaRef.current.style.height = 'auto';
+                        textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, MAX_HEIGHT) + 'px';
+                        perfCountersRef.current.maxResizeMs = Math.max(perfCountersRef.current.maxResizeMs, performance.now() - resizeStart);
+                    } else {
+                        // Ensure min height during seed so it doesn't collapse
+                        // (Assuming MIN_HEIGHT is enough for 1 line)
+                        textareaRef.current.style.height = `${MIN_HEIGHT}px`;
+                    }
+
+                    // CRITICAL CHANGE: We do NOT calling setInputText(nextVal) here.
+                    // This prevents React re-renders @ 60fps.
+                    // We sync state only on completion or external events.
 
                     // Reset guard in microtask
                     queueMicrotask(() => {
@@ -367,6 +397,8 @@ export const FullChatbar: React.FC<FullChatbarProps> = ({ engineRef }) => {
                 lastLen = nextLen;
             }
 
+            perfCountersRef.current.maxTickMs = Math.max(perfCountersRef.current.maxTickMs, performance.now() - tickStart);
+
             if (progress < 1) {
                 rafRef.current = requestAnimationFrame(tick);
             } else {
@@ -374,12 +406,22 @@ export const FullChatbar: React.FC<FullChatbarProps> = ({ engineRef }) => {
                 if (textareaRef.current && textareaRef.current.value !== targetText) {
                     isProgrammaticSetRef.current = true;
                     textareaRef.current.value = targetText;
-                    setInputText(targetText);
-                    // Fix height
+
+                    // Final resize is mandatory
                     textareaRef.current.style.height = 'auto';
                     textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, MAX_HEIGHT) + 'px';
+
                     queueMicrotask(() => { isProgrammaticSetRef.current = false; });
                 }
+
+                // Sync React state at the end
+                setInputText(targetText);
+
+                // Log Perf if Seed
+                if (phaseRef.current === 'seed') {
+                    console.log(`[PrefillPerf] seed ticks=${perfCountersRef.current.seedTicks} maxTickMs=${perfCountersRef.current.maxTickMs.toFixed(2)} maxResizeMs=${perfCountersRef.current.maxResizeMs.toFixed(2)}`);
+                }
+
                 onDone();
             }
         };
@@ -432,7 +474,7 @@ export const FullChatbar: React.FC<FullChatbarProps> = ({ engineRef }) => {
                 if (textareaRef.current) {
                     isProgrammaticSetRef.current = true;
                     textareaRef.current.value = '';
-                    setInputText('');
+                    setInputText(''); // Sync empty
                     textareaRef.current.focus();
                     queueMicrotask(() => { isProgrammaticSetRef.current = false; });
                 }
@@ -481,6 +523,21 @@ export const FullChatbar: React.FC<FullChatbarProps> = ({ engineRef }) => {
         }
 
     }, [fullChat.prefill, dirtySincePrefill, cancelEverything, streamToText, startRefine]);
+
+    // --- Sync Textarea (Uncontrolled Mode Support) ---
+    // Since we removed 'value={inputText}', we must manually push state updates to DOM
+    // when NOT in a streaming phase.
+    useEffect(() => {
+        if (phaseRef.current !== 'idle') return;
+
+        if (textareaRef.current && textareaRef.current.value !== inputText) {
+            textareaRef.current.value = inputText;
+            // Also adjust height
+            textareaRef.current.style.height = `${MIN_HEIGHT}px`;
+            const newHeight = Math.min(textareaRef.current.scrollHeight, MAX_HEIGHT);
+            textareaRef.current.style.height = `${newHeight}px`;
+        }
+    }, [inputText]);
 
 
     const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -704,7 +761,9 @@ export const FullChatbar: React.FC<FullChatbarProps> = ({ engineRef }) => {
             <div style={{ ...INPUT_CONTAINER_STYLE, position: 'relative' }}>
                 <textarea
                     ref={textareaRef}
-                    value={inputText}
+                    // UNCONTROLLED for performance (value managed manually during stream)
+                    defaultValue=""
+                    // value={inputText} <--- REMOVE
                     onChange={handleInputChange}
                     onKeyDown={handleKeyDown}
                     placeholder="Trace the thought here…"

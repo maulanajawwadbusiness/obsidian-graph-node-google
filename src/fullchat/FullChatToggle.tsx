@@ -27,10 +27,17 @@ const TOGGLE_STYLE: React.CSSProperties = {
 const ICON_STYLE: React.CSSProperties = {
     width: '32px',
     height: '32px',
+    opacity: 0.5,
+    transition: 'opacity 200ms ease',
+};
+
+const ICON_STYLE_HOVER: React.CSSProperties = {
+    opacity: 0.8,
 };
 
 export const FullChatToggle: React.FC = () => {
     const { isOpen, openFullChat } = useFullChat();
+    const [isHovered, setIsHovered] = React.useState(false);
 
     if (isOpen) return null;
 
@@ -41,8 +48,17 @@ export const FullChatToggle: React.FC = () => {
             onClick={openFullChat}
             aria-label="Open Chat"
             title="Open Chat"
+            onMouseEnter={() => setIsHovered(true)}
+            onMouseLeave={() => setIsHovered(false)}
         >
-            <img src={chatbarIcon} alt="" style={ICON_STYLE} />
+            <img
+                src={chatbarIcon}
+                alt=""
+                style={{
+                    ...ICON_STYLE,
+                    ...(isHovered ? ICON_STYLE_HOVER : {}),
+                }}
+            />
         </button>
     );
 };

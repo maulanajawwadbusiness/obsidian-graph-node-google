@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useFullChat } from './FullChatStore';
 import { usePopup } from '../popup/PopupStore';
 import type { PhysicsEngine } from '../physics/engine';
+import { SendButton } from '../components/SendButton';
 
 /**
  * FullChatbar - Right-docked reasoning panel
@@ -157,7 +158,7 @@ const INPUT_CONTAINER_STYLE: React.CSSProperties = {
 
 const INPUT_FIELD_STYLE: React.CSSProperties = {
     flex: 1,
-    padding: '14px 18px',
+    padding: '8px 14px',
     fontSize: '14px',
     background: VOID.deep,
     border: `1px solid ${VOID.line}`,
@@ -167,22 +168,10 @@ const INPUT_FIELD_STYLE: React.CSSProperties = {
     resize: 'none',
     overflow: 'hidden',
     fontFamily: 'inherit',
-    lineHeight: '1.5',
+    lineHeight: '1.4',
 };
 
-const SEND_BUTTON_STYLE: React.CSSProperties = {
-    background: 'transparent',
-    border: 'none',
-    borderRadius: '6px',
-    padding: '8px',
-    cursor: 'pointer',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: '40px',
-    height: '40px',
-    flexShrink: 0,
-};
+
 
 const EMPTY_STATE_STYLE: React.CSSProperties = {
     flex: 1,
@@ -195,9 +184,9 @@ const EMPTY_STATE_STYLE: React.CSSProperties = {
     gap: '16px',
 };
 
-// Auto-expand constants
-const MIN_HEIGHT = 48;
-const MAX_HEIGHT = 140;
+// Auto-expand: compact single-line default, grows to max 5 lines
+const MIN_HEIGHT = 36;
+const MAX_HEIGHT = 116;
 
 // =============================================================================
 // COMPONENT
@@ -366,38 +355,7 @@ export const FullChatbar: React.FC<FullChatbarProps> = ({ engineRef }) => {
                         e.currentTarget.style.boxShadow = 'none';
                     }}
                 />
-                <button
-                    onClick={handleSend}
-                    disabled={!inputText.trim()}
-                    style={{
-                        ...SEND_BUTTON_STYLE,
-                        opacity: inputText.trim() ? 1 : 0.3,
-                        cursor: inputText.trim() ? 'pointer' : 'default',
-                    }}
-                    aria-label="Send"
-                    title="Send"
-                    onMouseEnter={(e) => {
-                        if (inputText.trim()) {
-                            e.currentTarget.style.background = VOID.energyFaint;
-                        }
-                    }}
-                    onMouseLeave={(e) => {
-                        e.currentTarget.style.background = 'transparent';
-                    }}
-                >
-                    {/* Energy arrow — the send action glows */}
-                    <svg
-                        viewBox="0 0 24 24"
-                        width="22"
-                        height="22"
-                        fill={inputText.trim() ? VOID.energy : VOID.textDim}
-                        style={{
-                            filter: inputText.trim() ? `drop-shadow(0 0 6px ${VOID.energySubtle})` : 'none',
-                        }}
-                    >
-                        <path d="M12 4l-1.41 1.41L16.17 11H4v2h12.17l-5.58 5.59L12 20l8-8z" />
-                    </svg>
-                </button>
+                <SendButton onClick={handleSend} disabled={!inputText.trim()} />
             </div>
         </div>
     );

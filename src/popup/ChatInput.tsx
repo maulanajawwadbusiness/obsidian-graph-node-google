@@ -1,14 +1,13 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { SendButton } from '../components/SendButton';
 
 /**
  * ChatInput - Expandable text input for popup footer
- * Expands up to 5 lines, image send button
+ * Expands up to 5 lines, uses reusable SendButton component
  * 
  * TODO: Smooth expand animation - Currently expands suddenly on type.
  * Future improvement: Add CSS transition for height changes.
  */
-
-import sendIcon from '../assets/send_icon.png';
 
 interface ChatInputProps {
     placeholder?: string;
@@ -25,10 +24,10 @@ const CONTAINER_STYLE: React.CSSProperties = {
 
 const TEXTAREA_STYLE: React.CSSProperties = {
     flex: 1,
-    boxSizing: 'border-box',  // Include padding in height calculation
-    height: '40px',           // Initial: exactly 1 line + padding (24px + 16px)
-    minHeight: '40px',        // Prevents shrinking below 1 line
-    maxHeight: '120px',       // 5 lines * ~24px
+    boxSizing: 'border-box',
+    height: '40px',
+    minHeight: '40px',
+    maxHeight: '120px',
     padding: '8px 12px',
     fontSize: '14px',
     lineHeight: '24px',
@@ -43,20 +42,6 @@ const TEXTAREA_STYLE: React.CSSProperties = {
     overflowX: 'hidden',
     outline: 'none',
     transition: 'height 150ms ease-out, border-color 0.2s, background-color 0.2s',
-};
-
-const SEND_BUTTON_STYLE: React.CSSProperties = {
-    background: 'transparent',
-    border: 'none',
-    cursor: 'pointer',
-    padding: '4px',
-    minWidth: '32px',
-    height: '32px',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    transition: 'opacity 0.2s, transform 0.2s',
-    opacity: 0.6,
 };
 
 export const ChatInput: React.FC<ChatInputProps> = ({
@@ -113,7 +98,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         <div style={CONTAINER_STYLE}>
             <textarea
                 ref={textareaRef}
-                rows={1}  // Force browser to use 1 line baseline
+                rows={1}
                 value={text}
                 onChange={(e) => setText(e.target.value)}
                 onKeyDown={handleKeyDown}
@@ -128,24 +113,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                     e.currentTarget.style.backgroundColor = 'rgba(99, 171, 255, 0.05)';
                 }}
             />
-            <button
-                style={SEND_BUTTON_STYLE}
-                onClick={handleSend}
-                disabled={!text.trim()}
-                onMouseEnter={(e) => {
-                    if (text.trim()) {
-                        e.currentTarget.style.opacity = '0.9';
-                        e.currentTarget.style.transform = 'scale(1.1)';
-                    }
-                }}
-                onMouseLeave={(e) => {
-                    e.currentTarget.style.opacity = '0.6';
-                    e.currentTarget.style.transform = 'scale(1)';
-                }}
-                title="Send (Enter)"
-            >
-                <img src={sendIcon} alt="Send" style={{ width: '20px', height: '20px' }} />
-            </button>
+            <SendButton onClick={handleSend} disabled={!text.trim()} />
         </div>
     );
 };

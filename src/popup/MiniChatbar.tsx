@@ -399,7 +399,7 @@ export const MiniChatbar: React.FC<MiniChatbarProps> = ({ messages, onSend, onCl
                 />
                 <button
                     onClick={handleSendToFullChat}
-                    title="Expand to Full Chat"
+                    title="Extend to Main Chat"
                     aria-label="Send to Full Chat"
                     style={{
                         background: 'transparent',

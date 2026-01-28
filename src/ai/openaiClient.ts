@@ -20,7 +20,12 @@ export class OpenAIClient implements LLMClient {
         opts?: { model?: string; temperature?: number; maxTokens?: number }
     ): Promise<string> {
         const model = opts?.model || this.defaultModel;
-        const temperature = opts?.temperature ?? 0.7;
+        const isFixedTemperatureModel = isFixedTemperatureOnlyModel(model);
+        let temperature = opts?.temperature ?? 0.7;
+        if (isFixedTemperatureModel && temperature !== 1) {
+            console.warn(`[OpenAIClient] Model ${model} only supports temperature=1; coercing.`);
+            temperature = 1;
+        }
         const maxTokens = opts?.maxTokens ?? 1000;
 
         try {
@@ -39,7 +44,8 @@ export class OpenAIClient implements LLMClient {
                         }
                     ],
                     temperature,
-                    max_tokens: maxTokens
+                    // Modern OpenAI models (o1, o3-mini) use max_completion_tokens
+                    max_completion_tokens: maxTokens
                 })
             });
 
@@ -78,4 +84,9 @@ export class OpenAIClient implements LLMClient {
         // Stub: return placeholder
         throw new Error('generateStructured not yet implemented');
     }
+}
+
+function isFixedTemperatureOnlyModel(model: string): boolean {
+    const normalized = model.trim().toLowerCase();
+    return normalized.startsWith('gpt-5') || normalized.startsWith('o1') || normalized.startsWith('o3');
 }

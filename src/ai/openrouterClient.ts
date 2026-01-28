@@ -17,15 +17,14 @@ export class OpenRouterClient implements LLMClient {
 
     async generateText(
         prompt: string,
-        opts?: { model?: string; temperature?: number; maxTokens?: number }
+        opts?: { model?: string; maxCompletionTokens?: number }
     ): Promise<string> {
         const model = opts?.model || this.defaultModel;
-        const temperature = opts?.temperature ?? 0.7;
-        const maxTokens = opts?.maxTokens ?? 1000;
+        const maxCompletionTokens = opts?.maxCompletionTokens ?? 1000;
 
         // TODO: Implement OpenRouter API call
         // Use fetch() with OpenRouter headers (Authorization, HTTP-Referer, X-Title)
-        console.log('[OpenRouterClient] generateText called:', { model, temperature, maxTokens });
+        console.log('[OpenRouterClient] generateText called:', { model, maxCompletionTokens });
         console.log('[OpenRouterClient] Prompt:', prompt);
 
         // Stub: return placeholder
@@ -35,13 +34,12 @@ export class OpenRouterClient implements LLMClient {
     async generateStructured<T>(
         schema: object,
         prompt: string,
-        opts?: { model?: string; temperature?: number }
+        opts?: { model?: string }
     ): Promise<T> {
         const model = opts?.model || this.defaultModel;
-        const temperature = opts?.temperature ?? 0.7;
 
         // TODO: Implement OpenRouter API call with JSON schema
-        console.log('[OpenRouterClient] generateStructured called:', { model, temperature });
+        console.log('[OpenRouterClient] generateStructured called:', { model });
         console.log('[OpenRouterClient] Schema:', schema);
         console.log('[OpenRouterClient] Prompt:', prompt);
 

@@ -421,7 +421,7 @@ reply based on the node and document context."
 **File:** `src/popup/MiniChatbar.tsx`
 
 **Future Integration:**
-- Expand to full chatbar (placeholder hook)
+- Extend to Main Chatbar (placeholder hook)
 - Real AI responses via LLMClient
 - Document viewer sync (scroll to relevant section)
 

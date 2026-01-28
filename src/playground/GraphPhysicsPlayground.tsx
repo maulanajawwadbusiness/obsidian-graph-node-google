@@ -16,6 +16,7 @@ import { DocumentProvider, useDocument } from '../store/documentStore';
 import { applyFirstWordsToNodes, applyAnalysisToNodes } from '../document/nodeBinding';
 import { AnalysisOverlay } from '../components/AnalysisOverlay';
 import { MapTitleBlock } from './components/MapTitleBlock';
+import { BrandLabel } from './components/BrandLabel';
 import { PopupProvider, usePopup } from '../popup/PopupStore';
 import { PopupPortal } from '../popup/PopupPortal';
 import { FullChatProvider, FullChatbar, FullChatToggle, useFullChat } from '../fullchat';
@@ -382,6 +383,7 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
                 <AIActivityGlyph />
                 <AnalysisOverlay />
                 <MapTitleBlock />
+                <BrandLabel />
                 <PopupPortal />
                 <FullChatToggle />
             </div>

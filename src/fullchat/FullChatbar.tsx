@@ -272,11 +272,15 @@ export const FullChatbar: React.FC<FullChatbarProps> = ({ engineRef }) => {
     const [dirtySincePrefill, setDirtySincePrefill] = useState(false);
     const lastHandledJobIdRef = useRef<number>(0);
 
-    // Streaming Refs
+    // Streaming & Phase Refs (V4)
     const streamTargetRef = useRef<string>('');
     const streamIdRef = useRef<number>(0);
     const rafRef = useRef<number>(0);
     const isStreamingRef = useRef<boolean>(false);
+
+    type PrefillPhase = 'idle' | 'seed' | 'breath' | 'refine' | 'waiting_for_refine';
+    const phaseRef = useRef<PrefillPhase>('idle');
+    const breathTimeoutRef = useRef<number | null>(null);
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const messagesContainerRef = useRef<HTMLDivElement>(null);
@@ -344,14 +348,7 @@ export const FullChatbar: React.FC<FullChatbarProps> = ({ engineRef }) => {
         rafRef.current = requestAnimationFrame(tick);
     }, []);
 
-    const stopStreaming = useCallback((reason: string) => {
-        if (isStreamingRef.current) {
-            isStreamingRef.current = false;
-            streamIdRef.current++; // Invalidates pending ticks
-            if (rafRef.current) cancelAnimationFrame(rafRef.current);
-            console.log(`[Prefill] stream_stop reason=${reason}`);
-        }
-    }, []);
+
 
     const focusLabel = getNodeLabel(currentFocusNodeId);
 

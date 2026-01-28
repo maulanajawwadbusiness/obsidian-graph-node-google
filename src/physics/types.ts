@@ -36,6 +36,13 @@ export interface PhysicsNode {
   // Force memory for temporal lag (early-expansion symmetry breaking)
   prevFx?: number; // Previous frame's force for low-pass filtering
   prevFy?: number;
+
+  // Knowledge Metadata (Paper Analyzer)
+  meta?: {
+    docId: string;
+    sourceTitle: string;   // The "Point Title"
+    sourceSummary: string; // The "Paragraph"
+  };
 }
 
 export interface PhysicsLink {

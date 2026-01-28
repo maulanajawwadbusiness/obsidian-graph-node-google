@@ -28,10 +28,15 @@ export interface PopupState {
     popupRect: PopupRect | null;  // Computed popup position/size
     chatbarOpen: boolean;
     messages: Array<{ role: 'user' | 'ai'; text: string }>;
+    // Dynamic Content (from Paper Analyzer)
+    content?: {
+        title: string;
+        summary: string;
+    } | null;
 }
 
 export interface PopupActions {
-    openPopup: (nodeId: string, geometry: AnchorGeometry) => void;
+    openPopup: (nodeId: string, geometry: AnchorGeometry, content?: { title: string; summary: string }) => void;
     closePopup: () => void;
     switchToNode: (nodeId: string, geometry: AnchorGeometry) => void;
     sendMessage: (text: string) => void;

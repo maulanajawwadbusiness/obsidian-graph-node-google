@@ -111,7 +111,7 @@ function computePopupPosition(
 }
 
 export const NodePopup: React.FC = () => {
-    const { selectedNodeId, anchorGeometry, closePopup, sendMessage, setPopupRect } = usePopup();
+    const { selectedNodeId, anchorGeometry, closePopup, sendMessage, setPopupRect, content } = usePopup();
     const popupRef = useRef<HTMLDivElement>(null);
     const [isVisible, setIsVisible] = useState(false);
     const [contentVisible, setContentVisible] = useState(false);
@@ -195,7 +195,9 @@ export const NodePopup: React.FC = () => {
         };
     }, [isVisible, position.left, position.top, setPopupRect]);
 
-    const nodeLabel = selectedNodeId ? `Node ${selectedNodeId.slice(0, 8)}` : 'Unknown';
+    // UI Content
+    const displayTitle = content?.title || (selectedNodeId ? `Node ${selectedNodeId.slice(0, 8)}` : 'Unknown');
+    const displayBody = content?.summary || 'No detailed analysis available for this node.';
 
     const contentTransition: React.CSSProperties = contentVisible
         ? { opacity: 1, transform: 'translateY(0)', transition: 'opacity 300ms ease-out, transform 300ms ease-out' }
@@ -232,12 +234,8 @@ export const NodePopup: React.FC = () => {
             </div>
 
             <div style={{ ...CONTENT_STYLE, ...contentTransition }}>
-                <div style={LABEL_STYLE}>{nodeLabel}</div>
-                <p>
-                    Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor
-                    incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud
-                    exercitation ullamco laboris.
-                </p>
+                <div style={LABEL_STYLE}>{displayTitle}</div>
+                <p>{displayBody}</p>
             </div>
 
             <div style={

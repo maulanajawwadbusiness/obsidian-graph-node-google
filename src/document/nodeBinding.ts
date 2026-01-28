@@ -5,7 +5,7 @@
 
 import type { PhysicsEngine } from '../physics/engine';
 import type { ParsedDocument } from './types';
-import { makeThreeWordLabels } from '../ai/labelRewriter';
+
 
 export function applyFirstWordsToNodes(
   engine: PhysicsEngine,
@@ -29,52 +29,60 @@ export function applyFirstWordsToNodes(
   console.log(`[NodeBinding] Applied ${words.length} words to ${nodes.length} nodes`);
 }
 
+import { analyzeDocument } from '../ai/paperAnalyzer';
+
 /**
- * Apply AI-generated 3-word labels to nodes
- * @param engine - Physics engine containing nodes
- * @param words - Original 5 words to transform
- * @param documentId - ID of the document for race protection
- * @param getCurrentDocId - Function to get current active document ID
- * @param setAIActivity - Function to set AI activity state
+ * Apply AI Analysis (5 Key Points) to nodes
+ * Replaces the old "3-word label" logic with a richer Title + Summary binding
  */
-export async function applyAILabelsToNodes(
+export async function applyAnalysisToNodes(
   engine: PhysicsEngine,
-  words: string[],
+  documentText: string,
   documentId: string,
   getCurrentDocId: () => string | null,
   setAIActivity: (active: boolean) => void
 ): Promise<void> {
-  console.log(`[AI] Starting label rewrite for doc ${documentId.slice(0, 8)}...`);
+  console.log(`[AI] Starting paper analysis for doc ${documentId.slice(0, 8)}...`);
 
-  setAIActivity(true);  // Signal AI activity started
+  setAIActivity(true);
 
   try {
-    // Call AI to generate 3-word sentences
-    const aiLabels = await makeThreeWordLabels(words);
+    // Call AI Analyzer
+    const { points } = await analyzeDocument(documentText);
 
-    // Gate check: is this still the active document?
+    // Gate check
     const currentDocId = getCurrentDocId();
     if (currentDocId !== documentId) {
       console.log(
-        `[AI] Discarding stale results (expected ${documentId.slice(0, 8)}, got ${currentDocId?.slice(0, 8)})`
+        `[AI] Discarding stale analysis (expected ${documentId.slice(0, 8)}, got ${currentDocId?.slice(0, 8)})`
       );
       return;
     }
 
-    // Apply AI labels to nodes
+    // Apply points to nodes
     const nodes = Array.from(engine.nodes.values()).slice(0, 5);
     nodes.forEach((node, i) => {
-      if (aiLabels[i]) {
-        node.label = aiLabels[i];
-        console.log(`[AI] Node ${i}: "${aiLabels[i]}"`);
+      const point = points[i];
+      if (point) {
+        // Update Label
+        node.label = point.title;
+
+        // Update Meta (Popup Knowledge)
+        node.meta = {
+          docId: documentId,
+          sourceTitle: point.title,
+          sourceSummary: point.summary
+        };
+
+        console.log(`[AI] Node ${i}: "${point.title}"`);
       }
     });
 
-    console.log(`[AI] Applied ${aiLabels.length} AI labels`);
+    console.log(`[AI] Applied ${points.length} analysis points`);
+
   } catch (error) {
-    console.error('[AI] Label rewrite failed:', error);
-    // Original words already applied, no action needed
+    console.error('[AI] Analysis failed:', error);
   } finally {
-    setAIActivity(false);  // Always signal AI activity ended
+    setAIActivity(false);
   }
 }

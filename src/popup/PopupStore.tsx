@@ -22,7 +22,7 @@ const PopupContext = createContext<PopupContextValue | null>(null);
 export function PopupProvider({ children }: { children: ReactNode }) {
     const [state, setState] = useState<PopupState>(initialState);
 
-    const openPopup = (nodeId: string, geometry: AnchorGeometry) => {
+    const openPopup = (nodeId: string, geometry: AnchorGeometry, content?: { title: string; summary: string }) => {
         console.log('[Popup] Opening for node:', nodeId);
         setState({
             isOpen: true,
@@ -34,6 +34,7 @@ export function PopupProvider({ children }: { children: ReactNode }) {
             popupRect: null,
             chatbarOpen: false,
             messages: [],
+            content: content || null
         });
     };
 

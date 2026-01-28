@@ -116,11 +116,16 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
         const screenRadius = node.radius * 5;  // Approximate screen radius
 
         // Open popup at node position
+        const metaContent = node.meta ? {
+            title: node.meta.sourceTitle,
+            summary: node.meta.sourceSummary
+        } : undefined;
+
         popupContext.openPopup(hoveredId, {
             x: screenPos.x,
             y: screenPos.y,
             radius: screenRadius
-        });
+        }, metaContent);
 
         console.log('[Popup] Opened for node:', hoveredId);
     };
@@ -242,10 +247,9 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
             // Trigger AI label rewrite (async, non-blocking)
             // Capture docId now to avoid races with documentContext updates.
             const docId = document.id;
-            const words = document.text.trim().split(/\s+/).slice(0, 5);
-            applyAILabelsToNodes(
+            applyAnalysisToNodes(
                 engineRef.current,
-                words,
+                document.text,
                 docId,
                 () => docId,
                 documentContext.setAIActivity
@@ -373,6 +377,7 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
                 />
                 <TextPreviewButton onToggle={toggleViewer} />
                 <AIActivityGlyph />
+                <AnalysisOverlay />
                 <PopupPortal />
                 <FullChatToggle />
             </div>

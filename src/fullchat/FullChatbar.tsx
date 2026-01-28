@@ -291,12 +291,17 @@ export const FullChatbar: React.FC<FullChatbarProps> = ({ engineRef }) => {
         seedTicks: 0,
         maxTickMs: 0,
         maxResizeMs: 0,
+        lastResizeTime: 0,
     });
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const messagesContainerRef = useRef<HTMLDivElement>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const isSendingRef = useRef(false);  // Prevent double-send
+
+    // Scroll State Refs (for reliable instant access in callbacks)
+    const isUserNearBottomRef = useRef(true);
+    const pendingScrollRef = useRef<number | null>(null);
 
     const currentFocusNodeId = popupContext.isOpen ? popupContext.selectedNodeId : null;
 
@@ -348,7 +353,7 @@ export const FullChatbar: React.FC<FullChatbarProps> = ({ engineRef }) => {
 
         // Reset counters for seed phase (approximation)
         if (phaseRef.current === 'seed') {
-            perfCountersRef.current = { seedTicks: 0, maxTickMs: 0, maxResizeMs: 0 };
+            perfCountersRef.current = { ...perfCountersRef.current, seedTicks: 0, maxTickMs: 0, maxResizeMs: 0 };
         }
 
         let lastLen = 0; // optimization: only touch DOM if length changed
@@ -391,11 +396,17 @@ export const FullChatbar: React.FC<FullChatbarProps> = ({ engineRef }) => {
                         // Seed: Fixed height to prevent jitter
                         textareaRef.current.style.height = `${MIN_HEIGHT}px`;
                     } else {
-                        // Refine: Allow growth
-                        const resizeStart = performance.now();
-                        textareaRef.current.style.height = 'auto';
-                        textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, MAX_HEIGHT) + 'px';
-                        perfCountersRef.current.maxResizeMs = Math.max(perfCountersRef.current.maxResizeMs, performance.now() - resizeStart);
+                        // Refine: Throttled Autosize
+                        // Don't resize on every tick. 50ms throttle is plenty for visual smoothness.
+                        if (now - perfCountersRef.current.lastResizeTime > 50) {
+                            const resizeStart = performance.now();
+                            textareaRef.current.style.height = 'auto';
+                            const scrollHeight = textareaRef.current.scrollHeight;
+                            textareaRef.current.style.height = Math.min(scrollHeight, MAX_HEIGHT) + 'px';
+
+                            perfCountersRef.current.lastResizeTime = now;
+                            perfCountersRef.current.maxResizeMs = Math.max(perfCountersRef.current.maxResizeMs, now - resizeStart);
+                        }
                     }
 
                     // Reset guard in microtask
@@ -585,17 +596,44 @@ export const FullChatbar: React.FC<FullChatbarProps> = ({ engineRef }) => {
 
     const focusLabel = getNodeLabel(currentFocusNodeId);
 
-    // Auto-scroll when at bottom and content changes
-    // Using messagesEndRef.current to avoid triggering on every message update
-    const lastMessageTimestamp = fullChat.messages[fullChat.messages.length - 1]?.timestamp;
-    useEffect(() => {
-        if (isAtBottom && messagesEndRef.current) {
-            // Use requestAnimationFrame to batch with browser paint
-            requestAnimationFrame(() => {
-                messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-            });
+    // -------------------------------------------------------------------------
+    // SCROLL HARDENING
+    // -------------------------------------------------------------------------
+
+    // A helper to safely scroll to bottom if allowed
+    const safeScrollToBottom = useCallback((reason: string) => {
+        if (!messagesEndRef.current || !isUserNearBottomRef.current) {
+            // console.log(`[AutoScroll] ignore reason=userAway triggers=${reason}`);
+            return;
         }
-    }, [lastMessageTimestamp, isAtBottom]);
+
+        // Cancel any pending scroll
+        if (pendingScrollRef.current) {
+            cancelAnimationFrame(pendingScrollRef.current);
+        }
+
+        // Schedule new one
+        pendingScrollRef.current = requestAnimationFrame(() => {
+            if (isUserNearBottomRef.current && messagesEndRef.current) {
+                messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+                // console.log(`[AutoScroll] applied reason=nearBottom source=${reason}`);
+            }
+            pendingScrollRef.current = null;
+        });
+    }, []);
+
+    // 1. Instant Scroll on New Message Update (e.g. user sent, or new streaming text chunk)
+    const lastMessage = fullChat.messages[fullChat.messages.length - 1];
+
+    // We use a layout effect to check scroll position *before* browser paint if possible, 
+    // but here we just want to trigger the safe scroll when data changes.
+    useEffect(() => {
+        if (!lastMessage) return;
+
+        // Trigger scroll check
+        safeScrollToBottom('message_update');
+    }, [lastMessage, safeScrollToBottom]);
+
 
     // Show/hide "Jump to Latest" pill
     useEffect(() => {
@@ -605,13 +643,20 @@ export const FullChatbar: React.FC<FullChatbarProps> = ({ engineRef }) => {
     // Track scroll position
     const handleScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
         const el = e.currentTarget;
-        const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < SCROLL_BOTTOM_THRESHOLD;
+        const dist = el.scrollHeight - el.scrollTop - el.clientHeight;
+        const atBottom = dist < SCROLL_BOTTOM_THRESHOLD;
+
         setIsAtBottom(atBottom);
+        isUserNearBottomRef.current = atBottom;
     }, []);
 
     const adjustTextareaHeight = useCallback(() => {
         const textarea = textareaRef.current;
         if (!textarea) return;
+
+        // Safety: disable adjust during streaming externally
+        if (phaseRef.current !== 'idle') return;
+
         textarea.style.height = `${MIN_HEIGHT}px`;
         const newHeight = Math.min(textarea.scrollHeight, MAX_HEIGHT);
         textarea.style.height = `${newHeight}px`;

@@ -13,6 +13,7 @@ export interface FullChatMessage {
 export interface MiniChatContext {
     miniChatMessages: Array<{ role: 'user' | 'ai'; text: string }>;
     nodeLabel: string;
+    content?: { title: string; summary: string } | null;
     suggestedPrompt?: string;
 }
 

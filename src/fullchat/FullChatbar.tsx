@@ -877,12 +877,17 @@ export const FullChatbar: React.FC<FullChatbarProps> = ({ engineRef }) => {
 
         // Build Context
         const focusedNodeId = popupContext.isOpen ? popupContext.selectedNodeId : null;
-        const nodeLabel = getNodeLabel(focusedNodeId);
+        let nodeLabel = getNodeLabel(focusedNodeId);
+
+        // Handoff Override: If we have pending context from MiniChat, use it
+        if (fullChat.pendingContext && fullChat.pendingContext.nodeLabel) {
+            nodeLabel = fullChat.pendingContext.nodeLabel;
+        }
 
         const aiContext: AiContext = {
             nodeLabel,
-            documentText: documentState.activeDocument?.text ?? null,
-            documentTitle: documentState.activeDocument?.fileName ?? null,
+            documentText: fullChat.pendingContext?.content?.summary ?? documentState.activeDocument?.text ?? null,
+            documentTitle: fullChat.pendingContext?.content?.title ?? documentState.activeDocument?.fileName ?? null,
             recentHistory: fullChat.messages.slice(-10) // Take last 10 messages for context
         };
 

@@ -319,6 +319,7 @@ export const MiniChatbar: React.FC<MiniChatbarProps> = ({ messages, onSend, onCl
         fullChat.receiveFromMiniChat({
             miniChatMessages: messages,
             nodeLabel,
+            content: popupContext.content
         });
 
         console.log('[MiniChat] Sent context to Full Chat (v2)');

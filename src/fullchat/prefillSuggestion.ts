@@ -9,6 +9,7 @@ export interface MiniChatHistory {
 export interface PrefillContext {
     nodeLabel: string;
     miniChatMessages: MiniChatHistory[];
+    content?: { title: string; summary: string } | null;
 }
 
 /**
@@ -136,9 +137,12 @@ Rules:
  * Packs context into a minimal string for the LLM
  */
 function buildRefinePacket(context: PrefillContext): string {
-    const { nodeLabel, miniChatMessages } = context;
+    const { nodeLabel, miniChatMessages, content } = context;
 
     let packet = `Target Node: ${nodeLabel}\n`;
+    if (content) {
+        packet += `Node Knowledge: "${content.title}" - ${content.summary.slice(0, 150)}...\n`;
+    }
 
     // Add recent history (last 4 turns)
     if (miniChatMessages && miniChatMessages.length > 0) {

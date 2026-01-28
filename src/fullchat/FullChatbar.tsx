@@ -290,6 +290,10 @@ export const FullChatbar: React.FC<FullChatbarProps> = ({ engineRef }) => {
     const lastSeedStartRunIdRef = useRef<number>(-1);
     const lastRefineStartRunIdRef = useRef<number>(-1);
 
+    // Fail-Safe Refs
+    const hardTimeoutRef = useRef<number | null>(null);
+    const isMountedRef = useRef(true);
+
     // Performance Counters
     const perfCountersRef = useRef({
         seedTicks: 0,
@@ -312,6 +316,12 @@ export const FullChatbar: React.FC<FullChatbarProps> = ({ engineRef }) => {
     const pendingScrollRef = useRef<number | null>(null);
 
     const currentFocusNodeId = popupContext.isOpen ? popupContext.selectedNodeId : null;
+
+    // Mounted Check
+    useEffect(() => {
+        isMountedRef.current = true;
+        return () => { isMountedRef.current = false; };
+    }, []);
 
     const getNodeLabel = (nodeId: string | null): string | null => {
         if (!nodeId || !engineRef.current) return null;
@@ -336,12 +346,51 @@ export const FullChatbar: React.FC<FullChatbarProps> = ({ engineRef }) => {
             breathTimerRef.current = null;
         }
 
-        // 3. Reset phase
+        // 3. Stop hard timeout
+        if (hardTimeoutRef.current) {
+            clearTimeout(hardTimeoutRef.current);
+            hardTimeoutRef.current = null;
+        }
+
+        // 4. Reset phase
         phaseRef.current = 'idle';
 
         // Note: We do NOT clear currentRunIdRef here, as we might be cancelling
         // to prepare for the *same* run or just stopping activity.
+
+        // Log Summary if reason implies termination
+        if (reason !== 'new_run' && reason !== 'resize') {
+            // For new_run we log start separately.
+            // For others, we assume this is an 'end'.
+        }
     }, []);
+
+    // --- Helper: Snap to Stable State (Fail-Safe) ---
+    const snapToStable = useCallback((reason: string) => {
+        // Guard: Dirty or unmounted
+        if (dirtySincePrefill || !isMountedRef.current) return;
+
+        // Determine best stable text
+        let targetText: string | null = null;
+        // If we have refined, prefer that. Else seed.
+        targetText = refinedTextRef.current || seedTextRef.current;
+
+        if (targetText !== null && textareaRef.current) {
+            console.log(`[Prefill] snap action=${reason} textLen=${targetText.length}`);
+            isProgrammaticSetRef.current = true;
+            textareaRef.current.value = targetText;
+            setInputText(targetText); // Sync React state instantly
+
+            // Force quick resize
+            textareaRef.current.style.height = 'auto';
+            textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, MAX_HEIGHT) + 'px';
+
+            queueMicrotask(() => { isProgrammaticSetRef.current = false; });
+
+            // Log End of Run
+            console.log(`[PrefillRun] runId=${currentRunIdRef.current} end=snapped reason=${reason}`);
+        }
+    }, [dirtySincePrefill]);
 
     // --- Helper: Ease Out Cubic ---
     const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3);
@@ -349,7 +398,7 @@ export const FullChatbar: React.FC<FullChatbarProps> = ({ engineRef }) => {
     // --- Helper: Deterministic Streaming ---
     const streamToText = useCallback((targetRunId: number, targetText: string, durationMs: number, onDone: () => void) => {
         // Guard: If we are already dirty or stale before starting, abort immediately
-        if (dirtySincePrefill || targetRunId !== currentRunIdRef.current) {
+        if (dirtySincePrefill || targetRunId !== currentRunIdRef.current || !isMountedRef.current) {
             console.log(`[Prefill] stream_start_blocked runId=${targetRunId} dirty=${dirtySincePrefill}`);
             return;
         }
@@ -375,107 +424,117 @@ export const FullChatbar: React.FC<FullChatbarProps> = ({ engineRef }) => {
         let lastLen = 0; // optimization: only touch DOM if length changed
 
         const tick = () => {
-            // -----------------------------------------------------------------
-            // CRITICAL GUARD: Run Integrity / Token Integrity / User Dirty
-            // -----------------------------------------------------------------
-            if (
-                myToken !== streamTokenRef.current ||       // Newer stream started
-                targetRunId !== currentRunIdRef.current ||  // Newer run started
-                dirtySincePrefill                           // User took over
-            ) {
-                // Silent exit - another process likely handled cleanup
-                return;
-            }
-            // -----------------------------------------------------------------
+            // Try/Catch Guard against uncaught errors breaking the loop state
+            try {
+                // -----------------------------------------------------------------
+                // CRITICAL GUARD: Run Integrity / Token Integrity / User Dirty / Mount
+                // -----------------------------------------------------------------
+                if (
+                    myToken !== streamTokenRef.current ||       // Newer stream started
+                    targetRunId !== currentRunIdRef.current ||  // Newer run started
+                    dirtySincePrefill ||                        // User took over
+                    !isMountedRef.current                       // Unmounted
+                ) {
+                    return;
+                }
+                // -----------------------------------------------------------------
 
-            const tickStart = performance.now();
-            if (phaseRef.current === 'seed') perfCountersRef.current.seedTicks++;
+                const tickStart = performance.now();
+                if (phaseRef.current === 'seed') perfCountersRef.current.seedTicks++;
 
-            const now = performance.now();
-            const elapsed = now - startTime;
-            const progress = Math.min(elapsed / durationMs, 1);
-            const eased = easeOutCubic(progress);
+                const now = performance.now();
+                const elapsed = now - startTime;
+                const progress = Math.min(elapsed / durationMs, 1);
+                const eased = easeOutCubic(progress);
 
-            // Calculate length
-            const nextLen = Math.floor(eased * targetText.length);
+                // Calculate length
+                const nextLen = Math.floor(eased * targetText.length);
 
-            // DOM Access & Update
-            if (nextLen !== lastLen) { // Only write if changed
-                const nextVal = targetText.slice(0, nextLen);
+                // DOM Access & Update
+                if (nextLen !== lastLen) { // Only write if changed
+                    const nextVal = targetText.slice(0, nextLen);
 
-                if (textareaRef.current) {
-                    isProgrammaticSetRef.current = true;
-                    textareaRef.current.value = nextVal;
+                    if (textareaRef.current) {
+                        isProgrammaticSetRef.current = true;
+                        textareaRef.current.value = nextVal;
 
-                    if (phaseRef.current === 'seed') {
-                        perfCountersRef.current.seedUpdates++;
-                        // Seed: Fixed height to prevent jitter
-                        textareaRef.current.style.height = `${MIN_HEIGHT}px`;
-                    } else {
-                        perfCountersRef.current.refineUpdates++;
-                        // Refine: Throttled Autosize
-                        if (now - perfCountersRef.current.lastResizeTime > 50) {
-                            perfCountersRef.current.autosizeCalls++;
-                            const resizeStart = performance.now();
-                            textareaRef.current.style.height = 'auto';
-                            const scrollHeight = textareaRef.current.scrollHeight;
-                            textareaRef.current.style.height = Math.min(scrollHeight, MAX_HEIGHT) + 'px';
+                        if (phaseRef.current === 'seed') {
+                            perfCountersRef.current.seedUpdates++;
+                            // Seed: Fixed height to prevent jitter
+                            textareaRef.current.style.height = `${MIN_HEIGHT}px`;
+                        } else {
+                            perfCountersRef.current.refineUpdates++;
+                            // Refine: Throttled Autosize
+                            if (now - perfCountersRef.current.lastResizeTime > 50) {
+                                perfCountersRef.current.autosizeCalls++;
+                                const resizeStart = performance.now();
+                                textareaRef.current.style.height = 'auto';
+                                const scrollHeight = textareaRef.current.scrollHeight;
+                                textareaRef.current.style.height = Math.min(scrollHeight, MAX_HEIGHT) + 'px';
 
-                            perfCountersRef.current.lastResizeTime = now;
-                            perfCountersRef.current.maxResizeMs = Math.max(perfCountersRef.current.maxResizeMs, now - resizeStart);
+                                perfCountersRef.current.lastResizeTime = now;
+                                perfCountersRef.current.maxResizeMs = Math.max(perfCountersRef.current.maxResizeMs, now - resizeStart);
+                            }
                         }
+
+                        // Reset guard in microtask
+                        queueMicrotask(() => {
+                            isProgrammaticSetRef.current = false;
+                        });
+                    }
+                    lastLen = nextLen;
+                }
+
+                const tickTime = performance.now() - tickStart;
+                perfCountersRef.current.maxTickMs = Math.max(perfCountersRef.current.maxTickMs, tickTime);
+
+                // Perf Budget Warning (Dev Only helpful)
+                if (tickTime > 12) {
+                    // console.warn(`[PrefillPerfWarn] slow tick ${tickTime.toFixed(1)}ms phase=${phaseRef.current}`);
+                }
+
+                if (progress < 1) {
+                    rafRef.current = requestAnimationFrame(tick);
+                } else {
+                    // Final Check
+                    if (targetRunId !== currentRunIdRef.current || dirtySincePrefill || !isMountedRef.current) return;
+
+                    // Ensure final state
+                    if (textareaRef.current && textareaRef.current.value !== targetText) {
+                        isProgrammaticSetRef.current = true;
+                        textareaRef.current.value = targetText;
+
+                        // Final resize
+                        textareaRef.current.style.height = 'auto';
+                        textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, MAX_HEIGHT) + 'px';
+
+                        queueMicrotask(() => { isProgrammaticSetRef.current = false; });
                     }
 
-                    // Reset guard in microtask
-                    queueMicrotask(() => {
-                        isProgrammaticSetRef.current = false;
-                    });
+                    setInputText(targetText);
+
+                    // Log Perf Summary
+                    if (phaseRef.current === 'seed') {
+                        console.log(`[PrefillPerf] phase=seed updates=${perfCountersRef.current.seedUpdates} maxTickMs=${perfCountersRef.current.maxTickMs.toFixed(2)} autosize=${perfCountersRef.current.autosizeCalls}`);
+                    } else if (phaseRef.current === 'refine') {
+                        console.log(`[PrefillPerf] phase=refine updates=${perfCountersRef.current.refineUpdates} maxTickMs=${perfCountersRef.current.maxTickMs.toFixed(2)} autosize=${perfCountersRef.current.autosizeCalls}`);
+                        // Refine End = Run Complete usually
+                        console.log(`[PrefillRun] runId=${targetRunId} end=refined`);
+                        // Clear hard timeout on success
+                        if (hardTimeoutRef.current) { clearTimeout(hardTimeoutRef.current); hardTimeoutRef.current = null; }
+                    }
+
+                    onDone();
                 }
-                lastLen = nextLen;
-            }
-
-            const tickTime = performance.now() - tickStart;
-            perfCountersRef.current.maxTickMs = Math.max(perfCountersRef.current.maxTickMs, tickTime);
-
-            // Perf Budget Warning (Dev Only helpful)
-            if (tickTime > 12) {
-                // console.warn(`[PrefillPerfWarn] slow tick ${tickTime.toFixed(1)}ms phase=${phaseRef.current}`);
-            }
-
-            if (progress < 1) {
-                rafRef.current = requestAnimationFrame(tick);
-            } else {
-                // Final Check before committing completion
-                if (targetRunId !== currentRunIdRef.current || dirtySincePrefill) return;
-
-                // Ensure final state is perfect
-                if (textareaRef.current && textareaRef.current.value !== targetText) {
-                    isProgrammaticSetRef.current = true;
-                    textareaRef.current.value = targetText;
-
-                    // Final resize
-                    textareaRef.current.style.height = 'auto';
-                    textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, MAX_HEIGHT) + 'px';
-
-                    queueMicrotask(() => { isProgrammaticSetRef.current = false; });
-                }
-
-                // Sync React state at the end
-                setInputText(targetText);
-
-                // Log Perf Summary
-                if (phaseRef.current === 'seed') {
-                    console.log(`[PrefillPerf] phase=seed updates=${perfCountersRef.current.seedUpdates} maxTickMs=${perfCountersRef.current.maxTickMs.toFixed(2)} autosize=${perfCountersRef.current.autosizeCalls}`);
-                } else if (phaseRef.current === 'refine') {
-                    console.log(`[PrefillPerf] phase=refine updates=${perfCountersRef.current.refineUpdates} maxTickMs=${perfCountersRef.current.maxTickMs.toFixed(2)} autosize=${perfCountersRef.current.autosizeCalls}`);
-                }
-
-                onDone();
+            } catch (err) {
+                console.error(`[PrefillError] tick_failed runId=${targetRunId}`, err);
+                cancelEverything("tick_error");
+                snapToStable("tick_error");
             }
         };
 
         rafRef.current = requestAnimationFrame(tick);
-    }, [dirtySincePrefill]);
+    }, [dirtySincePrefill, snapToStable, cancelEverything]);
 
 
     // --- Helper: Start Refine Phase ---
@@ -483,12 +542,9 @@ export const FullChatbar: React.FC<FullChatbarProps> = ({ engineRef }) => {
         const runId = currentRunIdRef.current;
         const text = refinedTextRef.current;
 
-        // Security check: Must have runId, text, and NOT be dirty
-        if (!runId || !text) return;
-        if (dirtySincePrefill) {
-            console.log(`[Prefill] refine_blocked reason=dirty runId=${runId}`);
-            return;
-        }
+        // Security check
+        if (!runId || !text || !isMountedRef.current) return;
+        if (dirtySincePrefill) return;
 
         // Strict Mode Guard: Prevent duplicate start
         if (lastRefineStartRunIdRef.current === runId) {
@@ -500,7 +556,6 @@ export const FullChatbar: React.FC<FullChatbarProps> = ({ engineRef }) => {
         console.log(`[Prefill] phase refine runId=${runId}`);
         phaseRef.current = 'refine';
 
-        // Duration based on length
         const duration = Math.min(Math.max(700, text.length * 30), 1200);
 
         streamToText(runId, text, duration, () => {
@@ -527,6 +582,15 @@ export const FullChatbar: React.FC<FullChatbarProps> = ({ engineRef }) => {
             breathDoneRef.current = false;
 
             console.log(`[Prefill] run_start runId=${runId}`);
+
+            // Start Hard Timeout (Fail-Safe) - 3000ms max for whole flow
+            hardTimeoutRef.current = window.setTimeout(() => {
+                if (currentRunIdRef.current === runId && !dirtySincePrefill && isMountedRef.current) {
+                    console.warn(`[PrefillWarn] hard_timeout fired runId=${runId}`);
+                    cancelEverything("hard_timeout");
+                    snapToStable("hard_timeout");
+                }
+            }, 3000);
 
             if (seed) {
                 // Strict Mode Guard: Prevent duplicate start for same runId
@@ -605,7 +669,7 @@ export const FullChatbar: React.FC<FullChatbarProps> = ({ engineRef }) => {
             }
         }
 
-    }, [fullChat.prefill, dirtySincePrefill, cancelEverything, streamToText, startRefine]);
+    }, [fullChat.prefill, dirtySincePrefill, cancelEverything, streamToText, startRefine, snapToStable]);
 
     // --- Sync Textarea (Uncontrolled Mode Support) ---
     // Since we removed 'value={inputText}', we must manually push state updates to DOM

@@ -17,10 +17,10 @@ export interface MiniChatContext {
 }
 
 export interface PrefillState {
+    runId: number;
     seed: string | null;
     refined: string | null;
     status: 'idle' | 'seeded' | 'refining' | 'ready';
-    jobId: number;
 }
 
 export interface FullChatState {

@@ -24,7 +24,7 @@ interface SendButtonProps {
 }
 
 // Size control knob - change this to scale the button size
-const SIZE_MULTIPLIER = 1.1;
+const SIZE_MULTIPLIER = 1.3;
 
 const BUTTON_STYLE: React.CSSProperties = {
     background: 'transparent',

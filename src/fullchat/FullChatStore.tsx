@@ -16,7 +16,7 @@ const initialState: FullChatState = {
     messages: [],
     pendingContext: null,
     isStreaming: false,
-    prefill: { seed: null, refined: null, status: 'idle', jobId: 0 },
+    prefill: { runId: 0, seed: null, refined: null, status: 'idle' },
 };
 
 const FullChatContext = createContext<FullChatContextValue | null>(null);
@@ -112,12 +112,11 @@ export function FullChatProvider({ children }: { children: ReactNode }) {
         const signal = refineAbortController.current.signal;
 
         setState(prev => {
-            const nextJobId = prev.prefill.jobId + 1;
+            const nextRunId = (prev.prefill.runId || 0) + 1;
+            console.log('[Prefill] run_start', { runId: nextRunId, seed });
 
             // Start async refine side-effect
-            // Note: We intentionally fire-and-forget this promise, handling state updates inside.
             (async () => {
-                console.log('[Prefill] refine_started', { jobId: nextJobId });
                 try {
                     const refined = await refinePromptAsync({
                         nodeLabel: context.nodeLabel,
@@ -125,9 +124,9 @@ export function FullChatProvider({ children }: { children: ReactNode }) {
                     }, { signal });
 
                     setState(curr => {
-                        // Check staleness
-                        if (curr.prefill.jobId !== nextJobId) {
-                            console.log('[Prefill] refine_canceled reason=stale_job', { jobId: nextJobId });
+                        // Check staleness via runId
+                        if (curr.prefill.runId !== nextRunId) {
+                            console.log('[Prefill] refine_canceled reason=stale_run', { runId: nextRunId, currentRunId: curr.prefill.runId });
                             return curr;
                         }
 
@@ -149,15 +148,14 @@ export function FullChatProvider({ children }: { children: ReactNode }) {
 
             return {
                 ...prev,
-                pendingContext: context, // Keep for reference if needed
+                pendingContext: context,
                 isOpen: true,
                 prefill: {
+                    runId: nextRunId,
                     seed,
                     refined: null,
                     status: 'seeded',
-                    jobId: nextJobId
                 },
-                pendingSuggestion: null  // Clear any old suggestion
             };
         });
     }, []);

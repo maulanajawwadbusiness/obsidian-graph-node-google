@@ -268,19 +268,23 @@ export const FullChatbar: React.FC<FullChatbarProps> = ({ engineRef }) => {
     const [isAtBottom, setIsAtBottom] = useState(true);
     const [showJumpToLatest, setShowJumpToLatest] = useState(false);
 
-    // v3 Prefill Logic State (Local Streaming)
+    // v4 Prefill Logic State (Deterministic Breath Streaming)
     const [dirtySincePrefill, setDirtySincePrefill] = useState(false);
-    const lastHandledJobIdRef = useRef<number>(0);
 
-    // Streaming & Phase Refs (V4)
-    const streamTargetRef = useRef<string>('');
-    const streamIdRef = useRef<number>(0);
-    const rafRef = useRef<number>(0);
-    const isStreamingRef = useRef<boolean>(false);
+    // Core state for v4 controller
+    const currentRunIdRef = useRef<number | null>(null);
+    const phaseRef = useRef<'idle' | 'seed' | 'breath' | 'refine'>('idle');
+    const breathDoneRef = useRef(false);
 
-    type PrefillPhase = 'idle' | 'seed' | 'breath' | 'refine' | 'waiting_for_refine';
-    const phaseRef = useRef<PrefillPhase>('idle');
-    const breathTimeoutRef = useRef<number | null>(null);
+    // Data holding (local, not state, to avoid re-renders)
+    const seedTextRef = useRef<string>('');
+    const refinedTextRef = useRef<string | null>(null);
+
+    // Automation & Safety Refs
+    const streamTokenRef = useRef<number>(0);
+    const breathTimerRef = useRef<number | null>(null);
+    const isProgrammaticSetRef = useRef<boolean>(false);
+    const rafRef = useRef<number | null>(null);
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const messagesContainerRef = useRef<HTMLDivElement>(null);
@@ -294,54 +298,89 @@ export const FullChatbar: React.FC<FullChatbarProps> = ({ engineRef }) => {
         return engineRef.current.nodes.get(nodeId)?.label ?? null;
     };
 
-    // Helper: Start local streaming
-    const startStreaming = useCallback((targetText: string, mode: 'seed' | 'refine') => {
-        // Cancel any existing stream
-        if (rafRef.current) cancelAnimationFrame(rafRef.current);
-        streamIdRef.current++;
-        const myStreamId = streamIdRef.current;
+    // --- Helper: Cancellation ---
+    const cancelEverything = useCallback((reason: string) => {
+        console.log(`[Prefill] cancel reason=${reason} runId=${currentRunIdRef.current}`);
 
-        isStreamingRef.current = true;
-        streamTargetRef.current = targetText;
+        // 1. Stop streaming
+        streamTokenRef.current++; // Invalidates current rAF
+        if (rafRef.current) {
+            cancelAnimationFrame(rafRef.current);
+            rafRef.current = null;
+        }
 
-        console.log(`[Prefill] stream_start mode=${mode}`);
+        // 2. Stop breath timer
+        if (breathTimerRef.current) {
+            clearTimeout(breathTimerRef.current);
+            breathTimerRef.current = null;
+        }
+
+        // 3. Reset phase
+        phaseRef.current = 'idle';
+        // Note: We do NOT clear the input text. Destructive actions are bad.
+    }, []);
+
+    // --- Helper: Ease Out Cubic ---
+    const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3);
+
+    // --- Helper: Deterministic Streaming ---
+    const streamToText = useCallback((targetRunId: number, targetText: string, durationMs: number, onDone: () => void) => {
+        // Setup new stream
+        streamTokenRef.current++;
+        const myToken = streamTokenRef.current;
+        const startTime = performance.now();
+
+        let lastLen = 0; // optimization: only touch DOM if length changed
 
         const tick = () => {
-            // Stop if stream was superseded or user typed
-            if (myStreamId !== streamIdRef.current || !isStreamingRef.current) return;
+            // Check invalidation
+            if (myToken !== streamTokenRef.current || targetRunId !== currentRunIdRef.current) return;
 
-            // Current value in DOM
-            const current = textareaRef.current?.value || '';
+            const now = performance.now();
+            const elapsed = now - startTime;
+            const progress = Math.min(elapsed / durationMs, 1);
+            const eased = easeOutCubic(progress);
 
-            // If we reached target, stop
-            if (current === targetText) {
-                isStreamingRef.current = false;
-                console.log(`[Prefill] stream_stop reason=done mode=${mode}`);
-                return;
+            // Calculate length
+            const nextLen = Math.floor(eased * targetText.length);
+
+            // DOM Access & Update
+            if (nextLen !== lastLen) { // Only write if changed
+                const nextVal = targetText.slice(0, nextLen);
+
+                if (textareaRef.current) {
+                    isProgrammaticSetRef.current = true;
+                    textareaRef.current.value = nextVal;
+                    // Fix height
+                    textareaRef.current.style.height = 'auto';
+                    textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, MAX_HEIGHT) + 'px';
+
+                    // React Sync (keep it controlled, but delayed slightly to avoid conflict?)
+                    // Actually, for immediate feedback, we should sync state.
+                    setInputText(nextVal);
+
+                    // Reset guard in microtask
+                    queueMicrotask(() => {
+                        isProgrammaticSetRef.current = false;
+                    });
+                }
+                lastLen = nextLen;
             }
 
-            // Calculate next slice
-            // Speed: 3 chars per frame (~60fps = 180 chars/sec) -> fast but readable streaming
-            const nextLen = Math.min(current.length + 3, targetText.length);
-            const nextVal = targetText.slice(0, nextLen);
-
-            if (textareaRef.current) {
-                textareaRef.current.value = nextVal;
-                // Sync React state occasionally or just let input flow?
-                // For proper controlled input behavior, we MUST update state.
-                // However, doing setInputText on every frame might be heavy.
-                // React 18 is usually fine with this.
-                setInputText(nextVal);
-
-                // Adjust height
-                textareaRef.current.style.height = 'auto';
-                textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, MAX_HEIGHT) + 'px';
-            }
-
-            if (nextVal !== targetText) {
+            if (progress < 1) {
                 rafRef.current = requestAnimationFrame(tick);
             } else {
-                isStreamingRef.current = false;
+                // Ensure final state is perfect
+                if (textareaRef.current && textareaRef.current.value !== targetText) {
+                    isProgrammaticSetRef.current = true;
+                    textareaRef.current.value = targetText;
+                    setInputText(targetText);
+                    // Fix height
+                    textareaRef.current.style.height = 'auto';
+                    textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, MAX_HEIGHT) + 'px';
+                    queueMicrotask(() => { isProgrammaticSetRef.current = false; });
+                }
+                onDone();
             }
         };
 
@@ -349,59 +388,115 @@ export const FullChatbar: React.FC<FullChatbarProps> = ({ engineRef }) => {
     }, []);
 
 
+    // --- Helper: Start Refine Phase ---
+    const startRefine = useCallback(() => {
+        const runId = currentRunIdRef.current;
+        const text = refinedTextRef.current;
 
-    const focusLabel = getNodeLabel(currentFocusNodeId);
+        if (!runId || !text) return;
 
-    // v3 Prefill & Refine Synchronization (Streaming)
+        console.log('[Prefill] phase refine');
+        phaseRef.current = 'refine';
+
+        // Duration based on length, clamped
+        // e.g. 50 chars => 1.5s, 100 chars => 3s? 
+        // Let's make it snappier: 30ms per char, min 700ms, max 1200ms
+        const duration = Math.min(Math.max(700, text.length * 30), 1200);
+
+        streamToText(runId, text, duration, () => {
+            console.log('[Prefill] refine done');
+            phaseRef.current = 'idle';
+        });
+    }, [streamToText]);
+
+
+    // --- Store Sync Effect ---
     useEffect(() => {
-        const { seed, refined, status, jobId } = fullChat.prefill;
+        const { runId, seed, refined } = fullChat.prefill;
 
-        // 1. New Handoff Job Detected (Seed Phase)
-        if (jobId !== lastHandledJobIdRef.current && status !== 'idle') {
-            lastHandledJobIdRef.current = jobId;
+        // 1. New Run Detected
+        if (runId !== 0 && runId !== currentRunIdRef.current) {
+            cancelEverything("new_run");
 
-            // Reset dirty state for new job
-            setDirtySincePrefill(false);
+            currentRunIdRef.current = runId;
+            setDirtySincePrefill(false); // Reset dirty flag
+            seedTextRef.current = seed || '';
+            refinedTextRef.current = null;
+            breathDoneRef.current = false;
 
             if (seed) {
-                // Ensure input is empty or we start from scratch for new handoff
-                setInputText('');
+                console.log('[Prefill] phase seed');
+                phaseRef.current = 'seed';
+
+                // Clear input first
                 if (textareaRef.current) {
+                    isProgrammaticSetRef.current = true;
                     textareaRef.current.value = '';
+                    setInputText('');
                     textareaRef.current.focus();
+                    queueMicrotask(() => { isProgrammaticSetRef.current = false; });
                 }
-                startStreaming(seed, 'seed');
+
+                // Stream Seed (500ms)
+                streamToText(runId, seed, 500, () => {
+                    if (phaseRef.current !== 'seed') return; // Interrupted
+
+                    console.log('[Prefill] phase breath');
+                    phaseRef.current = 'breath';
+
+                    // Breath Timer (500ms pause)
+                    breathTimerRef.current = window.setTimeout(() => {
+                        breathDoneRef.current = true;
+                        breathTimerRef.current = null;
+
+                        // Breath done. If we already have refined text, go!
+                        if (refinedTextRef.current && !dirtySincePrefill) {
+                            startRefine();
+                        } else {
+                            // Wait in idle, but marked breathDone
+                            phaseRef.current = 'idle';
+                        }
+                    }, 500);
+                });
             }
-            return;
         }
 
-        // 2. Refinement Ready Phase
-        if (jobId === lastHandledJobIdRef.current && status === 'ready' && refined) {
+        // 2. Refined Text Arrived
+        if (runId === currentRunIdRef.current && refined && refined !== refinedTextRef.current) {
+            refinedTextRef.current = refined;
+
             if (dirtySincePrefill) {
-                // User typed -> discard refinement
                 console.log('[Prefill] refine_ready apply=NO reason=dirty');
+                return;
+            }
+
+            // Logic to trigger refine based on current phase
+            if (breathDoneRef.current) {
+                // Breath already finished -> go immediately
+                startRefine();
             } else {
-                // Clean -> Stream upgrade
-                // We don't overwrite if it's already refined (e.g. re-renders)
-                if (inputText !== refined) {
-                    console.log('[Prefill] refine_ready apply=YES reason=clean');
-                    startStreaming(refined, 'refine');
-                }
+                // Breath still running or seed running -> do nothing, the callback chains will pick it up
+                console.log('[Prefill] refine_ready apply=PENDING reason=waiting_for_breath');
             }
         }
-    }, [fullChat.prefill, dirtySincePrefill, inputText, startStreaming]);
+
+    }, [fullChat.prefill, dirtySincePrefill, cancelEverything, streamToText, startRefine]);
+
 
     const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-        // User interaction detected
+        // Critical: Ignore programmatic updates
+        if (isProgrammaticSetRef.current) return;
+
+        // User typed!
         if (!dirtySincePrefill) {
             setDirtySincePrefill(true);
+            cancelEverything("user_dirty");
         }
-
-        // Stop any active prefill streaming immediately
-        stopStreaming('dirty');
 
         setInputText(e.target.value);
     };
+
+    const focusLabel = getNodeLabel(currentFocusNodeId);
 
     // Auto-scroll when at bottom and content changes
     // Using messagesEndRef.current to avoid triggering on every message update

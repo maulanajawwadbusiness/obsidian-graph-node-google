@@ -15,7 +15,8 @@ type DocumentAction =
     | { type: 'TOGGLE_PREVIEW' }
     | { type: 'SET_PREVIEW'; open: boolean }
     | { type: 'CLEAR_DOCUMENT' }
-    | { type: 'SET_AI_ACTIVITY'; active: boolean };
+    | { type: 'SET_AI_ACTIVITY'; active: boolean }
+    | { type: 'SET_INFERRED_TITLE'; title: string | null };
 
 // Initial state
 const initialState: DocumentState = {
@@ -24,6 +25,7 @@ const initialState: DocumentState = {
     errorMessage: null,
     previewOpen: false,
     aiActivity: false,
+    inferredTitle: null,
 };
 
 // Reducer
@@ -37,6 +39,7 @@ function documentReducer(state: DocumentState, action: DocumentAction): Document
                 activeDocument: action.document,
                 status: 'ready',
                 errorMessage: null,
+                inferredTitle: null, // Reset on new document (will be filled by AI later)
             };
         case 'SET_ERROR':
             return {
@@ -52,6 +55,8 @@ function documentReducer(state: DocumentState, action: DocumentAction): Document
             return { ...initialState, previewOpen: state.previewOpen };
         case 'SET_AI_ACTIVITY':
             return { ...state, aiActivity: action.active };
+        case 'SET_INFERRED_TITLE':
+            return { ...state, inferredTitle: action.title };
         default:
             return state;
     }
@@ -68,6 +73,7 @@ interface DocumentContextValue {
     clearDocument: () => void;
     parseFile: (file: File) => Promise<ParsedDocument | null>;
     setAIActivity: (active: boolean) => void;
+    setInferredTitle: (title: string | null) => void;
 }
 
 const DocumentContext = createContext<DocumentContextValue | null>(null);
@@ -119,7 +125,8 @@ export function DocumentProvider({ children }: { children: ReactNode }) {
         setPreviewOpen: (open) => dispatch({ type: 'SET_PREVIEW', open }),
         clearDocument: () => dispatch({ type: 'CLEAR_DOCUMENT' }),
         parseFile,
-        setAIActivity: (active) => dispatch({ type: 'SET_AI_ACTIVITY', active })
+        setAIActivity: (active) => dispatch({ type: 'SET_AI_ACTIVITY', active }),
+        setInferredTitle: (title) => dispatch({ type: 'SET_INFERRED_TITLE', title })
     };
 
     return (

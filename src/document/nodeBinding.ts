@@ -40,7 +40,8 @@ export async function applyAnalysisToNodes(
   documentText: string,
   documentId: string,
   getCurrentDocId: () => string | null,
-  setAIActivity: (active: boolean) => void
+  setAIActivity: (active: boolean) => void,
+  setInferredTitle: (title: string | null) => void
 ): Promise<void> {
   console.log(`[AI] Starting paper analysis for doc ${documentId.slice(0, 8)}...`);
 
@@ -77,6 +78,12 @@ export async function applyAnalysisToNodes(
         console.log(`[AI] Node ${i}: "${point.title}"`);
       }
     });
+
+    // Dispatch Inferred Title (Main Topic)
+    if (points.length > 0) {
+      setInferredTitle(points[0].title);
+      console.log(`[AI] Inferred Title: "${points[0].title}"`);
+    }
 
     console.log(`[AI] Applied ${points.length} analysis points`);
 

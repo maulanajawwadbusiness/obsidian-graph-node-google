@@ -15,6 +15,7 @@ import { generateRandomGraph } from './graphRandom';
 import { DocumentProvider, useDocument } from '../store/documentStore';
 import { applyFirstWordsToNodes, applyAnalysisToNodes } from '../document/nodeBinding';
 import { AnalysisOverlay } from '../components/AnalysisOverlay';
+import { MapTitleBlock } from './components/MapTitleBlock';
 import { PopupProvider, usePopup } from '../popup/PopupStore';
 import { PopupPortal } from '../popup/PopupPortal';
 import { FullChatProvider, FullChatbar, FullChatToggle, useFullChat } from '../fullchat';
@@ -253,7 +254,8 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
                 document.text,
                 docId,
                 () => docId,
-                documentContext.setAIActivity
+                documentContext.setAIActivity,
+                documentContext.setInferredTitle
             );
         }
     };
@@ -379,6 +381,7 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
                 <TextPreviewButton onToggle={toggleViewer} />
                 <AIActivityGlyph />
                 <AnalysisOverlay />
+                <MapTitleBlock />
                 <PopupPortal />
                 <FullChatToggle />
             </div>

@@ -8,7 +8,7 @@ import { SidebarControls } from './components/SidebarControls';
 import { TextPreviewButton } from './components/TextPreviewButton';
 import { HalfLeftWindow } from './components/HalfLeftWindow';
 import { AIActivityGlyph } from './components/AIActivityGlyph';
-import { CONTAINER_STYLE, MAIN_STYLE, SHOW_THEME_TOGGLE } from './graphPlaygroundStyles';
+import { CONTAINER_STYLE, MAIN_STYLE, SHOW_THEME_TOGGLE, SHOW_MAP_TITLE, SHOW_BRAND_LABEL } from './graphPlaygroundStyles';
 import { PlaygroundMetrics } from './playgroundTypes';
 import { useGraphRendering } from './useGraphRendering';
 import { generateRandomGraph } from './graphRandom';
@@ -382,8 +382,8 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
                 <TextPreviewButton onToggle={toggleViewer} />
                 <AIActivityGlyph />
                 <AnalysisOverlay />
-                <MapTitleBlock />
-                <BrandLabel />
+                {SHOW_MAP_TITLE && <MapTitleBlock />}
+                {SHOW_BRAND_LABEL && <BrandLabel />}
                 <PopupPortal />
                 <FullChatToggle />
             </div>

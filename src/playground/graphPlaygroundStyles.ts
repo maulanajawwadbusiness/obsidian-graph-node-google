@@ -4,6 +4,8 @@ import React from 'react';
 // Configuration Knobs
 // -----------------------------------------------------------------------------
 export const SHOW_THEME_TOGGLE = true; // Set to false to hide theme toggle button
+export const SHOW_MAP_TITLE = false; // Set to false to hide the bottom-center title
+export const SHOW_BRAND_LABEL = false; // Set to false to hide the top-left brand label
 
 // -----------------------------------------------------------------------------
 // Styles (Inline for simplicity, as requested)

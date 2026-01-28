@@ -1,5 +1,6 @@
-import { createContext, useContext, useState, useCallback, ReactNode } from 'react';
+import { createContext, useContext, useState, useCallback, ReactNode, useRef } from 'react';
 import type { FullChatState, FullChatContextValue, FullChatMessage, MiniChatContext } from './fullChatTypes';
+import { makeSeedPrompt, refinePromptAsync } from './prefillSuggestion';
 
 /**
  * Full Chat Store - React Context for managing full chatbar state
@@ -15,12 +16,15 @@ const initialState: FullChatState = {
     messages: [],
     pendingContext: null,
     isStreaming: false,
+    prefill: { seed: null, refined: null, status: 'idle', jobId: 0 },
+    pendingSuggestion: null,
 };
 
 const FullChatContext = createContext<FullChatContextValue | null>(null);
 
 export function FullChatProvider({ children }: { children: ReactNode }) {
     const [state, setState] = useState<FullChatState>(initialState);
+    const refineAbortController = useRef<AbortController | null>(null);
 
     const openFullChat = useCallback(() => {
         console.log('[FullChat] Toggled: true');
@@ -92,11 +96,75 @@ export function FullChatProvider({ children }: { children: ReactNode }) {
 
     const receiveFromMiniChat = useCallback((context: MiniChatContext) => {
         console.log('[FullChat] Handoff received:', context);
-        setState(prev => ({
-            ...prev,
-            pendingContext: context,
-            isOpen: true,
-        }));
+
+        // 1. Generate Seed (Instant)
+        const seed = makeSeedPrompt({
+            nodeLabel: context.nodeLabel,
+            miniChatMessages: context.miniChatMessages
+        });
+        console.log('[Prefill] seed_applied', { seed });
+
+        // 2. Manage Refine Job
+        if (refineAbortController.current) {
+            refineAbortController.current.abort();
+            console.log('[Prefill] refine_canceled reason=new_handoff');
+        }
+        refineAbortController.current = new AbortController();
+        const signal = refineAbortController.current.signal;
+
+        setState(prev => {
+            const nextJobId = prev.prefill.jobId + 1;
+
+            // Start async refine side-effect
+            // Note: We intentionally fire-and-forget this promise, handling state updates inside.
+            (async () => {
+                console.log('[Prefill] refine_started', { jobId: nextJobId });
+                try {
+                    const refined = await refinePromptAsync({
+                        nodeLabel: context.nodeLabel,
+                        miniChatMessages: context.miniChatMessages
+                    }, { signal });
+
+                    setState(curr => {
+                        // Check staleness
+                        if (curr.prefill.jobId !== nextJobId) {
+                            console.log('[Prefill] refine_canceled reason=stale_job', { jobId: nextJobId });
+                            return curr;
+                        }
+
+                        console.log('[Prefill] refine_ready', { refined });
+                        return {
+                            ...curr,
+                            prefill: {
+                                ...curr.prefill,
+                                refined,
+                                status: 'ready'
+                            }
+                        };
+                    });
+                } catch (err: unknown) {
+                    if (err instanceof Error && err.message === 'Aborted') return;
+                    console.error('[Prefill] Refine error', err);
+                }
+            })();
+
+            return {
+                ...prev,
+                pendingContext: context, // Keep for reference if needed
+                isOpen: true,
+                prefill: {
+                    seed,
+                    refined: null,
+                    status: 'seeded',
+                    jobId: nextJobId
+                },
+                pendingSuggestion: null  // Clear any old suggestion
+            };
+        });
+    }, []);
+
+    const setPendingSuggestion = useCallback((text: string | null) => {
+        setState(prev => ({ ...prev, pendingSuggestion: text }));
     }, []);
 
     const clearPendingContext = useCallback(() => {
@@ -113,6 +181,7 @@ export function FullChatProvider({ children }: { children: ReactNode }) {
         completeStreamingMessage,
         receiveFromMiniChat,
         clearPendingContext,
+        setPendingSuggestion,
     };
 
     return (

@@ -268,6 +268,10 @@ export const FullChatbar: React.FC<FullChatbarProps> = ({ engineRef }) => {
     const [isAtBottom, setIsAtBottom] = useState(true);
     const [showJumpToLatest, setShowJumpToLatest] = useState(false);
 
+    // v2 Prefill Logic State
+    const [dirtySincePrefill, setDirtySincePrefill] = useState(false);
+    const lastHandledJobIdRef = useRef<number>(0);
+
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const messagesContainerRef = useRef<HTMLDivElement>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -282,14 +286,59 @@ export const FullChatbar: React.FC<FullChatbarProps> = ({ engineRef }) => {
 
     const focusLabel = getNodeLabel(currentFocusNodeId);
 
-    // Handle pending context from mini chat handoff
+    // v2 Prefill & Refine Synchronization
     useEffect(() => {
-        if (fullChat.pendingContext && textareaRef.current) {
-            setInputText(fullChat.pendingContext.suggestedPrompt);
-            textareaRef.current.focus();
-            fullChat.clearPendingContext();
+        const { seed, refined, status, jobId } = fullChat.prefill;
+        const textarea = textareaRef.current;
+
+        // 1. New Handoff Job Detected (Seed Phase)
+        if (jobId !== lastHandledJobIdRef.current && status !== 'idle') {
+            lastHandledJobIdRef.current = jobId;
+            if (seed) {
+                setInputText(seed);
+                setDirtySincePrefill(false);
+                if (textarea) {
+                    textarea.focus();
+                    // Trigger height adjust next tick
+                    setTimeout(() => {
+                        textarea.style.height = 'auto'; // Reset to force recalc if needed
+                        textarea.style.height = Math.min(textarea.scrollHeight, MAX_HEIGHT) + 'px';
+                    }, 0);
+                }
+            }
+            return;
         }
-    }, [fullChat.pendingContext, fullChat.clearPendingContext]);
+
+        // 2. Refinement Ready Phase
+        if (jobId === lastHandledJobIdRef.current && status === 'ready' && refined) {
+            if (dirtySincePrefill) {
+                // User typed -> Convert to pending suggestion
+                if (fullChat.pendingSuggestion !== refined) {
+                    fullChat.setPendingSuggestion(refined);
+                }
+            } else {
+                // Clean -> Auto-upgrade
+                if (inputText !== refined) {
+                    setInputText(refined);
+                    // setDirtySincePrefill remains false (system update)
+                }
+            }
+        }
+    }, [fullChat.prefill, dirtySincePrefill, fullChat.pendingSuggestion, inputText, fullChat.setPendingSuggestion]);
+
+    const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+        setInputText(e.target.value);
+        setDirtySincePrefill(true);
+    };
+
+    const handleApplySuggestion = () => {
+        if (fullChat.pendingSuggestion) {
+            setInputText(fullChat.pendingSuggestion);
+            setDirtySincePrefill(false);
+            fullChat.setPendingSuggestion(null);
+            textareaRef.current?.focus();
+        }
+    };
 
     // Auto-scroll when at bottom and content changes
     // Using messagesEndRef.current to avoid triggering on every message update
@@ -494,11 +543,37 @@ export const FullChatbar: React.FC<FullChatbarProps> = ({ engineRef }) => {
             )}
 
             {/* Input */}
-            <div style={INPUT_CONTAINER_STYLE}>
+            <div style={{ ...INPUT_CONTAINER_STYLE, position: 'relative' }}>
+                {fullChat.pendingSuggestion && (
+                    <button
+                        onClick={handleApplySuggestion}
+                        style={{
+                            position: 'absolute',
+                            bottom: '100%',
+                            left: '24px',
+                            marginBottom: '8px',
+                            fontSize: '12px',
+                            color: VOID.energy,
+                            cursor: 'pointer',
+                            background: VOID.elevated,
+                            padding: '6px 10px',
+                            borderRadius: '4px',
+                            border: `1px solid ${VOID.lineEnergy}`,
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+                            zIndex: 20
+                        }}
+                    >
+                        <span>✨ Refined prompt available</span>
+                        <span style={{ opacity: 0.6, fontSize: '10px' }}>(Apply)</span>
+                    </button>
+                )}
                 <textarea
                     ref={textareaRef}
                     value={inputText}
-                    onChange={(e) => setInputText(e.target.value)}
+                    onChange={handleInputChange}
                     onKeyDown={handleKeyDown}
                     placeholder="Trace the thought here…"
                     style={{ ...INPUT_FIELD_STYLE, height: `${MIN_HEIGHT}px` }}

@@ -314,17 +314,13 @@ export const MiniChatbar: React.FC<MiniChatbarProps> = ({ messages, onSend, onCl
             ? `Node ${popupContext.selectedNodeId.slice(0, 8)}`
             : 'this node';
 
-        const themeHint = messages.length > 0
-            ? `Continuing discussion about "${nodeLabel}": ${messages[messages.length - 1].text.slice(0, 50)}...`
-            : `Tell me more about "${nodeLabel}"`;
-
+        // v2: Pass raw context. Seed/Refine logic is in FullChatStore.
         fullChat.receiveFromMiniChat({
             miniChatMessages: messages,
             nodeLabel,
-            suggestedPrompt: themeHint,
         });
 
-        console.log('[MiniChat] Sent context to Full Chat');
+        console.log('[MiniChat] Sent context to Full Chat (v2)');
     };
 
     const position = computeChatbarPosition(popupRect, chatbarSize);

@@ -13,13 +13,22 @@ export interface FullChatMessage {
 export interface MiniChatContext {
     miniChatMessages: Array<{ role: 'user' | 'ai'; text: string }>;
     nodeLabel: string;
-    suggestedPrompt: string;
+    suggestedPrompt?: string;
+}
+
+export interface PrefillState {
+    seed: string | null;
+    refined: string | null;
+    status: 'idle' | 'seeded' | 'refining' | 'ready';
+    jobId: number;
 }
 
 export interface FullChatState {
     isOpen: boolean;
     messages: FullChatMessage[];
     pendingContext: MiniChatContext | null;
+    prefill: PrefillState;
+    pendingSuggestion: string | null;
     isStreaming: boolean;
 }
 
@@ -32,6 +41,7 @@ export interface FullChatActions {
     completeStreamingMessage: () => void;
     receiveFromMiniChat: (context: MiniChatContext) => void;
     clearPendingContext: () => void;
+    setPendingSuggestion: (text: string | null) => void;
 }
 
 export type FullChatContextValue = FullChatState & FullChatActions;

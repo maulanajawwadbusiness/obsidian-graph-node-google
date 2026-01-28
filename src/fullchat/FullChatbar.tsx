@@ -622,6 +622,93 @@ export const FullChatbar: React.FC<FullChatbarProps> = ({ engineRef }) => {
         });
     }, []);
 
+    // -------------------------------------------------------------------------
+    // VISIBILITY & RESIZE HARDENING (Edge Cases #5 & #6)
+    // -------------------------------------------------------------------------
+
+    const snapToFinalState = useCallback((reason: string) => {
+        // If we are dirty, do nothing (user owns state)
+        if (dirtySincePrefill) return;
+
+        // Determine what text "should" be there
+        let targetText: string | null = null;
+        if (phaseRef.current === 'seed') {
+            targetText = seedTextRef.current;
+        } else if (phaseRef.current === 'refine' || (phaseRef.current === 'idle' && refinedTextRef.current)) {
+            // If we have refined text, snap to it. Otherwise stick with seed.
+            targetText = refinedTextRef.current || seedTextRef.current;
+        } else if (phaseRef.current === 'breath') {
+            targetText = seedTextRef.current;
+        }
+
+        if (targetText !== null && textareaRef.current) {
+            console.log(`[Prefill] snap action=${reason} textLen=${targetText.length}`);
+            isProgrammaticSetRef.current = true;
+            textareaRef.current.value = targetText;
+            setInputText(targetText); // Sync React state instantly
+
+            // Force quick resize
+            textareaRef.current.style.height = 'auto';
+            textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, MAX_HEIGHT) + 'px';
+
+            queueMicrotask(() => { isProgrammaticSetRef.current = false; });
+        }
+    }, [dirtySincePrefill]);
+
+    // Visibility Handling
+    useEffect(() => {
+        const handleVisibilityChange = () => {
+            if (document.hidden) {
+                console.log(`[Prefill] visibility hidden`);
+                // Stop everything instantly
+                cancelEverything("tab_hidden");
+                // Snap to final state to avoid "brick jump" on return
+                snapToFinalState("tab_hidden");
+            } else {
+                console.log(`[Prefill] visibility visible`);
+                // Do NOT restart. Stay snapped/idle. "It just works".
+            }
+        };
+
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+        return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+    }, [cancelEverything, snapToFinalState]);
+
+    // Resize Handling (Throttled)
+    const resizeTimeoutRef = useRef<number | null>(null);
+    useEffect(() => {
+        const handleResize = () => {
+            // 1. Instant Stop on Resize Start (First event)
+            if (phaseRef.current !== 'idle') {
+                console.log(`[Prefill] resize start`);
+                cancelEverything("resize");
+                snapToFinalState("resize");
+            }
+
+            // 2. Debounce End of Resize (to fix layout)
+            if (resizeTimeoutRef.current) {
+                clearTimeout(resizeTimeoutRef.current);
+            }
+
+            resizeTimeoutRef.current = window.setTimeout(() => {
+                console.log(`[Prefill] resize settle`);
+                resizeTimeoutRef.current = null;
+                // Force one autosize pass after layout settles
+                if (textareaRef.current) {
+                    textareaRef.current.style.height = 'auto';
+                    textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, MAX_HEIGHT) + 'px';
+                }
+            }, 150);
+        };
+
+        window.addEventListener('resize', handleResize);
+        return () => {
+            window.removeEventListener('resize', handleResize);
+            if (resizeTimeoutRef.current) clearTimeout(resizeTimeoutRef.current);
+        };
+    }, [cancelEverything, snapToFinalState]);
+
+
     // 1. Instant Scroll on New Message Update (e.g. user sent, or new streaming text chunk)
     const lastMessage = fullChat.messages[fullChat.messages.length - 1];
 

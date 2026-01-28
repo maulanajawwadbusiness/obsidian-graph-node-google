@@ -47,7 +47,7 @@ export const TextPreviewButton: React.FC<TextPreviewButtonProps> = ({ onToggle }
             aria-label={open ? 'Close document viewer' : 'Open document viewer'}
             title={open ? 'Close document viewer' : 'Open document viewer'}
         >
-            {open ? '✕ Close Viewer' : '📄 Open Document'}
+            {open ? '✕ Close Viewer' : '📄 Open Document (Beta)'}
         </button>
     );
 };

@@ -27,7 +27,7 @@ const LABEL_STYLE: React.CSSProperties = {
 };
 
 const MAIN_TITLE_STYLE: React.CSSProperties = {
-    color: 'rgba(237, 251, 255, 0.7)', // #edfbff at ~0.7 opacity (dimmed)
+    color: 'rgba(212, 245, 255, 0.5)', // #edfbff at ~0.7 opacity (dimmed)
     fontSize: '16px',
     fontWeight: 300, // Light/Normal
     letterSpacing: '0.5px',
@@ -44,7 +44,7 @@ export const MapTitleBlock: React.FC = () => {
     const { state } = useDocument();
 
     // Determine what to show
-    let mainText = 'Seret dokumen untuk memulai'; // Indonesian fallback
+    let mainText = 'Judul paper di sini'; // Indonesian fallback
 
     if (state.inferredTitle) {
         mainText = state.inferredTitle;

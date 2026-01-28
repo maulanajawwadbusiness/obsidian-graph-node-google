@@ -18,13 +18,13 @@
 *   **Fallback Logic**:
     *   If `inferredTitle` exists → Show it.
     *   Else if `activeDocument` exists → Show filename (cleaned).
-    *   Else → Show "Seret dokumen untuk memulai".
+    *   Else → Show "Judul paper di sini".
 
 ### 3. Wiring
 *   `GraphPhysicsPlayground` renders `<MapTitleBlock />` as a sibling to overlays.
 *   It passes `documentContext.setInferredTitle` into the binding layer.
 
 ## Verification
-1.  **Empty State**: Shows "Seret dokumen untuk memulai".
+1.  **Empty State**: Shows "Judul paper di sini".
 2.  **Upload**: After analysis, updates to "Main Topic Title".
 3.  **Interaction**: Does not block canvas panning/zooming.

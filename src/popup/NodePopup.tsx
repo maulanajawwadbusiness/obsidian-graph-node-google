@@ -227,7 +227,7 @@ export const NodePopup: React.FC = () => {
                     onClick={closePopup}
                     onMouseEnter={(e) => (e.currentTarget.style.color = 'rgba(255, 255, 255, 0.9)')}
                     onMouseLeave={(e) => (e.currentTarget.style.color = 'rgba(180, 190, 210, 0.7)')}
-                    title="Close (ESC)"
+                    title="Close window"
                 >
                     ×
                 </button>

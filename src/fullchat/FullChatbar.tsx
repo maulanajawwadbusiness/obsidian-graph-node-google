@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, memo } from 'react';
 import { useFullChat } from './FullChatStore';
 import { useStreamSimulator } from './useStreamSimulator';
 import { usePopup } from '../popup/PopupStore';
@@ -235,18 +235,25 @@ const SCROLL_BOTTOM_THRESHOLD = 50;
 // =============================================================================
 // STREAMING DOTS — Subtle thinking indicator
 // =============================================================================
-const StreamingDots: React.FC = () => (
-    <span style={{
-        display: 'inline-flex',
-        gap: '3px',
-        marginLeft: '4px',
-        opacity: 0.35,
-    }}>
-        <span style={{ fontSize: '16px', lineHeight: 1 }}>·</span>
-        <span style={{ fontSize: '16px', lineHeight: 1 }}>·</span>
-        <span style={{ fontSize: '16px', lineHeight: 1 }}>·</span>
+const STREAMING_DOTS_STYLE: React.CSSProperties = {
+    display: 'inline-flex',
+    gap: '3px',
+    marginLeft: '4px',
+    opacity: 0.35,
+};
+
+const DOT_STYLE: React.CSSProperties = {
+    fontSize: '16px',
+    lineHeight: 1,
+};
+
+const StreamingDots: React.FC = memo(() => (
+    <span style={STREAMING_DOTS_STYLE}>
+        <span style={DOT_STYLE}>·</span>
+        <span style={DOT_STYLE}>·</span>
+        <span style={DOT_STYLE}>·</span>
     </span>
-);
+));
 
 // =============================================================================
 // COMPONENT
@@ -285,11 +292,16 @@ export const FullChatbar: React.FC<FullChatbarProps> = ({ engineRef }) => {
     }, [fullChat.pendingContext, fullChat.clearPendingContext]);
 
     // Auto-scroll when at bottom and content changes
+    // Using messagesEndRef.current to avoid triggering on every message update
+    const lastMessageTimestamp = fullChat.messages[fullChat.messages.length - 1]?.timestamp;
     useEffect(() => {
         if (isAtBottom && messagesEndRef.current) {
-            messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+            // Use requestAnimationFrame to batch with browser paint
+            requestAnimationFrame(() => {
+                messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+            });
         }
-    }, [fullChat.messages, isAtBottom]);
+    }, [lastMessageTimestamp, isAtBottom]);
 
     // Show/hide "Jump to Latest" pill
     useEffect(() => {
@@ -358,19 +370,20 @@ export const FullChatbar: React.FC<FullChatbarProps> = ({ engineRef }) => {
     }, []);
 
     // Get message style with turn spacing
-    const getMessageStyle = useCallback((msg: FullChatMessage, idx: number): React.CSSProperties => {
+    // Optimized to not recreate on every message update during streaming
+    const getMessageStyle = useCallback((msg: FullChatMessage, prevMsg: FullChatMessage | undefined): React.CSSProperties => {
         const base = msg.role === 'user' ? MESSAGE_STYLE_USER : MESSAGE_STYLE_AI;
-        const messages = fullChat.messages;
-        const prev = messages[idx - 1];
 
         // Extra top margin when switching from AI to User (new turn)
-        const isNewTurn = prev && prev.role === 'ai' && msg.role === 'user';
+        const isNewTurn = prevMsg && prevMsg.role === 'ai' && msg.role === 'user';
+
+        if (!isNewTurn) return base;
 
         return {
             ...base,
-            marginTop: isNewTurn ? '12px' : undefined,
+            marginTop: '12px',
         };
-    }, [fullChat.messages]);
+    }, []);
 
     if (!fullChat.isOpen) return null;
 
@@ -430,8 +443,8 @@ export const FullChatbar: React.FC<FullChatbarProps> = ({ engineRef }) => {
                     >
                         {fullChat.messages.map((msg, i) => (
                             <div
-                                key={`${msg.timestamp}-${i}`}
-                                style={getMessageStyle(msg, i)}
+                                key={msg.timestamp}
+                                style={getMessageStyle(msg, fullChat.messages[i - 1])}
                             >
                                 {msg.text}
                                 {msg.status === 'streaming' && <StreamingDots />}

@@ -17,7 +17,6 @@ const initialState: FullChatState = {
     pendingContext: null,
     isStreaming: false,
     prefill: { seed: null, refined: null, status: 'idle', jobId: 0 },
-    pendingSuggestion: null,
 };
 
 const FullChatContext = createContext<FullChatContextValue | null>(null);
@@ -163,10 +162,6 @@ export function FullChatProvider({ children }: { children: ReactNode }) {
         });
     }, []);
 
-    const setPendingSuggestion = useCallback((text: string | null) => {
-        setState(prev => ({ ...prev, pendingSuggestion: text }));
-    }, []);
-
     const clearPendingContext = useCallback(() => {
         setState(prev => ({ ...prev, pendingContext: null }));
     }, []);
@@ -181,7 +176,6 @@ export function FullChatProvider({ children }: { children: ReactNode }) {
         completeStreamingMessage,
         receiveFromMiniChat,
         clearPendingContext,
-        setPendingSuggestion,
     };
 
     return (

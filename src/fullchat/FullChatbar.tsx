@@ -268,9 +268,15 @@ export const FullChatbar: React.FC<FullChatbarProps> = ({ engineRef }) => {
     const [isAtBottom, setIsAtBottom] = useState(true);
     const [showJumpToLatest, setShowJumpToLatest] = useState(false);
 
-    // v2 Prefill Logic State
+    // v3 Prefill Logic State (Local Streaming)
     const [dirtySincePrefill, setDirtySincePrefill] = useState(false);
     const lastHandledJobIdRef = useRef<number>(0);
+
+    // Streaming Refs
+    const streamTargetRef = useRef<string>('');
+    const streamIdRef = useRef<number>(0);
+    const rafRef = useRef<number>(0);
+    const isStreamingRef = useRef<boolean>(false);
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const messagesContainerRef = useRef<HTMLDivElement>(null);
@@ -284,27 +290,90 @@ export const FullChatbar: React.FC<FullChatbarProps> = ({ engineRef }) => {
         return engineRef.current.nodes.get(nodeId)?.label ?? null;
     };
 
+    // Helper: Start local streaming
+    const startStreaming = useCallback((targetText: string, mode: 'seed' | 'refine') => {
+        // Cancel any existing stream
+        if (rafRef.current) cancelAnimationFrame(rafRef.current);
+        streamIdRef.current++;
+        const myStreamId = streamIdRef.current;
+
+        isStreamingRef.current = true;
+        streamTargetRef.current = targetText;
+
+        console.log(`[Prefill] stream_start mode=${mode}`);
+
+        const tick = () => {
+            // Stop if stream was superseded or user typed
+            if (myStreamId !== streamIdRef.current || !isStreamingRef.current) return;
+
+            // Current value in DOM
+            const current = textareaRef.current?.value || '';
+
+            // If we reached target, stop
+            if (current === targetText) {
+                isStreamingRef.current = false;
+                console.log(`[Prefill] stream_stop reason=done mode=${mode}`);
+                return;
+            }
+
+            // Calculate next slice
+            // Speed: 3 chars per frame (~60fps = 180 chars/sec) -> fast but readable streaming
+            const nextLen = Math.min(current.length + 3, targetText.length);
+            const nextVal = targetText.slice(0, nextLen);
+
+            if (textareaRef.current) {
+                textareaRef.current.value = nextVal;
+                // Sync React state occasionally or just let input flow?
+                // For proper controlled input behavior, we MUST update state.
+                // However, doing setInputText on every frame might be heavy.
+                // React 18 is usually fine with this.
+                setInputText(nextVal);
+
+                // Adjust height
+                textareaRef.current.style.height = 'auto';
+                textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, MAX_HEIGHT) + 'px';
+            }
+
+            if (nextVal !== targetText) {
+                rafRef.current = requestAnimationFrame(tick);
+            } else {
+                isStreamingRef.current = false;
+            }
+        };
+
+        rafRef.current = requestAnimationFrame(tick);
+    }, []);
+
+    const stopStreaming = useCallback((reason: string) => {
+        if (isStreamingRef.current) {
+            isStreamingRef.current = false;
+            streamIdRef.current++; // Invalidates pending ticks
+            if (rafRef.current) cancelAnimationFrame(rafRef.current);
+            console.log(`[Prefill] stream_stop reason=${reason}`);
+        }
+    }, []);
+
     const focusLabel = getNodeLabel(currentFocusNodeId);
 
-    // v2 Prefill & Refine Synchronization
+    // v3 Prefill & Refine Synchronization (Streaming)
     useEffect(() => {
         const { seed, refined, status, jobId } = fullChat.prefill;
-        const textarea = textareaRef.current;
 
         // 1. New Handoff Job Detected (Seed Phase)
         if (jobId !== lastHandledJobIdRef.current && status !== 'idle') {
             lastHandledJobIdRef.current = jobId;
+
+            // Reset dirty state for new job
+            setDirtySincePrefill(false);
+
             if (seed) {
-                setInputText(seed);
-                setDirtySincePrefill(false);
-                if (textarea) {
-                    textarea.focus();
-                    // Trigger height adjust next tick
-                    setTimeout(() => {
-                        textarea.style.height = 'auto'; // Reset to force recalc if needed
-                        textarea.style.height = Math.min(textarea.scrollHeight, MAX_HEIGHT) + 'px';
-                    }, 0);
+                // Ensure input is empty or we start from scratch for new handoff
+                setInputText('');
+                if (textareaRef.current) {
+                    textareaRef.current.value = '';
+                    textareaRef.current.focus();
                 }
+                startStreaming(seed, 'seed');
             }
             return;
         }
@@ -312,32 +381,29 @@ export const FullChatbar: React.FC<FullChatbarProps> = ({ engineRef }) => {
         // 2. Refinement Ready Phase
         if (jobId === lastHandledJobIdRef.current && status === 'ready' && refined) {
             if (dirtySincePrefill) {
-                // User typed -> Convert to pending suggestion
-                if (fullChat.pendingSuggestion !== refined) {
-                    fullChat.setPendingSuggestion(refined);
-                }
+                // User typed -> discard refinement
+                console.log('[Prefill] refine_ready apply=NO reason=dirty');
             } else {
-                // Clean -> Auto-upgrade
+                // Clean -> Stream upgrade
+                // We don't overwrite if it's already refined (e.g. re-renders)
                 if (inputText !== refined) {
-                    setInputText(refined);
-                    // setDirtySincePrefill remains false (system update)
+                    console.log('[Prefill] refine_ready apply=YES reason=clean');
+                    startStreaming(refined, 'refine');
                 }
             }
         }
-    }, [fullChat.prefill, dirtySincePrefill, fullChat.pendingSuggestion, inputText, fullChat.setPendingSuggestion]);
+    }, [fullChat.prefill, dirtySincePrefill, inputText, startStreaming]);
 
     const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-        setInputText(e.target.value);
-        setDirtySincePrefill(true);
-    };
-
-    const handleApplySuggestion = () => {
-        if (fullChat.pendingSuggestion) {
-            setInputText(fullChat.pendingSuggestion);
-            setDirtySincePrefill(false);
-            fullChat.setPendingSuggestion(null);
-            textareaRef.current?.focus();
+        // User interaction detected
+        if (!dirtySincePrefill) {
+            setDirtySincePrefill(true);
         }
+
+        // Stop any active prefill streaming immediately
+        stopStreaming('dirty');
+
+        setInputText(e.target.value);
     };
 
     // Auto-scroll when at bottom and content changes
@@ -544,32 +610,6 @@ export const FullChatbar: React.FC<FullChatbarProps> = ({ engineRef }) => {
 
             {/* Input */}
             <div style={{ ...INPUT_CONTAINER_STYLE, position: 'relative' }}>
-                {fullChat.pendingSuggestion && (
-                    <button
-                        onClick={handleApplySuggestion}
-                        style={{
-                            position: 'absolute',
-                            bottom: '100%',
-                            left: '24px',
-                            marginBottom: '8px',
-                            fontSize: '12px',
-                            color: VOID.energy,
-                            cursor: 'pointer',
-                            background: VOID.elevated,
-                            padding: '6px 10px',
-                            borderRadius: '4px',
-                            border: `1px solid ${VOID.lineEnergy}`,
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '6px',
-                            boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
-                            zIndex: 20
-                        }}
-                    >
-                        <span>✨ Refined prompt available</span>
-                        <span style={{ opacity: 0.6, fontSize: '10px' }}>(Apply)</span>
-                    </button>
-                )}
                 <textarea
                     ref={textareaRef}
                     value={inputText}

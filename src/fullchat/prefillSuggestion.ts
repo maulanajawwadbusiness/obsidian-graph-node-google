@@ -20,12 +20,7 @@ export function makeSeedPrompt(context: PrefillContext): string {
         return `Tell me more about "${nodeLabel}"`;
     }
 
-    const lastMsg = miniChatMessages[miniChatMessages.length - 1];
-    // Simple truncation for the seed
-    const rawText = lastMsg.text.replace(/\s+/g, ' ').trim();
-    const preview = rawText.length > 60 ? rawText.slice(0, 60) + '...' : rawText;
-
-    return `In context of "${nodeLabel}", continuing: ${preview}`;
+    return `In context of "${nodeLabel}", continuing...`;
 }
 
 /**

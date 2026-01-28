@@ -28,7 +28,6 @@ export interface FullChatState {
     messages: FullChatMessage[];
     pendingContext: MiniChatContext | null;
     prefill: PrefillState;
-    pendingSuggestion: string | null;
     isStreaming: boolean;
 }
 
@@ -41,7 +40,6 @@ export interface FullChatActions {
     completeStreamingMessage: () => void;
     receiveFromMiniChat: (context: MiniChatContext) => void;
     clearPendingContext: () => void;
-    setPendingSuggestion: (text: string | null) => void;
 }
 
 export type FullChatContextValue = FullChatState & FullChatActions;

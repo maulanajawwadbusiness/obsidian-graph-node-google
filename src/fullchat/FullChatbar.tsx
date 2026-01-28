@@ -1,9 +1,9 @@
 import React, { useState, useRef, useEffect, useCallback, memo } from 'react';
 import { useFullChat } from './FullChatStore';
-import { useStreamSimulator } from './useStreamSimulator';
 import { usePopup } from '../popup/PopupStore';
+import { useDocument } from '../store/documentStore';
 import type { PhysicsEngine } from '../physics/engine';
-import type { FullChatMessage } from './fullChatTypes';
+import type { FullChatMessage, AiContext } from './fullChatTypes';
 import { SendButton } from '../components/SendButton';
 
 /**
@@ -55,9 +55,6 @@ const VOID = {
     line: 'rgba(255, 255, 255, 0.04)',
     lineEnergy: 'rgba(86, 196, 255, 0.12)',
 };
-
-// Mock response for testing streaming
-const MOCK_AI_RESPONSE = 'This is a mock AI response. In the future, this will be a real AI-powered reply based on the node and document context. The streaming simulation reveals text gradually to test the conversation flow experience.';
 
 // =============================================================================
 // STYLES — Depth and Darkness
@@ -262,7 +259,6 @@ const StreamingDots: React.FC = memo(() => (
 export const FullChatbar: React.FC<FullChatbarProps> = ({ engineRef }) => {
     const fullChat = useFullChat();
     const popupContext = usePopup();
-    const streamSimulator = useStreamSimulator();
 
     const [inputText, setInputText] = useState('');
     const [isAtBottom, setIsAtBottom] = useState(true);
@@ -861,6 +857,8 @@ export const FullChatbar: React.FC<FullChatbarProps> = ({ engineRef }) => {
         adjustTextareaHeight();
     }, [inputText, adjustTextareaHeight]);
 
+    const { state: documentState } = useDocument();
+
     const handleSend = useCallback(() => {
         // Prevent double-send and empty sends
         if (isSendingRef.current || !inputText.trim() || fullChat.isStreaming) return;
@@ -877,19 +875,24 @@ export const FullChatbar: React.FC<FullChatbarProps> = ({ engineRef }) => {
         // Ensure we're at bottom for the response
         setIsAtBottom(true);
 
-        // Send message (creates user + streaming AI placeholder)
-        fullChat.sendMessage(textToSend);
+        // Build Context
+        const focusedNodeId = popupContext.isOpen ? popupContext.selectedNodeId : null;
+        const nodeLabel = getNodeLabel(focusedNodeId);
 
-        // Start streaming simulation
-        streamSimulator.startStream(
-            MOCK_AI_RESPONSE,
-            (text) => fullChat.updateStreamingMessage(text),
-            () => fullChat.completeStreamingMessage()
-        );
+        const aiContext: AiContext = {
+            nodeLabel,
+            documentText: documentState.activeDocument?.text ?? null,
+            documentTitle: documentState.activeDocument?.fileName ?? null,
+            recentHistory: fullChat.messages.slice(-10) // Take last 10 messages for context
+        };
+
+        // Send message (creates user + streaming AI placeholder)
+        // Store handles the rest (Async AI generation)
+        fullChat.sendMessage(textToSend, aiContext);
 
         // Reset send lock after a tick
         setTimeout(() => { isSendingRef.current = false; }, 50);
-    }, [inputText, fullChat, streamSimulator]);
+    }, [inputText, fullChat, popupContext.isOpen, popupContext.selectedNodeId, documentState.activeDocument]);
 
     const handleKeyDown = (e: React.KeyboardEvent) => {
         if (e.key === 'Enter' && !e.shiftKey) {

@@ -1,6 +1,8 @@
 import { createContext, useContext, useState, useCallback, ReactNode, useRef } from 'react';
 import type { FullChatState, FullChatContextValue, FullChatMessage, MiniChatContext } from './fullChatTypes';
 import { makeSeedPrompt, refinePromptAsync } from './prefillSuggestion';
+import { generateResponseAsync } from './fullChatAi';
+import type { AiContext } from './fullChatTypes';
 
 /**
  * Full Chat Store - React Context for managing full chatbar state
@@ -43,30 +45,6 @@ export function FullChatProvider({ children }: { children: ReactNode }) {
         });
     }, []);
 
-    // Send user message and create placeholder for AI response
-    const sendMessage = useCallback((text: string) => {
-        console.log('[FullChat] Sending message:', text);
-        const userMessage: FullChatMessage = {
-            role: 'user',
-            text,
-            timestamp: Date.now(),
-            status: 'sent',  // User messages are instantly "sent"
-        };
-
-        // Create streaming AI message placeholder
-        const aiMessage: FullChatMessage = {
-            role: 'ai',
-            text: '',  // Empty initially, will be filled by streaming
-            timestamp: Date.now() + 1,
-            status: 'streaming',
-        };
-
-        setState(prev => ({
-            ...prev,
-            messages: [...prev.messages, userMessage, aiMessage],
-            isStreaming: true,
-        }));
-    }, []);
 
     // Update the current streaming message with new text
     const updateStreamingMessage = useCallback((text: string) => {
@@ -92,6 +70,87 @@ export function FullChatProvider({ children }: { children: ReactNode }) {
             return { ...prev, messages, isStreaming: false };
         });
     }, []);
+
+    // Send user message and create placeholder for AI response
+    // context is now required for AI generation
+    const sendMessage = useCallback((text: string, context: AiContext) => {
+        console.log('[FullChat] Sending message:', text);
+
+        // 1. Cancel previous generation if any
+        if (refineAbortController.current) {
+            refineAbortController.current.abort();
+            console.log('[FullChatAI] previous_aborted reason=new_message');
+        }
+        refineAbortController.current = new AbortController();
+        const signal = refineAbortController.current.signal;
+
+        const userMessage: FullChatMessage = {
+            role: 'user',
+            text,
+            timestamp: Date.now(),
+            status: 'sent',
+        };
+
+        const aiMessage: FullChatMessage = {
+            role: 'ai',
+            text: '',
+            timestamp: Date.now() + 1,
+            status: 'streaming',
+        };
+
+        setState(prev => ({
+            ...prev,
+            messages: [...prev.messages, userMessage, aiMessage],
+            isStreaming: true,
+        }));
+
+        // 2. Start Async Generation
+        (async () => {
+            try {
+                // Combine history: store messages + new user message
+                // The context passed in has "recentHistory" from component, 
+                // but we should probably trust the Store's history more or merge them?
+                // The component passed "recentHistory" in context. Let's use that + the new user message.
+                // Actually, the component constructed the context.
+                // We just pass it through.
+
+                const generator = generateResponseAsync(text, context, signal);
+
+                let accumulatedText = '';
+                let lastUpdate = 0;
+
+                for await (const chunk of generator) {
+                    if (signal.aborted) break;
+
+                    accumulatedText += chunk;
+                    const now = Date.now();
+
+                    // Throttle updates to ~30fps (32ms) to save React cycles
+                    // visual streaming is handled by CSS/native feel, but data needs to be there.
+                    if (now - lastUpdate > 32) {
+                        updateStreamingMessage(accumulatedText);
+                        lastUpdate = now;
+                    }
+                }
+
+                // Final update to ensure complete text
+                if (!signal.aborted) {
+                    updateStreamingMessage(accumulatedText);
+                    completeStreamingMessage();
+                }
+
+            } catch (err) {
+                if (signal.aborted) return;
+                console.error('[FullChatAI] generation failed', err);
+                // On error, maybe append an error message or just stop streaming?
+                // For "robustness", we stop streaming. Text stays as is (maybe empty).
+                completeStreamingMessage();
+            }
+        })();
+
+    }, [updateStreamingMessage, completeStreamingMessage]);
+
+
 
     const receiveFromMiniChat = useCallback((context: MiniChatContext) => {
         console.log('[FullChat] Handoff received:', context);

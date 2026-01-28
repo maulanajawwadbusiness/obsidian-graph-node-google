@@ -19,6 +19,7 @@ export interface LLMClient {
         prompt: string,
         opts?: {
             model?: string;
+            temperature?: number;
             maxCompletionTokens?: number;
         }
     ): Promise<string>;

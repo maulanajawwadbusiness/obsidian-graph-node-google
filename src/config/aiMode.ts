@@ -25,5 +25,5 @@ export function getAiMode(): AiMode {
     }
 
     // 3. Default
-    return 'mock';
+    return 'real';
 }

@@ -35,11 +35,19 @@ export interface FullChatActions {
     openFullChat: () => void;
     closeFullChat: () => void;
     toggleFullChat: () => void;
-    sendMessage: (text: string) => void;
+    sendMessage: (text: string, context: AiContext) => void;
     updateStreamingMessage: (text: string) => void;
     completeStreamingMessage: () => void;
     receiveFromMiniChat: (context: MiniChatContext) => void;
     clearPendingContext: () => void;
+}
+
+
+export interface AiContext {
+    nodeLabel: string | null;
+    documentText: string | null;
+    documentTitle: string | null;
+    recentHistory: FullChatMessage[];
 }
 
 export type FullChatContextValue = FullChatState & FullChatActions;

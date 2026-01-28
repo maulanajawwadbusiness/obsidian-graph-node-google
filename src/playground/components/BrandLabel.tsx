@@ -8,10 +8,10 @@ const BRAND_STYLE: React.CSSProperties = {
     pointerEvents: 'none',
     userSelect: 'none',
     color: 'rgba(212, 245, 255, 0.5)', // Brighter bluish white, semi-transparent
-    fontSize: '20px',
-    fontWeight: 400,
+    fontSize: '16px',
+    fontWeight: 200,
     letterSpacing: '0.5px',
-    fontFamily: 'system-ui, sans-serif',
+    fontFamily: 'system-ui, -apple-system, sans-serif',
     textShadow: '0 2px 10px rgba(0,0,0,0.2)'
 };
 

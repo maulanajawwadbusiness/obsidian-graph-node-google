@@ -307,10 +307,11 @@ export const FullChatbar: React.FC<FullChatbarProps> = ({ engineRef }) => {
 
     // --- Helper: Cancellation ---
     const cancelEverything = useCallback((reason: string) => {
-        console.log(`[Prefill] cancel reason=${reason} runId=${currentRunIdRef.current}`);
+        const rId = currentRunIdRef.current;
+        console.log(`[Prefill] cancel reason=${reason} runId=${rId}`);
 
-        // 1. Stop streaming
-        streamTokenRef.current++; // Invalidates current rAF
+        // 1. Stop streaming loop
+        streamTokenRef.current++; // Invalidates ANY active tick
         if (rafRef.current) {
             cancelAnimationFrame(rafRef.current);
             rafRef.current = null;
@@ -325,10 +326,8 @@ export const FullChatbar: React.FC<FullChatbarProps> = ({ engineRef }) => {
         // 3. Reset phase
         phaseRef.current = 'idle';
 
-        // 4. Sync state to ensure consistency (e.g. if we cancelled mid-stream, keep text)
-        // If cancellation is due to user typing, handleInputChange already handled it.
-        // If cancellation is due to new run, we typically clear anyway.
-        // So explicit sync here is handled by specific triggers (new run clears, user type updates).
+        // Note: We do NOT clear currentRunIdRef here, as we might be cancelling 
+        // to prepare for the *same* run or just stopping activity.
     }, []);
 
     // --- Helper: Ease Out Cubic ---
@@ -336,6 +335,12 @@ export const FullChatbar: React.FC<FullChatbarProps> = ({ engineRef }) => {
 
     // --- Helper: Deterministic Streaming ---
     const streamToText = useCallback((targetRunId: number, targetText: string, durationMs: number, onDone: () => void) => {
+        // Guard: If we are already dirty or stale before starting, abort immediately
+        if (dirtySincePrefill || targetRunId !== currentRunIdRef.current) {
+            console.log(`[Prefill] stream_start_blocked runId=${targetRunId} dirty=${dirtySincePrefill}`);
+            return;
+        }
+
         // Setup new stream
         streamTokenRef.current++;
         const myToken = streamTokenRef.current;
@@ -349,8 +354,18 @@ export const FullChatbar: React.FC<FullChatbarProps> = ({ engineRef }) => {
         let lastLen = 0; // optimization: only touch DOM if length changed
 
         const tick = () => {
-            // Check invalidation
-            if (myToken !== streamTokenRef.current || targetRunId !== currentRunIdRef.current) return;
+            // -----------------------------------------------------------------
+            // CRITICAL GUARD: Run Integrity / Token Integrity / User Dirty
+            // -----------------------------------------------------------------
+            if (
+                myToken !== streamTokenRef.current ||       // Newer stream started
+                targetRunId !== currentRunIdRef.current ||  // Newer run started
+                dirtySincePrefill                           // User took over
+            ) {
+                // Silent exit - another process likely handled cleanup
+                return;
+            }
+            // -----------------------------------------------------------------
 
             const tickStart = performance.now();
             perfCountersRef.current.seedTicks++;
@@ -371,23 +386,17 @@ export const FullChatbar: React.FC<FullChatbarProps> = ({ engineRef }) => {
                     isProgrammaticSetRef.current = true;
                     textareaRef.current.value = nextVal;
 
-                    // Layout Thrashing Fix:
-                    // During 'seed' (short, predictable), we SKIP autosize measurements entirely.
-                    // During 'refine' (longer, variable), we allow it.
-                    if (phaseRef.current !== 'seed') {
+                    // Layout Thrashing Prevention
+                    if (phaseRef.current === 'seed') {
+                        // Seed: Fixed height to prevent jitter
+                        textareaRef.current.style.height = `${MIN_HEIGHT}px`;
+                    } else {
+                        // Refine: Allow growth
                         const resizeStart = performance.now();
                         textareaRef.current.style.height = 'auto';
                         textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, MAX_HEIGHT) + 'px';
                         perfCountersRef.current.maxResizeMs = Math.max(perfCountersRef.current.maxResizeMs, performance.now() - resizeStart);
-                    } else {
-                        // Ensure min height during seed so it doesn't collapse
-                        // (Assuming MIN_HEIGHT is enough for 1 line)
-                        textareaRef.current.style.height = `${MIN_HEIGHT}px`;
                     }
-
-                    // CRITICAL CHANGE: We do NOT calling setInputText(nextVal) here.
-                    // This prevents React re-renders @ 60fps.
-                    // We sync state only on completion or external events.
 
                     // Reset guard in microtask
                     queueMicrotask(() => {
@@ -402,12 +411,15 @@ export const FullChatbar: React.FC<FullChatbarProps> = ({ engineRef }) => {
             if (progress < 1) {
                 rafRef.current = requestAnimationFrame(tick);
             } else {
+                // Final Check before committing completion
+                if (targetRunId !== currentRunIdRef.current || dirtySincePrefill) return;
+
                 // Ensure final state is perfect
                 if (textareaRef.current && textareaRef.current.value !== targetText) {
                     isProgrammaticSetRef.current = true;
                     textareaRef.current.value = targetText;
 
-                    // Final resize is mandatory
+                    // Final resize
                     textareaRef.current.style.height = 'auto';
                     textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, MAX_HEIGHT) + 'px';
 
@@ -419,7 +431,7 @@ export const FullChatbar: React.FC<FullChatbarProps> = ({ engineRef }) => {
 
                 // Log Perf if Seed
                 if (phaseRef.current === 'seed') {
-                    console.log(`[PrefillPerf] seed ticks=${perfCountersRef.current.seedTicks} maxTickMs=${perfCountersRef.current.maxTickMs.toFixed(2)} maxResizeMs=${perfCountersRef.current.maxResizeMs.toFixed(2)}`);
+                    console.log(`[PrefillPerf] seed ticks=${perfCountersRef.current.seedTicks} maxTickMs=${perfCountersRef.current.maxTickMs.toFixed(2)}`);
                 }
 
                 onDone();
@@ -427,7 +439,7 @@ export const FullChatbar: React.FC<FullChatbarProps> = ({ engineRef }) => {
         };
 
         rafRef.current = requestAnimationFrame(tick);
-    }, []);
+    }, [dirtySincePrefill]);
 
 
     // --- Helper: Start Refine Phase ---
@@ -435,28 +447,33 @@ export const FullChatbar: React.FC<FullChatbarProps> = ({ engineRef }) => {
         const runId = currentRunIdRef.current;
         const text = refinedTextRef.current;
 
+        // Security check: Must have runId, text, and NOT be dirty
         if (!runId || !text) return;
+        if (dirtySincePrefill) {
+            console.log(`[Prefill] refine_blocked reason=dirty runId=${runId}`);
+            return;
+        }
 
-        console.log('[Prefill] phase refine');
+        console.log(`[Prefill] phase refine runId=${runId}`);
         phaseRef.current = 'refine';
 
-        // Duration based on length, clamped
-        // e.g. 50 chars => 1.5s, 100 chars => 3s? 
-        // Let's make it snappier: 30ms per char, min 700ms, max 1200ms
+        // Duration based on length
         const duration = Math.min(Math.max(700, text.length * 30), 1200);
 
         streamToText(runId, text, duration, () => {
-            console.log('[Prefill] refine done');
+            console.log(`[Prefill] refine_done runId=${runId}`);
             phaseRef.current = 'idle';
         });
-    }, [streamToText]);
+    }, [streamToText, dirtySincePrefill]);
 
 
     // --- Store Sync Effect ---
     useEffect(() => {
         const { runId, seed, refined } = fullChat.prefill;
 
+        // ---------------------------------------------------------------------
         // 1. New Run Detected
+        // ---------------------------------------------------------------------
         if (runId !== 0 && runId !== currentRunIdRef.current) {
             cancelEverything("new_run");
 
@@ -466,24 +483,27 @@ export const FullChatbar: React.FC<FullChatbarProps> = ({ engineRef }) => {
             refinedTextRef.current = null;
             breathDoneRef.current = false;
 
+            console.log(`[Prefill] run_start runId=${runId}`);
+
             if (seed) {
-                console.log('[Prefill] phase seed');
+                console.log(`[Prefill] phase seed runId=${runId}`);
                 phaseRef.current = 'seed';
 
                 // Clear input first
                 if (textareaRef.current) {
                     isProgrammaticSetRef.current = true;
                     textareaRef.current.value = '';
-                    setInputText(''); // Sync empty
+                    setInputText('');
                     textareaRef.current.focus();
                     queueMicrotask(() => { isProgrammaticSetRef.current = false; });
                 }
 
                 // Stream Seed (500ms)
                 streamToText(runId, seed, 500, () => {
-                    if (phaseRef.current !== 'seed') return; // Interrupted
+                    // Callback Guard
+                    if (currentRunIdRef.current !== runId || dirtySincePrefill) return;
 
-                    console.log('[Prefill] phase breath');
+                    console.log(`[Prefill] phase breath runId=${runId}`);
                     phaseRef.current = 'breath';
 
                     // Breath Timer (500ms pause)
@@ -491,11 +511,18 @@ export const FullChatbar: React.FC<FullChatbarProps> = ({ engineRef }) => {
                         breathDoneRef.current = true;
                         breathTimerRef.current = null;
 
+                        // Strict Callback Guard inside Timeout
+                        if (currentRunIdRef.current !== runId || dirtySincePrefill) return;
+
                         // Breath done. If we already have refined text, go!
-                        if (refinedTextRef.current && !dirtySincePrefill) {
+                        if (refinedTextRef.current) {
                             startRefine();
                         } else {
                             // Wait in idle, but marked breathDone
+                            // We do NOT set phase='idle' here, we stay in 'breath' waiting for refine?
+                            // Actually 'idle' is safer to prevent confusing logic.
+                            // But we need to know we are "ready for refine".
+                            // Let's rely on breathDoneRef + idle check in the other effect.
                             phaseRef.current = 'idle';
                         }
                     }, 500);
@@ -503,12 +530,14 @@ export const FullChatbar: React.FC<FullChatbarProps> = ({ engineRef }) => {
             }
         }
 
+        // ---------------------------------------------------------------------
         // 2. Refined Text Arrived
+        // ---------------------------------------------------------------------
         if (runId === currentRunIdRef.current && refined && refined !== refinedTextRef.current) {
             refinedTextRef.current = refined;
 
             if (dirtySincePrefill) {
-                console.log('[Prefill] refine_ready apply=NO reason=dirty');
+                console.log(`[Prefill] refine_ready apply=NO reason=dirty runId=${runId}`);
                 return;
             }
 
@@ -517,8 +546,7 @@ export const FullChatbar: React.FC<FullChatbarProps> = ({ engineRef }) => {
                 // Breath already finished -> go immediately
                 startRefine();
             } else {
-                // Breath still running or seed running -> do nothing, the callback chains will pick it up
-                console.log('[Prefill] refine_ready apply=PENDING reason=waiting_for_breath');
+                console.log(`[Prefill] refine_ready apply=PENDING reason=waiting_for_breath runId=${runId}`);
             }
         }
 
@@ -547,6 +575,8 @@ export const FullChatbar: React.FC<FullChatbarProps> = ({ engineRef }) => {
         // User typed!
         if (!dirtySincePrefill) {
             setDirtySincePrefill(true);
+            const runId = currentRunIdRef.current;
+            console.log(`[Prefill] dirty user_takeover runId=${runId}`);
             cancelEverything("user_dirty");
         }
 

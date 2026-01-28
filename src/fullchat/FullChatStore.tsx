@@ -116,21 +116,31 @@ export function FullChatProvider({ children }: { children: ReactNode }) {
             console.log('[Prefill] run_start', { runId: nextRunId, seed });
 
             // Start async refine side-effect
+            // -----------------------------------------------------------------
+            // Edge Case Protection: New Run cancels Previous Refine
+            // -----------------------------------------------------------------
             (async () => {
+                const myRunId = nextRunId;
                 try {
                     const refined = await refinePromptAsync({
                         nodeLabel: context.nodeLabel,
                         miniChatMessages: context.miniChatMessages
                     }, { signal });
 
+                    if (signal.aborted) {
+                        console.log(`[Prefill] refine_aborted runId=${myRunId}`);
+                        return;
+                    }
+
                     setState(curr => {
-                        // Check staleness via runId
-                        if (curr.prefill.runId !== nextRunId) {
-                            console.log('[Prefill] refine_canceled reason=stale_run', { runId: nextRunId, currentRunId: curr.prefill.runId });
+                        // 1. Stale Guard: If runId moved on, ignore (spam click protection)
+                        if (curr.prefill.runId !== myRunId) {
+                            console.log(`[Prefill] refine_ignored reason=stale runId=${myRunId} curr=${curr.prefill.runId}`);
                             return curr;
                         }
 
-                        console.log('[Prefill] refine_ready', { refined });
+                        // 2. Ready
+                        console.log(`[Prefill] refine_ready runId=${myRunId} len=${refined.length}`);
                         return {
                             ...curr,
                             prefill: {
@@ -141,8 +151,11 @@ export function FullChatProvider({ children }: { children: ReactNode }) {
                         };
                     });
                 } catch (err: unknown) {
-                    if (err instanceof Error && err.message === 'Aborted') return;
-                    console.error('[Prefill] Refine error', err);
+                    if (err instanceof Error && err.name === 'AbortError') {
+                        console.log(`[Prefill] refine_aborted_caught runId=${myRunId}`);
+                        return;
+                    }
+                    console.error(`[Prefill] refine_error runId=${myRunId}`, err);
                 }
             })();
 

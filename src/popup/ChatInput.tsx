@@ -45,7 +45,7 @@ const TEXTAREA_STYLE: React.CSSProperties = {
 };
 
 export const ChatInput: React.FC<ChatInputProps> = ({
-    placeholder = 'Ask about this node...',
+    placeholder = 'Ask about it further...',
     onSend
 }) => {
     const [text, setText] = useState('');

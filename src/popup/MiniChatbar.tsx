@@ -394,12 +394,12 @@ export const MiniChatbar: React.FC<MiniChatbarProps> = ({ messages, onSend, onCl
                     value={inputText}
                     onChange={(e) => setInputText(e.target.value)}
                     onKeyDown={handleKeyDown}
-                    placeholder="Type a message..."
+                    placeholder="Ask about it further..."
                     style={INPUT_FIELD_STYLE}
                 />
                 <button
                     onClick={handleSendToFullChat}
-                    title="Extend to Main Chat"
+                    title="Extend to main chat"
                     aria-label="Send to Full Chat"
                     style={{
                         background: 'transparent',

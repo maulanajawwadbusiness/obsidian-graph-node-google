@@ -8,6 +8,9 @@ import {
     THEME_TOGGLE_STYLE
 } from '../graphPlaygroundStyles';
 
+// Toggle to show/hide debug controls buttons (Debug, Theme, Controls)
+const SHOW_DEBUG_CONTROLS = false;
+
 const stopPropagation = (e: React.MouseEvent) => e.stopPropagation();
 type CanvasOverlaysProps = {
     debugOpen: boolean;
@@ -35,7 +38,7 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
     viewerOpen
 }) => (
     <>
-        {!debugOpen && (
+        {SHOW_DEBUG_CONTROLS && !debugOpen && (
             <button
                 type="button"
                 style={DEBUG_TOGGLE_STYLE}
@@ -53,7 +56,7 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
             </button>
         )}
 
-        {showThemeToggle && (
+        {SHOW_DEBUG_CONTROLS && showThemeToggle && (
             <button
                 type="button"
                 style={THEME_TOGGLE_STYLE}
@@ -71,21 +74,23 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
             </button>
         )}
 
-        <button
-            type="button"
-            style={SIDEBAR_TOGGLE_STYLE}
-            onMouseDown={stopPropagation}
-            onMouseMove={stopPropagation}
-            onMouseUp={stopPropagation}
-            onClick={(e) => {
-                stopPropagation(e);
-                onToggleSidebar();
-            }}
-            aria-label={sidebarOpen ? 'Hide controls' : 'Show controls'}
-            title={sidebarOpen ? 'Hide controls' : 'Show controls'}
-        >
-            {sidebarOpen ? 'Hide Controls' : 'Controls'}
-        </button>
+        {SHOW_DEBUG_CONTROLS && (
+            <button
+                type="button"
+                style={SIDEBAR_TOGGLE_STYLE}
+                onMouseDown={stopPropagation}
+                onMouseMove={stopPropagation}
+                onMouseUp={stopPropagation}
+                onClick={(e) => {
+                    stopPropagation(e);
+                    onToggleSidebar();
+                }}
+                aria-label={sidebarOpen ? 'Hide controls' : 'Show controls'}
+                title={sidebarOpen ? 'Hide controls' : 'Show controls'}
+            >
+                {sidebarOpen ? 'Hide Controls' : 'Controls'}
+            </button>
+        )}
 
         {debugOpen && (
             <div

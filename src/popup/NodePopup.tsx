@@ -243,7 +243,7 @@ export const NodePopup: React.FC = () => {
                     ? { transition: 'opacity 300ms ease-out 150ms' }
                     : { opacity: 0, transition: 'opacity 300ms ease-out 150ms' }
             }>
-                <ChatInput onSend={sendMessage} placeholder="Ask about this node..." />
+                <ChatInput onSend={sendMessage} placeholder="Ask about it further..." />
             </div>
         </div>
     );

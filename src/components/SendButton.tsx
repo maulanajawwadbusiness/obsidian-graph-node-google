@@ -61,7 +61,7 @@ export const SendButton: React.FC<SendButtonProps> = ({ onClick, disabled = fals
                 e.currentTarget.style.opacity = '0.6';
                 e.currentTarget.style.transform = 'scale(1)';
             }}
-            title="Send (Enter)"
+            title="Send message"
             aria-label="Send"
         >
             <img src={sendIcon} alt="" style={ICON_STYLE} />

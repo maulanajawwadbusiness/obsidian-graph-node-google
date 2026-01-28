@@ -1,29 +1,45 @@
 # Full Chatbar Fake Streaming
 
 **Date**: 2026-01-28
-**Status**: Implemented
+**Feature**: Fake Streaming (Chunking) for Real AI Responses
 
-## 1. Problem
-The `OpenAIClient` is blocking (await full json), causing the AI response to appear "all at once" after a 2-5s delay. This breaks the expected conversational effect.
+## Context
+The current OpenAI client (`OpenAIClient.generateText`) is **blocking** (non-streaming). It waits for the full response before returning. To prevent a "wall of text" UX, we implemented a fake streaming mechanism that chunks the completed response and feeds it to the UI over time.
 
-## 2. Solution: Client-Side Fake Streaming
-We implemented a **chunker** inside the async generator `realResponseGenerator` in `src/fullchat/fullChatAi.ts`.
+## Changes
 
-### Logic
-1.  **Block**: Await the full text from OpenAI (`await client.generateText(...)`).
-2.  **Stream**: Enter a loop that yields chunks of the text (4 chars every 12ms).
-    *   This mimics a ~250 token/sec stream.
-    *   It checks `AbortSignal` on every tick for instant cancellation.
+### 1. `src/fullchat/fullChatAi.ts`
+- **Modified**: `realResponseGenerator`
+- **Logic**:
+  - Awaits the full `responseText` from the client (blocking).
+  - Enters a `while` loop to slice the text into **chunks of 4 characters**.
+  - Yields each chunk.
+  - Waits **15ms** between chunks.
+  - Checks `signal.aborted` on every tick.
 
-### Integration
-*   The `FullChatStore` already uses a `for await` loop to consume this generator.
-*   The Store throttles updates to React state at ~32ms (30fps).
-*   The interaction of "Fast Generator (12ms)" + "Throttled Store (32ms)" results in smooth, batched updates to the UI.
+## Technical Details
 
-## 3. Verification
-*   **Typing Effect**: Confirmed that text behaves as if typed, even though the network request was atomic.
-*   **Cancellation**: Aborting the signal stops the `chunking loop` immediately.
-*   **Mock Fallback**: Remains untouched (already fake-streams via its own generator).
+- **Chunk Size**: 4 characters
+- **Tick Rate**: ~15ms
+- **Effective Speed**: ~260 chars/second (Feels fast but readable, "robotic-smooth").
+- **Authority**: Since `FullChatStore` consumes this generator using `for await`, the `AbortSignal` passed to the generator ensures the loop terminates immediately if the user sends a new message or closes the chat.
 
-## 4. Future Work
-*   Upgrade `OpenAIClient` to use `response.body` and `eventsource-parser` for *true* streaming (Start -> First Token latency improvement).
+## Verification Steps
+
+### 1. Visual Test
+1.  Open Full Chat.
+2.  Send a message: "Write a short poem about the void."
+3.  **Observation**:
+    -   You will see "buffer" time (thinking) for 1-2 seconds.
+    -   Then, text will start appearing **smoothly** (streaming), not all at once.
+    -   The speed should initially feel like a fast typist.
+
+### 2. Cancellation Test
+1.  Send "Tell me a long story."
+2.  Wait for streaming to start.
+3.  Send "Stop." (or any new message).
+4.  **Observation**: The first stream freezes/vanishes immediately, and the new message process begins.
+
+## Risks / Future Work
+- **Latency**: The initial "Thinking..." phase mimics the full generation time. For long responses (e.g., 500 tokens), this delay might contain the *entire* generation time (e.g., 5-10s) before *any* text appears.
+- **Fix**: Implement True Streaming (SSE) in `OpenAIClient` to reduce Time-To-First-Token (TTFT).

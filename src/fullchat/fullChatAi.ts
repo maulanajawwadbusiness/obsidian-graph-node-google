@@ -89,13 +89,30 @@ async function* realResponseGenerator(
             signal
         );
 
-        // Since we don't have true streaming client yet, we yield the whole thing.
-        // The store can visually stream it if needed, or we just show it.
-        // *Correction*: The user asked for "stream result... same anti-jank technique".
-        // That implies visual streaming.
-        yield responseText;
+        // Fake Stream Implementation
+        // ---------------------------------------------------------------------
+        // The client returned the whole string (blocking), but we stream it 
+        // to the UI for that "alive" feeling.
+        // ---------------------------------------------------------------------
 
-        console.log(`[FullChatAI] response_ok len=${responseText.length}`);
+        const CHUNK_SIZE = 4; // Char count per tick
+        const DELAY_MS = 15;  // Tick interval (approx 60fps-ish feel)
+
+        let index = 0;
+        while (index < responseText.length) {
+            if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+
+            const endIndex = Math.min(index + CHUNK_SIZE, responseText.length);
+            const chunk = responseText.slice(index, endIndex);
+
+            yield chunk;
+            index += CHUNK_SIZE;
+
+            // Small delay to simulate typing
+            await new Promise(resolve => setTimeout(resolve, DELAY_MS));
+        }
+
+        console.log(`[FullChatAI] response_streamed len=${responseText.length}`);
 
     } catch (err) {
         if (signal?.aborted || (err instanceof Error && err.name === 'AbortError')) {

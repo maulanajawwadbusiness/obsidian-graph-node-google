@@ -1,11 +1,19 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useFullChat } from './FullChatStore';
+import { useStreamSimulator } from './useStreamSimulator';
 import { usePopup } from '../popup/PopupStore';
 import type { PhysicsEngine } from '../physics/engine';
+import type { FullChatMessage } from './fullChatTypes';
 import { SendButton } from '../components/SendButton';
 
 /**
  * FullChatbar - Right-docked reasoning panel
+ * 
+ * SMOOTH CONVERSATION EXPERIENCE:
+ * - Typing: calm, anchored, no jitter
+ * - Sending: instant clear, smooth handoff
+ * - Streaming: single growing bubble, thinking indicator
+ * - Scrolling: breathing rhythm, maintained position
  * 
  * DARK ELEGANCE:
  * - Near-black void as base (not gray, not navy — BLACK)
@@ -34,6 +42,8 @@ const VOID = {
     textBright: 'rgba(255, 255, 255, 0.92)',
     textSoft: 'rgba(200, 210, 225, 0.7)',
     textDim: 'rgba(140, 150, 170, 0.5)',
+    // Input text — slightly softer, "ink about to be committed"
+    textInput: 'rgba(255, 255, 255, 0.85)',
 
     // The energy that escapes — use SPARINGLY
     energy: '#56C4FF',
@@ -45,6 +55,9 @@ const VOID = {
     line: 'rgba(255, 255, 255, 0.04)',
     lineEnergy: 'rgba(86, 196, 255, 0.12)',
 };
+
+// Mock response for testing streaming
+const MOCK_AI_RESPONSE = 'This is a mock AI response. In the future, this will be a real AI-powered reply based on the node and document context. The streaming simulation reveals text gradually to test the conversation flow experience.';
 
 // =============================================================================
 // STYLES — Depth and Darkness
@@ -67,7 +80,10 @@ const PANEL_STYLE: React.CSSProperties = {
     color: VOID.textSoft,
     position: 'relative',
     pointerEvents: 'auto',
-};
+    // CSS variables for scroll fades
+    '--panel-bg-rgb': '8, 8, 12',
+    '--panel-bg-opacity': '1',
+} as React.CSSProperties;
 
 const HEADER_STYLE: React.CSSProperties = {
     height: '56px',
@@ -112,16 +128,24 @@ const CONTEXT_BADGE_STYLE: React.CSSProperties = {
     gap: '10px',
 };
 
-const MESSAGES_CONTAINER_STYLE: React.CSSProperties = {
+// Wrapper for scroll fades
+const MESSAGES_WRAPPER_STYLE: React.CSSProperties = {
     flex: 1,
     minHeight: 0,
+    position: 'relative',
+    overflow: 'hidden',
+};
+
+const MESSAGES_CONTAINER_STYLE: React.CSSProperties = {
+    height: '100%',
     overflowY: 'auto',
     display: 'flex',
     flexDirection: 'column',
-    gap: '24px',
+    gap: '20px',
     fontSize: '14px',
     lineHeight: '1.65',
     padding: '24px',
+    paddingRight: 'var(--scrollbar-gutter, 12px)',
 };
 
 const MESSAGE_STYLE_USER: React.CSSProperties = {
@@ -163,15 +187,14 @@ const INPUT_FIELD_STYLE: React.CSSProperties = {
     background: VOID.deep,
     border: `1px solid ${VOID.line}`,
     borderRadius: '8px',
-    color: VOID.textBright,
+    color: VOID.textInput,  // Softer, "ink about to be committed"
+    caretColor: VOID.energy,  // Energy-colored caret
     outline: 'none',
     resize: 'none',
     overflow: 'hidden',
     fontFamily: 'inherit',
     lineHeight: '1.4',
 };
-
-
 
 const EMPTY_STATE_STYLE: React.CSSProperties = {
     flex: 1,
@@ -184,9 +207,46 @@ const EMPTY_STATE_STYLE: React.CSSProperties = {
     gap: '16px',
 };
 
+const JUMP_TO_LATEST_STYLE: React.CSSProperties = {
+    position: 'absolute',
+    bottom: '12px',
+    right: '24px',
+    background: VOID.elevated,
+    border: `1px solid ${VOID.lineEnergy}`,
+    borderRadius: '16px',
+    padding: '6px 14px',
+    color: VOID.textSoft,
+    fontSize: '11px',
+    cursor: 'pointer',
+    zIndex: 10,
+    display: 'flex',
+    alignItems: 'center',
+    gap: '4px',
+    transition: 'opacity 150ms ease',
+};
+
 // Auto-expand: compact single-line default, grows to max 5 lines
 const MIN_HEIGHT = 36;
 const MAX_HEIGHT = 116;
+
+// Threshold for "at bottom" detection (pixels from bottom)
+const SCROLL_BOTTOM_THRESHOLD = 50;
+
+// =============================================================================
+// STREAMING DOTS — Subtle thinking indicator
+// =============================================================================
+const StreamingDots: React.FC = () => (
+    <span style={{
+        display: 'inline-flex',
+        gap: '3px',
+        marginLeft: '4px',
+        opacity: 0.35,
+    }}>
+        <span style={{ fontSize: '16px', lineHeight: 1 }}>·</span>
+        <span style={{ fontSize: '16px', lineHeight: 1 }}>·</span>
+        <span style={{ fontSize: '16px', lineHeight: 1 }}>·</span>
+    </span>
+);
 
 // =============================================================================
 // COMPONENT
@@ -195,9 +255,16 @@ const MAX_HEIGHT = 116;
 export const FullChatbar: React.FC<FullChatbarProps> = ({ engineRef }) => {
     const fullChat = useFullChat();
     const popupContext = usePopup();
+    const streamSimulator = useStreamSimulator();
+
     const [inputText, setInputText] = useState('');
+    const [isAtBottom, setIsAtBottom] = useState(true);
+    const [showJumpToLatest, setShowJumpToLatest] = useState(false);
+
     const messagesEndRef = useRef<HTMLDivElement>(null);
+    const messagesContainerRef = useRef<HTMLDivElement>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
+    const isSendingRef = useRef(false);  // Prevent double-send
 
     const currentFocusNodeId = popupContext.isOpen ? popupContext.selectedNodeId : null;
 
@@ -208,6 +275,7 @@ export const FullChatbar: React.FC<FullChatbarProps> = ({ engineRef }) => {
 
     const focusLabel = getNodeLabel(currentFocusNodeId);
 
+    // Handle pending context from mini chat handoff
     useEffect(() => {
         if (fullChat.pendingContext && textareaRef.current) {
             setInputText(fullChat.pendingContext.suggestedPrompt);
@@ -216,9 +284,24 @@ export const FullChatbar: React.FC<FullChatbarProps> = ({ engineRef }) => {
         }
     }, [fullChat.pendingContext, fullChat.clearPendingContext]);
 
+    // Auto-scroll when at bottom and content changes
     useEffect(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, [fullChat.messages]);
+        if (isAtBottom && messagesEndRef.current) {
+            messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+        }
+    }, [fullChat.messages, isAtBottom]);
+
+    // Show/hide "Jump to Latest" pill
+    useEffect(() => {
+        setShowJumpToLatest(!isAtBottom && fullChat.isStreaming);
+    }, [isAtBottom, fullChat.isStreaming]);
+
+    // Track scroll position
+    const handleScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
+        const el = e.currentTarget;
+        const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < SCROLL_BOTTOM_THRESHOLD;
+        setIsAtBottom(atBottom);
+    }, []);
 
     const adjustTextareaHeight = useCallback(() => {
         const textarea = textareaRef.current;
@@ -232,15 +315,35 @@ export const FullChatbar: React.FC<FullChatbarProps> = ({ engineRef }) => {
         adjustTextareaHeight();
     }, [inputText, adjustTextareaHeight]);
 
-    const handleSend = () => {
-        if (inputText.trim()) {
-            fullChat.sendMessage(inputText.trim());
-            setInputText('');
-            if (textareaRef.current) {
-                textareaRef.current.style.height = `${MIN_HEIGHT}px`;
-            }
+    const handleSend = useCallback(() => {
+        // Prevent double-send and empty sends
+        if (isSendingRef.current || !inputText.trim() || fullChat.isStreaming) return;
+
+        isSendingRef.current = true;
+        const textToSend = inputText.trim();
+
+        // Clear input immediately (same frame feel)
+        setInputText('');
+        if (textareaRef.current) {
+            textareaRef.current.style.height = `${MIN_HEIGHT}px`;
         }
-    };
+
+        // Ensure we're at bottom for the response
+        setIsAtBottom(true);
+
+        // Send message (creates user + streaming AI placeholder)
+        fullChat.sendMessage(textToSend);
+
+        // Start streaming simulation
+        streamSimulator.startStream(
+            MOCK_AI_RESPONSE,
+            (text) => fullChat.updateStreamingMessage(text),
+            () => fullChat.completeStreamingMessage()
+        );
+
+        // Reset send lock after a tick
+        setTimeout(() => { isSendingRef.current = false; }, 50);
+    }, [inputText, fullChat, streamSimulator]);
 
     const handleKeyDown = (e: React.KeyboardEvent) => {
         if (e.key === 'Enter' && !e.shiftKey) {
@@ -248,6 +351,26 @@ export const FullChatbar: React.FC<FullChatbarProps> = ({ engineRef }) => {
             handleSend();
         }
     };
+
+    const handleJumpToLatest = useCallback(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+        setIsAtBottom(true);
+    }, []);
+
+    // Get message style with turn spacing
+    const getMessageStyle = useCallback((msg: FullChatMessage, idx: number): React.CSSProperties => {
+        const base = msg.role === 'user' ? MESSAGE_STYLE_USER : MESSAGE_STYLE_AI;
+        const messages = fullChat.messages;
+        const prev = messages[idx - 1];
+
+        // Extra top margin when switching from AI to User (new turn)
+        const isNewTurn = prev && prev.role === 'ai' && msg.role === 'user';
+
+        return {
+            ...base,
+            marginTop: isNewTurn ? '12px' : undefined,
+        };
+    }, [fullChat.messages]);
 
     if (!fullChat.isOpen) return null;
 
@@ -298,16 +421,37 @@ export const FullChatbar: React.FC<FullChatbarProps> = ({ engineRef }) => {
 
             {/* Messages or Empty State */}
             {hasMessages ? (
-                <div style={MESSAGES_CONTAINER_STYLE} className="arnvoid-scroll">
-                    {fullChat.messages.map((msg, i) => (
-                        <div
-                            key={i}
-                            style={msg.role === 'user' ? MESSAGE_STYLE_USER : MESSAGE_STYLE_AI}
+                <div style={MESSAGES_WRAPPER_STYLE} className="arnvoid-scroll-fades">
+                    <div
+                        ref={messagesContainerRef}
+                        style={MESSAGES_CONTAINER_STYLE}
+                        className="arnvoid-scroll"
+                        onScroll={handleScroll}
+                    >
+                        {fullChat.messages.map((msg, i) => (
+                            <div
+                                key={`${msg.timestamp}-${i}`}
+                                style={getMessageStyle(msg, i)}
+                            >
+                                {msg.text}
+                                {msg.status === 'streaming' && <StreamingDots />}
+                            </div>
+                        ))}
+                        <div ref={messagesEndRef} />
+                    </div>
+
+                    {/* Jump to Latest pill */}
+                    {showJumpToLatest && (
+                        <button
+                            style={JUMP_TO_LATEST_STYLE}
+                            onClick={handleJumpToLatest}
+                            onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
+                            onMouseLeave={(e) => e.currentTarget.style.opacity = '0.9'}
                         >
-                            {msg.text}
-                        </div>
-                    ))}
-                    <div ref={messagesEndRef} />
+                            <span>↓</span>
+                            <span>Latest</span>
+                        </button>
+                    )}
                 </div>
             ) : (
                 <div style={EMPTY_STATE_STYLE}>
@@ -348,14 +492,14 @@ export const FullChatbar: React.FC<FullChatbarProps> = ({ engineRef }) => {
                     rows={1}
                     onFocus={(e) => {
                         e.currentTarget.style.borderColor = VOID.lineEnergy;
-                        e.currentTarget.style.boxShadow = `0 0 0 1px ${VOID.energyFaint}`;
+                        e.currentTarget.style.boxShadow = `inset 0 1px 4px ${VOID.energyFaint}`;
                     }}
                     onBlur={(e) => {
                         e.currentTarget.style.borderColor = VOID.line;
                         e.currentTarget.style.boxShadow = 'none';
                     }}
                 />
-                <SendButton onClick={handleSend} disabled={!inputText.trim()} />
+                <SendButton onClick={handleSend} disabled={!inputText.trim() || fullChat.isStreaming} />
             </div>
         </div>
     );

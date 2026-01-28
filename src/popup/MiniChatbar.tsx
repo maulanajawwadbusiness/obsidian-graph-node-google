@@ -1,14 +1,13 @@
 import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
+import { SendButton } from '../components/SendButton';
+import { usePopup } from './PopupStore';
+import { useFullChat } from '../fullchat';
+import type { PopupRect } from './popupTypes';
 
 /**
  * MiniChatbar - Small chat window next to popup
  * Positioned adjacent to popup (intelligent left/right placement)
  */
-
-import sendIcon from '../assets/send_icon.png';
-import { usePopup } from './PopupStore';
-import { useFullChat } from '../fullchat';
-import type { PopupRect } from './popupTypes';
 
 interface Message {
     role: 'user' | 'ai';
@@ -425,29 +424,7 @@ export const MiniChatbar: React.FC<MiniChatbarProps> = ({ messages, onSend, onCl
                 >
                     ↗
                 </button>
-                <button
-                    onClick={handleSend}
-                    disabled={!inputText.trim()}
-                    style={{
-                        background: 'transparent',
-                        border: 'none',
-                        cursor: 'pointer',
-                        padding: '4px',
-                        opacity: 0.6,
-                    }}
-                    onMouseEnter={(e) => {
-                        if (inputText.trim()) {
-                            e.currentTarget.style.opacity = '0.9';
-                            e.currentTarget.style.transform = 'scale(1.1)';
-                        }
-                    }}
-                    onMouseLeave={(e) => {
-                        e.currentTarget.style.opacity = '0.6';
-                        e.currentTarget.style.transform = 'scale(1)';
-                    }}
-                >
-                    <img src={sendIcon} alt="Send" style={{ width: '18px', height: '18px' }} />
-                </button>
+                <SendButton onClick={handleSend} disabled={!inputText.trim()} />
             </div>
         </div>
     );

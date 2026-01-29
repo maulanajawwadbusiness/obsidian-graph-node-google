@@ -105,7 +105,7 @@ Rules:
         const rawOutput = await withTimeoutAndAbort(
             client.generateText(
                 `${systemPrompt}\n\nCONTEXT:\n${prompt}`,
-                { model: 'gpt-4o', maxCompletionTokens: 60, temperature: 0.3 }
+                { model: 'gpt-4o', temperature: 0.3 }
             ),
             REAL_TIMEOUT_MS,
             options.signal

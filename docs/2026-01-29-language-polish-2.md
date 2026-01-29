@@ -26,7 +26,7 @@ Added explicit `t()` support for all icon buttons:
 
 ### 2. FullChat Empty States
 Migrated hardcoded "Reasoning space" strings to i18n:
-- `fullChat.emptyStateTitle`: "Ruang Nalar"
+- `fullChat.emptyStateTitle`: "Berpikir"
 - `fullChat.emptyStateDesc`: "Pilih sebuah node..."
 - `fullChat.emptyStateThinking`: "Memikirkan {label}"
 - `fullChat.emptyStateTrace`: "Telusuri pikiran Anda di sini."

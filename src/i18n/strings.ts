@@ -35,13 +35,13 @@ export const STRINGS = {
         "tooltip.jumpToLatest": "Loncat ke pesan terbaru",
 
         // Full Chat
-        "fullChat.placeholder": "Ketik pesan...", // Inferred commonly needed
+        "fullChat.placeholder": "Telusuri pikiran di sini...", // Inferred commonly needed
         "fullChat.jumpToLatest": "Loncat ke terbaru",
-        "fullChat.emptyStateTitle": "Ruang Nalar",
-        "fullChat.emptyStateDesc": "Pilih sebuah node untuk memulai diskusi.",
+        "fullChat.emptyStateTitle": "Berpikir",
+        "fullChat.emptyStateDesc": "Ruang tenang untuk berpikir.",
         "fullChat.emptyStateThinking": "Memikirkan {label}",
         "fullChat.emptyStateTrace": "Telusuri pikiran Anda di sini.",
-        "fullChat.emptyStateTraceDefault": "Pilih node, atau mulai langsung.",
+        "fullChat.emptyStateTraceDefault": "Pilih sebuah node, atau mulai langsung.",
 
         // Document Viewer
         "docViewer.title": "Penampil Dokumen",

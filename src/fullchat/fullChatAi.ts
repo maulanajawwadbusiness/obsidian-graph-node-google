@@ -79,9 +79,7 @@ async function* realResponseGenerator(
         console.log(`[FullChatAI] calling_real_stream model=${MODEL}`);
 
         const stream = client.generateTextStream(fullPrompt, {
-            model: MODEL,
-            temperature: 0.7,
-            maxCompletionTokens: 500
+            model: MODEL
         }, signal);
 
         let totalChars = 0;
@@ -177,4 +175,3 @@ Current Context:
  * Wraps a promise with a timeout and abort signal check
  * Reused exactly from prefillSuggestion.ts logic
  */
-

@@ -28,7 +28,7 @@ const TOGGLE_STYLE: React.CSSProperties = {
 const ICON_STYLE: React.CSSProperties = {
     width: '64px',
     height: '64px',
-    opacity: 0.25,
+    opacity: 0.35,
     transition: 'opacity 200ms ease',
 };
 

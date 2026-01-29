@@ -65,7 +65,7 @@ export const STRINGS = {
         "nodePopup.closeTooltip": "Close window",
         "nodePopup.fallbackTitle": "Node {id}",
         "nodePopup.fallbackSummary": "No detailed analysis available for this node.",
-        "nodePopup.inputPlaceholder": "Ask about it further",
+        "nodePopup.inputPlaceholder": "Trace it further...",
 
         // Mini Chat
         "miniChat.header": "Mini Chat",

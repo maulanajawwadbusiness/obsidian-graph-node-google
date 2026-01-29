@@ -25,6 +25,21 @@ export interface LLMClient {
     ): Promise<string>;
 
     /**
+     * Generate text completion as a stream
+     * @param prompt - The prompt to send to the LLM
+     * @param opts - Optional generation parameters
+     */
+    generateTextStream(
+        prompt: string,
+        opts?: {
+            model?: string;
+            temperature?: number;
+            maxCompletionTokens?: number;
+        },
+        signal?: AbortSignal
+    ): AsyncGenerator<string, void, unknown>;
+
+    /**
      * Generate structured output (JSON)
      * @param schema - JSON schema for structured output
      * @param prompt - The prompt to send to the LLM

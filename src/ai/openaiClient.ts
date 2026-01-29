@@ -15,10 +15,13 @@ export class OpenAIClient implements LLMClient {
         this.defaultModel = defaultModel;
     }
 
-    async generateText(
+
+
+    async * generateTextStream(
         prompt: string,
-        opts?: { model?: string; temperature?: number; maxTokens?: number }
-    ): Promise<string> {
+        opts?: { model?: string; temperature?: number; maxTokens?: number },
+        signal?: AbortSignal
+    ): AsyncGenerator<string, void, unknown> {
         const model = opts?.model || this.defaultModel;
         const isFixedTemperatureModel = isFixedTemperatureOnlyModel(model);
         let temperature = opts?.temperature ?? 0.7;
@@ -27,6 +30,8 @@ export class OpenAIClient implements LLMClient {
             temperature = 1;
         }
         const maxTokens = opts?.maxTokens ?? 1000;
+
+        console.log(`[chatStream] start model=${model}`);
 
         try {
             const response = await fetch(`${this.baseUrl}/chat/completions`, {
@@ -38,15 +43,13 @@ export class OpenAIClient implements LLMClient {
                 body: JSON.stringify({
                     model,
                     messages: [
-                        {
-                            role: 'user',
-                            content: prompt
-                        }
+                        { role: 'user', content: prompt }
                     ],
                     temperature,
-                    // Modern OpenAI models (o1, o3-mini) use max_completion_tokens
-                    max_completion_tokens: maxTokens
-                })
+                    max_completion_tokens: maxTokens,
+                    stream: true
+                }),
+                signal
             });
 
             if (!response.ok) {
@@ -54,18 +57,71 @@ export class OpenAIClient implements LLMClient {
                 throw new Error(`OpenAI API error (${response.status}): ${errorText}`);
             }
 
-            const data = await response.json();
-            const content = data.choices?.[0]?.message?.content;
+            if (!response.body) throw new Error('No response body');
 
-            if (!content) {
-                throw new Error('No content in OpenAI response');
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder('utf-8');
+            let buffer = '';
+
+            try {
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+
+                    buffer += decoder.decode(value, { stream: true });
+                    const lines = buffer.split('\n\n');
+
+                    // Keep the last partial chunk in the buffer
+                    buffer = lines.pop() || '';
+
+                    for (const line of lines) {
+                        const trimmed = line.trim();
+                        if (!trimmed.startsWith('data: ')) continue;
+
+                        const data = trimmed.slice(6); // Remove 'data: '
+
+                        if (data === '[DONE]') return;
+
+                        try {
+                            const json = JSON.parse(data);
+                            const content = json.choices?.[0]?.delta?.content;
+                            if (content) {
+                                yield content;
+                            }
+                        } catch (e) {
+                            // Ignore parse errors for individual chunks (resilience)
+                            // Often caused by keep-alives or malformed frames
+                        }
+                    }
+                }
+            } finally {
+                reader.releaseLock();
             }
 
-            return content;
+            console.log('[chatStream] done');
+
         } catch (error) {
-            console.error('[OpenAIClient] generateText failed:', error);
+            if (signal?.aborted || (error instanceof Error && error.name === 'AbortError')) {
+                console.log('[chatStream] abort');
+                return; // Clean exit
+            }
+            console.error('[chatStream] error', error);
             throw error;
         }
+    }
+
+    async generateText(
+        prompt: string,
+        opts?: { model?: string; temperature?: number; maxTokens?: number }
+    ): Promise<string> {
+        // Optional Clean Move: Consume the stream to implement the blocking call
+        // This ensures consistent logic for both modes.
+        const generator = this.generateTextStream(prompt, opts);
+        let fullText = '';
+        for await (const chunk of generator) {
+            fullText += chunk;
+        }
+        return fullText;
     }
 
     async generateStructured<T>(
@@ -88,5 +144,5 @@ export class OpenAIClient implements LLMClient {
 
 function isFixedTemperatureOnlyModel(model: string): boolean {
     const normalized = model.trim().toLowerCase();
-    return normalized.startsWith('gpt-5') || normalized.startsWith('o1') || normalized.startsWith('o3');
+    return normalized.startsWith('gpt-4o') || normalized.startsWith('o1') || normalized.startsWith('o3');
 }

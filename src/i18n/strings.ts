@@ -10,10 +10,10 @@ export const STRINGS = {
         "nodePopup.closeTooltip": "Tutup jendela",
         "nodePopup.fallbackTitle": "Node {id}",
         "nodePopup.fallbackSummary": "Tidak ada analisis detail untuk node ini.",
-        "nodePopup.inputPlaceholder": "Tanyakan lebih lanjut",
+        "nodePopup.inputPlaceholder": "Telusuri ini lebih lanjut",
 
         // Mini Chat
-        "miniChat.header": "Obrolan Singkat",
+        "miniChat.header": "Analisis Mini",
         "miniChat.closeTooltip": "Tutup",
         "miniChat.extendTooltip": "Lanjut ke Obrolan Utama",
         "miniChat.extendAria": "Kirim ke Obrolan Utama",
@@ -26,7 +26,7 @@ export const STRINGS = {
 
         // Tooltips
         "tooltip.close": "Tutup",
-        "tooltip.openChat": "Buka Chat",
+        "tooltip.openChat": "Buka Chatbar",
         "tooltip.closeChat": "Tutup Chat",
         "tooltip.send": "Kirim",
         "tooltip.uploadDoc": "Unggah Dokumen",

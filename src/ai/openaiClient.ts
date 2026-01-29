@@ -131,8 +131,8 @@ export class OpenAIClient implements LLMClient {
                                 if (item?.type === 'message' && item.role === 'assistant') {
                                     const text = extractText(item);
                                     if (text) {
-                                        console.log(`[ResponsesStream] yielding fallback text len=${text.length}`);
-                                        yield text;
+                                        console.log(`[ResponsesStream] output_item.done final_text_len=${text.length} (ignored to prevent dup)`);
+                                        // DO NOT YIELD HERE. We rely on deltas.
                                     }
                                 }
                             } else if (event.type === 'response.incomplete') {

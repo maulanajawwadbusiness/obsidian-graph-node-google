@@ -74,7 +74,7 @@ export function FullChatProvider({ children }: { children: ReactNode }) {
     // Send user message and create placeholder for AI response
     // context is now required for AI generation
     const sendMessage = useCallback((text: string, context: AiContext) => {
-        console.log('[FullChat] Sending message:', text);
+        console.log(`[AI_SEND] surface=fullchat lang=${context.nodeLabel ? 'id' : 'en'} message="${text}"`);
 
         // 1. Cancel previous generation if any
         if (refineAbortController.current) {
@@ -112,6 +112,10 @@ export function FullChatProvider({ children }: { children: ReactNode }) {
                 // but we should probably trust the Store's history more or merge them?
                 // The component passed "recentHistory" in context. Let's use that + the new user message.
                 // Actually, the component constructed the context.
+                // We just pass it through.
+
+                // We just pass it through.
+
                 // We just pass it through.
 
                 const generator = generateResponseAsync(text, context, signal);

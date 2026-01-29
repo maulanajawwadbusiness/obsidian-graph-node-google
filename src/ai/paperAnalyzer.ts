@@ -40,23 +40,18 @@ export async function analyzeDocument(text: string): Promise<AnalysisResult> {
         defaultModel: 'gpt-4o'
     });
 
-    const prompt = `Analyze the following document text and extract exactly 5 distinct key points to describe its content.
+    const prompt = `Analyze the following document text and extract:
+    1. A short "paper_title" for the document.
+    2. Exactly 5 distinct "main_points" to describe its content.
     
-    Structure your answer as 5 blocks. 
-    For each block, provide:
-    1. A short title (3-5 words)
-    2. A summary paragraph (2-3 sentences)
-
-    Output Format (Strict JSON):
-    [
-      { "title": "...", "summary": "..." },
-      ...
-    ]
+    For each main point, provide:
+    - A short "title" (3-5 words)
+    - A "explanation" paragraph (2-3 sentences)
 
     Rules:
-    - The first point MUST be the "Main Topic".
+    - The first point should be the "Main Topic".
     - The other 4 points should be supporting arguments or key details.
-    - JSON only. No markdown formatting.
+    - Be concise and analytical.
 
     Document Excerpt:
     """${safeText}"""...`;
@@ -92,8 +87,7 @@ export async function analyzeDocument(text: string): Promise<AnalysisResult> {
             schema,
             prompt,
             {
-                model: 'gpt-5-nano',
-                temperature: 0.3
+                model: 'gpt-5'
             }
         );
 

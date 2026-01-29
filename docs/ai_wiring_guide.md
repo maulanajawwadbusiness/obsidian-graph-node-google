@@ -8,12 +8,12 @@ There are two real AI call sites:
 1) Prefill suggestion (mini chat input prompt)
 - File: `src/fullchat/prefillSuggestion.ts`
 - Purpose: generate a short, single-line prompt to prefill the chat input.
-- Model used: `gpt-4o-mini` (forced for reliability).
+- Model used: `gpt-4o` (forced for reliability).
 
 2) Label rewriter (5 words -> 5 three-word phrases)
 - File: `src/ai/labelRewriter.ts`
 - Purpose: turn 5 words into 5 short phrases.
-- Model used: `gpt-4o-mini`.
+- Model used: `gpt-4o`.
 
 Both flows use the same OpenAI client implementation.
 
@@ -61,7 +61,7 @@ Flow:
    - Builds a "context packet" from the node label and recent chat.
    - Builds a system-style instruction string (but it is passed as user content).
    - Calls `client.generateText(...)` with:
-     - `model: gpt-4o-mini`
+     - `model: gpt-4o`
      - `temperature: 0.3`
      - `maxTokens: 60`
 4) Output is sanitized:
@@ -82,7 +82,7 @@ Flow:
 2) Reads `VITE_OPENAI_API_KEY`.
 3) Builds a single prompt string with explicit format rules.
 4) Calls `client.generateText(...)` with:
-   - `model: gpt-4o-mini`
+   - `model: gpt-4o`
    - `temperature: 0.3`
    - `maxTokens: 100`
 5) Validates output: exactly 5 lines, 3 words each.
@@ -103,7 +103,7 @@ There are two places to change parameters:
   - `generateText` uses it when `opts.model` is missing
 
 Important: In OpenAIClient, some models only accept `temperature = 1`.
-This repo currently coerces that value only for `gpt-5*`, `o1*`, `o3*`.
+This repo currently coerces that value only for `gpt-4o*`, `o1*`, `o3*`.
 
 ## 7) What actually goes over the wire (OpenAI)
 OpenAI payload (OpenAIClient):
@@ -111,7 +111,7 @@ OpenAI payload (OpenAIClient):
 ```
 POST https://api.openai.com/v1/chat/completions
 {
-  "model": "gpt-4o-mini",
+  "model": "gpt-4o",
   "messages": [
     { "role": "user", "content": "<full prompt string>" }
   ],
@@ -124,12 +124,12 @@ Response parsing:
 - The client expects `choices[0].message.content`.
 - If that is missing, the client throws `No content in OpenAI response`.
 
-## 8) Why gpt-4o-mini is used for prefill right now
-`gpt-5-nano` sometimes returns a response shape that does not include
+## 8) Why gpt-4o is used for prefill right now
+`gpt-4o-nano` sometimes returns a response shape that does not include
 `choices[0].message.content` when used with `/chat/completions`.
 That triggers "No content in OpenAI response".
 
-To avoid that, prefill is pinned to `gpt-4o-mini`, same as label rewriter.
+To avoid that, prefill is pinned to `gpt-4o`, same as label rewriter.
 
 ## 9) How to add a new AI feature safely (reliable path)
 Use this checklist:
@@ -165,7 +165,7 @@ These are safe improvements if you need production-grade reliability:
 
 2) Add response-shape fallback parsing
 - Accept `output_text` or `output[].content[].text` for Responses API.
-- Useful if you re-enable `gpt-5*`.
+- Useful if you re-enable `gpt-4o*`.
 
 3) Add a tiny smoke test script
 - A CLI script that sends one prompt and validates output format.
@@ -178,7 +178,7 @@ These are safe improvements if you need production-grade reliability:
 ## 11) Quick troubleshooting guide
 Symptom: "No content in OpenAI response"
 - Likely model or endpoint mismatch.
-- Fix: use `gpt-4o-mini` or add response-shape parser.
+- Fix: use `gpt-4o` or add response-shape parser.
 
 Symptom: "unsupported_value temperature"
 - Model only supports temperature=1.

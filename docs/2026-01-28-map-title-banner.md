@@ -1,7 +1,7 @@
 # Map Title Banner
 
 **Date**: 2026-01-28
-**Goal**: Display a "Peta Pengetahuan 2D" banner with the AI-inferred document title at the bottom-center of the map.
+**Goal**: Display a "Antarmuka Pengetahuan 2 Dimensi" banner with the AI-inferred document title at the bottom-center of the map.
 
 ## Architecture
 

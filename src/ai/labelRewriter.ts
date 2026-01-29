@@ -25,11 +25,11 @@ export async function makeThreeWordLabels(words: string[]): Promise<string[]> {
             return words;
         }
 
-        // Create OpenAI client with gpt-5-nano model
+        // Create OpenAI client with gpt-4o-nano model
         const client = createLLMClient({
             apiKey,
             mode: 'openai',
-            defaultModel: 'gpt-4o-mini' // Using gpt-4o-mini as gpt-5-nano equivalent
+            defaultModel: 'gpt-4o' // Using gpt-4o as gpt-4o-nano equivalent
         });
 
         // Build prompt
@@ -45,9 +45,9 @@ export async function makeThreeWordLabels(words: string[]): Promise<string[]> {
         let output: string;
         try {
             output = await client.generateText(prompt, {
-                model: 'gpt-4o-mini',
+                model: 'gpt-4o',
                 temperature: 0.3,
-                maxTokens: 100
+                maxCompletionTokens: 100
             });
             clearTimeout(timeout);
         } catch (innerError) {

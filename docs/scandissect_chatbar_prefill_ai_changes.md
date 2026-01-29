@@ -41,7 +41,7 @@
     *   `src/fullchat/prefillSuggestion.ts`: The entry point. Checks `getAiMode()`.
     *   `src/config/aiMode.ts`: Reads `VITE_AI_MODE` (real/mock).
     *   `src/ai/openaiClient.ts`: The production client.
-*   **Current Model**: `gpt-4o-mini` (hardcoded in `prefillSuggestion.ts` for real mode, though a `gpt-5-nano` comment exists).
+*   **Current Model**: `gpt-4o` (hardcoded in `prefillSuggestion.ts` for real mode, though a `gpt-4o-nano` comment exists).
 *   **Wiring**:
     *   Mock: Simulates network delay (150-400ms) and returns heuristic string.
     *   Real: Calls OpenAI ChatCompletions. Uses `VITE_OPENAI_API_KEY`.
@@ -59,8 +59,8 @@
 
 *   **Client**: `OpenAIClient` (Chat Completions API).
 *   **Current Model Code**:
-    *   `src/fullchat/prefillSuggestion.ts`: Explicitly uses `gpt-4o-mini` in `refinePromptWithReal`.
-    *   `src/ai/labelRewriter.ts`: Also seemingly uses `gpt-4o-mini`.
+    *   `src/fullchat/prefillSuggestion.ts`: Explicitly uses `gpt-4o` in `refinePromptWithReal`.
+    *   `src/ai/labelRewriter.ts`: Also seemingly uses `gpt-4o`.
 *   **Env Vars**:
     *   `VITE_AI_MODE`: 'real' or 'mock' (default).
     *   `VITE_OPENAI_API_KEY`: Required for real mode.

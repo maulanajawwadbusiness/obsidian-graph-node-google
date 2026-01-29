@@ -34,7 +34,7 @@ export async function refinePromptAsync(context: PrefillContext, options: { sign
     const mode = getAiMode();
 
     if (mode === 'real') {
-        console.log('[Prefill] refine_starting mode=real model=gpt-4o-mini');
+        console.log('[Prefill] refine_starting mode=real model=gpt-4o');
         return refinePromptWithReal(context, options);
     } else {
         console.log('[Prefill] refine_starting mode=mock');
@@ -69,7 +69,7 @@ async function refinePromptMock(context: PrefillContext, options: { signal?: Abo
 }
 
 // =============================================================================
-// REAL IMPLEMENTATION (GPT-4o-MINI)
+// REAL IMPLEMENTATION (gpt-4o)
 // =============================================================================
 
 const REAL_TIMEOUT_MS = 2500;
@@ -85,7 +85,7 @@ async function refinePromptWithReal(context: PrefillContext, options: { signal?:
         const client = createLLMClient({
             apiKey,
             mode: 'openai',
-            defaultModel: 'gpt-4o-mini'
+            defaultModel: 'gpt-4o'
         });
 
         const prompt = buildRefinePacket(context);
@@ -105,7 +105,7 @@ Rules:
         const rawOutput = await withTimeoutAndAbort(
             client.generateText(
                 `${systemPrompt}\n\nCONTEXT:\n${prompt}`,
-                { model: 'gpt-4o-mini', maxTokens: 60, temperature: 0.3 }
+                { model: 'gpt-4o', maxCompletionTokens: 60, temperature: 0.3 }
             ),
             REAL_TIMEOUT_MS,
             options.signal

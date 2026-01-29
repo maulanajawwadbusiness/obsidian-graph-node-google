@@ -30,8 +30,8 @@ export function getAiMode(): AiMode {
 
 /**
  * Get the default OpenAI model
- * Defaults to 'gpt-5-nano' as it supports responses API + streaming + structured outputs
+ * Defaults to 'gpt-5' as it supports responses API + streaming + structured outputs
  */
 export function getDefaultModel(): string {
-    return import.meta.env.VITE_OPENAI_MODEL_DEFAULT || 'gpt-5-nano';
+    return import.meta.env.VITE_OPENAI_MODEL_DEFAULT || 'gpt-5';
 }

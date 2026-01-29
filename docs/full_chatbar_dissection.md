@@ -30,7 +30,7 @@ The most complex part of the chatbar is the prefill system, which uses a three-p
 ### Logic Wiring
 - **Run Authority**: `FullChatStore` maintains a `runId`. Every handoff (Mini Chat -> Full Chat) increments this ID. Async callbacks check `myRunId === currentRunId` to ensure stale responses from previous clicks never overwrite the current state.
 - **Dirty Flag**: The `dirtySincePrefill` state is set the moment a user types. Once dirty, all automation (SEED/BREATH/REFINE) is instantly killed via `cancelEverything()`.
-- **Client Factory**: The system uses `createLLMClient` (from `src/ai/index.ts`) pinning to `gpt-4o-mini` for the refinement step.
+- **Client Factory**: The system uses `createLLMClient` (from `src/ai/index.ts`) pinning to `gpt-4o` for the refinement step.
 
 ### Fail-Safes
 - **Hard Timeout**: A 3000ms `window.setTimeout` acts as a global watchdog. If the refined prompt doesn't arrive or the streaming stalls, the system "snaps" to the best available text (usually the seed) to ensure the input field is never left empty or broken.

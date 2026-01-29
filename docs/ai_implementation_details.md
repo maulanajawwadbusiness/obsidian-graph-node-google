@@ -23,7 +23,7 @@ The helper is typically used to wrap the `client.generateText` call:
 const rawOutput = await withTimeoutAndAbort(
     client.generateText(
         fullPrompt,
-        { model: 'gpt-4o-mini', maxTokens: 60, temperature: 0.3 }
+        { model: 'gpt-4o', maxTokens: 60, temperature: 0.3 }
     ),
     2500, // REAL_TIMEOUT_MS
     options.signal
@@ -56,7 +56,7 @@ We performed a scan to determine if AI clients are shared/cached or recreated on
 const client = createLLMClient({
     apiKey,
     mode: 'openai',
-    defaultModel: 'gpt-4o-mini'
+    defaultModel: 'gpt-4o'
 });
 ```
 
@@ -66,7 +66,7 @@ const client = createLLMClient({
 const client = createLLMClient({
     apiKey,
     mode: 'openai',
-    defaultModel: 'gpt-4o-mini'
+    defaultModel: 'gpt-4o'
 });
 ```
 

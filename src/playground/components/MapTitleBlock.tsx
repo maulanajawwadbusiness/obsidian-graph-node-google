@@ -55,7 +55,7 @@ export const MapTitleBlock: React.FC = () => {
 
     return (
         <div style={TITLE_BLOCK_STYLE}>
-            <div style={LABEL_STYLE}>Peta Pengetahuan 2D</div>
+            <div style={LABEL_STYLE}>Antarmuka Pengetahuan 2 Dimensi</div>
             <div style={MAIN_TITLE_STYLE} title={mainText}>
                 "{mainText}"
             </div>

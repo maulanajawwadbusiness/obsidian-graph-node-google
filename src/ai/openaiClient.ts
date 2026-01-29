@@ -24,6 +24,11 @@ export class OpenAIClient implements LLMClient {
         const temperature = opts?.temperature ?? 0.7;
         const maxTokens = opts?.maxCompletionTokens;
 
+        // Runtime Guard for Legacy Params
+        if ((opts as any)?.maxTokens) {
+            console.warn('[OpenAIClient] DEPRECATED: "maxTokens" passed to generateTextStream. Use "maxCompletionTokens". This param is IGNORED.');
+        }
+
         console.log(`[responsesStream] start model=${model}`);
 
         try {
@@ -166,6 +171,11 @@ export class OpenAIClient implements LLMClient {
         prompt: string,
         opts?: { model?: string; temperature?: number; maxCompletionTokens?: number }
     ): Promise<string> {
+        // Runtime Guard
+        if ((opts as any)?.maxTokens) {
+            console.warn('[OpenAIClient] DEPRECATED: "maxTokens" passed to generateText. Use "maxCompletionTokens". This param is IGNORED.');
+        }
+
         const model = opts?.model || this.defaultModel;
         const temperature = opts?.temperature ?? 0.7;
 

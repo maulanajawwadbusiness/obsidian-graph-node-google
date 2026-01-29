@@ -83,6 +83,8 @@ export class PhysicsEngine {
         topologySkipped: 0,
         topologyDuplicates: 0,
     };
+    private perfMode: 'normal' | 'stressed' | 'emergency' | 'fatal' = 'normal';
+    private perfModeLogAt: number = 0;
     private perfTiming = {
         lastReportAt: 0,
         frameCount: 0,
@@ -332,6 +334,8 @@ export class PhysicsEngine {
         this.lifecycle += dt;
         this.frameIndex++;
 
+        this.updatePerfMode(nodeList.length, this.links.length);
+
         // =====================================================================
         // SOFT PRE-ROLL PHASE (Gentle separation before expansion)
         // Springs at 10%, spacing on, angle off, velocity-only corrections
@@ -354,11 +358,20 @@ export class PhysicsEngine {
         // =====================================================================
         const { energy, forceScale, effectiveDamping, maxVelocityEffective } = computeEnergyEnvelope(this.lifecycle);
 
-        const pairStrideBase = computePairStride(
-            nodeList.length,
-            this.config.pairwiseMaxChecks,
-            this.config.pairwiseMaxStride
-        );
+        const pairBudgetScale = this.perfMode === 'normal'
+            ? 1
+            : this.perfMode === 'stressed'
+                ? 0.7
+                : this.perfMode === 'emergency'
+                    ? 0.4
+                    : 0;
+        const pairStrideBase = pairBudgetScale > 0
+            ? computePairStride(
+                nodeList.length,
+                this.config.pairwiseMaxChecks * pairBudgetScale,
+                this.config.pairwiseMaxStride
+            )
+            : this.config.pairwiseMaxStride;
         const pairOffset = this.frameIndex;
 
         const spacingGateTarget = energy <= 0.7
@@ -370,6 +383,23 @@ export class PhysicsEngine {
         const spacingGateRise = 1 - Math.exp(-dt / 0.6);
         this.spacingGate += (spacingGateTarget - this.spacingGate) * spacingGateRise;
         const spacingGate = this.spacingGate;
+
+        if (this.perfMode === 'fatal') {
+            for (const node of nodeList) {
+                node.fx = 0;
+                node.fy = 0;
+            }
+            applyDragVelocity(this, nodeList, dt, debugStats);
+            applyPreRollVelocity(this, nodeList, preRollActive, debugStats);
+            integrateNodes(this, nodeList, dt, energy, effectiveDamping, maxVelocityEffective, debugStats, preRollActive);
+            this.lastDebugStats = debugStats;
+            if (perfEnabled && frameTiming) {
+                frameTiming.totalMs = getNowMs() - tickStart;
+            }
+            return;
+        }
+
+        const springsEnabled = this.perfMode !== 'emergency' || this.frameIndex % 2 === 0;
 
         // 2. Apply Core Forces (scaled by energy)
         applyForcePass(
@@ -386,7 +416,8 @@ export class PhysicsEngine {
             frameTiming ?? undefined,
             perfEnabled ? getNowMs : undefined,
             pairStrideBase,
-            pairOffset
+            pairOffset,
+            springsEnabled
         );
         applyDragVelocity(this, nodeList, dt, debugStats);
         applyPreRollVelocity(this, nodeList, preRollActive, debugStats);
@@ -443,7 +474,12 @@ export class PhysicsEngine {
                 );
             }
             applyEdgeRelaxation(this, correctionAccum, nodeDegreeEarly, debugStats);
-            if (spacingGate > 0.02) {
+            const spacingEvery = this.perfMode === 'normal'
+                ? 1
+                : this.perfMode === 'stressed'
+                    ? 2
+                    : 4;
+            if (spacingGate > 0.02 && this.frameIndex % spacingEvery === 0) {
                 if (perfEnabled && frameTiming) {
                     const spacingStart = getNowMs();
                     applySpacingConstraints(
@@ -474,7 +510,9 @@ export class PhysicsEngine {
                     );
                 }
             }
-            applyTriangleAreaConstraints(this, nodeList, correctionAccum, nodeDegreeEarly, energy, debugStats);
+            if (this.perfMode === 'normal' || this.perfMode === 'stressed') {
+                applyTriangleAreaConstraints(this, nodeList, correctionAccum, nodeDegreeEarly, energy, debugStats);
+            }
             applyAngleResistanceVelocity(this, nodeList, nodeDegreeEarly, energy, debugStats);
             applyDistanceBiasVelocity(this, nodeList, debugStats);
             applySafetyClamp(
@@ -526,6 +564,7 @@ export class PhysicsEngine {
                     `total=${avg(perf.totals.totalMs)} ` +
                     `nodes=${nodeList.length} ` +
                     `links=${this.links.length} ` +
+                    `mode=${this.perfMode} ` +
                     `allocs=${this.perfCounters.nodeListBuilds + this.perfCounters.correctionNewEntries} ` +
                     `topoDrop=${this.perfCounters.topologySkipped} ` +
                     `topoDup=${this.perfCounters.topologyDuplicates} ` +
@@ -557,6 +596,79 @@ export class PhysicsEngine {
             this.perfCounters.nodeListBuilds += 1;
         }
         return this.nodeListCache;
+    }
+
+    private updatePerfMode(nodeCount: number, linkCount: number) {
+        const downshift = this.config.perfModeDownshiftRatio;
+        const nextMode = (n: number, e: number) => {
+            if (n >= this.config.perfModeNFatal || e >= this.config.perfModeEFatal) return 'fatal';
+            if (n >= this.config.perfModeNEmergency || e >= this.config.perfModeEEmergency) return 'emergency';
+            if (n >= this.config.perfModeNStressed || e >= this.config.perfModeEStressed) return 'stressed';
+            return 'normal';
+        };
+
+        const desired = nextMode(nodeCount, linkCount);
+        if (desired === this.perfMode) return;
+
+        const downshiftThresholds = {
+            stressed: {
+                n: this.config.perfModeNStressed * downshift,
+                e: this.config.perfModeEStressed * downshift,
+            },
+            emergency: {
+                n: this.config.perfModeNEmergency * downshift,
+                e: this.config.perfModeEEmergency * downshift,
+            },
+            fatal: {
+                n: this.config.perfModeNFatal * downshift,
+                e: this.config.perfModeEFatal * downshift,
+            },
+        };
+
+        const allowDownshift = (mode: 'stressed' | 'emergency' | 'fatal') => {
+            const thresholds = downshiftThresholds[mode];
+            return nodeCount < thresholds.n && linkCount < thresholds.e;
+        };
+
+        let newMode = this.perfMode;
+        if (desired === 'fatal') {
+            newMode = 'fatal';
+        } else if (desired === 'emergency') {
+            if (this.perfMode === 'fatal') {
+                if (allowDownshift('fatal')) newMode = 'emergency';
+            } else {
+                newMode = 'emergency';
+            }
+        } else if (desired === 'stressed') {
+            if (this.perfMode === 'fatal') {
+                if (allowDownshift('fatal')) newMode = 'emergency';
+            }
+            if (newMode === 'emergency' && allowDownshift('emergency')) {
+                newMode = 'stressed';
+            }
+            if (this.perfMode === 'normal') newMode = 'stressed';
+        } else {
+            if (this.perfMode === 'fatal' && allowDownshift('fatal')) newMode = 'emergency';
+            if (newMode === 'emergency' && allowDownshift('emergency')) newMode = 'stressed';
+            if (newMode === 'stressed' && allowDownshift('stressed')) newMode = 'normal';
+        }
+
+        if (newMode !== this.perfMode) {
+            this.perfMode = newMode;
+            const now = getNowMs();
+            if (now - this.perfModeLogAt > 500) {
+                this.perfModeLogAt = now;
+                console.log(`[PhysicsMode] mode=${this.perfMode} nodes=${nodeCount} links=${linkCount}`);
+            }
+        }
+
+        if (this.perfMode === 'fatal') {
+            const now = getNowMs();
+            if (now - this.perfModeLogAt > 1000) {
+                this.perfModeLogAt = now;
+                console.log(`[PhysicsFatal] nodes=${nodeCount} links=${linkCount} mode=fatal`);
+            }
+        }
     }
 
     private warnTopology(reason: 'maxLinksPerNode' | 'maxTotalLinks', link: PhysicsLink) {

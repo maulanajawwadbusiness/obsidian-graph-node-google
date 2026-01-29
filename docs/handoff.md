@@ -5,61 +5,53 @@
 
 It is triggered by the "Extend to Main Chat" action (diagonal arrow icon) in the Mini Chat interface.
 
-## 2. Handoff Payload Schema
-When the handoff is triggered, `MiniChatbar` constructs a payload and sends it to `FullChatStore`.
-
-> **Contract**: The payload must be synchronous and serializable.
+## 2. Handoff Payload Schema (V2)
+When the handoff is triggered, `MiniChatbar` constructs a payload and sends it to `FullChatStore.receiveFromMiniChat(payload)`.
 
 | Field | Type | Description |
 | :--- | :--- | :--- |
-| `nodeLabel` | `string` | The label of the currently focused node (e.g. "Biology"). Derived from `popupContext.selectedNodeId`. |
-| `miniChatMessages` | `Array<{ role: 'user'\|'ai', text: string }>` | The full history of the current Mini Chat session. Used by the AI to understand context. |
+| `nodeLabel` | `string` | The label of the currently focused node. |
+| `miniChatMessages` | `Array<{ role: 'user'\|'ai', text: string }>` | The full history of the current Mini Chat session. |
+| `content` | `{ title: string, summary: string } \| null` | **Enriched context**. Contains the AI-distilled essence of the node. |
 
-### "Current Focus" Definition
-The "Focus" is determined by the **Open Popup**, not necessarily the last clicked node. If a popup is open for Node A, and the user clicks Handoff from that popup's Mini Chat, the context is **Node A**.
+## 3. Propagation & Authority
+The `FullChatStore` stores this as `pendingContext`.
 
-## 3. Prefill Integration
-The Full Chat system uses the Handoff Payload to drive the **Prefill V4** engine.
+### Context Preservation Logic
+In `FullChatbar.tsx`, the `handleSend` function follows this priority:
+1.  **Handoff Priority**: If `pendingContext.content` exists, use that `title` as the reasoning anchor and the `summary` as the foundational text.
+2.  **Document Fallback**: If no handoff exists, fall back to the generic `activeDocument` text.
 
-### Data Flow
-1.  **Receive**: Store receives payload -> Generates `runId`.
-2.  **Seed**: "In context of {nodeLabel}..." is generated immediately (0 latency).
-3.  **Refine Packet**: The store constructs a prompt for the AI:
-    *   *Input*: Node Label + Last ~4 messages of Mini Chat history.
-    *   *Sanitization*: Truncates very long history to fit token limits.
-    *   *Output*: A single-sentence prompt suggestion.
+### Prefill V4 Integration
+*   The **Refine Packet** builder (`prefillSuggestion.ts`) now consumes the `content` field.
+*   The AI uses the `summary` to generate a much more relevant "next step" suggestion than just looking at the node label.
 
 ## 4. UI/UX Requirements
-The handoff must feel physical and deliberate.
+*   **Zero Jitter**: Autosize logic in `FullChatbar` must be throttled.
+*   **Breath is Intentional**: The 500ms pause during prefill allows the `refinePromptAsync` call (LLM) to complete so it can stream the finished suggestion.
+*   **Handoff Visibility**: When a handoff happens, the `FullChatbar` header/badge should reflect the node being discussed.
 
-*   **No Badges**: We do not use "NEW" or "Context" chips. The text itself ("In context of...") carries the meaning.
-*   **No Brick Replacement**: The input field text must not "snap" or blink into existence. It must stream in character-by-character (60fps).
-*   **Breath is Intentional**: The system pauses after the Seed phase. This is not lag; it is a design choice to convey "thinking" and allow the Refine step to complete naturally.
+## 5. Troubleshooting (Forensic Checklist)
 
-## 5. Debugging Checklist
+### A. "The Drift" (Ignored Knowledge)
+*   **Symptom**: You hand off a summary about "Photosynthesis", but the chat starts talking about the whole generic biology document.
+*   **Fix**: Check `FullChatbar.tsx > getAiContext()`. Ensure it is checking `fullChat.pendingContext?.content?.summary` before `documentState.activeDocument`.
 
-If Handoff feels broken or janky, check these:
+### B. "The Zombie" (Stale Context)
+*   **Symptom**: You hand off Node A, close it, then hand off Node B, but it still shows Node A's title.
+*   **Fix**: The `receiveFromMiniChat` action must overwrite the previous context. Check `FullChatStore.tsx`.
 
-### A. "The Stutter" (Layout Thrashing)
-*   **Symptom**: The chatbar frame drops during streaming.
-*   **Fix**: Check `FullChatbar.tsx`. Ensure autosize logic is throttled (`now - lastResizeTime > 50`).
+### C. "The Dirty Wipe"
+*   **Symptom**: Clicking handoff doesn't show the prefill suggestion.
+*   **Fix**: Check if `setDirtySincePrefill` was triggered by a stray keyboard event. User input always kills the prefill machine.
 
-### B. "The Ghost" (Overwriting)
-*   **Symptom**: User text gets replaced by AI text while typing.
-*   **Fix**: Check `dirtySincePrefill`. The `handleInputChange` handler must set this flag immediately on any user keystroke.
-
-### C. "The Zombie" (Stale Refs)
-*   **Symptom**: Clicking Handoff 5x results in flickering text or mixed messages.
-*   **Fix**: Check `runId`. The `streamToText` loop must abort if `targetRunId !== currentRunId`.
-
-### D. "The Void" (No Refine)
-*   **Symptom**: Seed streams, then... nothing.
-*   **Fix**: Check AI Mode. If `VITE_AI_MODE=real` but no API key is present, it should fallback to Mock. Check console for `[PrefillError]`.
+### D. "The Void"
+*   **Symptom**: AI is in 'real' mode but isn't responding.
+*   **Fix**: Check `VITE_OPENAI_API_KEY` and the `withTimeoutAndAbort` log in `prefillSuggestion.ts`.
 
 ## 6. Logs to Watch
-Filter console for `[Prefill]`:
+Filter for `[MiniChatAI]` and `[Prefill]`:
+*   `[MiniChatAI] send_start` -> Mini Chat is alive.
+*   `[Prefill] phase seed` -> Handoff received, animation starting.
+*   `[Prefill] refine_ready` -> AI context has arrived at the boundary.
 
-*   `[Prefill] run_start runId=105` -> Healthy start.
-*   `[Prefill] phase seed runId=105` -> Animation start.
-*   `[Prefill] refine_ready runId=105` -> AI response arrived.
-*   `[Prefill] cancel reason=user_dirty` -> User took over.

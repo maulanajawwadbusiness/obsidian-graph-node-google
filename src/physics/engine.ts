@@ -68,6 +68,7 @@ export class PhysicsEngine {
     public frameIndex: number = 0;
 
     private lastDebugStats: DebugStats | null = null;
+    private spacingGate: number = 0;
     private perfTiming = {
         lastReportAt: 0,
         frameCount: 0,
@@ -293,6 +294,16 @@ export class PhysicsEngine {
         );
         const pairOffset = this.frameIndex;
 
+        const spacingGateTarget = energy <= 0.7
+            ? (() => {
+                const gateT = Math.max(0, Math.min(1, (0.7 - energy) / 0.3));
+                return gateT * gateT * (3 - 2 * gateT);
+            })()
+            : 0;
+        const spacingGateRise = 1 - Math.exp(-dt / 0.6);
+        this.spacingGate += (spacingGateTarget - this.spacingGate) * spacingGateRise;
+        const spacingGate = this.spacingGate;
+
         // 2. Apply Core Forces (scaled by energy)
         applyForcePass(
             this,
@@ -350,10 +361,9 @@ export class PhysicsEngine {
 
         if (!preRollActive) {
             let spacingStride = pairStrideBase;
-            if (energy <= 0.7) {
-                const gateT = Math.max(0, Math.min(1, (0.7 - energy) / 0.3));
-                const spacingGate = gateT * gateT * (3 - 2 * gateT);
-                const scaledTarget = this.config.pairwiseMaxChecks * Math.max(0.2, spacingGate);
+            if (spacingGate > 0) {
+                const spacingBudgetScale = Math.max(0.1, spacingGate);
+                const scaledTarget = this.config.pairwiseMaxChecks * spacingBudgetScale;
                 spacingStride = computePairStride(
                     nodeList.length,
                     scaledTarget,
@@ -361,30 +371,34 @@ export class PhysicsEngine {
                 );
             }
             applyEdgeRelaxation(this, correctionAccum, nodeDegreeEarly, debugStats);
-            if (perfEnabled && frameTiming) {
-                const spacingStart = getNowMs();
-                applySpacingConstraints(
-                    this,
-                    nodeList,
-                    correctionAccum,
-                    nodeDegreeEarly,
-                    energy,
-                    debugStats,
-                    spacingStride,
-                    pairOffset + 2
-                );
-                frameTiming.spacingMs += getNowMs() - spacingStart;
-            } else {
-                applySpacingConstraints(
-                    this,
-                    nodeList,
-                    correctionAccum,
-                    nodeDegreeEarly,
-                    energy,
-                    debugStats,
-                    spacingStride,
-                    pairOffset + 2
-                );
+            if (spacingGate > 0.02) {
+                if (perfEnabled && frameTiming) {
+                    const spacingStart = getNowMs();
+                    applySpacingConstraints(
+                        this,
+                        nodeList,
+                        correctionAccum,
+                        nodeDegreeEarly,
+                        energy,
+                        debugStats,
+                        spacingGate,
+                        spacingStride,
+                        pairOffset + 2
+                    );
+                    frameTiming.spacingMs += getNowMs() - spacingStart;
+                } else {
+                    applySpacingConstraints(
+                        this,
+                        nodeList,
+                        correctionAccum,
+                        nodeDegreeEarly,
+                        energy,
+                        debugStats,
+                        spacingGate,
+                        spacingStride,
+                        pairOffset + 2
+                    );
+                }
             }
             applyTriangleAreaConstraints(this, nodeList, correctionAccum, nodeDegreeEarly, energy, debugStats);
             applyAngleResistanceVelocity(this, nodeList, nodeDegreeEarly, energy, debugStats);

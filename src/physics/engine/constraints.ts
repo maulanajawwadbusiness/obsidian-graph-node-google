@@ -91,112 +91,104 @@ export const applySpacingConstraints = (
     nodeDegreeEarly: Map<string, number>,
     energy: number,
     stats: DebugStats,
+    spacingGate: number,
     pairStride: number = 1,
     pairOffset: number = 0
 ) => {
     // =====================================================================
     // DISTANCE-BASED SPACING (Soft pre-zone + Hard barrier)
-    // Soft zone: resistance ramps up as nodes approach hard barrier
+    // Soft zone: resistance ramps up as dots approach hard barrier
     // Hard zone: guarantee separation (dots never touch)
-    // Gated by energy: completely disabled during expansion
-    // Shadow barrier during expansion: prevent overlaps from deepening
     // =====================================================================
     const D_hard = engine.config.minNodeDistance;
+    if (spacingGate <= 0) return;
 
-    if (energy <= 0.7) {
-        const passStats = getPassStats(stats, 'SpacingConstraints');
-        const affected = new Set<string>();
-        // SETTLING PHASE: full spacing with smoothstep gate
-        const D_soft = D_hard * engine.config.softDistanceMultiplier;
-        const softExponent = engine.config.softRepulsionExponent;
-        const softMaxCorr = engine.config.softMaxCorrectionPx;
+    const passStats = getPassStats(stats, 'SpacingConstraints');
+    const affected = new Set<string>();
+    const D_soft = D_hard * engine.config.softDistanceMultiplier;
+    const softExponent = engine.config.softRepulsionExponent;
+    const softMaxCorr = engine.config.softMaxCorrectionPx;
 
-        // Spacing gate: smoothstep for settling strength (0 at energy=0.7, 1 at energy=0.4)
-        const gateT = Math.max(0, Math.min(1, (0.7 - energy) / 0.3));
-        const spacingGate = gateT * gateT * (3 - 2 * gateT);  // smoothstep
+    for (let i = 0; i < nodeList.length; i++) {
+        const a = nodeList[i];
 
-        for (let i = 0; i < nodeList.length; i++) {
-            const a = nodeList[i];
+        for (let j = i + 1; j < nodeList.length; j++) {
+            if (pairStride > 1) {
+                const mix = (i * 73856093 + j * 19349663 + pairOffset) % pairStride;
+                if (mix !== 0) continue;
+            }
+            const b = nodeList[j];
 
-            for (let j = i + 1; j < nodeList.length; j++) {
-                if (pairStride > 1) {
-                    const mix = (i * 73856093 + j * 19349663 + pairOffset) % pairStride;
-                    if (mix !== 0) continue;
-                }
-                const b = nodeList[j];
+            const dx = b.x - a.x;
+            const dy = b.y - a.y;
+            const d = Math.sqrt(dx * dx + dy * dy);
 
-                const dx = b.x - a.x;
-                const dy = b.y - a.y;
-                const d = Math.sqrt(dx * dx + dy * dy);
+            if (d >= D_soft || d < 0.1) continue;  // Outside soft zone or singularity
 
-                if (d >= D_soft || d < 0.1) continue;  // Outside soft zone or singularity
+            // Normalize direction (from a toward b)
+            const nx = dx / d;
+            const ny = dy / d;
 
-                // Normalize direction (from a toward b)
-                const nx = dx / d;
-                const ny = dy / d;
+            let corr: number;
 
-                let corr: number;
+            if (d <= D_hard) {
+                // HARD ZONE: smoothstep ramp to eliminate chattering
+                const penetration = D_hard - d;
+                const softnessBand = D_hard * engine.config.hardSoftnessBand;
+                const t = Math.min(penetration / softnessBand, 1);
+                const ramp = t * t * (3 - 2 * t);
+                corr = penetration * ramp;
+            } else {
+                // SOFT ZONE: resistance ramps up as d approaches D_hard
+                const t = (D_soft - d) / (D_soft - D_hard);
+                const s = Math.pow(t, softExponent);
+                corr = s * softMaxCorr;
+            }
 
-                if (d <= D_hard) {
-                    // HARD ZONE: smoothstep ramp to eliminate chattering
-                    const penetration = D_hard - d;
-                    const softnessBand = D_hard * engine.config.hardSoftnessBand;
-                    const t = Math.min(penetration / softnessBand, 1);  // 0→1
-                    const ramp = t * t * (3 - 2 * t);  // smoothstep
-                    corr = penetration * ramp;
-                } else {
-                    // SOFT ZONE: resistance ramps up as d approaches D_hard
-                    const t = (D_soft - d) / (D_soft - D_hard);  // 0 at D_soft, 1 at D_hard
-                    const s = Math.pow(t, softExponent);
-                    corr = s * softMaxCorr;
-                }
+            const maxCorr = engine.config.maxCorrectionPerFrame;
+            const corrApplied = Math.min(corr * spacingGate, maxCorr);
 
-                // Rate-limit and gate by energy (minimal during expansion)
-                const maxCorr = engine.config.maxCorrectionPerFrame;
-                const corrApplied = Math.min(corr * spacingGate, maxCorr);
+            // Request correction via accumulator (equal split)
+            // DEGREE-1 EXCLUSION: dangling dots don't receive positional correction
+            const aAccum = correctionAccum.get(a.id);
+            const bAccum = correctionAccum.get(b.id);
+            const aDeg = nodeDegreeEarly.get(a.id) || 0;
+            const bDeg = nodeDegreeEarly.get(b.id) || 0;
 
-                // Request correction via accumulator (equal split)
-                // DEGREE-1 EXCLUSION: dangling nodes don't receive positional correction
-                const aAccum = correctionAccum.get(a.id);
-                const bAccum = correctionAccum.get(b.id);
-                const aDeg = nodeDegreeEarly.get(a.id) || 0;
-                const bDeg = nodeDegreeEarly.get(b.id) || 0;
+            // EARLY-PHASE HUB PRIVILEGE + ESCAPE WINDOW
+            const aEscape = engine.escapeWindow.has(a.id);
+            const bEscape = engine.escapeWindow.has(b.id);
+            const aHubSkip = (energy > 0.85 && aDeg >= 3) || aEscape;
+            const bHubSkip = (energy > 0.85 && bDeg >= 3) || bEscape;
 
-                // EARLY-PHASE HUB PRIVILEGE + ESCAPE WINDOW
-                const aEscape = engine.escapeWindow.has(a.id);
-                const bEscape = engine.escapeWindow.has(b.id);
-                const aHubSkip = (energy > 0.85 && aDeg >= 3) || aEscape;
-                const bHubSkip = (energy > 0.85 && bDeg >= 3) || bEscape;
-
-                if (!a.isFixed && !b.isFixed) {
-                    if (aAccum && aDeg > 1 && !aHubSkip) {
-                        aAccum.dx -= nx * corrApplied * 0.5;
-                        aAccum.dy -= ny * corrApplied * 0.5;
-                        passStats.correction += Math.abs(corrApplied) * 0.5;
-                        affected.add(a.id);
-                    }
-                    if (bAccum && bDeg > 1 && !bHubSkip) {
-                        bAccum.dx += nx * corrApplied * 0.5;
-                        bAccum.dy += ny * corrApplied * 0.5;
-                        passStats.correction += Math.abs(corrApplied) * 0.5;
-                        affected.add(b.id);
-                    }
-                } else if (!a.isFixed && aAccum && aDeg > 1 && !aHubSkip) {
-                    aAccum.dx -= nx * corrApplied;
-                    aAccum.dy -= ny * corrApplied;
-                    passStats.correction += Math.abs(corrApplied);
+            if (!a.isFixed && !b.isFixed) {
+                if (aAccum && aDeg > 1 && !aHubSkip) {
+                    aAccum.dx -= nx * corrApplied * 0.5;
+                    aAccum.dy -= ny * corrApplied * 0.5;
+                    passStats.correction += Math.abs(corrApplied) * 0.5;
                     affected.add(a.id);
-                } else if (!b.isFixed && bAccum && bDeg > 1 && !bHubSkip) {
-                    bAccum.dx += nx * corrApplied;
-                    bAccum.dy += ny * corrApplied;
-                    passStats.correction += Math.abs(corrApplied);
+                }
+                if (bAccum && bDeg > 1 && !bHubSkip) {
+                    bAccum.dx += nx * corrApplied * 0.5;
+                    bAccum.dy += ny * corrApplied * 0.5;
+                    passStats.correction += Math.abs(corrApplied) * 0.5;
                     affected.add(b.id);
                 }
+            } else if (!a.isFixed && aAccum && aDeg > 1 && !aHubSkip) {
+                aAccum.dx -= nx * corrApplied;
+                aAccum.dy -= ny * corrApplied;
+                passStats.correction += Math.abs(corrApplied);
+                affected.add(a.id);
+            } else if (!b.isFixed && bAccum && bDeg > 1 && !bHubSkip) {
+                bAccum.dx += nx * corrApplied;
+                bAccum.dy += ny * corrApplied;
+                passStats.correction += Math.abs(corrApplied);
+                affected.add(b.id);
             }
         }
+    }
 
-        passStats.nodes += affected.size;
-    }  // End energy gate
+    passStats.nodes += affected.size;
 };
 
 export const applyTriangleAreaConstraints = (

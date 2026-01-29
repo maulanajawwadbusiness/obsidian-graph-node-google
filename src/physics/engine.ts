@@ -69,6 +69,20 @@ export class PhysicsEngine {
 
     private lastDebugStats: DebugStats | null = null;
     private spacingGate: number = 0;
+    private nodeListCache: PhysicsNode[] = [];
+    private nodeListDirty: boolean = true;
+    private awakeList: PhysicsNode[] = [];
+    private sleepingList: PhysicsNode[] = [];
+    private correctionAccumCache = new Map<string, { dx: number; dy: number }>();
+    private topologyLinkKeys = new Set<string>();
+    private nodeLinkCounts = new Map<string, number>();
+    private topologyWarnAt: number = 0;
+    private perfCounters = {
+        nodeListBuilds: 0,
+        correctionNewEntries: 0,
+        topologySkipped: 0,
+        topologyDuplicates: 0,
+    };
     private perfTiming = {
         lastReportAt: 0,
         frameCount: 0,
@@ -91,6 +105,10 @@ export class PhysicsEngine {
      */
     addNode(node: PhysicsNode) {
         this.nodes.set(node.id, node);
+        this.nodeListDirty = true;
+        if (!this.nodeLinkCounts.has(node.id)) {
+            this.nodeLinkCounts.set(node.id, 0);
+        }
         this.wakeNode(node.id);
     }
 
@@ -98,7 +116,31 @@ export class PhysicsEngine {
      * Add a link between two nodes.
      */
     addLink(link: PhysicsLink) {
+        const source = link.source;
+        const target = link.target;
+        const key = source < target ? `${source}:${target}` : `${target}:${source}`;
+        if (this.topologyLinkKeys.has(key)) {
+            this.perfCounters.topologyDuplicates += 1;
+            return;
+        }
+
+        const sourceCount = this.nodeLinkCounts.get(source) || 0;
+        const targetCount = this.nodeLinkCounts.get(target) || 0;
+        if (sourceCount >= this.config.maxLinksPerNode || targetCount >= this.config.maxLinksPerNode) {
+            this.perfCounters.topologySkipped += 1;
+            this.warnTopology('maxLinksPerNode', link);
+            return;
+        }
+        if (this.links.length >= this.config.maxTotalLinks) {
+            this.perfCounters.topologySkipped += 1;
+            this.warnTopology('maxTotalLinks', link);
+            return;
+        }
+
         this.links.push(link);
+        this.topologyLinkKeys.add(key);
+        this.nodeLinkCounts.set(source, sourceCount + 1);
+        this.nodeLinkCounts.set(target, targetCount + 1);
         this.wakeNode(link.source);
         this.wakeNode(link.target);
     }
@@ -109,6 +151,13 @@ export class PhysicsEngine {
     clear() {
         this.nodes.clear();
         this.links = [];
+        this.nodeListCache.length = 0;
+        this.awakeList.length = 0;
+        this.sleepingList.length = 0;
+        this.nodeListDirty = true;
+        this.correctionAccumCache.clear();
+        this.topologyLinkKeys.clear();
+        this.nodeLinkCounts.clear();
         this.lifecycle = 0;
         this.hasFiredImpulse = false;
         this.globalAngle = 0;
@@ -139,7 +188,7 @@ export class PhysicsEngine {
      * Get the current centroid of all nodes.
      */
     getCentroid(): { x: number, y: number } {
-        const nodeList = Array.from(this.nodes.values());
+        const nodeList = this.getNodeList();
         if (nodeList.length === 0) return { x: 0, y: 0 };
 
         let cx = 0, cy = 0;
@@ -167,6 +216,8 @@ export class PhysicsEngine {
         const node = this.nodes.get(nodeId);
         if (node) {
             node.warmth = 1.0;
+            node.isSleeping = false;
+            node.sleepFrames = 0;
         }
     }
 
@@ -186,6 +237,8 @@ export class PhysicsEngine {
     wakeAll() {
         for (const node of this.nodes.values()) {
             node.warmth = 1.0;
+            node.isSleeping = false;
+            node.sleepFrames = 0;
         }
     }
 
@@ -246,9 +299,10 @@ export class PhysicsEngine {
      * @param dt Delta time in seconds (e.g. 0.016 for 60fps)
      */
     tick(dt: number) {
-        const nodeList = Array.from(this.nodes.values());
+        const nodeList = this.getNodeList();
         const debugStats = createDebugStats();
         const perfEnabled = this.config.debugPerf === true;
+        const allocCounter = perfEnabled ? { newEntries: 0 } : undefined;
         const frameTiming = perfEnabled
             ? {
                 repulsionMs: 0,
@@ -260,6 +314,19 @@ export class PhysicsEngine {
             }
             : null;
         const tickStart = perfEnabled ? getNowMs() : 0;
+
+        this.awakeList.length = 0;
+        this.sleepingList.length = 0;
+        for (let i = 0; i < nodeList.length; i++) {
+            const node = nodeList[i];
+            node.listIndex = i;
+            const isSleeping = node.isFixed || node.isSleeping === true;
+            if (isSleeping) {
+                this.sleepingList.push(node);
+            } else {
+                this.awakeList.push(node);
+            }
+        }
 
         // Lifecycle Management
         this.lifecycle += dt;
@@ -308,6 +375,8 @@ export class PhysicsEngine {
         applyForcePass(
             this,
             nodeList,
+            this.awakeList,
+            this.sleepingList,
             forceScale,
             dt,
             debugStats,
@@ -357,7 +426,10 @@ export class PhysicsEngine {
         // Total correction magnitude is clamped to prevent multi-constraint pileup
         // =====================================================================
         const pbdStart = perfEnabled ? getNowMs() : 0;
-        const correctionAccum = initializeCorrectionAccum(nodeList);
+        const correctionAccum = initializeCorrectionAccum(nodeList, this.correctionAccumCache, allocCounter);
+        if (allocCounter) {
+            this.perfCounters.correctionNewEntries += allocCounter.newEntries;
+        }
 
         if (!preRollActive) {
             let spacingStride = pairStrideBase;
@@ -376,7 +448,8 @@ export class PhysicsEngine {
                     const spacingStart = getNowMs();
                     applySpacingConstraints(
                         this,
-                        nodeList,
+                        this.awakeList,
+                        this.sleepingList,
                         correctionAccum,
                         nodeDegreeEarly,
                         energy,
@@ -389,7 +462,8 @@ export class PhysicsEngine {
                 } else {
                     applySpacingConstraints(
                         this,
-                        nodeList,
+                        this.awakeList,
+                        this.sleepingList,
                         correctionAccum,
                         nodeDegreeEarly,
                         energy,
@@ -405,7 +479,8 @@ export class PhysicsEngine {
             applyDistanceBiasVelocity(this, nodeList, debugStats);
             applySafetyClamp(
                 this,
-                nodeList,
+                this.awakeList,
+                this.sleepingList,
                 correctionAccum,
                 nodeDegreeEarly,
                 energy,
@@ -449,6 +524,11 @@ export class PhysicsEngine {
                     `spacing=${avg(perf.totals.spacingMs)} ` +
                     `pbd=${avg(perf.totals.pbdMs)} ` +
                     `total=${avg(perf.totals.totalMs)} ` +
+                    `nodes=${nodeList.length} ` +
+                    `links=${this.links.length} ` +
+                    `allocs=${this.perfCounters.nodeListBuilds + this.perfCounters.correctionNewEntries} ` +
+                    `topoDrop=${this.perfCounters.topologySkipped} ` +
+                    `topoDup=${this.perfCounters.topologyDuplicates} ` +
                     `frames=${frames}`
                 );
                 perf.frameCount = 0;
@@ -459,7 +539,33 @@ export class PhysicsEngine {
                 perf.totals.pbdMs = 0;
                 perf.totals.totalMs = 0;
                 perf.lastReportAt = tickEnd;
+                this.perfCounters.nodeListBuilds = 0;
+                this.perfCounters.correctionNewEntries = 0;
+                this.perfCounters.topologySkipped = 0;
+                this.perfCounters.topologyDuplicates = 0;
             }
         }
+    }
+
+    public getNodeList(): PhysicsNode[] {
+        if (this.nodeListDirty) {
+            this.nodeListCache.length = 0;
+            for (const node of this.nodes.values()) {
+                this.nodeListCache.push(node);
+            }
+            this.nodeListDirty = false;
+            this.perfCounters.nodeListBuilds += 1;
+        }
+        return this.nodeListCache;
+    }
+
+    private warnTopology(reason: 'maxLinksPerNode' | 'maxTotalLinks', link: PhysicsLink) {
+        const now = getNowMs();
+        if (now - this.topologyWarnAt < 1000) return;
+        this.topologyWarnAt = now;
+        console.log(
+            `[PhysicsTopology] drop=${reason} source=${link.source} target=${link.target} ` +
+            `nodes=${this.nodes.size} links=${this.links.length}`
+        );
     }
 }

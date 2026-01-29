@@ -23,6 +23,9 @@ export interface PhysicsNode {
   isFixed: boolean; // If true, physics ignores position updates (useful for dragging)
   warmth?: number; // 0.0 (Cold) to 1.0 (Hot). Defaults to 1.0 if undefined.
   role?: 'spine' | 'rib' | 'fiber'; // Topology role for directed impulse weighting
+  isSleeping?: boolean; // True when dot is at rest for multiple frames
+  sleepFrames?: number; // Consecutive frames below sleep threshold
+  listIndex?: number; // Per-tick index cache for pair sampling
 
 
   // Display (optional)
@@ -82,6 +85,7 @@ export interface ForceConfig {
   // Constraints
   maxVelocity: number; // Cap speed to prevent explosions
   velocitySleepThreshold?: number; // Stop moving if slower than this (e.g. 0.01)
+  sleepFramesThreshold?: number; // Frames below threshold before sleeping
 
   // Cooling / Phase Shift
   formingTime: number; // Time in seconds to stay "hot"
@@ -137,6 +141,10 @@ export interface ForceConfig {
   // Pairwise pass throttling
   pairwiseMaxChecks: number; // Target max pair checks per pass before sampling
   pairwiseMaxStride: number; // Upper bound for sampling stride
+
+  // Topology safety caps
+  maxLinksPerNode: number; // Max links per dot to prevent dense topology
+  maxTotalLinks: number; // Max total links to keep springs bounded
 
   // Debug
   debugPerf?: boolean; // Enable per-pass timing logs (once per second)

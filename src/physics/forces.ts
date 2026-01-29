@@ -7,6 +7,8 @@ import { PhysicsNode, PhysicsLink, ForceConfig } from './types';
  */
 export function applyRepulsion(
     nodes: PhysicsNode[],
+    activeNodes: PhysicsNode[],
+    sleepingNodes: PhysicsNode[],
     config: ForceConfig,
     energy?: number,
     pairStride: number = 1,
@@ -22,25 +24,29 @@ export function applyRepulsion(
     const densityRadius = 25;  // Radius to count neighbors
     const localDensity = new Map<string, number>();
 
+    const shouldSkipPair = (a: PhysicsNode, b: PhysicsNode) => {
+        if (pairStride <= 1) return false;
+        const i = a.listIndex ?? 0;
+        const j = b.listIndex ?? 0;
+        const mix = (i * 73856093 + j * 19349663 + pairOffset) % pairStride;
+        return mix !== 0;
+    };
+
     if (earlyExpansion) {
-        const stride = Math.max(1, pairStride);
         const densityRadiusSq = densityRadius * densityRadius;
         for (let i = 0; i < nodes.length; i++) {
             const node = nodes[i];
             let count = 0;
             for (let j = 0; j < nodes.length; j++) {
                 if (i === j) continue;
-                if (stride > 1) {
-                    const mix = (i * 73856093 + j * 19349663 + pairOffset) % stride;
-                    if (mix !== 0) continue;
-                }
                 const other = nodes[j];
+                if (shouldSkipPair(node, other)) continue;
                 const dx = other.x - node.x;
                 const dy = other.y - node.y;
                 const d2 = dx * dx + dy * dy;
                 if (d2 < densityRadiusSq) count++;
             }
-            const scaledCount = stride > 1 ? Math.round(count * stride) : count;
+            const scaledCount = pairStride > 1 ? Math.round(count * pairStride) : count;
             localDensity.set(node.id, scaledCount);
         }
     }
@@ -50,92 +56,95 @@ export function applyRepulsion(
     let debugAvgCenterDensity = 0;
     let debugCenterCount = 0;
 
-    for (let i = 0; i < nodes.length; i++) {
-        const nodeA = nodes[i];
-        for (let j = i + 1; j < nodes.length; j++) {
-            if (pairStride > 1) {
-                const mix = (i * 73856093 + j * 19349663 + pairOffset) % pairStride;
-                if (mix !== 0) continue;
+    const applyPair = (nodeA: PhysicsNode, nodeB: PhysicsNode) => {
+        if (shouldSkipPair(nodeA, nodeB)) return;
+
+        let dx = nodeA.x - nodeB.x;
+        let dy = nodeA.y - nodeB.y;
+
+        // If nodes are exactly on top of each other, nudge slightly random
+        if (dx === 0 && dy === 0) {
+            dx = (Math.random() - 0.5) * 0.1;
+            dy = (Math.random() - 0.5) * 0.1;
+        }
+
+        const d2 = dx * dx + dy * dy;
+
+        if (d2 < maxDistSq && d2 > 0) {
+            const d = Math.sqrt(d2);
+
+            // REPULSION DEAD-CORE: within coreRadius, scale repulsion down
+            // Creates pressure gradient instead of uniform radial blast
+            // Allows close nodes to slide past each other before spacing locks
+            const coreRadius = 12;  // Very close proximity threshold
+            let repulsionScale = 1.0;
+            if (d < coreRadius) {
+                // Ramp: 0.1 at d=0, 1.0 at d=coreRadius (smoothstep)
+                const t = d / coreRadius;  // 0 at center, 1 at edge
+                const smooth = t * t * (3 - 2 * t);
+                repulsionScale = 0.1 + smooth * 0.9;  // 10% -> 100%
             }
-            const nodeB = nodes[j];
 
-            let dx = nodeA.x - nodeB.x;
-            let dy = nodeA.y - nodeB.y;
+            // ENHANCED DENSITY BOOST: stronger at short range
+            // Nodes in dense regions AND close together repel much more strongly
+            let densityBoost = 1.0;
+            if (earlyExpansion) {
+                const densityA = localDensity.get(nodeA.id) || 0;
+                const densityB = localDensity.get(nodeB.id) || 0;
+                const avgDensity = (densityA + densityB) / 2;
 
-            // If nodes are exactly on top of each other, nudge slightly random
-            if (dx === 0 && dy === 0) {
-                dx = (Math.random() - 0.5) * 0.1;
-                dy = (Math.random() - 0.5) * 0.1;
-            }
+                // Track center-ish nodes (high density)
+                if (densityA >= 4) { debugAvgCenterDensity += densityA; debugCenterCount++; }
+                if (densityB >= 4) { debugAvgCenterDensity += densityB; debugCenterCount++; }
 
-            const d2 = dx * dx + dy * dy;
+                if (avgDensity > 2) {
+                    // Base density boost: +30% per extra neighbor beyond 2
+                    const baseDensityBoost = 0.30 * (avgDensity - 2);
 
-            if (d2 < maxDistSq && d2 > 0) {
-                const d = Math.sqrt(d2);
-
-                // REPULSION DEAD-CORE: within coreRadius, scale repulsion down
-                // Creates pressure gradient instead of uniform radial blast
-                // Allows close nodes to slide past each other before spacing locks
-                const coreRadius = 12;  // Very close proximity threshold
-                let repulsionScale = 1.0;
-                if (d < coreRadius) {
-                    // Ramp: 0.1 at d=0, 1.0 at d=coreRadius (smoothstep)
-                    const t = d / coreRadius;  // 0 at center, 1 at edge
-                    const smooth = t * t * (3 - 2 * t);
-                    repulsionScale = 0.1 + smooth * 0.9;  // 10% → 100%
-                }
-
-                // ENHANCED DENSITY BOOST: stronger at short range
-                // Nodes in dense regions AND close together repel much more strongly
-                let densityBoost = 1.0;
-                if (earlyExpansion) {
-                    const densityA = localDensity.get(nodeA.id) || 0;
-                    const densityB = localDensity.get(nodeB.id) || 0;
-                    const avgDensity = (densityA + densityB) / 2;
-
-                    // Track center-ish nodes (high density)
-                    if (densityA >= 4) { debugAvgCenterDensity += densityA; debugCenterCount++; }
-                    if (densityB >= 4) { debugAvgCenterDensity += densityB; debugCenterCount++; }
-
-                    if (avgDensity > 2) {
-                        // Base density boost: +30% per extra neighbor beyond 2
-                        const baseDensityBoost = 0.30 * (avgDensity - 2);
-
-                        // Distance multiplier: stronger when very close (within minNodeDistance)
-                        const minDist = config.minNodeDistance || 30;
-                        let distanceMultiplier = 1.0;
-                        if (d < minDist) {
-                            // Ramp: 2.0 at d=0.5*minDist, 1.0 at d=minDist (smoothstep)
-                            const closeT = Math.max(0, (minDist - d) / (minDist * 0.5));
-                            const closeSmooth = Math.min(closeT, 1);
-                            distanceMultiplier = 1.0 + closeSmooth;  // 1.0 → 2.0
-                        }
-
-                        densityBoost = 1 + baseDensityBoost * distanceMultiplier;
-
-                        // Clamp to prevent explosion (max 3x)
-                        densityBoost = Math.min(densityBoost, 3.0);
-
-                        debugMaxDensityBoost = Math.max(debugMaxDensityBoost, densityBoost);
+                    // Distance multiplier: stronger when very close (within minNodeDistance)
+                    const minDist = config.minNodeDistance || 30;
+                    let distanceMultiplier = 1.0;
+                    if (d < minDist) {
+                        // Ramp: 2.0 at d=0.5*minDist, 1.0 at d=minDist (smoothstep)
+                        const closeT = Math.max(0, (minDist - d) / (minDist * 0.5));
+                        const closeSmooth = Math.min(closeT, 1);
+                        distanceMultiplier = 1.0 + closeSmooth;  // 1.0 -> 2.0
                     }
-                }
 
-                // Standard repulsion force: F = k / d, scaled by dead-core and density
-                const forceMagnitude = (repulsionStrength / d) * repulsionScale * densityBoost;
+                    densityBoost = 1 + baseDensityBoost * distanceMultiplier;
 
-                // Vector components
-                const fx = (dx / d) * forceMagnitude;
-                const fy = (dy / d) * forceMagnitude;
+                    // Clamp to prevent explosion (max 3x)
+                    densityBoost = Math.min(densityBoost, 3.0);
 
-                if (!nodeA.isFixed) {
-                    nodeA.fx += fx;
-                    nodeA.fy += fy;
-                }
-                if (!nodeB.isFixed) {
-                    nodeB.fx -= fx;
-                    nodeB.fy -= fy;
+                    debugMaxDensityBoost = Math.max(debugMaxDensityBoost, densityBoost);
                 }
             }
+
+            // Standard repulsion force: F = k / d, scaled by dead-core and density
+            const forceMagnitude = (repulsionStrength / d) * repulsionScale * densityBoost;
+
+            // Vector components
+            const fx = (dx / d) * forceMagnitude;
+            const fy = (dy / d) * forceMagnitude;
+
+            if (!nodeA.isFixed) {
+                nodeA.fx += fx;
+                nodeA.fy += fy;
+            }
+            if (!nodeB.isFixed) {
+                nodeB.fx -= fx;
+                nodeB.fy -= fy;
+            }
+        }
+    };
+
+    for (let i = 0; i < activeNodes.length; i++) {
+        const nodeA = activeNodes[i];
+        for (let j = i + 1; j < activeNodes.length; j++) {
+            applyPair(nodeA, activeNodes[j]);
+        }
+        for (let j = 0; j < sleepingNodes.length; j++) {
+            applyPair(nodeA, sleepingNodes[j]);
         }
     }
 
@@ -146,13 +155,10 @@ export function applyRepulsion(
     }
 }
 
-/**
- * Apply hard collision/personal space.
- * UX Anchor: "Visual Dignity".
- * Prevents overlap. Acts as a hard shell with padding.
- */
 export function applyCollision(
     nodes: PhysicsNode[],
+    activeNodes: PhysicsNode[],
+    sleepingNodes: PhysicsNode[],
     config: ForceConfig,
     strengthScale: number = 1.0,
     pairStride: number = 1,
@@ -163,63 +169,63 @@ export function applyCollision(
     const strength = collisionStrength * strengthScale;
     if (strength <= 0.01) return; // Optimization: Skip if minimal
 
-    for (let i = 0; i < nodes.length; i++) {
-        const nodeA = nodes[i];
-        for (let j = i + 1; j < nodes.length; j++) {
-            if (pairStride > 1) {
-                const mix = (i * 73856093 + j * 19349663 + pairOffset) % pairStride;
-                if (mix !== 0) continue;
+    const shouldSkipPair = (a: PhysicsNode, b: PhysicsNode) => {
+        if (pairStride <= 1) return false;
+        const i = a.listIndex ?? 0;
+        const j = b.listIndex ?? 0;
+        const mix = (i * 73856093 + j * 19349663 + pairOffset) % pairStride;
+        return mix !== 0;
+    };
+
+    const applyPair = (nodeA: PhysicsNode, nodeB: PhysicsNode) => {
+        if (shouldSkipPair(nodeA, nodeB)) return;
+        const dx = nodeA.x - nodeB.x;
+        const dy = nodeA.y - nodeB.y;
+        const distSq = dx * dx + dy * dy;
+
+        const radiusSum = nodeA.radius + nodeB.radius + collisionPadding;
+        const minDistSq = radiusSum * radiusSum;
+
+        if (distSq < minDistSq && distSq > 0) {
+            const dist = Math.sqrt(distSq);
+            const overlap = radiusSum - dist;
+
+            const forceMagnitude = overlap * strength;
+
+            const nx = dx / dist;
+            const ny = dy / dist;
+
+            const fx = nx * forceMagnitude;
+            const fy = ny * forceMagnitude;
+
+            if (!nodeA.isFixed) {
+                nodeA.fx += fx;
+                nodeA.fy += fy;
             }
-            const nodeB = nodes[j];
-
-            const dx = nodeA.x - nodeB.x;
-            const dy = nodeA.y - nodeB.y;
-            const distSq = dx * dx + dy * dy;
-
-            const radiusSum = nodeA.radius + nodeB.radius + collisionPadding;
-            const minDistSq = radiusSum * radiusSum;
-
-            if (distSq < minDistSq && distSq > 0) {
-                const dist = Math.sqrt(distSq);
-                const overlap = radiusSum - dist;
-
-                // Force is proportional to overlap (Penalty Method)
-                // Or we could use strength / distance, but overlap is more "solid".
-                // User wants "force strength increases sharply as distance approaches zero".
-                // Overlap is linear, but we can make it exponential or just very strong.
-                // k * overlap is standard spring collision.
-                const forceMagnitude = overlap * strength;
-
-                const nx = dx / dist;
-                const ny = dy / dist;
-
-                const fx = nx * forceMagnitude;
-                const fy = ny * forceMagnitude;
-
-                if (!nodeA.isFixed) {
-                    nodeA.fx += fx;
-                    nodeA.fy += fy;
-                }
-                if (!nodeB.isFixed) {
-                    nodeB.fx -= fx;
-                    nodeB.fy -= fy;
-                }
-            } else if (distSq === 0) {
-                // Exact overlap? Push apart randomly.
-                const angle = Math.random() * Math.PI * 2;
-                const force = collisionStrength * 0.1;
-                if (!nodeA.isFixed) { nodeA.fx += Math.cos(angle) * force; nodeA.fy += Math.sin(angle) * force; }
-                if (!nodeB.isFixed) { nodeB.fx -= Math.cos(angle) * force; nodeB.fy -= Math.sin(angle) * force; }
+            if (!nodeB.isFixed) {
+                nodeB.fx -= fx;
+                nodeB.fy -= fy;
             }
+        } else if (distSq === 0) {
+            // Exact overlap? Push apart randomly.
+            const angle = Math.random() * Math.PI * 2;
+            const force = collisionStrength * 0.1;
+            if (!nodeA.isFixed) { nodeA.fx += Math.cos(angle) * force; nodeA.fy += Math.sin(angle) * force; }
+            if (!nodeB.isFixed) { nodeB.fx -= Math.cos(angle) * force; nodeB.fy -= Math.sin(angle) * force; }
+        }
+    };
+
+    for (let i = 0; i < activeNodes.length; i++) {
+        const nodeA = activeNodes[i];
+        for (let j = i + 1; j < activeNodes.length; j++) {
+            applyPair(nodeA, activeNodes[j]);
+        }
+        for (let j = 0; j < sleepingNodes.length; j++) {
+            applyPair(nodeA, sleepingNodes[j]);
         }
     }
 }
 
-/**
- * Apply spring force for links.
- * UX Anchor: "Friend-Distance".
- * Pulls connected nodes together or pushes them if too close.
- */
 export function applySprings(
     nodes: Map<string, PhysicsNode>,
     links: PhysicsLink[],

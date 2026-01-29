@@ -232,7 +232,7 @@ export const useGraphRendering = ({
                 drawVignetteBackground(ctx, width, height, theme);
             });
 
-            const nodes = Array.from(engine.nodes.values());
+            const nodes = engine.getNodeList();
             updateCameraContainment(cameraRef, nodes, width, height);
 
             const pendingPointer = pendingPointerRef.current;

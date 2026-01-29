@@ -170,13 +170,22 @@ export const integrateNodes = (
         node.x += node.vx * nodeDt;
         node.y += node.vy * nodeDt;
 
-        // Sleep Check (optional - keeps physics running but zeros micro-motion)
-        if (engine.config.velocitySleepThreshold) {
+        // Sleep Check (optional - zeroes micro-motion and marks as sleeping)
+        const sleepThreshold = engine.config.velocitySleepThreshold;
+        if (sleepThreshold) {
             const velSq = node.vx * node.vx + node.vy * node.vy;
-            const threshSq = engine.config.velocitySleepThreshold * engine.config.velocitySleepThreshold;
+            const threshSq = sleepThreshold * sleepThreshold;
+            const sleepFramesRequired = engine.config.sleepFramesThreshold ?? 30;
             if (velSq < threshSq) {
-                node.vx = 0;
-                node.vy = 0;
+                node.sleepFrames = (node.sleepFrames ?? 0) + 1;
+                if (node.sleepFrames >= sleepFramesRequired) {
+                    node.isSleeping = true;
+                    node.vx = 0;
+                    node.vy = 0;
+                }
+            } else {
+                node.sleepFrames = 0;
+                node.isSleeping = false;
             }
         }
 

@@ -55,6 +55,7 @@ export const DEFAULT_PHYSICS_CONFIG: ForceConfig = {
     // ---------------------------------------------------------------------------
     // If a node's speed is below this threshold, we might skip physics or mark inactive.
     velocitySleepThreshold: 0.1,
+    sleepFramesThreshold: 30,
 
     // ---------------------------------------------------------------------------
     // ANCHOR: Cooling / Phase Shift
@@ -126,5 +127,7 @@ export const DEFAULT_PHYSICS_CONFIG: ForceConfig = {
     expansionResistance: 0.15,    // Degree-based velocity damping during expansion (0-1)
     pairwiseMaxChecks: 60000,
     pairwiseMaxStride: 8,
+    maxLinksPerNode: 12,
+    maxTotalLinks: 2000,
     debugPerf: false,
 };

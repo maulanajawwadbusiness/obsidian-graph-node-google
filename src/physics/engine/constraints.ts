@@ -2,10 +2,21 @@ import type { PhysicsEngine } from '../engine';
 import type { PhysicsNode } from '../types';
 import { getPassStats, type DebugStats } from './stats';
 
-export const initializeCorrectionAccum = (nodeList: PhysicsNode[]) => {
-    const correctionAccum = new Map<string, { dx: number; dy: number }>();
+export const initializeCorrectionAccum = (
+    nodeList: PhysicsNode[],
+    cache?: Map<string, { dx: number; dy: number }>,
+    allocationCounter?: { newEntries: number }
+) => {
+    const correctionAccum = cache ?? new Map<string, { dx: number; dy: number }>();
     for (const node of nodeList) {
-        correctionAccum.set(node.id, { dx: 0, dy: 0 });
+        const existing = correctionAccum.get(node.id);
+        if (existing) {
+            existing.dx = 0;
+            existing.dy = 0;
+        } else {
+            correctionAccum.set(node.id, { dx: 0, dy: 0 });
+            if (allocationCounter) allocationCounter.newEntries += 1;
+        }
     }
     return correctionAccum;
 };
@@ -86,7 +97,8 @@ export const applyEdgeRelaxation = (
 
 export const applySpacingConstraints = (
     engine: PhysicsEngine,
-    nodeList: PhysicsNode[],
+    activeNodes: PhysicsNode[],
+    sleepingNodes: PhysicsNode[],
     correctionAccum: Map<string, { dx: number; dy: number }>,
     nodeDegreeEarly: Map<string, number>,
     energy: number,
@@ -109,82 +121,91 @@ export const applySpacingConstraints = (
     const softExponent = engine.config.softRepulsionExponent;
     const softMaxCorr = engine.config.softMaxCorrectionPx;
 
-    for (let i = 0; i < nodeList.length; i++) {
-        const a = nodeList[i];
+    const shouldSkipPair = (a: PhysicsNode, b: PhysicsNode) => {
+        if (pairStride <= 1) return false;
+        const i = a.listIndex ?? 0;
+        const j = b.listIndex ?? 0;
+        const mix = (i * 73856093 + j * 19349663 + pairOffset) % pairStride;
+        return mix !== 0;
+    };
 
-        for (let j = i + 1; j < nodeList.length; j++) {
-            if (pairStride > 1) {
-                const mix = (i * 73856093 + j * 19349663 + pairOffset) % pairStride;
-                if (mix !== 0) continue;
-            }
-            const b = nodeList[j];
+    const applyPair = (a: PhysicsNode, b: PhysicsNode) => {
+        if (shouldSkipPair(a, b)) return;
+        const dx = b.x - a.x;
+        const dy = b.y - a.y;
+        const d = Math.sqrt(dx * dx + dy * dy);
 
-            const dx = b.x - a.x;
-            const dy = b.y - a.y;
-            const d = Math.sqrt(dx * dx + dy * dy);
+        if (d >= D_soft || d < 0.1) return;  // Outside soft zone or singularity
 
-            if (d >= D_soft || d < 0.1) continue;  // Outside soft zone or singularity
+        // Normalize direction (from a toward b)
+        const nx = dx / d;
+        const ny = dy / d;
 
-            // Normalize direction (from a toward b)
-            const nx = dx / d;
-            const ny = dy / d;
+        let corr: number;
 
-            let corr: number;
+        if (d <= D_hard) {
+            // HARD ZONE: smoothstep ramp to eliminate chattering
+            const penetration = D_hard - d;
+            const softnessBand = D_hard * engine.config.hardSoftnessBand;
+            const t = Math.min(penetration / softnessBand, 1);
+            const ramp = t * t * (3 - 2 * t);
+            corr = penetration * ramp;
+        } else {
+            // SOFT ZONE: resistance ramps up as d approaches D_hard
+            const t = (D_soft - d) / (D_soft - D_hard);
+            const s = Math.pow(t, softExponent);
+            corr = s * softMaxCorr;
+        }
 
-            if (d <= D_hard) {
-                // HARD ZONE: smoothstep ramp to eliminate chattering
-                const penetration = D_hard - d;
-                const softnessBand = D_hard * engine.config.hardSoftnessBand;
-                const t = Math.min(penetration / softnessBand, 1);
-                const ramp = t * t * (3 - 2 * t);
-                corr = penetration * ramp;
-            } else {
-                // SOFT ZONE: resistance ramps up as d approaches D_hard
-                const t = (D_soft - d) / (D_soft - D_hard);
-                const s = Math.pow(t, softExponent);
-                corr = s * softMaxCorr;
-            }
+        const maxCorr = engine.config.maxCorrectionPerFrame;
+        const corrApplied = Math.min(corr * spacingGate, maxCorr);
 
-            const maxCorr = engine.config.maxCorrectionPerFrame;
-            const corrApplied = Math.min(corr * spacingGate, maxCorr);
+        // Request correction via accumulator (equal split)
+        // DEGREE-1 EXCLUSION: dangling dots don't receive positional correction
+        const aAccum = correctionAccum.get(a.id);
+        const bAccum = correctionAccum.get(b.id);
+        const aDeg = nodeDegreeEarly.get(a.id) || 0;
+        const bDeg = nodeDegreeEarly.get(b.id) || 0;
 
-            // Request correction via accumulator (equal split)
-            // DEGREE-1 EXCLUSION: dangling dots don't receive positional correction
-            const aAccum = correctionAccum.get(a.id);
-            const bAccum = correctionAccum.get(b.id);
-            const aDeg = nodeDegreeEarly.get(a.id) || 0;
-            const bDeg = nodeDegreeEarly.get(b.id) || 0;
+        // EARLY-PHASE HUB PRIVILEGE + ESCAPE WINDOW
+        const aEscape = engine.escapeWindow.has(a.id);
+        const bEscape = engine.escapeWindow.has(b.id);
+        const aHubSkip = (energy > 0.85 && aDeg >= 3) || aEscape;
+        const bHubSkip = (energy > 0.85 && bDeg >= 3) || bEscape;
 
-            // EARLY-PHASE HUB PRIVILEGE + ESCAPE WINDOW
-            const aEscape = engine.escapeWindow.has(a.id);
-            const bEscape = engine.escapeWindow.has(b.id);
-            const aHubSkip = (energy > 0.85 && aDeg >= 3) || aEscape;
-            const bHubSkip = (energy > 0.85 && bDeg >= 3) || bEscape;
-
-            if (!a.isFixed && !b.isFixed) {
-                if (aAccum && aDeg > 1 && !aHubSkip) {
-                    aAccum.dx -= nx * corrApplied * 0.5;
-                    aAccum.dy -= ny * corrApplied * 0.5;
-                    passStats.correction += Math.abs(corrApplied) * 0.5;
-                    affected.add(a.id);
-                }
-                if (bAccum && bDeg > 1 && !bHubSkip) {
-                    bAccum.dx += nx * corrApplied * 0.5;
-                    bAccum.dy += ny * corrApplied * 0.5;
-                    passStats.correction += Math.abs(corrApplied) * 0.5;
-                    affected.add(b.id);
-                }
-            } else if (!a.isFixed && aAccum && aDeg > 1 && !aHubSkip) {
-                aAccum.dx -= nx * corrApplied;
-                aAccum.dy -= ny * corrApplied;
-                passStats.correction += Math.abs(corrApplied);
+        if (!a.isFixed && !b.isFixed) {
+            if (aAccum && aDeg > 1 && !aHubSkip) {
+                aAccum.dx -= nx * corrApplied * 0.5;
+                aAccum.dy -= ny * corrApplied * 0.5;
+                passStats.correction += Math.abs(corrApplied) * 0.5;
                 affected.add(a.id);
-            } else if (!b.isFixed && bAccum && bDeg > 1 && !bHubSkip) {
-                bAccum.dx += nx * corrApplied;
-                bAccum.dy += ny * corrApplied;
-                passStats.correction += Math.abs(corrApplied);
+            }
+            if (bAccum && bDeg > 1 && !bHubSkip) {
+                bAccum.dx += nx * corrApplied * 0.5;
+                bAccum.dy += ny * corrApplied * 0.5;
+                passStats.correction += Math.abs(corrApplied) * 0.5;
                 affected.add(b.id);
             }
+        } else if (!a.isFixed && aAccum && aDeg > 1 && !aHubSkip) {
+            aAccum.dx -= nx * corrApplied;
+            aAccum.dy -= ny * corrApplied;
+            passStats.correction += Math.abs(corrApplied);
+            affected.add(a.id);
+        } else if (!b.isFixed && bAccum && bDeg > 1 && !bHubSkip) {
+            bAccum.dx += nx * corrApplied;
+            bAccum.dy += ny * corrApplied;
+            passStats.correction += Math.abs(corrApplied);
+            affected.add(b.id);
+        }
+    };
+
+    for (let i = 0; i < activeNodes.length; i++) {
+        const a = activeNodes[i];
+        for (let j = i + 1; j < activeNodes.length; j++) {
+            applyPair(a, activeNodes[j]);
+        }
+        for (let j = 0; j < sleepingNodes.length; j++) {
+            applyPair(a, sleepingNodes[j]);
         }
     }
 
@@ -303,7 +324,8 @@ export const applyTriangleAreaConstraints = (
 
 export const applySafetyClamp = (
     engine: PhysicsEngine,
-    nodeList: PhysicsNode[],
+    activeNodes: PhysicsNode[],
+    sleepingNodes: PhysicsNode[],
     correctionAccum: Map<string, { dx: number; dy: number }>,
     nodeDegreeEarly: Map<string, number>,
     energy: number,
@@ -318,69 +340,79 @@ export const applySafetyClamp = (
     const passStats = getPassStats(stats, 'SafetyClamp');
     const affected = new Set<string>();
 
-    for (let i = 0; i < nodeList.length; i++) {
-        const a = nodeList[i];
-        for (let j = i + 1; j < nodeList.length; j++) {
-            if (pairStride > 1) {
-                const mix = (i * 73856093 + j * 19349663 + pairOffset) % pairStride;
-                if (mix !== 0) continue;
-            }
-            const b = nodeList[j];
+    const shouldSkipPair = (a: PhysicsNode, b: PhysicsNode) => {
+        if (pairStride <= 1) return false;
+        const i = a.listIndex ?? 0;
+        const j = b.listIndex ?? 0;
+        const mix = (i * 73856093 + j * 19349663 + pairOffset) % pairStride;
+        return mix !== 0;
+    };
 
-            const dx = b.x - a.x;
-            const dy = b.y - a.y;
-            const d = Math.sqrt(dx * dx + dy * dy);
+    const applyPair = (a: PhysicsNode, b: PhysicsNode) => {
+        if (shouldSkipPair(a, b)) return;
+        const dx = b.x - a.x;
+        const dy = b.y - a.y;
+        const d = Math.sqrt(dx * dx + dy * dy);
 
-            if (d < 0.1) continue;  // Singularity guard
+        if (d < 0.1) return;  // Singularity guard
 
-            const nx = dx / d;
-            const ny = dy / d;
+        const nx = dx / d;
+        const ny = dy / d;
 
-            if (d < D_hard) {
-                const penetration = D_hard - d;
+        if (d < D_hard) {
+            const penetration = D_hard - d;
 
-                stats.safety.penetrationTotal += penetration;
-                stats.safety.penetrationCount += 1;
+            stats.safety.penetrationTotal += penetration;
+            stats.safety.penetrationCount += 1;
 
-                if (penetration > 5) {
-                    stats.safety.clampTriggers += 1;
+            if (penetration > 5) {
+                stats.safety.clampTriggers += 1;
 
-                    const emergencyCorrection = Math.min(penetration - 5, 0.3);
-                    const aAccum = correctionAccum.get(a.id);
-                    const bAccum = correctionAccum.get(b.id);
-                    const aDeg = nodeDegreeEarly.get(a.id) || 0;
-                    const bDeg = nodeDegreeEarly.get(b.id) || 0;
+                const emergencyCorrection = Math.min(penetration - 5, 0.3);
+                const aAccum = correctionAccum.get(a.id);
+                const bAccum = correctionAccum.get(b.id);
+                const aDeg = nodeDegreeEarly.get(a.id) || 0;
+                const bDeg = nodeDegreeEarly.get(b.id) || 0;
 
-                    // EARLY-PHASE HUB PRIVILEGE: high-degree nodes skip clamp during early expansion
-                    const aHubSkip = energy > 0.85 && aDeg >= 3;
-                    const bHubSkip = energy > 0.85 && bDeg >= 3;
+                // EARLY-PHASE HUB PRIVILEGE: high-degree nodes skip clamp during early expansion
+                const aHubSkip = energy > 0.85 && aDeg >= 3;
+                const bHubSkip = energy > 0.85 && bDeg >= 3;
 
-                    if (!a.isFixed && !b.isFixed) {
-                        if (aAccum && aDeg > 1 && !aHubSkip) {
-                            aAccum.dx -= nx * emergencyCorrection * 0.5;
-                            aAccum.dy -= ny * emergencyCorrection * 0.5;
-                            passStats.correction += Math.abs(emergencyCorrection) * 0.5;
-                            affected.add(a.id);
-                        }
-                        if (bAccum && bDeg > 1 && !bHubSkip) {
-                            bAccum.dx += nx * emergencyCorrection * 0.5;
-                            bAccum.dy += ny * emergencyCorrection * 0.5;
-                            passStats.correction += Math.abs(emergencyCorrection) * 0.5;
-                            affected.add(b.id);
-                        }
-                    } else if (!a.isFixed && aAccum && aDeg > 1 && !aHubSkip) {
-                        aAccum.dx -= nx * emergencyCorrection;
-                        aAccum.dy -= ny * emergencyCorrection;
-                        passStats.correction += Math.abs(emergencyCorrection);
+                if (!a.isFixed && !b.isFixed) {
+                    if (aAccum && aDeg > 1 && !aHubSkip) {
+                        aAccum.dx -= nx * emergencyCorrection * 0.5;
+                        aAccum.dy -= ny * emergencyCorrection * 0.5;
+                        passStats.correction += Math.abs(emergencyCorrection) * 0.5;
                         affected.add(a.id);
-                    } else if (!b.isFixed && bAccum && bDeg > 1 && !bHubSkip) {
-                        bAccum.dx += nx * emergencyCorrection;
-                        bAccum.dy += ny * emergencyCorrection;
-                        passStats.correction += Math.abs(emergencyCorrection);
+                    }
+                    if (bAccum && bDeg > 1 && !bHubSkip) {
+                        bAccum.dx += nx * emergencyCorrection * 0.5;
+                        bAccum.dy += ny * emergencyCorrection * 0.5;
+                        passStats.correction += Math.abs(emergencyCorrection) * 0.5;
                         affected.add(b.id);
                     }
+                } else if (!a.isFixed && aAccum && aDeg > 1 && !aHubSkip) {
+                    aAccum.dx -= nx * emergencyCorrection;
+                    aAccum.dy -= ny * emergencyCorrection;
+                    passStats.correction += Math.abs(emergencyCorrection);
+                    affected.add(a.id);
+                } else if (!b.isFixed && bAccum && bDeg > 1 && !bHubSkip) {
+                    bAccum.dx += nx * emergencyCorrection;
+                    bAccum.dy += ny * emergencyCorrection;
+                    passStats.correction += Math.abs(emergencyCorrection);
+                    affected.add(b.id);
                 }
             }
+        }
+    };
+
+    for (let i = 0; i < activeNodes.length; i++) {
+        const a = activeNodes[i];
+        for (let j = i + 1; j < activeNodes.length; j++) {
+            applyPair(a, activeNodes[j]);
+        }
+        for (let j = 0; j < sleepingNodes.length; j++) {
+            applyPair(a, sleepingNodes[j]);
         }
     }
 

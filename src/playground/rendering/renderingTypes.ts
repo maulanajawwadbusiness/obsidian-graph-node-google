@@ -72,6 +72,9 @@ export type HoverState = {
     slushFrameCount?: number;
     lastSlushLog?: number;
     lastDropLog?: number;
+    overloadCount?: number;
+    freezeCount?: number;
+    lastOverloadLog?: number;
 };
 
 export type CanvasStateDebug = {

@@ -148,29 +148,9 @@ export const useGraphRendering = ({
                 }
             }
 
-            while (accumulatorMs >= fixedStepMs && stepsThisFrame < maxStepsPerFrame) {
-                if (engine.config.debugPerf) {
-                    const tickStart = performance.now();
-                    engine.tick(fixedStepMs / 1000);
-                    recordTick(performance.now() - tickStart);
-                } else {
-                    engine.tick(fixedStepMs / 1000);
-                }
-                accumulatorMs -= fixedStepMs;
-                stepsThisFrame += 1;
-            }
 
-            if (stepsThisFrame === 0 && accumulatorMs > 0) {
-                if (engine.config.debugPerf) {
-                    const tickStart = performance.now();
-                    engine.tick(accumulatorMs / 1000);
-                    recordTick(performance.now() - tickStart);
-                } else {
-                    engine.tick(accumulatorMs / 1000);
-                }
-                accumulatorMs = 0;
-                stepsThisFrame = 1;
-            }
+
+
 
             // ⚠️ DEBUG STALL: Simulate heavy load if 'F9' is pressed (implied state)
             // For now, we'll just check a global or config, but let's stick to the requested structure.

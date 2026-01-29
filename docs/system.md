@@ -39,17 +39,28 @@ The application layers, ordered by z-index (lowest to highest):
 
 ## 3. AI Architecture
 
-Arnvoid uses a specialized AI factory (`src/ai/`) and localized modules for different tasks.
+Arnvoid uses a unified AI layer (`src/ai/`) that abstracts provider details behind a strict interface.
 
-### Core Modules
+### A. The Core: `LLMClient`
+*   **Contract**: All features (Chat, Prefill, Analyzer) talk to the `LLMClient` interface (`generateText`, `generateTextStream`, `generateStructured`).
+*   **Provider Agnostic**: The application logic does not know if it's talking to OpenAI, OpenRouter, or a local model.
+*   **Factory**: `createLLMClient` in `src/ai/index.ts` determines the implementation based on config.
+
+### B. Current & Future State
+*   **Current Reality**: We primarily use `OpenAIClient` which leverages the **Responses API** (`v1/responses`) for text and streaming.
+*   **Future Unification**: We are moving towards a "Single SDK" model where we use the official OpenAI SDK for *both* OpenAI and OpenRouter (by swapping `baseURL` to `https://openrouter.ai/api/v1`).
+    *   *Why*: Reduces code drift and unifies parsing logic.
+    *   *Status*: Architecture defined, refactor pending.
+
+### C. Core Modules
 *   **Paper Analyzer (`src/ai/paperAnalyzer.ts`)**: Distills documents into 1 Main Topic + 4 Detailed Points.
 *   **FullChat AI (`src/fullchat/fullChatAi.ts`)**: Handles the reasoning panel and handoff prefill.
 *   **MiniChat AI (`src/popup/PopupStore.tsx`)**: Directly integrated into the popup store for node-specific queries.
 
-### Behavior Doctrine
+### D. Behavior Doctrine
 *   **Mode Switch**: `VITE_AI_MODE='real'` vs `'mock'`.
-*   **Abort Model**: Every AI loop uses an `AbortController`. Sending a new message or closing a panel instantly kills the in-flight request.
-*   **Fake Streaming**: Since the client is non-streaming, we simulate character-by-character growth (Tick: 15ms, Chunk: 4chars) in the Store layer to maintain "living" feel.
+*   **Abort Model**: Every AI loop uses an `AbortController`. Quick kill on navigation.
+*   **Fake Streaming**: Client-side character ticking (15ms) used where backend streaming is unavailable or for UI effect.
 *   **Fallback**: Timeouts (15s for FullChat, 2.5s for Prefill) trigger graceful mock fallbacks.
 
 ## 4. Context Doctrine

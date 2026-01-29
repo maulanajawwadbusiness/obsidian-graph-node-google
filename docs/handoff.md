@@ -47,7 +47,7 @@ In `FullChatbar.tsx`, the `handleSend` function follows this priority:
 
 ### D. "The Void"
 *   **Symptom**: AI is in 'real' mode but isn't responding.
-*   **Fix**: Check `VITE_OPENAI_API_KEY` and the `withTimeoutAndAbort` log in `prefillSuggestion.ts`.
+*   **Fix**: Check Provider Keys (e.g. `VITE_OPENAI_API_KEY`) and the `withTimeoutAndAbort` log in `prefillSuggestion.ts`.
 
 ## 6. Logs to Watch
 Filter for `[MiniChatAI]` and `[Prefill]`:

@@ -53,3 +53,18 @@ Terminology matters. In the graph, we render "Dots", not "Nodes" (though the dat
 
 ### ⛔ UI CONFIG KNOBS
 UI markers (Brand/Title) are controlled via `src/playground/graphPlaygroundStyles.ts`. Check `SHOW_MAP_TITLE` and `SHOW_BRAND_LABEL` before assuming they deleted.
+
+## 5. AI Doctrine (The Brain)
+
+### A. Current Rules
+*   **Responses API**: The OpenAI path MUST use the `v1/responses` endpoint.
+*   **Strict Param Hygiene**:
+    *   `maxCompletionTokens` (YES) vs `maxTokens` (NO).
+    *   `response_format` (YES) vs legacy JSON modes.
+    *   **Reasoning Models**: Do NOT send `temperature` or low `maxCompletionTokens` caps to `gpt-5` series models.
+
+### B. The "Single SDK" Refactor (Future)
+We are moving to a unified architecture where `LLMClient` wraps a single OpenAI SDK instance.
+*   **Routing**: Switch providers via `baseURL` (`https://openrouter.ai/api/v1`) and `apiKey`.
+*   **Goal**: Zero divergence in parsing or streaming logic.
+*   **Rule**: Do NOT build new custom fetch wrappers. Use the `LLMClient` contract.

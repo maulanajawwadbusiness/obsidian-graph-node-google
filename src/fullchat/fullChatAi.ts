@@ -19,7 +19,9 @@ export interface AiResponse {
 // CONSTANTS
 // =============================================================================
 
-const MODEL = 'gpt-5-nano';
+import { AI_MODELS } from '../config/aiModels';
+
+const MODEL = AI_MODELS.CHAT;
 
 // =============================================================================
 // PUBLIC API

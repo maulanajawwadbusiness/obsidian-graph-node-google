@@ -3,6 +3,7 @@
  */
 
 import { createLLMClient } from './index';
+import { AI_MODELS } from '../config/aiModels';
 
 export interface AnalysisPoint {
     title: string;   // Short title (3-5 words)
@@ -87,7 +88,7 @@ export async function analyzeDocument(text: string): Promise<AnalysisResult> {
             schema,
             prompt,
             {
-                model: 'gpt-5-nano'
+                model: AI_MODELS.ANALYZER
             }
         );
 

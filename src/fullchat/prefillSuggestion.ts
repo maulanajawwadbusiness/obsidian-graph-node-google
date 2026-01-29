@@ -1,5 +1,6 @@
 import { createLLMClient } from '../ai';
 import { getAiMode } from '../config/aiMode';
+import { AI_MODELS } from '../config/aiModels';
 
 export interface MiniChatHistory {
     role: 'user' | 'ai';
@@ -105,7 +106,7 @@ Rules:
         const rawOutput = await withTimeoutAndAbort(
             client.generateText(
                 `${systemPrompt}\n\nCONTEXT:\n${prompt}`,
-                { model: 'gpt-5-nano' }
+                { model: AI_MODELS.PREFILL }
             ),
             REAL_TIMEOUT_MS,
             options.signal

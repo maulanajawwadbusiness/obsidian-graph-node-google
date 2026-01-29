@@ -4,6 +4,7 @@
  */
 
 import { createLLMClient } from './index';
+import { AI_MODELS } from '../config/aiModels';
 
 /**
  * Convert 5 words into 5 three-word sentences using AI
@@ -45,7 +46,7 @@ export async function makeThreeWordLabels(words: string[]): Promise<string[]> {
         let output: string;
         try {
             output = await client.generateText(prompt, {
-                model: 'gpt-5-nano'
+                model: AI_MODELS.REWRITER
             });
             clearTimeout(timeout);
         } catch (innerError) {

@@ -59,51 +59,61 @@ export class OpenAIClient implements LLMClient {
             try {
                 while (true) {
                     const { done, value } = await reader.read();
-                    if (done) {
-                        console.log('[ResponsesStream] done');
-                        break;
-                    }
+                    if (done) break;
 
                     const chunkStr = decoder.decode(value, { stream: true });
-                    // Log raw chunk preview (first 50 chars)
-                    console.log(`[ResponsesStream] raw_chunk: ${chunkStr.substring(0, 50).replace(/\n/g, '\\n')}...`);
-
                     buffer += chunkStr;
-                    const lines = buffer.split('\n\n');
-                    buffer = lines.pop() || '';
 
-                    for (const line of lines) {
-                        const trimmed = line.trim();
-                        // Log line preview
-                        // console.log(`[ResponsesStream] raw_line: ${trimmed.substring(0, 30)}...`);
+                    // Split by double newline to get identifying frames
+                    const frames = buffer.split('\n\n');
+                    buffer = frames.pop() || '';
 
-                        if (!trimmed.startsWith('data: ')) {
-                            // Log skipped lines to see if we miss something
-                            if (trimmed.length > 0) console.log(`[ResponsesStream] skipped_line: ${trimmed.substring(0, 50)}...`);
-                            continue;
+                    for (const frame of frames) {
+                        const lines = frame.split('\n');
+                        let eventName = '';
+                        let dataBuffer = '';
+
+                        for (const line of lines) {
+                            const trimmed = line.trim();
+                            if (trimmed.startsWith('event: ')) {
+                                eventName = trimmed.slice(7).trim();
+                            } else if (trimmed.startsWith('data: ')) {
+                                dataBuffer += trimmed.slice(6);
+                            }
                         }
-                        const data = trimmed.slice(6);
-                        if (data === '[DONE]') return;
+
+                        if (!dataBuffer) continue;
+                        if (dataBuffer === '[DONE]') return;
 
                         try {
-                            const event = JSON.parse(data);
+                            const event = JSON.parse(dataBuffer);
+
+                            // Debug Log (First 20)
                             if (eventCount < 20) {
-                                const keys = Object.keys(event).join(',');
-                                console.log(`[ResponsesStream] evt#${eventCount} type=${event.type} keys=${keys}`);
+                                console.log(`[ResponsesStream] evt#${eventCount} type=${event.type || eventName}`);
                                 eventCount++;
                             }
 
                             if (event.type === 'response.output_text.delta') {
-                                if (eventCount < 20) console.log(`[ResponsesStream] delta len=${event.delta?.length}`);
                                 yield event.delta;
-                            } else if (event.type === 'response.output_text.done') {
-                                console.log('[ResponsesStream] output_text.done', event);
-                            } else if (event.type === 'response.done') {
-                                console.log('[ResponsesStream] response.done', event);
+                            } else if (event.type === 'response.output_item.done') {
+                                // Fallback: If no deltas were sent, extract text from the completed item
+                                if (event.item?.type === 'message' && event.item.role === 'assistant') {
+                                    if (Array.isArray(event.item.content)) {
+                                        for (const content of event.item.content) {
+                                            if (content.type === 'output_text' && content.text) {
+                                                console.log('[ResponsesStream] yielding output_item.done text');
+                                                yield content.text;
+                                            }
+                                        }
+                                    }
+                                }
+                            } else if (event.type === 'response.incomplete') {
+                                console.warn('[ResponsesStream] response.incomplete', event);
                             }
 
                         } catch (e) {
-                            console.log('[ResponsesStream] parse_error', data.substring(0, 50));
+                            console.log('[ResponsesStream] parse_error', dataBuffer.substring(0, 50));
                         }
                     }
                 }

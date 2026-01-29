@@ -329,7 +329,10 @@ export const ArnvoidDocumentViewer = forwardRef<
             )}
             {format === "docx" && <div ref={docxContainerRef} />}
             {!source && (
-              <div className="arnvoid-empty">{t("docViewer.empty")}</div>
+              <div className="arnvoid-empty">
+                <div>{t("docViewer.empty")}</div>
+                <div style={{ fontSize: '0.85em', opacity: 0.6, marginTop: '8px' }}>{t("docViewer.dropText")}</div>
+              </div>
             )}
           </div>
         )}

@@ -181,7 +181,7 @@ All microcopy rewritten to match analyst-room tone:
 | Location | Before | After |
 |----------|--------|-------|
 | Header | "Full Chat" | "REASONING" |
-| Toggle aria-label | "Open Full Chat" | "Open Chat" |
+| Toggle aria-label | "Open Full Chat" | "Open Chatbar" |
 | Input placeholder | "Type a message... (Enter to send, Shift+Enter for newline)" | "What needs clarification?" |
 | Empty state (no context) | "Click a node to focus, or just start chatting" | "Quiet space for thinking." |
 | Empty state subtitle | "This is your space to process confusion and gain insight" | "Select a node to set context, or begin reasoning directly." |

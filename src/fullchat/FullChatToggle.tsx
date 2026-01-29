@@ -1,6 +1,7 @@
 import React from 'react';
 import { useFullChat } from './FullChatStore';
 import chatbarIcon from '../assets/chatbar_icon.png';
+import { t } from '../i18n/t';
 
 /**
  * FullChatToggle - Bottom-right toggle button for Full Chatbar
@@ -9,8 +10,8 @@ import chatbarIcon from '../assets/chatbar_icon.png';
 
 const TOGGLE_STYLE: React.CSSProperties = {
     position: 'fixed',
-    bottom: '20px',
-    right: '20px',
+    bottom: '30px',
+    right: '30px',
     zIndex: 100,
     width: '72px',
     height: '72px',
@@ -25,14 +26,14 @@ const TOGGLE_STYLE: React.CSSProperties = {
 };
 
 const ICON_STYLE: React.CSSProperties = {
-    width: '32px',
-    height: '32px',
-    opacity: 0.5,
+    width: '64px',
+    height: '64px',
+    opacity: 0.25,
     transition: 'opacity 200ms ease',
 };
 
 const ICON_STYLE_HOVER: React.CSSProperties = {
-    opacity: 0.8,
+    opacity: 0.6,
 };
 
 export const FullChatToggle: React.FC = () => {
@@ -44,10 +45,11 @@ export const FullChatToggle: React.FC = () => {
     return (
         <button
             type="button"
+            type="button"
             style={TOGGLE_STYLE}
             onClick={openFullChat}
-            aria-label="Open Chat"
-            title="Open Chat"
+            aria-label={t('tooltip.openChat')}
+            title={t('tooltip.openChat')}
             onMouseEnter={() => setIsHovered(true)}
             onMouseLeave={() => setIsHovered(false)}
         >

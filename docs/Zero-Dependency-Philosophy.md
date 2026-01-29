@@ -1,4 +1,5 @@
-# The Zero-Dependency Doctrine
+# The "Zero-Dependency" Philosophy
+
 # Zero-Dependency Architecture
 
 **Strategy**: Minimal Dependency Surface Area

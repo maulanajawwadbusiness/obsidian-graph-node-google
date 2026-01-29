@@ -10,8 +10,6 @@ import sendIcon from '../assets/send_icon.png';
  * Specifications:
  * - Icon: send_icon.png
  * - Idle opacity: 0.6
- * - Hover opacity: 0.9
- * - Hover scale: 1.1x
  * - Transition: 0.2s (200ms)
  * 
  * Size Control:
@@ -51,16 +49,6 @@ export const SendButton: React.FC<SendButtonProps> = ({ onClick, disabled = fals
             style={BUTTON_STYLE}
             onClick={onClick}
             disabled={disabled}
-            onMouseEnter={(e) => {
-                if (!disabled) {
-                    e.currentTarget.style.opacity = '0.9';
-                    e.currentTarget.style.transform = 'scale(1.1)';
-                }
-            }}
-            onMouseLeave={(e) => {
-                e.currentTarget.style.opacity = '0.6';
-                e.currentTarget.style.transform = 'scale(1)';
-            }}
             title="Send message"
             aria-label="Send"
         >

@@ -5,6 +5,7 @@ import { useDocument } from '../store/documentStore';
 import type { PhysicsEngine } from '../physics/engine';
 import type { FullChatMessage, AiContext } from './fullChatTypes';
 import { SendButton } from '../components/SendButton';
+import { t } from '../i18n/t';
 
 /**
  * FullChatbar - Right-docked reasoning panel
@@ -999,12 +1000,12 @@ export const FullChatbar: React.FC<FullChatbarProps> = ({ engineRef }) => {
                     {showJumpToLatest && (
                         <button
                             style={JUMP_TO_LATEST_STYLE}
-                            onClick={handleJumpToLatest}
+                            onClick={() => safeScrollToBottom('jump_button')}
                             onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
                             onMouseLeave={(e) => e.currentTarget.style.opacity = '0.9'}
                         >
                             <span>↓</span>
-                            <span>Latest</span>
+                            {t('fullChat.jumpToLatest')}
                         </button>
                     )}
                 </div>
@@ -1044,7 +1045,7 @@ export const FullChatbar: React.FC<FullChatbarProps> = ({ engineRef }) => {
                     // value={inputText} <--- REMOVE
                     onChange={handleInputChange}
                     onKeyDown={handleKeyDown}
-                    placeholder="Trace the thought here…"
+                    placeholder="Trace the thought here..."
                     style={{ ...INPUT_FIELD_STYLE, height: `${MIN_HEIGHT}px` }}
                     rows={1}
                     onFocus={(e) => {

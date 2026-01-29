@@ -4,6 +4,8 @@
 
 import { createLLMClient } from './index';
 import { AI_MODELS } from '../config/aiModels';
+import { getAiLanguageDirective } from '../i18n/aiLanguage';
+import { getLang } from '../i18n/lang';
 
 export interface AnalysisPoint {
     title: string;   // Short title (3-5 words)
@@ -16,9 +18,12 @@ export interface AnalysisResult {
 
 // Fallback if AI fails: creates deterministic placeholders
 function createFallbackPoints(words: string[]): AnalysisPoint[] {
+    const isId = getLang() === 'id';
     return words.slice(0, 5).map(word => ({
         title: word,
-        summary: `This is a key concept derived from "${word}". The system is currently running in fallback mode, so this summary is a placeholder. In a fully connected state, this would contain a detailed explanation of how "${word}" relates to the source text.`
+        summary: isId
+            ? `Ini adalah konsep kunci yang berasal dari "${word}". Sistem saat ini berjalan dalam mode fallback, sehingga ringkasan ini hanya placeholder. Dalam keadaan terhubung sepenuhnya, ini akan berisi penjelasan rinci tentang bagaimana "${word}" berhubungan dengan teks sumber.`
+            : `This is a key concept derived from "${word}". The system is currently running in fallback mode, so this summary is a placeholder. In a fully connected state, this would contain a detailed explanation of how "${word}" relates to the source text.`
     }));
 }
 
@@ -53,7 +58,8 @@ export async function analyzeDocument(text: string): Promise<AnalysisResult> {
     - The first point should be the "Main Topic".
     - The other 4 points should be supporting arguments or key details.
     - Be concise and analytical.
-
+    ${getAiLanguageDirective()}
+    
     Document Excerpt:
     """${safeText}"""...`;
 

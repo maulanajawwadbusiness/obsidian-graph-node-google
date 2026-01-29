@@ -5,6 +5,7 @@
 
 import { createLLMClient } from './index';
 import { AI_MODELS } from '../config/aiModels';
+import { getAiLanguageDirective } from '../i18n/aiLanguage';
 
 /**
  * Convert 5 words into 5 three-word sentences using AI
@@ -86,6 +87,7 @@ Rules:
 - No numbering, no punctuation, no quotes
 - Creative but coherent
 - Separate lines with newline only
+${getAiLanguageDirective()}
 
 Words:
 1. ${words[0]}

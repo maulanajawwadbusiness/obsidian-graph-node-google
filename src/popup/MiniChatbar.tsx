@@ -4,6 +4,7 @@ import { usePopup } from './PopupStore';
 import { useFullChat } from '../fullchat';
 import handoffIcon from '../assets/handoff_minichat.png';
 import type { PopupRect } from './popupTypes';
+import { t } from '../i18n/t';
 
 /**
  * MiniChatbar - Small chat window next to popup
@@ -312,8 +313,8 @@ export const MiniChatbar: React.FC<MiniChatbarProps> = ({ messages, onSend, onCl
 
     const handleSendToFullChat = () => {
         const nodeLabel = popupContext.selectedNodeId
-            ? `Node ${popupContext.selectedNodeId.slice(0, 8)}`
-            : 'this node';
+            ? t('miniChat.nodeLabel', { label: popupContext.selectedNodeId.slice(0, 8) })
+            : t('miniChat.fallbackNode');
 
         // v2: Pass raw context. Seed/Refine logic is in FullChatStore.
         fullChat.receiveFromMiniChat({
@@ -343,7 +344,7 @@ export const MiniChatbar: React.FC<MiniChatbarProps> = ({ messages, onSend, onCl
             onClick={stopPropagation}
         >
             <div style={HEADER_STYLE}>
-                <span style={{ fontSize: '13px', fontWeight: '600' }}>Mini Chat</span>
+                <span style={{ fontSize: '13px', fontWeight: '600' }}>{t('miniChat.header')}</span>
                 <button
                     style={{
                         background: 'transparent',
@@ -354,7 +355,7 @@ export const MiniChatbar: React.FC<MiniChatbarProps> = ({ messages, onSend, onCl
                         padding: '4px 8px',
                     }}
                     onClick={onClose}
-                    title="Close"
+                    title={t('miniChat.closeTooltip')}
                 >
                     ×
                 </button>
@@ -395,13 +396,13 @@ export const MiniChatbar: React.FC<MiniChatbarProps> = ({ messages, onSend, onCl
                     value={inputText}
                     onChange={(e) => setInputText(e.target.value)}
                     onKeyDown={handleKeyDown}
-                    placeholder="Ask about it further..."
+                    placeholder={t('nodePopup.inputPlaceholder')}
                     style={INPUT_FIELD_STYLE}
                 />
                 <button
                     onClick={handleSendToFullChat}
-                    title="Extend to main chat"
-                    aria-label="Send to Full Chat"
+                    title={t('miniChat.extendTooltip')}
+                    aria-label={t('miniChat.extendAria')}
                     style={{
                         background: 'transparent',
                         border: 'none',

@@ -1,6 +1,9 @@
 import { createLLMClient } from '../ai';
 import { getAiMode } from '../config/aiMode';
 import { AI_MODELS } from '../config/aiModels';
+import { t } from '../i18n/t';
+import { getAiLanguageDirective } from '../i18n/aiLanguage';
+import { getLang } from '../i18n/lang';
 
 export interface MiniChatHistory {
     role: 'user' | 'ai';
@@ -21,10 +24,10 @@ export function makeSeedPrompt(context: PrefillContext): string {
     const { nodeLabel, miniChatMessages } = context;
 
     if (!miniChatMessages || miniChatMessages.length === 0) {
-        return `Tell me more about "${nodeLabel}"`;
+        return t('ai.seedPromptNew', { label: nodeLabel });
     }
 
-    return `In context of "${nodeLabel}", continuing...`;
+    return t('ai.seedPromptContinue', { label: nodeLabel });
 }
 
 /**
@@ -59,14 +62,18 @@ async function refinePromptMock(context: PrefillContext, options: { signal?: Abo
 
     // Mock refinement logic
     if (!miniChatMessages || miniChatMessages.length === 0) {
-        return `Analyze "${nodeLabel}" and explain its connections within the graph framework.`;
+        return getLang() === 'id'
+            ? `Analisis "${nodeLabel}" dan jelaskan koneksinya dalam kerangka grafik.`
+            : `Analyze "${nodeLabel}" and explain its connections within the graph framework.`;
     }
 
     const lastMsg = miniChatMessages[miniChatMessages.length - 1];
     const words = lastMsg.text.split(' ');
     const shortSummary = words.slice(0, 8).join(' ') + (words.length > 8 ? '...' : '');
 
-    return `Synthesize the discussion regarding "${nodeLabel}", focusing on the point: "${shortSummary}"`;
+    return getLang() === 'id'
+        ? `Sintesis diskusi mengenai "${nodeLabel}", berfokus pada poin: "${shortSummary}"`
+        : `Synthesize the discussion regarding "${nodeLabel}", focusing on the point: "${shortSummary}"`;
 }
 
 // =============================================================================
@@ -100,7 +107,8 @@ Rules:
 - No quotes.
 - Max 160 characters.
 - Tone: calm, analytical, dark-elegant.
-- Return ONLY the prompt text.`;
+- Return ONLY the prompt text.
+${getAiLanguageDirective()}`;
 
         // Execute with timeout and abort support
         const rawOutput = await withTimeoutAndAbort(

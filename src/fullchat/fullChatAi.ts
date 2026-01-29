@@ -1,6 +1,8 @@
 import { createLLMClient } from '../ai';
 import { getAiMode } from '../config/aiMode';
 import type { AiContext } from './fullChatTypes';
+import { getAiLanguageDirective } from '../i18n/aiLanguage';
+import { getLang } from '../i18n/lang';
 
 // =============================================================================
 // TYPES
@@ -130,12 +132,20 @@ async function* mockResponseGenerator(context: AiContext): AsyncGenerator<string
     const { nodeLabel, documentTitle } = context;
     let response = "I'm essentially a void of data right now.";
 
+    const isId = getLang() === 'id';
+
     if (nodeLabel) {
-        response = `Viewing node "${nodeLabel}"... it connects to several concepts in my graph. The relationship is tenuous but present.`;
+        response = isId
+            ? `Melihat titik "${nodeLabel}"... ini terhubung ke beberapa konsep dalam grafik Anda. Hubungannya tipis namun ada.`
+            : `Viewing node "${nodeLabel}"... it connects to several concepts in my graph. The relationship is tenuous but present.`;
     } else if (documentTitle) {
-        response = `I see you're reading "${documentTitle}". It's a dense text. What would you like to know?`;
+        response = isId
+            ? `Saya melihat Anda sedang membaca "${documentTitle}". Teks yang padat. Apa yang ingin Anda ketahui?`
+            : `I see you're reading "${documentTitle}". It's a dense text. What would you like to know?`;
     } else {
-        response = "I am ready to reason about your graph.";
+        response = isId
+            ? "Saya siap menalar tentang grafik Anda."
+            : "I am ready to reason about your graph.";
     }
 
     yield response;
@@ -149,6 +159,7 @@ function buildSystemPrompt(context: AiContext): string {
     const { nodeLabel, documentText, documentTitle, recentHistory } = context;
 
     let prompt = `You are a dark, elegant AI assistant in a tool called Arnvoid.
+${getAiLanguageDirective()}
 Style: Concise, analytical, mysterious but helpful. No fluff.
 Current Context:
 `;

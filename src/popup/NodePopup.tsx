@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { usePopup } from './PopupStore';
 import { ChatInput } from './ChatInput';
+import { t } from '../i18n/t';
 
 const stopPropagation = (e: React.MouseEvent) => e.stopPropagation();
 
@@ -196,8 +197,8 @@ export const NodePopup: React.FC = () => {
     }, [isVisible, position.left, position.top, setPopupRect]);
 
     // UI Content
-    const displayTitle = content?.title || (selectedNodeId ? `Node ${selectedNodeId.slice(0, 8)}` : 'Unknown');
-    const displayBody = content?.summary || 'No detailed analysis available for this node.';
+    const displayTitle = content?.title || (selectedNodeId ? t('nodePopup.fallbackTitle', { id: selectedNodeId.slice(0, 8) }) : 'Unknown');
+    const displayBody = content?.summary || t('nodePopup.fallbackSummary');
 
     const contentTransition: React.CSSProperties = contentVisible
         ? { opacity: 1, transform: 'translateY(0)', transition: 'opacity 300ms ease-out, transform 300ms ease-out' }
@@ -221,13 +222,13 @@ export const NodePopup: React.FC = () => {
             onClick={stopPropagation}
         >
             <div style={{ ...HEADER_STYLE, ...contentTransition }}>
-                <span style={{ fontSize: '14px', opacity: 0.7 }}>Node Info</span>
+                <span style={{ fontSize: '14px', opacity: 0.7 }}>{t('nodePopup.header')}</span>
                 <button
                     style={CLOSE_BUTTON_STYLE}
                     onClick={closePopup}
                     onMouseEnter={(e) => (e.currentTarget.style.color = 'rgba(255, 255, 255, 0.9)')}
                     onMouseLeave={(e) => (e.currentTarget.style.color = 'rgba(180, 190, 210, 0.7)')}
-                    title="Close window"
+                    title={t('nodePopup.closeTooltip')}
                 >
                     ×
                 </button>
@@ -243,7 +244,7 @@ export const NodePopup: React.FC = () => {
                     ? { transition: 'opacity 300ms ease-out 150ms' }
                     : { opacity: 0, transition: 'opacity 300ms ease-out 150ms' }
             }>
-                <ChatInput onSend={sendMessage} placeholder="Ask about it further..." />
+                <ChatInput onSend={sendMessage} placeholder={t('nodePopup.inputPlaceholder')} />
             </div>
         </div>
     );

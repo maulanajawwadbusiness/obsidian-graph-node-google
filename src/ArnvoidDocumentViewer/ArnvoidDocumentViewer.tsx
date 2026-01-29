@@ -20,6 +20,7 @@ import { createRangeFromOffsets } from "./hooks/textRange";
 import PdfViewer from "./engines/PdfEngine/PdfViewer";
 import type { LoadSource } from "./engines/PdfEngine/pdf-viewer/types";
 import "./styles.css";
+import { t } from "../i18n/t";
 
 export type ArnvoidDocumentViewerProps = {
   source: ViewerSource | null;
@@ -135,7 +136,7 @@ export const ArnvoidDocumentViewer = forwardRef<
             if (!cancelled) setPdfSource({ type: "url", value: source.url });
             return;
           }
-          reportError("Unsupported PDF source.");
+          reportError(t("docViewer.unsupportedPdf"));
           return;
         }
 
@@ -152,14 +153,14 @@ export const ArnvoidDocumentViewer = forwardRef<
           if (source.kind === "url") {
             const response = await fetch(source.url);
             if (!response.ok) {
-              reportError(`Failed to fetch DOCX (${response.status}).`);
+              reportError(t("docViewer.failedDocx", { status: response.status }));
               return;
             }
             const buffer = await response.arrayBuffer();
             if (!cancelled) setDocxBuffer(buffer);
             return;
           }
-          reportError("Unsupported DOCX source.");
+          reportError(t("docViewer.failedDocx", { status: "source" }));
           return;
         }
 
@@ -181,7 +182,7 @@ export const ArnvoidDocumentViewer = forwardRef<
           if (source.kind === "url") {
             const response = await fetch(source.url);
             if (!response.ok) {
-              reportError(`Failed to fetch text (${response.status}).`);
+              reportError(t("docViewer.failedText", { status: response.status }));
               return;
             }
             const text = await response.text();
@@ -328,7 +329,7 @@ export const ArnvoidDocumentViewer = forwardRef<
             )}
             {format === "docx" && <div ref={docxContainerRef} />}
             {!source && (
-              <div className="arnvoid-empty">No document loaded.</div>
+              <div className="arnvoid-empty">{t("docViewer.empty")}</div>
             )}
           </div>
         )}

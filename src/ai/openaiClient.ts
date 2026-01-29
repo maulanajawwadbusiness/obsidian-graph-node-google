@@ -37,7 +37,7 @@ export class OpenAIClient implements LLMClient {
                     model,
                     input: [{ role: 'user', content: prompt }],
                     ...(model === 'gpt-5' ? {} : { temperature }),
-                    max_completion_tokens: maxTokens,
+                    max_output_tokens: maxTokens,
                     stream: true,
                     store: false
                 }),
@@ -123,7 +123,7 @@ export class OpenAIClient implements LLMClient {
                     model,
                     input: [{ role: 'user', content: prompt }],
                     ...(model === 'gpt-5' ? {} : { temperature }),
-                    max_completion_tokens: opts?.maxCompletionTokens,
+                    max_output_tokens: opts?.maxCompletionTokens,
                     store: false
                 })
             });

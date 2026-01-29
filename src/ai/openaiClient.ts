@@ -36,7 +36,7 @@ export class OpenAIClient implements LLMClient {
                 body: JSON.stringify({
                     model,
                     input: [{ role: 'user', content: prompt }],
-                    ...(model === 'gpt-5' ? {} : { temperature }),
+                    ...(model.startsWith('gpt-5') ? {} : { temperature }),
                     max_output_tokens: maxTokens,
                     stream: true,
                     store: false
@@ -122,7 +122,7 @@ export class OpenAIClient implements LLMClient {
                 body: JSON.stringify({
                     model,
                     input: [{ role: 'user', content: prompt }],
-                    ...(model === 'gpt-5' ? {} : { temperature }),
+                    ...(model.startsWith('gpt-5') ? {} : { temperature }),
                     max_output_tokens: opts?.maxCompletionTokens,
                     store: false
                 })
@@ -189,7 +189,7 @@ export class OpenAIClient implements LLMClient {
                 body: JSON.stringify({
                     model,
                     input: [{ role: 'user', content: prompt }],
-                    ...(model === 'gpt-5' ? {} : { temperature }),
+                    ...(model.startsWith('gpt-5') ? {} : { temperature }),
                     text: {
                         format: {
                             type: 'json_schema',

@@ -1,4 +1,4 @@
-# AGENTS.md: Developer Doctrine
+﻿# AGENTS.md: Developer Doctrine
 
 **Welcome, Agent.**
 This file outlines the sacred laws of the Arnvoid project. Read it before touching code.
@@ -10,6 +10,9 @@ Jitter, layout thrashing, and frame drops are critical bugs.
 *   **Never** block the main thread.
 *   **Never** put expensive logic in a render loop.
 *   **Throttle** all scroll/resize handlers (Streaming text autosize should be ~50ms).
+*   **Decouple** physics ticks from monitor refresh; target a fixed tick rate.
+*   **Degrade** gracefully under load (adaptive pass frequency and budgets).
+*   **Protect** against fatal graphs (safe mode when N/E exceed the envelope).
 
 ### B. Panels Own Integration
 The Canvas (Graph) is the substrate. Panels (Chat, Docs) and the Analysis Overlay float above it.
@@ -24,7 +27,7 @@ The Canvas (Graph) is the substrate. Panels (Chat, Docs) and the Analysis Overla
 
 | Domain | Path | Description |
 | :--- | :--- | :--- |
-| **Physics/Graph** | `src/physics/` | ForceAtlas2 engine and WebGL renderer. |
+| **Physics/Graph** | `src/physics/` | Hybrid solver (forces + PBD + buoyancy) and WebGL renderer. |
 | **Paper Analyzer** | `src/ai/paperAnalyzer.ts` | The "Essence" distiller (Main Topic + 4 Points). |
 | **Full Chat** | `src/fullchat/` | Right panel. `FullChatStore` + `fullChatAi` module. |
 | **Mini Chat** | `src/popup/` | Node popover chat logic (`PopupStore.tsx`). |
@@ -35,26 +38,41 @@ The Canvas (Graph) is the substrate. Panels (Chat, Docs) and the Analysis Overla
 
 1.  **Scan**: Read `docs/system.md` and related code first. Do not guess.
 2.  **Dissect**: Identify the "load-bearing" logic (runIds, refs, context priorities).
-3.  **Implement**: Make small, verifiable changes. Use `console.log` tags like `[MiniChatAI]` or `[Prefill]`.
-4.  **Verify**: Manual verification is required.
-5.  **Docs**: Update `docs/*.md` to reflect new truth.
-6.  **Commit**: Use compact, descriptive messages (`feat(chat): ...`).
+3.  **Instrument**: Add minimal metrics/logs before changing behavior.
+4.  **Implement**: Make small, verifiable changes. Use `console.log` tags like `[MiniChatAI]` or `[Prefill]`.
+5.  **Verify**: Manual verification is required.
+6.  **Docs**: Update `docs/*.md` to reflect new truth.
+7.  **Commit**: Use compact, descriptive messages (`feat(chat): ...`).
 
 ## 4. CRITICAL WARNINGS
 
-### ⛔ NEVER Use `task_boundary` or Browser Testing Tools
+### NEVER Use `task_boundary` or Browser Testing Tools
 These tools are currently broken or unreliable in this environment. Manage your own context through code analysis and manual reporting.
 
-### ⛔ POWERSHELL CAUTION
+### POWERSHELL CAUTION
 Do NOT use `&&` in the terminal. It breaks the parser. Use separate commands or use `;` correctly.
 
-### ⛔ DO NOT Break The "Dot"
+### DO NOT Break The "Dot"
 Terminology matters. In the graph, we render "Dots", not "Nodes" (though the data structure is a node). Keep performance-first language.
 
-### ⛔ UI CONFIG KNOBS
+### UI CONFIG KNOBS
 UI markers (Brand/Title) are controlled via `src/playground/graphPlaygroundStyles.ts`. Check `SHOW_MAP_TITLE` and `SHOW_BRAND_LABEL` before assuming they deleted.
 
-## 5. AI Doctrine (The Brain)
+## 5. Perf Doctrine (Physics)
+
+### A. Tick Control
+*   Target a fixed physics tick rate; do not bind to refresh rate.
+*   Cap steps per frame; drop excess time rather than multi-step spikes.
+
+### B. Adaptive Gating
+*   Use hysteresis and ramps to avoid cliffs when enabling expensive passes.
+*   Scale pass frequency/budgets with N/E and measured tick cost.
+
+### C. Safe Mode
+*   When N/E exceed safe limits, enter a fatal-safe mode that preserves responsiveness.
+*   Always log mode transitions and key metrics (N, E, tick ms).
+
+## 6. AI Doctrine (The Brain)
 
 ### A. Current Rules
 *   **Responses API**: The OpenAI path MUST use the `v1/responses` endpoint.
@@ -67,7 +85,8 @@ UI markers (Brand/Title) are controlled via `src/playground/graphPlaygroundStyle
 We are moving to a unified architecture where `LLMClient` wraps a single OpenAI SDK instance.
 *   **Routing**: Switch providers via `baseURL` (`https://openrouter.ai/api/v1`) and `apiKey`.
 *   **Goal**: Zero divergence in parsing or streaming logic.
-## 6. Arnvoid Streaming Doctrine (Responses API)
+
+## 7. Arnvoid Streaming Doctrine (Responses API)
 
 ### A. Principles
 *   **SDK-Defined Boundaries**: The Provider/SDK defines what a "chunk" is. Do not reshape, combine, or split chunks in the transport layer.
@@ -92,7 +111,7 @@ We are moving to a unified architecture where `LLMClient` wraps a single OpenAI 
 *   Middleman: `src/fullchat/fullChatAi.ts` (`realResponseGenerator`)
 *   Pump: `src/fullchat/FullChatStore.tsx` (consumes generator, updates `streamingText`)
 
-## 7. The Zero-Dependency Strategy
+## 8. The Zero-Dependency Strategy
 **Philosophy**: Minimal Surface Area. Maximum Control.
 *   **Default Stance**: Prioritize standard Web APIs over third-party libraries.
 *   **Evaluation**: Justify every dependency against three risks: Maintenance Churn, Bundle Bloat, and Loss of Control.

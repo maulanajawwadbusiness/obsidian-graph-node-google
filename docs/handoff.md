@@ -13,6 +13,9 @@ When the handoff is triggered, `MiniChatbar` constructs a payload and sends it t
 | `nodeLabel` | `string` | The label of the currently focused node. |
 | `miniChatMessages` | `Array<{ role: 'user'\|'ai', text: string }>` | The full history of the current Mini Chat session. |
 | `content` | `{ title: string, summary: string } \| null` | **Enriched context**. Contains the AI-distilled essence of the node. |
+| `suggestedPrompt` | `string \| undefined` | Optional prefill hint (stored, not required for handoff). |
+
+**Implementation Note**: `MiniChatbar` currently derives `nodeLabel` from `selectedNodeId` (short ID label) when present; it does not read the dot's actual label.
 
 ## 3. Propagation & Authority
 The `FullChatStore` stores this as `pendingContext`.
@@ -22,6 +25,8 @@ In `FullChatbar.tsx`, the `handleSend` function follows this priority:
 1.  **Handoff Priority**: If `pendingContext.content` exists, use that `title` as the reasoning anchor and the `summary` as the foundational text.
 2.  **Document Fallback**: If no handoff exists, fall back to the generic `activeDocument` text.
 
+`nodeLabel` is also overridden by `pendingContext.nodeLabel` when present, otherwise it uses the current focused dot label.
+
 ### Prefill V4 Integration
 *   The **Refine Packet** builder (`prefillSuggestion.ts`) now consumes the `content` field.
 *   The AI uses the `summary` to generate a much more relevant "next step" suggestion than just looking at the node label.
@@ -30,6 +35,7 @@ In `FullChatbar.tsx`, the `handleSend` function follows this priority:
 *   **Zero Jitter**: Autosize logic in `FullChatbar` must be throttled.
 *   **Breath is Intentional**: The 500ms pause during prefill allows the `refinePromptAsync` call (LLM) to complete so it can stream the finished suggestion.
 *   **Handoff Visibility**: When a handoff happens, the `FullChatbar` header/badge should reflect the node being discussed.
+*   **Perf Isolation**: Physics/perf throttles do not alter handoff payload or context priority.
 
 ## 5. Troubleshooting (Forensic Checklist)
 
@@ -54,4 +60,5 @@ Filter for `[MiniChatAI]` and `[Prefill]`:
 *   `[MiniChatAI] send_start` -> Mini Chat is alive.
 *   `[Prefill] phase seed` -> Handoff received, animation starting.
 *   `[Prefill] refine_ready` -> AI context has arrived at the boundary.
+*   `[MiniChat] Sent context to Full Chat (v2)` -> Handoff payload dispatched.
 

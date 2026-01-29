@@ -76,4 +76,21 @@ Intelligence is relative to context. We maintain three levels:
 *   **Hot Loops**: No network calls, no state updates inside the physics tick.
 *   **Streaming**: Autosize and DOM updates for streaming text are throttled (~50ms) to prevent layout thrashing.
 *   **Throttled Scroll**: `safeScrollToBottom` uses `requestAnimationFrame` and near-bottom detection to avoid jarring jumps.
+*   **Tick Decoupling**: Physics ticks are capped at `targetTickHz` (default 60) and do not scale with monitor refresh rate.
+*   **Adaptive Degradation**: The engine shifts into `stressed`/`emergency`/`fatal` modes based on N/E thresholds with hysteresis; expensive passes throttle instead of cliffing.
+*   **Fatal-Mode Guardrail**: If N/E exceed the safe envelope, heavy passes are skipped and the sim stays responsive rather than attempting full n^2.
+
+### A. Operating Envelope
+*   **Intended**: Paper-essence graphs and small clusters (roughly N <= 250, E <= 1200).
+*   **Stressed**: N >= 250 or E >= 1200; spacing frequency reduces.
+*   **Emergency**: N >= 500 or E >= 2000; springs staggered, spacing reduced further.
+*   **Fatal**: N >= 900 or E >= 3000; heavy passes disabled to avoid app melt.
+
+### B. Telemetry & Logs
+Enable `debugPerf: true` to get per-second metrics:
+*   `[RenderPerf]` -> `ticksPerSecond`, `avgTickMs`, `p95TickMs`, `maxTickMs`, `ticksPerFrame`, `droppedMs`.
+*   `[PhysicsPerf]` -> per-pass ms, `nodes`, `links`, `mode`, `allocs`, `topoDrop`, `topoDup`.
+*   `[PhysicsMode]` -> mode transitions.
+*   `[PhysicsTopology]` -> edge cap drops.
+*   `[PhysicsFatal]` -> fatal mode active (once per second).
 

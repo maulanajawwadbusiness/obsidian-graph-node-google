@@ -64,27 +64,44 @@ export class OpenAIClient implements LLMClient {
                         break;
                     }
 
-                    buffer += decoder.decode(value, { stream: true });
+                    const chunkStr = decoder.decode(value, { stream: true });
+                    // Log raw chunk preview (first 50 chars)
+                    console.log(`[ResponsesStream] raw_chunk: ${chunkStr.substring(0, 50).replace(/\n/g, '\\n')}...`);
+
+                    buffer += chunkStr;
                     const lines = buffer.split('\n\n');
                     buffer = lines.pop() || '';
 
                     for (const line of lines) {
                         const trimmed = line.trim();
-                        if (!trimmed.startsWith('data: ')) continue;
+                        // Log line preview
+                        // console.log(`[ResponsesStream] raw_line: ${trimmed.substring(0, 30)}...`);
+
+                        if (!trimmed.startsWith('data: ')) {
+                            // Log skipped lines to see if we miss something
+                            if (trimmed.length > 0) console.log(`[ResponsesStream] skipped_line: ${trimmed.substring(0, 50)}...`);
+                            continue;
+                        }
                         const data = trimmed.slice(6);
                         if (data === '[DONE]') return;
 
                         try {
                             const event = JSON.parse(data);
-                            if (eventCount < 10) {
-                                console.log(`[ResponsesStream] event type=${event.type}`);
+                            if (eventCount < 20) {
+                                const keys = Object.keys(event).join(',');
+                                console.log(`[ResponsesStream] evt#${eventCount} type=${event.type} keys=${keys}`);
                                 eventCount++;
                             }
 
                             if (event.type === 'response.output_text.delta') {
-                                if (eventCount < 10) console.log(`[ResponsesStream] delta len=${event.delta?.length} preview="${(event.delta || '').substring(0, 20)}..."`);
+                                if (eventCount < 20) console.log(`[ResponsesStream] delta len=${event.delta?.length}`);
                                 yield event.delta;
+                            } else if (event.type === 'response.output_text.done') {
+                                console.log('[ResponsesStream] output_text.done', event);
+                            } else if (event.type === 'response.done') {
+                                console.log('[ResponsesStream] response.done', event);
                             }
+
                         } catch (e) {
                             console.log('[ResponsesStream] parse_error', data.substring(0, 50));
                         }

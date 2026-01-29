@@ -7,6 +7,7 @@ export const applyCorrectionsWithDiffusion = (
     nodeList: PhysicsNode[],
     correctionAccum: Map<string, { dx: number; dy: number }>,
     energy: number,
+    spacingGate: number,
     stats: DebugStats
 ) => {
     // =====================================================================
@@ -88,8 +89,15 @@ export const applyCorrectionsWithDiffusion = (
 
         // DIFFUSION: split correction between self and neighbors
         if (degree > 1) {
-            const selfShare = 0.4;
-            const neighborShare = 0.6 / degree;
+            const densityAttenuation = 1 / (1 + Math.max(0, degree - 2) * engine.config.correctionDiffusionDensityScale);
+            const spacingAttenuation = 1 - spacingGate * engine.config.correctionDiffusionSpacingScale;
+            const diffusionScale = Math.max(
+                engine.config.correctionDiffusionMin,
+                Math.min(1, densityAttenuation * spacingAttenuation)
+            );
+            const neighborShareTotal = engine.config.correctionDiffusionBase * diffusionScale;
+            const selfShare = 1 - neighborShareTotal;
+            const neighborShare = neighborShareTotal / degree;
 
             // Self gets 40%
             node.x += corrDx * selfShare;

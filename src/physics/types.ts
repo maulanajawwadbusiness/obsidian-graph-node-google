@@ -63,6 +63,8 @@ export interface ForceConfig {
   // Repulsion (Node-Node)
   repulsionStrength: number; // How strongly nodes push eac other away
   repulsionDistanceMax: number; // Distance at which repulsion is 0 (optimization)
+  repulsionMinDistance: number; // Clamp distance to avoid singular forces
+  repulsionMaxForce: number; // Cap per-pair repulsion force
 
   // Springs (Links)
   springStiffness: number; // How "stiff" the link is (0.0 to 1.0 usually)
@@ -105,6 +107,7 @@ export interface ForceConfig {
   // ---------------------------------------------------------------------------
   collisionStrength: number; // Stiffness of the personal bubble
   collisionPadding: number; // Extra radius around node to keep empty
+  collisionMaxForce: number; // Cap per-pair collision force
 
   // ---------------------------------------------------------------------------
   // Orbital Drift (Anisotropic Damping)
@@ -142,6 +145,19 @@ export interface ForceConfig {
   maxNodeCorrectionPerFrame: number;  // Per-node correction budget to prevent pileup (default 0.5px)
   contactSlop: number;            // Zone above minDist for gradual velocity projection (default 12px)
   expansionResistance: number;    // Degree-based velocity damping during expansion (default 0.15)
+  correctionDiffusionBase: number; // Base neighbor diffusion share (default 0.6)
+  correctionDiffusionMin: number; // Min diffusion share under dense gating (default 0.2)
+  correctionDiffusionDensityScale: number; // Density-based attenuation factor
+  correctionDiffusionSpacingScale: number; // Spacing-gate attenuation factor
+  spacingGateOnEnergy: number; // Energy to enable spacing gate (hysteresis on)
+  spacingGateOffEnergy: number; // Energy to disable spacing gate (hysteresis off)
+  spacingGateRampStart: number; // Energy where spacing ramp starts
+  spacingGateRampEnd: number; // Energy where spacing ramp reaches full
+  spacingGateRiseTime: number; // Time constant for spacing gate smoothing
+  spacingGateEnableThreshold: number; // Minimum gate to run spacing pass
+  spacingCascadeGate: number; // Gate threshold to stagger pairwise passes
+  spacingCascadePhaseModulo: number; // Phase modulo for cascade staggering
+  spacingCascadeSpacingPhase: number; // Phase index to run spacing pass
 
   // Pairwise pass throttling
   pairwiseMaxChecks: number; // Target max pair checks per pass before sampling

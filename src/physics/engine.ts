@@ -69,6 +69,7 @@ export class PhysicsEngine {
 
     private lastDebugStats: DebugStats | null = null;
     private spacingGate: number = 0;
+    private spacingGateActive: boolean = false;
     private nodeListCache: PhysicsNode[] = [];
     private nodeListDirty: boolean = true;
     private awakeList: PhysicsNode[] = [];
@@ -85,6 +86,8 @@ export class PhysicsEngine {
     };
     private perfMode: 'normal' | 'stressed' | 'emergency' | 'fatal' = 'normal';
     private perfModeLogAt: number = 0;
+    private spacingLogAt: number = 0;
+    private passLogAt: number = 0;
     private perfTiming = {
         lastReportAt: 0,
         frameCount: 0,
@@ -162,6 +165,8 @@ export class PhysicsEngine {
         this.nodeLinkCounts.clear();
         this.lifecycle = 0;
         this.hasFiredImpulse = false;
+        this.spacingGate = 0;
+        this.spacingGateActive = false;
         this.globalAngle = 0;
         this.globalAngularVel = 0;
     }
@@ -208,6 +213,8 @@ export class PhysicsEngine {
         this.lifecycle = 0;
         this.hasFiredImpulse = false;
         this.preRollFrames = 5;  // Reset pre-roll
+        this.spacingGate = 0;
+        this.spacingGateActive = false;
         this.wakeAll();
     }
 
@@ -374,15 +381,77 @@ export class PhysicsEngine {
             : this.config.pairwiseMaxStride;
         const pairOffset = this.frameIndex;
 
-        const spacingGateTarget = energy <= 0.7
-            ? (() => {
-                const gateT = Math.max(0, Math.min(1, (0.7 - energy) / 0.3));
-                return gateT * gateT * (3 - 2 * gateT);
-            })()
-            : 0;
-        const spacingGateRise = 1 - Math.exp(-dt / 0.6);
+        const spacingGateOn = this.config.spacingGateOnEnergy;
+        const spacingGateOff = this.config.spacingGateOffEnergy;
+        if (this.spacingGateActive) {
+            if (energy > spacingGateOff) this.spacingGateActive = false;
+        } else if (energy < spacingGateOn) {
+            this.spacingGateActive = true;
+        }
+
+        let spacingGateTarget = 0;
+        if (this.spacingGateActive) {
+            const rampStart = this.config.spacingGateRampStart;
+            const rampEnd = this.config.spacingGateRampEnd;
+            const denom = Math.max(0.0001, rampStart - rampEnd);
+            const gateT = Math.max(0, Math.min(1, (rampStart - energy) / denom));
+            spacingGateTarget = gateT * gateT * (3 - 2 * gateT);
+        }
+
+        const spacingGateRise = 1 - Math.exp(-dt / this.config.spacingGateRiseTime);
         this.spacingGate += (spacingGateTarget - this.spacingGate) * spacingGateRise;
         const spacingGate = this.spacingGate;
+        const spacingEnabled = spacingGate > this.config.spacingGateEnableThreshold;
+        let spacingStride = pairStrideBase;
+        if (spacingEnabled) {
+            const scaledTarget = this.config.pairwiseMaxChecks * spacingGate;
+            spacingStride = computePairStride(
+                nodeList.length,
+                scaledTarget,
+                this.config.pairwiseMaxStride
+            );
+        }
+
+        const cascadeActive = spacingEnabled && spacingGate >= this.config.spacingCascadeGate && pairStrideBase > 1;
+        const cascadeModulo = this.config.spacingCascadePhaseModulo;
+        const cascadePhase = cascadeModulo > 0 ? this.frameIndex % cascadeModulo : 0;
+        const spacingPhase = this.config.spacingCascadeSpacingPhase;
+        const spacingPhaseActive = !cascadeActive || cascadePhase === spacingPhase;
+        const runPairwiseForces = !cascadeActive || cascadePhase !== spacingPhase;
+        const spacingEvery = this.perfMode === 'normal'
+            ? 1
+            : this.perfMode === 'stressed'
+                ? 2
+                : 4;
+        const spacingWillRun = spacingEnabled && spacingPhaseActive && this.frameIndex % spacingEvery === 0;
+
+        if (perfEnabled) {
+            const now = getNowMs();
+            if (now - this.spacingLogAt >= 1000) {
+                this.spacingLogAt = now;
+                console.log(
+                    `[PhysicsSpacing] energy=${energy.toFixed(3)} ` +
+                    `spacingStrength=${spacingGate.toFixed(3)} ` +
+                    `spacingEnabled=${spacingEnabled} ` +
+                    `spacingFreq=${spacingEvery} ` +
+                    `mode=${this.perfMode}`
+                );
+            }
+            if (now - this.passLogAt >= 1000) {
+                this.passLogAt = now;
+                console.log(
+                    `[PhysicsPasses] repulsion=${runPairwiseForces} ` +
+                    `collision=${runPairwiseForces} ` +
+                    `spacing=${spacingWillRun} ` +
+                    `pairStride=${pairStrideBase} ` +
+                    `spacingStride=${spacingStride} ` +
+                    `pairOffset=${pairOffset} ` +
+                    `spacingOffset=${pairOffset + 2} ` +
+                    `cascade=${cascadeActive} ` +
+                    `phase=${cascadeActive ? cascadePhase : -1}`
+                );
+            }
+        }
 
         if (this.perfMode === 'fatal') {
             for (const node of nodeList) {
@@ -417,6 +486,8 @@ export class PhysicsEngine {
             perfEnabled ? getNowMs : undefined,
             pairStrideBase,
             pairOffset,
+            runPairwiseForces,
+            runPairwiseForces,
             springsEnabled
         );
         applyDragVelocity(this, nodeList, dt, debugStats);
@@ -463,23 +534,8 @@ export class PhysicsEngine {
         }
 
         if (!preRollActive) {
-            let spacingStride = pairStrideBase;
-            if (spacingGate > 0) {
-                const spacingBudgetScale = Math.max(0.1, spacingGate);
-                const scaledTarget = this.config.pairwiseMaxChecks * spacingBudgetScale;
-                spacingStride = computePairStride(
-                    nodeList.length,
-                    scaledTarget,
-                    this.config.pairwiseMaxStride
-                );
-            }
             applyEdgeRelaxation(this, correctionAccum, nodeDegreeEarly, debugStats);
-            const spacingEvery = this.perfMode === 'normal'
-                ? 1
-                : this.perfMode === 'stressed'
-                    ? 2
-                    : 4;
-            if (spacingGate > 0.02 && this.frameIndex % spacingEvery === 0) {
+            if (spacingWillRun) {
                 if (perfEnabled && frameTiming) {
                     const spacingStart = getNowMs();
                     applySpacingConstraints(
@@ -526,7 +582,7 @@ export class PhysicsEngine {
                 pairStrideBase,
                 pairOffset + 3
             );
-            applyCorrectionsWithDiffusion(this, nodeList, correctionAccum, energy, debugStats);
+            applyCorrectionsWithDiffusion(this, nodeList, correctionAccum, energy, spacingGate, debugStats);
         }
         if (perfEnabled && frameTiming) {
             frameTiming.pbdMs += getNowMs() - pbdStart;

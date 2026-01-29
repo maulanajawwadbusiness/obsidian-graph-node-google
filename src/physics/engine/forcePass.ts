@@ -18,6 +18,8 @@ export const applyForcePass = (
     nowFn?: () => number,
     pairStride: number = 1,
     pairOffset: number = 0,
+    repulsionEnabled: boolean = true,
+    collisionEnabled: boolean = true,
     springsEnabled: boolean = true
 ) => {
     const now =
@@ -166,12 +168,16 @@ export const applyForcePass = (
         // 2. Apply Core Forces (scaled by energy)
         if (timing) {
             const repulsionStart = now();
-            applyRepulsion(nodeList, activeNodes, sleepingNodes, engine.config, energy, pairStride, pairOffset);
-            timing.repulsionMs += now() - repulsionStart;
+            if (repulsionEnabled) {
+                applyRepulsion(nodeList, activeNodes, sleepingNodes, engine.config, energy, pairStride, pairOffset);
+                timing.repulsionMs += now() - repulsionStart;
+            }
 
             const collisionStart = now();
-            applyCollision(nodeList, activeNodes, sleepingNodes, engine.config, 1.0, pairStride, pairOffset + 1);
-            timing.collisionMs += now() - collisionStart;
+            if (collisionEnabled) {
+                applyCollision(nodeList, activeNodes, sleepingNodes, engine.config, 1.0, pairStride, pairOffset + 1);
+                timing.collisionMs += now() - collisionStart;
+            }
 
             if (springsEnabled) {
                 const springsStart = now();
@@ -179,8 +185,12 @@ export const applyForcePass = (
                 timing.springsMs += now() - springsStart;
             }
         } else {
-            applyRepulsion(nodeList, activeNodes, sleepingNodes, engine.config, energy, pairStride, pairOffset);
-            applyCollision(nodeList, activeNodes, sleepingNodes, engine.config, 1.0, pairStride, pairOffset + 1);
+            if (repulsionEnabled) {
+                applyRepulsion(nodeList, activeNodes, sleepingNodes, engine.config, energy, pairStride, pairOffset);
+            }
+            if (collisionEnabled) {
+                applyCollision(nodeList, activeNodes, sleepingNodes, engine.config, 1.0, pairStride, pairOffset + 1);
+            }
             if (springsEnabled) {
                 applySprings(engine.nodes, engine.links, engine.config, 1.0, forceScale, frameIndex || 0);
             }

@@ -14,7 +14,12 @@ export function applyRepulsion(
     pairStride: number = 1,
     pairOffset: number = 0
 ) {
-    const { repulsionStrength, repulsionDistanceMax } = config;
+    const {
+        repulsionStrength,
+        repulsionDistanceMax,
+        repulsionMinDistance,
+        repulsionMaxForce,
+    } = config;
     const maxDistSq = repulsionDistanceMax * repulsionDistanceMax;
 
     // DENSITY-DEPENDENT REPULSION (early expansion only)
@@ -121,7 +126,9 @@ export function applyRepulsion(
             }
 
             // Standard repulsion force: F = k / d, scaled by dead-core and density
-            const forceMagnitude = (repulsionStrength / d) * repulsionScale * densityBoost;
+            const effectiveD = Math.max(d, repulsionMinDistance);
+            const rawForce = (repulsionStrength / effectiveD) * repulsionScale * densityBoost;
+            const forceMagnitude = repulsionMaxForce > 0 ? Math.min(rawForce, repulsionMaxForce) : rawForce;
 
             // Vector components
             const fx = (dx / d) * forceMagnitude;
@@ -164,7 +171,7 @@ export function applyCollision(
     pairStride: number = 1,
     pairOffset: number = 0
 ) {
-    const { collisionStrength, collisionPadding } = config;
+    const { collisionStrength, collisionPadding, collisionMaxForce } = config;
     // Effective strength
     const strength = collisionStrength * strengthScale;
     if (strength <= 0.01) return; // Optimization: Skip if minimal
@@ -190,7 +197,8 @@ export function applyCollision(
             const dist = Math.sqrt(distSq);
             const overlap = radiusSum - dist;
 
-            const forceMagnitude = overlap * strength;
+            const rawForce = overlap * strength;
+            const forceMagnitude = collisionMaxForce > 0 ? Math.min(rawForce, collisionMaxForce) : rawForce;
 
             const nx = dx / dist;
             const ny = dy / dist;

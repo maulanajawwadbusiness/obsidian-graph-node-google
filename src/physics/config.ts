@@ -10,6 +10,8 @@ export const DEFAULT_PHYSICS_CONFIG: ForceConfig = {
 
     // Very short range. Only affects immediate neighbors.
     repulsionDistanceMax: 60,
+    repulsionMinDistance: 6,
+    repulsionMaxForce: 1200,
 
     // ---------------------------------------------------------------------------
     // ANCHOR: Friend-Distance
@@ -85,6 +87,7 @@ export const DEFAULT_PHYSICS_CONFIG: ForceConfig = {
     collisionStrength: 2000,
     // Small padding to ensure readability (nodes don't kiss)
     collisionPadding: 8,  // Phase 4: 25% reduction from 10
+    collisionMaxForce: 1800,
 
     // ---------------------------------------------------------------------------
     // ANCHOR: Orbital Drift (Anisotropic Damping)
@@ -132,6 +135,19 @@ export const DEFAULT_PHYSICS_CONFIG: ForceConfig = {
     maxNodeCorrectionPerFrame: 0.5,  // Per-node budget to prevent multi-constraint pileup
     contactSlop: 12,              // Zone above minDist for gradual velocity projection
     expansionResistance: 0.15,    // Degree-based velocity damping during expansion (0-1)
+    correctionDiffusionBase: 0.6,
+    correctionDiffusionMin: 0.2,
+    correctionDiffusionDensityScale: 0.15,
+    correctionDiffusionSpacingScale: 0.5,
+    spacingGateOnEnergy: 0.72,
+    spacingGateOffEnergy: 0.78,
+    spacingGateRampStart: 0.75,
+    spacingGateRampEnd: 0.45,
+    spacingGateRiseTime: 0.6,
+    spacingGateEnableThreshold: 0.02,
+    spacingCascadeGate: 0.25,
+    spacingCascadePhaseModulo: 3,
+    spacingCascadeSpacingPhase: 2,
     pairwiseMaxChecks: 60000,
     pairwiseMaxStride: 8,
     maxLinksPerNode: 12,

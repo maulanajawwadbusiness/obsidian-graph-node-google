@@ -66,10 +66,13 @@ export const STRINGS = {
         "miniChat.fallbackNode": "this node",
 
         // Full Chat
-        "fullChat.placeholder": "Type a message...",
+        "fullChat.header": "Reasoning",
+        "fullChat.placeholder": "Trace the thought here...",
         "fullChat.jumpToLatest": "Jump to latest",
-        "fullChat.emptyState": "A quiet space for reasoning.",
-        "fullChat.emptyStateSelect": "Select a node to start.",
+        "fullChat.emptyState": "A quiet space for reasoning",
+        "fullChat.emptyStateSelect": "Select a node, or begin directly.",
+        "fullChat.thinkingAbout": "Thinking about {label}",
+        "fullChat.traceThoughts": "Trace your thoughts here.",
         "fullChat.loading": "Thinking...",
 
         // Document Viewer

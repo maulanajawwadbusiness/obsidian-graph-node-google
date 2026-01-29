@@ -944,13 +944,13 @@ export const FullChatbar: React.FC<FullChatbarProps> = ({ engineRef }) => {
         >
             {/* Header */}
             <div style={HEADER_STYLE}>
-                <div style={TITLE_STYLE}>Reasoning</div>
+                <div style={TITLE_STYLE}>{t('fullChat.header')}</div>
                 <button
                     type="button"
                     style={CLOSE_BUTTON_STYLE}
                     onClick={fullChat.closeFullChat}
-                    aria-label="Close"
-                    title="Close"
+                    aria-label={t('tooltip.close')}
+                    title={t('tooltip.close')}
                     onMouseEnter={(e) => e.currentTarget.style.color = VOID.textSoft}
                     onMouseLeave={(e) => e.currentTarget.style.color = VOID.textDim}
                 >
@@ -1024,14 +1024,14 @@ export const FullChatbar: React.FC<FullChatbarProps> = ({ engineRef }) => {
                         color: VOID.textSoft,
                         fontSize: '14px',
                     }}>
-                        {focusLabel ? `Thinking about ${focusLabel}` : 'A quiet space for reasoning'}
+                        {focusLabel ? t('fullChat.thinkingAbout', { label: focusLabel }) : t('fullChat.emptyState')}
                     </div>
                     <div style={{
                         color: VOID.textDim,
                         fontSize: '12px',
                         maxWidth: '220px',
                     }}>
-                        {focusLabel ? 'Trace your thoughts here.' : 'Select a node, or begin directly.'}
+                        {focusLabel ? t('fullChat.traceThoughts') : t('fullChat.emptyStateSelect')}
                     </div>
                 </div>
             )}
@@ -1045,7 +1045,7 @@ export const FullChatbar: React.FC<FullChatbarProps> = ({ engineRef }) => {
                     // value={inputText} <--- REMOVE
                     onChange={handleInputChange}
                     onKeyDown={handleKeyDown}
-                    placeholder="Trace the thought here..."
+                    placeholder={t('fullChat.placeholder')}
                     style={{ ...INPUT_FIELD_STYLE, height: `${MIN_HEIGHT}px` }}
                     rows={1}
                     onFocus={(e) => {

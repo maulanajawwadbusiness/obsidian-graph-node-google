@@ -43,6 +43,13 @@ export class OpenAIClient implements LLMClient {
                 }),
                 signal
             });
+            // Debug Log: Request Payload
+            console.log('[ResponsesStream] request_payload', {
+                model,
+                inputLen: prompt.length,
+                max_output_tokens: maxTokens,
+                temperature: (model.startsWith('gpt-5') ? undefined : temperature)
+            });
 
             if (!response.ok) {
                 const errorText = await response.text();

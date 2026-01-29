@@ -67,4 +67,27 @@ UI markers (Brand/Title) are controlled via `src/playground/graphPlaygroundStyle
 We are moving to a unified architecture where `LLMClient` wraps a single OpenAI SDK instance.
 *   **Routing**: Switch providers via `baseURL` (`https://openrouter.ai/api/v1`) and `apiKey`.
 *   **Goal**: Zero divergence in parsing or streaming logic.
-*   **Rule**: Do NOT build new custom fetch wrappers. Use the `LLMClient` contract.
+## 6. Arnvoid Streaming Doctrine (Responses API)
+
+### A. Principles
+*   **SDK-Defined Boundaries**: The Provider/SDK defines what a "chunk" is. Do not reshape, combine, or split chunks in the transport layer.
+*   **Events over Typing**: Consume streaming as a sequence of data events, not a "typing simulation".
+*   **Source vs Pump**:
+    *   **Source** (`LLMClient`): Async generator that yields text deltas. Pure data.
+    *   **Pump** (Store/UI): Consumes the generator, appends to state, and handles rendering hygiene (e.g. throttling to 30fps).
+    *   *Never* put render logic in the Source.
+*   **No Semantic Smoothing**: Do not "smooth" the text stream for aesthetics in the API client. Visual smoothing is a UI concern.
+
+### B. Invariants
+*   **Abort Correctness**: New `runId` MUST cancel the old stream immediately.
+*   **Stable Fallbacks**:
+    *   Mock mode must always work.
+    *   Non-streaming network error -> Fallback to Mock (Graceful degradation).
+*   **Structured Outputs**:
+    *   **Chat**: Stream text deltas.
+    *   **JSON/Analysis**: Buffer the full output, then parse. Do not attempt to stream partial JSON unless using a specialized parser.
+
+### C. Implementation Reference (The "Pump")
+*   Source: `src/ai/openaiClient.ts` (`generateTextStream`)
+*   Middleman: `src/fullchat/fullChatAi.ts` (`realResponseGenerator`)
+*   Pump: `src/fullchat/FullChatStore.tsx` (consumes generator, updates `streamingText`)

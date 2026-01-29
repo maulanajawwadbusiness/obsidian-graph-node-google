@@ -13,7 +13,9 @@ import type { LLMClient, LLMMode, LLMClientConfig } from './clientTypes';
  * @returns LLMClient instance
  */
 export function createLLMClient(config: LLMClientConfig): LLMClient {
-    const { apiKey, mode, defaultModel } = config;
+    const apiKey = config.apiKey;
+    const mode = config.mode;
+    const defaultModel = config.defaultModel;
 
     switch (mode) {
         case 'openai':

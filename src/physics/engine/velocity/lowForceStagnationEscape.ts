@@ -94,7 +94,7 @@ export const applyLowForceStagnationEscape = (
             for (const link of engine.links) {
                 if ((link.source === node.id && link.target === nbId) ||
                     (link.target === node.id && link.source === nbId)) {
-                    restLength = link.restLength || engine.config.linkRestLength;
+                    restLength = link.length || engine.config.linkRestLength;
                     break;
                 }
             }

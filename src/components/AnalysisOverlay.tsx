@@ -41,8 +41,9 @@ export const AnalysisOverlay: React.FC = () => {
     if (!state.aiActivity) return null;
 
     // Inject keyframes if not present 
+    // Inject keyframes if not present 
     // (Ideally this goes in index.css, but this ensures self-containment for the micro-mission)
-    const styleSheet = document.styleSheets[0];
+    // const styleSheet = document.styleSheets[0]; // Unused
     const keyframes = `
         @keyframes spin {
             from { transform: rotate(0deg); }

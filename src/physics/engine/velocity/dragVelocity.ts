@@ -4,7 +4,7 @@ import { getPassStats, type DebugStats } from '../stats';
 
 export const applyDragVelocity = (
     engine: PhysicsEngine,
-    nodeList: PhysicsNode[],
+    _nodeList: PhysicsNode[],
     dt: number,
     stats: DebugStats
 ) => {

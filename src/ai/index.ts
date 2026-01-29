@@ -5,7 +5,7 @@
 
 import { OpenAIClient } from './openaiClient';
 import { OpenRouterClient } from './openrouterClient';
-import type { LLMClient, LLMMode, LLMClientConfig } from './clientTypes';
+import type { LLMClient, LLMClientConfig } from './clientTypes';
 
 /**
  * Create an LLM client instance

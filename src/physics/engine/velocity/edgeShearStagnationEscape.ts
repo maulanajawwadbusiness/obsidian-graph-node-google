@@ -87,7 +87,7 @@ export const applyEdgeShearStagnationEscape = (
         const dist = Math.sqrt(dx * dx + dy * dy);
         if (dist < 0.1) continue;
 
-        const restLength = link.restLength || engine.config.linkRestLength;
+        const restLength = link.length || engine.config.linkRestLength;
         const tension = Math.abs(dist - restLength);
 
         // Gate 1: Edge must be near rest length (most "satisfied")

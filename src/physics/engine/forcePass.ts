@@ -9,7 +9,7 @@ export const applyForcePass = (
     activeNodes: PhysicsNode[],
     sleepingNodes: PhysicsNode[],
     forceScale: number,
-    dt: number,
+    _dt: number,
     stats: DebugStats,
     preRollActive: boolean,
     energy?: number,

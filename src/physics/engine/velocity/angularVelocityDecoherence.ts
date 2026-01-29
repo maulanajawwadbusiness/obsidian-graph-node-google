@@ -18,7 +18,7 @@ import { getPassStats, type DebugStats } from '../stats';
  * Result: Dense core shears and swirls instead of drifting as a unit.
  */
 export const applyAngularVelocityDecoherence = (
-    engine: PhysicsEngine,
+    _engine: PhysicsEngine,
     nodeList: PhysicsNode[],
     energy: number,
     stats: DebugStats

@@ -23,6 +23,7 @@ export type DebugStats = {
     passes: Record<string, PassStats>;
     safety: SafetyStats;
     expansionResistance: ExpansionResistanceStats;
+    dtSkew?: { min: number; max: number };
 };
 
 export const createDebugStats = (): DebugStats => ({

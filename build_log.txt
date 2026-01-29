@@ -1,0 +1,70 @@
+
+> obsidian-physics@0.0.0 build
+> tsc && vite build
+
+src/ai/index.ts(8,26): error TS6196: 'LLMMode' is declared but never used.
+src/ai/openrouterClient.ts(9,13): error TS6133: 'apiKey' is declared but its value is never read.
+src/ai/openrouterClient.ts(10,13): error TS6133: 'defaultModel' is declared but its value is never read.
+src/ai/openrouterClient.ts(11,13): error TS6133: 'baseUrl' is declared but its value is never read.
+src/ai/openrouterClient.ts(19,9): error TS6133: 'prompt' is declared but its value is never read.
+src/ai/openrouterClient.ts(20,9): error TS6133: 'opts' is declared but its value is never read.
+src/ai/openrouterClient.ts(27,9): error TS6133: 'prompt' is declared but its value is never read.
+src/ai/openrouterClient.ts(28,9): error TS6133: 'opts' is declared but its value is never read.
+src/ai/openrouterClient.ts(29,9): error TS6133: 'signal' is declared but its value is never read.
+src/ai/openrouterClient.ts(36,9): error TS6133: 'schema' is declared but its value is never read.
+src/ai/openrouterClient.ts(37,9): error TS6133: 'prompt' is declared but its value is never read.
+src/ai/openrouterClient.ts(38,9): error TS6133: 'opts' is declared but its value is never read.
+src/ArnvoidDocumentViewer/engines/PdfEngine/lib/pdfjs.ts(1,27): error TS7016: Could not find a declaration file for module 'pdfjs-dist/build/pdf.mjs'. 'C:/Users/maulana/Downloads/obsidian-graph-node-google/node_modules/pdfjs-dist/build/pdf.mjs' implicitly has an 'any' type.
+  If the 'pdfjs-dist' package actually exposes this module, try adding a new declaration (.d.ts) file containing `declare module 'pdfjs-dist/build/pdf.mjs';`
+src/ArnvoidDocumentViewer/engines/PdfEngine/pdf-viewer/components/PdfCanvasStage.tsx(21,34): error TS2322: Type 'RefObject<HTMLDivElement | null> | undefined' is not assignable to type 'LegacyRef<HTMLDivElement> | undefined'.
+  Type 'RefObject<HTMLDivElement | null>' is not assignable to type 'LegacyRef<HTMLDivElement> | undefined'.
+    Type 'RefObject<HTMLDivElement | null>' is not assignable to type 'RefObject<HTMLDivElement>'.
+      Type 'HTMLDivElement | null' is not assignable to type 'HTMLDivElement'.
+        Type 'null' is not assignable to type 'HTMLDivElement'.
+src/ArnvoidDocumentViewer/engines/PdfEngine/pdf-viewer/components/PdfCanvasStage.tsx(22,37): error TS2322: Type 'RefObject<HTMLDivElement | null>' is not assignable to type 'LegacyRef<HTMLDivElement> | undefined'.
+  Type 'RefObject<HTMLDivElement | null>' is not assignable to type 'RefObject<HTMLDivElement>'.
+    Type 'HTMLDivElement | null' is not assignable to type 'HTMLDivElement'.
+      Type 'null' is not assignable to type 'HTMLDivElement'.
+src/ArnvoidDocumentViewer/engines/PdfEngine/pdf-viewer/components/PdfCanvasStage.tsx(23,47): error TS2322: Type 'RefObject<HTMLDivElement | null>' is not assignable to type 'LegacyRef<HTMLDivElement> | undefined'.
+  Type 'RefObject<HTMLDivElement | null>' is not assignable to type 'RefObject<HTMLDivElement>'.
+    Type 'HTMLDivElement | null' is not assignable to type 'HTMLDivElement'.
+      Type 'null' is not assignable to type 'HTMLDivElement'.
+src/ArnvoidDocumentViewer/engines/PdfEngine/pdf-viewer/components/PdfCanvasStage.tsx(24,19): error TS2322: Type 'RefObject<HTMLCanvasElement | null>' is not assignable to type 'LegacyRef<HTMLCanvasElement> | undefined'.
+  Type 'RefObject<HTMLCanvasElement | null>' is not assignable to type 'RefObject<HTMLCanvasElement>'.
+    Type 'HTMLCanvasElement | null' is not assignable to type 'HTMLCanvasElement'.
+      Type 'null' is not assignable to type 'HTMLCanvasElement'.
+src/ArnvoidDocumentViewer/engines/PdfEngine/pdf-viewer/components/PdfCanvasStage.tsx(25,19): error TS2322: Type 'RefObject<HTMLCanvasElement | null>' is not assignable to type 'LegacyRef<HTMLCanvasElement> | undefined'.
+  Type 'RefObject<HTMLCanvasElement | null>' is not assignable to type 'RefObject<HTMLCanvasElement>'.
+    Type 'HTMLCanvasElement | null' is not assignable to type 'HTMLCanvasElement'.
+      Type 'null' is not assignable to type 'HTMLCanvasElement'.
+src/ArnvoidDocumentViewer/engines/PdfEngine/pdf-viewer/components/PdfCanvasStage.tsx(26,16): error TS2322: Type 'RefObject<HTMLDivElement | null>' is not assignable to type 'LegacyRef<HTMLDivElement> | undefined'.
+  Type 'RefObject<HTMLDivElement | null>' is not assignable to type 'RefObject<HTMLDivElement>'.
+    Type 'HTMLDivElement | null' is not assignable to type 'HTMLDivElement'.
+      Type 'null' is not assignable to type 'HTMLDivElement'.
+src/components/AnalysisOverlay.tsx(45,11): error TS6133: 'styleSheet' is declared but its value is never read.
+src/fullchat/FullChatbar.tsx(119,7): error TS6133: 'CLOSE_BUTTON_SVG' is declared but its value is never read.
+src/fullchat/FullChatbar.tsx(715,45): error TS6133: 'reason' is declared but its value is never read.
+src/fullchat/FullChatbar.tsx(916,11): error TS6133: 'handleJumpToLatest' is declared but its value is never read.
+src/physics/engine/forcePass.ts(12,5): error TS6133: 'dt' is declared but its value is never read.
+src/physics/engine/integration.ts(143,28): error TS2339: Property 'dtSkew' does not exist on type 'DebugStats'.
+src/physics/engine/integration.ts(143,42): error TS2339: Property 'dtSkew' does not exist on type 'DebugStats'.
+src/physics/engine/integration.ts(144,23): error TS2339: Property 'dtSkew' does not exist on type 'DebugStats'.
+src/physics/engine/integration.ts(144,51): error TS2339: Property 'dtSkew' does not exist on type 'DebugStats'.
+src/physics/engine/integration.ts(145,23): error TS2339: Property 'dtSkew' does not exist on type 'DebugStats'.
+src/physics/engine/integration.ts(145,51): error TS2339: Property 'dtSkew' does not exist on type 'DebugStats'.
+src/physics/engine/integration.ts(202,42): error TS2339: Property 'dtSkew' does not exist on type 'DebugStats'.
+src/physics/engine/integration.ts(203,68): error TS2339: Property 'dtSkew' does not exist on type 'DebugStats'.
+src/physics/engine/integration.ts(203,101): error TS2339: Property 'dtSkew' does not exist on type 'DebugStats'.
+src/physics/engine/velocity/angularVelocityDecoherence.ts(21,5): error TS6133: 'engine' is declared but its value is never read.
+src/physics/engine/velocity/denseCoreInertiaRelaxation.ts(30,5): error TS6133: 'engine' is declared but its value is never read.
+src/physics/engine/velocity/denseCoreVelocityUnlock.ts(20,5): error TS6133: 'engine' is declared but its value is never read.
+src/physics/engine/velocity/dragVelocity.ts(7,5): error TS6133: 'nodeList' is declared but its value is never read.
+src/physics/engine/velocity/edgeShearStagnationEscape.ts(90,33): error TS2551: Property 'restLength' does not exist on type 'PhysicsLink'. Did you mean 'strength'?
+src/physics/engine/velocity/localPhaseDiffusion.ts(23,5): error TS6133: 'engine' is declared but its value is never read.
+src/physics/engine/velocity/lowForceStagnationEscape.ts(97,39): error TS2551: Property 'restLength' does not exist on type 'PhysicsLink'. Did you mean 'strength'?
+src/physics/forces.ts(159,5): error TS6133: 'nodes' is declared but its value is never read.
+src/playground/components/SidebarControls.tsx(127,25): error TS2322: Type 'number | boolean | undefined' is not assignable to type 'string | number | readonly string[] | undefined'.
+  Type 'false' is not assignable to type 'string | number | readonly string[] | undefined'.
+src/popup/useAnchorGeometry.ts(1,10): error TS6133: 'useRef' is declared but its value is never read.
+src/popup/useAnchorGeometry.ts(27,35): error TS6133: 'updateInterval' is declared but its value is never read.
+src/popup/useAnchorGeometry.ts(74,21): error TS6133: 'callback' is declared but its value is never read.

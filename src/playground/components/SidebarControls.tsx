@@ -124,7 +124,7 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
                         min={min}
                         max={max}
                         step={step}
-                        value={val}
+                        value={val as any}
                         onChange={(e) => onConfigChange(k, Number(e.target.value))}
                         style={{ width: '100%' }}
                     />

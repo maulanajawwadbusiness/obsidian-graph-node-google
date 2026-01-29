@@ -20,7 +20,7 @@ import { getPassStats, type DebugStats } from '../stats';
  * - Self-disabling
  */
 export const applyLocalPhaseDiffusion = (
-    engine: PhysicsEngine,
+    _engine: PhysicsEngine,
     nodeList: PhysicsNode[],
     energy: number,
     stats: DebugStats

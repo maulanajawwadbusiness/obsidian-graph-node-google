@@ -156,7 +156,7 @@ export function applyRepulsion(
 }
 
 export function applyCollision(
-    nodes: PhysicsNode[],
+    _nodes: PhysicsNode[],
     activeNodes: PhysicsNode[],
     sleepingNodes: PhysicsNode[],
     config: ForceConfig,

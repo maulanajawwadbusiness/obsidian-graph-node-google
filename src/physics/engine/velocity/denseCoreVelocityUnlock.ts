@@ -17,7 +17,7 @@ import {
  * Allows nodes to slide relative to each other during early expansion.
  */
 export const applyDenseCoreVelocityDeLocking = (
-    engine: PhysicsEngine,
+    _engine: PhysicsEngine,
     nodeList: PhysicsNode[],
     energy: number,
     stats: DebugStats

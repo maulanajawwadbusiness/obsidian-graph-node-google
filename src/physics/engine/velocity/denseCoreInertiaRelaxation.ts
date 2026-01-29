@@ -27,7 +27,7 @@ import { getPassStats, type DebugStats } from '../stats';
  * - Self-disabling
  */
 export const applyDenseCoreInertiaRelaxation = (
-    engine: PhysicsEngine,
+    _engine: PhysicsEngine,
     nodeList: PhysicsNode[],
     energy: number,
     stats: DebugStats

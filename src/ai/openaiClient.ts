@@ -205,27 +205,48 @@ export class OpenAIClient implements LLMClient {
             // Adjust based on actural response shape: { output: [{ content: [{ type: 'text', text: '...' }] }] }
             // Simplifying assumption: data.output[0].content[0].text exists
 
-            // Check for output_text at top level or nested
-            // As per recon notes: traverse output[] and concat output_text
-
-            // Safe traversal stub:
+            // Robust Extraction (Helper Logic Inline)
             let content = '';
-            if (data.output_text) {
+
+            const extractText = (obj: any) => {
+                if (!obj) return;
+                // Priority keys for text content
+                if (typeof obj.text === 'string') content += obj.text;
+                else if (typeof obj.value === 'string') content += obj.value;
+                else if (typeof obj.delta === 'string') content += obj.delta;
+                else if (obj.type === 'text' || obj.type === 'output_text') {
+                    if (typeof obj.text === 'string') content += obj.text;
+                }
+            };
+
+            // Path A: Top-level output_text
+            if (typeof data.output_text === 'string') {
                 content = data.output_text;
-            } else if (Array.isArray(data.output)) {
+            }
+            // Path B: Scan output array
+            else if (Array.isArray(data.output)) {
                 for (const item of data.output) {
-                    if (item.content) {
+                    // 1. Check item itself (flat text block)
+                    extractText(item);
+                    // 2. Check content array (message style)
+                    if (Array.isArray(item.content)) {
                         for (const sub of item.content) {
-                            if (sub.type === 'text') content += sub.text;
+                            extractText(sub);
                         }
+                    }
+                    // 3. Check nested text value (some shapes)
+                    if (item.text && typeof item.text === 'object') {
+                        extractText(item.text); // e.g. text.value
                     }
                 }
             }
 
             if (!content && !data.output_text) {
-                // Fallback if shape is different (e.g. choice[0] style from legacy?)
-                // Responses API should be consistent.
-                console.warn('[OpenAIClient] Unexpected response shape', data);
+                // Only warn if truly empty and status is weird
+                console.warn('[OpenAIClient] Empty extraction from shape:', JSON.stringify(data).substring(0, 200));
+            } else {
+                // Debug log for success
+                console.log(`[OpenAIClient] generateText extracted len=${content.length}`);
             }
 
             return content;

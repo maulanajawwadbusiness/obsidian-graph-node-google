@@ -112,6 +112,7 @@ Rules:
         );
 
         // Sanitize Output
+        console.log(`[PrefillAI] raw_out len=${rawOutput?.length}`);
         const sanitized = sanitizeOutput(rawOutput);
 
         if (!sanitized) {

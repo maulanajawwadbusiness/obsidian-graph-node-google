@@ -91,6 +91,13 @@ export const useGraphRendering = ({
 
         let frameId = 0;
         let lastTime = performance.now();
+        const perfSample = {
+            lastReportAt: 0,
+            frameCount: 0,
+            tickCount: 0,
+            tickMsTotal: 0,
+            tickMsMax: 0,
+        };
 
         const engine = engineRef.current;
         if (!engine) return;
@@ -114,7 +121,41 @@ export const useGraphRendering = ({
             const dt = Math.min(dtMs / 1000, 0.1);
             lastTime = now;
 
-            engine.tick(dt);
+            let tickMs = 0;
+            if (engine.config.debugPerf) {
+                const tickStart = performance.now();
+                engine.tick(dt);
+                tickMs = performance.now() - tickStart;
+            } else {
+                engine.tick(dt);
+            }
+
+            if (engine.config.debugPerf) {
+                perfSample.frameCount += 1;
+                perfSample.tickCount += 1;
+                perfSample.tickMsTotal += tickMs;
+                perfSample.tickMsMax = Math.max(perfSample.tickMsMax, tickMs);
+                if (perfSample.lastReportAt === 0) {
+                    perfSample.lastReportAt = now;
+                }
+                const elapsed = now - perfSample.lastReportAt;
+                if (elapsed >= 1000) {
+                    const frames = perfSample.frameCount || 1;
+                    const ticks = perfSample.tickCount || 1;
+                    const avgTickMs = perfSample.tickMsTotal / ticks;
+                    console.log(
+                        `[RenderPerf] avgTickMs=${avgTickMs.toFixed(3)} ` +
+                        `maxTickMs=${perfSample.tickMsMax.toFixed(3)} ` +
+                        `ticksPerFrame=${(ticks / frames).toFixed(2)} ` +
+                        `frames=${frames}`
+                    );
+                    perfSample.lastReportAt = now;
+                    perfSample.frameCount = 0;
+                    perfSample.tickCount = 0;
+                    perfSample.tickMsTotal = 0;
+                    perfSample.tickMsMax = 0;
+                }
+            }
 
             const rect = canvas.getBoundingClientRect();
             const dpr = window.devicePixelRatio || 1;

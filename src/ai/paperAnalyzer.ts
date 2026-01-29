@@ -87,7 +87,7 @@ export async function analyzeDocument(text: string): Promise<AnalysisResult> {
             schema,
             prompt,
             {
-                model: 'gpt-5'
+                model: 'gpt-5-nano'
             }
         );
 

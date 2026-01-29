@@ -45,8 +45,7 @@ export async function makeThreeWordLabels(words: string[]): Promise<string[]> {
         let output: string;
         try {
             output = await client.generateText(prompt, {
-                model: 'gpt-4o',
-                temperature: 0.3
+                model: 'gpt-5-nano'
             });
             clearTimeout(timeout);
         } catch (innerError) {

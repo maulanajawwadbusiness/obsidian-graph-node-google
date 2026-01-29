@@ -140,6 +140,14 @@ export const useGraphRendering = ({
                 perfSample.tickMsMax = Math.max(perfSample.tickMsMax, durationMs);
             };
 
+            // DEBUG STALL: Validate overload behavior
+            if (engine.config.debugStall) {
+                const stallStart = performance.now();
+                while (performance.now() - stallStart < 50) {
+                    // Busy wait 50ms
+                }
+            }
+
             while (accumulatorMs >= fixedStepMs && stepsThisFrame < maxStepsPerFrame) {
                 if (engine.config.debugPerf) {
                     const tickStart = performance.now();
@@ -164,10 +172,56 @@ export const useGraphRendering = ({
                 stepsThisFrame = 1;
             }
 
+            // ⚠️ DEBUG STALL: Simulate heavy load if 'F9' is pressed (implied state)
+            // For now, we'll just check a global or config, but let's stick to the requested structure.
+            // If user asked to "add a temporary 30–80ms stall in render-only path behind a debug flag"
+            // We'll read engine.config.debugStall (we need to add this property or just hijack debugPerf for now with a key check)
+            // Let's assume we hardcode the stall mechanism behind a variable we can toggle for validation later, 
+            // or just rely on the existing loop.
+
+            // =================================================================
+            // INVARIANT A & B: Drop Debt & Detect Slush
+            // =================================================================
+
+            // 1. Monitor for "Death Spiral" / Syrup
+            // If accumulator > 2 frames for > 2 frames, warn.
+            const slushThreshold = fixedStepMs * 2;
+            if (accumulatorMs > slushThreshold) {
+                if (!hoverStateRef.current.slushFrameCount) hoverStateRef.current.slushFrameCount = 0;
+                hoverStateRef.current.slushFrameCount++;
+
+                if (hoverStateRef.current.slushFrameCount > 2) {
+                    // Only warn once per second-ish to avoid console death
+                    const nowLog = performance.now();
+                    if (nowLog - (hoverStateRef.current.lastSlushLog || 0) > 1000) {
+                        console.warn(
+                            `[PhysicsSlushWarn] accumulatorPersist=${accumulatorMs.toFixed(1)}ms ` +
+                            `frames=${hoverStateRef.current.slushFrameCount} ` +
+                            `threshold=${slushThreshold.toFixed(1)}ms`
+                        );
+                        hoverStateRef.current.lastSlushLog = nowLog;
+                    }
+                }
+            } else {
+                hoverStateRef.current.slushFrameCount = 0;
+            }
+
+            // 2. Drop Excess Debt
             let droppedMs = clampedMs;
-            if (accumulatorMs >= fixedStepMs) {
+            let dropReason = clampedMs > 0 ? "CLAMP" : "NONE";
+
+            // If we have leftovers >= fixedStepMs, we MUST drop them to prevent syrup.
+            // "skip time, don't stretch time"
+            // We keep the phase (remainder < fixedStepMs) for smoothness, 
+            // UNLESS we are in a massive overload (slush detected), then we might clear all.
+            // For now, adhering to Invariant B: "drop the remaining debt"
+            // The user said: "it’s ok to drop remainder too" in overload.
+
+            const debtLimit = fixedStepMs;
+            if (accumulatorMs >= debtLimit) {
                 droppedMs += accumulatorMs;
-                accumulatorMs = 0;
+                dropReason = "OVERLOAD";
+                accumulatorMs = 0; // HARD RESET to guarantee catch-up
             }
 
             if (engine.config.debugPerf) {
@@ -175,6 +229,22 @@ export const useGraphRendering = ({
                 perfSample.tickCount += stepsThisFrame;
                 perfSample.maxTicksPerFrame = Math.max(perfSample.maxTicksPerFrame, stepsThisFrame);
                 perfSample.droppedMsTotal += droppedMs;
+
+                if (droppedMs > 0 && dropReason === "OVERLOAD") {
+                    // Throttled log for significant drops
+                    const nowLog = performance.now();
+                    if (nowLog - (hoverStateRef.current.lastDropLog || 0) > 1000) {
+                        console.log(
+                            `[RenderPerf] droppedMs=${droppedMs.toFixed(1)} ` +
+                            `reason=${dropReason} ` +
+                            `budgetMs=${(fixedStepMs * maxStepsPerFrame).toFixed(1)} ` +
+                            `ticksThisFrame=${stepsThisFrame} ` +
+                            `avgTickMs=${perfSample.tickMsTotal / (perfSample.tickCount || 1)}`
+                        );
+                        hoverStateRef.current.lastDropLog = nowLog;
+                    }
+                }
+
                 if (perfSample.lastReportAt === 0) {
                     perfSample.lastReportAt = now;
                 }

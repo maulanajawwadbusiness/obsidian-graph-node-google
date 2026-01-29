@@ -178,4 +178,5 @@ export interface ForceConfig {
 
   // Debug
   debugPerf?: boolean; // Enable per-pass timing logs (once per second)
+  debugStall?: boolean; // Simulate heavy load
 }

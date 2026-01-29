@@ -67,6 +67,11 @@ export type HoverState = {
     debugOuterRadius: number;
     debugOcclusionRadius: number;
     debugShrinkPct: number;
+
+    // Overload Detection
+    slushFrameCount?: number;
+    lastSlushLog?: number;
+    lastDropLog?: number;
 };
 
 export type CanvasStateDebug = {

@@ -12,7 +12,7 @@ export class OpenAIClient implements LLMClient {
 
     constructor(apiKey: string, defaultModel?: string) {
         this.apiKey = apiKey;
-        this.defaultModel = defaultModel || 'gpt-5-nano';
+        this.defaultModel = defaultModel || 'gpt-5';
     }
 
     async * generateTextStream(
@@ -36,7 +36,7 @@ export class OpenAIClient implements LLMClient {
                 body: JSON.stringify({
                     model,
                     input: [{ role: 'user', content: prompt }],
-                    temperature,
+                    ...(model === 'gpt-5' ? {} : { temperature }),
                     max_completion_tokens: maxTokens,
                     stream: true,
                     store: false
@@ -130,7 +130,7 @@ export class OpenAIClient implements LLMClient {
                 body: JSON.stringify({
                     model,
                     input: [{ role: 'user', content: prompt }],
-                    temperature,
+                    ...(model === 'gpt-5' ? {} : { temperature }),
                     max_completion_tokens: opts?.maxCompletionTokens,
                     store: false
                 })
@@ -197,10 +197,10 @@ export class OpenAIClient implements LLMClient {
                 body: JSON.stringify({
                     model,
                     input: [{ role: 'user', content: prompt }],
-                    temperature,
-                    response_format: {
-                        type: 'json_schema',
-                        json_schema: {
+                    ...(model === 'gpt-5' ? {} : { temperature }),
+                    text: {
+                        format: {
+                            type: 'json_schema',
                             name: 'structured_response',
                             schema: schema,
                             strict: true
@@ -217,20 +217,64 @@ export class OpenAIClient implements LLMClient {
 
             const data = await response.json();
 
-            // Extract usage of structured output
-            // Should be in output[0].content[0].text as a JSON string
-            let jsonString = '';
+            // 1. Debug Log (Deep Scan)
+            console.log(`[OpenAIClient] structured response scan id=${data.id} status=${response.status}`);
             if (Array.isArray(data.output)) {
+                data.output.forEach((item: any, i: number) => {
+                    console.log(`[OpenAIClient] output[${i}] type=${item.type} role=${item.role} contentLen=${item.content?.length}`);
+                    if (Array.isArray(item.content)) {
+                        item.content.forEach((sub: any, j: number) => {
+                            const keys = Object.keys(sub).join(',');
+                            const preview = (sub.text || sub.value || sub.delta || '').substring(0, 50);
+                            console.log(`[OpenAIClient] .. content[${j}] type=${sub.type} keys=[${keys}] preview="${preview}"`);
+                        });
+                    }
+                });
+            }
+
+            // 2. Refusal / Error Handling
+            if (data.refusal) throw new Error(`Model Refusal: ${data.refusal}`);
+            if (data.error) throw new Error(`API Error: ${JSON.stringify(data.error)}`);
+
+            // 3. Robust Extraction (Helper Logic Inline)
+            let jsonString = '';
+
+            const extractText = (obj: any) => {
+                if (!obj) return;
+                // Priority keys for text content
+                if (typeof obj.text === 'string') jsonString += obj.text;
+                else if (typeof obj.value === 'string') jsonString += obj.value;
+                else if (typeof obj.delta === 'string') jsonString += obj.delta;
+            };
+
+            // Path A: Top-level output_text
+            if (typeof data.output_text === 'string') {
+                jsonString = data.output_text;
+            }
+            // Path B: Scan output array
+            else if (Array.isArray(data.output)) {
                 for (const item of data.output) {
-                    if (item.content) {
+                    // 1. Check item itself (flat text block)
+                    if (item.type === 'text' || item.type === 'output_text') {
+                        extractText(item);
+                    }
+                    // 2. Check content array (message style)
+                    if (Array.isArray(item.content)) {
                         for (const sub of item.content) {
-                            if (sub.type === 'text') jsonString += sub.text;
+                            extractText(sub);
                         }
+                    }
+                    // 3. Check nested text value (some shapes)
+                    if (item.text && typeof item.text === 'object') {
+                        extractText(item.text); // e.g. text.value
                     }
                 }
             }
 
-            if (!jsonString) throw new Error('No content in structured response');
+            if (!jsonString) {
+                console.error('[OpenAIClient] Failed to extract JSON. Dump:', JSON.stringify(data.output || data).substring(0, 1000));
+                throw new Error(`No content in structured response. ID: ${data.id} OutputLen: ${data.output?.length}`);
+            }
 
             return JSON.parse(jsonString) as T;
 
@@ -240,5 +284,3 @@ export class OpenAIClient implements LLMClient {
         }
     }
 }
-
-

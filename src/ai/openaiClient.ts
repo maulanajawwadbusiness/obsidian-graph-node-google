@@ -55,30 +55,34 @@ export class OpenAIClient implements LLMClient {
             const decoder = new TextDecoder('utf-8');
             let buffer = '';
 
+            let eventCount = 0;
             try {
                 while (true) {
                     const { done, value } = await reader.read();
-                    if (done) break;
+                    if (done) {
+                        console.log('[ResponsesStream] done');
+                        break;
+                    }
 
                     buffer += decoder.decode(value, { stream: true });
                     const lines = buffer.split('\n\n');
-
-                    // Keep the last partial chunk in the buffer
                     buffer = lines.pop() || '';
 
                     for (const line of lines) {
                         const trimmed = line.trim();
                         if (!trimmed.startsWith('data: ')) continue;
-
-                        const data = trimmed.slice(6); // Remove 'data: '
-
+                        const data = trimmed.slice(6);
                         if (data === '[DONE]') return;
 
                         try {
                             const event = JSON.parse(data);
-                            console.log(`[ResponsesStream] event type=${event.type}`); // LOGGING ADDED
+                            if (eventCount < 10) {
+                                console.log(`[ResponsesStream] event type=${event.type}`);
+                                eventCount++;
+                            }
 
                             if (event.type === 'response.output_text.delta') {
+                                if (eventCount < 10) console.log(`[ResponsesStream] delta len=${event.delta?.length} preview="${(event.delta || '').substring(0, 20)}..."`);
                                 yield event.delta;
                             }
                         } catch (e) {

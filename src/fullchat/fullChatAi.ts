@@ -85,11 +85,18 @@ async function* realResponseGenerator(
         }, signal);
 
         let totalChars = 0;
+        console.log('[FullChatAI] consuming generator...');
+        let chunkCount = 0;
         for await (const chunk of stream) {
             if (signal?.aborted) break;
+            if (chunkCount < 10) {
+                console.log(`[FullChatAI] got_delta len=${chunk.length}`);
+                chunkCount++;
+            }
             yield chunk;
             totalChars += chunk.length;
         }
+        console.log('[FullChatAI] generator completed');
 
         console.log(`[FullChatAI] response_streamed len=${totalChars}`);
 

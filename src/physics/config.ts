@@ -124,4 +124,5 @@ export const DEFAULT_PHYSICS_CONFIG: ForceConfig = {
     maxNodeCorrectionPerFrame: 0.5,  // Per-node budget to prevent multi-constraint pileup
     contactSlop: 12,              // Zone above minDist for gradual velocity projection
     expansionResistance: 0.15,    // Degree-based velocity damping during expansion (0-1)
+    debugPerf: false,
 };

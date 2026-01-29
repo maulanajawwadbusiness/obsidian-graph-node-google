@@ -19,6 +19,9 @@ import { applyAngleResistanceVelocity, applyDistanceBiasVelocity, applyDragVeloc
 import { logEnergyDebug } from './engine/debug';
 import { createDebugStats, type DebugStats } from './engine/stats';
 
+const getNowMs = () =>
+    (typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now());
+
 export class PhysicsEngine {
     public nodes: Map<string, PhysicsNode> = new Map();
     public links: PhysicsLink[] = [];
@@ -57,6 +60,18 @@ export class PhysicsEngine {
     public frameIndex: number = 0;
 
     private lastDebugStats: DebugStats | null = null;
+    private perfTiming = {
+        lastReportAt: 0,
+        frameCount: 0,
+        totals: {
+            repulsionMs: 0,
+            collisionMs: 0,
+            springsMs: 0,
+            spacingMs: 0,
+            pbdMs: 0,
+            totalMs: 0,
+        },
+    };
 
     constructor(config: Partial<ForceConfig> = {}) {
         this.config = { ...DEFAULT_PHYSICS_CONFIG, ...config };
@@ -224,6 +239,18 @@ export class PhysicsEngine {
     tick(dt: number) {
         const nodeList = Array.from(this.nodes.values());
         const debugStats = createDebugStats();
+        const perfEnabled = this.config.debugPerf === true;
+        const frameTiming = perfEnabled
+            ? {
+                repulsionMs: 0,
+                collisionMs: 0,
+                springsMs: 0,
+                spacingMs: 0,
+                pbdMs: 0,
+                totalMs: 0,
+            }
+            : null;
+        const tickStart = perfEnabled ? getNowMs() : 0;
 
         // Lifecycle Management
         this.lifecycle += dt;
@@ -252,7 +279,18 @@ export class PhysicsEngine {
         const { energy, forceScale, effectiveDamping, maxVelocityEffective } = computeEnergyEnvelope(this.lifecycle);
 
         // 2. Apply Core Forces (scaled by energy)
-        applyForcePass(this, nodeList, forceScale, dt, debugStats, preRollActive, energy, this.frameIndex);
+        applyForcePass(
+            this,
+            nodeList,
+            forceScale,
+            dt,
+            debugStats,
+            preRollActive,
+            energy,
+            this.frameIndex,
+            frameTiming ?? undefined,
+            perfEnabled ? getNowMs : undefined
+        );
         applyDragVelocity(this, nodeList, dt, debugStats);
         applyPreRollVelocity(this, nodeList, preRollActive, debugStats);
 
@@ -290,19 +328,69 @@ export class PhysicsEngine {
         // All constraints request position corrections via accumulator
         // Total correction magnitude is clamped to prevent multi-constraint pileup
         // =====================================================================
+        const pbdStart = perfEnabled ? getNowMs() : 0;
         const correctionAccum = initializeCorrectionAccum(nodeList);
 
         if (!preRollActive) {
             applyEdgeRelaxation(this, correctionAccum, nodeDegreeEarly, debugStats);
-            applySpacingConstraints(this, nodeList, correctionAccum, nodeDegreeEarly, energy, debugStats);
+            if (perfEnabled && frameTiming) {
+                const spacingStart = getNowMs();
+                applySpacingConstraints(this, nodeList, correctionAccum, nodeDegreeEarly, energy, debugStats);
+                frameTiming.spacingMs += getNowMs() - spacingStart;
+            } else {
+                applySpacingConstraints(this, nodeList, correctionAccum, nodeDegreeEarly, energy, debugStats);
+            }
             applyTriangleAreaConstraints(this, nodeList, correctionAccum, nodeDegreeEarly, energy, debugStats);
             applyAngleResistanceVelocity(this, nodeList, nodeDegreeEarly, energy, debugStats);
             applyDistanceBiasVelocity(this, nodeList, debugStats);
             applySafetyClamp(this, nodeList, correctionAccum, nodeDegreeEarly, energy, debugStats);
             applyCorrectionsWithDiffusion(this, nodeList, correctionAccum, energy, debugStats);
         }
+        if (perfEnabled && frameTiming) {
+            frameTiming.pbdMs += getNowMs() - pbdStart;
+        }
 
         logEnergyDebug(this.lifecycle, energy, effectiveDamping, maxVelocityEffective);
         this.lastDebugStats = debugStats;
+
+        if (perfEnabled && frameTiming) {
+            const tickEnd = getNowMs();
+            frameTiming.totalMs = tickEnd - tickStart;
+
+            const perf = this.perfTiming;
+            perf.frameCount += 1;
+            perf.totals.repulsionMs += frameTiming.repulsionMs;
+            perf.totals.collisionMs += frameTiming.collisionMs;
+            perf.totals.springsMs += frameTiming.springsMs;
+            perf.totals.spacingMs += frameTiming.spacingMs;
+            perf.totals.pbdMs += frameTiming.pbdMs;
+            perf.totals.totalMs += frameTiming.totalMs;
+
+            if (perf.lastReportAt === 0) {
+                perf.lastReportAt = tickEnd;
+            }
+            const elapsed = tickEnd - perf.lastReportAt;
+            if (elapsed >= 1000) {
+                const frames = perf.frameCount || 1;
+                const avg = (value: number) => (value / frames).toFixed(3);
+                console.log(
+                    `[PhysicsPerf] avgMs repulsion=${avg(perf.totals.repulsionMs)} ` +
+                    `collision=${avg(perf.totals.collisionMs)} ` +
+                    `springs=${avg(perf.totals.springsMs)} ` +
+                    `spacing=${avg(perf.totals.spacingMs)} ` +
+                    `pbd=${avg(perf.totals.pbdMs)} ` +
+                    `total=${avg(perf.totals.totalMs)} ` +
+                    `frames=${frames}`
+                );
+                perf.frameCount = 0;
+                perf.totals.repulsionMs = 0;
+                perf.totals.collisionMs = 0;
+                perf.totals.springsMs = 0;
+                perf.totals.spacingMs = 0;
+                perf.totals.pbdMs = 0;
+                perf.totals.totalMs = 0;
+                perf.lastReportAt = tickEnd;
+            }
+        }
     }
 }

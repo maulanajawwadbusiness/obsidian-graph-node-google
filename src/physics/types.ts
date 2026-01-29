@@ -133,4 +133,7 @@ export interface ForceConfig {
   maxNodeCorrectionPerFrame: number;  // Per-node correction budget to prevent pileup (default 0.5px)
   contactSlop: number;            // Zone above minDist for gradual velocity projection (default 12px)
   expansionResistance: number;    // Degree-based velocity damping during expansion (default 0.15)
+
+  // Debug
+  debugPerf?: boolean; // Enable per-pass timing logs (once per second)
 }

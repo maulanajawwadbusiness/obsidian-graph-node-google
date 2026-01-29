@@ -11,8 +11,14 @@ export const applyForcePass = (
     stats: DebugStats,
     preRollActive: boolean,
     energy?: number,
-    frameIndex?: number
+    frameIndex?: number,
+    timing?: { repulsionMs: number; collisionMs: number; springsMs: number },
+    nowFn?: () => number
 ) => {
+    const now =
+        nowFn ??
+        (() => (typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now()));
+
     // 1. Clear forces
     for (const node of nodeList) {
         node.fx = 0;
@@ -153,9 +159,23 @@ export const applyForcePass = (
         }
     } else {
         // 2. Apply Core Forces (scaled by energy)
-        applyRepulsion(nodeList, engine.config, energy);
-        applyCollision(nodeList, engine.config, 1.0);
-        applySprings(engine.nodes, engine.links, engine.config, 1.0, forceScale, frameIndex || 0);
+        if (timing) {
+            const repulsionStart = now();
+            applyRepulsion(nodeList, engine.config, energy);
+            timing.repulsionMs += now() - repulsionStart;
+
+            const collisionStart = now();
+            applyCollision(nodeList, engine.config, 1.0);
+            timing.collisionMs += now() - collisionStart;
+
+            const springsStart = now();
+            applySprings(engine.nodes, engine.links, engine.config, 1.0, forceScale, frameIndex || 0);
+            timing.springsMs += now() - springsStart;
+        } else {
+            applyRepulsion(nodeList, engine.config, energy);
+            applyCollision(nodeList, engine.config, 1.0);
+            applySprings(engine.nodes, engine.links, engine.config, 1.0, forceScale, frameIndex || 0);
+        }
         applyBoundaryForce(nodeList, engine.config, engine.worldWidth, engine.worldHeight);
 
         // Scale all forces by energy envelope

@@ -90,10 +90,10 @@ export const STRINGS = {
         "tooltip.jumpToLatest": "Jump to latest",
 
         // Full Chat
-        "fullChat.placeholder": "Type a message...",
+        "fullChat.placeholder": "Trace the thought here...",
         "fullChat.jumpToLatest": "Jump to latest",
-        "fullChat.emptyStateTitle": "Reasoning Space",
-        "fullChat.emptyStateDesc": "Select a node or start typing to reason.",
+        "fullChat.emptyStateTitle": "Reasoning",
+        "fullChat.emptyStateDesc": "A quiet space for reasoning",
         "fullChat.emptyStateThinking": "Thinking about {label}",
         "fullChat.emptyStateTrace": "Trace your thoughts here.",
         "fullChat.emptyStateTraceDefault": "Select a node, or begin directly.",
@@ -101,7 +101,7 @@ export const STRINGS = {
         // Document Viewer
         "docViewer.title": "Document Viewer",
         "docViewer.empty": "No document loaded.",
-        "docViewer.dropInstruction": "Drop a file onto the canvas to view.",
+        "docViewer.dropInstruction": "Drop a file onto the canvas (right side) to view.",
         "docViewer.unsupportedPdf": "Unsupported PDF source.",
         "docViewer.failedDocx": "Failed to fetch DOCX ({status}).",
         "docViewer.failedText": "Failed to fetch text ({status}).",

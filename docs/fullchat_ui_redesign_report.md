@@ -15,7 +15,7 @@ The existing FullChatbar UI contradicted Arnvoid's core design philosophy:
 2. **Iconography**: Emoji-based (💬) — playful and unprofessional
 3. **Spacing**: Tight, mobile-cramped layout — not suitable for long-form thinking
 4. **Typography**: Generic, no clear hierarchy — lacked calm readability
-5. **Copywriting**: "Full Chat", "Type a message...", "hiii~" vibes — social chat bait, not analyst room
+5. **Copywriting**: "Full Chat", "Trace the thought here...", "hiii~" vibes — social chat bait, not analyst room
 6. **Visual Weight**: Overly rounded capsules, inconsistent radii — no design system
 
 ### Target Aesthetic
@@ -137,7 +137,7 @@ color: 'rgba(160, 165, 180, 0.75)',  // Slightly more muted
 ##### Input Area
 
 **Placeholder Text**:
-- Before: `"Type a message... (Enter to send, Shift+Enter for newline)"`
+- Before: `"Trace the thought here... (Enter to send, Shift+Enter for newline)"`
 - After: `"What needs clarification?"`
 
 **Send Button**:
@@ -182,7 +182,7 @@ All microcopy rewritten to match analyst-room tone:
 |----------|--------|-------|
 | Header | "Full Chat" | "REASONING" |
 | Toggle aria-label | "Open Full Chat" | "Open Chatbar" |
-| Input placeholder | "Type a message... (Enter to send, Shift+Enter for newline)" | "What needs clarification?" |
+| Input placeholder | "Trace the thought here... (Enter to send, Shift+Enter for newline)" | "What needs clarification?" |
 | Empty state (no context) | "Click a node to focus, or just start chatting" | "Quiet space for thinking." |
 | Empty state subtitle | "This is your space to process confusion and gain insight" | "Select a node to set context, or begin reasoning directly." |
 | Empty state (with context) | "Ready to explore \"{label}\"" | "Context: {label}" |

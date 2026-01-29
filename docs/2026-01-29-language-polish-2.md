@@ -25,7 +25,7 @@ Added explicit `t()` support for all icon buttons:
 - `textPreview.open`, `textPreview.close`
 
 ### 2. FullChat Empty States
-Migrated hardcoded "Reasoning space" strings to i18n:
+Migrated hardcoded "Reasoning" strings to i18n:
 - `fullChat.emptyStateTitle`: "Berpikir"
 - `fullChat.emptyStateDesc`: "Pilih sebuah node..."
 - `fullChat.emptyStateThinking`: "Memikirkan {label}"

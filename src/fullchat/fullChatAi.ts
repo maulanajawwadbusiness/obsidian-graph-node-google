@@ -1,6 +1,6 @@
 import { createLLMClient } from '../ai';
 import { getAiMode } from '../config/aiMode';
-import type { FullChatMessage, AiContext } from './fullChatTypes';
+import type { AiContext } from './fullChatTypes';
 
 // =============================================================================
 // TYPES
@@ -15,8 +15,11 @@ export interface AiResponse {
 // CONSTANTS
 // =============================================================================
 
-const REAL_TIMEOUT_MS = 15000; // 15s timeout for full answers
-const MODEL = 'gpt-4o-mini';
+// =============================================================================
+// CONSTANTS
+// =============================================================================
+
+const MODEL = 'gpt-4o';
 
 // =============================================================================
 // PUBLIC API
@@ -66,53 +69,29 @@ async function* realResponseGenerator(
         const systemPrompt = buildSystemPrompt(context);
         const fullPrompt = `${systemPrompt}\n\nUSER PROMPT:\n${userPrompt}`;
 
-        // NOTE: The current client only supports non-streaming generateText.
-        // We will simulate streaming by yielding the full result in chunks 
-        // if we can't implement true streaming yet, OR just await the whole thing
-        // and yield it. The prompt requirement was "stream result".
-        // Since `client.generateText` is Promise<string>, we can't stream tokens.
-        // We will simulate the "streaming" aspect from the Store side for visual effect, 
-        // OR we just yield the final text at once and let the store handle it.
-        // 
-        // Requirement: "stream result into the pending ai message".
-        // If the client doesn't support streaming, we must wait for full response.
-
-        console.log(`[FullChatAI] calling_real model=${MODEL}`);
-
-        const responseText = await withTimeoutAndAbort(
-            client.generateText(fullPrompt, {
-                model: MODEL,
-                temperature: 0.7,
-                maxTokens: 500
-            }),
-            REAL_TIMEOUT_MS,
-            signal
-        );
-
-        // Fake Stream Implementation
+        // True Stream Implementation
         // ---------------------------------------------------------------------
-        // The client returned the whole string (blocking), but we stream it 
-        // to the UI for that "alive" feeling.
+        // We now have true streaming from the client.
+        // We just yield the chunks as they come.
+        // The Store handles the throttling/buffering.
         // ---------------------------------------------------------------------
 
-        const CHUNK_SIZE = 4; // Char count per tick
-        const DELAY_MS = 15;  // Tick interval (approx 60fps-ish feel)
+        console.log(`[FullChatAI] calling_real_stream model=${MODEL}`);
 
-        let index = 0;
-        while (index < responseText.length) {
-            if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+        const stream = client.generateTextStream(fullPrompt, {
+            model: MODEL,
+            temperature: 0.7,
+            maxCompletionTokens: 500
+        }, signal);
 
-            const endIndex = Math.min(index + CHUNK_SIZE, responseText.length);
-            const chunk = responseText.slice(index, endIndex);
-
+        let totalChars = 0;
+        for await (const chunk of stream) {
+            if (signal?.aborted) break;
             yield chunk;
-            index += CHUNK_SIZE;
-
-            // Small delay to simulate typing
-            await new Promise(resolve => setTimeout(resolve, DELAY_MS));
+            totalChars += chunk.length;
         }
 
-        console.log(`[FullChatAI] response_streamed len=${responseText.length}`);
+        console.log(`[FullChatAI] response_streamed len=${totalChars}`);
 
     } catch (err) {
         if (signal?.aborted || (err instanceof Error && err.name === 'AbortError')) {
@@ -187,31 +166,4 @@ Current Context:
  * Wraps a promise with a timeout and abort signal check
  * Reused exactly from prefillSuggestion.ts logic
  */
-async function withTimeoutAndAbort<T>(promise: Promise<T>, timeoutMs: number, signal?: AbortSignal): Promise<T> {
-    return new Promise<T>((resolve, reject) => {
-        if (signal?.aborted) return reject(new DOMException('Aborted', 'AbortError'));
 
-        const timer = setTimeout(() => {
-            reject(new Error('Timeout'));
-        }, timeoutMs);
-
-        const onAbort = () => {
-            clearTimeout(timer);
-            reject(new DOMException('Aborted', 'AbortError'));
-        };
-        signal?.addEventListener('abort', onAbort);
-
-        promise.then(
-            (res) => {
-                clearTimeout(timer);
-                signal?.removeEventListener('abort', onAbort);
-                resolve(res);
-            },
-            (err) => {
-                clearTimeout(timer);
-                signal?.removeEventListener('abort', onAbort);
-                reject(err);
-            }
-        );
-    });
-}

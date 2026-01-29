@@ -19,7 +19,7 @@ export interface AiResponse {
 // CONSTANTS
 // =============================================================================
 
-const MODEL = 'gpt-4o';
+const MODEL = 'gpt-5-nano';
 
 // =============================================================================
 // PUBLIC API
@@ -98,7 +98,11 @@ async function* realResponseGenerator(
             console.log('[FullChatAI] aborted');
             throw err;
         }
-        console.error('[FullChatAI] error', err);
+        console.error('[FullChatAI] real stream failed', {
+            name: err instanceof Error ? err.name : 'Unknown',
+            message: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined
+        });
         // Fallback to mock on error? Or just throw?
         // User said: "if timeout/abort -> show a gentle... ending state".
         // If network error, we probably want to show it or fallback.

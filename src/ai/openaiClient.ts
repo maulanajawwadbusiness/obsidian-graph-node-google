@@ -76,21 +76,13 @@ export class OpenAIClient implements LLMClient {
 
                         try {
                             const event = JSON.parse(data);
-                            // New Responses API streaming shape:
-                            // event: "response.output_text.delta"
-                            // data: { delta: "..." }
-
-                            // Check for event type inside standard SSE data wrapping if any, 
-                            // OR if OpenAI uses standard SSE "event: type" lines.
-                            // Currently, Chat Completions puts everything in data payload.
-                            // Let's assume Responses API does similar or standard SSE.
-                            // Documentation says: listen for `response.output_text.delta`.
+                            console.log(`[ResponsesStream] event type=${event.type}`); // LOGGING ADDED
 
                             if (event.type === 'response.output_text.delta') {
                                 yield event.delta;
                             }
                         } catch (e) {
-                            // Ignore malformed
+                            console.log('[ResponsesStream] parse_error', data.substring(0, 50));
                         }
                     }
                 }

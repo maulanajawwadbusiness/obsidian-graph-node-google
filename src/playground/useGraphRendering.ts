@@ -92,15 +92,13 @@ export const useGraphRendering = ({
         let frameId = 0;
         let lastTime = performance.now();
         let accumulatorMs = 0;
-        const fixedStepMs = 1000 / 60;
-        const maxFrameDeltaMs = 120;
-        const maxStepsPerFrame = 2;
         const perfSample = {
             lastReportAt: 0,
             frameCount: 0,
             tickCount: 0,
             tickMsTotal: 0,
             tickMsMax: 0,
+            tickMsSamples: [] as number[],
             droppedMsTotal: 0,
             maxTicksPerFrame: 0,
         };
@@ -122,6 +120,10 @@ export const useGraphRendering = ({
 
         const render = () => {
             const now = performance.now();
+            const targetTickHz = engine.config.targetTickHz || 60;
+            const fixedStepMs = 1000 / targetTickHz;
+            const maxFrameDeltaMs = engine.config.maxFrameDeltaMs || 120;
+            const maxStepsPerFrame = engine.config.maxStepsPerFrame || 2;
             const rawDeltaMs = now - lastTime;
             const frameDeltaMs = Math.min(rawDeltaMs, maxFrameDeltaMs);
             const dtMs = frameDeltaMs;
@@ -132,12 +134,17 @@ export const useGraphRendering = ({
 
             let stepsThisFrame = 0;
             let tickMsTotal = 0;
+            const recordTick = (durationMs: number) => {
+                tickMsTotal += durationMs;
+                perfSample.tickMsSamples.push(durationMs);
+                perfSample.tickMsMax = Math.max(perfSample.tickMsMax, durationMs);
+            };
 
             while (accumulatorMs >= fixedStepMs && stepsThisFrame < maxStepsPerFrame) {
                 if (engine.config.debugPerf) {
                     const tickStart = performance.now();
                     engine.tick(fixedStepMs / 1000);
-                    tickMsTotal += performance.now() - tickStart;
+                    recordTick(performance.now() - tickStart);
                 } else {
                     engine.tick(fixedStepMs / 1000);
                 }
@@ -149,7 +156,7 @@ export const useGraphRendering = ({
                 if (engine.config.debugPerf) {
                     const tickStart = performance.now();
                     engine.tick(accumulatorMs / 1000);
-                    tickMsTotal += performance.now() - tickStart;
+                    recordTick(performance.now() - tickStart);
                 } else {
                     engine.tick(accumulatorMs / 1000);
                 }
@@ -166,8 +173,6 @@ export const useGraphRendering = ({
             if (engine.config.debugPerf) {
                 perfSample.frameCount += 1;
                 perfSample.tickCount += stepsThisFrame;
-                perfSample.tickMsTotal += tickMsTotal;
-                perfSample.tickMsMax = Math.max(perfSample.tickMsMax, tickMsTotal);
                 perfSample.maxTicksPerFrame = Math.max(perfSample.maxTicksPerFrame, stepsThisFrame);
                 perfSample.droppedMsTotal += droppedMs;
                 if (perfSample.lastReportAt === 0) {
@@ -177,10 +182,18 @@ export const useGraphRendering = ({
                 if (elapsed >= 1000) {
                     const frames = perfSample.frameCount || 1;
                     const ticks = perfSample.tickCount || 1;
-                    const avgTickMs = perfSample.tickMsTotal / ticks;
+                    const avgTickMs = perfSample.tickMsSamples.length
+                        ? perfSample.tickMsSamples.reduce((sum, v) => sum + v, 0) / perfSample.tickMsSamples.length
+                        : 0;
+                    const sorted = perfSample.tickMsSamples.slice().sort((a, b) => a - b);
+                    const p95Index = sorted.length ? Math.min(sorted.length - 1, Math.floor(sorted.length * 0.95)) : 0;
+                    const p95TickMs = sorted.length ? sorted[p95Index] : 0;
+                    const ticksPerSecond = ticks / (elapsed / 1000);
                     console.log(
                         `[RenderPerf] avgTickMs=${avgTickMs.toFixed(3)} ` +
+                        `p95TickMs=${p95TickMs.toFixed(3)} ` +
                         `maxTickMs=${perfSample.tickMsMax.toFixed(3)} ` +
+                        `ticksPerSecond=${ticksPerSecond.toFixed(1)} ` +
                         `ticksPerFrame=${(ticks / frames).toFixed(2)} ` +
                         `maxTicksPerFrame=${perfSample.maxTicksPerFrame} ` +
                         `droppedMs=${perfSample.droppedMsTotal.toFixed(1)} ` +
@@ -189,8 +202,8 @@ export const useGraphRendering = ({
                     perfSample.lastReportAt = now;
                     perfSample.frameCount = 0;
                     perfSample.tickCount = 0;
-                    perfSample.tickMsTotal = 0;
                     perfSample.tickMsMax = 0;
+                    perfSample.tickMsSamples = [];
                     perfSample.droppedMsTotal = 0;
                     perfSample.maxTicksPerFrame = 0;
                 }

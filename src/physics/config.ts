@@ -65,6 +65,13 @@ export const DEFAULT_PHYSICS_CONFIG: ForceConfig = {
     restForceScale: 0.05,
 
     // ---------------------------------------------------------------------------
+    // ANCHOR: Tick Control
+    // ---------------------------------------------------------------------------
+    targetTickHz: 60,
+    maxStepsPerFrame: 2,
+    maxFrameDeltaMs: 120,
+
+    // ---------------------------------------------------------------------------
     // ANCHOR: Screen Containment
     // ---------------------------------------------------------------------------
     boundaryMargin: 50,
@@ -129,5 +136,16 @@ export const DEFAULT_PHYSICS_CONFIG: ForceConfig = {
     pairwiseMaxStride: 8,
     maxLinksPerNode: 12,
     maxTotalLinks: 2000,
+
+    // ---------------------------------------------------------------------------
+    // ANCHOR: Adaptive Scaling Thresholds
+    // ---------------------------------------------------------------------------
+    perfModeNStressed: 250,
+    perfModeNEmergency: 500,
+    perfModeNFatal: 900,
+    perfModeEStressed: 1200,
+    perfModeEEmergency: 2000,
+    perfModeEFatal: 3000,
+    perfModeDownshiftRatio: 0.9,
     debugPerf: false,
 };

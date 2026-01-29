@@ -91,6 +91,11 @@ export interface ForceConfig {
   formingTime: number; // Time in seconds to stay "hot"
   restForceScale: number; // Multiplier for forces when "cold"
 
+  // Tick control
+  targetTickHz: number; // Target physics ticks per second
+  maxStepsPerFrame: number; // Max physics steps per render frame
+  maxFrameDeltaMs: number; // Clamp on per-frame delta before dropping time
+
   // Boundary
   boundaryMargin: number;
   boundaryStrength: number;
@@ -145,6 +150,15 @@ export interface ForceConfig {
   // Topology safety caps
   maxLinksPerNode: number; // Max links per dot to prevent dense topology
   maxTotalLinks: number; // Max total links to keep springs bounded
+
+  // Adaptive scaling thresholds
+  perfModeNStressed: number;
+  perfModeNEmergency: number;
+  perfModeNFatal: number;
+  perfModeEStressed: number;
+  perfModeEEmergency: number;
+  perfModeEFatal: number;
+  perfModeDownshiftRatio: number; // Hysteresis ratio to exit a mode
 
   // Debug
   debugPerf?: boolean; // Enable per-pass timing logs (once per second)

@@ -91,3 +91,10 @@ We are moving to a unified architecture where `LLMClient` wraps a single OpenAI 
 *   Source: `src/ai/openaiClient.ts` (`generateTextStream`)
 *   Middleman: `src/fullchat/fullChatAi.ts` (`realResponseGenerator`)
 *   Pump: `src/fullchat/FullChatStore.tsx` (consumes generator, updates `streamingText`)
+
+## 7. The Zero-Dependency Vow (User Preference)
+**The User LOVES Zero-Dependency.**
+*   **Default Stance**: Do NOT `npm install` just for convenience.
+*   **Ask First**: If you think a library is needed, you must justify it against the "Code Rot" and "Bloat" risks.
+*   **Value**: We value *Ownership* and *Longevity* over "Easy Typing". better to write 50 lines of robust `fetch` logic than depend on a 500KB SDK that might break next month.
+*   **Refactor Warning**: Be very careful proposing SDK migrations. Only do so if the manual maintenance burden becomes genuinely overwhelming.

@@ -37,7 +37,7 @@ export async function analyzeDocument(text: string): Promise<AnalysisResult> {
     const client = createLLMClient({
         apiKey,
         mode: 'openai',
-        defaultModel: 'gpt-4o-mini'
+        defaultModel: 'gpt-4o'
     });
 
     const prompt = `Analyze the following document text and extract exactly 5 distinct key points to describe its content.
@@ -65,28 +65,45 @@ export async function analyzeDocument(text: string): Promise<AnalysisResult> {
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 15000); // 15s timeout
 
-        const responseText = await client.generateText(prompt, {
-            model: 'gpt-4o-mini',
-            temperature: 0.3, // Low temp for structural stability
-            maxCompletionTokens: 1000
-        });
+        const schema = {
+            type: "object",
+            properties: {
+                paper_title: { type: "string" },
+                main_points: {
+                    type: "array",
+                    items: {
+                        type: "object",
+                        properties: {
+                            title: { type: "string" },
+                            explanation: { type: "string" }
+                        },
+                        required: ["title", "explanation"],
+                        additionalProperties: false
+                    },
+                    minItems: 5,
+                    maxItems: 5
+                }
+            },
+            required: ["paper_title", "main_points"],
+            additionalProperties: false
+        };
+
+        const result = await client.generateStructured<{ paper_title: string; main_points: { title: string; explanation: string }[] }>(
+            schema,
+            prompt,
+            {
+                model: 'gpt-5-nano',
+                temperature: 0.3
+            }
+        );
 
         clearTimeout(timeout);
 
-        // Parse JSON
-        let jsonStr = responseText.trim();
-        // Remove markdown code blocks if present
-        if (jsonStr.startsWith('```json')) {
-            jsonStr = jsonStr.replace(/^```json/, '').replace(/```$/, '').trim();
-        } else if (jsonStr.startsWith('```')) {
-            jsonStr = jsonStr.replace(/^```/, '').replace(/```$/, '').trim();
-        }
-
-        const points = JSON.parse(jsonStr) as AnalysisPoint[];
-
-        if (!Array.isArray(points) || points.length !== 5) {
-            throw new Error(`Invalid JSON structure or count: ${points.length}`);
-        }
+        // Map to internal format
+        const points: AnalysisPoint[] = result.main_points.map(p => ({
+            title: p.title,
+            summary: p.explanation
+        }));
 
         return { points };
 

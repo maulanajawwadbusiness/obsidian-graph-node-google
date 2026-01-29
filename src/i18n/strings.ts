@@ -44,8 +44,9 @@ export const STRINGS = {
         "fullChat.emptyStateTraceDefault": "Pilih node, atau mulai langsung.",
 
         // Document Viewer
+        "docViewer.title": "Penampil Dokumen",
         "docViewer.empty": "Tidak ada dokumen yang dimuat.",
-        "docViewer.dropInstruction": "Tarik & Lepas file ke canvas untuk melihat.",
+        "docViewer.dropInstruction": "Tarik & Lepas file ke layar (sebelah kanan) untuk melihat.",
         "docViewer.unsupportedPdf": "Sumber PDF tidak didukung.",
         "docViewer.failedDocx": "Gagal memuat DOCX ({status}).",
         "docViewer.failedText": "Gagal memuat teks ({status}).",
@@ -98,6 +99,7 @@ export const STRINGS = {
         "fullChat.emptyStateTraceDefault": "Select a node, or begin directly.",
 
         // Document Viewer
+        "docViewer.title": "Document Viewer",
         "docViewer.empty": "No document loaded.",
         "docViewer.dropInstruction": "Drop a file onto the canvas to view.",
         "docViewer.unsupportedPdf": "Unsupported PDF source.",

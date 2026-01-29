@@ -119,7 +119,7 @@ export const HalfLeftWindow: React.FC<HalfLeftWindowProps> = ({ open, onClose, r
             onDropCapture={blockDrop}
         >
             <div style={HEADER_STYLE}>
-                <div style={TITLE_STYLE}>{t('docViewer.empty')}</div>
+                <div style={TITLE_STYLE}>{t('docViewer.title')}</div>
                 <button type="button" style={CLOSE_BUTTON_STYLE} onClick={onClose} aria-label={t('tooltip.closeViewer')} title={t('tooltip.closeViewer')}>
                     ×
                 </button>

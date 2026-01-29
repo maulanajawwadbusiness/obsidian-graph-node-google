@@ -33,6 +33,7 @@ Migrated hardcoded "Reasoning space" strings to i18n:
 
 ### 3. Document Viewer
 Migrated empty states and instructions:
+- `docViewer.title`: "Penampil Dokumen"
 - `docViewer.empty`: "Tidak ada dokumen yang dimuat."
 - `docViewer.dropInstruction`: "Tarik & Lepas file..."
 

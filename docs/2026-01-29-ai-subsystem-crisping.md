@@ -6,8 +6,8 @@
 ## Changes Verified
 
 ### 1. Parameter Alignment (Fixing "Unbounded" Tokens)
-*   **Prefill Subsystem**: Updated `src/fullchat/prefillSuggestion.ts` to use `maxCompletionTokens: 60`. Previously used `maxTokens` which was ignored, causing full-length generation.
-*   **Label Rewriter**: Updated `src/ai/labelRewriter.ts` to use `maxCompletionTokens: 100`. Previously ignored, risking wasted tokens.
+*   **Prefill Subsystem**: Updated `src/fullchat/prefillSuggestion.ts` to use system defaults (no `maxCompletionTokens`).
+*   **Label Rewriter**: Updated `src/ai/labelRewriter.ts` to use system defaults (no `maxCompletionTokens`).
 
 ### 2. Reasoning Model Compatibility
 *   **FullChat**: Removed `temperature` and `maxCompletionTokens` (relying on defaults) to prevent "incomplete" errors with `gpt-5-nano`.
@@ -24,9 +24,9 @@
 | :--- | :--- | :--- | :--- | :--- |
 | **FullChat** | `fullChatAi.ts` | `generateTextStream` | `gpt-5-nano` | Defaults (Reasoning) |
 | **MiniChat** | `fullChatAi.ts` | `generateTextStream` | `gpt-5-nano` | Defaults (Reasoning) |
-| **Prefill** | `prefillSuggestion.ts` | `generateText` | `gpt-4o` | `maxCompletionTokens: 60`, `temp: 0.3` |
-| **LabelRewrite**| `labelRewriter.ts` | `generateText` | `gpt-4o` | `maxCompletionTokens: 100`, `temp: 0.3` |
-| **Analyzer** | `paperAnalyzer.ts` | `generateStructured` | `gpt-5` | Defaults (Reasoning) |
+| **Prefill** | `prefillSuggestion.ts` | `generateText` | `gpt-5-nano` | Defaults (Reasoning) |
+| **LabelRewrite**| `labelRewriter.ts` | `generateText` | `gpt-5-nano` | Defaults (Reasoning) |
+| **Analyzer** | `paperAnalyzer.ts` | `generateStructured` | `gpt-5-nano` | Defaults (Reasoning) |
 
 ## Verification Status
 *   [x] Audit complete: No `v1/chat/completions` usage.

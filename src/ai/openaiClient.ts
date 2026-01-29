@@ -97,19 +97,38 @@ export class OpenAIClient implements LLMClient {
                             if (event.type === 'response.output_text.delta') {
                                 yield event.delta;
                             } else if (event.type === 'response.output_item.done') {
-                                // Fallback: If no deltas were sent, extract text from the completed item
-                                if (event.item?.type === 'message' && event.item.role === 'assistant') {
-                                    if (Array.isArray(event.item.content)) {
-                                        for (const content of event.item.content) {
-                                            if (content.type === 'output_text' && content.text) {
-                                                console.log('[ResponsesStream] yielding output_item.done text');
-                                                yield content.text;
-                                            }
-                                        }
+                                // Log the structure of the completion item
+                                const item = event.item;
+                                console.log(`[ResponsesStream] output_item.done type=${item?.type} role=${item?.role}`);
+                                if (Array.isArray(item?.content)) {
+                                    item.content.forEach((c: any, i: number) =>
+                                        console.log(`[ResponsesStream] .. content[${i}] type=${c.type} textLen=${c.text?.length}`)
+                                    );
+                                }
+
+                                // Robust extraction using helper
+                                const extractText = (obj: any): string => {
+                                    if (!obj) return '';
+                                    if (typeof obj.text === 'string') return obj.text;
+                                    if (typeof obj.value === 'string') return obj.value;
+                                    if (Array.isArray(obj.content)) return obj.content.map(extractText).join('');
+                                    if (obj.type === 'text' || obj.type === 'output_text') return obj.text || '';
+                                    return '';
+                                };
+
+                                if (item?.type === 'message' && item.role === 'assistant') {
+                                    const text = extractText(item);
+                                    if (text) {
+                                        console.log(`[ResponsesStream] yielding fallback text len=${text.length}`);
+                                        yield text;
                                     }
                                 }
                             } else if (event.type === 'response.incomplete') {
-                                console.warn('[ResponsesStream] response.incomplete', event);
+                                console.warn('[ResponsesStream] response.incomplete', {
+                                    reason: event.response?.status,
+                                    details: event.response?.incomplete_details,
+                                    usage: event.response?.usage
+                                });
                             }
 
                         } catch (e) {

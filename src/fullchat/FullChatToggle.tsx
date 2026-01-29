@@ -45,7 +45,6 @@ export const FullChatToggle: React.FC = () => {
     return (
         <button
             type="button"
-            type="button"
             style={TOGGLE_STYLE}
             onClick={openFullChat}
             aria-label={t('tooltip.openChat')}

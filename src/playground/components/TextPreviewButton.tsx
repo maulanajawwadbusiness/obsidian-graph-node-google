@@ -1,5 +1,6 @@
 import React from 'react';
 import { useDocument } from '../../store/documentStore';
+import { t } from '../../i18n/t';
 
 /**
  * Bottom-left button to toggle the left viewer window.
@@ -44,10 +45,10 @@ export const TextPreviewButton: React.FC<TextPreviewButtonProps> = ({ onToggle }
                 stopPropagation(e);
                 (onToggle ?? togglePreview)();
             }}
-            aria-label={open ? 'Close document viewer' : 'Open document viewer'}
-            title={open ? 'Close document viewer' : 'Open document viewer'}
+            aria-label={open ? t('tooltip.closeViewer') : t('tooltip.openViewer')}
+            title={open ? t('tooltip.closeViewer') : t('tooltip.openViewer')}
         >
-            {open ? '✕ Close Viewer' : '📄 Open Document (Beta)'}
+            {open ? `✕ ${t('textPreview.close')}` : `📄 ${t('textPreview.open')}`}
         </button>
     );
 };

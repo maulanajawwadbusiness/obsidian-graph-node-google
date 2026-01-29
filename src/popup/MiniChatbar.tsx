@@ -355,7 +355,7 @@ export const MiniChatbar: React.FC<MiniChatbarProps> = ({ messages, onSend, onCl
                         padding: '4px 8px',
                     }}
                     onClick={onClose}
-                    title={t('miniChat.closeTooltip')}
+                    title={t('tooltip.close')}
                 >
                     ×
                 </button>

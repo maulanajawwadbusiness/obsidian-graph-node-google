@@ -116,6 +116,12 @@ const CLOSE_BUTTON_STYLE: React.CSSProperties = {
     fontSize: '18px',
     borderRadius: '4px',
 };
+const CLOSE_BUTTON_SVG = (
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <line x1="18" y1="6" x2="6" y2="18"></line>
+        <line x1="6" y1="6" x2="18" y2="18"></line>
+    </svg>
+);
 
 const CONTEXT_BADGE_STYLE: React.CSSProperties = {
     padding: '12px 24px',
@@ -944,13 +950,13 @@ export const FullChatbar: React.FC<FullChatbarProps> = ({ engineRef }) => {
         >
             {/* Header */}
             <div style={HEADER_STYLE}>
-                <div style={TITLE_STYLE}>{t('fullChat.header')}</div>
+                <div style={TITLE_STYLE}>{t('fullChat.emptyStateTitle')}</div>
                 <button
                     type="button"
                     style={CLOSE_BUTTON_STYLE}
                     onClick={fullChat.closeFullChat}
-                    aria-label={t('tooltip.close')}
-                    title={t('tooltip.close')}
+                    aria-label="Close"
+                    title="Close"
                     onMouseEnter={(e) => e.currentTarget.style.color = VOID.textSoft}
                     onMouseLeave={(e) => e.currentTarget.style.color = VOID.textDim}
                 >
@@ -1024,14 +1030,14 @@ export const FullChatbar: React.FC<FullChatbarProps> = ({ engineRef }) => {
                         color: VOID.textSoft,
                         fontSize: '14px',
                     }}>
-                        {focusLabel ? t('fullChat.thinkingAbout', { label: focusLabel }) : t('fullChat.emptyState')}
+                        {focusLabel ? t('fullChat.emptyStateThinking', { label: focusLabel }) : t('fullChat.emptyStateDesc')}
                     </div>
                     <div style={{
                         color: VOID.textDim,
                         fontSize: '12px',
                         maxWidth: '220px',
                     }}>
-                        {focusLabel ? t('fullChat.traceThoughts') : t('fullChat.emptyStateSelect')}
+                        {focusLabel ? t('fullChat.emptyStateTrace') : t('fullChat.emptyStateTraceDefault')}
                     </div>
                 </div>
             )}

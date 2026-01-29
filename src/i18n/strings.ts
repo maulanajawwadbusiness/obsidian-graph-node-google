@@ -20,19 +20,35 @@ export const STRINGS = {
         "miniChat.nodeLabel": "Node {label}",
         "miniChat.fallbackNode": "node ini",
 
+        // Text Preview
+        "textPreview.open": "Buka Dokumen (Beta)",
+        "textPreview.close": "Tutup Penampil",
+
+        // Tooltips
+        "tooltip.close": "Tutup",
+        "tooltip.openChat": "Buka Chat",
+        "tooltip.closeChat": "Tutup Chat",
+        "tooltip.send": "Kirim",
+        "tooltip.uploadDoc": "Unggah Dokumen",
+        "tooltip.openViewer": "Buka penampil dokumen",
+        "tooltip.closeViewer": "Tutup penampil dokumen",
+        "tooltip.jumpToLatest": "Loncat ke pesan terbaru",
+
         // Full Chat
-        "fullChat.placeholder": "Ketik pesan...",
+        "fullChat.placeholder": "Ketik pesan...", // Inferred commonly needed
         "fullChat.jumpToLatest": "Loncat ke terbaru",
-        "fullChat.emptyState": "Ruang tenang untuk menalar.",
-        "fullChat.emptyStateSelect": "Pilih node untuk memulai.",
-        "fullChat.loading": "Berpikir...",
+        "fullChat.emptyStateTitle": "Ruang Nalar",
+        "fullChat.emptyStateDesc": "Pilih sebuah node untuk memulai diskusi.",
+        "fullChat.emptyStateThinking": "Memikirkan {label}",
+        "fullChat.emptyStateTrace": "Telusuri pikiran Anda di sini.",
+        "fullChat.emptyStateTraceDefault": "Pilih node, atau mulai langsung.",
 
         // Document Viewer
         "docViewer.empty": "Tidak ada dokumen yang dimuat.",
+        "docViewer.dropInstruction": "Tarik & Lepas file ke canvas untuk melihat.",
         "docViewer.unsupportedPdf": "Sumber PDF tidak didukung.",
         "docViewer.failedDocx": "Gagal memuat DOCX ({status}).",
         "docViewer.failedText": "Gagal memuat teks ({status}).",
-        "docViewer.dropText": "Seret file ke kanvas...",
 
         // Generic / Common
         "common.error": "Terjadi kesalahan.",
@@ -41,13 +57,6 @@ export const STRINGS = {
         // AI Strings
         "ai.seedPromptNew": "Ceritakan lebih lanjut tentang \"{label}\"",
         "ai.seedPromptContinue": "Dalam konteks \"{label}\", melanjutkan...",
-
-        // Tooltips
-        "tooltip.openChat": "Buka Chatbar",
-        "tooltip.send": "Kirim pesan",
-        "tooltip.close": "Tutup",
-        "tooltip.openDocument": "Buka Dokumen",
-        "tooltip.uploadFile": "Unggah File",
     },
     en: {
         // Node Popup
@@ -65,22 +74,35 @@ export const STRINGS = {
         "miniChat.nodeLabel": "Node {label}",
         "miniChat.fallbackNode": "this node",
 
+        // Text Preview
+        "textPreview.open": "Open Document (Beta)",
+        "textPreview.close": "Close Viewer",
+
+        // Tooltips
+        "tooltip.close": "Close",
+        "tooltip.openChat": "Open Chat",
+        "tooltip.closeChat": "Close Chat",
+        "tooltip.send": "Send",
+        "tooltip.uploadDoc": "Upload Document",
+        "tooltip.openViewer": "Open document viewer",
+        "tooltip.closeViewer": "Close document viewer",
+        "tooltip.jumpToLatest": "Jump to latest",
+
         // Full Chat
-        "fullChat.header": "Reasoning",
-        "fullChat.placeholder": "Trace the thought here...",
+        "fullChat.placeholder": "Type a message...",
         "fullChat.jumpToLatest": "Jump to latest",
-        "fullChat.emptyState": "A quiet space for reasoning",
-        "fullChat.emptyStateSelect": "Select a node, or begin directly.",
-        "fullChat.thinkingAbout": "Thinking about {label}",
-        "fullChat.traceThoughts": "Trace your thoughts here.",
-        "fullChat.loading": "Thinking...",
+        "fullChat.emptyStateTitle": "Reasoning Space",
+        "fullChat.emptyStateDesc": "Select a node or start typing to reason.",
+        "fullChat.emptyStateThinking": "Thinking about {label}",
+        "fullChat.emptyStateTrace": "Trace your thoughts here.",
+        "fullChat.emptyStateTraceDefault": "Select a node, or begin directly.",
 
         // Document Viewer
         "docViewer.empty": "No document loaded.",
+        "docViewer.dropInstruction": "Drop a file onto the canvas to view.",
         "docViewer.unsupportedPdf": "Unsupported PDF source.",
         "docViewer.failedDocx": "Failed to fetch DOCX ({status}).",
         "docViewer.failedText": "Failed to fetch text ({status}).",
-        "docViewer.dropText": "Drop a file onto the canvas...",
 
         // Generic / Common
         "common.error": "An error occurred.",
@@ -89,12 +111,5 @@ export const STRINGS = {
         // AI Strings
         "ai.seedPromptNew": "Tell me more about \"{label}\"",
         "ai.seedPromptContinue": "In context of \"{label}\", continuing...",
-
-        // Tooltips
-        "tooltip.openChat": "Open Chatbar",
-        "tooltip.send": "Send message",
-        "tooltip.close": "Close",
-        "tooltip.openDocument": "Open Document",
-        "tooltip.uploadFile": "Upload File",
     }
 } as const;

@@ -1,6 +1,5 @@
 import React from 'react';
 import sendIcon from '../assets/send_icon.png';
-import { t } from '../i18n/t';
 
 /**
  * SendButton - Reusable send button component
@@ -50,8 +49,8 @@ export const SendButton: React.FC<SendButtonProps> = ({ onClick, disabled = fals
             style={BUTTON_STYLE}
             onClick={onClick}
             disabled={disabled}
-            title={t('tooltip.send')}
-            aria-label={t('tooltip.send')}
+            title="Send message"
+            aria-label="Send"
         >
             <img src={sendIcon} alt="" style={ICON_STYLE} />
         </button>

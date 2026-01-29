@@ -1,44 +1,46 @@
-# Language Polish Pass #2 (Fix Report)
+# Language Polish Pass #2 Report
 
 **Date**: 2026-01-29
 **Status**: Completed
 
-## Changes Implemented
+## Summary
+Refactored the codebase to standardize terminology and enforce full localization for tooltips and empty states.
 
-### 1. Terminology Standardized ("Node")
--   **ID Language**: Renamed "Titik" to "Node" in all UI strings within `src/i18n/strings.ts`. This ensures consistent technical terminology.
+## Terminology Changes
+- **"Titik" -> "Node"**: Verified and replaced throughout `src/i18n/strings.ts`.
+  - Indonesian users will now see "Node n1", "Info Node", etc., matching technical preference.
 
-### 2. Localization Coverage Extended
-Migrated hardcoded English strings to `i18n` system:
+## Localization Coverage
+### 1. Tooltips & Aria Labels
+Added explicit `t()` support for all icon buttons:
+- **FullChatbar**: Close, Jump to Latest, Send.
+- **FullChatToggle**: Main floating toggle.
+- **NodePopup**: Close button.
+- **MiniChatbar**: Close button.
+- **TextPreviewButton**: Open/Close viewer logic.
 
-**Full Chat (`src/fullchat/FullChatbar.tsx`)**
--   **Header**: "Reasoning" -> `t('fullChat.header')`
--   **Placeholder**: "Trace the thought here..." -> `t('fullChat.placeholder')`
--   **Empty State Title**: "A quiet space for reasoning" -> `t('fullChat.emptyState')`
--   **Empty State Sub**: "Select a node, or begin directly" -> `t('fullChat.emptyStateSelect')`
--   **Context Title**: "Thinking about {label}" -> `t('fullChat.thinkingAbout')`
--   **Context Sub**: "Trace your thoughts here." -> `t('fullChat.traceThoughts')`
+**New Keys:**
+- `tooltip.close`, `tooltip.openChat`, `tooltip.closeChat`, `tooltip.send`
+- `tooltip.openViewer`, `tooltip.closeViewer`
+- `textPreview.open`, `textPreview.close`
 
-**Document Viewer (`src/ArnvoidDocumentViewer/ArnvoidDocumentViewer.tsx`)**
--   Empty State: "No document loaded" -> `t('docViewer.empty')`
--   Drop Instructions: Added "Drop a file onto the canvas..." -> `t('docViewer.dropText')`
+### 2. FullChat Empty States
+Migrated hardcoded "Reasoning space" strings to i18n:
+- `fullChat.emptyStateTitle`: "Ruang Nalar"
+- `fullChat.emptyStateDesc`: "Pilih sebuah node..."
+- `fullChat.emptyStateThinking`: "Memikirkan {label}"
+- `fullChat.emptyStateTrace`: "Telusuri pikiran Anda di sini."
 
-### 3. Tooltips & Accessibility
-Added `tooltip.*` namespace to `strings.ts` and applied to icon buttons:
-
--   **Full Chat Toggle**: `t('tooltip.openChat')` ("Buka Chatbar")
--   **Send Button**: `t('tooltip.send')` ("Kirim pesan")
--   **Close Buttons**: `t('tooltip.close')` ("Tutup")
--   **Document Viewer**: `t('tooltip.openDocument')` ("Buka Dokumen")
-
-## Files Touched
--   `src/i18n/strings.ts`
--   `src/fullchat/FullChatbar.tsx`
--   `src/fullchat/FullChatToggle.tsx`
--   `src/components/SendButton.tsx`
--   `src/ArnvoidDocumentViewer/ArnvoidDocumentViewer.tsx`
+### 3. Document Viewer
+Migrated empty states and instructions:
+- `docViewer.empty`: "Tidak ada dokumen yang dimuat."
+- `docViewer.dropInstruction`: "Tarik & Lepas file..."
 
 ## Verification
--   **Switch Language (ID/EN)**: All new UI elements should flip instantly.
--   **Tooltips**: Hovering over icons now shows localized text.
--   **Terminology**: "Node" is used consistently.
+- **Grep**: No literal "Titik" found in source (outside `git` history).
+- **Files**:
+  - `src/i18n/strings.ts`: Updated.
+  - `src/fullchat/FullChatbar.tsx`: Localized.
+  - `src/fullchat/FullChatToggle.tsx`: Localized.
+  - `src/playground/components/HalfLeftWindow.tsx`: Localized.
+  - `src/playground/components/TextPreviewButton.tsx`: Localized.

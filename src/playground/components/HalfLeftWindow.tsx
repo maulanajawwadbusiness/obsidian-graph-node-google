@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { useDocument } from '../../store/documentStore';
 import { ArnvoidDocumentViewer } from '../../ArnvoidDocumentViewer';
 import type { ViewerSource } from '../../ArnvoidDocumentViewer';
+import { t } from '../../i18n/t';
 
 type HalfLeftWindowProps = {
     open: boolean;
@@ -118,8 +119,8 @@ export const HalfLeftWindow: React.FC<HalfLeftWindowProps> = ({ open, onClose, r
             onDropCapture={blockDrop}
         >
             <div style={HEADER_STYLE}>
-                <div style={TITLE_STYLE}>Document Viewer</div>
-                <button type="button" style={CLOSE_BUTTON_STYLE} onClick={onClose} aria-label="Close viewer" title="Close">
+                <div style={TITLE_STYLE}>{t('docViewer.empty')}</div>
+                <button type="button" style={CLOSE_BUTTON_STYLE} onClick={onClose} aria-label={t('tooltip.closeViewer')} title={t('tooltip.closeViewer')}>
                     ×
                 </button>
             </div>
@@ -139,9 +140,9 @@ export const HalfLeftWindow: React.FC<HalfLeftWindowProps> = ({ open, onClose, r
                     >
                         <div style={EMPTY_STYLE}>
                             <strong style={{ display: 'block', marginBottom: '6px', color: 'rgba(220, 228, 245, 0.9)' }}>
-                                No document loaded
+                                {t('docViewer.empty')}
                             </strong>
-                            <div>Drop a file onto the canvas (right side) to parse it.</div>
+                            <div>{t('docViewer.dropInstruction')}</div>
                         </div>
                     </div>
                 )}

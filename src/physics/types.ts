@@ -134,6 +134,10 @@ export interface ForceConfig {
   contactSlop: number;            // Zone above minDist for gradual velocity projection (default 12px)
   expansionResistance: number;    // Degree-based velocity damping during expansion (default 0.15)
 
+  // Pairwise pass throttling
+  pairwiseMaxChecks: number; // Target max pair checks per pass before sampling
+  pairwiseMaxStride: number; // Upper bound for sampling stride
+
   // Debug
   debugPerf?: boolean; // Enable per-pass timing logs (once per second)
 }

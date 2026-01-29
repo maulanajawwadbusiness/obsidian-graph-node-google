@@ -13,7 +13,9 @@ export const applyForcePass = (
     energy?: number,
     frameIndex?: number,
     timing?: { repulsionMs: number; collisionMs: number; springsMs: number },
-    nowFn?: () => number
+    nowFn?: () => number,
+    pairStride: number = 1,
+    pairOffset: number = 0
 ) => {
     const now =
         nowFn ??
@@ -161,19 +163,19 @@ export const applyForcePass = (
         // 2. Apply Core Forces (scaled by energy)
         if (timing) {
             const repulsionStart = now();
-            applyRepulsion(nodeList, engine.config, energy);
+            applyRepulsion(nodeList, engine.config, energy, pairStride, pairOffset);
             timing.repulsionMs += now() - repulsionStart;
 
             const collisionStart = now();
-            applyCollision(nodeList, engine.config, 1.0);
+            applyCollision(nodeList, engine.config, 1.0, pairStride, pairOffset + 1);
             timing.collisionMs += now() - collisionStart;
 
             const springsStart = now();
             applySprings(engine.nodes, engine.links, engine.config, 1.0, forceScale, frameIndex || 0);
             timing.springsMs += now() - springsStart;
         } else {
-            applyRepulsion(nodeList, engine.config, energy);
-            applyCollision(nodeList, engine.config, 1.0);
+            applyRepulsion(nodeList, engine.config, energy, pairStride, pairOffset);
+            applyCollision(nodeList, engine.config, 1.0, pairStride, pairOffset + 1);
             applySprings(engine.nodes, engine.links, engine.config, 1.0, forceScale, frameIndex || 0);
         }
         applyBoundaryForce(nodeList, engine.config, engine.worldWidth, engine.worldHeight);

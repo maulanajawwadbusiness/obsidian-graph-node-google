@@ -90,7 +90,9 @@ export const applySpacingConstraints = (
     correctionAccum: Map<string, { dx: number; dy: number }>,
     nodeDegreeEarly: Map<string, number>,
     energy: number,
-    stats: DebugStats
+    stats: DebugStats,
+    pairStride: number = 1,
+    pairOffset: number = 0
 ) => {
     // =====================================================================
     // DISTANCE-BASED SPACING (Soft pre-zone + Hard barrier)
@@ -117,6 +119,10 @@ export const applySpacingConstraints = (
             const a = nodeList[i];
 
             for (let j = i + 1; j < nodeList.length; j++) {
+                if (pairStride > 1) {
+                    const mix = (i * 73856093 + j * 19349663 + pairOffset) % pairStride;
+                    if (mix !== 0) continue;
+                }
                 const b = nodeList[j];
 
                 const dx = b.x - a.x;
@@ -309,7 +315,9 @@ export const applySafetyClamp = (
     correctionAccum: Map<string, { dx: number; dy: number }>,
     nodeDegreeEarly: Map<string, number>,
     energy: number,
-    stats: DebugStats
+    stats: DebugStats,
+    pairStride: number = 1,
+    pairOffset: number = 0
 ) => {
     // =====================================================================
     // SAFETY CLAMP: hard positional correction only for deep violations
@@ -321,6 +329,10 @@ export const applySafetyClamp = (
     for (let i = 0; i < nodeList.length; i++) {
         const a = nodeList[i];
         for (let j = i + 1; j < nodeList.length; j++) {
+            if (pairStride > 1) {
+                const mix = (i * 73856093 + j * 19349663 + pairOffset) % pairStride;
+                if (mix !== 0) continue;
+            }
             const b = nodeList[j];
 
             const dx = b.x - a.x;

@@ -22,6 +22,14 @@ import { createDebugStats, type DebugStats } from './engine/stats';
 const getNowMs = () =>
     (typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now());
 
+const computePairStride = (nodeCount: number, targetChecks: number, maxStride: number) => {
+    if (nodeCount < 2) return 1;
+    const pairCount = (nodeCount * (nodeCount - 1)) / 2;
+    const safeTarget = Math.max(1, targetChecks);
+    const stride = Math.ceil(pairCount / safeTarget);
+    return Math.max(1, Math.min(maxStride, stride));
+};
+
 export class PhysicsEngine {
     public nodes: Map<string, PhysicsNode> = new Map();
     public links: PhysicsLink[] = [];
@@ -278,6 +286,13 @@ export class PhysicsEngine {
         // =====================================================================
         const { energy, forceScale, effectiveDamping, maxVelocityEffective } = computeEnergyEnvelope(this.lifecycle);
 
+        const pairStrideBase = computePairStride(
+            nodeList.length,
+            this.config.pairwiseMaxChecks,
+            this.config.pairwiseMaxStride
+        );
+        const pairOffset = this.frameIndex;
+
         // 2. Apply Core Forces (scaled by energy)
         applyForcePass(
             this,
@@ -289,7 +304,9 @@ export class PhysicsEngine {
             energy,
             this.frameIndex,
             frameTiming ?? undefined,
-            perfEnabled ? getNowMs : undefined
+            perfEnabled ? getNowMs : undefined,
+            pairStrideBase,
+            pairOffset
         );
         applyDragVelocity(this, nodeList, dt, debugStats);
         applyPreRollVelocity(this, nodeList, preRollActive, debugStats);
@@ -332,18 +349,56 @@ export class PhysicsEngine {
         const correctionAccum = initializeCorrectionAccum(nodeList);
 
         if (!preRollActive) {
+            let spacingStride = pairStrideBase;
+            if (energy <= 0.7) {
+                const gateT = Math.max(0, Math.min(1, (0.7 - energy) / 0.3));
+                const spacingGate = gateT * gateT * (3 - 2 * gateT);
+                const scaledTarget = this.config.pairwiseMaxChecks * Math.max(0.2, spacingGate);
+                spacingStride = computePairStride(
+                    nodeList.length,
+                    scaledTarget,
+                    this.config.pairwiseMaxStride
+                );
+            }
             applyEdgeRelaxation(this, correctionAccum, nodeDegreeEarly, debugStats);
             if (perfEnabled && frameTiming) {
                 const spacingStart = getNowMs();
-                applySpacingConstraints(this, nodeList, correctionAccum, nodeDegreeEarly, energy, debugStats);
+                applySpacingConstraints(
+                    this,
+                    nodeList,
+                    correctionAccum,
+                    nodeDegreeEarly,
+                    energy,
+                    debugStats,
+                    spacingStride,
+                    pairOffset + 2
+                );
                 frameTiming.spacingMs += getNowMs() - spacingStart;
             } else {
-                applySpacingConstraints(this, nodeList, correctionAccum, nodeDegreeEarly, energy, debugStats);
+                applySpacingConstraints(
+                    this,
+                    nodeList,
+                    correctionAccum,
+                    nodeDegreeEarly,
+                    energy,
+                    debugStats,
+                    spacingStride,
+                    pairOffset + 2
+                );
             }
             applyTriangleAreaConstraints(this, nodeList, correctionAccum, nodeDegreeEarly, energy, debugStats);
             applyAngleResistanceVelocity(this, nodeList, nodeDegreeEarly, energy, debugStats);
             applyDistanceBiasVelocity(this, nodeList, debugStats);
-            applySafetyClamp(this, nodeList, correctionAccum, nodeDegreeEarly, energy, debugStats);
+            applySafetyClamp(
+                this,
+                nodeList,
+                correctionAccum,
+                nodeDegreeEarly,
+                energy,
+                debugStats,
+                pairStrideBase,
+                pairOffset + 3
+            );
             applyCorrectionsWithDiffusion(this, nodeList, correctionAccum, energy, debugStats);
         }
         if (perfEnabled && frameTiming) {

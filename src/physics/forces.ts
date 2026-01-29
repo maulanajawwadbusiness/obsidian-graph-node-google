@@ -8,7 +8,9 @@ import { PhysicsNode, PhysicsLink, ForceConfig } from './types';
 export function applyRepulsion(
     nodes: PhysicsNode[],
     config: ForceConfig,
-    energy?: number
+    energy?: number,
+    pairStride: number = 1,
+    pairOffset: number = 0
 ) {
     const { repulsionStrength, repulsionDistanceMax } = config;
     const maxDistSq = repulsionDistanceMax * repulsionDistanceMax;
@@ -21,16 +23,25 @@ export function applyRepulsion(
     const localDensity = new Map<string, number>();
 
     if (earlyExpansion) {
-        for (const node of nodes) {
+        const stride = Math.max(1, pairStride);
+        const densityRadiusSq = densityRadius * densityRadius;
+        for (let i = 0; i < nodes.length; i++) {
+            const node = nodes[i];
             let count = 0;
-            for (const other of nodes) {
-                if (other.id === node.id) continue;
+            for (let j = 0; j < nodes.length; j++) {
+                if (i === j) continue;
+                if (stride > 1) {
+                    const mix = (i * 73856093 + j * 19349663 + pairOffset) % stride;
+                    if (mix !== 0) continue;
+                }
+                const other = nodes[j];
                 const dx = other.x - node.x;
                 const dy = other.y - node.y;
-                const d = Math.sqrt(dx * dx + dy * dy);
-                if (d < densityRadius) count++;
+                const d2 = dx * dx + dy * dy;
+                if (d2 < densityRadiusSq) count++;
             }
-            localDensity.set(node.id, count);
+            const scaledCount = stride > 1 ? Math.round(count * stride) : count;
+            localDensity.set(node.id, scaledCount);
         }
     }
 
@@ -42,6 +53,10 @@ export function applyRepulsion(
     for (let i = 0; i < nodes.length; i++) {
         const nodeA = nodes[i];
         for (let j = i + 1; j < nodes.length; j++) {
+            if (pairStride > 1) {
+                const mix = (i * 73856093 + j * 19349663 + pairOffset) % pairStride;
+                if (mix !== 0) continue;
+            }
             const nodeB = nodes[j];
 
             let dx = nodeA.x - nodeB.x;
@@ -139,7 +154,9 @@ export function applyRepulsion(
 export function applyCollision(
     nodes: PhysicsNode[],
     config: ForceConfig,
-    strengthScale: number = 1.0
+    strengthScale: number = 1.0,
+    pairStride: number = 1,
+    pairOffset: number = 0
 ) {
     const { collisionStrength, collisionPadding } = config;
     // Effective strength
@@ -149,6 +166,10 @@ export function applyCollision(
     for (let i = 0; i < nodes.length; i++) {
         const nodeA = nodes[i];
         for (let j = i + 1; j < nodes.length; j++) {
+            if (pairStride > 1) {
+                const mix = (i * 73856093 + j * 19349663 + pairOffset) % pairStride;
+                if (mix !== 0) continue;
+            }
             const nodeB = nodes[j];
 
             const dx = nodeA.x - nodeB.x;

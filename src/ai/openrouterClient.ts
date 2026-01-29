@@ -17,33 +17,26 @@ export class OpenRouterClient implements LLMClient {
 
     async generateText(
         prompt: string,
-        opts?: { model?: string; maxCompletionTokens?: number }
+        opts?: { model?: string; temperature?: number; maxCompletionTokens?: number }
     ): Promise<string> {
-        const model = opts?.model || this.defaultModel;
-        const maxCompletionTokens = opts?.maxCompletionTokens ?? 1000;
+        // For now, let's just make sure the signautre matches the new interface
+        return "OpenRouter not fully implemented in this migration";
+    }
 
-        // TODO: Implement OpenRouter API call
-        // Use fetch() with OpenRouter headers (Authorization, HTTP-Referer, X-Title)
-        console.log('[OpenRouterClient] generateText called:', { model, maxCompletionTokens });
-        console.log('[OpenRouterClient] Prompt:', prompt);
-
-        // Stub: return placeholder
-        return `[OpenRouter ${model} response to: ${prompt.substring(0, 50)}...]`;
+    async * generateTextStream(
+        prompt: string,
+        opts?: { model?: string; temperature?: number; maxCompletionTokens?: number },
+        signal?: AbortSignal
+    ): AsyncGenerator<string, void, unknown> {
+        // Stub for now as we are focusing on OpenAI migration
+        yield "OpenRouter streaming not implemented yet.";
     }
 
     async generateStructured<T>(
         schema: object,
         prompt: string,
-        opts?: { model?: string }
+        opts?: { model?: string; temperature?: number }
     ): Promise<T> {
-        const model = opts?.model || this.defaultModel;
-
-        // TODO: Implement OpenRouter API call with JSON schema
-        console.log('[OpenRouterClient] generateStructured called:', { model });
-        console.log('[OpenRouterClient] Schema:', schema);
-        console.log('[OpenRouterClient] Prompt:', prompt);
-
-        // Stub: return placeholder
-        throw new Error('generateStructured not yet implemented');
+        throw new Error("OpenRouter structured output not implemented");
     }
 }

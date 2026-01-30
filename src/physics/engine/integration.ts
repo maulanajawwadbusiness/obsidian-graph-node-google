@@ -42,14 +42,16 @@ export const integrateNodes = (
 
         // =====================================================================
         // WATER MICRO-DRIFT: The water is alive, not glass
-        // Very slow, very tiny drift to globalAngle - "water touching the underside"
+        // FIX #16: Gate behind config to prevent phantom movement perception
         // =====================================================================
-        const t = engine.lifecycle;
-        const microDrift =
-            Math.sin(t * 0.3) * 0.0008 +  // ~20 second period, tiny amplitude
-            Math.sin(t * 0.7) * 0.0004 +  // ~9 second period, tinier
-            Math.sin(t * 1.1) * 0.0002;   // ~6 second period, tiniest
-        engine.globalAngle += microDrift * dt;
+        if (engine.config.enableMicroDrift) {
+            const t = engine.lifecycle;
+            const microDrift =
+                Math.sin(t * 0.3) * 0.0008 +
+                Math.sin(t * 0.7) * 0.0004 +
+                Math.sin(t * 1.1) * 0.0002;
+            engine.globalAngle += microDrift * dt;
+        }
     }
 
     // =====================================================================

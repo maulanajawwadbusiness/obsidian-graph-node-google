@@ -50,7 +50,7 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
         aspectRatio: 0,
         lifecycleMs: 0
     });
-    const [spawnCount, setSpawnCount] = useState(5);
+    const [spawnCount, setSpawnCount] = useState(6);
     const [seed, setSeed] = useState(Date.now()); // Seed for deterministic generation
     const [skinMode, setSkinMode] = useState<SkinMode>('elegant'); // Skin toggle (default: elegant)
 
@@ -276,7 +276,7 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
     // ---------------------------------------------------------------------------
     // Config Updates
     // ---------------------------------------------------------------------------
-    const handleConfigChange = (key: keyof ForceConfig, value: number) => {
+    const handleConfigChange = (key: keyof ForceConfig, value: number | boolean) => {
         const newConfig = { ...config, [key]: value };
         setConfig(newConfig);
         engineRef.current?.updateConfig(newConfig);

@@ -6,7 +6,7 @@ import { SIDEBAR_CLOSE_STYLE, SIDEBAR_STYLE } from '../graphPlaygroundStyles';
 type SidebarControlsProps = {
     config: ForceConfig;
     onClose: () => void;
-    onConfigChange: (key: keyof ForceConfig, value: number) => void;
+    onConfigChange: (key: keyof ForceConfig, value: number | boolean) => void;
     onLogPreset: () => void;
     onReset: () => void;
     onSpawn: () => void;
@@ -111,6 +111,21 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
             }
             if (k === 'repulsionDistanceMax' || k === 'springLength' || k === 'boundaryMargin' || k === 'gravityBaseRadius') {
                 max = 500;
+            }
+
+            if (typeof val === 'boolean') {
+                return (
+                    <div key={k} style={{ marginBottom: '8px' }}>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px' }}>
+                            <input
+                                type="checkbox"
+                                checked={val}
+                                onChange={(e) => onConfigChange(k, e.target.checked)}
+                            />
+                            {k}
+                        </label>
+                    </div>
+                );
             }
 
             return (

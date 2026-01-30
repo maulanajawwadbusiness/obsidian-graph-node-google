@@ -252,11 +252,38 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
             if (engineRef.current.draggedNodeId) {
                 engineRef.current.releaseNode();
             }
-            isDraggingRef.current = false;
-            pendingDragRef.current = null;
         };
         window.addEventListener('blur', handleBlur);
         return () => window.removeEventListener('blur', handleBlur);
+    }, []);
+
+    // FIX 40: Global Shortcut Gate (Focus Truth)
+    // Prevent browser defaults (e.g. Page Scroll on Space/Arrows) when interacting with Canvas.
+    // Allow them if user is typing in Chat/Input.
+    useEffect(() => {
+        const handleGlobalKeydown = (e: KeyboardEvent) => {
+            // 1. Focus Check: Is user typing?
+            const target = e.target as HTMLElement;
+            const isInput = target.tagName === 'INPUT' ||
+                target.tagName === 'TEXTAREA' ||
+                target.isContentEditable;
+
+            if (isInput) {
+                // User is typing. Let browser/app handle it (e.g. space in text).
+                // Do NOT block.
+                return;
+            }
+
+            // 2. Block List: Keys that cause unwanted browser scrolling/nav on Canvas
+            // Space, Arrows
+            if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) {
+                e.preventDefault();
+                // e.stopPropagation(); // Optional: Stop bubble if we had conflicting listeners up-tree
+            }
+        };
+
+        window.addEventListener('keydown', handleGlobalKeydown, { capture: true }); // Capture to intercept early
+        return () => window.removeEventListener('keydown', handleGlobalKeydown, { capture: true });
     }, []);
 
     const handleSpawn = () => {

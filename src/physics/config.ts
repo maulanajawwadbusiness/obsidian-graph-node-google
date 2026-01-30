@@ -166,4 +166,5 @@ export const DEFAULT_PHYSICS_CONFIG: ForceConfig = {
     perfModeEFatal: 3000,
     perfModeDownshiftRatio: 0.9,
     debugPerf: false,
+    debugStall: false,
 };

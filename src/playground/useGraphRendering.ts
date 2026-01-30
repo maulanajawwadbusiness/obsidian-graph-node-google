@@ -143,7 +143,7 @@ export const useGraphRendering = ({
             const now = performance.now();
             const targetTickHz = engine.config.targetTickHz || 60;
             const fixedStepMs = 1000 / targetTickHz;
-            const maxFrameDeltaMs = engine.config.maxFrameDeltaMs || 120;
+
             const maxStepsPerFrame = engine.config.maxStepsPerFrame || 2;
             const maxPhysicsBudgetMs = engine.config.maxPhysicsBudgetMs ?? fixedStepMs * maxStepsPerFrame;
             const dtHugeMs = engine.config.dtHugeMs ?? 250;
@@ -154,12 +154,28 @@ export const useGraphRendering = ({
                 maxPhysicsBudgetMs
             );
             const rawDeltaMs = now - lastTime;
-            const frameDeltaMs = Math.min(rawDeltaMs, maxFrameDeltaMs);
+            // FIX #4: No dt clamp. Allow full time to flow (prevent syrup).
+            // We handle huge spikes via overload/debt-drop instead of dilating time.
+            const frameDeltaMs = rawDeltaMs;
             const dtMs = frameDeltaMs;
             lastTime = now;
 
             accumulatorMs += frameDeltaMs;
-            const clampedMs = Math.max(0, rawDeltaMs - frameDeltaMs);
+
+            let freezeThisFrame = false;
+            let overloadReason = 'NONE';
+            let overloadSeverity: 'NONE' | 'SOFT' | 'HARD' = 'NONE';
+
+            // Detect massive spikes (e.g. tab switch) -> force freeze/reset
+            if (accumulatorMs > dtHugeMs * 3) {
+                // Hard reset if >750ms behind (safety hatch)
+                accumulatorMs = 0;
+                overloadReason = 'DT_HUGE_RESET';
+                overloadSeverity = 'HARD';
+                freezeThisFrame = true;
+            }
+
+            const clampedMs = 0; // No longer clamping upstream
 
             let stepsThisFrame = 0;
             let tickMsTotal = 0;
@@ -183,9 +199,7 @@ export const useGraphRendering = ({
             const dtHuge = rawDeltaMs > dtHugeMs;
             const debtWatchdogPrev = overloadState.debtFrames > 2;
 
-            let freezeThisFrame = false;
-            let overloadReason = 'NONE';
-            let overloadSeverity: 'NONE' | 'SOFT' | 'HARD' = 'NONE';
+            // Var definitions moved up
 
             if (dtHuge) {
                 freezeThisFrame = true;
@@ -254,83 +268,48 @@ export const useGraphRendering = ({
             // INVARIANT A & B: Drop Debt & Detect Overload
             // =================================================================
 
+            const capHit = !freezeThisFrame && (stepsThisFrame >= maxStepsPerFrame);
+            const budgetExceeded = !freezeThisFrame && (physicsMs >= maxPhysicsBudgetMs);
+
+            // FIX #5: Burst Control & Anti-Syrup
+            // If we hit a limit (Budget or StepCap) and still have debt, DROP IT.
+            // Never carry debt that we proved we can't handle this frame.
+            let droppedMs = clampedMs;
+            let dropReason = "NONE";
+
+            // Check for persistent debt (Syrup Detector)
             const slushThreshold = fixedStepMs * 2;
             if (accumulatorMs > slushThreshold) {
                 overloadState.debtFrames += 1;
             } else {
                 overloadState.debtFrames = 0;
             }
-            const debtPersistent = overloadState.debtFrames >= 2;
-            const debtWatchdog = overloadState.debtFrames > 2;
 
-            let forceDropDebt = false;
-            let forceDropReason = 'NONE';
-
-            if (!freezeThisFrame && debtWatchdog) {
-                forceDropDebt = true;
-                forceDropReason = 'WATCHDOG';
-                if (overloadSeverity !== 'HARD') {
-                    overloadReason = 'DEBT_WATCHDOG';
-                    overloadSeverity = 'HARD';
-                }
-                if (engine.config.debugPerf) {
-                    const nowLog = performance.now();
-                    if (nowLog - overloadState.lastLogAt > 1000) {
-                        console.error(
-                            `[SlushAssert] debtFrames=${overloadState.debtFrames} ` +
-                            `accumulatorMs=${accumulatorMs.toFixed(1)} ` +
-                            `threshold=${slushThreshold.toFixed(1)}`
-                        );
-                        overloadState.lastLogAt = nowLog;
-                    }
-                }
-            }
-
-            const capHit = !freezeThisFrame && stepsThisFrame >= maxStepsPerFrame && accumulatorMs >= fixedStepMs;
-            const budgetExceeded = !freezeThisFrame && physicsMs > maxPhysicsBudgetMs;
-
-            // 1. Drop Excess Debt
-            let droppedMs = clampedMs;
-            let dropReason = clampedMs > 0 ? "CLAMP" : "NONE";
-
-            // If we have leftovers >= fixedStepMs, we MUST drop them to prevent syrup.
-            // "skip time, don't stretch time"
-            // We keep the phase (remainder < fixedStepMs) for smoothness, 
-            // UNLESS we are in a massive overload (slush detected), then we might clear all.
-            // For now, adhering to Invariant B: "drop the remaining debt"
-            // The user said: "it's ok to drop remainder too" in overload.
-
-            const debtLimit = fixedStepMs;
             if (freezeThisFrame) {
                 droppedMs += accumulatorMs;
                 dropReason = "FREEZE";
                 accumulatorMs = 0;
-            } else if (forceDropDebt) {
+            } else if (capHit || budgetExceeded) {
+                // If we stopped early, we MUST drop the rest to stay real-time.
+                if (accumulatorMs > 0) {
+                    droppedMs += accumulatorMs;
+                    dropReason = budgetExceeded ? "BUDGET_DROP" : "CAP_DROP";
+                    accumulatorMs = 0; // HARD RESET
+                }
+            } else if (overloadState.debtFrames > 2) {
+                // Watchdog: If we have >2 frames of slush, force reset
                 droppedMs += accumulatorMs;
-                dropReason = forceDropReason;
+                dropReason = "WATCHDOG_DROP";
                 accumulatorMs = 0;
-            } else if ((capHit || budgetExceeded) && accumulatorMs >= debtLimit) {
-                droppedMs += accumulatorMs;
-                dropReason = budgetExceeded ? "BUDGET" : "CAP";
-                accumulatorMs = 0; // HARD RESET to guarantee catch-up
             }
-            if (!freezeThisFrame && (forceDropDebt || capHit || budgetExceeded)) {
-                overloadState.debtFrames = 0;
-            }
+
+            // Determine Overload State for Degrade System
             if (overloadSeverity === 'NONE') {
-                if (debtPersistent && (capHit || budgetExceeded)) {
-                    overloadReason = budgetExceeded ? 'DEBT_PERSIST_BUDGET' : 'DEBT_PERSIST_CAP';
-                    overloadSeverity = 'HARD';
-                    overloadState.pendingHardFreeze = true;
-                    overloadState.pendingReason = overloadReason;
+                if (droppedMs > fixedStepMs && dropReason !== "NONE") {
+                    overloadReason = dropReason;
+                    overloadSeverity = 'HARD'; // Drops are treated as hard overload
                 } else if (budgetExceeded) {
-                    overloadReason = 'BUDGET_EXCEEDED';
-                    overloadSeverity = 'SOFT';
-                } else if (capHit) {
-                    overloadReason = 'CAP_HIT';
-                    overloadSeverity = 'SOFT';
-                } else if (debtPersistent) {
-                    overloadReason = 'DEBT_PERSIST';
+                    overloadReason = 'BUDGET_HIT';
                     overloadSeverity = 'SOFT';
                 }
             }

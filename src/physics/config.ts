@@ -72,6 +72,8 @@ export const DEFAULT_PHYSICS_CONFIG: ForceConfig = {
     targetTickHz: 60,
     maxStepsPerFrame: 2,
     maxFrameDeltaMs: 120,
+    maxPhysicsBudgetMs: 12,
+    dtHugeMs: 250,
 
     // ---------------------------------------------------------------------------
     // ANCHOR: Screen Containment
@@ -164,5 +166,4 @@ export const DEFAULT_PHYSICS_CONFIG: ForceConfig = {
     perfModeEFatal: 3000,
     perfModeDownshiftRatio: 0.9,
     debugPerf: false,
-    debugStall: false,
 };

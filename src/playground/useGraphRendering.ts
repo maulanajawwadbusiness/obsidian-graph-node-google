@@ -101,6 +101,24 @@ export const useGraphRendering = ({
             tickMsSamples: [] as number[],
             droppedMsTotal: 0,
             maxTicksPerFrame: 0,
+            lastDtMs: 0,
+            lastAccumulatorMs: 0,
+            lastSteps: 0,
+            lastDroppedMs: 0,
+            lastPhysicsMs: 0,
+        };
+        const overloadState = {
+            active: false,
+            reason: 'NONE',
+            severity: 'NONE' as 'NONE' | 'SOFT' | 'HARD',
+            overloadCount: 0,
+            freezeCount: 0,
+            debtFrames: 0,
+            lastLogAt: 0,
+            lastOverloadAt: 0,
+            lastFreezeAt: 0,
+            pendingHardFreeze: false,
+            pendingReason: 'NONE',
         };
 
         const engine = engineRef.current;
@@ -124,6 +142,8 @@ export const useGraphRendering = ({
             const fixedStepMs = 1000 / targetTickHz;
             const maxFrameDeltaMs = engine.config.maxFrameDeltaMs || 120;
             const maxStepsPerFrame = engine.config.maxStepsPerFrame || 2;
+            const maxPhysicsBudgetMs = engine.config.maxPhysicsBudgetMs ?? fixedStepMs * maxStepsPerFrame;
+            const dtHugeMs = engine.config.dtHugeMs ?? 250;
             const rawDeltaMs = now - lastTime;
             const frameDeltaMs = Math.min(rawDeltaMs, maxFrameDeltaMs);
             const dtMs = frameDeltaMs;
@@ -132,147 +152,60 @@ export const useGraphRendering = ({
             accumulatorMs += frameDeltaMs;
             const clampedMs = Math.max(0, rawDeltaMs - frameDeltaMs);
 
-
+            let stepsThisFrame = 0;
             let tickMsTotal = 0;
+            let physicsMs = 0;
             const recordTick = (durationMs: number) => {
                 tickMsTotal += durationMs;
-                perfSample.tickMsSamples.push(durationMs);
-                perfSample.tickMsMax = Math.max(perfSample.tickMsMax, durationMs);
+                if (engine.config.debugPerf) {
+                    perfSample.tickMsSamples.push(durationMs);
+                    perfSample.tickMsMax = Math.max(perfSample.tickMsMax, durationMs);
+                }
             };
 
             // DEBUG STALL: Validate overload behavior
             if (engine.config.debugStall) {
                 const stallStart = performance.now();
-                while (performance.now() - stallStart < 50) {
-                    // Busy wait 50ms
+                while (performance.now() - stallStart < 60) {
+                    // Busy wait 60ms
                 }
             }
 
-
-
-
-
-            // ⚠️ DEBUG STALL: Simulate heavy load if 'F9' is pressed (implied state)
-            // For now, we'll just check a global or config, but let's stick to the requested structure.
-            // If user asked to "add a temporary 30–80ms stall in render-only path behind a debug flag"
-            // We'll read engine.config.debugStall (we need to add this property or just hijack debugPerf for now with a key check)
-            // Let's assume we hardcode the stall mechanism behind a variable we can toggle for validation later, 
-            // or just rely on the existing loop.
-
-            // =================================================================
-            // INVARIANT A & B: Drop Debt & Detect Slush
-            // =================================================================
-
-            // 1. Monitor for "Death Spiral" / Syrup
-            // If accumulator > 2 frames for > 2 frames, warn.
             const slushThreshold = fixedStepMs * 2;
             if (accumulatorMs > slushThreshold) {
-                if (!hoverStateRef.current.slushFrameCount) hoverStateRef.current.slushFrameCount = 0;
-                hoverStateRef.current.slushFrameCount++;
-
-                if (hoverStateRef.current.slushFrameCount > 2) {
-                    // Only warn once per second-ish to avoid console death
-                    const nowLog = performance.now();
-                    if (nowLog - (hoverStateRef.current.lastSlushLog || 0) > 1000) {
-                        console.warn(
-                            `[PhysicsSlushWarn] accumulatorPersist=${accumulatorMs.toFixed(1)}ms ` +
-                            `frames=${hoverStateRef.current.slushFrameCount} ` +
-                            `threshold=${slushThreshold.toFixed(1)}ms`
-                        );
-                        hoverStateRef.current.lastSlushLog = nowLog;
-                    }
-                }
+                overloadState.debtFrames += 1;
             } else {
-                hoverStateRef.current.slushFrameCount = 0;
+                overloadState.debtFrames = 0;
             }
+            const debtPersistent = overloadState.debtFrames >= 2;
+            const debtWatchdog = overloadState.debtFrames > 2;
+            const dtHuge = rawDeltaMs > dtHugeMs;
 
-            // 2. Drop Excess Debt
-
-
-            // If we have leftovers >= fixedStepMs, we MUST drop them to prevent syrup.
-            // "skip time, don't stretch time"
-            // We keep the phase (remainder < fixedStepMs) for smoothness, 
-            // UNLESS we are in a massive overload (slush detected), then we might clear all.
-            // For now, adhering to Invariant B: "drop the remaining debt"
-            // The user said: "it’s ok to drop remainder too" in overload.
-
-            // =================================================================
-            // OVERLOAD STATE MACHINE
-            // =================================================================
-
-            // Constants
-            const DT_HUGE_MS = 200; // Tab switch, major GC, or massive stall
-            const SLUSH_THRESHOLD = fixedStepMs * 2;
-            const SLUSH_FRAMES_TRIGGER = 2; // >= 2 frames of persistent debt
-
-            // Signals
-            const isHugeDt = rawDeltaMs > DT_HUGE_MS;
-            const isPersistentDebt = accumulatorMs > SLUSH_THRESHOLD;
-
-            // State Updates
-            if (isPersistentDebt) {
-                if (!hoverStateRef.current.slushFrameCount) hoverStateRef.current.slushFrameCount = 0;
-                hoverStateRef.current.slushFrameCount++;
-            } else {
-                hoverStateRef.current.slushFrameCount = 0;
-            }
-
-            const persistentFrames = hoverStateRef.current.slushFrameCount || 0;
-            const isSlushy = persistentFrames >= SLUSH_FRAMES_TRIGGER;
-
-            // Decision Matrix
-            let overloadSeverity = 'NONE';
+            let freezeThisFrame = false;
             let overloadReason = 'NONE';
+            let overloadSeverity: 'NONE' | 'SOFT' | 'HARD' = 'NONE';
 
-            if (isHugeDt) {
-                overloadSeverity = 'HARD';
+            if (dtHuge) {
+                freezeThisFrame = true;
                 overloadReason = 'DT_HUGE';
-            } else if (isSlushy) {
-                overloadSeverity = 'HARD'; // Upgrade to HARD to kill syrup
-                overloadReason = 'PERSISTENT_DEBT';
+                overloadSeverity = 'HARD';
+            } else if (debtWatchdog) {
+                freezeThisFrame = true;
+                overloadReason = 'DEBT_WATCHDOG';
+                overloadSeverity = 'HARD';
+            } else if (overloadState.pendingHardFreeze) {
+                freezeThisFrame = true;
+                overloadReason = overloadState.pendingReason;
+                overloadSeverity = 'HARD';
             }
 
-            // =================================================================
-            // BRANCH: EMERGENCY FREEZE vs NORMAL TICK
-            // =================================================================
+            if (freezeThisFrame) {
+                overloadState.pendingHardFreeze = false;
+                overloadState.pendingReason = 'NONE';
+            }
 
-            let stepsThisFrame = 0;
-            let droppedMs = clampedMs;
-            let freezeTriggered = false;
-
-            if (overloadSeverity === 'HARD') {
-                // 🧊 HARD FREEZE FAILURE MODE
-                // 1. Skip ALL physics this frame
-                stepsThisFrame = 0;
-                freezeTriggered = true;
-
-                // 2. Drop ALL debt immediately
-                droppedMs += accumulatorMs;
-                accumulatorMs = 0;
-
-                // 3. Stats & Logs
-                if (!hoverStateRef.current.freezeCount) hoverStateRef.current.freezeCount = 0;
-                if (!hoverStateRef.current.overloadCount) hoverStateRef.current.overloadCount = 0;
-                hoverStateRef.current.freezeCount++;
-                hoverStateRef.current.overloadCount++;
-
-                // Reset slush counter to give chance to recover
-                hoverStateRef.current.slushFrameCount = 0;
-
-                const nowLog = performance.now();
-                if (nowLog - (hoverStateRef.current.lastOverloadLog || 0) > 1000) {
-                    console.warn(
-                        `[Overload] active=true severity=${overloadSeverity} ` +
-                        `reason=${overloadReason} ` +
-                        `freezeTriggered=true ` +
-                        `freezeCount=${hoverStateRef.current.freezeCount} ` +
-                        `droppedMs=${droppedMs.toFixed(1)}`
-                    );
-                    hoverStateRef.current.lastOverloadLog = nowLog;
-                }
-
-            } else {
-                // NORMAL TICK LOOP (with standard cap)
+            if (!freezeThisFrame) {
+                const physicsStart = performance.now();
                 while (accumulatorMs >= fixedStepMs && stepsThisFrame < maxStepsPerFrame) {
                     if (engine.config.debugPerf) {
                         const tickStart = performance.now();
@@ -285,36 +218,121 @@ export const useGraphRendering = ({
                     stepsThisFrame += 1;
                 }
 
-                // If budget exceeded but debt remains:
-                if (stepsThisFrame === maxStepsPerFrame && accumulatorMs >= fixedStepMs) {
-                    // Soft drop (stutter) to maintain invariant A/B from basic contract
-                    const excess = accumulatorMs;
-                    accumulatorMs = 0;
-                    droppedMs += excess;
-
-                    if (!hoverStateRef.current.overloadCount) hoverStateRef.current.overloadCount = 0;
-                    hoverStateRef.current.overloadCount++;
-
-                    const nowLog = performance.now();
-                    if (nowLog - (hoverStateRef.current.lastDropLog || 0) > 1000) {
-                        console.log(
-                            `[RenderPerf] droppedMs=${droppedMs.toFixed(1)} ` +
-                            `reason=CAP_HIT ` +
-                            `budgetMs=${(fixedStepMs * maxStepsPerFrame).toFixed(1)} ` +
-                            `steps=${stepsThisFrame}`
-                        );
-                        hoverStateRef.current.lastDropLog = nowLog;
+                if (stepsThisFrame === 0 && accumulatorMs > 0) {
+                    if (engine.config.debugPerf) {
+                        const tickStart = performance.now();
+                        engine.tick(accumulatorMs / 1000);
+                        recordTick(performance.now() - tickStart);
+                    } else {
+                        engine.tick(accumulatorMs / 1000);
                     }
+                    accumulatorMs = 0;
+                    stepsThisFrame = 1;
                 }
+                physicsMs = performance.now() - physicsStart;
+            } else if (engine.draggedNodeId && engine.dragTarget) {
+                const dragged = engine.nodes.get(engine.draggedNodeId);
+                if (dragged) {
+                    dragged.x = engine.dragTarget.x;
+                    dragged.y = engine.dragTarget.y;
+                }
+            }
+
+            // ⚠️ DEBUG STALL: Simulate heavy load if 'F9' is pressed (implied state)
+            // For now, we'll just check a global or config, but let's stick to the requested structure.
+            // If user asked to "add a temporary 30–80ms stall in render-only path behind a debug flag"
+            // We'll read engine.config.debugStall (we need to add this property or just hijack debugPerf for now with a key check)
+            // Let's assume we hardcode the stall mechanism behind a variable we can toggle for validation later, 
+            // or just rely on the existing loop.
+
+            // =================================================================
+            // INVARIANT A & B: Drop Debt & Detect Overload
+            // =================================================================
+
+            // 1. Drop Excess Debt
+            let droppedMs = clampedMs;
+            let dropReason = clampedMs > 0 ? "CLAMP" : "NONE";
+
+            // If we have leftovers >= fixedStepMs, we MUST drop them to prevent syrup.
+            // "skip time, don't stretch time"
+            // We keep the phase (remainder < fixedStepMs) for smoothness, 
+            // UNLESS we are in a massive overload (slush detected), then we might clear all.
+            // For now, adhering to Invariant B: "drop the remaining debt"
+            // The user said: "it’s ok to drop remainder too" in overload.
+
+            const debtLimit = fixedStepMs;
+            if (freezeThisFrame) {
+                droppedMs += accumulatorMs;
+                dropReason = "FREEZE";
+                accumulatorMs = 0;
+            } else if (accumulatorMs >= debtLimit) {
+                droppedMs += accumulatorMs;
+                dropReason = "OVERLOAD";
+                accumulatorMs = 0; // HARD RESET to guarantee catch-up
+            }
+
+            const capHit = !freezeThisFrame && stepsThisFrame >= maxStepsPerFrame && accumulatorMs >= fixedStepMs;
+            const budgetExceeded = !freezeThisFrame && physicsMs > maxPhysicsBudgetMs;
+            if (overloadSeverity === 'NONE') {
+                if (debtPersistent && (capHit || budgetExceeded)) {
+                    overloadReason = budgetExceeded ? 'DEBT_PERSIST_BUDGET' : 'DEBT_PERSIST_CAP';
+                    overloadSeverity = 'HARD';
+                    overloadState.pendingHardFreeze = true;
+                    overloadState.pendingReason = overloadReason;
+                } else if (budgetExceeded) {
+                    overloadReason = 'BUDGET_EXCEEDED';
+                    overloadSeverity = 'SOFT';
+                } else if (capHit) {
+                    overloadReason = 'CAP_HIT';
+                    overloadSeverity = 'SOFT';
+                } else if (debtPersistent) {
+                    overloadReason = 'DEBT_PERSIST';
+                    overloadSeverity = 'SOFT';
+                }
+            }
+
+            const overloadActive = overloadReason !== 'NONE';
+            if (overloadActive) {
+                if (!overloadState.active || overloadReason !== overloadState.reason || overloadSeverity !== overloadState.severity) {
+                    overloadState.overloadCount += 1;
+                }
+                overloadState.lastOverloadAt = now;
+            }
+            overloadState.active = overloadActive;
+            overloadState.reason = overloadReason;
+            overloadState.severity = overloadSeverity;
+            if (freezeThisFrame) {
+                overloadState.freezeCount += 1;
+                overloadState.debtFrames = 0;
+                overloadState.lastFreezeAt = now;
             }
 
             if (engine.config.debugPerf) {
                 perfSample.frameCount += 1;
                 perfSample.tickCount += stepsThisFrame;
+                perfSample.tickMsTotal += tickMsTotal;
                 perfSample.maxTicksPerFrame = Math.max(perfSample.maxTicksPerFrame, stepsThisFrame);
                 perfSample.droppedMsTotal += droppedMs;
+                perfSample.lastDtMs = dtMs;
+                perfSample.lastAccumulatorMs = accumulatorMs;
+                perfSample.lastSteps = stepsThisFrame;
+                perfSample.lastDroppedMs = droppedMs;
+                perfSample.lastPhysicsMs = physicsMs;
 
-
+                if (droppedMs > 0 && dropReason === "OVERLOAD") {
+                    // Throttled log for significant drops
+                    const nowLog = performance.now();
+                    if (nowLog - (hoverStateRef.current.lastDropLog || 0) > 1000) {
+                        console.log(
+                            `[RenderPerf] droppedMs=${droppedMs.toFixed(1)} ` +
+                            `reason=${dropReason} ` +
+                            `budgetMs=${(fixedStepMs * maxStepsPerFrame).toFixed(1)} ` +
+                            `ticksThisFrame=${stepsThisFrame} ` +
+                            `avgTickMs=${perfSample.tickMsTotal / (perfSample.tickCount || 1)}`
+                        );
+                        hoverStateRef.current.lastDropLog = nowLog;
+                    }
+                }
 
                 if (perfSample.lastReportAt === 0) {
                     perfSample.lastReportAt = now;
@@ -323,13 +341,37 @@ export const useGraphRendering = ({
                 if (elapsed >= 1000) {
                     const frames = perfSample.frameCount || 1;
                     const ticks = perfSample.tickCount || 1;
+                    const fps = frames / (elapsed / 1000);
+                    const rafHz = fps;
                     const avgTickMs = perfSample.tickMsSamples.length
                         ? perfSample.tickMsSamples.reduce((sum, v) => sum + v, 0) / perfSample.tickMsSamples.length
-                        : 0;
+                        : (perfSample.lastSteps > 0 ? perfSample.lastPhysicsMs / perfSample.lastSteps : 0);
                     const sorted = perfSample.tickMsSamples.slice().sort((a, b) => a - b);
                     const p95Index = sorted.length ? Math.min(sorted.length - 1, Math.floor(sorted.length * 0.95)) : 0;
                     const p95TickMs = sorted.length ? sorted[p95Index] : 0;
                     const ticksPerSecond = ticks / (elapsed / 1000);
+                    const freezeRecently = now - overloadState.lastFreezeAt < 1000;
+                    console.log(
+                        `[RenderPerf] fps=${fps.toFixed(1)} ` +
+                        `rafHz=${rafHz.toFixed(1)} ` +
+                        `dt=${perfSample.lastDtMs.toFixed(1)} ` +
+                        `accumulatorMs=${perfSample.lastAccumulatorMs.toFixed(1)} ` +
+                        `steps=${perfSample.lastSteps} ` +
+                        `droppedMs=${perfSample.lastDroppedMs.toFixed(1)}`
+                    );
+                    console.log(
+                        `[Overload] active=${overloadState.active} ` +
+                        `severity=${overloadState.severity} ` +
+                        `reason=${overloadState.reason} ` +
+                        `freezeTriggered=${freezeRecently} ` +
+                        `freezeCount=${overloadState.freezeCount} ` +
+                        `overloadCount=${overloadState.overloadCount}`
+                    );
+                    console.log(
+                        `[SlushWatch] debtFrames=${overloadState.debtFrames} ` +
+                        `accumulatorMs=${perfSample.lastAccumulatorMs.toFixed(1)} ` +
+                        `avgTickMs=${avgTickMs.toFixed(3)}`
+                    );
                     console.log(
                         `[RenderPerf] avgTickMs=${avgTickMs.toFixed(3)} ` +
                         `p95TickMs=${p95TickMs.toFixed(3)} ` +
@@ -343,6 +385,7 @@ export const useGraphRendering = ({
                     perfSample.lastReportAt = now;
                     perfSample.frameCount = 0;
                     perfSample.tickCount = 0;
+                    perfSample.tickMsTotal = 0;
                     perfSample.tickMsMax = 0;
                     perfSample.tickMsSamples = [];
                     perfSample.droppedMsTotal = 0;

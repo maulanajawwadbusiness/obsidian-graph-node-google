@@ -97,6 +97,8 @@ export interface ForceConfig {
   targetTickHz: number; // Target physics ticks per second
   maxStepsPerFrame: number; // Max physics steps per render frame
   maxFrameDeltaMs: number; // Clamp on per-frame delta before dropping time
+  maxPhysicsBudgetMs?: number; // Max physics compute time per render frame
+  dtHugeMs?: number; // Threshold for dt spikes (tab switch / stall)
 
   // Boundary
   boundaryMargin: number;

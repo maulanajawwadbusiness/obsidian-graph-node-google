@@ -452,19 +452,30 @@ import { isDebugEnabled } from './debugUtils';
 export const drawHoverDebugOverlay = (
     ctx: CanvasRenderingContext2D,
     engine: PhysicsEngine,
-    hoverStateRef: MutableRefObject<HoverState>
+    hoverStateRef: MutableRefObject<HoverState>,
+    worldToScreen: (x: number, y: number) => { x: number; y: number }
 ) => {
     // GATE: Production Safety
-    if (!isDebugEnabled(true)) return; // Accessing theme prop would be cleaner, but caller passes ref
+    if (!isDebugEnabled(true)) return;
 
     withCtx(ctx, () => {
         const displayId = hoverStateRef.current.hoverDisplayNodeId ?? hoverStateRef.current.hoveredNodeId;
         const hoveredNode = engine.nodes.get(displayId ?? '');
         if (!hoveredNode) return;
 
+        // Manual Projection to match Nodes/Edges style exactly
+        // This prevents "drift" where the debug overlay floats away from the node
+        const screen = worldToScreen(hoveredNode.x, hoveredNode.y);
+
         const r = hoverStateRef.current.renderedRadius;
         const hitR = hoverStateRef.current.hitRadius;
         const halo = hoverStateRef.current.haloRadius;
+
+        // Use node's screen projection center
+        const sx = screen.x;
+        const sy = screen.y;
+
+        // Stats
         const energy = hoverStateRef.current.energy;
         const nodeEnergy = hoverStateRef.current.debugNodeEnergy;
         const targetEnergy = hoverStateRef.current.targetEnergy;
@@ -490,33 +501,44 @@ export const drawHoverDebugOverlay = (
         ctx.lineCap = 'butt';
         ctx.lineJoin = 'miter';
 
+        // Rendered Radius Ring
         ctx.beginPath();
-        ctx.arc(hoveredNode.x, hoveredNode.y, r, 0, Math.PI * 2);
+        ctx.arc(sx, sy, r, 0, Math.PI * 2);
         ctx.strokeStyle = 'rgba(0, 255, 255, 0.6)';
         ctx.lineWidth = 1;
         ctx.setLineDash([]);
         ctx.stroke();
 
+        // Hit Radius Ring
         ctx.beginPath();
-        ctx.arc(hoveredNode.x, hoveredNode.y, hitR, 0, Math.PI * 2);
+        ctx.arc(sx, sy, hitR, 0, Math.PI * 2);
         ctx.strokeStyle = 'rgba(255, 100, 200, 0.5)';
         ctx.lineWidth = 1;
         ctx.setLineDash([6, 4]);
         ctx.stroke();
         ctx.setLineDash([]);
 
+        // Halo Ring
         ctx.beginPath();
-        ctx.arc(hoveredNode.x, hoveredNode.y, halo, 0, Math.PI * 2);
+        ctx.arc(sx, sy, halo, 0, Math.PI * 2);
         ctx.strokeStyle = 'rgba(255, 255, 0, 0.4)';
         ctx.lineWidth = 1;
         ctx.setLineDash([6, 4]);
         ctx.stroke();
         ctx.setLineDash([]);
 
+        // Connection Line to Pointer
         if (hoverStateRef.current.hasPointer) {
+            // Pointer is already in world space in state, but let's project it safely
+            // Actually, we generally have cursorWorldX.
+            // But for consistent visual, let's just draw from center to cursor.
+            // We need cursor SCREEN coordinates?
+            // Since we removed 'transform', we need to project everything.
+            const cursorScreen = worldToScreen(hoverStateRef.current.cursorWorldX, hoverStateRef.current.cursorWorldY);
+
             ctx.beginPath();
-            ctx.moveTo(hoveredNode.x, hoveredNode.y);
-            ctx.lineTo(hoverStateRef.current.cursorWorldX, hoverStateRef.current.cursorWorldY);
+            ctx.moveTo(sx, sy);
+            ctx.lineTo(cursorScreen.x, cursorScreen.y);
             ctx.strokeStyle = 'rgba(0, 200, 255, 0.35)';
             ctx.lineWidth = 1;
             ctx.setLineDash([4, 3]);
@@ -528,36 +550,36 @@ export const drawHoverDebugOverlay = (
         ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
         ctx.fillText(
             `e=${energy.toFixed(2)}`,
-            hoveredNode.x + r + 3,
-            hoveredNode.y - r - 4
+            sx + r + 3,
+            sy - r - 4
         );
 
         ctx.font = '10px monospace';
         ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
         ctx.fillText(
             `e=${energy.toFixed(2)} nE=${nodeEnergy.toFixed(2)} t=${targetEnergy.toFixed(2)} d=${dist.toFixed(0)}`,
-            hoveredNode.x + r + 5,
-            hoveredNode.y - 5
+            sx + r + 5,
+            sy - 5
         );
         ctx.fillText(
             `id=${hoverStateRef.current.hoveredNodeId} disp=${displayId ?? 'null'} near=${nearestId ?? 'null'} nd=${isFinite(nearestDist) ? nearestDist.toFixed(0) : 'inf'} ${decision}`,
-            hoveredNode.x + r + 5,
-            hoveredNode.y + 8
+            sx + r + 5,
+            sy + 8
         );
         ctx.fillText(
             `hold=${holdRemaining.toFixed(0)}ms pending=${pendingId ?? 'null'} age=${pendingAge.toFixed(0)}ms`,
-            hoveredNode.x + r + 5,
-            hoveredNode.y + 21
+            sx + r + 5,
+            sy + 21
         );
         ctx.fillText(
             `dt=${dtRaw.toFixed(1)}ms clamped=${dtUsed.toFixed(1)}ms a=${alpha.toFixed(3)}`,
-            hoveredNode.x + r + 5,
-            hoveredNode.y + 34
+            sx + r + 5,
+            sy + 34
         );
         ctx.fillText(
             `scan=${hoverStateRef.current.nodesScannedLastSelection} sel/s=${hoverStateRef.current.selectionRunsPerSecond} en/s=${hoverStateRef.current.energyUpdatesPerSecond}`,
-            hoveredNode.x + r + 5,
-            hoveredNode.y + 47
+            sx + r + 5,
+            sy + 47
         );
         // Glow energy debug
         const iA = hoverStateRef.current.debugGlowInnerAlpha;
@@ -566,8 +588,8 @@ export const drawHoverDebugOverlay = (
         const oB = hoverStateRef.current.debugGlowOuterBlur;
         ctx.fillText(
             `glow: iA=${iA.toFixed(2)} iB=${iB.toFixed(0)} oA=${oA.toFixed(2)} oB=${oB.toFixed(0)}`,
-            hoveredNode.x + r + 5,
-            hoveredNode.y + 60
+            sx + r + 5,
+            sy + 60
         );
         // Occlusion disk sizing debug
         const nodeR = hoverStateRef.current.debugNodeRadius;
@@ -576,8 +598,8 @@ export const drawHoverDebugOverlay = (
         const shrinkPct = hoverStateRef.current.debugShrinkPct;
         ctx.fillText(
             `occlusion: nodeR=${nodeR.toFixed(1)} outerR=${outerR.toFixed(1)} occlR=${occlR.toFixed(1)} shrink=${(shrinkPct * 100).toFixed(0)}%`,
-            hoveredNode.x + r + 5,
-            hoveredNode.y + 73
+            sx + r + 5,
+            sy + 73
         );
     });
 };

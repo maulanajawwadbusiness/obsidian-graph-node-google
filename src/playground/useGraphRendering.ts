@@ -665,6 +665,7 @@ export const useGraphRendering = ({
         clearHover,
         clientToWorld,
         worldToScreen,
-        hoverStateRef
+        hoverStateRef,
+        updateHoverSelection // Expose for drag initiation
     };
 };

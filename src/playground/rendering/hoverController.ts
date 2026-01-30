@@ -53,10 +53,11 @@ export const createHoverController = ({
     };
 
     const evaluateNode = (
-        node: { id: string; x: number; y: number; radius: number },
+        node: { id: string; x: number; y: number; radius: number; label?: string },
         worldX: number,
         worldY: number,
-        theme: ThemeConfig
+        theme: ThemeConfig,
+        checkLabel: boolean = false
     ) => {
         const dx = node.x - worldX;
         const dy = node.y - worldY;
@@ -65,6 +66,9 @@ export const createHoverController = ({
         const { outerRadius, hitRadius, haloRadius } = getInteractionRadii(node, theme);
 
         let targetEnergy = 0;
+        let isLabelHit = false;
+
+        // 1. Core Hit Test (Glow/Halo)
         if (dist <= hitRadius) {
             targetEnergy = 1;
         } else if (dist <= haloRadius) {
@@ -72,9 +76,45 @@ export const createHoverController = ({
             targetEnergy = smoothstep(t);
         }
 
+        // 2. Label Hit Test (User Eyes)
+        if (checkLabel && theme.labelEnabled && targetEnergy < 1) {
+            const label = node.label || node.id;
+            // Approx font width: 0.6em per char (common simplified metric for sans-serif)
+            const fontSize = theme.labelFontSize;
+            const charWidth = fontSize * 0.6;
+            const textWidth = label.length * charWidth;
+            const textHeight = fontSize; // Line height approx
+
+            // Replicate offset logic from graphDraw.ts (assume energy=0 for idle state pick)
+            // Picking usually happens when idle or active, if active, it's easier.
+            // Conservative: use base offset (energy=0) to ensure picking works from afar
+            const offsetY = outerRadius + theme.labelOffsetBasePx;
+
+            const labelCenterX = node.x;
+            const labelTopY = node.y + offsetY;
+
+            // Simple AABB check (ignoring rotation for simplicity/perf, or if rotation is small)
+            // If labelForceHorizontal is true, we should strictly check against unrotated client rect, 
+            // but we are in world space.
+            // World space label is: (node.x, node.y + offset).
+            // AABB centered on X.
+            const halfW = textWidth / 2;
+            const pad = 4; // Padding
+
+            if (
+                worldX >= labelCenterX - halfW - pad &&
+                worldX <= labelCenterX + halfW + pad &&
+                worldY >= labelTopY - pad &&
+                worldY <= labelTopY + textHeight + pad
+            ) {
+                targetEnergy = 1;
+                isLabelHit = true;
+            }
+        }
+
         return {
             nodeId: node.id,
-            dist,
+            dist: isLabelHit ? 0 : dist, // Hack: Treat label hit as 0 dist (perfect match)
             renderedRadius: outerRadius,
             hitRadius,
             haloRadius,
@@ -103,26 +143,36 @@ export const createHoverController = ({
 
         for (const node of engine.nodes.values()) {
             scanned++;
-            const dx = node.x - worldX;
-            const dy = node.y - worldY;
-            const dist = Math.sqrt(dx * dx + dy * dy);
+            // Pass checkLabel=true for primary hit test
+            const candidate = evaluateNode(node, worldX, worldY, theme, true);
 
-            const { outerRadius, hitRadius, haloRadius } = getInteractionRadii(node, theme);
+            if (candidate.targetEnergy > 0) {
+                // Optimization: if perfect hit (energy=1), take it immediately?
+                // No, keep searching for closest in case of overlap (Z-order isn't strict yet)
+                // But dist=0 (label hit) should precise win.
+            }
 
-            if (dist <= haloRadius && dist < nearestDist) {
-                nearestId = node.id;
-                nearestDist = dist;
-                nearestRenderedRadius = outerRadius;
-                nearestHitRadius = hitRadius;
-                nearestHaloRadius = haloRadius;
-                if (dist <= outerRadius * 0.3 || dist === 0) {
-                    break;
+            // Use evaluateNode's result directly instead of recomputing
+            if (candidate.dist <= candidate.haloRadius && candidate.dist < nearestDist) {
+                nearestId = candidate.nodeId;
+                nearestDist = candidate.dist;
+                nearestRenderedRadius = candidate.renderedRadius;
+                nearestHitRadius = candidate.hitRadius;
+                nearestHaloRadius = candidate.haloRadius;
+
+                // If direct hit on label or core
+                if (nearestDist === 0 || nearestDist <= candidate.hitRadius) {
+                    // Keep looking only if we want to support overlapping dense nodes better
+                    // But for now, this is good enough.
                 }
             }
         }
 
         let targetEnergy = 0;
         if (nearestId !== null) {
+            // Re-evaluate to get precise energy for the winner? 
+            // We can just trust nearestDist logic if we map back to energy.
+            // But strict logic:
             if (nearestDist <= nearestHitRadius) {
                 targetEnergy = 1;
             } else {

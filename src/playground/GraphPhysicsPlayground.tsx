@@ -67,7 +67,8 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
         clearHover,
         clientToWorld,
         worldToScreen,
-        hoverStateRef
+        hoverStateRef,
+        updateHoverSelection
     } = useGraphRendering({
         canvasRef,
         config,
@@ -147,25 +148,17 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
         }
 
         const rect = canvas.getBoundingClientRect();
-        const { x, y } = clientToWorld(e.clientX, e.clientY, rect);
+        // --- Unified Interaction Logic ---
+        // Force a hover update to ensure we are testing against the exact same logic as the "Visual Glow".
+        // This ensures WYSIWYG selection: if it glows, it drags.
+        // Also includes Label Hit-Testing if enabled.
+        const theme = getTheme(skinMode);
+        updateHoverSelection(e.clientX, e.clientY, rect, theme, 'pointer');
 
-        // Find node under cursor
-        // Simple naive search (checking all nodes). Fine for <1000 nodes.
-        let hitId: string | null = null;
-        let minDist = Infinity;
-
-        engineRef.current.nodes.forEach((node) => {
-            const dx = node.x - x;
-            const dy = node.y - y;
-            const d = Math.sqrt(dx * dx + dy * dy);
-            // Give a bit of fuzzy hit area (radius + 5px padding)
-            if (d < node.radius + 10 && d < minDist) {
-                minDist = d;
-                hitId = node.id;
-            }
-        });
+        const hitId = hoverStateRef.current.hoveredNodeId;
 
         if (hitId) {
+            const { x, y } = clientToWorld(e.clientX, e.clientY, rect);
             engineRef.current.grabNode(hitId, { x, y });
         }
         // -----------------------------------------

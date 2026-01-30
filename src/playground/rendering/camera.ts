@@ -23,7 +23,8 @@ export class CameraTransform {
     ) {
         this.width = width;
         this.height = height;
-        this.zoom = zoom;
+        // Fix 6: Degenerate Zoom Guard (Prevent Divide-by-Zero)
+        this.zoom = Math.max(zoom, 0.0001);
         this.panX = panX;
         this.panY = panY;
         this.angle = angle;
@@ -93,6 +94,10 @@ export class CameraTransform {
     }
 
     public clientToWorld(clientX: number, clientY: number, rect: DOMRect): { x: number, y: number } {
+        // Fix 7: Degenerate Rect Guard (Prevent NaNs)
+        if (rect.width === 0 || rect.height === 0) {
+            return { x: this.cx, y: this.cy };
+        }
         let { zoom, panX, panY, angle, cx, cy } = this;
 
         // Fix 5: Pixel Snapping Policy (Symmetry)
@@ -165,8 +170,8 @@ export const updateCameraContainment = (
     const safeWidth = width - 2 * marginPx;
     const safeHeight = height - 2 * marginPx;
 
-    const zoomX = safeWidth / aabbWidth;
-    const zoomY = safeHeight / aabbHeight;
+    const zoomX = safeWidth / Math.max(aabbWidth, 1);
+    const zoomY = safeHeight / Math.max(aabbHeight, 1);
     const requiredZoom = Math.min(zoomX, zoomY, 1.0);
 
     const requiredPanX = -aabbCenterX;

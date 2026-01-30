@@ -419,13 +419,34 @@ export class PhysicsEngine {
         const { energy, forceScale, effectiveDamping, maxVelocityEffective } = computeEnergyEnvelope(this.lifecycle);
 
         const degradePairScale = degradeLevel === 0 ? 1 : degradeLevel === 1 ? 0.7 : 0.4;
-        const pairBudgetScale = (this.perfMode === 'normal'
+
+        // FIX #9: SMOOTH MODE TRANSITIONS
+        // Slew the budget scalar instead of snapping to prevent "law changes".
+        const targetBudgetScale = (this.perfMode === 'normal'
             ? 1
             : this.perfMode === 'stressed'
                 ? 0.7
                 : this.perfMode === 'emergency'
                     ? 0.4
                     : 0) * degradePairScale;
+
+        // Initialize if undefined (first frame)
+        if ((this as any)._currentBudgetScale === undefined) {
+            (this as any)._currentBudgetScale = targetBudgetScale;
+        }
+
+        // Slew towards target (10% per frame)
+        // This makes transitions take ~0.5s instead of 0s
+        const slewRate = 0.1;
+        const diff = targetBudgetScale - (this as any)._currentBudgetScale;
+        if (Math.abs(diff) > 0.001) {
+            (this as any)._currentBudgetScale += diff * slewRate;
+        } else {
+            (this as any)._currentBudgetScale = targetBudgetScale;
+        }
+
+        const pairBudgetScale = (this as any)._currentBudgetScale;
+
         const pairStrideBase = pairBudgetScale > 0
             ? computePairStride(
                 nodeList.length,
@@ -558,7 +579,7 @@ export class PhysicsEngine {
                     `diff:Y micro:${this.frameIndex % microEvery === 0 ? 'Y' : 'N'}} ` +
                     `k={repel:${repulsionEvery} coll:${collisionEvery} spring:${springsEvery} ` +
                     `space:${spacingEvery} tri:${triangleEvery} safety:${safetyEvery} micro:${microEvery}} ` +
-                    `pairBudget={pairStride:${pairStrideBase} spacingStride:${spacingStride}}`
+                    `pairBudget={pairStride:${pairStrideBase} spacingStride:${spacingStride} smoothScale:${((this as any)._currentBudgetScale ?? 1.0).toFixed(2)}}`
                 );
             }
         }

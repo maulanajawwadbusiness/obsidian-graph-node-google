@@ -109,7 +109,8 @@ export const applySpacingConstraints = (
     spacingGate: number,
     dt: number,
     pairStride: number = 1,
-    pairOffset: number = 0
+    pairOffset: number = 0,
+    timeScaleMultiplier: number = 1.0 // Compensation factor for skipped frames
 ) => {
     // =====================================================================
     // DISTANCE-BASED SPACING (Soft pre-zone + Hard barrier)
@@ -121,7 +122,7 @@ export const applySpacingConstraints = (
 
     const passStats = getPassStats(stats, 'SpacingConstraints');
     const affected = new Set<string>();
-    const timeScale = dt * 60.0;
+    const timeScale = dt * 60.0 * timeScaleMultiplier; // Apply compensation
     const D_soft = D_hard * engine.config.softDistanceMultiplier;
     const softExponent = engine.config.softRepulsionExponent;
     const softMaxCorr = engine.config.softMaxCorrectionPx * timeScale;

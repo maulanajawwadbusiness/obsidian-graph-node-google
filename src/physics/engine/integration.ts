@@ -170,13 +170,25 @@ export const integrateNodes = (
         node.x += node.vx * nodeDt;
         node.y += node.vy * nodeDt;
 
-        // Sleep Check (optional - zeroes micro-motion and marks as sleeping)
+        // Sleep Check (Smart Force-Aware)
+        // FIX #7: Only sleep if velocity is low AND acting force is low.
+        // Prevents nodes from sleeping while under tension (e.g. held by springs).
         const sleepThreshold = engine.config.velocitySleepThreshold;
         if (sleepThreshold) {
             const velSq = node.vx * node.vx + node.vy * node.vy;
             const threshSq = sleepThreshold * sleepThreshold;
+
+            // Force check: F = ma. If F/m is large, we will accelerate soon.
+            // Threshold: if acceleration * dt > sleepThreshold, we shouldn't sleep.
+            const accX = node.fx / (node.mass || 1);
+            const accY = node.fy / (node.mass || 1);
+            const accSq = accX * accX + accY * accY;
+            // Allow sleep only if force is negligible (< 10% of velocity threshold impact)
+            const forceSilent = accSq * (dt * dt) < (threshSq * 0.1);
+
             const sleepFramesRequired = engine.config.sleepFramesThreshold ?? 30;
-            if (velSq < threshSq) {
+
+            if (velSq < threshSq && forceSilent) {
                 node.sleepFrames = (node.sleepFrames ?? 0) + 1;
                 if (node.sleepFrames >= sleepFramesRequired) {
                     node.isSleeping = true;

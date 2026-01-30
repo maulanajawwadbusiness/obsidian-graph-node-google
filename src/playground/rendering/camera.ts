@@ -206,9 +206,14 @@ export const updateCameraContainment = (
 
     const camera = cameraRef.current;
 
-    // FIX 1: Deadzone (Recenter Creep)
-    // Only update target if required changed significantly (>0.5px)
-    const deadzone = 0.5;
+    // FIX 29: Screen-Space Deadzone (Pixel Consistency)
+    // Interpret thresholds as SCREEN PIXELS, not World Units.
+    // Thresholds scale with 1/Zoom to remain visibly constant.
+    const pixelScale = 1.0 / Math.max(0.0001, camera.zoom);
+
+    // Deadzone: 0.1 screen pixels (Virtually invisible, stops micro-drift but allows intent)
+    const deadzone = 0.1 * pixelScale;
+
     if (Math.abs(requiredPanX - camera.targetPanX) > deadzone) {
         camera.targetPanX = requiredPanX;
     }
@@ -235,8 +240,9 @@ export const updateCameraContainment = (
     camera.panY += (camera.targetPanY - camera.panY) * alpha;
     camera.zoom += (camera.targetZoom - camera.zoom) * alpha;
 
-    // FIX 2: Snap to Target (Kill Lerp Tail)
-    const snapPixels = 0.05; // 0.05px is invisible
+    // FIX 30: Invisible Snap (No Jumps)
+    // Snap only when error is visibly zero (0.01 screen pixels)
+    const snapPixels = 0.01 * pixelScale;
     const snapZoom = 0.0005;
 
     if (Math.abs(camera.targetPanX - camera.panX) < snapPixels) {

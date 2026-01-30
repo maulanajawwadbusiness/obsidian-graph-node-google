@@ -621,6 +621,17 @@ export const useGraphRendering = ({
             renderDebug.activeRingStateBefore = defaultState;
             renderDebug.activeRingStateAfter = defaultState;
 
+            // FIX 28: Render-Rate Drag Coupling (Visual Dignity)
+            // Force update the dragged node to the cursor position EVERY VSRE frame.
+            // This ensures smooth movement even if physics ticks are dropped or quantized (e.g. 60hz physics on 144hz screen).
+            if (engine.draggedNodeId && engine.dragTarget) {
+                const dragged = engine.nodes.get(engine.draggedNodeId);
+                if (dragged) {
+                    dragged.x = engine.dragTarget.x;
+                    dragged.y = engine.dragTarget.y;
+                }
+            }
+
             drawLinks(ctx, engine, theme);
             drawNodes(ctx, engine, theme, settingsRef, hoverStateRef, renderDebugRef);
             drawLabels(ctx, engine, theme, settingsRef, hoverStateRef, globalAngle);

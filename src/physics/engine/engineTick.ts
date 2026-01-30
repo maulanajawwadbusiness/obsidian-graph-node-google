@@ -46,6 +46,8 @@ export type PhysicsEngineTickContext = {
     localBoostFrames: number;
     spacingGate: number;
     spacingGateActive: boolean;
+    // FIX 44: Idle Rest Mode
+    idleFrames: number;
     spacingHotPairs: Set<string>;
     perfMode: 'normal' | 'stressed' | 'emergency' | 'fatal';
     perfModeLogAt: number;
@@ -220,6 +222,56 @@ export const runPhysicsTick = (engine: PhysicsEngineTickContext, dt: number) => 
         engine.localBoostFrames -= 1;
     }
     const localBoostActive = engine.localBoostFrames > 0;
+
+    // =====================================================================
+    // FIX 44: SOLVER COMA (Idle Rest Mode)
+    // If energy is negligible for > 1 second (60 ticks), we HARD FREEZE.
+    // This stops all floating point noise and ensures "Dead" visual state.
+    // =====================================================================
+    const isInteracting = engine.draggedNodeId !== null || engine.localBoostFrames > 0;
+    const isStartup = engine.lifecycle < 2.0; // Grace period for startup
+    const energyThreshold = 0.05;
+
+    // We compute energy later, but we need it now? 
+    // `computeEnergyEnvelope` returns "max allowed" not "current".
+    // We have to rely on `engine.spacingGate` or similar proxies? 
+    // Or just check if we are already in coma?
+    // Actually `energy` (computed later) is the envelope (1.0 -> 0.0). 
+    // It's ALWAYS > 0.05 for a long time. 
+    // We want to check KINETIC energy (velocities).
+    // Let's use `debugStats` later? No, we want to skip early.
+    // Let's use the PREVIOUS frame's decision? 
+    // Or just run a quick velocity scan.
+    let maxVelSq = 0;
+    if (!isInteracting && !isStartup) {
+        for (const node of nodeList) {
+            maxVelSq = Math.max(maxVelSq, node.vx * node.vx + node.vy * node.vy);
+            if (maxVelSq > 0.001) break;
+        }
+    }
+
+    if (!isInteracting && !isStartup && maxVelSq < 0.0001) {
+        engine.idleFrames++;
+    } else {
+        engine.idleFrames = 0;
+    }
+
+    const restModeActive = engine.idleFrames > 60; // 1 second of silence
+    if (restModeActive) {
+        // HARD SKIP
+        // Zero out everything to be sure
+        if (engine.idleFrames === 61) { // On entry, clamp hard
+            for (const node of nodeList) {
+                node.vx = 0;
+                node.vy = 0;
+                node.fx = 0;
+                node.fy = 0;
+            }
+            if (engine.config.debugPerf) console.log('[PhysicsRest] Entered Coma');
+        }
+        return; // EXIT TICK
+    }
+
 
     // =====================================================================
     // SOFT PRE-ROLL PHASE (Gentle separation before expansion)
@@ -470,7 +522,7 @@ export const runPhysicsTick = (engine: PhysicsEngineTickContext, dt: number) => 
 
     // 2. Apply Core Forces (scaled by energy)
     applyForcePass(
-        engine,
+        engine as any,
         nodeList,
         engine.awakeList,
         engine.sleepingList,
@@ -494,39 +546,39 @@ export const runPhysicsTick = (engine: PhysicsEngineTickContext, dt: number) => 
         1,
         pairOffset + 7
     );
-    applyDragVelocity(engine, nodeList, dt, debugStats);
-    applyPreRollVelocity(engine, nodeList, preRollActive, debugStats);
+    applyDragVelocity(engine as any, nodeList, dt, debugStats);
+    applyPreRollVelocity(engine as any, nodeList, preRollActive, debugStats);
 
     // 4. Integrate (always runs, never stops)
-    integrateNodes(engine, nodeList, dt, energy, effectiveDamping, maxVelocityEffective, debugStats, preRollActive);
+    integrateNodes(engine as any, nodeList, dt, energy, effectiveDamping, maxVelocityEffective, debugStats, preRollActive);
 
     // =====================================================================
     // COMPUTE Dot DEGREES (needed early for degree-1 exclusion)
     // Degree-1 dots (dangling limbs) are excluded from positional corrections
     // =====================================================================
-    const nodeDegreeEarly = computeNodeDegrees(engine, nodeList);
+    const nodeDegreeEarly = computeNodeDegrees(engine as any, nodeList);
 
-    applyExpansionResistance(engine, nodeList, nodeDegreeEarly, energy, debugStats, dt);
+    applyExpansionResistance(engine as any, nodeList, nodeDegreeEarly, energy, debugStats, dt);
 
     const microEnabled = engine.frameIndex % microEvery === 0;
     if (microEnabled) {
         // Dense-core velocity de-locking (micro-slip) - breaks rigid-body lock
-        applyDenseCoreVelocityDeLocking(engine, nodeList, energy, debugStats);
+        applyDenseCoreVelocityDeLocking(engine as any, nodeList, energy, debugStats);
 
         // Static friction bypass - breaks zero-velocity rest state
-        applyStaticFrictionBypass(engine, nodeList, energy, debugStats);
+        applyStaticFrictionBypass(engine as any, nodeList, energy, debugStats);
 
         // Angular velocity decoherence - breaks velocity orientation correlation
-        applyAngularVelocityDecoherence(engine, nodeList, energy, debugStats);
+        applyAngularVelocityDecoherence(engine as any, nodeList, energy, debugStats);
 
         // Local phase diffusion - breaks oscillation synchronization (shape memory eraser)
-        applyLocalPhaseDiffusion(engine, nodeList, energy, debugStats);
+        applyLocalPhaseDiffusion(engine as any, nodeList, energy, debugStats);
 
         // Low-force stagnation escape - breaks rest-position preference (edge shear version)
-        applyEdgeShearStagnationEscape(engine, nodeList, energy, debugStats);
+        applyEdgeShearStagnationEscape(engine as any, nodeList, energy, debugStats);
 
         // Dense-core inertia relaxation - erases momentum memory in jammed dots
-        applyDenseCoreInertiaRelaxation(engine, nodeList, energy, debugStats);
+        applyDenseCoreInertiaRelaxation(engine as any, nodeList, energy, debugStats);
     }
 
     // =====================================================================
@@ -549,7 +601,7 @@ export const runPhysicsTick = (engine: PhysicsEngineTickContext, dt: number) => 
             if (perfEnabled && frameTiming) {
                 const spacingStart = getNowMs();
                 applySpacingConstraints(
-                    engine,
+                    engine as any,
                     engine.awakeList,
                     engine.sleepingList,
                     correctionAccum,
@@ -566,7 +618,7 @@ export const runPhysicsTick = (engine: PhysicsEngineTickContext, dt: number) => 
                 frameTiming.spacingMs += getNowMs() - spacingStart;
             } else {
                 applySpacingConstraints(
-                    engine,
+                    engine as any,
                     engine.awakeList,
                     engine.sleepingList,
                     correctionAccum,
@@ -583,7 +635,7 @@ export const runPhysicsTick = (engine: PhysicsEngineTickContext, dt: number) => 
             }
         } else if (localBoostActive && focusActive.length > 0) {
             applySpacingConstraints(
-                engine,
+                engine as any,
                 focusActive,
                 focusSleeping,
                 correctionAccum,
@@ -599,14 +651,14 @@ export const runPhysicsTick = (engine: PhysicsEngineTickContext, dt: number) => 
         const triangleEnabled = (engine.perfMode === 'normal' || engine.perfMode === 'stressed') &&
             engine.frameIndex % triangleEvery === 0;
         if (triangleEnabled) {
-            applyTriangleAreaConstraints(engine, nodeList, correctionAccum, nodeDegreeEarly, energy, debugStats, dt);
+            applyTriangleAreaConstraints(engine as any, nodeList, correctionAccum, nodeDegreeEarly, energy, debugStats, dt);
         }
-        applyAngleResistanceVelocity(engine, nodeList, nodeDegreeEarly, energy, debugStats, dt);
-        applyDistanceBiasVelocity(engine, nodeList, debugStats, dt);
+        applyAngleResistanceVelocity(engine as any, nodeList, nodeDegreeEarly, energy, debugStats, dt);
+        applyDistanceBiasVelocity(engine as any, nodeList, debugStats, dt);
         const safetyEnabled = engine.frameIndex % safetyEvery === 0;
         if (safetyEnabled) {
             applySafetyClamp(
-                engine,
+                engine as any,
                 engine.awakeList,
                 engine.sleepingList,
                 correctionAccum,
@@ -619,7 +671,7 @@ export const runPhysicsTick = (engine: PhysicsEngineTickContext, dt: number) => 
             );
         } else if (localBoostActive && focusActive.length > 0) {
             applySafetyClamp(
-                engine,
+                engine as any,
                 focusActive,
                 focusSleeping,
                 correctionAccum,
@@ -633,7 +685,7 @@ export const runPhysicsTick = (engine: PhysicsEngineTickContext, dt: number) => 
         }
         const maxDiffusionNeighbors = degradeLevel === 0 ? undefined : degradeLevel === 1 ? 4 : 2;
         applyCorrectionsWithDiffusion(
-            engine,
+            engine as any,
             nodeList,
             correctionAccum,
             energy,

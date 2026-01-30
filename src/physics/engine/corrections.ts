@@ -17,7 +17,14 @@ export const applyCorrectionsWithDiffusion = (
     // Degree-weighted resistance + neighbor diffusion to prevent pressure concentration
     // =====================================================================
     const timeScale = dt * 60.0;
-    const nodeBudget = engine.config.maxNodeCorrectionPerFrame * timeScale;
+    let nodeBudget = engine.config.maxNodeCorrectionPerFrame * timeScale;
+
+    // FIX 45: Kill Delayed Debt (Boost Budget during Interaction)
+    // If user is interacting, we want to resolve constraints IMMEDIATELY.
+    // No saving debt for later. "Pay now".
+    if (engine.draggedNodeId) {
+        nodeBudget *= 3.0; // 3x budget allows instant resolution of most overlaps
+    }
 
     // Compute node degree and neighbor map
     const nodeDegree = new Map<string, number>();

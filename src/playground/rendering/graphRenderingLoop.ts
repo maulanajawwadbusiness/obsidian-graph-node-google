@@ -58,6 +58,7 @@ type GraphRenderLoopDeps = {
     clientToWorld: (clientX: number, clientY: number, rect: DOMRect) => { x: number; y: number };
     updateHoverSelection: UpdateHoverSelection;
     clearHover: (reason: string, id: number, source: string) => void;
+    renderScratch: RenderScratch;
 };
 
 type PerfSample = {
@@ -814,6 +815,7 @@ export const startGraphRenderLoop = (deps: GraphRenderLoopDeps) => {
         clientToWorld,
         updateHoverSelection,
         clearHover,
+        renderScratch,
     } = deps;
 
     let frameId = 0;
@@ -921,17 +923,6 @@ export const startGraphRenderLoop = (deps: GraphRenderLoopDeps) => {
             );
         }
 
-        updateHoverSelectionIfNeeded(
-            pendingPointerRef.current.hasPending,
-            hoverStateRef,
-            cameraRef,
-            engine,
-            rect,
-            theme,
-            surfaceChanged,
-            updateHoverSelection
-        );
-
         ctx.save();
         const camera = cameraRef.current;
         const centroid = stabilizeCentroid(engine, dragAnchorRef, stableCentroidRef);
@@ -992,6 +983,18 @@ export const startGraphRenderLoop = (deps: GraphRenderLoopDeps) => {
         const project = (x: number, y: number) => transform.worldToScreen(x, y);
         const worldToScreen = project;
         const visibleBounds = transform.getVisibleBounds(200);
+        renderScratch.prepare(engine, visibleBounds);
+        updateHoverSelectionIfNeeded(
+            pendingPointerRef.current.hasPending,
+            hoverStateRef,
+            cameraRef,
+            engine,
+            rect,
+            theme,
+            surfaceChanged,
+            renderScratch,
+            updateHoverSelection
+        );
 
         if (settingsRef.current.showDebugGrid) {
             ctx.save();
@@ -1031,7 +1034,6 @@ export const startGraphRenderLoop = (deps: GraphRenderLoopDeps) => {
             dpr,
             worldToScreen,
             visibleBounds,
-            renderScratch // Fix 55
         );
 
         // --- RENDER PASS 5: OVERLAYS (DEBUG) ---

@@ -17,8 +17,10 @@ import type {
     HoverState,
     PendingPointerState,
     RenderDebugInfo,
-    RenderSettingsRef
+    RenderSettings,
+    SurfaceSnapshot
 } from './rendering/renderingTypes';
+import { RenderScratch } from './rendering/renderScratch';
 
 type UseGraphRenderingProps = {
     canvasRef: RefObject<HTMLCanvasElement>;
@@ -57,13 +59,15 @@ export const useGraphRendering = ({
         targetPanY: 0,
         targetZoom: 1.0,
         lastRecenterCentroidX: 0,
-        lastRecenterCentroidY: 0
+        lastRecenterCentroidY: 0,
+        lastInteractionTime: 0
     });
 
-    const settingsRef = useRef<RenderSettingsRef>(createInitialRenderSettings());
+    const settingsRef = useRef<RenderSettings>(createInitialRenderSettings());
     const pendingPointerRef = useRef<PendingPointerState>(createInitialPendingPointer());
     const hoverStateRef = useRef<HoverState>(createInitialHoverState());
     const renderDebugRef = useRef<RenderDebugInfo>(createInitialRenderDebug());
+    const renderScratchRef = useRef<RenderScratch>(new RenderScratch());
 
     // FIX 18: Rotation Anchor Freeze (Stop World Swap)
     const dragAnchorRef = useRef<{ x: number, y: number } | null>(null);
@@ -72,7 +76,15 @@ export const useGraphRendering = ({
     // FIX 39: Camera NaN Safety Backup
     const lastSafeCameraRef = useRef<CameraState>({ ...cameraRef.current });
     // FIX 40 & 41: DPR Stability (Safe & Debounced)
-    const activeDprRef = useRef<number>(typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1);
+    const initialDpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
+    const activeDprRef = useRef<number>(initialDpr);
+    const surfaceSnapshotRef = useRef<SurfaceSnapshot>({
+        displayWidth: 0,
+        displayHeight: 0,
+        rectWidth: 0,
+        rectHeight: 0,
+        dpr: initialDpr
+    });
     const dprStableFramesRef = useRef<number>(0);
 
     const {
@@ -129,9 +141,11 @@ export const useGraphRendering = ({
             lastSafeCameraRef,
             activeDprRef,
             dprStableFramesRef,
+            surfaceSnapshotRef,
             clientToWorld,
             updateHoverSelection,
             clearHover,
+            renderScratch: renderScratchRef.current,
         });
 
         return stopLoop;

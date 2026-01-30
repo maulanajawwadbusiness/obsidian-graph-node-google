@@ -12,6 +12,7 @@ Excluding: `node_modules`, `dist`, `build`, `.git`
 ├── docs/                      # Extensive system documentation
 │   ├── system.md              # MAIN SYSTEM DOC
 │   ├── physics_xray.md        # PHYSICS DOCTRINE
+│   ├── onboarding_dpr_rendering.md # RENDERER DOCTRINE
 │   └── ... (forensic reports)
 ├── src/
 │   ├── ai/                    # AI Layer (Provider Agnostic)
@@ -38,12 +39,17 @@ Excluding: `node_modules`, `dist`, `build`, `.git`
 │   ├── physics/               # Core Physics Engine
 │   │   ├── engine/            # Sub-systems (constraints, forces)
 │   │   ├── types.ts           # Physics Types
-│   │   ├── engine.ts          # MAIN CLASS & DEGRADE LOGIC
-│   │   └── ...
+│   │   ├── engine.ts          # MAIN CLASS STATE
+│   │   ├── engine/            # Sub-systems
+│   │   │   ├── engineTick.ts  # MAIN TICK LOGIC
+│   │   │   ├── engineTime.ts  # Time Helpers
+│   │   │   └── ...
 │   ├── playground/            # Main Application Canvas
 │   │   ├── rendering/         # Canvas Drawing
+│   │   │   ├── graphRenderingLoop.ts # RENDER LOOP & SCHEDULER
+│   │   │   └── ...
 │   │   ├── components/        # Canvas-overlay components
-│   │   ├── useGraphRendering.ts # SCHEDULER & OVERLOAD DETECT
+│   │   ├── useGraphRendering.ts # HOOK WIRING
 │   │   └── GraphPhysicsPlayground.tsx # ROOT CONTAINER
 │   ├── popup/                 # Node Popups & MiniChat
 │   │   ├── PopupStore.tsx
@@ -58,8 +64,10 @@ Excluding: `node_modules`, `dist`, `build`, `.git`
 ## 2. Top Source Files (By Line Count)
 *Note: Counts are based on specific file scan.*
 
-1.  `src/physics/engine.ts` (950+ lines) - **Core Physics Logic & Degrade State**
-2.  `src/playground/useGraphRendering.ts` (600+ lines) - **Scheduler & Overload Controller**
+1.  `src/playground/rendering/graphRenderingLoop.ts` (900+ lines) - **Main Render Loop & Scheduler**
+2.  `src/physics/engine/engineTick.ts` (750+ lines) - **Core Physics Logic & Degrade State**
+3.  `src/physics/engine.ts` (480+ lines) - **Engine State Container**
+4.  `src/playground/useGraphRendering.ts` (Hook Shell)
 3.  `src/physics/engine/constraints.ts` (372 lines) - **PBD Constraints & Spacing**
 4.  `src/playground/GraphPhysicsPlayground.tsx` (378 lines) - **Main UI Controller**
 5.  `src/physics/engine/integration.ts` (200+ lines) - **Time Steps & Dt Skew**

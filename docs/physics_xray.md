@@ -30,7 +30,7 @@ When frame budget (`maxPhysicsBudgetMs`) is exceeded, we do NOT lower spring sti
     *   **Deep Diffusion**: Neighbor count cap reduces (3 -> 1 -> 0).
 
 ## 4. The Hybrid Solver Pipeline
-The ticking loop (`src/physics/engine.ts`) execution order:
+The ticking loop (`src/physics/engine/engineTick.ts`) execution order:
 1.  **Force Pass** (Soft: Repulsion, Springs) -> *Modulate by Degrade Schedule*
 2.  **Velocity Pass** (Damping, Drag, Inertia, Local Boost Logic)
 3.  **Integration** (Euler) -> *Updates x = x + v*
@@ -58,7 +58,7 @@ User interaction must never feel degraded.
     *   **Overlay Shield**: `e.target === canvas` prevents click-through.
     *   **Gesture Policy**: 5px threshold prevents accidental drags.
     *   **Z-Order**: Top-most node always wins the click.
-    *   **Pixel Alignment** (New): Stroking logic quantizes to `N.5` or `N.0` pixels for visual crispness.
+    *   **Pixel Alignment (Hysteresis)**: Motion is smooth (float), Rest is crisp (integer snapped). 150ms settling period.
     *   **Overlay Glue** (New): Popup positions are locked to the render loop via `graph-render-tick` event (Zero Lag).
     *   **Decoupled Input**: `useGraphRendering` samples pointers but applies them in `rAF` using the **Frame Camera** (Fix 34).
     *   **Deterministic Plan**: `UpdatePlan` calculated at frame start freezes laws/budgets for the tick (Fix 35).

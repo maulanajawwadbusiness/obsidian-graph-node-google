@@ -73,7 +73,9 @@ Post-Fixes #01–#22, the system guarantees:
         *   **Manual Projection**: Nodes/Links (Identity Matrix + `worldToScreen`). Allows for sub-pixel stroke alignment.
     *   **Gradient Glow**: GPU-optimized radial gradients replace CSS/Canvas filters for 144Hz performance.
     *   **Deadzone**: Motions < 0.5px are ignored to prevent sub-pixel drift.
-    *   **Snap**: Camera settling < 0.05px force-snaps to integer coordinates.
+    *   **Visual Stability (Hysteresis)**:
+        *   **Motion**: Snapping DISABLED for sub-pixel smooth panning/zooming.
+        *   **Rest**: Snapping ENABLED after 150ms idle to lock content to integer device pixels (Crisp Edges).
 
 2.  **Physics Authority**:
     *   **Absolute Fixed**: `isFixed` nodes (dragged) are immune to diffusion/forces.
@@ -141,7 +143,7 @@ Enable `debugPerf: true` in `config.ts` to see:
     *   `[PhysicsMode]`: Transitions (Normal -> Stressed).
 
 ## 8. Where to Edit (Entrypoints)
-*   **Scheduler Logic**: `src/playground/useGraphRendering.ts` (Look for `render` loop, `overloadState`).
-*   **Pass Scheduling**: `src/physics/engine.ts` (Look for `tick`, `setDegradeState`).
+*   **Scheduler Logic**: `src/playground/rendering/graphRenderingLoop.ts` (Look for `runPhysicsScheduler`, `render` loop).
+*   **Pass Scheduling**: `src/physics/engine/engineTick.ts` (Look for `runPhysicsTick`).
 *   **Force Logic**: `src/physics/engine/forcePass.ts`.
 *   **Constraint Logic**: `src/physics/engine/constraints.ts`.

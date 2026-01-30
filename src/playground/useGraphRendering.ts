@@ -659,7 +659,7 @@ export const useGraphRendering = ({
 
             drawLinks(ctx, engine, theme, project);
             drawNodes(ctx, engine, theme, settingsRef, hoverStateRef, camera.zoom, renderDebugRef, dpr, project);
-            drawLabels(ctx, engine, theme, settingsRef, hoverStateRef, globalAngle);
+            drawLabels(ctx, engine, theme, settingsRef, hoverStateRef, camera.zoom, dpr, project);
 
             if (
                 theme.hoverDebugEnabled &&

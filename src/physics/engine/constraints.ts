@@ -8,14 +8,16 @@ export const initializeCorrectionAccum = (
     allocationCounter?: { newEntries: number }
 ) => {
     const correctionAccum = cache ?? new Map<string, { dx: number; dy: number }>();
+    // FIX #9: Reset already handled at end of tick, but we ensure existence here.
     for (const node of nodeList) {
-        const existing = correctionAccum.get(node.id);
-        if (existing) {
-            existing.dx = 0;
-            existing.dy = 0;
-        } else {
+        if (!correctionAccum.has(node.id)) {
             correctionAccum.set(node.id, { dx: 0, dy: 0 });
             if (allocationCounter) allocationCounter.newEntries += 1;
+        } else {
+            // Redundant zeroing (safety)
+            const existing = correctionAccum.get(node.id)!;
+            existing.dx = 0;
+            existing.dy = 0;
         }
     }
     return correctionAccum;
@@ -110,7 +112,8 @@ export const applySpacingConstraints = (
     dt: number,
     pairStride: number = 1,
     pairOffset: number = 0,
-    timeScaleMultiplier: number = 1.0 // Compensation factor for skipped frames
+    timeScaleMultiplier: number = 1.0, // Compensation factor for skipped frames
+    hotPairs?: Set<string>             // Fix 22: Priority set for 1:1 coverage
 ) => {
     // =====================================================================
     // DISTANCE-BASED SPACING (Soft pre-zone + Hard barrier)
@@ -127,21 +130,13 @@ export const applySpacingConstraints = (
     const softExponent = engine.config.softRepulsionExponent;
     const softMaxCorr = engine.config.softMaxCorrectionPx * timeScale;
 
-    const shouldSkipPair = (a: PhysicsNode, b: PhysicsNode) => {
-        if (pairStride <= 1) return false;
-        const i = a.listIndex ?? 0;
-        const j = b.listIndex ?? 0;
-        const mix = (i * 73856093 + j * 19349663 + pairOffset) % pairStride;
-        return mix !== 0;
-    };
-
-    const applyPair = (a: PhysicsNode, b: PhysicsNode) => {
-        if (shouldSkipPair(a, b)) return;
+    // Helper to apply constraint to a pair
+    const applyPairLogic = (a: PhysicsNode, b: PhysicsNode) => {
         const dx = b.x - a.x;
         const dy = b.y - a.y;
         const d = Math.sqrt(dx * dx + dy * dy);
 
-        if (d >= D_soft || d < 0.1) return;  // Outside soft zone or singularity
+        if (d >= D_soft || d < 0.1) return false;  // Outside soft zone or singularity
 
         // Normalize direction (from a toward b)
         const nx = dx / d;
@@ -202,6 +197,61 @@ export const applySpacingConstraints = (
             bAccum.dy += ny * corrApplied;
             passStats.correction += Math.abs(corrApplied);
             affected.add(b.id);
+        }
+        return true; // Applied
+    };
+
+    // FIX 22: PRIORITY PASS (Residual-Aware)
+    // Process known hot pairs every frame to prevent crawl
+    if (hotPairs && hotPairs.size > 0) {
+        const resolved = new Set<string>();
+        for (const key of hotPairs) {
+            const [idA, idB] = key.split(':');
+            const a = engine.nodes.get(idA);
+            const b = engine.nodes.get(idB);
+            if (!a || !b) {
+                resolved.add(key);
+                continue;
+            }
+            // Check without stride
+            const dx = b.x - a.x;
+            const dy = b.y - a.y;
+            const d = Math.sqrt(dx * dx + dy * dy);
+
+            // Hysteresis: Keep hot until well clear (90% of soft zone)
+            if (d < D_soft * 0.95) {
+                applyPairLogic(a, b);
+            } else {
+                resolved.add(key);
+            }
+        }
+        // Cleanup resolved
+        for (const k of resolved) hotPairs.delete(k);
+    }
+
+    const shouldSkipPair = (a: PhysicsNode, b: PhysicsNode) => {
+        if (pairStride <= 1) return false;
+        const i = a.listIndex ?? 0;
+        const j = b.listIndex ?? 0;
+        const mix = (i * 73856093 + j * 19349663 + pairOffset) % pairStride;
+        return mix !== 0;
+    };
+
+    const applyPair = (a: PhysicsNode, b: PhysicsNode) => {
+        if (shouldSkipPair(a, b)) return;
+
+        // Scan for new hot pairs (optimization: verify check before adding)
+        const dx = b.x - a.x;
+        const dy = b.y - a.y;
+        const d = Math.sqrt(dx * dx + dy * dy);
+
+        if (d < D_soft && d >= 0.1) {
+            applyPairLogic(a, b);
+            // Register as hot for next frame
+            if (hotPairs) {
+                const key = a.id < b.id ? `${a.id}:${b.id}` : `${b.id}:${a.id}`;
+                hotPairs.add(key);
+            }
         }
     };
 
@@ -285,7 +335,18 @@ export const applyTriangleAreaConstraints = (
 
         // How much deficit?
         const deficit = restArea - currentArea;
-        const correction = deficit * areaStrength;
+        let correction = deficit * areaStrength;
+
+        // FIX 19: Degeneracy Guard
+        // prevent gradients blowing up when triangle is flat
+        const maxTriCorrection = 2.0 * timeScale;
+        correction = Math.min(correction, maxTriCorrection);
+
+        // Ramp down if near degenerate (area < 5.0) to avoid jitter
+        if (currentArea < 5.0) {
+            correction *= (currentArea / 5.0);
+            // if (currentArea < 0.1) continue; // Skip strictly degenerate
+        }
 
         // Push each vertex outward along altitude direction
         // (from opposite edge midpoint toward vertex)

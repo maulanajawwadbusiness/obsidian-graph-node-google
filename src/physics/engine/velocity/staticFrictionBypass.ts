@@ -20,13 +20,17 @@ export const applyStaticFrictionBypass = (
     // Only during early expansion
     if (!isEarlyExpansion(energy)) return;
 
+    // FIX 20: MICRO-NOISE MISGATING
+    // Disable during interaction to prevent "fighting" the hand
+    if (engine.draggedNodeId) return;
+
     const passStats = getPassStats(stats, 'StaticFrictionBypass');
     const affected = new Set<string>();
 
     const densityRadius = 30;
     const densityThreshold = 4;
-    const relVelEpsilon = 0.5;  // Near-zero relative velocity threshold
-    const microSlip = 0.02;     // Extremely small shear (px/frame equivalent)
+    const relVelEpsilon = 0.05;  // FIX 20: Stricter activation (was 0.5)
+    const microSlip = 0.01;      // FIX 20: Reduced amplitude (was 0.02)
 
     // Pre-compute local density for all nodes
     const localDensity = new Map<string, number>();

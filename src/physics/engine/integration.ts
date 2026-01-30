@@ -113,9 +113,18 @@ export const integrateNodes = (
             if (node.prevFy === undefined) node.prevFy = 0;
 
             // Low-pass filter: blend current with previous frame
-            const alpha = 0.3;  // 30% previous, 70% current (temporal lag)
-            effectiveFx = alpha * node.prevFx + (1 - alpha) * node.fx;
-            effectiveFy = alpha * node.prevFy + (1 - alpha) * node.fy;
+            // FIX 18: Hub Lag Tail Snap
+            // If input force stops (negligible), snap immediately to prevent asymptotic drift.
+            if (Math.abs(node.fx) < 0.01 && Math.abs(node.fy) < 0.01) {
+                effectiveFx = node.fx;
+                effectiveFy = node.fy;
+                node.prevFx = node.fx;
+                node.prevFy = node.fy;
+            } else {
+                const alpha = 0.3;  // 30% previous, 70% current (temporal lag)
+                effectiveFx = alpha * node.prevFx + (1 - alpha) * node.fx;
+                effectiveFy = alpha * node.prevFy + (1 - alpha) * node.fy;
+            }
         }
 
         // Compute acceleration from effective (possibly lagged) forces
@@ -141,8 +150,11 @@ export const integrateNodes = (
             // FIX #15: CONSTRAINED DT SKEW
             // Reduced max skew from ±3% to ±1% for better determinism.
             // Disabled entirely if node is interacting (dragged) to ensure hand authority.
+            // FIX #21: TEMPORAL COHERENCE
+            // Default to uniform DT (skew=0) to prevent cluster drift.
+            // Only enable skew if debug is active for stress testing.
             const isInteracting = node.id === engine.draggedNodeId;
-            const skewMagnitude = isInteracting ? 0 : 0.02;
+            const skewMagnitude = (engine.config.debugPerf && !isInteracting) ? 0.02 : 0;
 
             const dtMultiplier = (1.0 - skewMagnitude) + skew * (2 * skewMagnitude); // 0.98 to 1.02
             nodeDt = dt * dtMultiplier;
@@ -195,9 +207,13 @@ export const integrateNodes = (
             // Allow sleep only if force is negligible (< 10% of velocity threshold impact)
             const forceSilent = accSq * (dt * dt) < (threshSq * 0.1);
 
+            // FIX 13: Pressure Check (Constraint Residuals)
+            // Prevent sleeping if under significant constraint stress (e.g. pulled by spring)
+            const pressureSilent = (node.lastCorrectionMag ?? 0) < 0.1;
+
             const sleepFramesRequired = engine.config.sleepFramesThreshold ?? 30;
 
-            if (velSq < threshSq && forceSilent) {
+            if (velSq < threshSq && forceSilent && pressureSilent) {
                 node.sleepFrames = (node.sleepFrames ?? 0) + 1;
                 if (node.sleepFrames >= sleepFramesRequired) {
                     node.isSleeping = true;

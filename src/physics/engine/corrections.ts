@@ -43,22 +43,50 @@ export const applyCorrectionsWithDiffusion = (
     const affected = new Set<string>();
 
     for (const node of nodeList) {
-        if (node.isFixed) continue;
+        // Fix 13: Capture constraint pressure
+        const accum = correctionAccum.get(node.id);
+
+        // FIX 17: Correction Debt Repayment
+        // Add unpaid residual from previous frames
+        let accDx = accum ? accum.dx : 0;
+        let accDy = accum ? accum.dy : 0;
+
+        if (node.correctionResidual) {
+            accDx += node.correctionResidual.dx;
+            accDy += node.correctionResidual.dy;
+        }
+
+        const totalMag = Math.sqrt(accDx * accDx + accDy * accDy);
+        node.lastCorrectionMag = totalMag;
+
+        if (node.isFixed) {
+            // Clear residual if fixed (force resolved by anchor)
+            node.correctionResidual = undefined;
+            continue;
+        }
 
         // DEGREE-1 EXCLUSION: dangling nodes don't receive positional correction
         const deg = nodeDegree.get(node.id) || 0;
-        if (deg === 1) continue;
+        if (deg === 1) {
+            node.correctionResidual = undefined;
+            continue;
+        }
 
-        const accum = correctionAccum.get(node.id);
-        if (!accum) continue;
+        if (totalMag < 0.001) {
+            node.correctionResidual = undefined;
+            continue;  // Skip tiny corrections
+        }
 
-        // Total correction magnitude
-        let totalMag = Math.sqrt(accum.dx * accum.dx + accum.dy * accum.dy);
+        // FIX 11: DIFFUSION PRESSURE GATE
+        // Only diffuse if there is significant local pressure.
+        const diffusionThreshold = 0.5; // px per frame
+        const enableDiffusion = totalMag > diffusionThreshold;
 
-        if (totalMag < 0.001) continue;  // Skip tiny corrections
-
+        // FIX 17: Track budget hits/Residuals
+        let clipped = false;
         if (totalMag > nodeBudget) {
             stats.safety.correctionBudgetHits += 1;
+            clipped = true;
         }
 
         // Degree-weighted resistance (hubs act heavier)
@@ -66,7 +94,7 @@ export const applyCorrectionsWithDiffusion = (
         const degreeScale = 1 / Math.sqrt(degree);
 
         // Normalize new direction
-        const newDir = { x: accum.dx / totalMag, y: accum.dy / totalMag };
+        const newDir = { x: accDx / totalMag, y: accDy / totalMag };
 
         // Check directional continuity
         let attenuationFactor = 1.0;
@@ -77,21 +105,48 @@ export const applyCorrectionsWithDiffusion = (
             }
         }
 
-        // PHASE-AWARE HUB INERTIA: high-degree nodes absorb corrections gradually
-        // Prevents synchronization spike during expansion→settling transition
-        // hubFactor = 0 for leaves, 1 for high-degree hubs
+        // PHASE-AWARE HUB INERTIA
         const hubFactor = Math.min(Math.max((degree - 2) / 3, 0), 1);
-        const inertiaStrength = 0.6;  // How much to slow hub correction acceptance
-        // Active during transition (energy 0.4-0.7) and settling
+        const inertiaStrength = 0.6;
         const hubInertiaScale = energy < 0.8 ? (1 - hubFactor * inertiaStrength) : 1.0;
 
         // Clamp to budget and apply attenuation + degree scaling + hub inertia
-        const scale = Math.min(1, nodeBudget / totalMag) * attenuationFactor * degreeScale * hubInertiaScale;
-        const corrDx = accum.dx * scale;
-        const corrDy = accum.dy * scale;
+        const budgetScale = Math.min(1, nodeBudget / totalMag);
+        const scale = budgetScale * attenuationFactor * degreeScale * hubInertiaScale;
+
+        const corrDx = accDx * scale;
+        const corrDy = accDy * scale;
+
+        // FIX 17: Store Residual
+        if (clipped || scale < 1.0) {
+            // Determine what wasn't paid. 
+            // Note: attenuationFactor/degreeScale etc are "physical resistance", not "unpaid debt".
+            // Debt is only what is cut by BUDGET.
+            // If physics says "resist", that's not debt.
+            // However, budget clipping IS debt.
+            // Only track debt if budgetScale < 1.0
+
+            if (budgetScale < 1.0) {
+                const budgetOnlyScale = budgetScale; // Just the budget cut
+                const paidDx = accDx * budgetOnlyScale;
+                const paidDy = accDy * budgetOnlyScale;
+                const remDx = accDx - paidDx;
+                const remDy = accDy - paidDy;
+
+                // Decay debt (0.8) to prevent explosion
+                node.correctionResidual = { dx: remDx * 0.8, dy: remDy * 0.8 };
+
+                // if (engine.config.debugPerf) console.warn('[CorrCap] Debt stored', node.id);
+            } else {
+                node.correctionResidual = undefined;
+            }
+        } else {
+            node.correctionResidual = undefined;
+        }
 
         // DIFFUSION: split correction between self and neighbors
-        if (degree > 1) {
+        // FIX 11: Gate diffusion by pressure threshold
+        if (degree > 1 && enableDiffusion) {
             const densityAttenuation = 1 / (1 + Math.max(0, degree - 2) * engine.config.correctionDiffusionDensityScale);
             const spacingAttenuation = 1 - spacingGate * engine.config.correctionDiffusionSpacingScale;
             const diffusionScale = Math.max(
@@ -102,19 +157,23 @@ export const applyCorrectionsWithDiffusion = (
             const selfShare = 1 - neighborShareTotal;
             const neighborShare = neighborShareTotal / degree;
 
-            // Self gets 40%
+            // Self gets share
             node.x += corrDx * selfShare;
             node.y += corrDy * selfShare;
             passStats.correction += Math.sqrt((corrDx * selfShare) ** 2 + (corrDy * selfShare) ** 2);
             affected.add(node.id);
 
-            // Neighbors get 60% split
+            // Neighbors get share
             const neighbors = nodeNeighbors.get(node.id) || [];
             const neighborLimit = maxDiffusionNeighbors && maxDiffusionNeighbors > 0
                 ? Math.min(neighbors.length, maxDiffusionNeighbors)
                 : neighbors.length;
             for (let i = 0; i < neighborLimit; i++) {
                 const nbId = neighbors[i];
+                // FIX #7: Do not diffuse corrections TO fixed nodes
+                const neighborNode = engine.nodes.get(nbId);
+                if (neighborNode && neighborNode.isFixed) continue;
+
                 const nbDiff = diffusedCorrection.get(nbId);
                 if (nbDiff) {
                     // Neighbors receive opposite direction (they move to absorb)

@@ -23,6 +23,14 @@ type CanvasOverlaysProps = {
     sidebarOpen: boolean;
     skinMode: string;
     viewerOpen: boolean;
+    cameraLocked: boolean;
+    showDebugGrid: boolean;
+    onToggleCameraLock: () => void;
+    onToggleDebugGrid: () => void;
+    pixelSnapping: boolean;
+    debugNoRenderMotion: boolean;
+    onTogglePixelSnapping: () => void;
+    onToggleNoRenderMotion: () => void;
 };
 
 export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
@@ -35,7 +43,15 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
     showThemeToggle,
     sidebarOpen,
     skinMode,
-    viewerOpen
+    viewerOpen,
+    cameraLocked,
+    showDebugGrid,
+    onToggleCameraLock,
+    onToggleDebugGrid,
+    pixelSnapping,
+    debugNoRenderMotion,
+    onTogglePixelSnapping,
+    onToggleNoRenderMotion
 }) => (
     <>
         {SHOW_DEBUG_CONTROLS && !debugOpen && (
@@ -131,6 +147,44 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
                     </div>
                 </div>
                 <br />
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginBottom: '10px' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', cursor: 'pointer' }}>
+                        <input
+                            type="checkbox"
+                            checked={cameraLocked}
+                            onChange={onToggleCameraLock}
+                            style={{ cursor: 'pointer' }}
+                        />
+                        Lock Camera
+                    </label>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', cursor: 'pointer' }}>
+                        <input
+                            type="checkbox"
+                            checked={showDebugGrid}
+                            onChange={onToggleDebugGrid}
+                            style={{ cursor: 'pointer' }}
+                        />
+                        Show Grid/Axes
+                    </label>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', cursor: 'pointer' }}>
+                        <input
+                            type="checkbox"
+                            checked={pixelSnapping}
+                            onChange={onTogglePixelSnapping}
+                            style={{ cursor: 'pointer' }}
+                        />
+                        Pixel Snapping
+                    </label>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', cursor: 'pointer' }}>
+                        <input
+                            type="checkbox"
+                            checked={debugNoRenderMotion}
+                            onChange={onToggleNoRenderMotion}
+                            style={{ cursor: 'pointer' }}
+                        />
+                        Kill Render Motion
+                    </label>
+                </div>
                 <strong style={{ fontWeight: 700 }}>Performance</strong><br />
                 FPS: {metrics.fps} <br />
                 Nodes: {metrics.nodes} (Active: {metrics.activeNodes}) <br />

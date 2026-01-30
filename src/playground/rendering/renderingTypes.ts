@@ -3,6 +3,10 @@ import type { SkinMode } from '../../visual/theme';
 export type RenderSettingsRef = {
     useVariedSize: boolean;
     skinMode: SkinMode;
+    cameraLocked: boolean;
+    showDebugGrid: boolean;
+    pixelSnapping: boolean;
+    debugNoRenderMotion: boolean;
 };
 
 export type PendingPointerState = {
@@ -102,11 +106,17 @@ export type CameraState = {
     targetPanX: number;
     targetPanY: number;
     targetZoom: number;
+    lastRecenterCentroidX: number;
+    lastRecenterCentroidY: number;
 };
 
 export const createInitialRenderSettings = (): RenderSettingsRef => ({
     useVariedSize: true,
-    skinMode: 'normal'
+    skinMode: 'normal',
+    cameraLocked: false,
+    showDebugGrid: false,
+    pixelSnapping: false,
+    debugNoRenderMotion: false
 });
 
 export const createInitialPendingPointer = (): PendingPointerState => ({

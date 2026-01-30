@@ -78,7 +78,10 @@ export class PhysicsEngine {
     private correctionAccumCache = new Map<string, { dx: number; dy: number }>();
     private topologyLinkKeys = new Set<string>();
     private nodeLinkCounts = new Map<string, number>();
-    private topologyWarnAt: number = 0;
+
+    // Fix 22: Prioritize unresolved constraints (Hot Pairs) to prevent crawl
+    public spacingHotPairs = new Set<string>();
+
     private perfCounters = {
         nodeListBuilds: 0,
         correctionNewEntries: 0,
@@ -117,6 +120,9 @@ export class PhysicsEngine {
     // Fix #14: Wake Throttling State
     private lastWakeTime: number = 0;
 
+    // Adjacency Cache for O(1) wake lookups (Fix 12)
+    private adjacencyMap = new Map<string, string[]>();
+
     constructor(config: Partial<ForceConfig> = {}) {
         this.config = { ...DEFAULT_PHYSICS_CONFIG, ...config };
     }
@@ -130,7 +136,11 @@ export class PhysicsEngine {
         if (!this.nodeLinkCounts.has(node.id)) {
             this.nodeLinkCounts.set(node.id, 0);
         }
+        if (!this.adjacencyMap.has(node.id)) {
+            this.adjacencyMap.set(node.id, []);
+        }
         this.wakeNode(node.id);
+        this.invalidateWarmStart('TOPOLOGY_CHANGE');
     }
 
     /**
@@ -139,22 +149,31 @@ export class PhysicsEngine {
     addLink(link: PhysicsLink) {
         const source = link.source;
         const target = link.target;
+        // FIX 15: Strict Dedupe (Min:Max)
         const key = source < target ? `${source}:${target}` : `${target}:${source}`;
+
         if (this.topologyLinkKeys.has(key)) {
             this.perfCounters.topologyDuplicates += 1;
+            if (this.config.debugPerf) console.warn(`[Topology] Duplicate rejected: ${key}`);
             return;
         }
 
         const sourceCount = this.nodeLinkCounts.get(source) || 0;
         const targetCount = this.nodeLinkCounts.get(target) || 0;
+
+        // FIX 15: Degree Cap
         if (sourceCount >= this.config.maxLinksPerNode || targetCount >= this.config.maxLinksPerNode) {
             this.perfCounters.topologySkipped += 1;
-            this.warnTopology('maxLinksPerNode', link);
+            // this.warnTopology('maxLinksPerNode', link); 
+            // Inline warning logic to be safe/explicit
+            if (this.config.debugPerf) {
+                console.warn(`[Topology] Degree Limit s=${sourceCount} t=${targetCount} cap=${this.config.maxLinksPerNode}`);
+            }
             return;
         }
         if (this.links.length >= this.config.maxTotalLinks) {
             this.perfCounters.topologySkipped += 1;
-            this.warnTopology('maxTotalLinks', link);
+            if (this.config.debugPerf) console.warn('[Topology] Max total links reached');
             return;
         }
 
@@ -162,8 +181,39 @@ export class PhysicsEngine {
         this.topologyLinkKeys.add(key);
         this.nodeLinkCounts.set(source, sourceCount + 1);
         this.nodeLinkCounts.set(target, targetCount + 1);
+
+        // Update Adjacency (Fix 12)
+        if (!this.adjacencyMap.has(source)) this.adjacencyMap.set(source, []);
+        if (!this.adjacencyMap.has(target)) this.adjacencyMap.set(target, []);
+        this.adjacencyMap.get(source)?.push(target);
+        this.adjacencyMap.get(target)?.push(source);
+
         this.wakeNode(link.source);
         this.wakeNode(link.target);
+        this.invalidateWarmStart('TOPOLOGY_CHANGE');
+    }
+
+    /**
+     * Clear warm-start caches to prevent phantom pushes (Fix 10).
+     */
+    public invalidateWarmStart(reason: string) {
+        // Clear Hysteresis
+        this.clampedPairs.clear();
+
+        // Clear directional inertia on all nodes
+        for (const node of this.nodes.values()) {
+            delete node.lastCorrectionDir;
+            node.correctionResidual = undefined; // Fix 16/17: Clear debt on mode switch
+            node.prevFx = 0;
+            node.prevFy = 0;
+            // Reset equilibrium if topology changes significantly? 
+            // Maybe too aggressive, but safer for "no phantom motion".
+            // We'll keep equilibrium for now as it's computed via special algo.
+        }
+
+        if (this.config.debugPerf) {
+            console.log(`[WarmStart] Invalidation Triggered: ${reason}`);
+        }
     }
 
     /**
@@ -179,6 +229,8 @@ export class PhysicsEngine {
         this.correctionAccumCache.clear();
         this.topologyLinkKeys.clear();
         this.nodeLinkCounts.clear();
+        this.adjacencyMap.clear(); // Fix 12
+        this.spacingHotPairs.clear(); // Fix 22
         this.lifecycle = 0;
         this.hasFiredImpulse = false;
         this.spacingGate = 0;
@@ -193,6 +245,8 @@ export class PhysicsEngine {
     updateConfig(newConfig: Partial<ForceConfig>) {
         this.config = { ...this.config, ...newConfig };
         this.wakeAll();
+        // Config changes might alter solver physics => clear caches
+        this.invalidateWarmStart('CONFIG_CHANGE');
     }
 
     /**
@@ -204,10 +258,22 @@ export class PhysicsEngine {
         severity: 'NONE' | 'SOFT' | 'HARD',
         budgetMs: number
     ) {
+        if (this.degradeLevel !== level) {
+            this.invalidateWarmStart('MODE_CHANGE');
+        }
         this.degradeLevel = Math.max(0, Math.min(2, Math.floor(level)));
         this.degradeReason = reason;
         this.degradeSeverity = severity;
         this.degradeBudgetMs = budgetMs;
+    }
+
+    public getDegradeState() {
+        return {
+            level: this.degradeLevel,
+            reason: this.degradeReason,
+            severity: this.degradeSeverity,
+            budgetMs: this.degradeBudgetMs
+        };
     }
 
     // =========================================================================
@@ -247,6 +313,7 @@ export class PhysicsEngine {
         this.spacingGate = 0;
         this.spacingGateActive = false;
         this.wakeAll();
+        this.invalidateWarmStart('RESET_LIFECYCLE');
     }
 
     /**
@@ -258,16 +325,31 @@ export class PhysicsEngine {
             node.warmth = 1.0;
             node.isSleeping = false;
             node.sleepFrames = 0;
+            // FIX 13: Clear pressure memory on wake to prevent "pop"
+            node.lastCorrectionMag = 0;
+
+            // Clear PBD accumulator immediately (in case it was hot)
+            const accum = this.correctionAccumCache.get(nodeId);
+            if (accum) {
+                accum.dx = 0;
+                accum.dy = 0;
+            }
         }
     }
 
     /**
-     * Wake up a node and its neighbors.
+     * Wake up a node and its neighbors (Optimized for Fix 12).
      */
     wakeNeighbors(nodeId: string) {
-        for (const link of this.links) {
-            if (link.source === nodeId) this.wakeNode(link.target);
-            if (link.target === nodeId) this.wakeNode(link.source);
+        // FIX 12: Use O(1) Adjacency Map instead of O(Links)
+        const neighbors = this.adjacencyMap.get(nodeId);
+        if (neighbors) {
+            // FIX 12: Wake propagation limit
+            // Only wake neighbors if they are not already "very hot" to avoid redundant ops?
+            // Actually, we must ensure they are awake. But we can skip if warmth is already 1.0.
+            for (const nbId of neighbors) {
+                this.wakeNode(nbId);
+            }
         }
     }
 
@@ -349,13 +431,25 @@ export class PhysicsEngine {
                     node.vx *= scale;
                     node.vy *= scale;
                 }
-                // Optional: apply immediate extra damping to stabilize
-                node.vx *= 0.8;
-                node.vy *= 0.8;
+                // FIX #8: Stale Drag & Leash Cleanup
+                // Hard damping on release to kill residual momentum
+                node.vx *= 0.1;
+                node.vy *= 0.1;
+
+                // Clear force memory to prevent "ghost pulls" from previous frames
+                node.prevFx = 0;
+                node.prevFy = 0;
+                node.fx = 0;
+                node.fy = 0;
+
+                // Clear directional inertia
+                delete node.lastCorrectionDir;
             }
         }
+        // Hard clear all drag state
         this.draggedNodeId = null;
         this.dragTarget = null;
+        this.lastDraggedNodeId = null; // Also clear focus history to stop local boost
     }
 
     /**
@@ -367,13 +461,11 @@ export class PhysicsEngine {
 
         // Guard 1: Cooldown (1000ms)
         if (now - this.lastImpulseTime < 1000) {
-            console.log(`[Impulse] REJECTED: Cooldown (${(now - this.lastImpulseTime).toFixed(0)}ms < 1000ms)`);
             return;
         }
 
         // Guard 2: Interaction (Don't kick while user holds a node)
         if (this.draggedNodeId) {
-            console.log(`[Impulse] REJECTED: User Dragging`);
             return;
         }
 
@@ -396,6 +488,17 @@ export class PhysicsEngine {
      */
     tick(dt: number) {
         const nodeList = this.getNodeList();
+
+        // FIX #7: Fixed Node Authority Check (Snapshot)
+        const fixedSnapshots = new Map<string, { x: number, y: number }>();
+        if (this.config.debugPerf) {
+            for (const node of nodeList) {
+                if (node.isFixed) {
+                    fixedSnapshots.set(node.id, { x: node.x, y: node.y });
+                }
+            }
+        }
+
         const debugStats = createDebugStats();
         const perfEnabled = this.config.debugPerf === true;
         const allocCounter = perfEnabled ? { newEntries: 0 } : undefined;
@@ -778,7 +881,9 @@ export class PhysicsEngine {
                         spacingGate,
                         dt,
                         spacingStride,
-                        pairOffset + 2
+                        pairOffset + 2,
+                        1.0,
+                        this.spacingHotPairs
                     );
                     frameTiming.spacingMs += getNowMs() - spacingStart;
                 } else {
@@ -793,7 +898,9 @@ export class PhysicsEngine {
                         spacingGate,
                         dt,
                         spacingStride,
-                        pairOffset + 2
+                        pairOffset + 2,
+                        1.0,
+                        this.spacingHotPairs
                     );
                 }
             } else if (localBoostActive && focusActive.length > 0) {
@@ -860,6 +967,32 @@ export class PhysicsEngine {
         }
         if (perfEnabled && frameTiming) {
             frameTiming.pbdMs += getNowMs() - pbdStart;
+        }
+
+        // FIX #9: Reset Correction Accumulators
+        // Explicitly zero out the cache to prevent leftover drift in next tick
+        if (this.correctionAccumCache.size > 0) {
+            for (const item of this.correctionAccumCache.values()) {
+                item.dx = 0;
+                item.dy = 0;
+            }
+        }
+
+        // FIX #7: Validation (Leak Check)
+        if (perfEnabled && fixedSnapshots.size > 0) {
+            for (const [id, snap] of fixedSnapshots) {
+                const node = this.nodes.get(id);
+                if (node) {
+                    const dx = node.x - snap.x;
+                    const dy = node.y - snap.y;
+                    if (Math.abs(dx) > 0.0001 || Math.abs(dy) > 0.0001) {
+                        console.warn(`[FixedLeakWarn] Node ${id} moved! dx=${dx.toFixed(6)} dy=${dy.toFixed(6)}`);
+                        // Force reset to preserve contract
+                        node.x = snap.x;
+                        node.y = snap.y;
+                    }
+                }
+            }
         }
 
         if (this.draggedNodeId && this.dragTarget) {
@@ -1028,15 +1161,5 @@ export class PhysicsEngine {
                 console.log(`[PhysicsFatal] nodes=${nodeCount} links=${linkCount} mode=fatal`);
             }
         }
-    }
-
-    private warnTopology(reason: 'maxLinksPerNode' | 'maxTotalLinks', link: PhysicsLink) {
-        const now = getNowMs();
-        if (now - this.topologyWarnAt < 1000) return;
-        this.topologyWarnAt = now;
-        console.log(
-            `[PhysicsTopology] drop=${reason} source=${link.source} target=${link.target} ` +
-            `nodes=${this.nodes.size} links=${this.links.length}`
-        );
     }
 }

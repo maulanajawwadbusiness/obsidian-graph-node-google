@@ -46,6 +46,12 @@ export interface PhysicsNode {
     sourceTitle: string;   // The "Point Title"
     sourceSummary: string; // The "Paragraph"
   };
+
+  // Constraint Pressure Memory (Fix 13)
+  lastCorrectionMag?: number; // Magnitude of PBD correction applied last frame
+
+  // Correction Debt (Fix 17)
+  correctionResidual?: { dx: number; dy: number }; // Unpaid correction due to budget clipping
 }
 
 export interface PhysicsLink {

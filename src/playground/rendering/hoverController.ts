@@ -2,13 +2,14 @@ import type { RefObject, MutableRefObject } from 'react';
 import type { PhysicsEngine } from '../../physics/engine';
 import { getNodeRadius, getNodeScale, getTheme } from '../../visual/theme';
 import type { ThemeConfig } from '../../visual/theme';
-import { rotateAround, smoothstep } from './renderingMath';
+import { smoothstep } from './renderingMath';
 import type {
     CameraState,
     HoverState,
     PendingPointerState,
     RenderSettingsRef
 } from './renderingTypes';
+import { CameraTransform } from './camera';
 
 type HoverControllerDeps = {
     engineRef: RefObject<PhysicsEngine>;
@@ -196,16 +197,23 @@ export const createHoverController = ({
             return { x: 0, y: 0, sx: 0, sy: 0 };
         }
 
-        const sx = clientX - rect.left;
-        const sy = clientY - rect.top;
-        const cssX = sx - rect.width / 2;
-        const cssY = sy - rect.height / 2;
+        const transform = new CameraTransform(
+            rect.width,
+            rect.height,
+            camera.zoom,
+            camera.panX,
+            camera.panY,
+            angle,
+            centroid,
+            settingsRef.current.pixelSnapping
+        );
 
-        const unrotatedX = cssX / camera.zoom - camera.panX;
-        const unrotatedY = cssY / camera.zoom - camera.panY;
-        const world = rotateAround(unrotatedX, unrotatedY, centroid.x, centroid.y, -angle);
+        const world = transform.clientToWorld(clientX, clientY, rect);
 
-        return { x: world.x, y: world.y, sx, sy };
+        const sxRaw = clientX - rect.left;
+        const syRaw = clientY - rect.top;
+
+        return { x: world.x, y: world.y, sx: sxRaw, sy: syRaw };
     };
 
     const worldToScreen = (worldX: number, worldY: number, rect: DOMRect) => {
@@ -214,13 +222,18 @@ export const createHoverController = ({
         const centroid = engine ? engine.getCentroid() : { x: 0, y: 0 };
         const angle = engine ? engine.getGlobalAngle() : 0;
 
-        const rotated = rotateAround(worldX, worldY, centroid.x, centroid.y, angle);
-        const viewX = (rotated.x + camera.panX) * camera.zoom;
-        const viewY = (rotated.y + camera.panY) * camera.zoom;
-        return {
-            x: viewX + rect.width / 2,
-            y: viewY + rect.height / 2
-        };
+        const transform = new CameraTransform(
+            rect.width,
+            rect.height,
+            camera.zoom,
+            camera.panX,
+            camera.panY,
+            angle,
+            centroid,
+            settingsRef.current.pixelSnapping
+        );
+
+        return transform.worldToScreen(worldX, worldY);
     };
 
     const logPointerEvent = (

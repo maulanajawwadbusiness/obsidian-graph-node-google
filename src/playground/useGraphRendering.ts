@@ -458,10 +458,14 @@ export const useGraphRendering = ({
             const displayWidth = Math.max(1, Math.round(rect.width * dpr));
             const displayHeight = Math.max(1, Math.round(rect.height * dpr));
 
+            let surfaceChanged = false;
             if (canvas.width !== displayWidth || canvas.height !== displayHeight) {
                 canvas.width = displayWidth;
                 canvas.height = displayHeight;
                 engine.updateBounds(rect.width, rect.height);
+                // FIX 32 & 33: Stale Rect / Cache Invalidation
+                // Mark surface as dirty to force immediate hover recalc and cache clear
+                surfaceChanged = true;
             }
 
             const width = rect.width;
@@ -539,7 +543,7 @@ export const useGraphRendering = ({
                     'pointer',
                     engine.draggedNodeId // Fix 46: Lock cue to dragged node
                 );
-            } else if (hoverStateRef.current.hasPointer && cameraChanged) {
+            } else if (hoverStateRef.current.hasPointer && (cameraChanged || surfaceChanged)) {
                 updateHoverSelection(
                     hoverStateRef.current.cursorClientX,
                     hoverStateRef.current.cursorClientY,
@@ -766,6 +770,11 @@ export const useGraphRendering = ({
             } else if (e.deltaMode === 2) {
                 delta *= 800; // ~Page height
             }
+
+            // FIX 31: Trackpad Inertia Tail Clipping
+            // Ignore sub-pixel deltas (tails) to prevent "phantom drift" at end of gesture.
+            // This makes the world feel "dead" when you stop, rather than "floating".
+            if (Math.abs(delta) < 0.5) return;
 
             // Zoom Factor
             // Use normalized delta

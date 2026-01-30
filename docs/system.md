@@ -81,12 +81,20 @@ Post-Fixes #01–#22, the system guarantees:
     *   **Mode Ramps**: Switching modes (Normal <-> Stressed) smoothly ramps budgets and clears residuals to prevent "Law Jump" pops.
     *   **Degeneracy**: Triangle area forces ramp down to 0 if area < 5.0 to prevent gradient explosions.
     *   **Coherence**: DT Skew is disabled (`skew=0`) by default to prevent cluster drift.
+    *   **Interaction Determinism**:
+        *   **Z-Order Truth**: Picking logic (`hoverController`) strictly respects draw order (Last=Top wins).
+        *   **Hitbox Truth**: Visual radius (with glow) equals touch radius. Labels have bounding boxes.
+        *   **Gesture Truth**: Click vs Drag is resolved by a 5px threshold (No accidental micromoves).
 
-## 4. Interaction Contract
-*   **Hand Authority**: When dragging a node, it follows the cursor 1:1. `isFixed=true`.
+## 4. Interaction Contract (The "King" Layer)
+*   **Hand Authority**: When dragging a node:
+    *   It follows the cursor 1:1 **instantly** (bypasses physics tick for "Knife-Sharp" feel).
+    *   It is an **Immutable Physics Object** (`isFixed=true` + immunity to constraints). No elasticity.
+    *   **Grab Offset**: The node maintains its relative offset to the cursor (no snap-to-center).
+*   **Capture Safety**: Window blur (Alt-Tab) or pointer cancel **must** release the drag to prevent stuck states.
 *   **Local Boost (Interaction Bubble)**: Dragging wakes neighbors and forces them into **Bucket A** (Full Physics).
 *   **Impulse Safety**: `requestImpulse` strictly enforces cooldown (1s).
-*   **Input Ownership**: UI panels (Chat, Docs) fully consume pointer events.
+*   **Input Ownership**: UI panels (Chat, Docs) fully consume pointer events (Overlay Shield).
 *   **Release Snap**: Releasing a drag instantly clears valid velocity/force history to prevent "Ghost Slides".
 
 ## 5. AI Architecture

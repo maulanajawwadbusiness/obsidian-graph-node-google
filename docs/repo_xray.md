@@ -65,10 +65,11 @@ Excluding: `node_modules`, `dist`, `build`, `.git`
 5.  `src/physics/engine/integration.ts` (200+ lines) - **Time Steps & Dt Skew**
 6.  `src/physics/engine/corrections.ts` (170+ lines) - **Diffusion & Jitter Control**
 7.  `src/physics/engine/velocity/dragVelocity.ts` (40 lines) - **Critical Interaction Logic**
-8.  `src/playground/rendering/camera.ts` (New) - **Render Authority & Unified Transform**
-9.  `src/physics/engine/forcePass.ts` (202 lines) - **Force Calculations**
-10. `src/fullchat/FullChatStore.tsx` (227 lines) - **Chat State Manager**
-11. `src/ArnvoidDocumentViewer/ArnvoidDocumentViewer.tsx` (312 lines) - **Doc Viewer UI**
+8.  `src/playground/rendering/hoverController.ts` (300+ lines) - **Interaction Source of Truth (Hit/Touch/Hover)**
+9.  `src/playground/rendering/camera.ts` (New) - **Render Authority & Unified Transform**
+10. `src/physics/engine/forcePass.ts` (202 lines) - **Force Calculations**
+11. `src/fullchat/FullChatStore.tsx` (227 lines) - **Chat State Manager**
+12. `src/ArnvoidDocumentViewer/ArnvoidDocumentViewer.tsx` (312 lines) - **Doc Viewer UI**
 
 ## 3. Core Runtime Loops
 
@@ -91,8 +92,10 @@ Excluding: `node_modules`, `dist`, `build`, `.git`
 2.  **Zero-Drift Rendering**: Camera uses integer snapping and unified transform. No sub-pixel creep.
 3.  **Interaction Authority**: Dragged nodes are `isFixed=true` and immune to simulation forces.
     *   **Warm Release**: Releasing a node atomically clears its force history.
-4.  **No Debt Drift**: Clipped budgets store `correctionResidual` to ideally resolving error over time.
-5.  **Fixed-Step Stability**: Physics runs at 60hz deterministic, decoupled from Render Hz.
+    *   **Knife-Sharp**: Drags update instantly (bypassing tick).
+4.  **Interaction Determinism**: "If it matches visually, it matches logically." (Z-order, Hitboxes, Labels).
+5.  **No Debt Drift**: Clipped budgets store `correctionResidual` to ideally resolving error over time.
+6.  **Fixed-Step Stability**: Physics runs at 60hz deterministic, decoupled from Render Hz.
 
 ## 5. Key Files for Physics Control
 

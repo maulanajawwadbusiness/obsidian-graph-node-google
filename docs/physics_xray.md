@@ -39,24 +39,31 @@ The ticking loop (`src/physics/engine.ts`) execution order:
 
 ## 5. Locality Protection (Interaction Bubble)
 User interaction must never feel degraded.
-*   **Mechanism**: `Local Boost`.
-*   **Trigger**: Dragging a node.
-*   **Effect**: The dragged node + its direct neighbors (`focusActive`) are forced into **Level 0** (Full Physics) regardless of the global `degradeLevel`.
-*   **Result**: The graph under your finger feels "crisp" and responsive (60hz), while the far-field might be updating at 20-30hz (stuttery but stable).
+*   **Mechanism 1: Local Boost**:
+    *   **Trigger**: Dragging a node.
+    *   **Effect**: The dragged node + its direct neighbors (`focusActive`) are forced into **Level 0** (Full Physics).
+*   **Mechanism 2: Knife-Sharp Drag**:
+    *   **Trigger**: `moveDrag`.
+    *   **Effect**: Position updates are applied **immediately** to the node object, bypassing the 16ms physics tick.
+    *   **Result**: 1:1 Hardware Cursor Sync (Zero Lag).
 
-## 6. Move-Leak Hardening (01–22)
+## 6. Move-Leak Hardening (01–22 + Interaction)
 **Status**: Secured.
 
-### A. The Three-Layer Shield
+### A. The Four-Layer Shield
 1.  **Render Guard**: `CameraTransform` ensures mathematical perfection in World<->Screen mapping (Fixes 01-03).
-2.  **Scheduler Guard**: Timebase is strictly decoupled. We never "stretch" time (`min(dt)` removed). Overload = Stutter (Fixes 04-06).
-3.  **Physics Guard**: Absolute authority. Dragged nodes, sleeping nodes, and warm-started nodes have their state explicitly cleansed of "ghost" forces (Fixes 07-22).
+2.  **Scheduler Guard**: Timebase is strictly decoupled. We never "stretch" time. Overload = Stutter (Fixes 04-06).
+3.  **Physics Guard**: Absolute authority. Dragged nodes, sleeping nodes, and warm-starts are cleansed of "ghost" forces (Fixes 07-22).
+4.  **Interaction Guard**:
+    *   **Overlay Shield**: `e.target === canvas` prevents click-through.
+    *   **Gesture Policy**: 5px threshold prevents accidental drags.
+    *   **Z-Order**: Top-most node always wins the click.
 
 ### B. Critical Mechanisms
-*   **Correction Residue**: Unpaid constraint budget is stored as debt (`correctionResidual`) rather than discarded, preventing dense clusters from crawling (Fix 17).
-*   **Hot Pair Fairness**: Even in Degrade Level 2 (skipping 66% of checks), violated pairs are upgraded to 1:1 "Hot" status to prevent far-field crawl (Fix 22).
-*   **Hub Snap**: Velocity low-pass filters snap to 0.00 when input ceases, preventing "ice slide" (Fix 18).
-*   **Triangle Ramp**: Degenerate triangles fade force to 0 to prevent gradient explosions (Fix 19).
+*   **Correction Residue**: Unpaid constraint budget is stored as debt (`correctionResidual`), preventing dense clusters from crawling.
+*   **Hot Pair Fairness**: Violated pairs are upgraded to 1:1 "Hot" status to prevent crawl.
+*   **Hub Snap**: Velocity low-pass filters snap to 0.00 when input ceases.
+*   **Triangle Ramp**: Degenerate triangles fade force to 0.
 
 ## 7. Observability
 New telemetry in `[RenderPerf]` and `[PhysicsPasses]`:

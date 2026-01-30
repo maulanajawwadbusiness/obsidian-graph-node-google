@@ -109,20 +109,24 @@ function computePopupPosition(
     const originY = anchor.y - top;
 
     return { left, top, originX, originY };
-    return { left, top, originX, originY };
 }
+
+import { PhysicsEngine } from '../physics/engine';
+import { RenderTickDetail } from '../playground/rendering/renderingTypes';
+import { quantizeToDevicePixel } from '../playground/rendering/renderingMath';
 
 interface NodePopupProps {
     trackNode?: (nodeId: string) => { x: number; y: number; radius: number } | null;
+    engineRef?: React.RefObject<PhysicsEngine>;
 }
 
-export const NodePopup: React.FC<NodePopupProps> = ({ trackNode }) => {
+export const NodePopup: React.FC<NodePopupProps> = ({ trackNode, engineRef }) => {
     const { selectedNodeId, anchorGeometry, closePopup, sendMessage, setPopupRect, content } = usePopup();
     const popupRef = useRef<HTMLDivElement>(null);
     const [isVisible, setIsVisible] = useState(false);
     const [contentVisible, setContentVisible] = useState(false);
 
-    // Staged reveal: container first, then content
+    // Staged reveal
     useEffect(() => {
         setIsVisible(false);
         setContentVisible(false);
@@ -134,6 +138,8 @@ export const NodePopup: React.FC<NodePopupProps> = ({ trackNode }) => {
         };
     }, [selectedNodeId]);
 
+    // Initial position from store (for first paint before sync)
+    // We keep this to prevent "jump" on mount if tick hasn't happened.
     const position = anchorGeometry
         ? computePopupPosition(
             anchorGeometry,
@@ -267,44 +273,93 @@ export const NodePopup: React.FC<NodePopupProps> = ({ trackNode }) => {
     // Synchronization achieved.
     // `useGraphRendering` dispatches event at end of frame.
 
+    // FIX 26: Synchronous Overlay Positioning & FIX 25: Consistent Rounding
     useEffect(() => {
-        if (!trackNode || !selectedNodeId || !isVisible) return;
+        if (!selectedNodeId || !isVisible) return;
 
-        const handleSync = () => {
-            const geom = trackNode(selectedNodeId);
-            if (geom && popupRef.current) {
-                const width = popupRef.current.offsetWidth;
-                const height = popupRef.current.offsetHeight;
+        const handleSync = (e: Event) => {
+            if (!popupRef.current) return;
 
-                // Fix 23: CSS Pixel Quantization for Transform
-                // Snap to integer CSS pixels to avoid sub-pixel blur on transform
-                // (Browser handles layout snapping locally, but transform needs help)
-                const dpr = window.devicePixelRatio || 1;
-                // We use computePopupPosition which outputs floats.
-                const rawPos = computePopupPosition(geom, width, height);
+            // Prefer Event Detail (Exact Camera Snapshot)
+            const detail = (e as CustomEvent<RenderTickDetail>).detail;
+            let finalLeft = 0;
+            let finalTop = 0;
+            let finalOx = 0;
+            let finalOy = 0;
+            let hasPosition = false;
 
-                // Quantize final usage
-                // round(x * dpr) / dpr
-                const snap = (v: number) => Math.round(v * dpr) / dpr;
+            if (detail && engineRef?.current) {
+                const node = engineRef.current.nodes.get(selectedNodeId);
+                if (node) {
+                    const { x, y } = detail.transform.worldToScreen(node.x, node.y);
+                    // Use approximate radius scaling same as playground
+                    // Note: We use zoom from the transform if available, or assume it's baked in?
+                    // renderingMath.ts rotateAround/etc don't expose zoom directly unless we cast or it's public.
+                    // CameraTransform in camera.ts HAS a public zoom property? 
+                    // Let's check Step 31. public zoom is NOT exposed on the instance? 
+                    // It has `private zoom: number`. But `applyToContext` uses it.
+                    // `worldToScreen` uses it.
+                    // We can't access `transform.zoom` if it's private.
+                    // However, we can approximate scale by transforming a vector? 
+                    // OR we just rely on `node.radius * 5` rule if that's what user wants?
+                    // User constraint: "overlay stays glued".
+                    // If we use fixed pixel radius (e.g. 20px), and we zoom in, the node gets huge, the popup stays inside?
+                    // Logic in GraphPhysicsPlayground used `screenRadius = node.radius * 5`.
+                    // But wait, `worldToScreen` returns coordinates.
+                    // If we want the popup to be relative to the visual node edge, we need visual radius.
+                    // Visual radius = node.radius * zoom.
+                    // We can cheat: transform (x+r, y) and measure distance to (x,y)?
+                    const center = detail.transform.worldToScreen(node.x, node.y);
+                    const edge = detail.transform.worldToScreen(node.x + node.radius, node.y);
+                    const dx = edge.x - center.x;
+                    const dy = edge.y - center.y;
+                    const screenRadius = Math.sqrt(dx * dx + dy * dy);
 
-                const left = snap(rawPos.left);
-                const top = snap(rawPos.top);
-                const ox = snap(rawPos.originX);
-                const oy = snap(rawPos.originY);
+                    const geom = { x, y, radius: screenRadius };
+                    const width = popupRef.current.offsetWidth;
+                    const height = popupRef.current.offsetHeight;
 
-                popupRef.current.style.left = `${left}px`;
-                popupRef.current.style.top = `${top}px`;
-                popupRef.current.style.transformOrigin = `${ox}px ${oy}px`;
+                    // Pure layout calculation
+                    const rawPos = computePopupPosition(geom, width, height);
+
+                    // FIX 25: Consistent Rounding
+                    // Use standard quantizer (Device Pixel -> CSS Pixel)
+                    const dpr = detail.dpr || window.devicePixelRatio || 1;
+
+                    finalLeft = quantizeToDevicePixel(rawPos.left, dpr);
+                    finalTop = quantizeToDevicePixel(rawPos.top, dpr);
+                    finalOx = quantizeToDevicePixel(rawPos.originX, dpr);
+                    finalOy = quantizeToDevicePixel(rawPos.originY, dpr);
+                    hasPosition = true;
+                }
+            } else if (trackNode) {
+                // Fallback for legacy / side-loading
+                const geom = trackNode(selectedNodeId);
+                if (geom) {
+                    const width = popupRef.current.offsetWidth;
+                    const height = popupRef.current.offsetHeight;
+                    const rawPos = computePopupPosition(geom, width, height);
+                    const dpr = window.devicePixelRatio || 1;
+                    finalLeft = quantizeToDevicePixel(rawPos.left, dpr);
+                    finalTop = quantizeToDevicePixel(rawPos.top, dpr);
+                    finalOx = quantizeToDevicePixel(rawPos.originX, dpr);
+                    finalOy = quantizeToDevicePixel(rawPos.originY, dpr);
+                    hasPosition = true;
+                }
+            }
+
+            if (hasPosition) {
+                popupRef.current.style.left = `${finalLeft}px`;
+                popupRef.current.style.top = `${finalTop}px`;
+                popupRef.current.style.transformOrigin = `${finalOx}px ${finalOy}px`;
             }
         };
 
         // Listen for the Master Tick
         window.addEventListener('graph-render-tick', handleSync);
-        // Also run once now
-        handleSync();
 
         return () => window.removeEventListener('graph-render-tick', handleSync);
-    }, [selectedNodeId, trackNode, isVisible]);
+    }, [selectedNodeId, trackNode, isVisible, engineRef]);
 
     const finalStyle: React.CSSProperties = {
         ...POPUP_STYLE,
@@ -316,6 +371,7 @@ export const NodePopup: React.FC<NodePopupProps> = ({ trackNode }) => {
 
     return (
         <div
+            id="arnvoid-node-popup"
             ref={popupRef}
             style={finalStyle}
             onMouseDown={stopPropagation}

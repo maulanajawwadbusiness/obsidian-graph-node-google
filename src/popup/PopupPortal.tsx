@@ -11,11 +11,14 @@ import { usePopup } from './PopupStore';
  * Future: Can be extended to support seed popup mode.
  */
 
+import { PhysicsEngine } from '../physics/engine';
+
 interface PopupPortalProps {
     trackNode?: (nodeId: string) => { x: number; y: number; radius: number } | null;
+    engineRef?: React.RefObject<PhysicsEngine>;
 }
 
-export const PopupPortal: React.FC<PopupPortalProps> = ({ trackNode }) => {
+export const PopupPortal: React.FC<PopupPortalProps> = ({ trackNode, engineRef }) => {
     const { isOpen, chatbarOpen, messages, sendMessage, closeChatbar } = usePopup();
 
     // Don't render portal if nothing is open
@@ -25,7 +28,7 @@ export const PopupPortal: React.FC<PopupPortalProps> = ({ trackNode }) => {
 
     return (
         <PopupOverlayContainer>
-            {isOpen && <NodePopup trackNode={trackNode} />}
+            {isOpen && <NodePopup trackNode={trackNode} engineRef={engineRef} />}
             {chatbarOpen && (
                 <MiniChatbar
                     messages={messages}

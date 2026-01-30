@@ -290,150 +290,192 @@ export const MiniChatbar: React.FC<MiniChatbarProps> = ({ messages, onSend, onCl
             if (scrollTimeoutRef.current) {
                 window.clearTimeout(scrollTimeoutRef.current);
             }
-        };
-    }, []);
-
-    const handleSend = () => {
-        if (inputText.trim()) {
-            onSend(inputText.trim());
-            setInputText('');
-        }
-    };
-
-    const handleKeyDown = (e: React.KeyboardEvent) => {
-        if (e.key === 'Enter') {
-            e.preventDefault();
-            handleSend();
-        }
-    };
-
-    // Handoff to full chatbar
-    const fullChat = useFullChat();
-    const popupContext = usePopup();
-
-    const handleSendToFullChat = () => {
-        const nodeLabel = popupContext.selectedNodeId
-            ? t('miniChat.nodeLabel', { label: popupContext.selectedNodeId.slice(0, 8) })
-            : t('miniChat.fallbackNode');
-
-        // v2: Pass raw context. Seed/Refine logic is in FullChatStore.
-        fullChat.receiveFromMiniChat({
-            miniChatMessages: messages,
-            nodeLabel,
-            content: popupContext.content
         });
+}, []);
 
-        console.log('[MiniChat] Sent context to Full Chat (v2)');
+// FIX 26: Synchronous Chatbar Positioning (Slave to NodePopup)
+useEffect(() => {
+    if (!isVisible) return;
+
+    const handleSync = () => {
+        const popupEl = document.getElementById('arnvoid-node-popup');
+        const chatEl = chatbarRef.current;
+        if (!popupEl || !chatEl) return;
+
+        const r = popupEl.getBoundingClientRect();
+        // Use DOM rect directly (already quantized by NodePopup logic mostly)
+        const popupRect = { left: r.left, top: r.top, width: r.width, height: r.height };
+
+        const chatSize = { width: chatEl.offsetWidth, height: chatEl.offsetHeight };
+
+        // Re-run positioning logic
+        const style = computeChatbarPosition(popupRect, chatSize);
+
+        if (style.left && style.top) {
+            chatEl.style.left = style.left as string;
+            chatEl.style.top = style.top as string;
+            // If logic returned transform, we might need to clear it or apply it?
+            // computeChatbarPosition fallback uses transform.
+            // But normally it returns left/top. 
+            // We should probably trust the function's output.
+            if (style.transform) {
+                chatEl.style.transform = style.transform as string;
+            } else {
+                // Ensure we are in visible state
+                // CHATBAR_VISIBLE_STYLE has transform 'scale(1) translateY(0)'
+                // If we overwrite transform, we lose the scale(1).
+                // But fallback only happens if popup is missing. If we found popupEl, we are not in fallback.
+                // The candidates loop returns { left, top } only.
+                // So we are safe to leave transform alone (let CSS handle scale).
+            }
+        }
     };
 
-    const position = computeChatbarPosition(popupRect, chatbarSize);
+    window.addEventListener('graph-render-tick', handleSync);
+    return () => window.removeEventListener('graph-render-tick', handleSync);
+}, [isVisible]);
 
-    const finalStyle = {
-        ...CHATBAR_STYLE,
-        ...(isVisible ? CHATBAR_VISIBLE_STYLE : {}),
-        ...position,
-    };
+const handleSend = () => {
+    if (inputText.trim()) {
+        onSend(inputText.trim());
+        setInputText('');
+    }
+};
 
-    return (
-        <div
-            ref={chatbarRef}
-            style={finalStyle}
-            onMouseDown={stopPropagation}
-            onMouseMove={stopPropagation}
-            onMouseUp={stopPropagation}
-            onClick={stopPropagation}
-        >
-            <div style={HEADER_STYLE}>
-                <span style={{ fontSize: '13px', fontWeight: '600' }}>{t('miniChat.header')}</span>
-                <button
-                    style={{
-                        background: 'transparent',
-                        border: 'none',
-                        color: 'rgba(180, 190, 210, 0.7)',
-                        fontSize: '18px',
-                        cursor: 'pointer',
-                        padding: '4px 8px',
-                    }}
-                    onClick={onClose}
-                    title={t('tooltip.close')}
-                >
-                    ×
-                </button>
-            </div>
+const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        handleSend();
+    }
+};
 
-            <div
-                ref={fadeWrapperRef}
-                className="arnvoid-scroll-fades"
+// Handoff to full chatbar
+const fullChat = useFullChat();
+const popupContext = usePopup();
+
+const handleSendToFullChat = () => {
+    const nodeLabel = popupContext.selectedNodeId
+        ? t('miniChat.nodeLabel', { label: popupContext.selectedNodeId.slice(0, 8) })
+        : t('miniChat.fallbackNode');
+
+    // v2: Pass raw context. Seed/Refine logic is in FullChatStore.
+    fullChat.receiveFromMiniChat({
+        miniChatMessages: messages,
+        nodeLabel,
+        content: popupContext.content
+    });
+
+    console.log('[MiniChat] Sent context to Full Chat (v2)');
+};
+
+const position = computeChatbarPosition(popupRect, chatbarSize);
+
+const finalStyle = {
+    ...CHATBAR_STYLE,
+    ...(isVisible ? CHATBAR_VISIBLE_STYLE : {}),
+    ...position,
+};
+
+return (
+    <div
+        ref={chatbarRef}
+        style={finalStyle}
+        onMouseDown={stopPropagation}
+        onMouseMove={stopPropagation}
+        onMouseUp={stopPropagation}
+        onClick={stopPropagation}
+    >
+        <div style={HEADER_STYLE}>
+            <span style={{ fontSize: '13px', fontWeight: '600' }}>{t('miniChat.header')}</span>
+            <button
                 style={{
-                    position: 'relative',
-                    flex: 1,
-                    minHeight: 0,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    borderRadius: '8px',  // Match chatbar inner rounding
+                    background: 'transparent',
+                    border: 'none',
+                    color: 'rgba(180, 190, 210, 0.7)',
+                    fontSize: '18px',
+                    cursor: 'pointer',
+                    padding: '4px 8px',
                 }}
+                onClick={onClose}
+                title={t('tooltip.close')}
             >
-                <div
-                    ref={messagesRef}
-                    className="arnvoid-scroll"
-                    style={MESSAGES_STYLE}
-                >
-                    {messages.map((msg, i) => (
-                        <div
-                            key={i}
-                            style={msg.role === 'user' ? MESSAGE_STYLE_USER : MESSAGE_STYLE_AI}
-                        >
-                            {msg.text}
-                        </div>
-                    ))}
-                    <div ref={messagesEndRef} />
-                </div>
-            </div>
+                ×
+            </button>
+        </div>
 
-            <div style={{ ...INPUT_STYLE, alignItems: 'center' }}>
-                <input
-                    type="text"
-                    value={inputText}
-                    onChange={(e) => setInputText(e.target.value)}
-                    onKeyDown={handleKeyDown}
-                    placeholder={t('nodePopup.inputPlaceholder')}
-                    style={INPUT_FIELD_STYLE}
-                />
-                <button
-                    onClick={handleSendToFullChat}
-                    title={t('miniChat.extendTooltip')}
-                    aria-label={t('miniChat.extendAria')}
-                    style={{
-                        background: 'transparent',
-                        border: 'none',
-                        width: '31px', // +10%
-                        height: '31px', // +10%
-                        borderRadius: '50%',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        cursor: 'pointer',
-                        opacity: 0.5,
-                        flexShrink: 0,
-                        padding: 0,
-                        marginLeft: '4px', // Balance visual spacing (SendButton has 4px padding)
-                    }}
-                    onMouseEnter={(e) => e.currentTarget.style.opacity = '0.8'}
-                    onMouseLeave={(e) => e.currentTarget.style.opacity = '0.5'}
-                >
-                    <img
-                        src={handoffIcon}
-                        alt="Expand"
-                        style={{
-                            width: '20px', // +10%
-                            height: '20px', // +10%
-                            objectFit: 'contain',
-                            filter: 'brightness(0) saturate(100%) invert(83%) sepia(6%) saturate(347%) hue-rotate(178deg) brightness(91%) contrast(88%)' // Matches rgba(180, 190, 210, 0.9) roughly or just use brightness/opacity
-                        }}
-                    />
-                </button>
-                <SendButton onClick={handleSend} disabled={!inputText.trim()} />
+        <div
+            ref={fadeWrapperRef}
+            className="arnvoid-scroll-fades"
+            style={{
+                position: 'relative',
+                flex: 1,
+                minHeight: 0,
+                display: 'flex',
+                flexDirection: 'column',
+                borderRadius: '8px',  // Match chatbar inner rounding
+            }}
+        >
+            <div
+                ref={messagesRef}
+                className="arnvoid-scroll"
+                style={MESSAGES_STYLE}
+            >
+                {messages.map((msg, i) => (
+                    <div
+                        key={i}
+                        style={msg.role === 'user' ? MESSAGE_STYLE_USER : MESSAGE_STYLE_AI}
+                    >
+                        {msg.text}
+                    </div>
+                ))}
+                <div ref={messagesEndRef} />
             </div>
         </div>
-    );
+
+        <div style={{ ...INPUT_STYLE, alignItems: 'center' }}>
+            <input
+                type="text"
+                value={inputText}
+                onChange={(e) => setInputText(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder={t('nodePopup.inputPlaceholder')}
+                style={INPUT_FIELD_STYLE}
+            />
+            <button
+                onClick={handleSendToFullChat}
+                title={t('miniChat.extendTooltip')}
+                aria-label={t('miniChat.extendAria')}
+                style={{
+                    background: 'transparent',
+                    border: 'none',
+                    width: '31px', // +10%
+                    height: '31px', // +10%
+                    borderRadius: '50%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    opacity: 0.5,
+                    flexShrink: 0,
+                    padding: 0,
+                    marginLeft: '4px', // Balance visual spacing (SendButton has 4px padding)
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.opacity = '0.8'}
+                onMouseLeave={(e) => e.currentTarget.style.opacity = '0.5'}
+            >
+                <img
+                    src={handoffIcon}
+                    alt="Expand"
+                    style={{
+                        width: '20px', // +10%
+                        height: '20px', // +10%
+                        objectFit: 'contain',
+                        filter: 'brightness(0) saturate(100%) invert(83%) sepia(6%) saturate(347%) hue-rotate(178deg) brightness(91%) contrast(88%)' // Matches rgba(180, 190, 210, 0.9) roughly or just use brightness/opacity
+                    }}
+                />
+            </button>
+            <SendButton onClick={handleSend} disabled={!inputText.trim()} />
+        </div>
+    </div>
+);
 };

@@ -106,8 +106,6 @@ export type CameraState = {
     targetPanX: number;
     targetPanY: number;
     targetZoom: number;
-    // Fix 14: Shared Pivot (Anchor Correctness)
-    centroid: { x: number; y: number };
     lastRecenterCentroidX: number;
     lastRecenterCentroidY: number;
 };
@@ -199,3 +197,9 @@ export const createInitialRenderDebug = (): RenderDebugInfo => ({
     activeRingStateBefore: { globalCompositeOperation: 'source-over', globalAlpha: 1, filter: 'none' },
     activeRingStateAfter: { globalCompositeOperation: 'source-over', globalAlpha: 1, filter: 'none' }
 });
+
+export interface RenderTickDetail {
+    transform: { worldToScreen: (x: number, y: number) => { x: number, y: number } };
+    dpr: number;
+}
+

@@ -51,17 +51,13 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
         aspectRatio: 0,
         lifecycleMs: 0
     });
-    const [spawnCount, setSpawnCount] = useState(5);
+    const [spawnCount, setSpawnCount] = useState(50);
     const [seed, setSeed] = useState(Date.now()); // Seed for deterministic generation
     const [skinMode, setSkinMode] = useState<SkinMode>('elegant'); // Skin toggle (default: elegant)
     const [cameraLocked, setCameraLocked] = useState(false);
     const [showDebugGrid, setShowDebugGrid] = useState(false);
     const [pixelSnapping, setPixelSnapping] = useState(false);
     const [debugNoRenderMotion, setDebugNoRenderMotion] = useState(false);
-
-    // Fix: Distinguish Drag vs Click
-    const clickStartPosRef = useRef<{ x: number, y: number } | null>(null);
-    const clickStartNodeIdRef = useRef<string | null>(null);
 
     const {
         handlePointerMove,
@@ -73,8 +69,7 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
         clientToWorld,
         worldToScreen,
         hoverStateRef,
-        updateHoverSelection,
-        getFrameSnapshot // Fix 61
+        updateHoverSelection
     } = useGraphRendering({
         canvasRef,
         config,
@@ -96,13 +91,7 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
     const onPointerMove = (e: React.PointerEvent) => {
         const canvas = canvasRef.current;
         if (!canvas) return;
-
-        // Fix 61: Use Unified Frame Snapshot (Single Truth)
-        // This ensures input mapping uses the EXACT camera state that was rendered.
-        const snapshot = getFrameSnapshot();
-        const effectiveSource = snapshot || canvas.getBoundingClientRect();
-
-        const rect = snapshot ? snapshot.rect : (effectiveSource as DOMRect);
+        const rect = canvas.getBoundingClientRect();
 
         // 1. Hover Update
         handlePointerMove(e.pointerId, e.pointerType, e.clientX, e.clientY, rect);
@@ -113,8 +102,7 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
             return;
         }
         // Transform screen coords to world coords (camera + rotation aware)
-        // Fix 63: Disable Snapping for Drag Input
-        const { x, y } = clientToWorld(e.clientX, e.clientY, effectiveSource, undefined, false);
+        const { x, y } = clientToWorld(e.clientX, e.clientY, rect);
         engineRef.current.moveDrag({ x, y });
     };
 
@@ -140,43 +128,6 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
         handlePointerUp(e.pointerId, e.pointerType);
         // Release drag
         engineRef.current.releaseNode();
-
-        // Fix: Distinguish Drag vs Click (Part 2: Check Distance)
-        if (clickStartPosRef.current && clickStartNodeIdRef.current) {
-            const dx = e.clientX - clickStartPosRef.current.x;
-            const dy = e.clientY - clickStartPosRef.current.y;
-            const dist = Math.sqrt(dx * dx + dy * dy);
-
-            // Threshold: 5 pixels (allows for micro-jitter during click)
-            if (dist < 5) {
-                const targetNodeId = clickStartNodeIdRef.current;
-                const node = engineRef.current.nodes.get(targetNodeId);
-
-                if (node && canvas) {
-                    const rect = canvas.getBoundingClientRect();
-                    const screenPos = worldToScreen(node.x, node.y, rect);
-                    // Approximate visual radius logic
-                    const zoom = hoverStateRef.current.lastSelectionZoom || 1;
-                    const r = useVariedSize ? node.radius : 5;
-                    const screenRadius = r * zoom;
-
-                    const metaContent = node.meta ? {
-                        title: node.meta.sourceTitle,
-                        summary: node.meta.sourceSummary
-                    } : undefined;
-
-                    popupContext.openPopup(targetNodeId, {
-                        x: screenPos.x,
-                        y: screenPos.y,
-                        radius: screenRadius
-                    }, metaContent);
-                    console.log('[Popup] Opened for node (click):', targetNodeId);
-                }
-            }
-        }
-        // Reset
-        clickStartPosRef.current = null;
-        clickStartNodeIdRef.current = null;
     };
 
     const onPointerDown = (e: React.PointerEvent) => {
@@ -197,23 +148,18 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
             return;
         }
 
-        const snapshot = getFrameSnapshot();
-        const effectiveSource = snapshot || canvas.getBoundingClientRect();
-        const rect = snapshot ? snapshot.rect : (effectiveSource as DOMRect);
-
+        const rect = canvas.getBoundingClientRect();
         // --- Unified Interaction Logic ---
         // Force a hover update to ensure we are testing against the exact same logic as the "Visual Glow".
         // This ensures WYSIWYG selection: if it glows, it drags.
         // Also includes Label Hit-Testing if enabled.
         const theme = getTheme(skinMode);
-        // Fix 57 & 61: Interaction Safety (DPR Changes + Camera Unity)
-        updateHoverSelection(e.clientX, e.clientY, effectiveSource, theme, 'pointer', null);
+        updateHoverSelection(e.clientX, e.clientY, rect, theme, 'pointer');
 
         const hitId = hoverStateRef.current.hoveredNodeId;
 
         if (hitId) {
-            // Fix 63: Disable Snapping for Grab Input
-            const { x, y } = clientToWorld(e.clientX, e.clientY, effectiveSource, undefined, false);
+            const { x, y } = clientToWorld(e.clientX, e.clientY, rect);
             engineRef.current.grabNode(hitId, { x, y });
         }
         // -----------------------------------------
@@ -221,15 +167,27 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
         // Check if a node is currently hovered (for popup logic)
         // Use the hitId we just found or fallback to hover state
         const targetNodeId = hitId || hoverStateRef.current.hoveredNodeId;
+        if (!targetNodeId) return;
 
-        // Fix: Distinguish Drag vs Click (Part 1: Record Start)
-        if (targetNodeId) {
-            clickStartPosRef.current = { x: e.clientX, y: e.clientY };
-            clickStartNodeIdRef.current = targetNodeId;
-        } else {
-            clickStartPosRef.current = null;
-            clickStartNodeIdRef.current = null;
-        }
+        const node = engineRef.current.nodes.get(targetNodeId);
+        if (!node) return;
+
+        const screenPos = worldToScreen(node.x, node.y, rect);
+        const screenRadius = node.radius * 5;  // Approximate screen radius
+
+        // Open popup at node position
+        const metaContent = node.meta ? {
+            title: node.meta.sourceTitle,
+            summary: node.meta.sourceSummary
+        } : undefined;
+
+        popupContext.openPopup(targetNodeId, {
+            x: screenPos.x,
+            y: screenPos.y,
+            radius: screenRadius
+        }, metaContent);
+
+        console.log('[Popup] Opened for node:', targetNodeId);
     };
 
     // ---------------------------------------------------------------------------
@@ -446,24 +404,7 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
                 <AnalysisOverlay />
                 {SHOW_MAP_TITLE && <MapTitleBlock />}
                 {SHOW_BRAND_LABEL && <BrandLabel />}
-                <PopupPortal trackNode={(nodeId) => {
-                    const engine = engineRef.current;
-                    const node = engine?.nodes.get(nodeId);
-                    const canvas = canvasRef.current;
-                    if (!node || !canvas) return null;
-
-                    // Fix 58 & 61: Use Authoritative Frame Snapshot (Prevents Multi-loop Jitter)
-                    // If we re-measure rect here (in separate rAF), we fight the main loop.
-                    const snapshot = getFrameSnapshot();
-                    const effectiveSource = snapshot || canvas.getBoundingClientRect();
-                    const rect = snapshot ? snapshot.rect : (effectiveSource as DOMRect);
-
-                    const { x, y } = worldToScreen(node.x, node.y, effectiveSource);
-                    // Dynamic radius for zoom-aware spacing
-                    const zoom = hoverStateRef.current.lastSelectionZoom || 1;
-                    const r = useVariedSize ? node.radius : 5;
-                    return { x, y, radius: r * zoom };
-                }} />
+                <PopupPortal engineRef={engineRef} />
                 <RotationCompass engineRef={engineRef} />
                 <FullChatToggle />
             </div>

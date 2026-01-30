@@ -683,7 +683,9 @@ export const useGraphRendering = ({
             // Fix 24: Cadence Sync
             // Notify overlays (NodePopup) that the frame is ready and anchors are valid.
             // This ensures they update in the SAME tick, preventing 1-frame lag.
-            window.dispatchEvent(new Event('graph-render-tick'));
+            window.dispatchEvent(new CustomEvent('graph-render-tick', {
+                detail: { transform, dpr }
+            }));
 
             if (theme.hoverDebugEnabled) {
                 if (hoverStateRef.current.lastPerfSampleTime === 0) {

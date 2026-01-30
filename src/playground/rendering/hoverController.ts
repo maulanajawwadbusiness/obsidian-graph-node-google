@@ -153,7 +153,9 @@ export const createHoverController = ({
             }
 
             // Use evaluateNode's result directly instead of recomputing
-            if (candidate.dist <= candidate.haloRadius && candidate.dist < nearestDist) {
+            // Fix 8: Z-Order Determinism. Use <= to allow "Last Winner" (Top Visual) to override "First Winner" (Bottom Visual)
+            // when distances are equal (perfect overlap).
+            if (candidate.dist <= candidate.haloRadius && candidate.dist <= nearestDist) {
                 nearestId = candidate.nodeId;
                 nearestDist = candidate.dist;
                 nearestRenderedRadius = candidate.renderedRadius;

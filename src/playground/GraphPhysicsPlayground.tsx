@@ -245,6 +245,19 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
         engineRef.current?.updateConfig(newConfig);
     };
 
+    // Capture Safety: Release drag on window blur (Alt-Tab)
+    useEffect(() => {
+        const handleBlur = () => {
+            if (engineRef.current.draggedNodeId) {
+                engineRef.current.releaseNode();
+            }
+            isDraggingRef.current = false;
+            pendingDragRef.current = null;
+        };
+        window.addEventListener('blur', handleBlur);
+        return () => window.removeEventListener('blur', handleBlur);
+    }, []);
+
     const handleSpawn = () => {
         const engine = engineRef.current;
         if (!engine) return;

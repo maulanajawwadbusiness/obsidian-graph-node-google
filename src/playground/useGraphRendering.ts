@@ -86,8 +86,23 @@ export const useGraphRendering = ({
         backingH: 0,
         dpr: 1,
         rectW: 0,
-        rectH: 0
+        rectH: 0,
+        rectRaw: null as DOMRect | null // Fix 59: Store full rect
     });
+
+    // Fix 59: Rect Stability Filter
+    const surfaceStabilityRef = useRef({
+        frames: 0,
+        lastCandidates: { w: 0, h: 0, l: 0, t: 0 }
+    });
+
+    // Fix 58: Single Source of Truth
+    const surfaceSnapshotRef = useRef<{
+        rect: DOMRect;
+        dpr: number;
+        timestamp: number;
+        frameId: number;
+    } | null>(null);
 
     // Fix 52: Parallax Lock (Ref Pattern)
     // Ensure render loop always sees latest callback without restarting loop

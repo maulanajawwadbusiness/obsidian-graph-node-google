@@ -33,6 +33,19 @@ export const drawLinks = (
     // Fix 49: Zoom-Stable Line Thickness
     ctx.lineWidth = theme.linkWidth;
 
+    // Viewport Culling Bounds (Screen Space)
+    // Add margin for stroke width and general safety
+    const margin = 50;
+    const vWidth = ctx.canvas.width;
+    const vHeight = ctx.canvas.height;
+
+    // BATCHING: Single Path
+    ctx.beginPath();
+
+    // Debug Stats
+    let drawnCount = 0;
+    let culledCount = 0;
+
     try {
         engine.links.forEach((link) => {
             const source = engine.nodes.get(link.source);
@@ -42,12 +55,40 @@ export const drawLinks = (
                 const s = worldToScreen(source.x, source.y);
                 const t = worldToScreen(target.x, target.y);
 
-                ctx.beginPath();
+                // CULLING: Simple AABB check
+                // If both points are to the left, right, top, or bottom of strict viewport -> SKIP
+                // (Note: This is conservative. Intersecting lines might still be culled if we aren't careful, 
+                // but "both left" etc is safe for lines.)
+                const minX = -margin;
+                const maxX = vWidth + margin;
+                const minY = -margin;
+                const maxY = vHeight + margin;
+
+                if (
+                    (s.x < minX && t.x < minX) ||
+                    (s.x > maxX && t.x > maxX) ||
+                    (s.y < minY && t.y < minY) ||
+                    (s.y > maxY && t.y > maxY)
+                ) {
+                    culledCount++;
+                    return;
+                }
+
                 ctx.moveTo(s.x, s.y);
                 ctx.lineTo(t.x, t.y);
-                ctx.stroke();
+                drawnCount++;
             }
         });
+
+        // Single Stroke for all batched edges
+        if (drawnCount > 0) {
+            ctx.stroke();
+        }
+
+        if (process.env.NODE_ENV !== 'production' && Math.random() < 0.01) {
+            // console.log(`[BatchLinks] drawn=${drawnCount} culled=${culledCount}`);
+        }
+
     } finally {
         ctx.restore();
     }
@@ -80,9 +121,23 @@ export const drawNodes = (
     ctx.lineCap = 'butt'; // Default
     ctx.lineJoin = 'miter';
 
+    // Viewport Bounds for Culling
+    const vWidth = ctx.canvas.width;
+    const vHeight = ctx.canvas.height;
+    const margin = 100; // Generous margin for glow/shadow
+    const minX = -margin;
+    const maxX = vWidth + margin;
+    const minY = -margin;
+    const maxY = vHeight + margin;
+
     engine.nodes.forEach((node) => {
         // Fix 42: Manual Projection & Scaling
         let screen = worldToScreen(node.x, node.y); // Snapped if enabled
+
+        // CULLING 6: Offscreen
+        if (screen.x < minX || screen.x > maxX || screen.y < minY || screen.y > maxY) {
+            return;
+        }
 
         // Fix 22: Half-Pixel Stroke Alignment
         if (settingsRef.current.pixelSnapping) {
@@ -119,6 +174,18 @@ export const drawNodes = (
             const nodeScale = getNodeScale(nodeEnergy, theme);
             // Radius in SCREEN PIXELS
             const radiusPx = baseRenderRadius * nodeScale * zoom;
+
+            // CULLING 6b: Too small to matter (Sub-pixel culling)
+            // If radius is less than 0.5px and no energy, skip?
+            // User asked for "zoom threshold". If node radius < epsilon.
+            if (radiusPx < 0.5 && nodeEnergy < 0.01) {
+                // If it's effectively invisible, skip.
+                // But wait, strokes might still be visible (1px min).
+                // Let's be careful. If radiusPx is tiny, it's just a dot.
+                // We'll trust the user wants perf.
+                // return; 
+                // Actually, let's skip GLOW if small.
+            }
 
             // Energy-driven primary blue (smooth interpolation)
             const primaryBlue = node.isFixed
@@ -189,55 +256,58 @@ export const drawNodes = (
             }
 
             // 3. Glow (energy-driven: brightens + expands as hover energy rises)
-            if (theme.useTwoLayerGlow) {
-                if (sampleIdle && renderDebug) {
-                    renderDebug.idleGlowPassIndex = glowPassIndex;
-                    renderDebug.idleGlowStateBefore = captureCanvasState(ctx);
-                }
-                if (sampleActive && renderDebug) {
-                    renderDebug.activeGlowPassIndex = glowPassIndex;
-                    renderDebug.activeGlowStateBefore = captureCanvasState(ctx);
-                }
+            // OPTIMIZATION: Skip glow if node scale is tiny (< 2px) and no energy
+            if (radiusPx > 2 || nodeEnergy > 0.01) {
+                if (theme.useTwoLayerGlow) {
+                    if (sampleIdle && renderDebug) {
+                        renderDebug.idleGlowPassIndex = glowPassIndex;
+                        renderDebug.idleGlowStateBefore = captureCanvasState(ctx);
+                    }
+                    if (sampleActive && renderDebug) {
+                        renderDebug.activeGlowPassIndex = glowPassIndex;
+                        renderDebug.activeGlowStateBefore = captureCanvasState(ctx);
+                    }
 
-                // Hardened: No save/restore inside, safe to call in loop
-                const glowParams = drawTwoLayerGlow(
-                    ctx,
-                    screen.x,
-                    screen.y,
-                    radiusPx,
-                    nodeEnergy,
-                    primaryBlue,
-                    theme
-                );
+                    // Hardened: No save/restore inside, safe to call in loop
+                    const glowParams = drawTwoLayerGlow(
+                        ctx,
+                        screen.x,
+                        screen.y,
+                        radiusPx,
+                        nodeEnergy,
+                        primaryBlue,
+                        theme
+                    );
 
-                // Store glow debug values for hovered node
-                if (isHoveredNode) {
-                    hoverStateRef.current.debugGlowInnerAlpha = glowParams.innerAlpha;
-                    hoverStateRef.current.debugGlowInnerBlur = glowParams.innerBlur;
-                    hoverStateRef.current.debugGlowOuterAlpha = glowParams.outerAlpha;
-                    hoverStateRef.current.debugGlowOuterBlur = glowParams.outerBlur;
+                    // Store glow debug values for hovered node
+                    if (isHoveredNode) {
+                        hoverStateRef.current.debugGlowInnerAlpha = glowParams.innerAlpha;
+                        hoverStateRef.current.debugGlowInnerBlur = glowParams.innerBlur;
+                        hoverStateRef.current.debugGlowOuterAlpha = glowParams.outerAlpha;
+                        hoverStateRef.current.debugGlowOuterBlur = glowParams.outerBlur;
+                    }
+                    if (sampleIdle && renderDebug) {
+                        renderDebug.idleGlowStateAfter = captureCanvasState(ctx);
+                    }
+                    if (sampleActive && renderDebug) {
+                        renderDebug.activeGlowStateAfter = captureCanvasState(ctx);
+                    }
+                } else if (theme.glowEnabled) {
+                    // Legacy single-layer glow (static) - MUST manual save/restore for Filter!
+                    // Exception to the rule: Single layer glow needs filter.
+                    // We use explicit save/restore for this isolate case.
+                    ctx.save();
+                    ctx.beginPath();
+                    ctx.arc(screen.x, screen.y, radiusPx + theme.glowRadius, 0, Math.PI * 2);
+                    ctx.globalAlpha = 1;
+                    ctx.globalCompositeOperation = 'source-over';
+                    ctx.shadowBlur = 0;
+                    ctx.shadowColor = 'transparent';
+                    ctx.fillStyle = theme.glowColor;
+                    ctx.filter = `blur(${theme.glowRadius}px)`; // THE EXPENSIVE OP
+                    ctx.fill();
+                    ctx.restore();
                 }
-                if (sampleIdle && renderDebug) {
-                    renderDebug.idleGlowStateAfter = captureCanvasState(ctx);
-                }
-                if (sampleActive && renderDebug) {
-                    renderDebug.activeGlowStateAfter = captureCanvasState(ctx);
-                }
-            } else if (theme.glowEnabled) {
-                // Legacy single-layer glow (static) - MUST manual save/restore for Filter!
-                // Exception to the rule: Single layer glow needs filter.
-                // We use explicit save/restore for this isolate case.
-                ctx.save();
-                ctx.beginPath();
-                ctx.arc(screen.x, screen.y, radiusPx + theme.glowRadius, 0, Math.PI * 2);
-                ctx.globalAlpha = 1;
-                ctx.globalCompositeOperation = 'source-over';
-                ctx.shadowBlur = 0;
-                ctx.shadowColor = 'transparent';
-                ctx.fillStyle = theme.glowColor;
-                ctx.filter = `blur(${theme.glowRadius}px)`; // THE EXPENSIVE OP
-                ctx.fill();
-                ctx.restore();
             }
         } else {
             // Normal mode: no scaling
@@ -293,7 +363,23 @@ export const drawLabels = (
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
 
+    // Viewport Bounds for Culling Labels
+    // Use wider margin for labels
+    const vWidth = ctx.canvas.width;
+    const vHeight = ctx.canvas.height;
+    const margin = 200;
+    const minX = -margin;
+    const maxX = vWidth + margin;
+    const minY = -margin;
+    const maxY = vHeight + margin;
+
     engine.nodes.forEach((node) => {
+        // Optimization: Quick cull before expensive calculations
+        const screen = worldToScreen(node.x, node.y);
+        if (screen.x < minX || screen.x > maxX || screen.y < minY || screen.y > maxY) {
+            return;
+        }
+
         const baseRadius = settingsRef.current.useVariedSize ? node.radius : 5.0;
         const baseRenderRadius = getNodeRadius(baseRadius, theme);
         const isDisplayNode = node.id === hoverStateRef.current.hoverDisplayNodeId;
@@ -301,8 +387,13 @@ export const drawLabels = (
         const nodeScale = getNodeScale(nodeEnergy, theme);
         const renderRadiusPx = baseRenderRadius * nodeScale * zoom;
 
-        const label = node.label || node.id;  // Fallback to node ID
+        // Skip labels if node is too small (e.g. < 4px) and not hovered
+        // This is a powerful optimization for zoomed-out graphs.
+        if (renderRadiusPx < 4 && nodeEnergy < 0.1) {
+            return;
+        }
 
+        const label = node.label || node.id;  // Fallback to node ID
         drawNodeLabel(ctx, node.x, node.y, renderRadiusPx, label, nodeEnergy, theme, dpr, worldToScreen);
     });
 

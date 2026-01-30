@@ -174,11 +174,10 @@ export const useGraphRendering = ({
         // Fix: ResizeObserver for robust layout changes
         const resizeObserver = new ResizeObserver(() => {
             if (!canvas || !ctx) return;
-            const sizeChanged = syncCanvasSizing(canvas, ctx, lastDPR, true);
-            if (sizeChanged) {
-                const rect = canvas.getBoundingClientRect();
-                engine.updateBounds(rect.width, rect.height);
-            }
+            // FIX: Do NOT synchronously resize here. It clears the canvas after render but before paint.
+            // The rAF loop polls syncCanvasSizing at the start of every frame, which covers this.
+            // We keep the observer if we need to wake the engine or log, but for now we trust the loop.
+            // engine.updateBounds is also called in rAF if size changed.
         });
         resizeObserver.observe(canvas);
 

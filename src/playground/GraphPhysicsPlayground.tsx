@@ -59,6 +59,10 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
     const [pixelSnapping, setPixelSnapping] = useState(false);
     const [debugNoRenderMotion, setDebugNoRenderMotion] = useState(false);
 
+    // Fix: Distinguish Drag vs Click
+    const clickStartPosRef = useRef<{ x: number, y: number } | null>(null);
+    const clickStartNodeIdRef = useRef<string | null>(null);
+
     const {
         handlePointerMove,
         handlePointerEnter,
@@ -128,6 +132,43 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
         handlePointerUp(e.pointerId, e.pointerType);
         // Release drag
         engineRef.current.releaseNode();
+
+        // Fix: Distinguish Drag vs Click (Part 2: Check Distance)
+        if (clickStartPosRef.current && clickStartNodeIdRef.current) {
+            const dx = e.clientX - clickStartPosRef.current.x;
+            const dy = e.clientY - clickStartPosRef.current.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+
+            // Threshold: 5 pixels (allows for micro-jitter during click)
+            if (dist < 5) {
+                const targetNodeId = clickStartNodeIdRef.current;
+                const node = engineRef.current.nodes.get(targetNodeId);
+
+                if (node && canvas) {
+                    const rect = canvas.getBoundingClientRect();
+                    const screenPos = worldToScreen(node.x, node.y, rect);
+                    // Approximate visual radius logic
+                    const zoom = hoverStateRef.current.lastSelectionZoom || 1;
+                    const r = useVariedSize ? node.radius : 5;
+                    const screenRadius = r * zoom;
+
+                    const metaContent = node.meta ? {
+                        title: node.meta.sourceTitle,
+                        summary: node.meta.sourceSummary
+                    } : undefined;
+
+                    popupContext.openPopup(targetNodeId, {
+                        x: screenPos.x,
+                        y: screenPos.y,
+                        radius: screenRadius
+                    }, metaContent);
+                    console.log('[Popup] Opened for node (click):', targetNodeId);
+                }
+            }
+        }
+        // Reset
+        clickStartPosRef.current = null;
+        clickStartNodeIdRef.current = null;
     };
 
     const onPointerDown = (e: React.PointerEvent) => {
@@ -167,27 +208,15 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
         // Check if a node is currently hovered (for popup logic)
         // Use the hitId we just found or fallback to hover state
         const targetNodeId = hitId || hoverStateRef.current.hoveredNodeId;
-        if (!targetNodeId) return;
 
-        const node = engineRef.current.nodes.get(targetNodeId);
-        if (!node) return;
-
-        const screenPos = worldToScreen(node.x, node.y, rect);
-        const screenRadius = node.radius * 5;  // Approximate screen radius
-
-        // Open popup at node position
-        const metaContent = node.meta ? {
-            title: node.meta.sourceTitle,
-            summary: node.meta.sourceSummary
-        } : undefined;
-
-        popupContext.openPopup(targetNodeId, {
-            x: screenPos.x,
-            y: screenPos.y,
-            radius: screenRadius
-        }, metaContent);
-
-        console.log('[Popup] Opened for node:', targetNodeId);
+        // Fix: Distinguish Drag vs Click (Part 1: Record Start)
+        if (targetNodeId) {
+            clickStartPosRef.current = { x: e.clientX, y: e.clientY };
+            clickStartNodeIdRef.current = targetNodeId;
+        } else {
+            clickStartPosRef.current = null;
+            clickStartNodeIdRef.current = null;
+        }
     };
 
     // ---------------------------------------------------------------------------

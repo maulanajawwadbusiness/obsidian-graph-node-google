@@ -77,6 +77,9 @@ export const useGraphRendering = ({
     // FIX 33: Stable Centroid (Stop Idle Wobble)
     const stableCentroidRef = useRef<{ x: number, y: number }>({ x: 0, y: 0 });
 
+    // Fix 56: DPR Tracker
+    const lastDPR = useRef(window.devicePixelRatio || 1);
+
     // Fix 52: Parallax Lock (Ref Pattern)
     // Ensure render loop always sees latest callback without restarting loop
     const onTickRef = useRef(onTick);
@@ -462,13 +465,21 @@ export const useGraphRendering = ({
 
             const rect = canvas.getBoundingClientRect();
             const dpr = window.devicePixelRatio || 1;
+
+            // Fix 56: Browser Zoom / DPR Resync
+            // Detect if DPR changed (Ctrl+/-) OR if Rect changed (Resize).
+            // Force immediate resync of backing size to ensure 1:1 pixel mapping.
+            const dprChanged = dpr !== lastDPR.current;
             const displayWidth = Math.max(1, Math.round(rect.width * dpr));
             const displayHeight = Math.max(1, Math.round(rect.height * dpr));
+            const sizeChanged = canvas.width !== displayWidth || canvas.height !== displayHeight;
 
-            if (canvas.width !== displayWidth || canvas.height !== displayHeight) {
+            if (dprChanged || sizeChanged) {
+                lastDPR.current = dpr;
                 canvas.width = displayWidth;
                 canvas.height = displayHeight;
                 engine.updateBounds(rect.width, rect.height);
+                console.log(`[Resync] DPR=${dpr.toFixed(2)} Size=${displayWidth}x${displayHeight}`);
             }
 
             const width = rect.width;

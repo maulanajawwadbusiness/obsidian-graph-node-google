@@ -1016,7 +1016,8 @@ export const startGraphRenderLoop = (deps: GraphRenderLoopDeps) => {
             renderDebugRef,
             dpr,
             worldToScreen,
-            visibleBounds
+            visibleBounds,
+            renderScratch // Fix 55
         );
 
         // --- RENDER PASS 4: LABELS ---
@@ -1029,7 +1030,8 @@ export const startGraphRenderLoop = (deps: GraphRenderLoopDeps) => {
             camera.zoom,
             dpr,
             worldToScreen,
-            visibleBounds
+            visibleBounds,
+            renderScratch // Fix 55
         );
 
         // --- RENDER PASS 5: OVERLAYS (DEBUG) ---

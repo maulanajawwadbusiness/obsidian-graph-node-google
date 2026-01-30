@@ -34,6 +34,8 @@ body {
   place-items: center;
   min-width: 320px;
   min-height: 100vh;
+  /* Fix 60: Scrollbar Stability (Prevent layout shift) */
+  overflow: hidden;
 }
 
 /* Ensure form controls inside the physics playground sidebar inherit Quicksand */

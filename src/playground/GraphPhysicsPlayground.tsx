@@ -74,7 +74,7 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
         worldToScreen,
         hoverStateRef,
         updateHoverSelection,
-        getSurfaceSnapshot // Fix 58
+        getFrameSnapshot // Fix 61
     } = useGraphRendering({
         canvasRef,
         config,
@@ -194,21 +194,22 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
             return;
         }
 
-        const rect = getSurfaceSnapshot()?.rect || canvas.getBoundingClientRect();
-        const dpr = getSurfaceSnapshot()?.dpr || window.devicePixelRatio || 1;
+        const snapshot = getFrameSnapshot();
+        const effectiveSource = snapshot || canvas.getBoundingClientRect();
+        const rect = snapshot ? snapshot.rect : (effectiveSource as DOMRect);
 
         // --- Unified Interaction Logic ---
         // Force a hover update to ensure we are testing against the exact same logic as the "Visual Glow".
         // This ensures WYSIWYG selection: if it glows, it drags.
         // Also includes Label Hit-Testing if enabled.
         const theme = getTheme(skinMode);
-        // Fix 57: Interaction Safety (DPR Changes)
-        updateHoverSelection(e.clientX, e.clientY, rect, theme, 'pointer', null, dpr);
+        // Fix 57 & 61: Interaction Safety (DPR Changes + Camera Unity)
+        updateHoverSelection(e.clientX, e.clientY, effectiveSource, theme, 'pointer', null);
 
         const hitId = hoverStateRef.current.hoveredNodeId;
 
         if (hitId) {
-            const { x, y } = clientToWorld(e.clientX, e.clientY, rect, dpr);
+            const { x, y } = clientToWorld(e.clientX, e.clientY, effectiveSource);
             engineRef.current.grabNode(hitId, { x, y });
         }
         // -----------------------------------------
@@ -447,13 +448,13 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
                     const canvas = canvasRef.current;
                     if (!node || !canvas) return null;
 
-                    // Fix 58: Use Authoritative Surface Snapshot (Prevents Multi-loop Jitter)
+                    // Fix 58 & 61: Use Authoritative Frame Snapshot (Prevents Multi-loop Jitter)
                     // If we re-measure rect here (in separate rAF), we fight the main loop.
-                    const snapshot = getSurfaceSnapshot();
-                    const rect = snapshot ? snapshot.rect : canvas.getBoundingClientRect();
-                    const dpr = snapshot ? snapshot.dpr : (window.devicePixelRatio || 1);
+                    const snapshot = getFrameSnapshot();
+                    const effectiveSource = snapshot || canvas.getBoundingClientRect();
+                    const rect = snapshot ? snapshot.rect : (effectiveSource as DOMRect);
 
-                    const { x, y } = worldToScreen(node.x, node.y, rect, dpr);
+                    const { x, y } = worldToScreen(node.x, node.y, effectiveSource);
                     // Dynamic radius for zoom-aware spacing
                     const zoom = hoverStateRef.current.lastSelectionZoom || 1;
                     const r = useVariedSize ? node.radius : 5;

@@ -11,6 +11,15 @@ import type {
 } from './renderingTypes';
 import { CameraTransform } from './camera';
 
+// Fix 61: Frame Snapshot Unity
+export type FrameSnapshot = {
+    readonly rect: DOMRect;
+    readonly dpr: number;
+    readonly camera: CameraState;
+    readonly timestamp: number;
+    readonly frameId: number;
+};
+
 type HoverControllerDeps = {
     engineRef: RefObject<PhysicsEngine>;
     settingsRef: MutableRefObject<RenderSettingsRef>;
@@ -245,8 +254,28 @@ export const createHoverController = ({
         };
     };
 
-    const clientToWorld = (clientX: number, clientY: number, rect: DOMRect, dpr: number = window.devicePixelRatio || 1) => {
-        const camera = cameraRef.current;
+    // Fix 61: Unified Snapshot Consumption
+    const clientToWorld = (
+        clientX: number,
+        clientY: number,
+        source: DOMRect | FrameSnapshot,
+        dprOverride?: number
+    ) => {
+        let rect: DOMRect;
+        let dpr: number;
+        let camera: CameraState;
+
+        // Auto-detect Snapshot vs Legacy Rect
+        if ('camera' in source) {
+            rect = source.rect;
+            dpr = source.dpr;
+            camera = source.camera;
+        } else {
+            rect = source;
+            dpr = dprOverride || window.devicePixelRatio || 1;
+            camera = cameraRef.current;
+        }
+
         const engine = engineRef.current;
         const centroid = engine ? engine.getCentroid() : { x: 0, y: 0 };
         const angle = engine ? engine.getGlobalAngle() : 0;
@@ -275,8 +304,26 @@ export const createHoverController = ({
         return { x: world.x, y: world.y, sx: sxRaw, sy: syRaw };
     };
 
-    const worldToScreen = (worldX: number, worldY: number, rect: DOMRect, dpr: number = window.devicePixelRatio || 1) => {
-        const camera = cameraRef.current;
+    const worldToScreen = (
+        worldX: number,
+        worldY: number,
+        source: DOMRect | FrameSnapshot,
+        dprOverride?: number
+    ) => {
+        let rect: DOMRect;
+        let dpr: number;
+        let camera: CameraState;
+
+        if ('camera' in source) {
+            rect = source.rect;
+            dpr = source.dpr;
+            camera = source.camera;
+        } else {
+            rect = source;
+            dpr = dprOverride || window.devicePixelRatio || 1;
+            camera = cameraRef.current;
+        }
+
         const engine = engineRef.current;
         const centroid = engine ? engine.getCentroid() : { x: 0, y: 0 };
         const angle = engine ? engine.getGlobalAngle() : 0;
@@ -386,13 +433,13 @@ export const createHoverController = ({
     const updateHoverSelection = (
         clientX: number,
         clientY: number,
-        rect: DOMRect,
+        source: DOMRect | FrameSnapshot, // Fix 61: Unified Source
         theme: ThemeConfig,
         reason: 'pointer' | 'camera',
-        lockedNodeId: string | null = null, // Fix 46: Unify Cues (Single Pick Truth)
-        dpr: number = window.devicePixelRatio || 1 // Fix 57: Interaction Safety
+        lockedNodeId: string | null = null,
+        dprOverride?: number // Optional if source is snapshot
     ) => {
-        const { x: worldX, y: worldY, sx, sy } = clientToWorld(clientX, clientY, rect, dpr);
+        const { x: worldX, y: worldY, sx, sy } = clientToWorld(clientX, clientY, source, dprOverride);
 
         hoverStateRef.current.cursorWorldX = worldX;
         hoverStateRef.current.cursorWorldY = worldY;

@@ -7,7 +7,7 @@ import { generateRandomGraph } from './graphRandom';
 import { PlaygroundMetrics } from './playgroundTypes';
 import { CameraTransform, updateCameraContainment, verifyMappingIntegrity } from './rendering/camera';
 import { drawVignetteBackground, withCtx } from './rendering/canvasUtils';
-import { createHoverController } from './rendering/hoverController';
+import { createHoverController, FrameSnapshot } from './rendering/hoverController';
 import { updateHoverEnergy } from './rendering/hoverEnergy';
 import { drawHoverDebugOverlay, drawLabels, drawLinks, drawNodes, drawPointerCrosshair } from './rendering/graphDraw';
 import { createMetricsTracker } from './rendering/metrics';
@@ -96,13 +96,9 @@ export const useGraphRendering = ({
         lastCandidates: { w: 0, h: 0, l: 0, t: 0 }
     });
 
-    // Fix 58: Single Source of Truth
-    const surfaceSnapshotRef = useRef<{
-        rect: DOMRect;
-        dpr: number;
-        timestamp: number;
-        frameId: number;
-    } | null>(null);
+    // Fix 58 & 61: Unified Frame Snapshot (Single Source of Truth)
+    // Bundles Rect + DPR + Camera State for 1:1 input/render alignment.
+    const frameSnapshotRef = useRef<FrameSnapshot | null>(null);
 
     // Fix 52: Parallax Lock (Ref Pattern)
     // Ensure render loop always sees latest callback without restarting loop
@@ -506,24 +502,60 @@ export const useGraphRendering = ({
             let cssW = 0;
             let cssH = 0;
 
+            const approxEq = (a: number, b: number) => Math.abs(a - b) < 0.5;
+
+            let stableRect = rectRaw;
+
             if (isRectInvalid) {
-                // FAIL-SAFE: Use last good known state
+                // Invalid: Reset stability counter, keep last good (if available)
+                surfaceStabilityRef.current.frames = 0;
+                // Use last good RAW rect for continuity if possible, else current raw
+                stableRect = lastGoodSync.current.rectRaw || rectRaw;
+            } else if (
+                approxEq(rectRaw.width, surfaceStabilityRef.current.lastCandidates.w) &&
+                approxEq(rectRaw.height, surfaceStabilityRef.current.lastCandidates.h) &&
+                approxEq(rectRaw.left, surfaceStabilityRef.current.lastCandidates.l) &&
+                approxEq(rectRaw.top, surfaceStabilityRef.current.lastCandidates.t)
+            ) {
+                // Stable matches candidate
+                surfaceStabilityRef.current.frames++;
+            } else {
+                // Changed: Reset counter, update candidate
+                surfaceStabilityRef.current.frames = 0;
+                surfaceStabilityRef.current.lastCandidates = {
+                    w: rectRaw.width, h: rectRaw.height, l: rectRaw.left, t: rectRaw.top
+                };
+            }
+
+            // Accept new rect only if stable for >1 frame (OR if we have no valid state yet)
+            const acceptNewRect = surfaceStabilityRef.current.frames >= 1 || lastGoodSync.current.backingW === 0;
+
+            if (acceptNewRect) {
+                stableRect = rectRaw;
+            } else if (lastGoodSync.current.rectRaw) {
+                // Use last good rect (visual freeze during thrash)
+                stableRect = lastGoodSync.current.rectRaw;
+            }
+
+            if (isRectInvalid) { // Re-check invalidity or fallback necessity
                 if (lastGoodSync.current.backingW > 0) {
+                    // FAIL-SAFE: Use last good known state
                     backingW = lastGoodSync.current.backingW;
                     backingH = lastGoodSync.current.backingH;
                     cssW = lastGoodSync.current.rectW;
                     cssH = lastGoodSync.current.rectH;
+                    // Keep existing stableRect (which was set to lastGoodSync.rectRaw above)
                 } else {
-                    // Startup panic or unavailable state? Skip frame safely.
+                    // No history, must abort
                     frameId = requestAnimationFrame(render);
                     return;
                 }
             } else {
-                // Valid Layout: Compute Target
-                backingW = Math.max(1, Math.round(rectRaw.width * dpr));
-                backingH = Math.max(1, Math.round(rectRaw.height * dpr));
-                cssW = rectRaw.width;
-                cssH = rectRaw.height;
+                // Valid Layout: Compute Target from STABLE rect
+                backingW = Math.max(1, Math.round(stableRect.width * dpr));
+                backingH = Math.max(1, Math.round(stableRect.height * dpr));
+                cssW = stableRect.width;
+                cssH = stableRect.height;
 
                 // Commit to Last Good
                 lastGoodSync.current = {
@@ -531,7 +563,20 @@ export const useGraphRendering = ({
                     backingH,
                     dpr,
                     rectW: cssW,
-                    rectH: cssH
+                    rectH: cssH,
+                    rectRaw: stableRect // Fix 59: Store full rect
+                };
+
+                // PUBLISH SNAPSHOT (Unified Single Truth)
+                // Fix 61: Capture Camera State AT RENDER TIME
+                // This ensures that input mapping (hover/drag) matches EXACTLY what was drawn.
+                const now = performance.now();
+                frameSnapshotRef.current = {
+                    rect: stableRect,
+                    dpr,
+                    camera: { ...cameraRef.current }, // Clone to freeze state for this frame
+                    timestamp: now,
+                    frameId
                 };
             }
 
@@ -560,7 +605,7 @@ export const useGraphRendering = ({
             }
 
             // Use guarded dimensions for drawing
-            const rect = rectRaw; // Keep raw rect for clientToWorld offset calculations (needs .left/.top)
+            const rect = frameSnapshotRef.current ? frameSnapshotRef.current.rect : rectRaw; // Fix 59: Use Snapshot if available
             const width = cssW;
             const height = cssH;
 
@@ -918,6 +963,7 @@ export const useGraphRendering = ({
         clientToWorld,
         worldToScreen,
         hoverStateRef,
+        getFrameSnapshot: () => frameSnapshotRef.current, // Fix 61: Frame Accessor
         updateHoverSelection // Expose for drag initiation
     };
 };

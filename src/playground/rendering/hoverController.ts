@@ -7,13 +7,13 @@ import type {
     CameraState,
     HoverState,
     PendingPointerState,
-    RenderSettingsRef
+    RenderSettings
 } from './renderingTypes';
 import { CameraTransform } from './camera';
 
 type HoverControllerDeps = {
     engineRef: RefObject<PhysicsEngine>;
-    settingsRef: MutableRefObject<RenderSettingsRef>;
+    settingsRef: MutableRefObject<RenderSettings>;
     hoverStateRef: MutableRefObject<HoverState>;
     pendingPointerRef: MutableRefObject<PendingPointerState>;
     cameraRef: MutableRefObject<CameraState>;
@@ -245,8 +245,8 @@ export const createHoverController = ({
         };
     };
 
-    const clientToWorld = (clientX: number, clientY: number, rect: DOMRect) => {
-        const camera = cameraRef.current;
+    const clientToWorld = (clientX: number, clientY: number, rect: DOMRect, cameraOverride?: CameraState) => {
+        const camera = cameraOverride || cameraRef.current;
         const engine = engineRef.current;
         const centroid = engine ? engine.getCentroid() : { x: 0, y: 0 };
         const angle = engine ? engine.getGlobalAngle() : 0;
@@ -397,7 +397,11 @@ export const createHoverController = ({
         hoverStateRef.current.cursorScreenY = sy;
         hoverStateRef.current.cursorClientX = clientX;
         hoverStateRef.current.cursorClientY = clientY;
+        hoverStateRef.current.cursorClientY = clientY;
         hoverStateRef.current.hasPointer = true;
+        // FIX 35: Stale Hover (Persist Pointer)
+        hoverStateRef.current.lastClientX = clientX;
+        hoverStateRef.current.lastClientY = clientY;
 
         const nowMs = performance.now();
         const currentHoveredId = hoverStateRef.current.hoveredNodeId;

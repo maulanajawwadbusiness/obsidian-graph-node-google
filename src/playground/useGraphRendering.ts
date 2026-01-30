@@ -147,6 +147,14 @@ export const useGraphRendering = ({
         clientToWorld,
         worldToScreen,
         hoverStateRef,
-        updateHoverSelection // Expose for drag initiation
+        hoverStateRef,
+        updateHoverSelection, // Expose for drag initiation
+        setPendingDrag: (nodeId: string | null, clientX: number, clientY: number) => {
+            if (nodeId) {
+                pendingPointerRef.current.pendingDragStart = { nodeId, clientX, clientY };
+            } else {
+                pendingPointerRef.current.pendingDragStart = null;
+            }
+        }
     };
 };

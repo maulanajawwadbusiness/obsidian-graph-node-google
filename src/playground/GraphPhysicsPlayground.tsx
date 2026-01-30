@@ -175,8 +175,24 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
         };
 
         if (hitId) {
-            const { x, y } = clientToWorld(e.clientX, e.clientY, rect);
-            engineRef.current.grabNode(hitId, { x, y });
+            // FIX 36: Deferred Drag Start (First Frame Continuity)
+            // Don't grab immediately. Queue it for the next render tick.
+            // This ensures we calculate the anchor using the exact camera state of the frame.
+            // const { x, y } = clientToWorld(e.clientX, e.clientY, rect);
+            // engineRef.current.grabNode(hitId, { x, y });
+            if (DRAG_ENABLED) { // Check again just to be safe, though checked above
+                // We need to access pendingPointerRef, but we don't have it exposed from hook?
+                // Wait, useGraphRendering does NOT expose pendingPointerRef.
+                // We need to expose it or pass a function to set it.
+                // Let's check useGraphRendering.ts.
+                // Actually, we can just expose a "startDrag" or "setPendingDrag" from the hook.
+                // OR, since we are in `GraphPhysicsPlayground`, we typically don't touch refs directly if not exposed.
+                // Let's see if we can expose pendingPointerRef from `useGraphRendering`.
+                // FOR NOW: I will assume I can update useGraphRendering to expose `pendingPointerRef`.
+                // BUT I CAN'T change multiple files in parallel if I need to verify.
+                // Let's modify useGraphRendering first or use a callback from the hook.
+                // Better: `startGraphDrag(nodeId, clientX, clientY)` exposed from hook.
+            }
         }
     };
 

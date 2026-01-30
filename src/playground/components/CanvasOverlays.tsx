@@ -117,6 +117,7 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
                 onMouseDown={stopPropagation}
                 onMouseMove={stopPropagation}
                 onMouseUp={stopPropagation}
+                onWheel={stopPropagation}
             >
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
                     <strong>Time: T+{metrics.lifecycleMs}ms</strong>

@@ -1,19 +1,20 @@
-import type { Dispatch, SetStateAction } from 'react';
+import type { Dispatch, SetStateAction, MutableRefObject } from 'react';
 import type { PhysicsEngine } from '../../physics/engine';
 import type { ForceConfig } from '../../physics/types';
 import { getTheme } from '../../visual/theme';
 import { generateRandomGraph } from '../graphRandom';
 import type { PlaygroundMetrics } from '../playgroundTypes';
-import { updateCameraContainment, enforceCameraSafety, CameraTransform } from './camera';
+import { updateCameraContainment, CameraTransform, verifyMappingIntegrity } from './camera';
 import { drawVignetteBackground, withCtx } from './canvasUtils';
 import { updateHoverEnergy } from './hoverEnergy';
 import { drawHoverDebugOverlay, drawLabels, drawLinks, drawNodes, drawPointerCrosshair } from './graphDraw';
 import { createMetricsTracker } from './metrics';
 import {
     CameraState,
-    HoverState, // Removed duplicate CameraTransform from here
+    HoverState,
     RenderSettings,
-    MutableRefObject
+    PendingPointerState,
+    RenderDebugInfo
 } from './renderingTypes';
 import { gradientCache } from './gradientCache';
 import { isDebugEnabled } from './debugUtils';
@@ -41,7 +42,7 @@ type GraphRenderLoopDeps = {
     spawnCount: number;
     setMetrics: Dispatch<SetStateAction<PlaygroundMetrics>>;
     cameraRef: Ref<CameraState>;
-    settingsRef: Ref<RenderSettingsRef>;
+    settingsRef: Ref<RenderSettings>;
     pendingPointerRef: Ref<PendingPointerState>;
     hoverStateRef: Ref<HoverState>;
     renderDebugRef: Ref<RenderDebugInfo>;
@@ -267,13 +268,24 @@ export const updateHoverSelectionIfNeeded = (
     // Camera Change -> Check against stored generation in HoverState (if we had one, or just check values)
     // We'll trust the caller to call this function on every frame.
     // If camera changed significantly, we MUST re-run hit test, even if mouse didn't move.
+    // We'll trust the caller to call this function on every frame.
+    // If camera changed significantly, we MUST re-run hit test, even if mouse didn't move.
     const camera = cameraRef.current;
-    const camKey = `${camera.panX.toFixed(3)}:${camera.panY.toFixed(3)}:${camera.zoom.toFixed(4)}`;
 
-    // Note: In a real ECS we'd have a cameraGeneration ID. Here we use a heuristic or stored key.
-    if (hoverStateRef.current.cameraKey !== camKey) {
+    // FIX 31: Knife-Sharp Hover (High Precision Check)
+    // String key was too coarse (toFixed(2)). Use strict epsilon check.
+    // Check against cached exact values in HoverState.
+    const EPSILON = 0.0001;
+    const sameCam =
+        Math.abs(camera.panX - hoverStateRef.current.lastSelectionPanX) < EPSILON &&
+        Math.abs(camera.panY - hoverStateRef.current.lastSelectionPanY) < EPSILON &&
+        Math.abs(camera.zoom - hoverStateRef.current.lastSelectionZoom) < EPSILON &&
+        Math.abs(engine.getGlobalAngle() - hoverStateRef.current.lastSelectionAngle) < EPSILON;
+
+    if (!sameCam) {
         envChanged = true;
-        hoverStateRef.current.cameraKey = camKey;
+        // Update the "Last Selection" values immediately so next check works
+        // (Actually updateHoverSelection will update them, but we need to trigger the run)
     }
 
     if (globalSurfaceGeneration !== hoverStateRef.current.surfaceGeneration) {
@@ -322,14 +334,17 @@ export const updateHoverSelectionIfNeeded = (
 const applyDragTargetSync = (
     engine: PhysicsEngine,
     hoverStateRef: Ref<HoverState>,
-    clientToWorld: (clientX: number, clientY: number, rect: DOMRect) => { x: number; y: number },
-    rect: DOMRect
+    hoverStateRef: Ref<HoverState>,
+    clientToWorld: (clientX: number, clientY: number, rect: DOMRect, camera?: CameraState) => { x: number; y: number },
+    rect: DOMRect,
+    camera: CameraState
 ) => {
     if (engine.draggedNodeId && hoverStateRef.current.hasPointer) {
         const { x, y } = clientToWorld(
             hoverStateRef.current.cursorClientX,
             hoverStateRef.current.cursorClientY,
-            rect
+            rect,
+            camera
         );
         engine.moveDrag({ x, y });
     }
@@ -742,6 +757,16 @@ export const startGraphRenderLoop = (deps: GraphRenderLoopDeps) => {
     engine.updateBounds(canvas.width, canvas.height);
 
     const render = () => {
+        // FIX 36: Deferred Drag Start (First Frame Continuity)
+        // Apply the grab using the EXACT camera/surface state of this frame.
+        if (pendingPointerRef.current.pendingDragStart) {
+            const { nodeId, clientX, clientY } = pendingPointerRef.current.pendingDragStart;
+            const rect = canvas.getBoundingClientRect(); // Live rect for instant sync
+            const { x, y } = clientToWorld(clientX, clientY, rect);
+            engine.grabNode(nodeId, { x, y });
+            pendingPointerRef.current.pendingDragStart = null;
+        }
+
         const now = performance.now();
         const schedulerResult = runPhysicsScheduler(engine, schedulerState, overloadState, perfSample);
 
@@ -823,7 +848,7 @@ export const startGraphRenderLoop = (deps: GraphRenderLoopDeps) => {
         }
 
         updateHoverSelectionIfNeeded(
-            pendingPointerRef.current,
+            pendingPointerRef.current.hasPending,
             hoverStateRef,
             cameraRef,
             engine,
@@ -961,10 +986,10 @@ export const startGraphRenderLoop = (deps: GraphRenderLoopDeps) => {
             renderDebug.activeRingStateAfter = defaultState;
         }
 
-        applyDragTargetSync(engine, hoverStateRef, clientToWorld, rect);
+        applyDragTargetSync(engine, hoverStateRef, clientToWorld, rect, camera);
 
         window.dispatchEvent(new CustomEvent('graph-render-tick', {
-            detail: { transform, dpr },
+            detail: { transform, dpr, snapEnabled: effectiveSnapping },
         }));
 
         syncHoverPerfCounters(hoverStateRef, theme, now, ctx);
@@ -980,6 +1005,9 @@ export const startGraphRenderLoop = (deps: GraphRenderLoopDeps) => {
     window.addEventListener('blur', handleBlur);
 
     const handleWheel = (e: WheelEvent) => {
+        // FIX 32: strict wheel ownership
+        if (e.defaultPrevented) return;
+
         e.preventDefault();
         e.stopPropagation();
 
@@ -997,7 +1025,14 @@ export const startGraphRenderLoop = (deps: GraphRenderLoopDeps) => {
             delta *= 800;
         }
 
-        if (Math.abs(delta) < 0.5) return;
+        // FIX 39: OS Variance Guard (Clamp Massive deltas)
+        // Some trackpads send 500+, mice send 100. Normalize.
+        // Clamp to +/- 150 to keep zoom controllable.
+        delta = Math.max(-150, Math.min(150, delta));
+
+        // FIX 33: Trackpad Inertia Killer
+        // Filter tiny deltas that look like decay tails
+        if (Math.abs(delta) < 4.0) return;
 
         const scale = Math.exp(-delta * ZOOM_SENSITIVITY);
 

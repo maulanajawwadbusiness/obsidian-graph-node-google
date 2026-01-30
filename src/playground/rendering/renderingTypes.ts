@@ -15,6 +15,7 @@ export type PendingPointerState = {
     pointerId: number;
     pointerType: string;
     hasPending: boolean;
+    pendingDragStart: { nodeId: string; clientX: number; clientY: number; } | null;
 };
 
 export type HoverState = {
@@ -75,6 +76,7 @@ export type HoverState = {
     // Snap Hysteresis (Phase 6)
     isMoving: boolean;
     lastMoveTime: number;
+    lastSelectionTime: number;
     snapEnabled: boolean;
 
     // Debug / Perf
@@ -135,7 +137,8 @@ export const createInitialPendingPointer = (): PendingPointerState => ({
     clientY: 0,
     pointerId: -1,
     pointerType: 'mouse',
-    hasPending: false
+    hasPending: false,
+    pendingDragStart: null
 });
 
 export const createInitialHoverState = (): HoverState => ({
@@ -181,9 +184,16 @@ export const createInitialHoverState = (): HoverState => ({
     lastInsideMs: 0,
     pendingSwitchId: null,
     pendingSwitchSinceMs: 0,
+    // State Generation Tracking (Phase 5)
+    surfaceGeneration: 0,
+    cameraKey: '',
+    lastClientX: 0,
+    lastClientY: 0,
+
     // Snap Hysteresis
     isMoving: false,
     lastMoveTime: 0,
+    lastSelectionTime: 0,
     snapEnabled: true,
     // Debug: glow energy values
     debugGlowInnerAlpha: 0,
@@ -216,5 +226,6 @@ export const createInitialRenderDebug = (): RenderDebugInfo => ({
 export interface RenderTickDetail {
     transform: { worldToScreen: (x: number, y: number) => { x: number, y: number } };
     dpr: number;
+    snapEnabled: boolean;
 }
 

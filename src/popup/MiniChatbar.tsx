@@ -113,10 +113,16 @@ function computeChatbarPosition(
 ): React.CSSProperties {
     if (!popupRect) {
         // Fallback: screen edge
+        // Fallback: screen edge (Explicit Pixels, No Transform)
+        // Center vertically: (WindowHeight - ChatbarHeight) / 2
+        // We need chatbar height. If unknown, we guess 400.
+        const height = chatbarSize?.height || 400;
+        const top = Math.max(10, (window.innerHeight - height) / 2);
+
         return {
             right: '20px',
-            top: '50%',
-            transform: 'translateY(-50%)',
+            top: `${top}px`,
+            // transform: 'translateY(-50%)', // Removed to prevent sub-pixel drift
         };
     }
 
@@ -384,6 +390,7 @@ export const MiniChatbar: React.FC<MiniChatbarProps> = ({ messages, onSend, onCl
             onMouseMove={stopPropagation}
             onMouseUp={stopPropagation}
             onClick={stopPropagation}
+            onWheel={stopPropagation}
         >
             <div style={HEADER_STYLE}>
                 <span style={{ fontSize: '13px', fontWeight: '600' }}>{t('miniChat.header')}</span>

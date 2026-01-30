@@ -322,24 +322,37 @@ export const NodePopup: React.FC<NodePopupProps> = ({ trackNode, engineRef }) =>
                     // Pure layout calculation
                     const rawPos = computePopupPosition(geom, width, height);
 
-                    // FIX 25: Consistent Rounding
-                    // Use standard quantizer (Device Pixel -> CSS Pixel)
+                    // FIX 25 & 26: Consistent Rounding & Shared Snapshot
+                    // We adhere to the "Sacred 60" policy:
+                    // - Motion = Float (Smooth)
+                    // - Rest = Snapped (Crisp)
                     const dpr = detail.dpr || window.devicePixelRatio || 1;
+                    const snapEnabled = detail.snapEnabled ?? true; // Default to true if missing (safe)
 
-                    finalLeft = quantizeToDevicePixel(rawPos.left, dpr);
-                    finalTop = quantizeToDevicePixel(rawPos.top, dpr);
-                    finalOx = quantizeToDevicePixel(rawPos.originX, dpr);
-                    finalOy = quantizeToDevicePixel(rawPos.originY, dpr);
+                    // Helper: Quantize if snapped, else raw float
+                    const processCoord = (val: number) => {
+                        if (snapEnabled) {
+                            return quantizeToDevicePixel(val, dpr);
+                        }
+                        return val; // Float for smooth motion
+                    };
+
+                    finalLeft = processCoord(rawPos.left);
+                    finalTop = processCoord(rawPos.top);
+                    finalOx = processCoord(rawPos.originX);
+                    finalOy = processCoord(rawPos.originY);
                     hasPosition = true;
                 }
             } else if (trackNode) {
-                // Fallback for legacy / side-loading
+                // Fallback for legacy / side-loading (e.g. initial mount before first tick)
+                // We default to "Snapping" behavior here for stability, unless we know better.
                 const geom = trackNode(selectedNodeId);
                 if (geom) {
                     const width = popupRef.current.offsetWidth;
                     const height = popupRef.current.offsetHeight;
                     const rawPos = computePopupPosition(geom, width, height);
                     const dpr = window.devicePixelRatio || 1;
+                    // Default to quantized for legacy path
                     finalLeft = quantizeToDevicePixel(rawPos.left, dpr);
                     finalTop = quantizeToDevicePixel(rawPos.top, dpr);
                     finalOx = quantizeToDevicePixel(rawPos.originX, dpr);
@@ -378,6 +391,7 @@ export const NodePopup: React.FC<NodePopupProps> = ({ trackNode, engineRef }) =>
             onMouseMove={stopPropagation}
             onMouseUp={stopPropagation}
             onClick={stopPropagation}
+            onWheel={stopPropagation}
         >
             <div style={{ ...HEADER_STYLE, ...contentTransition }}>
                 <span style={{ fontSize: '14px', opacity: 0.7 }}>{t('nodePopup.header')}</span>

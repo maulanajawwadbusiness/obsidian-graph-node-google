@@ -183,8 +183,7 @@ export function drawTwoLayerGlow(
     return { innerAlpha, innerBlur, outerAlpha, outerBlur };
 }
 
-return { innerAlpha, innerBlur, outerAlpha, outerBlur };
-}
+
 
 /**
  * Synchronize Canvas Backing Store with CSS Size & DPR.

@@ -649,8 +649,20 @@ export const useGraphRendering = ({
             renderDebug.activeRingStateAfter = defaultState;
 
             // FIX 28: Render-Rate Drag Coupling (Visual Dignity)
+            // 1. Update Physics Target from Input (Decoupled)
+            // Re-project cursor to world using LATEST camera frame.
+            if (engine.draggedNodeId && hoverStateRef.current.hasPointer) {
+                const { x, y } = clientToWorld(
+                    hoverStateRef.current.cursorClientX,
+                    hoverStateRef.current.cursorClientY,
+                    rect
+                );
+                engine.moveDrag({ x, y });
+            }
+
+            // 2. Sync Node to Target
             // Force update the dragged node to the cursor position EVERY VSRE frame.
-            // This ensures smooth movement even if physics ticks are dropped or quantized (e.g. 60hz physics on 144hz screen).
+            // This ensures smooth movement even if physics ticks are dropped.
             if (engine.draggedNodeId && engine.dragTarget) {
                 const dragged = engine.nodes.get(engine.draggedNodeId);
                 if (dragged) {

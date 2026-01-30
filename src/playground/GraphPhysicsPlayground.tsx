@@ -93,17 +93,12 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
         if (!canvas) return;
         const rect = canvas.getBoundingClientRect();
 
-        // 1. Hover Update
+        // 1. Hover Update (Ref-based, cheap)
+        // FIX 28: Decoupled Input Sampling
+        // We do NOT update physics (moveDrag) here.
+        // We strictly relay the "Intention" (Client Coordinates) to the shared state.
+        // The Main Render Loop (rAF) will read this, re-project with the EXACT camera frame, and apply physics.
         handlePointerMove(e.pointerId, e.pointerType, e.clientX, e.clientY, rect);
-
-        // 2. Physics Drag Update
-        if (!DRAG_ENABLED) {
-            engineRef.current.releaseNode();
-            return;
-        }
-        // Transform screen coords to world coords (camera + rotation aware)
-        const { x, y } = clientToWorld(e.clientX, e.clientY, rect);
-        engineRef.current.moveDrag({ x, y });
     };
 
     const onPointerEnter = (e: React.PointerEvent) => {
@@ -116,7 +111,13 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
 
     const onPointerCancel = (e: React.PointerEvent) => {
         handlePointerCancel(e.pointerId, e.pointerType);
-        // Ensure drag is released on cancel
+        // FIX 29: Lifecycle Safety
+        engineRef.current.releaseNode();
+    };
+
+    const onLostPointerCapture = (e: React.PointerEvent) => {
+        // Treat as cancel/up
+        handlePointerUp(e.pointerId, e.pointerType);
         engineRef.current.releaseNode();
     };
 
@@ -393,6 +394,7 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
                 onPointerMove={onPointerMove}
                 onPointerLeave={onPointerLeave}
                 onPointerCancel={onPointerCancel}
+                onLostPointerCapture={onLostPointerCapture}
                 onPointerUp={onPointerUp}
                 onDragOver={handleDragOver}
                 onDrop={handleDrop}

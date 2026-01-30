@@ -195,12 +195,14 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
         // This ensures WYSIWYG selection: if it glows, it drags.
         // Also includes Label Hit-Testing if enabled.
         const theme = getTheme(skinMode);
-        updateHoverSelection(e.clientX, e.clientY, rect, theme, 'pointer');
+        // Fix 57: Interaction Safety (DPR Changes)
+        const dpr = window.devicePixelRatio || 1;
+        updateHoverSelection(e.clientX, e.clientY, rect, theme, 'pointer', null, dpr);
 
         const hitId = hoverStateRef.current.hoveredNodeId;
 
         if (hitId) {
-            const { x, y } = clientToWorld(e.clientX, e.clientY, rect);
+            const { x, y } = clientToWorld(e.clientX, e.clientY, rect, dpr);
             engineRef.current.grabNode(hitId, { x, y });
         }
         // -----------------------------------------

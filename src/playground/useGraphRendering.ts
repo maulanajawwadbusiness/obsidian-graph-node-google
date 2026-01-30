@@ -672,6 +672,7 @@ export const useGraphRendering = ({
                 camera.panY,
                 globalAngle,
                 centroid,
+                dpr, // Fix 57: Pass Fractional DPR
                 settingsRef.current.pixelSnapping
             );
             transform.applyToContext(ctx);
@@ -730,7 +731,8 @@ export const useGraphRendering = ({
                 const { x: wx, y: wy } = clientToWorld(
                     hoverStateRef.current.cursorClientX,
                     hoverStateRef.current.cursorClientY,
-                    rect
+                    rect,
+                    dpr // Fix 57: Pass DPR
                 );
                 engine.moveDrag({ x: wx, y: wy });
             }

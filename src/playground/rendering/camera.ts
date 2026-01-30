@@ -9,7 +9,7 @@ export class CameraTransform {
     private angle: number;
     private cx: number;
     private cy: number;
-    private pixelSnapping: boolean;
+    private dpr: number;
 
     constructor(
         width: number,
@@ -19,6 +19,7 @@ export class CameraTransform {
         panY: number,
         angle: number,
         centroid: { x: number, y: number },
+        dpr: number = 1, // Fix 57: Device Pixel Ratio
         pixelSnapping: boolean = false
     ) {
         this.width = width;
@@ -30,6 +31,7 @@ export class CameraTransform {
         this.angle = angle;
         this.cx = centroid.x;
         this.cy = centroid.y;
+        this.dpr = Math.max(0.1, dpr); // Guard against NaN/0
         this.pixelSnapping = pixelSnapping;
     }
 
@@ -41,13 +43,15 @@ export class CameraTransform {
      * T(Center) * S(Zoom) * T(Pan) * T(C) * R(Angle) * T(-C)
      */
     public applyToContext(ctx: CanvasRenderingContext2D) {
-        let { width, height, zoom, panX, panY, angle, cx, cy } = this;
+        let { width, height, zoom, panX, panY, angle, cx, cy, dpr } = this;
 
         // Fix 5: Pixel Snapping Policy
         // Snap the effective screen offset to nearest screen pixel
         if (this.pixelSnapping) {
-            panX = Math.round(panX * zoom) / zoom;
-            panY = Math.round(panY * zoom) / zoom;
+            // FIX 57: Sub-pixel Snapping (Retina awareness)
+            // Snap to 1/DPR increments instead of 1.0 increments.
+            panX = Math.round(panX * zoom * dpr) / (zoom * dpr);
+            panY = Math.round(panY * zoom * dpr) / (zoom * dpr);
         }
 
         ctx.translate(width / 2, height / 2);
@@ -61,12 +65,12 @@ export class CameraTransform {
     }
 
     public worldToScreen(worldX: number, worldY: number): { x: number, y: number } {
-        let { width, height, zoom, panX, panY, angle, cx, cy } = this;
+        let { width, height, zoom, panX, panY, angle, cx, cy, dpr } = this;
 
         // Fix 5: Pixel Snapping Policy (Symmetry)
         if (this.pixelSnapping) {
-            panX = Math.round(panX * zoom) / zoom;
-            panY = Math.round(panY * zoom) / zoom;
+            panX = Math.round(panX * zoom * dpr) / (zoom * dpr);
+            panY = Math.round(panY * zoom * dpr) / (zoom * dpr);
         }
 
         // 1. Rotate around centroid
@@ -98,12 +102,12 @@ export class CameraTransform {
         if (rect.width === 0 || rect.height === 0) {
             return { x: this.cx, y: this.cy };
         }
-        let { zoom, panX, panY, angle, cx, cy } = this;
+        let { zoom, panX, panY, angle, cx, cy, dpr } = this;
 
         // Fix 5: Pixel Snapping Policy (Symmetry)
         if (this.pixelSnapping) {
-            panX = Math.round(panX * zoom) / zoom;
-            panY = Math.round(panY * zoom) / zoom;
+            panX = Math.round(panX * zoom * dpr) / (zoom * dpr);
+            panY = Math.round(panY * zoom * dpr) / (zoom * dpr);
         }
 
         // 0. CSS relative to center

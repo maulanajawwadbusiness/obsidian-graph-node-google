@@ -245,7 +245,7 @@ export const createHoverController = ({
         };
     };
 
-    const clientToWorld = (clientX: number, clientY: number, rect: DOMRect) => {
+    const clientToWorld = (clientX: number, clientY: number, rect: DOMRect, dpr: number = window.devicePixelRatio || 1) => {
         const camera = cameraRef.current;
         const engine = engineRef.current;
         const centroid = engine ? engine.getCentroid() : { x: 0, y: 0 };
@@ -263,6 +263,7 @@ export const createHoverController = ({
             camera.panY,
             angle,
             centroid,
+            dpr,
             settingsRef.current.pixelSnapping
         );
 
@@ -274,7 +275,7 @@ export const createHoverController = ({
         return { x: world.x, y: world.y, sx: sxRaw, sy: syRaw };
     };
 
-    const worldToScreen = (worldX: number, worldY: number, rect: DOMRect) => {
+    const worldToScreen = (worldX: number, worldY: number, rect: DOMRect, dpr: number = window.devicePixelRatio || 1) => {
         const camera = cameraRef.current;
         const engine = engineRef.current;
         const centroid = engine ? engine.getCentroid() : { x: 0, y: 0 };
@@ -288,6 +289,7 @@ export const createHoverController = ({
             camera.panY,
             angle,
             centroid,
+            dpr,
             settingsRef.current.pixelSnapping
         );
 
@@ -387,9 +389,10 @@ export const createHoverController = ({
         rect: DOMRect,
         theme: ThemeConfig,
         reason: 'pointer' | 'camera',
-        lockedNodeId: string | null = null // Fix 46: Unify Cues (Single Pick Truth)
+        lockedNodeId: string | null = null, // Fix 46: Unify Cues (Single Pick Truth)
+        dpr: number = window.devicePixelRatio || 1 // Fix 57: Interaction Safety
     ) => {
-        const { x: worldX, y: worldY, sx, sy } = clientToWorld(clientX, clientY, rect);
+        const { x: worldX, y: worldY, sx, sy } = clientToWorld(clientX, clientY, rect, dpr);
 
         hoverStateRef.current.cursorWorldX = worldX;
         hoverStateRef.current.cursorWorldY = worldY;

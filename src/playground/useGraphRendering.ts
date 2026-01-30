@@ -681,8 +681,57 @@ export const useGraphRendering = ({
         };
         window.addEventListener('blur', handleBlur);
 
+        // FIX 23: Unambiguous Wheel Handling (Native Listener for preventDefault)
+        // Explicitly own the wheel on canvas to prevent page scroll.
+        // Also implements Zoom behavior.
+        const handleWheel = (e: WheelEvent) => {
+            e.preventDefault();
+            e.stopPropagation();
+
+            const rect = canvas.getBoundingClientRect();
+            // Point of interest (cursor)
+            const cx = e.clientX - rect.left;
+            const cy = e.clientY - rect.top;
+
+            // Zoom Factor
+            // Normalize delta (some mice 100, trackpads 1-10)
+            const delta = e.deltaY;
+            const zoomSensitivity = 0.001;
+            const scale = Math.exp(-delta * zoomSensitivity);
+
+            // Apply Zoom centered on cursor
+            // NewZoom = OldZoom * scale
+            // P_world = P_screen / OldZoom + Pan
+            // We want P_world to stay at P_screen.
+            // Pan_new = P_world - P_screen / NewZoom
+            // Pan_new = (P_screen / OldZoom + Pan_old) - P_screen / NewZoom
+
+            const camera = cameraRef.current;
+            const oldZoom = camera.targetZoom; // Use target for smoothness
+            const newZoom = Math.max(0.1, Math.min(10.0, oldZoom * scale));
+
+            // Viewport-relative cursor (centered 0,0)
+            const vx = cx - rect.width / 2;
+            const vy = cy - rect.height / 2;
+
+            // Shift Pan to maintain world position under cursor
+            const rx = vx / oldZoom;
+            const ry = vy / oldZoom;
+            const rxx = vx / newZoom;
+            const ryy = vy / newZoom;
+
+            // Pan Correction
+            camera.targetPanX += (rx - rxx);
+            camera.targetPanY += (ry - ryy);
+            camera.targetZoom = newZoom;
+
+            // Wake up loop if needed (though it runs always)
+        };
+        canvas.addEventListener('wheel', handleWheel, { passive: false });
+
         frameId = requestAnimationFrame(render);
         return () => {
+            canvas.removeEventListener('wheel', handleWheel);
             window.removeEventListener('blur', handleBlur);
             cancelAnimationFrame(frameId);
         };

@@ -395,6 +395,13 @@ export class PhysicsEngine {
                 node.vy = 0;
                 node.fx = 0;
                 node.fy = 0;
+
+                // FIX 22: Clean Slate (Kill Momentum)
+                // Clear all motion history so the dot doesn't "curve" due to past forces.
+                node.prevFx = 0;
+                node.prevFy = 0;
+                node.correctionResidual = undefined;
+                delete node.lastCorrectionDir;
             }
 
             this.wakeNode(nodeId);

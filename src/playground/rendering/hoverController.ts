@@ -34,36 +34,40 @@ export const createHoverController = ({
         return getNodeRadius(baseRadius, theme);
     };
 
-    const getInteractionRadii = (
-        node: { radius: number },
-        theme: ThemeConfig
-    ) => {
-        const renderRadius = getRenderedNodeRadius(node, theme);
-        // Use maximum scale (at energy=1) for interaction radii
-        // This ensures hit-test grows with visual size and provides forgiving interaction
-        const maxScale = getNodeScale(1.0, theme);
-        const scaledRenderRadius = renderRadius * maxScale;
 
-        const outerRadius = theme.nodeStyle === 'ring'
-            ? scaledRenderRadius + theme.ringWidth * 0.5
-            : scaledRenderRadius;
-        const hitRadius = outerRadius + theme.hoverHitPaddingPx;
-        const haloRadius = outerRadius * theme.hoverHaloMultiplier + theme.hoverHaloPaddingPx;
-        return { renderRadius: scaledRenderRadius, outerRadius, hitRadius, haloRadius };
-    };
 
     const evaluateNode = (
         node: { id: string; x: number; y: number; radius: number; label?: string },
         worldX: number,
         worldY: number,
         theme: ThemeConfig,
+        zoom: number, // Fix 24: Passing zoom for screen-space stability
         checkLabel: boolean = false
     ) => {
         const dx = node.x - worldX;
         const dy = node.y - worldY;
         const dist = Math.sqrt(dx * dx + dy * dy);
 
-        const { outerRadius, hitRadius, haloRadius } = getInteractionRadii(node, theme);
+        // Fix 24: Zoom-Stable Sensitivity
+        // Interpret hover padding as SCREEN PIXELS, not world units.
+        // This ensures the "feel" (hit target size) is constant.
+        const effectivePadding = theme.hoverHitPaddingPx / Math.max(0.1, zoom);
+        const effectiveHaloPadding = theme.hoverHaloPaddingPx / Math.max(0.1, zoom);
+
+        const renderRadius = getRenderedNodeRadius(node, theme);
+        const maxScale = getNodeScale(1.0, theme);
+        const scaledRenderRadius = renderRadius * maxScale;
+
+        const outerRadius = theme.nodeStyle === 'ring'
+            ? scaledRenderRadius + theme.ringWidth * 0.5
+            : scaledRenderRadius;
+
+        // Use effective padding
+        const hitRadius = outerRadius + effectivePadding;
+        const haloRadius = outerRadius * theme.hoverHaloMultiplier + effectiveHaloPadding;
+
+        // const { outerRadius, hitRadius, haloRadius } = getInteractionRadii(node, theme); 
+        // Inlined above to support zoom scaling without changing getInteractionRadii signature everywhere blindly
 
         let targetEnergy = 0;
         let isLabelHit = false;
@@ -141,10 +145,11 @@ export const createHoverController = ({
         let nearestHaloRadius = 0;
         let scanned = 0;
 
+        const zoom = cameraRef.current.zoom;
         for (const node of engine.nodes.values()) {
             scanned++;
             // Pass checkLabel=true for primary hit test
-            const candidate = evaluateNode(node, worldX, worldY, theme, true);
+            const candidate = evaluateNode(node, worldX, worldY, theme, zoom, true);
 
             if (candidate.targetEnergy > 0) {
                 // Optimization: if perfect hit (energy=1), take it immediately?
@@ -213,10 +218,11 @@ export const createHoverController = ({
 
         let nearest: ReturnType<typeof evaluateNode> | null = null;
         let scanned = 0;
+        const zoom = cameraRef.current.zoom;
         for (const node of engine.nodes.values()) {
             if (excludeId && node.id === excludeId) continue;
             scanned++;
-            const result = evaluateNode(node, worldX, worldY, theme);
+            const result = evaluateNode(node, worldX, worldY, theme, zoom);
             if (result.dist <= result.haloRadius && result.dist < (nearest?.dist ?? Infinity)) {
                 nearest = result;
                 if (result.dist <= result.renderedRadius * 0.3 || result.dist === 0) {
@@ -431,7 +437,7 @@ export const createHoverController = ({
         } else {
             const engine = engineRef.current;
             const currentNode = engine ? engine.nodes.get(currentHoveredId) : null;
-            const currentEval = currentNode ? evaluateNode(currentNode, worldX, worldY, theme) : null;
+            const currentEval = currentNode ? evaluateNode(currentNode, worldX, worldY, theme, cameraRef.current.zoom) : null;
 
             if (currentEval) {
                 const stickyHalo = currentEval.haloRadius * theme.hoverStickyExitMultiplier;

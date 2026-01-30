@@ -15,7 +15,8 @@ const captureCanvasState = (ctx: CanvasRenderingContext2D) => ({
 export const drawLinks = (
     ctx: CanvasRenderingContext2D,
     engine: PhysicsEngine,
-    theme: ThemeConfig
+    theme: ThemeConfig,
+    zoom: number
 ) => {
     withCtx(ctx, () => {
         ctx.globalAlpha = 1;
@@ -25,7 +26,18 @@ export const drawLinks = (
         ctx.shadowColor = 'transparent';
         ctx.filter = 'none';
         ctx.strokeStyle = theme.linkColor;
-        ctx.lineWidth = theme.linkWidth;
+
+        // FIX 49: Zoom-Stable Line Thickness
+        // We want the line to be `theme.linkWidth` SCREEN PIXELS wide.
+        // Since context is scaled by `zoom`, we must divide by `zoom`.
+        // Also clamp to at least 1 screen pixel (1/zoom world units) to avoid aliasing disappearance.
+        const targetWidthPx = theme.linkWidth;
+        const widthWorld = targetWidthPx / Math.max(0.001, zoom);
+        // Optional: Clamp to 1px minimum?
+        // const minWidthWorld = 1.0 / zoom;
+        // ctx.lineWidth = Math.max(widthWorld, minWidthWorld);
+        ctx.lineWidth = widthWorld;
+
         engine.links.forEach((link) => {
             const source = engine.nodes.get(link.source);
             const target = engine.nodes.get(link.target);
@@ -45,8 +57,13 @@ export const drawNodes = (
     theme: ThemeConfig,
     settingsRef: MutableRefObject<RenderSettingsRef>,
     hoverStateRef: MutableRefObject<HoverState>,
+    zoom: number, // Fix 49
     renderDebugRef?: MutableRefObject<RenderDebugInfo>
 ) => {
+    // Precompute line widths for this frame
+    const ringWidthWorld = theme.ringWidth / Math.max(0.001, zoom);
+    const strokeWidthWorld = theme.nodeStrokeWidth / Math.max(0.001, zoom);
+
     engine.nodes.forEach((node) => {
         withCtx(ctx, () => {
             const baseRadius = settingsRef.current.useVariedSize ? node.radius : 5.0;
@@ -114,14 +131,15 @@ export const drawNodes = (
 
                 if (theme.useGradientRing) {
                     // Energy-driven ring width boost
-                    const ringWidth = theme.ringWidth * (1 + theme.hoverRingWidthBoost * nodeEnergy);
+                    // Base width is zoom-stable, boost acts as multiplier
+                    const activeRingWidth = ringWidthWorld * (1 + theme.hoverRingWidthBoost * nodeEnergy);
 
                     drawGradientRing(
                         ctx,
                         node.x,
                         node.y,
                         radius,
-                        ringWidth,
+                        activeRingWidth,
                         primaryBlue,
                         theme.deepPurple,
                         theme.ringGradientSegments,
@@ -131,7 +149,8 @@ export const drawNodes = (
                     ctx.beginPath();
                     ctx.arc(node.x, node.y, radius, 0, Math.PI * 2);
                     ctx.strokeStyle = node.isFixed ? theme.nodeFixedColor : theme.ringColor;
-                    ctx.lineWidth = theme.ringWidth;
+                    // FIX 49: Zoom stable
+                    ctx.lineWidth = ringWidthWorld;
                     ctx.stroke();
                 }
                 if (sampleIdle && renderDebug) {
@@ -204,7 +223,8 @@ export const drawNodes = (
 
                 ctx.fill();
                 ctx.strokeStyle = theme.nodeStrokeColor;
-                ctx.lineWidth = theme.nodeStrokeWidth;
+                // FIX 49: Zoom Stable
+                ctx.lineWidth = strokeWidthWorld;
                 ctx.stroke();
             }
         });
@@ -244,7 +264,9 @@ export function drawNodeLabel(
         ctx.font = `${theme.labelFontSize}px ${theme.labelFontFamily}`;
         ctx.fillStyle = theme.labelColor;
         ctx.textAlign = 'center';
-        ctx.textBaseline = 'top';
+        // FIX 50: Text Wobble
+        // Use 'middle' baseline for consistent vertical centering regardless of font metrics quirks.
+        ctx.textBaseline = 'middle';
 
         // Counter-rotate to force horizontal text (cancels camera rotation)
         if (theme.labelForceHorizontal && globalAngle !== 0) {
@@ -253,7 +275,12 @@ export function drawNodeLabel(
             ctx.translate(-labelX, -labelY);
         }
 
-        ctx.fillText(label, labelX, labelY);
+        // Adjust Y because we switched from 'top' to 'middle'
+        // 'top' aligns top of text to labelY. 'middle' aligns center.
+        // So we need to shift down by ~half font size to keep it roughly below node.
+        const adjustedY = labelY + theme.labelFontSize * 0.4; // 0.4 is approx half visual height
+
+        ctx.fillText(label, labelX, adjustedY);
 
         // Debug: show rotation angle being canceled
         if (theme.labelDebugEnabled && theme.labelForceHorizontal && globalAngle !== 0) {

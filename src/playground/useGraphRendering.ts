@@ -651,9 +651,25 @@ export const useGraphRendering = ({
                     dragged.y = engine.dragTarget.y;
                 }
             }
+            ctx.restore();
 
-            drawLinks(ctx, engine, theme);
-            drawNodes(ctx, engine, theme, settingsRef, hoverStateRef, renderDebugRef);
+            const zoom = camera.zoom;
+
+            // Draw Links
+            drawLinks(ctx, engine, theme, zoom);
+
+            // Draw Nodes
+            drawNodes(
+                ctx,
+                engine,
+                theme,
+                settingsRef,
+                hoverStateRef,
+                zoom,
+                renderDebugRef
+            );
+
+            // Draw Labels
             drawLabels(ctx, engine, theme, settingsRef, hoverStateRef, globalAngle);
 
             if (

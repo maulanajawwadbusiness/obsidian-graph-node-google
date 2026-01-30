@@ -96,12 +96,24 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
     };
 
     const onPointerUp = (e: React.PointerEvent) => {
+        const canvas = canvasRef.current;
+        if (canvas && canvas.hasPointerCapture(e.pointerId)) {
+            canvas.releasePointerCapture(e.pointerId);
+        }
         handlePointerUp(e.pointerId, e.pointerType);
     };
 
-    const onPointerDown = (_e: React.PointerEvent) => {
+    const onPointerDown = (e: React.PointerEvent) => {
         const canvas = canvasRef.current;
         if (!canvas) return;
+
+        // STRICT FILTER: Only capture if the direct target is the canvas.
+        // This allows UI buttons (which are children) to handle their own events without
+        // the container stealing the pointer capture.
+        if (e.target !== canvas) return;
+
+        // POINTER CAPTURE: Ensure we receive events even if cursor leaves window
+        canvas.setPointerCapture(e.pointerId);
 
         // Check if a node is currently hovered
         const hoveredId = hoverStateRef.current.hoveredNodeId;

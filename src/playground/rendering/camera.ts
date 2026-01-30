@@ -138,13 +138,19 @@ export class CameraTransform {
  * Update camera target with Deadzone and Snap logic.
  * Call this every frame before rendering.
  */
+/**
+ * Update camera target with Deadzone and Snap logic.
+ * Call this every frame before rendering.
+ */
 export const updateCameraContainment = (
     cameraRef: { current: CameraState },
     nodes: Array<{ x: number; y: number; radius: number }>,
     width: number,
     height: number,
     dt: number, // Time delta in seconds
-    locked: boolean = false // "Camera Lock" debug toggle
+    locked: boolean = false, // "Camera Lock" debug toggle
+    angle: number = 0,       // Fix 19: Rotation Awareness
+    pivot: { x: number, y: number } = { x: 0, y: 0 } // Fix 19: Rotation Pivot
 ) => {
     if (locked) return;
     if (nodes.length === 0) return;
@@ -163,8 +169,9 @@ export const updateCameraContainment = (
 
     const aabbWidth = maxX - minX;
     const aabbHeight = maxY - minY;
-    const aabbCenterX = (minX + maxX) / 2;
-    const aabbCenterY = (minY + maxY) / 2;
+    // Target Center (World Space)
+    const tx = (minX + maxX) / 2;
+    const ty = (minY + maxY) / 2;
 
     const marginPx = Math.min(width, height) * 0.15;
     const safeWidth = width - 2 * marginPx;
@@ -174,8 +181,28 @@ export const updateCameraContainment = (
     const zoomY = safeHeight / Math.max(aabbHeight, 1);
     const requiredZoom = Math.min(zoomX, zoomY, 1.0);
 
-    const requiredPanX = -aabbCenterX;
-    const requiredPanY = -aabbCenterY;
+    // FIX 19: Rotation-Aware Pan Calculation
+    // We want the Target Center (tx, ty) to map to Screen Center (0,0).
+    // The transformation stack applies Pan *before* Rotation (relative to the context stack),
+    // but the Rotation happens around a Pivot (cx, cy).
+    // Formula: Pan = - [ R(angle) * (Target - Pivot) + Pivot ]
+    // This ensures that after Rotation+Pivot, the Target lands at -Pan, which cancels out to 0.
+
+    const dx = tx - pivot.x;
+    const dy = ty - pivot.y;
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+
+    // Rotate delta around 0
+    const rdx = cos * dx - sin * dy;
+    const rdy = sin * dx + cos * dy;
+
+    // Add Pivot back
+    const rotatedTargetX = rdx + pivot.x;
+    const rotatedTargetY = rdy + pivot.y;
+
+    const requiredPanX = -rotatedTargetX;
+    const requiredPanY = -rotatedTargetY;
 
     const camera = cameraRef.current;
 

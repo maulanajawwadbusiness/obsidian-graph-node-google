@@ -217,8 +217,21 @@ export const applyCorrectionsWithDiffusion = (
         const diffMag = Math.sqrt(diff.dx * diff.dx + diff.dy * diff.dy);
         if (diffMag < 0.001) continue;
 
+        // FIX 20: DAMPEN LOCAL DRIFT
+        // If this node is connected to the dragged node, dampen diffusion 
+        // to prevent "sideways squirt" feeling.
+        let localDamping = 1.0;
+        if (engine.draggedNodeId) {
+            const neighbors = nodeNeighbors.get(engine.draggedNodeId);
+            if (neighbors && neighbors.includes(node.id)) {
+                localDamping = 0.2; // 80% reduction in lateral diffusion
+            }
+        }
+
         // Clamp diffused correction to budget
-        const diffScale = Math.min(1, nodeBudget / diffMag);
+        // Apply local damping to diffusion reception
+        const diffScale = Math.min(1, nodeBudget / diffMag) * localDamping;
+
         node.x += diff.dx * diffScale;
         node.y += diff.dy * diffScale;
         passStats.correction += Math.sqrt((diff.dx * diffScale) ** 2 + (diff.dy * diffScale) ** 2);

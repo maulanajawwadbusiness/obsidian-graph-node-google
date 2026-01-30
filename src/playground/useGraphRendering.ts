@@ -504,13 +504,16 @@ export const useGraphRendering = ({
             // Do NOT recenter or smooth camera while user is holding a node.
             // This prevents "shifting earth" feel.
             if (!engine.draggedNodeId) {
+                // FIX 19: Pass active values for correct panning under rotation
                 updateCameraContainment(
                     cameraRef,
                     nodes,
                     width,
                     height,
                     dtMs / 1000,
-                    settingsRef.current.cameraLocked
+                    settingsRef.current.cameraLocked,
+                    engine.getGlobalAngle(),
+                    engine.getCentroid()
                 );
             }
 

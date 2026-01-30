@@ -71,28 +71,40 @@ export const applyEdgeRelaxation = (
         const sourceDeg = nodeDegreeEarly.get(source.id) || 0;
         const targetDeg = nodeDegreeEarly.get(target.id) || 0;
 
+        // FIX 21: HAND PRIORITY
+        // If one node is being dragged, reduce the stiffness of the constraint
+        // to prevent the neighbor from "snapping" away or fighting the drag direction.
+        let handDamping = 1.0;
+        if (engine.draggedNodeId === source.id || engine.draggedNodeId === target.id) {
+            handDamping = 0.3; // 70% softer constraints near hand
+        }
+
+        const effectiveCorrection = correction * handDamping;
+        const nxCorrect = nx * effectiveCorrection;
+        const nyCorrect = ny * effectiveCorrection;
+
         if (!source.isFixed && !target.isFixed) {
             if (sourceAccum && sourceDeg > 1) {
-                sourceAccum.dx += nx * correction * 0.5;
-                sourceAccum.dy += ny * correction * 0.5;
-                passStats.correction += Math.abs(correction) * 0.5;
+                sourceAccum.dx += nxCorrect * 0.5;
+                sourceAccum.dy += nyCorrect * 0.5;
+                passStats.correction += Math.abs(effectiveCorrection) * 0.5;
                 affected.add(source.id);
             }
             if (targetAccum && targetDeg > 1) {
-                targetAccum.dx -= nx * correction * 0.5;
-                targetAccum.dy -= ny * correction * 0.5;
-                passStats.correction += Math.abs(correction) * 0.5;
+                targetAccum.dx -= nxCorrect * 0.5;
+                targetAccum.dy -= nyCorrect * 0.5;
+                passStats.correction += Math.abs(effectiveCorrection) * 0.5;
                 affected.add(target.id);
             }
         } else if (!source.isFixed && sourceAccum && sourceDeg > 1) {
-            sourceAccum.dx += nx * correction;
-            sourceAccum.dy += ny * correction;
-            passStats.correction += Math.abs(correction);
+            sourceAccum.dx += nxCorrect;
+            sourceAccum.dy += nyCorrect;
+            passStats.correction += Math.abs(effectiveCorrection);
             affected.add(source.id);
         } else if (!target.isFixed && targetAccum && targetDeg > 1) {
-            targetAccum.dx -= nx * correction;
-            targetAccum.dy -= ny * correction;
-            passStats.correction += Math.abs(correction);
+            targetAccum.dx -= nxCorrect;
+            targetAccum.dy -= nyCorrect;
+            passStats.correction += Math.abs(effectiveCorrection);
             affected.add(target.id);
         }
     }

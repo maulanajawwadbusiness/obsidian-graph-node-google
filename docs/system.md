@@ -50,7 +50,7 @@ The graph is driven by a **Hybrid Solver** (`src/physics/`) prioritizing "Visual
 **"Interaction > Simulation"**
 
 #### 1. The Holy Grail Scheduler (0-Slush)
-*   **Timebase**: Time matches reality 1:1. We never "stretch" time to catch up ("Syrup").
+*   **Timebase**: Time matches reality 1:1. We never "stretch" time to catch up ("Syrup" is forbidden).
 *   **Overload Failure Mode**: **Brief Stutter (Drop Debt)**.
     *   If the renderer falls behind (`accumulator > budget`), we **delete** the debt.
     *   The graph teleports to the present moment. Stutter is acceptable; slow-motion is not.
@@ -67,17 +67,19 @@ When stressed (`degradeLevel > 0`), we reduce workload by **skipping entire pass
 
 ### C. Time Consistency (dt-Normalization)
 *   **Stiffness Invariance**: Spring strength and damping are normalized against `dt`. A simulation running at 30hz (degrade level 2) has the same structural stiffness as 60hz, just choppier updates.
+*   **Micro-Drift Control**: By default, render-space "water" drift is DISABLED (#16) to ensure absolute stillness when settled.
 
 ### D. Adaptive Operating Envelope
 The engine shifts modes based on Node count (N) and Edge count (E):
 *   **Normal**: Full fidelity (60hz).
 *   **Stressed** (N>250): Spacing pass throttled.
 *   **Emergency** (N>500): Springs staggered, angular resistance simplified.
-*   **Fatal** (N>900): Heavy passes disabled to preserve app survival.
+*   **Fatal** (N>900): Heavy passes disabled to preserve app survival. **Fix #10**: Even in fatal mode, boundary forces remain active to prevent drift.
 
 ## 4. Interaction Contract
-*   **Hand Authority**: When dragging a node, it must follow the cursor 1:1. Physics ignores mass/forces for the dragged node (`isFixed=true`).
-*   **Local Boost (Interaction Bubble)**: Dragging a node wakes its neighbors and forces them into **Bucket A** (Full Physics). The local cluster stays fluid even if the global graph is stuttering under load.
+*   **Hand Authority**: When dragging a node, it must follow the cursor 1:1. Physics ignores mass/forces for the dragged node (`isFixed=true`). **Fix #15**: Dt Skew is forced to 0.0 for dragged nodes.
+*   **Local Boost (Interaction Bubble)**: Dragging a node wakes its neighbors and forces them into **Bucket A** (Full Physics). **Fix #14**: Neighbor weakeups are throttled (max 10Hz) to prevent energy pumping ("boil").
+*   **Impulse Safety**: **Fix #11**: `requestImpulse` strictly enforces cooldown (1s) and drag locks.
 *   **Input Ownership**: UI panels (Chat, Docs) fully consume pointer events.
 
 ## 5. AI Architecture
@@ -109,7 +111,9 @@ Enable `debugPerf: true` in `config.ts` to see:
 *   **Physics Loop & Degrade**:
     *   `[Degrade]`: `level` (0-2), `passes={repel:Y, space:N}`, `budgetMs`.
     *   `[Hand]`: `localBoost=Y`, `lagP95Px` (Target: 0.00).
-    *   `[PhysicsPerf]`: Breakdown of ms per pass.
+    *   `[PhysicsPasses]`: Breakdown of ms per pass.
+    *   `[Impulse]`: Logged on trigger or rejection (Cooldown/Drag).
+    *   `[RenderDrift]`: Logged if micro-drift is active.
 *   **Lifecycle**:
     *   `[PhysicsMode]`: Transitions (Normal -> Stressed).
 

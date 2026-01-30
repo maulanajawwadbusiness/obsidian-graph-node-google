@@ -60,14 +60,14 @@ Excluding: `node_modules`, `dist`, `build`, `.git`
 
 1.  `src/physics/engine.ts` (950+ lines) - **Core Physics Logic & Degrade State**
 2.  `src/playground/useGraphRendering.ts` (600+ lines) - **Scheduler & Overload Controller**
-3.  `src/playground/GraphPhysicsPlayground.tsx` (378 lines) - **Main UI Controller**
-4.  `src/physics/engine/constraints.ts` (372 lines) - **PBD Constraints**
-5.  `src/ArnvoidDocumentViewer/ArnvoidDocumentViewer.tsx` (312 lines) - **Doc Viewer UI**
-6.  `src/fullchat/FullChatStore.tsx` (227 lines) - **Chat State Manager**
-7.  `src/physics/engine/forcePass.ts` (202 lines) - **Force Calculations**
-8.  `src/popup/PopupStore.tsx` (157 lines) - **Popup State Manager**
-9.  `src/physics/types.ts` (153 lines) - **Physics Type Definitions**
-10. `src/ai/paperAnalyzer.ts` (117 lines) - **AI Analysis Pipeline**
+3.  `src/physics/engine/constraints.ts` (372 lines) - **PBD Constraints & Spacing**
+4.  `src/playground/GraphPhysicsPlayground.tsx` (378 lines) - **Main UI Controller**
+5.  `src/physics/engine/integration.ts` (200+ lines) - **Time Steps & Dt Skew**
+6.  `src/physics/engine/corrections.ts` (170+ lines) - **Diffusion & Jitter Control**
+7.  `src/physics/engine/velocity/dragVelocity.ts` (40 lines) - **Critical Interaction Logic**
+8.  `src/physics/engine/forcePass.ts` (202 lines) - **Force Calculations**
+9.  `src/fullchat/FullChatStore.tsx` (227 lines) - **Chat State Manager**
+10. `src/ArnvoidDocumentViewer/ArnvoidDocumentViewer.tsx` (312 lines) - **Doc Viewer UI**
 
 ## 3. Core Runtime Loops
 
@@ -89,8 +89,9 @@ Excluding: `node_modules`, `dist`, `build`, `.git`
 1.  **Visual Dignity**: Prefer stutter (teleport) over slow motion. Time is 1:1.
 2.  **Interaction Authority**: Dragged nodes are `isFixed=true` and match cursor 1:1.
     *   **Local Boost**: Dragging wakes neighbors and forces high-priority physics for the local cluster, even in degrade mode.
-3.  **No Syrup**: Debt (`accumulatorMs`) is never carried > 1 frame if it exceeds the step budget.
+3.  **No Syrup**: Debt (`accumulatorMs`) is never carried > 1 frame if it exceeds the step budget. It is *deleted* (stutter) rather than processed (slow motion).
 4.  **Degrade-1:1**: When stressed, we skip *entire passes* (e.g. spacing frame 2 of 3) rather than reducing stiffness (which would create "mud").
+5.  **Fixed-Step Stability**: All integration happens at fixed `targetTickHz` (60hz), ensuring deterministic simulation regardless of render frame rate (until overload).
 
 ## 5. Key Files for Physics Control
 

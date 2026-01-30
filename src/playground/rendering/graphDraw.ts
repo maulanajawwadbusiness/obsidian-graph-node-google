@@ -18,7 +18,6 @@ export const drawLinks = (
     ctx: CanvasRenderingContext2D,
     engine: PhysicsEngine,
     theme: ThemeConfig,
-    theme: ThemeConfig,
     worldToScreen: (x: number, y: number) => { x: number; y: number },
     visibleBounds: { minX: number; maxX: number; minY: number; maxY: number }
 ) => {
@@ -101,7 +100,6 @@ export const drawNodes = (
     settingsRef: MutableRefObject<RenderSettings>,
     hoverStateRef: MutableRefObject<HoverState>,
     zoom: number,
-    renderDebugRef: MutableRefObject<RenderDebugInfo> | undefined,
     renderDebugRef: MutableRefObject<RenderDebugInfo> | undefined,
     dpr: number, // Fix 22: Pass DPR
     worldToScreen: (x: number, y: number) => { x: number; y: number },
@@ -354,7 +352,6 @@ export const drawLabels = (
     theme: ThemeConfig,
     settingsRef: MutableRefObject<RenderSettings>,
     hoverStateRef: MutableRefObject<HoverState>,
-    zoom: number,
     zoom: number,
     dpr: number, // Fix 21: Need DPR for Text Quantization
     worldToScreen: (x: number, y: number) => { x: number; y: number },

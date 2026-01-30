@@ -986,6 +986,7 @@ export const startGraphRenderLoop = (deps: GraphRenderLoopDeps) => {
 
         const project = (x: number, y: number) => transform.worldToScreen(x, y);
         const worldToScreen = project;
+        const visibleBounds = transform.getVisibleBounds(200);
 
         if (settingsRef.current.showDebugGrid) {
             ctx.save();
@@ -997,7 +998,7 @@ export const startGraphRenderLoop = (deps: GraphRenderLoopDeps) => {
         }
 
         // --- RENDER PASS 2: EDGES (BATCHED) ---
-        drawLinks(ctx, engine, theme, worldToScreen);
+        drawLinks(ctx, engine, theme, worldToScreen, visibleBounds);
 
         // --- RENDER PASS 3: NODES (ITERATED) ---
         drawNodes(
@@ -1009,7 +1010,8 @@ export const startGraphRenderLoop = (deps: GraphRenderLoopDeps) => {
             camera.zoom,
             renderDebugRef,
             dpr,
-            worldToScreen
+            worldToScreen,
+            visibleBounds
         );
 
         // --- RENDER PASS 4: LABELS ---
@@ -1021,7 +1023,8 @@ export const startGraphRenderLoop = (deps: GraphRenderLoopDeps) => {
             hoverStateRef,
             camera.zoom,
             dpr,
-            worldToScreen
+            worldToScreen,
+            visibleBounds
         );
 
         // --- RENDER PASS 5: OVERLAYS (DEBUG) ---

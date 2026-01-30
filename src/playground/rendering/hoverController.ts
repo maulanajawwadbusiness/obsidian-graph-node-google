@@ -10,6 +10,7 @@ import type {
     RenderSettings
 } from './renderingTypes';
 import { CameraTransform } from './camera';
+import type { SpatialGrid } from './spatialGrid';
 
 type HoverControllerDeps = {
     engineRef: RefObject<PhysicsEngine>;
@@ -126,7 +127,7 @@ export const createHoverController = ({
         };
     };
 
-    const findNearestNode = (worldX: number, worldY: number, theme: ThemeConfig) => {
+    const findNearestNode = (worldX: number, worldY: number, theme: ThemeConfig, spatialGrid?: SpatialGrid) => {
         const engine = engineRef.current;
         if (!engine) return {
             nodeId: null,
@@ -146,7 +147,34 @@ export const createHoverController = ({
         let scanned = 0;
 
         const zoom = cameraRef.current.zoom;
-        for (const node of engine.nodes.values()) {
+
+        // FIX 54: Spatial Grid Lookup
+        // Define search radius (screen space padding / zoom + max radius)
+        // Heuristic: Max node radius is ~20px world space usually? 
+        // Better: 150px (bucket size) is safe.
+        const searchNodes = spatialGrid
+            ? spatialGrid.query(worldX, worldY, 1500) // Broad phase: 1500 world units?
+            // Actually, we need to know the 'max possible interaction radius'.
+            // Max node radius + halo + hit padding.
+            // Let's assume 200 world units covers 99% of cases.
+            // If spatialGrid.query returns IDs, we map them to nodes.
+            : engine.nodes.values();
+
+        // If using iterator from values(), it's an iterable.
+        // If string[], we need to map to nodes.
+
+        const iter = spatialGrid
+            ? (function* () {
+                const ids = spatialGrid.query(worldX, worldY, 200 / zoom); // Adjust for zoom? No, world units.
+                // 200 world units is usually enough unless huge nodes.
+                for (const id of ids) {
+                    const n = engine.nodes.get(id);
+                    if (n) yield n;
+                }
+            })()
+            : engine.nodes.values();
+
+        for (const node of iter) {
             scanned++;
             // Pass checkLabel=true for primary hit test
             const candidate = evaluateNode(node, worldX, worldY, theme, zoom, true);
@@ -387,7 +415,8 @@ export const createHoverController = ({
         rect: DOMRect,
         theme: ThemeConfig,
         reason: 'pointer' | 'camera',
-        lockedNodeId: string | null = null // Fix 46: Unify Cues (Single Pick Truth)
+        lockedNodeId: string | null = null, // Fix 46: Unify Cues (Single Pick Truth)
+        spatialGrid?: SpatialGrid // FIX 54: Spatial Acceleration
     ) => {
         const { x: worldX, y: worldY, sx, sy } = clientToWorld(clientX, clientY, rect);
 
@@ -448,7 +477,7 @@ export const createHoverController = ({
         } else {
             // NORMAL SEARCH LOGIC
             if (currentHoveredId === null) {
-                const result = findNearestNode(worldX, worldY, theme);
+                const result = findNearestNode(worldX, worldY, theme, spatialGrid);
                 nodesScanned = result.scanned;
                 shouldSwitch = result.nodeId !== null;
                 if (shouldSwitch) {

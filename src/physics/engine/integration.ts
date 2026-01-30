@@ -135,7 +135,14 @@ export const integrateNodes = (
                 hash |= 0;
             }
             const skew = (Math.abs(hash) % 100) / 100; // 0-1
-            const dtMultiplier = 0.97 + skew * 0.06;  // 0.97 to 1.03 (±3%)
+
+            // FIX #15: CONSTRAINED DT SKEW
+            // Reduced max skew from ±3% to ±1% for better determinism.
+            // Disabled entirely if node is interacting (dragged) to ensure hand authority.
+            const isInteracting = node.id === engine.draggedNodeId;
+            const skewMagnitude = isInteracting ? 0 : 0.02;
+
+            const dtMultiplier = (1.0 - skewMagnitude) + skew * (2 * skewMagnitude); // 0.98 to 1.02
             nodeDt = dt * dtMultiplier;
 
             // Track min/max for debug (first 10 frames)

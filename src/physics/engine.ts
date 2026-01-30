@@ -1,4 +1,5 @@
 import { PhysicsNode, PhysicsLink, ForceConfig } from './types';
+import { applyBoundaryForce } from './forces';
 import { DEFAULT_PHYSICS_CONFIG } from './config';
 import { runPreRollPhase } from './engine/preRollPhase';
 import { fireInitialImpulse } from './engine/impulse';
@@ -112,6 +113,9 @@ export class PhysicsEngine {
 
     // Fix #11: Impulse Guard State
     private lastImpulseTime: number = 0;
+
+    // Fix #14: Wake Throttling State
+    private lastWakeTime: number = 0;
 
     constructor(config: Partial<ForceConfig> = {}) {
         this.config = { ...DEFAULT_PHYSICS_CONFIG, ...config };
@@ -316,8 +320,17 @@ export class PhysicsEngine {
     moveDrag(position: { x: number, y: number }) {
         if (this.draggedNodeId && this.dragTarget) {
             this.dragTarget = { ...position };
+
+            // Always wake self (ensure velocity is integrated)
             this.wakeNode(this.draggedNodeId);
-            this.wakeNeighbors(this.draggedNodeId);
+
+            // FIX #14: THROTTLED WAKE PROPAGATION
+            // Only wake neighbors every 100ms to prevent "boil" (energy pumping)
+            const now = getNowMs();
+            if (now - this.lastWakeTime > 100) {
+                this.wakeNeighbors(this.draggedNodeId);
+                this.lastWakeTime = now;
+            }
         }
     }
 
@@ -534,6 +547,9 @@ export class PhysicsEngine {
         const repulsionEvery = degradeLevel === 0 ? 1 : degradeLevel === 1 ? 2 : 3;
         const collisionEvery = degradeLevel === 0 ? 1 : degradeLevel === 1 ? 2 : 3;
         const springsEvery = degradeLevel === 0 ? 1 : degradeLevel === 1 ? 2 : 3;
+        const baseSpringsEnabled = this.perfMode !== 'emergency' || this.frameIndex % 2 === 0;
+        const springsEnabled = baseSpringsEnabled && this.frameIndex % springsEvery === 0;
+
         const triangleEvery = degradeLevel === 0 ? 1 : degradeLevel === 1 ? 2 : 4;
         const safetyEvery = degradeLevel === 0 ? 1 : degradeLevel === 1 ? 2 : 3;
         const edgeRelaxEvery = degradeLevel === 0 ? 1 : degradeLevel === 1 ? 2 : 3;
@@ -650,8 +666,7 @@ export class PhysicsEngine {
             return;
         }
 
-        const baseSpringsEnabled = this.perfMode !== 'emergency' || this.frameIndex % 2 === 0;
-        const springsEnabled = baseSpringsEnabled && this.frameIndex % springsEvery === 0;
+
 
         let focusActive: PhysicsNode[] = [];
         let focusSleeping: PhysicsNode[] = [];

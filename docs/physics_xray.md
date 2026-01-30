@@ -44,18 +44,28 @@ User interaction must never feel degraded.
 *   **Effect**: The dragged node + its direct neighbors (`focusActive`) are forced into **Level 0** (Full Physics) regardless of the global `degradeLevel`.
 *   **Result**: The graph under your finger feels "crisp" and responsive (60hz), while the far-field might be updating at 20-30hz (stuttery but stable).
 
-## 6. Observability
+## 6. Move-Leak Hardening (01–22)
+**Status**: Secured.
+
+### A. The Three-Layer Shield
+1.  **Render Guard**: `CameraTransform` ensures mathematical perfection in World<->Screen mapping (Fixes 01-03).
+2.  **Scheduler Guard**: Timebase is strictly decoupled. We never "stretch" time (`min(dt)` removed). Overload = Stutter (Fixes 04-06).
+3.  **Physics Guard**: Absolute authority. Dragged nodes, sleeping nodes, and warm-started nodes have their state explicitly cleansed of "ghost" forces (Fixes 07-22).
+
+### B. Critical Mechanisms
+*   **Correction Residue**: Unpaid constraint budget is stored as debt (`correctionResidual`) rather than discarded, preventing dense clusters from crawling (Fix 17).
+*   **Hot Pair Fairness**: Even in Degrade Level 2 (skipping 66% of checks), violated pairs are upgraded to 1:1 "Hot" status to prevent far-field crawl (Fix 22).
+*   **Hub Snap**: Velocity low-pass filters snap to 0.00 when input ceases, preventing "ice slide" (Fix 18).
+*   **Triangle Ramp**: Degenerate triangles fade force to 0 to prevent gradient explosions (Fix 19).
+
+## 7. Observability
 New telemetry in `[RenderPerf]` and `[PhysicsPasses]`:
 
 *   `[RenderPerf]`:
     *   `droppedMs`: >0 means we skipped time to maintain 1:1.
     *   `reason=OVERLOAD/BUDGET`: Why we dropped it.
-*   `[Overload]`:
-    *   `severity=SOFT/HARD`: Current stress state.
-*   `[Degrade]`:
-    *   `level=1`: Active skip level.
-    *   `passes={repel:Y, space:N}`: What actually ran this frame.
-*   `[Hand]`:
-    *   `localBoost=Y`: Verifies interaction bubble is protecting the drag.
-*   `[Impulse]`: Logs when kicker fires (time `t=...`) or is rejected.
-*   `[RenderDrift]`: Logs global angle if micro-drift is active.
+*   `[FixedLeakWarn]`: **CRITICAL**. Fixed node moved by solver.
+*   `[Degrade]`: `level`, `passes`.
+*   `[Hand]`: `localBoost=Y`.
+*   `[Impulse]`: Logged on trigger or rejection.
+*   `[RenderDrift]`: Logs global angle if micro-drift is active (should be 0).

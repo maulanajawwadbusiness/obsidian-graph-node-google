@@ -37,7 +37,7 @@ The application layers, ordered by z-index (lowest to highest):
     *   **Highest Layer**. Dims the screen during AI parsing/analysis.
     *   **Shielding Rule**: Blocks all pointer, wheel, and touch events to prevent graph disturbance during critical AI operations.
 
-## 3. Physics Architecture & Contract
+## 3. Physics Architecture And Contract
 The graph is driven by a **Hybrid Solver** (`src/physics/`) prioritizing "Visual Dignity" over pure simulation accuracy.
 
 ### A. The Hybrid Solver
@@ -54,33 +54,40 @@ The graph is driven by a **Hybrid Solver** (`src/physics/`) prioritizing "Visual
 *   **Overload Failure Mode**: **Brief Stutter (Drop Debt)**.
     *   If the renderer falls behind (`accumulator > budget`), we **delete** the debt.
     *   The graph teleports to the present moment. Stutter is acceptable; slow-motion is not.
-    *   **Triggers**:
-        *   `DT_HUGE` (>250ms, e.g. tab switch) -> Instant Freeze (1-frame).
-        *   `DEBT_WATCHDOG` (Debt persists > 2 frames) -> Hard Drop.
-        *   `BUDGET_EXCEEDED` (Physics took too long) -> Soft Drop.
+    *   **Triggers**: `DT_HUGE` (>250ms), `DEBT_WATCHDOG`, `BUDGET_EXCEEDED`.
 
 #### 2. Degrade-1:1 Policy ("No Mud")
-When stressed (`degradeLevel > 0`), we reduce workload by **skipping entire passes**, NOT by weakening forces (which creates "mud").
+When stressed (`degradeLevel > 0`), we reduce workload by **skipping entire passes**, NOT by weakening forces.
 *   **Bucket A (Sacred)**: Integration, Dragged Node Physics (Local Boost), Canvas Release. *Never degraded.*
 *   **Bucket B (Structural)**: Springs, Repulsion. *Frequency reduced (1:2, 1:3) but stiffness normalized to dt.*
-*   **Bucket C (Luxury)**: Far-field Spacing, Deep Diffusion. *Aggressively throttled or disabled.*
+*   **Bucket C (Luxury)**: Far-field Spacing, Deep Diffusion. *Aggressively throttled.*
+*   **Fix #22 (Fairness)**: "Hot Pairs" (pairs under pressure) are prioritized 1:1 even in degraded mode to prevent far-field crawl.
 
-### C. Time Consistency (dt-Normalization)
-*   **Stiffness Invariance**: Spring strength and damping are normalized against `dt`. A simulation running at 30hz (degrade level 2) has the same structural stiffness as 60hz, just choppier updates.
-*   **Micro-Drift Control**: By default, render-space "water" drift is DISABLED (#16) to ensure absolute stillness when settled.
+### C. Move-Leak Hardening (Invariants)
+Post-Fixes #01–#22, the system guarantees:
 
-### D. Adaptive Operating Envelope
-The engine shifts modes based on Node count (N) and Edge count (E):
-*   **Normal**: Full fidelity (60hz).
-*   **Stressed** (N>250): Spacing pass throttled.
-*   **Emergency** (N>500): Springs staggered, angular resistance simplified.
-*   **Fatal** (N>900): Heavy passes disabled to preserve app survival. **Fix #10**: Even in fatal mode, boundary forces remain active to prevent drift.
+1.  **Render Correctness**:
+    *   **Unified Transform**: `CameraTransform` singleton ensures Input and Render matrices are identical.
+    *   **Deadzone**: Motions < 0.5px are ignored to prevent sub-pixel drift.
+    *   **Snap**: Camera settling < 0.05px force-snaps to integer coordinates.
+
+2.  **Physics Authority**:
+    *   **Absolute Fixed**: `isFixed` nodes (dragged) are immune to diffusion/forces.
+    *   **Atomic Cleanup**: Drag release, mode switches, and topology changes trigger **Warm Start Invalidation** (clearing `prevFx`, `lastDir`, `correctionResidual`).
+    *   **No Debt Drift**: Constraint budget clipping forces `correctionResidual` tracking (Fix #17), ensuring unpaid debt is eventually resolved rather than discarded (prevents "Eternal Crawl").
+
+3.  **Stability Subsystems**:
+    *   **Sleep**: Nodes cannot sleep if constraint pressure > 0.1px.
+    *   **Mode Ramps**: Switching modes (Normal <-> Stressed) smoothly ramps budgets and clears residuals to prevent "Law Jump" pops.
+    *   **Degeneracy**: Triangle area forces ramp down to 0 if area < 5.0 to prevent gradient explosions.
+    *   **Coherence**: DT Skew is disabled (`skew=0`) by default to prevent cluster drift.
 
 ## 4. Interaction Contract
-*   **Hand Authority**: When dragging a node, it must follow the cursor 1:1. Physics ignores mass/forces for the dragged node (`isFixed=true`). **Fix #15**: Dt Skew is forced to 0.0 for dragged nodes.
-*   **Local Boost (Interaction Bubble)**: Dragging a node wakes its neighbors and forces them into **Bucket A** (Full Physics). **Fix #14**: Neighbor weakeups are throttled (max 10Hz) to prevent energy pumping ("boil").
-*   **Impulse Safety**: **Fix #11**: `requestImpulse` strictly enforces cooldown (1s) and drag locks.
+*   **Hand Authority**: When dragging a node, it follows the cursor 1:1. `isFixed=true`.
+*   **Local Boost (Interaction Bubble)**: Dragging wakes neighbors and forces them into **Bucket A** (Full Physics).
+*   **Impulse Safety**: `requestImpulse` strictly enforces cooldown (1s).
 *   **Input Ownership**: UI panels (Chat, Docs) fully consume pointer events.
+*   **Release Snap**: Releasing a drag instantly clears valid velocity/force history to prevent "Ghost Slides".
 
 ## 5. AI Architecture
 Arnvoid uses a unified AI layer (`src/ai/`) that abstracts provider details behind a strict interface.

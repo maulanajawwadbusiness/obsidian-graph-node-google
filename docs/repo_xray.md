@@ -65,51 +65,54 @@ Excluding: `node_modules`, `dist`, `build`, `.git`
 5.  `src/physics/engine/integration.ts` (200+ lines) - **Time Steps & Dt Skew**
 6.  `src/physics/engine/corrections.ts` (170+ lines) - **Diffusion & Jitter Control**
 7.  `src/physics/engine/velocity/dragVelocity.ts` (40 lines) - **Critical Interaction Logic**
-8.  `src/physics/engine/forcePass.ts` (202 lines) - **Force Calculations**
-9.  `src/fullchat/FullChatStore.tsx` (227 lines) - **Chat State Manager**
-10. `src/ArnvoidDocumentViewer/ArnvoidDocumentViewer.tsx` (312 lines) - **Doc Viewer UI**
+8.  `src/playground/rendering/camera.ts` (New) - **Render Authority & Unified Transform**
+9.  `src/physics/engine/forcePass.ts` (202 lines) - **Force Calculations**
+10. `src/fullchat/FullChatStore.tsx` (227 lines) - **Chat State Manager**
+11. `src/ArnvoidDocumentViewer/ArnvoidDocumentViewer.tsx` (312 lines) - **Doc Viewer UI**
 
 ## 3. Core Runtime Loops
 
 *   **Physics Loop (`engine.tick`)**:
     *   **Driven By**: Scheduler (`useGraphRendering.ts`).
     *   **Frequency**: 60hz (fixed step).
-    *   **Degrade-1:1**: Reduces pass frequency (e.g. 1/2 or 1/3 rate) based on scheduler's `degradeLevel`.
-    *   **Operations**: `ForcePass` -> `Integration` -> `Constraints`.
+    *   **Degrade-1:1**: Reduces pass frequency but enforces **Hot Pair Fairness** (Fix #22) to prevent far-field crawl.
+    *   **Operations**: `ForcePass` -> `Integration` -> `Constraints` -> `Correction`.
 
 *   **Scheduler ("Holy Grail" Logic)**:
     *   **Driven By**: `requestAnimationFrame`.
     *   **Accumulator**: Fixed-step logic (`accumulatorMs += frameDeltaMs`).
-    *   **Overload Detection**: Detects `dtHuge` (>250ms), missed budgets, or persistent debt.
-    *   **Failure Mode**: **Brief Stutter (Drop Debt)**. If behind, it *deletes* `accumulatorMs` instead of "syruping" (slow motion).
-    *   **Hysteresis**: Triggers `degradeLevel` (1 or 2) for 6-12 frames to recover breath.
+    *   **Overload Detection**: Detects `dtHuge` (>250ms), missed budgets.
+    *   **Failure Mode**: **Brief Stutter (Drop Debt)**.
+    *   **Hysteresis**: Triggers `degradeLevel` (1 or 2) for 6-12 frames.
 
-## 4. Invariants
+## 4. Invariants (Move-Leak Hardened)
 
-1.  **Visual Dignity**: Prefer stutter (teleport) over slow motion. Time is 1:1.
-2.  **Interaction Authority**: Dragged nodes are `isFixed=true` and match cursor 1:1.
-    *   **Local Boost**: Dragging wakes neighbors and forces high-priority physics for the local cluster, even in degrade mode.
-3.  **No Syrup**: Debt (`accumulatorMs`) is never carried > 1 frame if it exceeds the step budget. It is *deleted* (stutter) rather than processed (slow motion).
-4.  **Degrade-1:1**: When stressed, we skip *entire passes* (e.g. spacing frame 2 of 3) rather than reducing stiffness (which would create "mud").
-5.  **Fixed-Step Stability**: All integration happens at fixed `targetTickHz` (60hz), ensuring deterministic simulation regardless of render frame rate (until overload).
+1.  **Visual Dignity**: Prefer stutter over slow motion. Time is 1:1.
+2.  **Zero-Drift Rendering**: Camera uses integer snapping and unified transform. No sub-pixel creep.
+3.  **Interaction Authority**: Dragged nodes are `isFixed=true` and immune to simulation forces.
+    *   **Warm Release**: Releasing a node atomically clears its force history.
+4.  **No Debt Drift**: Clipped budgets store `correctionResidual` to ideally resolving error over time.
+5.  **Fixed-Step Stability**: Physics runs at 60hz deterministic, decoupled from Render Hz.
 
 ## 5. Key Files for Physics Control
 
 *   `src/playground/useGraphRendering.ts`:
     *   **Overload Monitor**: `overloadState` (active, reason, severity).
-    *   **Debt Dropper**: Logic to `accumulatorMs = 0` on freeze/watchdog.
-    *   **Degrade Setter**: Pushes `degradeLevel` to `engine`.
+    *   **Debt Dropper**: Logic to `accumulatorMs = 0`.
 *   `src/physics/engine.ts`:
-    *   **Pass Scheduler**: `repulsionEvery`, `spacingEvery` derived from `degradeLevel`.
-    *   **Local Boost**: `focusActive` list bypasses degrade limits for interaction.
+    *   **Pass Scheduler**: Global degrade logic.
+    *   **Warm Start**: Invalidation logic for state changes.
+*   `src/playground/rendering/camera.ts`:
+    *   **Unified Transform**: Source of truth for World<->Screen mapping.
 *   `src/physics/config.ts`:
     *   `maxPhysicsBudgetMs`: Hard cap on physics calculation time per frame.
     *   `dtHugeMs`: Threshold for "tab switch" freeze (default 250ms).
 
 ## 6. Logs to Watch
 
-*   `[RenderPerf]`: `droppedMs` (stutter magnitude), `fps`, `ticksPerSecond`.
-*   `[Overload]`: `active=true`, `reason=BUDGET_EXCEEDED`, `severity=SOFT/HARD`.
-*   `[Degrade]`: `level=1`, `passes={repel:Y, space:N}`, `budgetMs`.
-*   `[Hand]`: `dragging=Y`, `localBoost=Y`, `lagP95Px` (Target: 0.00).
+*   `[RenderPerf]`: `droppedMs`, `reason` (OVERLOAD/BUDGET).
+*   `[FixedLeakWarn]`: **CRITICAL**. Fixed node moved by solver (Bug).
+*   `[CorrCap]`: Debt stored due to budget clipping.
+*   `[Degrade]`: `level`, `passes`, `budgetMs`.
+*   `[Hand]`: `dragging=Y`, `localBoost=Y`.
 *   `[SlushWatch]`: Warnings if debt persists despite drop logic.

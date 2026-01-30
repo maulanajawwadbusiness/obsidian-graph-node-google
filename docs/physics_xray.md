@@ -60,6 +60,9 @@ User interaction must never feel degraded.
     *   **Z-Order**: Top-most node always wins the click.
     *   **Pixel Alignment** (New): Stroking logic quantizes to `N.5` or `N.0` pixels for visual crispness.
     *   **Overlay Glue** (New): Popup positions are locked to the render loop via `graph-render-tick` event (Zero Lag).
+    *   **Decoupled Input**: `useGraphRendering` samples pointers but applies them in `rAF` using the **Frame Camera** (Fix 34).
+    *   **Deterministic Plan**: `UpdatePlan` calculated at frame start freezes laws/budgets for the tick (Fix 35).
+    *   **Surface Safety**: `DPR` logic contains 4-frame hysteresis (Fix 41).
 
 ### B. Critical Mechanisms
 *   **Correction Residue**: Unpaid constraint budget is stored as debt (`correctionResidual`), preventing dense clusters from crawling.

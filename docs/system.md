@@ -100,6 +100,10 @@ Post-Fixes #01–#22, the system guarantees:
 *   **Impulse Safety**: `requestImpulse` strictly enforces cooldown (1s).
 *   **Input Ownership**: UI panels (Chat, Docs) fully consume pointer events (Overlay Shield).
 *   **Release Snap**: Releasing a drag instantly clears valid velocity/force history to prevent "Ghost Slides".
+*   **Input Decoupling**: Pointer events are sampled (referenced) but processed strictly inside the `rAF` loop to ensure zero-lag synchronization with the Camera.
+*   **Layout Safety**: `ResizeObserver` caches rects to prevent layout thrash. Zero-size canvases abort formatting.
+*   **DPR Stability**: Rapid monitor swaps are stabilized via hysteresis (4-frame debounce).
+*   **Camera Safety**: NaNs trigger instant rollback to last known good state.
 
 ## 5. AI Architecture
 Arnvoid uses a unified AI layer (`src/ai/`) that abstracts provider details behind a strict interface.

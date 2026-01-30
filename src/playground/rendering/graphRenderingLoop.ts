@@ -363,21 +363,16 @@ export const updateHoverSelectionIfNeeded = (
     const now = performance.now();
     const timeSinceLast = now - hoverStateRef.current.lastSelectionTime;
 
+    // Heartbeat: Force reliable 10Hz updates even if input loop is stalled
+    // This allows "camera-only" moves to trigger hover updates if mouse is still.
+    // Also recovers if a pointer-move flag was dropped.
+    const heartbeat = timeSinceLast > 100;
+
     // We bypass throttling if Env Changed (Must be correct instantly)
-    if (shouldRun || (timeSinceLast > 100)) { // 10hz fallback
+    if (shouldRun || heartbeat) { // 10hz fallback
         // ... (Hit test execution)
         if (hoverStateRef.current.hasPointer) {
-            // Use the CACHED cursor world coordinates? 
-            // NO. If camera moved, cursorWorldX is STALE. We must re-project from ClientX/Y.
-            // But we don't have ClientX/Y passed here easily unless we store it in HoverState?
-            // Assumption: HoverState has lastClientX/Y.
-            // If not, we rely on 'pendingPointer' having updated it?
-            // If camera moves but mouse doesn't, we don't get a mousemove event.
-            // We need to re-project `lastClientX` with NEW camera.
-
-            // For now, we assume updateHoverSelection handles the projection using the passed `camera`.
-            // We just ensure it RUNS.
-
+            // ...
             updateHoverSelection(
                 hoverStateRef.current.lastClientX || 0,
                 hoverStateRef.current.lastClientY || 0,
@@ -983,6 +978,10 @@ export const startGraphRenderLoop = (deps: GraphRenderLoopDeps) => {
         const project = (x: number, y: number) => transform.worldToScreen(x, y);
         const worldToScreen = project;
         const visibleBounds = transform.getVisibleBounds(200);
+        if (theme.hoverDebugEnabled && Math.random() < 0.01) {
+            console.log(`[HoverDbg] Loop Check: pending=${pendingPointerRef.current.hasPending} hasPtr=${hoverStateRef.current.hasPointer}`);
+        }
+
         renderScratch.prepare(engine, visibleBounds);
         updateHoverSelectionIfNeeded(
             pendingPointerRef.current.hasPending,

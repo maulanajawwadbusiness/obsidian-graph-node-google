@@ -108,6 +108,15 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
         return () => ro.disconnect();
     }, []);
 
+    // [HoverDbg] Window Control
+    useEffect(() => {
+        const h = () => {
+            if (Math.random() < 0.005) console.log('[HoverDbg] Window PointerMove (Control)');
+        };
+        window.addEventListener('pointermove', h);
+        return () => window.removeEventListener('pointermove', h);
+    }, []);
+
     const getCachedRect = () => {
         // Fallback to live read if RO hasn't fired yet (rare) or fails
         return contentRectRef.current || canvasRef.current?.getBoundingClientRect() || ({ left: 0, top: 0, width: 0, height: 0 } as DOMRect);
@@ -115,6 +124,11 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
 
     // Wrap hook handlers for pointer events
     const onPointerMove = (e: React.PointerEvent) => {
+        // [HoverDbg] DOM Proof
+        if (Math.random() < 0.01) {
+            console.log(`[HoverDbg] DOM PointerMove id=${e.pointerId} target=${(e.target as HTMLElement).tagName}`);
+        }
+
         const canvas = canvasRef.current;
         if (!canvas) return;
 

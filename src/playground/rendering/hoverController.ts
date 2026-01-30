@@ -346,14 +346,31 @@ export const createHoverController = ({
         clientY: number,
         _rect: DOMRect
     ) => {
+        // [HoverDbg] Raw Input Proof
+        if (Math.random() < 0.005) {
+            console.log(`[HoverDbg] Input Active: ${pointerType} at (${clientX},${clientY})`);
+        }
+
         if (pointerType === 'touch') {
             return;
         }
 
-        if (hoverStateRef.current.activePointerId === null) {
+        // FIX: Pointer Deadlock Release
+        // If we get a mouse move but we are "stuck" on another ID (e.g. ghost touch),
+        // and we are NOT currently dragging a node, allow mouse to steal focus.
+        const isDragActive = !!engineRef.current?.draggedNodeId;
+        const isStuck = hoverStateRef.current.activePointerId !== null &&
+            hoverStateRef.current.activePointerId !== pointerId;
+
+        if (isStuck) {
+            if (pointerType === 'mouse' && !isDragActive) {
+                // Auto-release stuck ID
+                hoverStateRef.current.activePointerId = pointerId;
+            } else {
+                return; // Ignore secondary pointer
+            }
+        } else if (hoverStateRef.current.activePointerId === null) {
             hoverStateRef.current.activePointerId = pointerId;
-        } else if (hoverStateRef.current.activePointerId !== pointerId) {
-            return;
         }
 
         pendingPointerRef.current.clientX = clientX;

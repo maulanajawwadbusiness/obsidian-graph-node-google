@@ -1,5 +1,6 @@
 import { lerpColor } from '../../visual/theme';
 import type { ThemeConfig } from '../../visual/theme';
+import { gradientCache } from './gradientCache';
 
 let idleProbeLogged = false;
 
@@ -89,6 +90,7 @@ export function drawVignetteBackground(
  * @param theme Theme configuration
  * @returns Computed glow parameters for debug overlay
  */
+// Hardened: Uses GradientCache + Manual State (No save/restore thrash)
 export function drawTwoLayerGlow(
     ctx: CanvasRenderingContext2D,
     x: number,
@@ -145,40 +147,48 @@ export function drawTwoLayerGlow(
         idleProbeLogged = true;
     }
 
-    // Outer glow (purple-leaning, wider atmosphere)
-    // FIX 48: Center Glow (Radial Gradient)
-    // Use mathematical gradient instead of filter: blur() to ensure perfect centering.
-    withCtx(ctx, () => {
-        const gRadius = radius + outerBlur * 2.0; // Extend far enough
-        const grad = ctx.createRadialGradient(x, y, radius, x, y, gRadius);
-        // Fade from color to transparent
-        // Use regex or parsing to handle opacity if needed, but assuming simple hex/rgba for now.
-        // For simplicity and perf, we just fade opacity.
-        // Actually, easiest way is to use transparent color stop.
+    // Manual State Management (Performance: Avoid save/restore)
+    // We assume the caller (drawNodes) sets base state. We only touch what we need.
+    // AND WE MUST RESET IT.
 
-        grad.addColorStop(0, theme.deepPurple); // Start at edge of node
-        grad.addColorStop(1, 'rgba(0,0,0,0)'); // End at extent
+    // OPTIMIZATION: Translate to (x,y) so we can use Cached Radial Gradient at (0,0)
+    ctx.translate(x, y);
 
-        ctx.fillStyle = grad;
-        ctx.globalAlpha = outerAlpha; // Master alpha
+    try {
+        // Outer Glow
+        const outerR = radius + outerBlur * 2.0;
+        // Get Cached Gradient (Centered at 0,0)
+        const outerGrad = gradientCache.getRadialGradient(
+            ctx, radius, outerR,
+            [{ offset: 0, color: theme.deepPurple }, { offset: 1, color: 'rgba(0,0,0,0)' }]
+        );
+
+        ctx.fillStyle = outerGrad;
+        ctx.globalAlpha = outerAlpha;
         ctx.beginPath();
-        ctx.arc(x, y, gRadius, 0, Math.PI * 2);
+        ctx.arc(0, 0, outerR, 0, Math.PI * 2);
         ctx.fill();
-    });
 
-    // Inner glow (blue-leaning, closer to ring)
-    withCtx(ctx, () => {
-        const gRadius = radius + innerBlur * 2.0;
-        const grad = ctx.createRadialGradient(x, y, radius, x, y, gRadius);
-        grad.addColorStop(0, primaryBlue);
-        grad.addColorStop(1, 'rgba(0,0,0,0)');
+        // Inner Glow
+        const innerR = radius + innerBlur * 2.0;
+        const innerGrad = gradientCache.getRadialGradient(
+            ctx, radius, innerR,
+            [{ offset: 0, color: primaryBlue }, { offset: 1, color: 'rgba(0,0,0,0)' }]
+        );
 
-        ctx.fillStyle = grad;
+        ctx.fillStyle = innerGrad;
         ctx.globalAlpha = innerAlpha;
         ctx.beginPath();
-        ctx.arc(x, y, gRadius, 0, Math.PI * 2);
+        ctx.arc(0, 0, innerR, 0, Math.PI * 2);
         ctx.fill();
-    });
+
+    } finally {
+        // Clean up translation
+        ctx.translate(-x, -y);
+        // Reset Alpha (Caller expects 1?) - ACTUALLY caller (drawNodes) resets it potentially.
+        // But for safety within "Render Guard" philosophy, we should return to "Good Base".
+        ctx.globalAlpha = 1;
+    }
 
     return { innerAlpha, innerBlur, outerAlpha, outerBlur };
 }

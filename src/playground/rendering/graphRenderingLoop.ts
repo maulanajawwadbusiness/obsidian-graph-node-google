@@ -16,6 +16,7 @@ import type {
     RenderDebugInfo,
     RenderSettingsRef,
 } from './renderingTypes';
+import { gradientCache } from './gradientCache';
 
 type Ref<T> = { current: T };
 
@@ -387,6 +388,16 @@ const recordPerfSample = (
         perfSample.tickMsSamples = [];
         perfSample.droppedMsTotal = 0;
         perfSample.maxTicksPerFrame = 0;
+
+        // Gradient Cache Stats
+        if (gradientCache.misses > 0 || gradientCache.hits > 0) {
+            console.log(
+                `[GradientCache] hits=${gradientCache.hits} ` +
+                `misses/created=${gradientCache.misses} ` +
+                `(HitRat=${(gradientCache.hits / (gradientCache.hits + gradientCache.misses) * 100).toFixed(1)}%)`
+            );
+            gradientCache.resetStats();
+        }
     }
 };
 

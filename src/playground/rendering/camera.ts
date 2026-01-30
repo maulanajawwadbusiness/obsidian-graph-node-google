@@ -233,7 +233,26 @@ export const updateCameraContainment = (
     // New: lambda=15.0 (Snappy, ~150ms settle). Small moves are instant, big moves are smooth.
     // FIX 45: Causality Snap (Kill Ghost Motion)
     // If user is interacting, we want 1:1 response. No smoothing.
-    const lambda = 15.0;
+    // If user just stopped, we settle quickly (200ms).
+    // If settled, we LOCK (deadband).
+
+    // Update interaction timer
+    const now = performance.now();
+    if (isInteraction) {
+        camera.lastInteractionTime = now;
+    }
+
+    const timeSinceInteraction = now - camera.lastInteractionTime;
+    const settleWindow = 200; // ms
+
+    let lambda = 15.0; // Normal snappy smoothing
+    if (!isInteraction && timeSinceInteraction > settleWindow) {
+        // FIX 43: Causality Lock
+        // If we verified "hand off" for > 200ms, we assume intentions are done.
+        // Snap aggressively to kill any lingering asymptotic tails.
+        lambda = 50.0;
+    }
+
     const alpha = isInteraction ? 1.0 : (1.0 - Math.exp(-lambda * dt));
 
     camera.panX += (camera.targetPanX - camera.panX) * alpha;
@@ -242,8 +261,12 @@ export const updateCameraContainment = (
 
     // FIX 30: Invisible Snap (No Jumps)
     // Snap only when error is visibly zero (0.01 screen pixels)
-    const snapPixels = 0.01 * pixelScale;
-    const snapZoom = 0.0005;
+    // FIX 43: Aggressive Rest Snap
+    // If we are past the settle window, we use a slightly larger snap threshold
+    // to force exact zero-velocity rest.
+    const isSettling = !isInteraction && timeSinceInteraction > settleWindow;
+    const snapPixels = (isSettling ? 0.05 : 0.01) * pixelScale;
+    const snapZoom = isSettling ? 0.001 : 0.0005;
 
     if (Math.abs(camera.targetPanX - camera.panX) < snapPixels) {
         camera.panX = camera.targetPanX;

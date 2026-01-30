@@ -133,6 +133,25 @@ const ensureSeededGraph = (engine: PhysicsEngine, config: ForceConfig, seed: num
     }
 };
 
+// FIX 50: Context State Restoration (Canonical State)
+const restoreContextState = (ctx: CanvasRenderingContext2D, dpr: number) => {
+    // 1. Reset Transform to DPR scale
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    // 2. Reset Composition
+    ctx.globalAlpha = 1.0;
+    ctx.globalCompositeOperation = 'source-over';
+
+    // 3. Reset Styling
+    ctx.filter = 'none';
+    ctx.imageSmoothingEnabled = true;
+    ctx.shadowBlur = 0;
+    ctx.shadowColor = 'transparent';
+    ctx.lineWidth = 1;
+    ctx.lineCap = 'butt';
+    ctx.lineJoin = 'miter';
+};
+
 const updateCanvasSurface = (
     canvas: HTMLCanvasElement,
     rect: DOMRect,

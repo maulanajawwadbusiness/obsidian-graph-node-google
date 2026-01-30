@@ -97,10 +97,12 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
         const canvas = canvasRef.current;
         if (!canvas) return;
 
-        // Fix 58: Use Single Source of Truth if available to prevent multi-loop jitter
-        const snapshot = getSurfaceSnapshot();
-        const rect = snapshot ? snapshot.rect : canvas.getBoundingClientRect();
-        const dpr = snapshot ? snapshot.dpr : (window.devicePixelRatio || 1);
+        // Fix 61: Use Unified Frame Snapshot (Single Truth)
+        // This ensures input mapping uses the EXACT camera state that was rendered.
+        const snapshot = getFrameSnapshot();
+        const effectiveSource = snapshot || canvas.getBoundingClientRect();
+
+        const rect = snapshot ? snapshot.rect : (effectiveSource as DOMRect);
 
         // 1. Hover Update
         handlePointerMove(e.pointerId, e.pointerType, e.clientX, e.clientY, rect);
@@ -111,7 +113,7 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
             return;
         }
         // Transform screen coords to world coords (camera + rotation aware)
-        const { x, y } = clientToWorld(e.clientX, e.clientY, rect, dpr);
+        const { x, y } = clientToWorld(e.clientX, e.clientY, effectiveSource);
         engineRef.current.moveDrag({ x, y });
     };
 

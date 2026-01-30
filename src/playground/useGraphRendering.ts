@@ -741,10 +741,13 @@ export const useGraphRendering = ({
                 dpr, // Fix 57: Pass Fractional DPR
                 settingsRef.current.pixelSnapping
             );
-            transform.applyToContext(ctx);
+            // Disable Global CTM (Fix 17/18: Post-Projection Snapping)
+            // transform.applyToContext(ctx);
+            const project = (x: number, y: number) => transform.worldToScreen(x, y);
 
             if (settingsRef.current.showDebugGrid) {
                 ctx.save();
+                transform.applyToContext(ctx); // Legacy CTM for Grid
                 const scale = 1 / camera.zoom;
                 ctx.lineWidth = scale;
 
@@ -816,7 +819,7 @@ export const useGraphRendering = ({
             const zoom = camera.zoom;
 
             // Draw Links
-            drawLinks(ctx, engine, theme, zoom);
+            drawLinks(ctx, engine, theme, project);
 
             // Draw Nodes
             drawNodes(
@@ -826,17 +829,22 @@ export const useGraphRendering = ({
                 settingsRef,
                 hoverStateRef,
                 zoom,
-                renderDebugRef
+                renderDebugRef,
+                project
             );
 
-            // Draw Labels
-            drawLabels(ctx, engine, theme, settingsRef, hoverStateRef, globalAngle);
+            // Draw Labels (Zoom + Project, No Angle)
+            drawLabels(ctx, engine, theme, settingsRef, hoverStateRef, zoom, project);
 
             if (
                 theme.hoverDebugEnabled &&
                 (hoverStateRef.current.hoveredNodeId || hoverStateRef.current.hoverDisplayNodeId)
             ) {
+                // Legacy CTM for Debug Overlay
+                ctx.save();
+                transform.applyToContext(ctx);
                 drawHoverDebugOverlay(ctx, engine, hoverStateRef);
+                ctx.restore();
             }
 
             ctx.restore();

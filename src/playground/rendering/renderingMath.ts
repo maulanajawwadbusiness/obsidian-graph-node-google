@@ -1,3 +1,11 @@
+// Fix 40: Device Pixel Quantization
+// Unifies snapping across Render/Overlay/Input layers.
+export const quantizeToDevicePixel = (px: number, dpr: number) => {
+    // Avoid degenerate dpr
+    const safeDpr = Math.max(0.1, dpr);
+    return Math.round(px * safeDpr) / safeDpr;
+};
+
 export function clamp(value: number, min: number, max: number): number {
     return Math.max(min, Math.min(max, value));
 }

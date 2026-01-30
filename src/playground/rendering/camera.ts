@@ -1,4 +1,5 @@
 import type { CameraState } from './renderingTypes';
+import { quantizeToDevicePixel } from './renderingMath';
 
 export class CameraTransform {
     private width: number;
@@ -45,14 +46,9 @@ export class CameraTransform {
     public applyToContext(ctx: CanvasRenderingContext2D) {
         let { width, height, zoom, panX, panY, angle, cx, cy, dpr } = this;
 
-        // Fix 5: Pixel Snapping Policy
-        // Snap the effective screen offset to nearest screen pixel
-        if (this.pixelSnapping) {
-            // FIX 57: Sub-pixel Snapping (Retina awareness)
-            // Snap to 1/DPR increments instead of 1.0 increments.
-            panX = Math.round(panX * zoom * dpr) / (zoom * dpr);
-            panY = Math.round(panY * zoom * dpr) / (zoom * dpr);
-        }
+        // Fix 5 & 18 & 40: Canonical Float Transform
+        // We do NOT snap the camera matrix (prevents sticky motion).
+        // Objects are snapped individually Post-Project.
 
         ctx.translate(width / 2, height / 2);
         ctx.scale(zoom, zoom);
@@ -66,12 +62,6 @@ export class CameraTransform {
 
     public worldToScreen(worldX: number, worldY: number): { x: number, y: number } {
         let { width, height, zoom, panX, panY, angle, cx, cy, dpr } = this;
-
-        // Fix 5: Pixel Snapping Policy (Symmetry)
-        if (this.pixelSnapping) {
-            panX = Math.round(panX * zoom * dpr) / (zoom * dpr);
-            panY = Math.round(panY * zoom * dpr) / (zoom * dpr);
-        }
 
         // 1. Rotate around centroid
         // x_rot = cos(a)(x-cx) - sin(a)(y-cy) + cx
@@ -94,6 +84,14 @@ export class CameraTransform {
         const sx = zx + width / 2;
         const sy = zy + height / 2;
 
+        // Fix 41: Post-Projection Device Pixel Quantization
+        if (this.pixelSnapping) {
+            return {
+                x: quantizeToDevicePixel(sx, dpr),
+                y: quantizeToDevicePixel(sy, dpr)
+            };
+        }
+
         return { x: sx, y: sy };
     }
 
@@ -104,11 +102,7 @@ export class CameraTransform {
         }
         let { zoom, panX, panY, angle, cx, cy, dpr } = this;
 
-        // Fix 5: Pixel Snapping Policy (Symmetry)
-        if (this.pixelSnapping) {
-            panX = Math.round(panX * zoom * dpr) / (zoom * dpr);
-            panY = Math.round(panY * zoom * dpr) / (zoom * dpr);
-        }
+        // Fix 18: No Input Snapping (Smooth Drag)
 
         // 0. CSS relative to center
         const sx = clientX - rect.left;

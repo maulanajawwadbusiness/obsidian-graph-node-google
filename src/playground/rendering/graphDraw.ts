@@ -8,101 +8,83 @@ import type { HoverState, RenderDebugInfo, RenderSettingsRef } from './rendering
 
 // ... (omitted)
 
-engine.nodes.forEach((node) => {
+const captureCanvasState = (ctx: CanvasRenderingContext2D) => ({
+    globalCompositeOperation: ctx.globalCompositeOperation,
+    globalAlpha: ctx.globalAlpha,
+    filter: ctx.filter || 'none'
+});
+
+export const drawLinks = (
+    ctx: CanvasRenderingContext2D,
+    engine: PhysicsEngine,
+    theme: ThemeConfig,
+    worldToScreen: (x: number, y: number) => { x: number; y: number }
+) => {
     withCtx(ctx, () => {
-        // Fix 42: Manual Projection & Scaling
-        let screen = worldToScreen(node.x, node.y); // Snapped if enabled
-
-        // Fix 22: Half-Pixel Stroke Alignment
-        // If pixel snapping is enabled, ensure the center is aligned such that the stroke
-        // lands on device pixels.
-        if (settingsRef.current.pixelSnapping) {
-            const dpr = window.devicePixelRatio || 1; // dpr is needed for stroke alignment
-            screen = {
-                x: quantizeForStroke(screen.x, theme.nodeStyle === 'ring' ? ringWidthPx : strokeWidthPx, dpr),
-                y: quantizeForStroke(screen.y, theme.nodeStyle === 'ring' ? ringWidthPx : strokeWidthPx, dpr)
-            };
-        }
-        // If we are showing a stroke (ring/circle), the center needs to be stroke-aligned.
-        // worldToScreen usually does simple quantization. We might need to adjust it
-        // if we are in "Pixel Snapping" mode.
-        // But worldToScreen is generic. We shouldn't change it there.
-        // We adjust locally if we detect snapping is impactful.
-        // actually, worldToScreen returns "snapped" coordinates potentially.
-        // If settings.pixelSnapping is TRUE, we must enforce stroke alignment.
-        if (settingsRef.current.pixelSnapping && theme.nodeStrokeWidth > 0) {
-            // Re-snap to stroke grid
-            const dpr = window.devicePixelRatio || 1; // Need access to dpr? 
-            // We don't have dpr here easily passed in drawNodes. 
-            // Rely on what worldToScreen used? No, that's opaque.
-            // We should pass dpr to drawNodes (Fix 49 did NOT pass dpr, only zoom).
-            // Use settings? Or just trust standard quantization?
-            // Standard quantization is to N.0. 
-            // If stroke is 1px (dev), we need N.5.
-            // This requires DPR. 
-        }
-        // WAIT. drawNodes signature does NOT have DPR. 
-        // drawLabels DOES (Fix 21 provided it).
-        // We need to pass DPR to drawNodes!
-
-        const baseRadius = settingsRef.current.useVariedSize ? node.radius : 5.0;
-        const baseRenderRadius = getNodeRadius(baseRadius, theme);
-
         ctx.globalAlpha = 1;
         ctx.globalCompositeOperation = 'source-over';
         ctx.setLineDash([]);
         ctx.shadowBlur = 0;
         ctx.shadowColor = 'transparent';
         ctx.filter = 'none';
+        ctx.strokeStyle = theme.linkColor;
 
-        if (theme.nodeStyle === 'ring') {
-            // Calculate nodeEnergy first (needed for both glow and ring)
-            const isHoveredNode = node.id === hoverStateRef.current.hoveredNodeId;
-            const isDisplayNode = node.id === hoverStateRef.current.hoverDisplayNodeId;
-            const nodeEnergy = isDisplayNode ? hoverStateRef.current.energy : 0;
-            if (isDisplayNode && theme.hoverDebugEnabled) {
-                hoverStateRef.current.debugNodeEnergy = nodeEnergy;
+        // Fix 49: Zoom-Stable Line Thickness
+        ctx.lineWidth = theme.linkWidth;
+
+        engine.links.forEach((link) => {
+            const source = engine.nodes.get(link.source);
+            const target = engine.nodes.get(link.target);
+            if (source && target) {
+                // Fix 42: Manual Projection (Snapped)
+                const s = worldToScreen(source.x, source.y);
+                const t = worldToScreen(target.x, target.y);
+
+                ctx.beginPath();
+                ctx.moveTo(s.x, s.y);
+                ctx.lineTo(t.x, t.y);
+                ctx.stroke();
             }
-            const renderDebug = renderDebugRef?.current;
-            const sampleIdle = !!renderDebug && nodeEnergy === 0 && renderDebug.idleGlowPassIndex < 0;
-            const sampleActive = !!renderDebug && nodeEnergy > 0 && renderDebug.activeGlowPassIndex < 0;
-            const glowPassIndex = 1;
-            const ringPassIndex = 2;
+        });
+    });
+};
 
-            // Energy-driven scale for node rendering (smooth growth on hover)
-            const nodeScale = getNodeScale(nodeEnergy, theme);
-            // Radius in SCREEN PIXELS
-            const radiusPx = baseRenderRadius * nodeScale * zoom;
+export const drawNodes = (
+    ctx: CanvasRenderingContext2D,
+    engine: PhysicsEngine,
+    theme: ThemeConfig,
+    settingsRef: MutableRefObject<RenderSettingsRef>,
+    hoverStateRef: MutableRefObject<HoverState>,
+    zoom: number,
+    renderDebugRef: MutableRefObject<RenderDebugInfo> | undefined,
+    dpr: number, // Fix 22: Pass DPR
+    worldToScreen: (x: number, y: number) => { x: number; y: number }
+) => {
+    // Screen Space Widths
+    const ringWidthPx = theme.ringWidth;
+    const strokeWidthPx = theme.nodeStrokeWidth;
 
-            // Energy-driven primary blue (smooth interpolation)
-            const primaryBlue = node.isFixed
-                ? theme.nodeFixedColor
-                : lerpColor(theme.primaryBlueDefault, theme.primaryBlueHover, nodeEnergy);
+    engine.nodes.forEach((node) => {
+        withCtx(ctx, () => {
+            // Fix 42: Manual Projection & Scaling
+            let screen = worldToScreen(node.x, node.y); // Snapped if enabled
 
-            // 1. Occlusion disk (hides links under node)
-            const occlusionRadiusPx = getOcclusionRadius(radiusPx, theme);
-
-            // Store debug values for hovered node
-            if (isHoveredNode && theme.hoverDebugEnabled) {
-                const outerRadius = radiusPx + theme.ringWidth * 0.5;
-                hoverStateRef.current.debugNodeRadius = radiusPx;
-                hoverStateRef.current.debugOuterRadius = outerRadius;
-                hoverStateRef.current.debugOcclusionRadius = occlusionRadiusPx;
-                hoverStateRef.current.debugShrinkPct = theme.occlusionShrinkPct;
+            // Fix 22: Half-Pixel Stroke Alignment
+            // If pixel snapping is enabled, ensure the center is aligned such that the stroke
+            // lands on device pixels.
+            if (settingsRef.current.pixelSnapping) {
+                // Fix 22: Half-Pixel Stroke Alignment
+                // Snap to grid + 0.5 device pixels if stroke width is odd
+                const width = theme.nodeStyle === 'ring' ? ringWidthPx : strokeWidthPx;
+                screen = {
+                    x: quantizeForStroke(screen.x, width, dpr),
+                    y: quantizeForStroke(screen.y, width, dpr)
+                };
             }
 
-            ctx.beginPath();
-            ctx.arc(screen.x, screen.y, occlusionRadiusPx, 0, Math.PI * 2);
-            ctx.fillStyle = theme.occlusionColor;
-            ctx.fill();
+            const baseRadius = settingsRef.current.useVariedSize ? node.radius : 5.0;
+            const baseRenderRadius = getNodeRadius(baseRadius, theme);
 
-            // 2. Ring stroke
-            if (sampleIdle && renderDebug) {
-                renderDebug.idleRingStateBefore = captureCanvasState(ctx);
-            }
-            if (sampleActive && renderDebug) {
-                renderDebug.activeRingStateBefore = captureCanvasState(ctx);
-            }
             ctx.globalAlpha = 1;
             ctx.globalCompositeOperation = 'source-over';
             ctx.setLineDash([]);
@@ -110,104 +92,159 @@ engine.nodes.forEach((node) => {
             ctx.shadowColor = 'transparent';
             ctx.filter = 'none';
 
-            if (theme.useGradientRing) {
-                // Energy-driven ring width boost
-                // Base width is zoom-stable, boost acts as multiplier
-                const activeRingWidth = ringWidthPx * (1 + theme.hoverRingWidthBoost * nodeEnergy);
+            if (theme.nodeStyle === 'ring') {
+                // Calculate nodeEnergy first (needed for both glow and ring)
+                const isHoveredNode = node.id === hoverStateRef.current.hoveredNodeId;
+                const isDisplayNode = node.id === hoverStateRef.current.hoverDisplayNodeId;
+                const nodeEnergy = isDisplayNode ? hoverStateRef.current.energy : 0;
+                if (isDisplayNode && theme.hoverDebugEnabled) {
+                    hoverStateRef.current.debugNodeEnergy = nodeEnergy;
+                }
+                const renderDebug = renderDebugRef?.current;
+                const sampleIdle = !!renderDebug && nodeEnergy === 0 && renderDebug.idleGlowPassIndex < 0;
+                const sampleActive = !!renderDebug && nodeEnergy > 0 && renderDebug.activeGlowPassIndex < 0;
+                const glowPassIndex = 1;
+                const ringPassIndex = 2;
 
-                drawGradientRing(
-                    ctx,
-                    screen.x,
-                    screen.y,
-                    radiusPx,
-                    activeRingWidth,
-                    primaryBlue,
-                    theme.deepPurple,
-                    theme.ringGradientSegments,
-                    theme.gradientRotationDegrees
-                );
+                // Energy-driven scale for node rendering (smooth growth on hover)
+                const nodeScale = getNodeScale(nodeEnergy, theme);
+                // Radius in SCREEN PIXELS
+                const radiusPx = baseRenderRadius * nodeScale * zoom;
+
+                // Energy-driven primary blue (smooth interpolation)
+                const primaryBlue = node.isFixed
+                    ? theme.nodeFixedColor
+                    : lerpColor(theme.primaryBlueDefault, theme.primaryBlueHover, nodeEnergy);
+
+                // 1. Occlusion disk (hides links under node)
+                const occlusionRadiusPx = getOcclusionRadius(radiusPx, theme);
+
+                // Store debug values for hovered node
+                if (isHoveredNode && theme.hoverDebugEnabled) {
+                    const outerRadius = radiusPx + theme.ringWidth * 0.5;
+                    hoverStateRef.current.debugNodeRadius = radiusPx;
+                    hoverStateRef.current.debugOuterRadius = outerRadius;
+                    hoverStateRef.current.debugOcclusionRadius = occlusionRadiusPx;
+                    hoverStateRef.current.debugShrinkPct = theme.occlusionShrinkPct;
+                }
+
+                ctx.beginPath();
+                ctx.arc(screen.x, screen.y, occlusionRadiusPx, 0, Math.PI * 2);
+                ctx.fillStyle = theme.occlusionColor;
+                ctx.fill();
+
+                // 2. Ring stroke
+                if (sampleIdle && renderDebug) {
+                    renderDebug.idleRingStateBefore = captureCanvasState(ctx);
+                }
+                if (sampleActive && renderDebug) {
+                    renderDebug.activeRingStateBefore = captureCanvasState(ctx);
+                }
+                ctx.globalAlpha = 1;
+                ctx.globalCompositeOperation = 'source-over';
+                ctx.setLineDash([]);
+                ctx.shadowBlur = 0;
+                ctx.shadowColor = 'transparent';
+                ctx.filter = 'none';
+
+                if (theme.useGradientRing) {
+                    // Energy-driven ring width boost
+                    // Base width is zoom-stable, boost acts as multiplier
+                    const activeRingWidth = ringWidthPx * (1 + theme.hoverRingWidthBoost * nodeEnergy);
+
+                    drawGradientRing(
+                        ctx,
+                        screen.x,
+                        screen.y,
+                        radiusPx,
+                        activeRingWidth,
+                        primaryBlue,
+                        theme.deepPurple,
+                        theme.ringGradientSegments,
+                        theme.gradientRotationDegrees
+                    );
+                } else {
+                    ctx.beginPath();
+                    ctx.arc(screen.x, screen.y, radiusPx, 0, Math.PI * 2);
+                    ctx.strokeStyle = node.isFixed ? theme.nodeFixedColor : theme.ringColor;
+                    ctx.lineWidth = ringWidthPx;
+                    ctx.stroke();
+                }
+                if (sampleIdle && renderDebug) {
+                    renderDebug.ringPassIndex = ringPassIndex;
+                    renderDebug.idleRingStateAfter = captureCanvasState(ctx);
+                }
+                if (sampleActive && renderDebug) {
+                    renderDebug.ringPassIndex = ringPassIndex;
+                    renderDebug.activeRingStateAfter = captureCanvasState(ctx);
+                }
+
+                // 3. Glow (energy-driven: brightens + expands as hover energy rises)
+                if (theme.useTwoLayerGlow) {
+                    if (sampleIdle && renderDebug) {
+                        renderDebug.idleGlowPassIndex = glowPassIndex;
+                        renderDebug.idleGlowStateBefore = captureCanvasState(ctx);
+                    }
+                    if (sampleActive && renderDebug) {
+                        renderDebug.activeGlowPassIndex = glowPassIndex;
+                        renderDebug.activeGlowStateBefore = captureCanvasState(ctx);
+                    }
+                    const glowParams = drawTwoLayerGlow(
+                        ctx,
+                        screen.x,
+                        screen.y,
+                        radiusPx,
+                        nodeEnergy,
+                        primaryBlue,
+                        theme
+                    );
+
+                    // Store glow debug values for hovered node
+                    if (isHoveredNode) {
+                        hoverStateRef.current.debugGlowInnerAlpha = glowParams.innerAlpha;
+                        hoverStateRef.current.debugGlowInnerBlur = glowParams.innerBlur;
+                        hoverStateRef.current.debugGlowOuterAlpha = glowParams.outerAlpha;
+                        hoverStateRef.current.debugGlowOuterBlur = glowParams.outerBlur;
+                    }
+                    if (sampleIdle && renderDebug) {
+                        renderDebug.idleGlowStateAfter = captureCanvasState(ctx);
+                    }
+                    if (sampleActive && renderDebug) {
+                        renderDebug.activeGlowStateAfter = captureCanvasState(ctx);
+                    }
+                } else if (theme.glowEnabled) {
+                    // Legacy single-layer glow (static)
+                    withCtx(ctx, () => {
+                        ctx.beginPath();
+                        ctx.arc(screen.x, screen.y, radiusPx + theme.glowRadius, 0, Math.PI * 2);
+                        ctx.globalAlpha = 1;
+                        ctx.globalCompositeOperation = 'source-over';
+                        ctx.shadowBlur = 0;
+                        ctx.shadowColor = 'transparent';
+                        ctx.fillStyle = theme.glowColor;
+                        ctx.filter = `blur(${theme.glowRadius}px)`;
+                        ctx.fill();
+                    });
+                }
             } else {
+                // Normal mode: no scaling
+                const radiusPx = baseRenderRadius * zoom;
                 ctx.beginPath();
                 ctx.arc(screen.x, screen.y, radiusPx, 0, Math.PI * 2);
-                ctx.strokeStyle = node.isFixed ? theme.nodeFixedColor : theme.ringColor;
-                ctx.lineWidth = ringWidthPx;
+
+                if (node.isFixed) {
+                    ctx.fillStyle = theme.nodeFixedColor;
+                } else {
+                    ctx.fillStyle = theme.nodeFillColor;
+                }
+
+                ctx.fill();
+                ctx.strokeStyle = theme.nodeStrokeColor;
+                ctx.lineWidth = strokeWidthPx;
                 ctx.stroke();
             }
-            if (sampleIdle && renderDebug) {
-                renderDebug.ringPassIndex = ringPassIndex;
-                renderDebug.idleRingStateAfter = captureCanvasState(ctx);
-            }
-            if (sampleActive && renderDebug) {
-                renderDebug.ringPassIndex = ringPassIndex;
-                renderDebug.activeRingStateAfter = captureCanvasState(ctx);
-            }
-
-            // 3. Glow (energy-driven: brightens + expands as hover energy rises)
-            if (theme.useTwoLayerGlow) {
-                if (sampleIdle && renderDebug) {
-                    renderDebug.idleGlowPassIndex = glowPassIndex;
-                    renderDebug.idleGlowStateBefore = captureCanvasState(ctx);
-                }
-                if (sampleActive && renderDebug) {
-                    renderDebug.activeGlowPassIndex = glowPassIndex;
-                    renderDebug.activeGlowStateBefore = captureCanvasState(ctx);
-                }
-                const glowParams = drawTwoLayerGlow(
-                    ctx,
-                    screen.x,
-                    screen.y,
-                    radiusPx,
-                    nodeEnergy,
-                    primaryBlue,
-                    theme
-                );
-
-                // Store glow debug values for hovered node
-                if (isHoveredNode) {
-                    hoverStateRef.current.debugGlowInnerAlpha = glowParams.innerAlpha;
-                    hoverStateRef.current.debugGlowInnerBlur = glowParams.innerBlur;
-                    hoverStateRef.current.debugGlowOuterAlpha = glowParams.outerAlpha;
-                    hoverStateRef.current.debugGlowOuterBlur = glowParams.outerBlur;
-                }
-                if (sampleIdle && renderDebug) {
-                    renderDebug.idleGlowStateAfter = captureCanvasState(ctx);
-                }
-                if (sampleActive && renderDebug) {
-                    renderDebug.activeGlowStateAfter = captureCanvasState(ctx);
-                }
-            } else if (theme.glowEnabled) {
-                // Legacy single-layer glow (static)
-                withCtx(ctx, () => {
-                    ctx.beginPath();
-                    ctx.arc(screen.x, screen.y, radiusPx + theme.glowRadius, 0, Math.PI * 2);
-                    ctx.globalAlpha = 1;
-                    ctx.globalCompositeOperation = 'source-over';
-                    ctx.shadowBlur = 0;
-                    ctx.shadowColor = 'transparent';
-                    ctx.fillStyle = theme.glowColor;
-                    ctx.filter = `blur(${theme.glowRadius}px)`;
-                    ctx.fill();
-                });
-            }
-        } else {
-            // Normal mode: no scaling
-            const radiusPx = baseRenderRadius * zoom;
-            ctx.beginPath();
-            ctx.arc(screen.x, screen.y, radiusPx, 0, Math.PI * 2);
-
-            if (node.isFixed) {
-                ctx.fillStyle = theme.nodeFixedColor;
-            } else {
-                ctx.fillStyle = theme.nodeFillColor;
-            }
-
-            ctx.fill();
-            ctx.strokeStyle = theme.nodeStrokeColor;
-            ctx.lineWidth = strokeWidthPx;
-            ctx.stroke();
-        }
+        });
     });
-});
 };
 
 /**

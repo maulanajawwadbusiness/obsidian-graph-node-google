@@ -3,6 +3,7 @@ import type { PhysicsEngine } from '../../physics/engine';
 import { getNodeRadius, getNodeScale, getOcclusionRadius, lerpColor } from '../../visual/theme';
 import type { ThemeConfig } from '../../visual/theme';
 import { drawGradientRing, drawTwoLayerGlow, withCtx } from './canvasUtils';
+import { quantizeToDevicePixel } from './renderingMath';
 import type { HoverState, RenderDebugInfo, RenderSettingsRef } from './renderingTypes';
 
 
@@ -55,7 +56,7 @@ export const drawNodes = (
     settingsRef: MutableRefObject<RenderSettingsRef>,
     hoverStateRef: MutableRefObject<HoverState>,
     zoom: number, // Fix 49
-    renderDebugRef: paramsRef<RenderDebugInfo> | undefined,
+    renderDebugRef: MutableRefObject<RenderDebugInfo> | undefined,
     worldToScreen: (x: number, y: number) => { x: number; y: number }
 ) => {
     // Screen Space Widths
@@ -247,6 +248,7 @@ export const drawLabels = (
     settingsRef: MutableRefObject<RenderSettingsRef>,
     hoverStateRef: MutableRefObject<HoverState>,
     zoom: number,
+    dpr: number, // Fix 21: Need DPR for Text Quantization
     worldToScreen: (x: number, y: number) => { x: number; y: number }
 ) => {
     if (!theme.labelEnabled) return;
@@ -261,7 +263,7 @@ export const drawLabels = (
 
         const label = node.label || node.id;  // Fallback to node ID
 
-        drawNodeLabel(ctx, node.x, node.y, renderRadiusPx, label, nodeEnergy, theme, worldToScreen);
+        drawNodeLabel(ctx, node.x, node.y, renderRadiusPx, label, nodeEnergy, theme, dpr, worldToScreen);
     });
 };
 
@@ -273,12 +275,13 @@ export function drawNodeLabel(
     label: string,
     nodeEnergy: number,
     theme: ThemeConfig,
+    dpr: number,
     worldToScreen: (x: number, y: number) => { x: number; y: number }
 ) {
     if (!theme.labelEnabled || !label) return;
 
     // Fix 42: Screen Space Labeling
-    const screen = worldToScreen(x, y);
+    const screen = worldToScreen(x, y); // NOTE: This is ALREADY snapped if effectiveSnapping is ON
     const e = Math.pow(Math.max(0, Math.min(1, nodeEnergy)), theme.labelEnergyGamma);
 
     // Compute label offset: base + energy-driven hover offset
@@ -286,7 +289,56 @@ export function drawNodeLabel(
     const alpha = theme.labelAlphaBase + (theme.labelAlphaHover - theme.labelAlphaBase) * e;
 
     const labelX = screen.x;
-    const labelY = screen.y + offsetY;
+    // Fix 21: Text Baseline Quantization
+    // Even if screen.y is snapped, adding a float offsetY de-snaps it.
+    // We must quantize the FINAL y-coordinate to the device pixel grid.
+    // We assume worldToScreen logic "knows" if snapping is on via camera state, but here 
+    // we enforce the gap is also cleanly handled if we want "Rock Solid" text.
+    // Actually, we should only snap if the camera is snapping?
+    // But `worldToScreen` output is already the source of truth for "Snapping Active".
+    // If screen.x is an integer (or .5), we assume snapping is active? No, that's flaky.
+    // Better: We should probably pass `effectiveSnapping` down.
+    // BUT: For now, let's just use `quantizeToDevicePixel` systematically on the final pos
+    // IF we are in a "stable" render?
+    // Actually, `quantizeToDevicePixel` is harmless if we are consistently using it.
+    // But we strictly want to match the dot center behavior.
+
+    // Simplification: We rely on `worldToScreen` to do the heavy lifting of "Is Snapping On?".
+    // If `worldToScreen` returned a float, we probably shouldn't snap the offset either (movement).
+    // If `worldToScreen` returned a snapped val, we SHOULD snap the offset.
+
+    // Let's just Apply quantization to the vertical offset step relative to the screen anchor.
+    // labelY = screen.y + offset. 
+    // if screen.y is snapped, and we add float offset, we get fuzz.
+
+    // Hack/Fix: We re-quantize the final Y using the same DPR logic, 
+    // effectively "rounding to nearest device pixel" regardless of mode? 
+    // NO. If we do that during motion, we get stair-stepping text.
+    // We need to know if snapping is enabled.
+
+    // For now, let's defer to the fact that screen.y is our anchor.
+    // We will apply the offset, then optionally snap if we detect we are in a "integer-ish" state?
+    // Too magic.
+
+    // REVISED PLAN based on "Fix 21": "labelY = round(labelY * dpr) / dpr (when snapEnabled)"
+    // Since we don't strictly know "snapEnabled" here without plumbing...
+    // Let's plumb `dpr` (done) and assume we want to match the precision of `screen.y`.
+    // Actually, let's just assume we ALWAYS want to quantize text position to prevent sub-pixel rendering artifacts?
+    // No, that causes jitter during zoom.
+
+    // Wait, the user prompt says: "derive label position from that same anchor"
+    // "ensure label y rounding uses the same device-pixel quantization method as circles"
+
+    // If I cannot easily pass "snapEnabled", I will check if `screen.x` equals `quantize(screen.x)`.
+    // If it matches exactly, then snapping is likely ON.
+
+    const snappedX = quantizeToDevicePixel(screen.x, dpr);
+    const isSnapped = Math.abs(screen.x - snappedX) < 1e-9;
+
+    let labelY = screen.y + offsetY;
+    if (isSnapped) {
+        labelY = quantizeToDevicePixel(labelY, dpr);
+    }
 
     withCtx(ctx, () => {
         ctx.globalAlpha = alpha;

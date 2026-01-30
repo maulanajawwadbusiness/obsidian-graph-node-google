@@ -98,6 +98,15 @@ export const useGraphRendering = ({
         lastCandidates: { w: 0, h: 0, l: 0, t: 0 }
     });
 
+    // Fix 19 & 20: Snapping Hysteresis (Motion Detector)
+    // We only enable pixel snapping when the scene is "Rock Solid" to prevent
+    // jitter during drag/zoom/physics-settle.
+    const snapStabilityRef = useRef({
+        isStable: false,
+        lastMotionAt: 0,
+        highEnergyFrames: 0
+    });
+
     // Fix 58 & 61: Unified Frame Snapshot (Single Source of Truth)
     // Bundles Rect + DPR + Camera State for 1:1 input/render alignment.
     const frameSnapshotRef = useRef<FrameSnapshot | null>(null);
@@ -604,7 +613,7 @@ export const useGraphRendering = ({
                 // Restore coordinate system immediately: Backing(Px) -> CSS(Px)
                 ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-                console.log(`[Resync] Atomic Sync: DPR=${dpr.toFixed(2)} Backing=${backingW}x${backingH} CSS=${cssW.toFixed(0)}x${cssH.toFixed(0)}`);
+                // console.log(`[Resync] Atomic Sync: DPR=${dpr.toFixed(2)} Backing=${backingW}x${backingH} CSS=${cssW.toFixed(0)}x${cssH.toFixed(0)}`);
             } else {
                 // Stabilize Transform every frame (Protects against external context resets)
                 ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -730,6 +739,37 @@ export const useGraphRendering = ({
 
             const globalAngle = engine.getGlobalAngle();
 
+            // Fix 19 & 20: Motion Hysteresis Logic
+            // Detect if ANYTHING is moving (Camera, Nodes, Input)
+            const isDragging = !!engine.draggedNodeId || pendingPointer.hasPending || hoverStateRef.current.hasPointer;
+            // Energy check: default to false if engine not running? Assume running.
+            // visualEnergy > 0.01 is "visible motion"
+            const systemEnergy = hoverStateRef.current.energy;
+            const isHighEnergy = systemEnergy > 0.1; // Threshold for "Active Physics"
+
+            // Camera Motion Check (Simple diff)
+            const cameraSpeed = Math.abs(camera.panX - camera.targetPanX) +
+                Math.abs(camera.panY - camera.targetPanY) +
+                Math.abs(camera.zoom - camera.targetZoom) * 100;
+            const isCameraMoving = cameraSpeed > 0.5;
+
+            const isMoving = isDragging || isHighEnergy || isCameraMoving;
+            const nowTime = performance.now();
+
+            if (isMoving) {
+                snapStabilityRef.current.isStable = false;
+                snapStabilityRef.current.lastMotionAt = nowTime;
+            } else {
+                // Settle Timer (200ms of pure silence required to lock)
+                const timeSinceMotion = nowTime - snapStabilityRef.current.lastMotionAt;
+                if (timeSinceMotion > 200) {
+                    snapStabilityRef.current.isStable = true;
+                }
+            }
+
+            // Fix A: Only snap if GLOBALLY enabled AND Locally Stable
+            const effectiveSnapping = settingsRef.current.pixelSnapping && snapStabilityRef.current.isStable;
+
             const transform = new CameraTransform(
                 width,
                 height,
@@ -739,7 +779,7 @@ export const useGraphRendering = ({
                 globalAngle,
                 centroid,
                 dpr, // Fix 57: Pass Fractional DPR
-                settingsRef.current.pixelSnapping
+                effectiveSnapping // Fix 19: Dynamic Snapping (Motion-Aware)
             );
             // Disable Global CTM (Fix 17/18: Post-Projection Snapping)
             // transform.applyToContext(ctx);
@@ -834,7 +874,16 @@ export const useGraphRendering = ({
             );
 
             // Draw Labels (Zoom + Project, No Angle)
-            drawLabels(ctx, engine, theme, settingsRef, hoverStateRef, zoom, project);
+            drawLabels(
+                ctx,
+                engine,
+                theme,
+                settingsRef,
+                hoverStateRef,
+                zoom,
+                dpr, // Fix 21: Pass DPR for Text Quantization
+                project
+            );
 
             if (
                 theme.hoverDebugEnabled &&

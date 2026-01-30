@@ -130,51 +130,87 @@ const ensureSeededGraph = (engine: PhysicsEngine, config: ForceConfig, seed: num
     }
 };
 
+    }
+};
+
 const updateCanvasSurface = (
     canvas: HTMLCanvasElement,
     rect: DOMRect,
     engine: PhysicsEngine,
     activeDprRef: Ref<number>,
-    dprStableFramesRef: Ref<number>
+    dprStableFramesRef: Ref<number>,
+    surfaceSnapshotRef: Ref<SurfaceSnapshot>
 ) => {
     // FIX 40: Safe DPR Read (No NaN/Zero)
+    // FIX 47: Guard DPR = 0 / undefined / NaN
     let rawDpr = window.devicePixelRatio || 1;
     if (!Number.isFinite(rawDpr) || rawDpr <= 0) {
-        rawDpr = 1;
+        // Fallback to last known good DPR if available, otherwise 1
+        rawDpr = surfaceSnapshotRef.current.dpr || 1;
+        // console.warn('[Surface] Invalid DPR detected, falling back to:', rawDpr);
     } else {
         // Clamp to sane range to avoid memory explosion (e.g. dpr=15 bug)
         rawDpr = Math.max(0.1, Math.min(8.0, rawDpr));
     }
 
-    // FIX 41: Rapid DPR Stabilization (Debounce)
+    // FIX 41 & 48: Rapid DPR Stabilization (Debounce + Hysteresis)
     // Require 4 consecutive frames of stable new DPR before committing.
-    // This filters out transient states during display swops or OS animations.
+    // This avoids resync storms during monitor swaps.
     let dpr = activeDprRef.current;
+
+    // Check if distinct change from current active
     if (Math.abs(rawDpr - dpr) > 0.001) {
         dprStableFramesRef.current++;
+        // 4 frames @ 60fps ~= 66ms. @ 120fps ~= 33ms.
+        // Enough to filter glitches, fast enough to feel responsive.
         if (dprStableFramesRef.current > 4) {
             dpr = rawDpr;
             activeDprRef.current = dpr;
             dprStableFramesRef.current = 0;
+            // console.log('[Surface] DPR stabilized to:', dpr);
         }
     } else {
         dprStableFramesRef.current = 0;
+    }
+
+    // FIX 46: Handle Transient 0x0 Backing Safely
+    // If layout is thrashing or minimized, we might get 0x0. 
+    // NEVER resize backing to 0. Freeze on last good snapshot.
+    if (rect.width <= 0 || rect.height <= 0) {
+        // console.warn('[Surface] Invalid Rect (0x0) detected. Freezing surface.');
+        return {
+            dpr: surfaceSnapshotRef.current.dpr,
+            surfaceChanged: false
+        };
     }
 
     const displayWidth = Math.max(1, Math.round(rect.width * dpr));
     const displayHeight = Math.max(1, Math.round(rect.height * dpr));
 
     let surfaceChanged = false;
+
+    // Resize backing if changed
     if (canvas.width !== displayWidth || canvas.height !== displayHeight) {
         canvas.width = displayWidth;
         canvas.height = displayHeight;
         engine.updateBounds(rect.width, rect.height);
+
         // FIX 32 & 33: Stale Rect / Cache Invalidation
         surfaceChanged = true;
+
+        // Update Snapshot (Commit Good State)
+        surfaceSnapshotRef.current = {
+            displayWidth,
+            displayHeight,
+            rectWidth: rect.width,
+            rectHeight: rect.height,
+            dpr
+        };
 
         // CACHE INVALIDATION (DPR Change / Resize)
         gradientCache.clear();
         textMetricsCache.clear();
+
         if (process.env.NODE_ENV !== 'production' && Math.random() < 0.05) {
             // console.log('[RenderLoop] Caches cleared due to surface change');
         }
@@ -508,6 +544,8 @@ const runPhysicsScheduler = (
     const effectiveBudget = isDragging ? Infinity : baseBudget;
 
     if (!isDragging) {
+        // FIX: Interaction Lock check is unnecessary here because setDegradeState
+        // now checks engine.interactionLock internally!
         engine.setDegradeState(
             overloadState.degradeLevel,
             overloadState.degradeReason,
@@ -515,11 +553,23 @@ const runPhysicsScheduler = (
             baseBudget
         );
     } else {
+        // Dragging forces safe mode (level 0)
+        // But if we are LOCKED, this call will be ignored by engine.
+        // That's exactly what we want: if locked, we stay in locked mode.
+        // If not locked, we go to 0.
         engine.setDegradeState(0, 'INTERACTION', 'NONE', Infinity);
     }
 
     const rawDeltaMs = now - schedulerState.lastTime;
-    const frameDeltaMs = rawDeltaMs;
+
+    // FIX: DT Clamping (Safety Cap)
+    // Limit delta time to ~35ms (approx 28fps minimum). 
+    // If the frame takes longer (e.g. 100ms), we only simulate 35ms of physics.
+    // This slows down the simulation "clock" relative to real time ("Visual Dignity"),
+    // but prevents the solver from exploding or needing 100 sub-steps.
+    const dtCap = 35;
+    const frameDeltaMs = Math.min(rawDeltaMs, dtCap);
+
     const dtMs = frameDeltaMs;
     schedulerState.lastTime = now;
 
@@ -737,6 +787,7 @@ export const startGraphRenderLoop = (deps: GraphRenderLoopDeps) => {
         lastSafeCameraRef,
         activeDprRef,
         dprStableFramesRef,
+        surfaceSnapshotRef,
         clientToWorld,
         updateHoverSelection,
         clearHover,
@@ -795,7 +846,8 @@ export const startGraphRenderLoop = (deps: GraphRenderLoopDeps) => {
             rect,
             engine,
             activeDprRef,
-            dprStableFramesRef
+            dprStableFramesRef,
+            surfaceSnapshotRef
         );
 
         const width = rect.width;

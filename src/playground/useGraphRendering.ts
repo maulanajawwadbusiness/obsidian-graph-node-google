@@ -137,6 +137,25 @@ export const useGraphRendering = ({
         return stopLoop;
     }, []);
 
+    const handleDragStart = (nodeId: string, clientX: number, clientY: number) => {
+        const engine = engineRef.current;
+        if (!engine) return;
+
+        // FIX: Lock Laws during interaction
+        engine.lockInteraction('drag');
+
+        pendingPointerRef.current.pendingDragStart = { nodeId, clientX, clientY };
+    };
+
+    const handleDragEnd = () => {
+        const engine = engineRef.current;
+        if (engine) {
+            engine.releaseNode();
+            // FIX: Unlock Laws
+            engine.unlockInteraction();
+        }
+    };
+
     return {
         handlePointerMove,
         handlePointerEnter,
@@ -147,14 +166,8 @@ export const useGraphRendering = ({
         clientToWorld,
         worldToScreen,
         hoverStateRef,
-        hoverStateRef,
-        updateHoverSelection, // Expose for drag initiation
-        setPendingDrag: (nodeId: string | null, clientX: number, clientY: number) => {
-            if (nodeId) {
-                pendingPointerRef.current.pendingDragStart = { nodeId, clientX, clientY };
-            } else {
-                pendingPointerRef.current.pendingDragStart = null;
-            }
-        }
+        updateHoverSelection,
+        handleDragStart,
+        handleDragEnd
     };
 };

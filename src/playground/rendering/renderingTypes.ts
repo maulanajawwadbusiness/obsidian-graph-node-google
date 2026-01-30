@@ -112,6 +112,15 @@ export type RenderDebugInfo = {
     activeRingStateAfter: CanvasStateDebug;
 };
 
+// FIX 46: Surface Safety Snapshot (Last Good State)
+export type SurfaceSnapshot = {
+    displayWidth: number;
+    displayHeight: number;
+    rectWidth: number;
+    rectHeight: number;
+    dpr: number;
+};
+
 export type CameraState = {
     panX: number;
     panY: number;
@@ -121,6 +130,7 @@ export type CameraState = {
     targetZoom: number;
     lastRecenterCentroidX: number;
     lastRecenterCentroidY: number;
+    lastInteractionTime: number; // FIX 43: Causality (Track last interaction)
 };
 
 export const createInitialRenderSettings = (): RenderSettings => ({

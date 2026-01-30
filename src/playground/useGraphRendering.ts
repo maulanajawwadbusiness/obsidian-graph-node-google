@@ -590,17 +590,19 @@ export const useGraphRendering = ({
                 camera.panY,
                 globalAngle,
                 centroid,
+                dpr, // Fix 57: Pass DPR
                 settingsRef.current.pixelSnapping
             );
-            transform.applyToContext(ctx);
-            // Fix 22: Local projection helper for draw functions
-            // This captures the exact camera state used for this frame's render.
+            // transform.applyToContext(ctx); // Fix: Remove global transform (Manual Projection used)
+
+            // Fix 22: Local projection helper (Screen Space)
             const project = (x: number, y: number) => transform.worldToScreen(x, y);
             // Alias for legacy calls if needed (though we only use project now or pass it)
             const worldToScreen = project;
 
             if (settingsRef.current.showDebugGrid) {
                 ctx.save();
+                transform.applyToContext(ctx); // Fix: Apply transform only for Grid
                 const scale = 1 / camera.zoom;
                 ctx.lineWidth = scale;
 
@@ -665,7 +667,11 @@ export const useGraphRendering = ({
                 theme.hoverDebugEnabled &&
                 (hoverStateRef.current.hoveredNodeId || hoverStateRef.current.hoverDisplayNodeId)
             ) {
+                // Fix: Debug Overlay uses World Coordinates, so it needs Camera Matrix
+                ctx.save();
+                transform.applyToContext(ctx);
                 drawHoverDebugOverlay(ctx, engine, hoverStateRef);
+                ctx.restore();
             }
 
             ctx.restore();

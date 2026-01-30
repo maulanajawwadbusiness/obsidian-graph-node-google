@@ -79,8 +79,10 @@ export const applyCorrectionsWithDiffusion = (
 
         // FIX 11: DIFFUSION PRESSURE GATE
         // Only diffuse if there is significant local pressure.
+        // FIX 34: Invisible Settling (Energy Gate)
+        // Disable diffusion at low energy to prevent visible "relaxation" or creep.
         const diffusionThreshold = 0.5; // px per frame
-        const enableDiffusion = totalMag > diffusionThreshold;
+        const enableDiffusion = totalMag > diffusionThreshold && energy > 0.1;
 
         // FIX 17: Track budget hits/Residuals
         let clipped = false;
@@ -134,7 +136,17 @@ export const applyCorrectionsWithDiffusion = (
                 const remDy = accDy - paidDy;
 
                 // Decay debt (0.8) to prevent explosion
-                node.correctionResidual = { dx: remDx * 0.8, dy: remDy * 0.8 };
+                // FIX 35: Bounded Debt (Snap to Zero)
+                // If residual is small, kill it immediately to prevent long-tail "ghost movement".
+                const residualDx = remDx * 0.8;
+                const residualDy = remDy * 0.8;
+                const resMag = Math.sqrt(residualDx * residualDx + residualDy * residualDy);
+
+                if (resMag > 0.5) {
+                    node.correctionResidual = { dx: residualDx, dy: residualDy };
+                } else {
+                    node.correctionResidual = undefined;
+                }
 
                 // if (engine.config.debugPerf) console.warn('[CorrCap] Debt stored', node.id);
             } else {

@@ -252,6 +252,15 @@ export const applySpacingConstraints = (
     const applyPair = (a: PhysicsNode, b: PhysicsNode) => {
         if (shouldSkipPair(a, b)) return;
 
+        // FIX 36: Prevent Double-Processing (Waves)
+        // If pair is already Hot, it was processed in the Priority Pass.
+        // Do not process again in the Scan Pass.
+        let key: string | undefined;
+        if (hotPairs) {
+            key = a.id < b.id ? `${a.id}:${b.id}` : `${b.id}:${a.id}`;
+            if (hotPairs.has(key)) return;
+        }
+
         // Scan for new hot pairs (optimization: verify check before adding)
         const dx = b.x - a.x;
         const dy = b.y - a.y;
@@ -260,8 +269,7 @@ export const applySpacingConstraints = (
         if (d < D_soft && d >= 0.1) {
             applyPairLogic(a, b);
             // Register as hot for next frame
-            if (hotPairs) {
-                const key = a.id < b.id ? `${a.id}:${b.id}` : `${b.id}:${a.id}`;
+            if (hotPairs && key) {
                 hotPairs.add(key);
             }
         }

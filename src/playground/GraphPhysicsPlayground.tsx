@@ -120,74 +120,93 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
         engineRef.current.releaseNode();
     };
 
-    const onPointerUp = (e: React.PointerEvent) => {
-        const canvas = canvasRef.current;
-        if (canvas && canvas.hasPointerCapture(e.pointerId)) {
-            canvas.releasePointerCapture(e.pointerId);
-        }
-        handlePointerUp(e.pointerId, e.pointerType);
-        // Release drag
-        engineRef.current.releaseNode();
-    };
+    // Track gesture start for Click vs Drag distinction
+    const gestureStartRef = useRef<{ x: number, y: number, nodeId: string | null } | null>(null);
 
     const onPointerDown = (e: React.PointerEvent) => {
         const canvas = canvasRef.current;
         if (!canvas) return;
-
-        // STRICT FILTER: Only capture if the direct target is the canvas.
-        // This allows UI buttons (which are children) to handle their own events without
-        // the container stealing the pointer capture.
         if (e.target !== canvas) return;
 
-        // POINTER CAPTURE: Ensure we receive events even if cursor leaves window
         canvas.setPointerCapture(e.pointerId);
 
-        // --- Logic Merged from handleMouseDown ---
         if (!DRAG_ENABLED) {
             engineRef.current.releaseNode();
             return;
         }
 
         const rect = canvas.getBoundingClientRect();
-        // --- Unified Interaction Logic ---
-        // Force a hover update to ensure we are testing against the exact same logic as the "Visual Glow".
-        // This ensures WYSIWYG selection: if it glows, it drags.
-        // Also includes Label Hit-Testing if enabled.
         const theme = getTheme(skinMode);
         updateHoverSelection(e.clientX, e.clientY, rect, theme, 'pointer');
 
         const hitId = hoverStateRef.current.hoveredNodeId;
 
+        // Record Gesture Start
+        gestureStartRef.current = {
+            x: e.clientX,
+            y: e.clientY,
+            nodeId: hitId
+        };
+
         if (hitId) {
             const { x, y } = clientToWorld(e.clientX, e.clientY, rect);
             engineRef.current.grabNode(hitId, { x, y });
         }
-        // -----------------------------------------
+    };
 
-        // Check if a node is currently hovered (for popup logic)
-        // Use the hitId we just found or fallback to hover state
-        const targetNodeId = hitId || hoverStateRef.current.hoveredNodeId;
-        if (!targetNodeId) return;
+    const onPointerUp = (e: React.PointerEvent) => {
+        const canvas = canvasRef.current;
+        if (canvas && canvas.hasPointerCapture(e.pointerId)) {
+            canvas.releasePointerCapture(e.pointerId);
+        }
+        handlePointerUp(e.pointerId, e.pointerType);
 
-        const node = engineRef.current.nodes.get(targetNodeId);
-        if (!node) return;
+        // GESTURE LOGIC: Click vs Drag
+        const start = gestureStartRef.current;
+        if (start && start.nodeId) {
+            const dx = e.clientX - start.x;
+            const dy = e.clientY - start.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
 
-        const screenPos = worldToScreen(node.x, node.y, rect);
-        const screenRadius = node.radius * 5;  // Approximate screen radius
+            // Threshold: < 5px is a Click
+            if (dist < 5) {
+                // It was a click (not a drag)
+                const node = engineRef.current.nodes.get(start.nodeId);
+                // Verify node still exists and matches
+                if (node) {
+                    const rect = canvas!.getBoundingClientRect();
+                    const screenPos = worldToScreen(node.x, node.y, rect);
+                    // Standard visual radius estimate (can be refined via renderDebug)
+                    const cameraZoom = hoverStateRef.current.lastSelectionZoom || 1;
+                    const visualRadius = node.radius * cameraZoom; // Basic radius
+                    // Popups usually attach to the "bubble" which includes glow/padding.
+                    // Let's use `visualRadius` but maybe pad it?
+                    // The old code `radius * 5` suggests nodes are drawn small but hit area is huge?
+                    // Actually, nodes are drawn small (r=3-5) but we want popup to spawn outside the "cluster"?
+                    // Let's stick to `visualRadius` but maybe add a margin in the Popup logic itself.
+                    // Actually, `computePopupPosition` uses `radius` to push it away.
+                    // Let's pass the actual visual radius.
 
-        // Open popup at node position
-        const metaContent = node.meta ? {
-            title: node.meta.sourceTitle,
-            summary: node.meta.sourceSummary
-        } : undefined;
+                    const metaContent = node.meta ? {
+                        title: node.meta.sourceTitle,
+                        summary: node.meta.sourceSummary
+                    } : undefined;
 
-        popupContext.openPopup(targetNodeId, {
-            x: screenPos.x,
-            y: screenPos.y,
-            radius: screenRadius
-        }, metaContent);
+                    popupContext.openPopup(start.nodeId, {
+                        x: screenPos.x,
+                        y: screenPos.y,
+                        radius: visualRadius
+                    }, metaContent);
 
-        console.log('[Popup] Opened for node:', targetNodeId);
+                    console.log('[Gesture] Click detected (dist<5px). Opening popup for:', start.nodeId);
+                }
+            } else {
+                console.log('[Gesture] Drag detected (dist>5px). Popup suppressed.');
+            }
+        }
+
+        gestureStartRef.current = null; // Reset
+        engineRef.current.releaseNode();
     };
 
     // ---------------------------------------------------------------------------

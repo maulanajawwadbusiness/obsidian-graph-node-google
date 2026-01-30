@@ -171,15 +171,8 @@ export const useGraphRendering = ({
                 }
             }
 
-            const slushThreshold = fixedStepMs * 2;
-            if (accumulatorMs > slushThreshold) {
-                overloadState.debtFrames += 1;
-            } else {
-                overloadState.debtFrames = 0;
-            }
-            const debtPersistent = overloadState.debtFrames >= 2;
-            const debtWatchdog = overloadState.debtFrames > 2;
             const dtHuge = rawDeltaMs > dtHugeMs;
+            const debtWatchdogPrev = overloadState.debtFrames > 2;
 
             let freezeThisFrame = false;
             let overloadReason = 'NONE';
@@ -189,7 +182,7 @@ export const useGraphRendering = ({
                 freezeThisFrame = true;
                 overloadReason = 'DT_HUGE';
                 overloadSeverity = 'HARD';
-            } else if (debtWatchdog) {
+            } else if (debtWatchdogPrev) {
                 freezeThisFrame = true;
                 overloadReason = 'DEBT_WATCHDOG';
                 overloadSeverity = 'HARD';
@@ -204,9 +197,24 @@ export const useGraphRendering = ({
                 overloadState.pendingReason = 'NONE';
             }
 
+            if (engine.config.debugPerf && debtWatchdogPrev) {
+                const nowLog = performance.now();
+                if (nowLog - overloadState.lastLogAt > 1000) {
+                    console.error(
+                        `[SlushAssert] debtFrames=${overloadState.debtFrames} ` +
+                        `accumulatorMs=${accumulatorMs.toFixed(1)} ` +
+                        `threshold=${(fixedStepMs * 2).toFixed(1)}`
+                    );
+                    overloadState.lastLogAt = nowLog;
+                }
+            }
+
             if (!freezeThisFrame) {
                 const physicsStart = performance.now();
                 while (accumulatorMs >= fixedStepMs && stepsThisFrame < maxStepsPerFrame) {
+                    if (performance.now() - physicsStart >= maxPhysicsBudgetMs) {
+                        break;
+                    }
                     if (engine.config.debugPerf) {
                         const tickStart = performance.now();
                         engine.tick(fixedStepMs / 1000);
@@ -216,18 +224,6 @@ export const useGraphRendering = ({
                     }
                     accumulatorMs -= fixedStepMs;
                     stepsThisFrame += 1;
-                }
-
-                if (stepsThisFrame === 0 && accumulatorMs > 0) {
-                    if (engine.config.debugPerf) {
-                        const tickStart = performance.now();
-                        engine.tick(accumulatorMs / 1000);
-                        recordTick(performance.now() - tickStart);
-                    } else {
-                        engine.tick(accumulatorMs / 1000);
-                    }
-                    accumulatorMs = 0;
-                    stepsThisFrame = 1;
                 }
                 physicsMs = performance.now() - physicsStart;
             } else if (engine.draggedNodeId && engine.dragTarget) {
@@ -249,6 +245,41 @@ export const useGraphRendering = ({
             // INVARIANT A & B: Drop Debt & Detect Overload
             // =================================================================
 
+            const slushThreshold = fixedStepMs * 2;
+            if (accumulatorMs > slushThreshold) {
+                overloadState.debtFrames += 1;
+            } else {
+                overloadState.debtFrames = 0;
+            }
+            const debtPersistent = overloadState.debtFrames >= 2;
+            const debtWatchdog = overloadState.debtFrames > 2;
+
+            let forceDropDebt = false;
+            let forceDropReason = 'NONE';
+
+            if (!freezeThisFrame && debtWatchdog) {
+                forceDropDebt = true;
+                forceDropReason = 'WATCHDOG';
+                if (overloadSeverity !== 'HARD') {
+                    overloadReason = 'DEBT_WATCHDOG';
+                    overloadSeverity = 'HARD';
+                }
+                if (engine.config.debugPerf) {
+                    const nowLog = performance.now();
+                    if (nowLog - overloadState.lastLogAt > 1000) {
+                        console.error(
+                            `[SlushAssert] debtFrames=${overloadState.debtFrames} ` +
+                            `accumulatorMs=${accumulatorMs.toFixed(1)} ` +
+                            `threshold=${slushThreshold.toFixed(1)}`
+                        );
+                        overloadState.lastLogAt = nowLog;
+                    }
+                }
+            }
+
+            const capHit = !freezeThisFrame && stepsThisFrame >= maxStepsPerFrame && accumulatorMs >= fixedStepMs;
+            const budgetExceeded = !freezeThisFrame && physicsMs > maxPhysicsBudgetMs;
+
             // 1. Drop Excess Debt
             let droppedMs = clampedMs;
             let dropReason = clampedMs > 0 ? "CLAMP" : "NONE";
@@ -258,21 +289,25 @@ export const useGraphRendering = ({
             // We keep the phase (remainder < fixedStepMs) for smoothness, 
             // UNLESS we are in a massive overload (slush detected), then we might clear all.
             // For now, adhering to Invariant B: "drop the remaining debt"
-            // The user said: "it’s ok to drop remainder too" in overload.
+            // The user said: "it's ok to drop remainder too" in overload.
 
             const debtLimit = fixedStepMs;
             if (freezeThisFrame) {
                 droppedMs += accumulatorMs;
                 dropReason = "FREEZE";
                 accumulatorMs = 0;
-            } else if (accumulatorMs >= debtLimit) {
+            } else if (forceDropDebt) {
                 droppedMs += accumulatorMs;
-                dropReason = "OVERLOAD";
+                dropReason = forceDropReason;
+                accumulatorMs = 0;
+            } else if ((capHit || budgetExceeded) && accumulatorMs >= debtLimit) {
+                droppedMs += accumulatorMs;
+                dropReason = budgetExceeded ? "BUDGET" : "CAP";
                 accumulatorMs = 0; // HARD RESET to guarantee catch-up
             }
-
-            const capHit = !freezeThisFrame && stepsThisFrame >= maxStepsPerFrame && accumulatorMs >= fixedStepMs;
-            const budgetExceeded = !freezeThisFrame && physicsMs > maxPhysicsBudgetMs;
+            if (!freezeThisFrame && (forceDropDebt || capHit || budgetExceeded)) {
+                overloadState.debtFrames = 0;
+            }
             if (overloadSeverity === 'NONE') {
                 if (debtPersistent && (capHit || budgetExceeded)) {
                     overloadReason = budgetExceeded ? 'DEBT_PERSIST_BUDGET' : 'DEBT_PERSIST_CAP';
@@ -319,14 +354,14 @@ export const useGraphRendering = ({
                 perfSample.lastDroppedMs = droppedMs;
                 perfSample.lastPhysicsMs = physicsMs;
 
-                if (droppedMs > 0 && dropReason === "OVERLOAD") {
+                if (droppedMs > 0 && dropReason !== "NONE") {
                     // Throttled log for significant drops
                     const nowLog = performance.now();
                     if (nowLog - (hoverStateRef.current.lastDropLog || 0) > 1000) {
                         console.log(
                             `[RenderPerf] droppedMs=${droppedMs.toFixed(1)} ` +
                             `reason=${dropReason} ` +
-                            `budgetMs=${(fixedStepMs * maxStepsPerFrame).toFixed(1)} ` +
+                            `budgetMs=${maxPhysicsBudgetMs.toFixed(1)} ` +
                             `ticksThisFrame=${stepsThisFrame} ` +
                             `avgTickMs=${perfSample.tickMsTotal / (perfSample.tickCount || 1)}`
                         );
@@ -357,6 +392,7 @@ export const useGraphRendering = ({
                         `dt=${perfSample.lastDtMs.toFixed(1)} ` +
                         `accumulatorMs=${perfSample.lastAccumulatorMs.toFixed(1)} ` +
                         `steps=${perfSample.lastSteps} ` +
+                        `ticksPerSecond=${ticksPerSecond.toFixed(1)} ` +
                         `droppedMs=${perfSample.lastDroppedMs.toFixed(1)}`
                     );
                     console.log(

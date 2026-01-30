@@ -70,7 +70,7 @@ export const DEFAULT_PHYSICS_CONFIG: ForceConfig = {
     // ANCHOR: Tick Control
     // ---------------------------------------------------------------------------
     targetTickHz: 60,
-    maxStepsPerFrame: 2,
+    maxStepsPerFrame: 6,
     maxFrameDeltaMs: 120,
     maxPhysicsBudgetMs: 12,
     dtHugeMs: 250,

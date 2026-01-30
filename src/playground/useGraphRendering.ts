@@ -72,6 +72,8 @@ export const useGraphRendering = ({
 
     // FIX 18: Rotation Anchor Freeze (Stop World Swap)
     const dragAnchorRef = useRef<{ x: number, y: number } | null>(null);
+    // FIX 33: Stable Centroid (Stop Idle Wobble)
+    const stableCentroidRef = useRef<{ x: number, y: number }>({ x: 0, y: 0 });
 
     const {
         clientToWorld,
@@ -546,18 +548,31 @@ export const useGraphRendering = ({
             ctx.save();
             const camera = cameraRef.current;
 
-            // FIX 18: Rotation Anchor Freeze
+            // FIX 18: Rotation Anchor Freeze & FIX 33: Stable Centroid
             // Capture centroid at start of drag and HOLD it.
-            // This prevents the world from rotating/shifting under the hand due to
-            // centroid changes caused by the drag itself.
-            let centroid = engine.getCentroid();
+            // Also stabilize it during idle to prevent "breathing" due to float noise.
+            let rawCentroid = engine.getCentroid();
+            let centroid = rawCentroid;
+
             if (engine.draggedNodeId) {
                 if (!dragAnchorRef.current) {
-                    dragAnchorRef.current = { ...centroid };
+                    dragAnchorRef.current = { ...rawCentroid };
                 }
                 centroid = dragAnchorRef.current;
+                // Sync stable ref so we don't jump on release
+                stableCentroidRef.current = centroid;
             } else {
                 dragAnchorRef.current = null;
+                // Idle Stabilization Hysteresis
+                // Only update if moved significantly (> 0.005)
+                const dx = rawCentroid.x - stableCentroidRef.current.x;
+                const dy = rawCentroid.y - stableCentroidRef.current.y;
+                const distSq = dx * dx + dy * dy;
+                // 0.005^2 = 0.000025
+                if (distSq > 0.000025) {
+                    stableCentroidRef.current = rawCentroid;
+                }
+                centroid = stableCentroidRef.current;
             }
 
             const globalAngle = engine.getGlobalAngle();

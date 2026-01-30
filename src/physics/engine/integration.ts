@@ -42,9 +42,11 @@ export const integrateNodes = (
 
         // =====================================================================
         // WATER MICRO-DRIFT: The water is alive, not glass
-        // FIX #16: Gate behind config to prevent phantom movement perception
+        // FIX 31: True Rest (Kill Idle Drift)
+        // Gate behind energy threshold to ensure Dead-Still Idle.
+        // Only active when graph is "awake" or user is interacting.
         // =====================================================================
-        if (engine.config.enableMicroDrift) {
+        if (engine.config.enableMicroDrift && energy > 0.05) {
             const t = engine.lifecycle;
             const microDrift =
                 Math.sin(t * 0.3) * 0.0008 +
@@ -204,12 +206,14 @@ export const integrateNodes = (
             const accX = node.fx / (node.mass || 1);
             const accY = node.fy / (node.mass || 1);
             const accSq = accX * accX + accY * accY;
-            // Allow sleep only if force is negligible (< 10% of velocity threshold impact)
-            const forceSilent = accSq * (dt * dt) < (threshSq * 0.1);
+            // Allow sleep only if force is negligible (< 1% of velocity threshold impact)
+            // FIX 31: Stricter Force Silence (was 0.1, now 0.01)
+            const forceSilent = accSq * (dt * dt) < (threshSq * 0.01);
 
             // FIX 13: Pressure Check (Constraint Residuals)
             // Prevent sleeping if under significant constraint stress (e.g. pulled by spring)
-            const pressureSilent = (node.lastCorrectionMag ?? 0) < 0.1;
+            // FIX 31: Stricter Pressure Silence (was 0.1 check, now 0.01)
+            const pressureSilent = (node.lastCorrectionMag ?? 0) < 0.01;
 
             const sleepFramesRequired = engine.config.sleepFramesThreshold ?? 30;
 

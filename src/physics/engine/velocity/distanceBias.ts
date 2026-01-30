@@ -5,14 +5,16 @@ import { getPassStats, type DebugStats } from '../stats';
 export const applyDistanceBiasVelocity = (
     engine: PhysicsEngine,
     nodeList: PhysicsNode[],
-    stats: DebugStats
+    stats: DebugStats,
+    dt: number
 ) => {
     const passStats = getPassStats(stats, 'DistanceBiasVelocity');
     const affected = new Set<string>();
 
     const D_hard = engine.config.minNodeDistance;
     const releaseDist = D_hard + engine.config.clampHysteresisMargin;
-    const biasStrength = 15.0;  // Outward velocity bias strength
+    const timeScale = dt * 60.0;
+    const biasStrength = 15.0 * timeScale;  // Outward velocity bias strength
 
     for (let i = 0; i < nodeList.length; i++) {
         const a = nodeList[i];
@@ -41,14 +43,19 @@ export const applyDistanceBiasVelocity = (
                 const slopT = (slopStart - d) / slop;  // 0→1 as d approaches minDist
                 const slopRamp = slopT * slopT * (3 - 2 * slopT);  // smoothstep
 
+                // Exponential Velocity Removal:
+                // We want to remove a fraction 'slopRamp' of velocity per tick (baseline 60hz).
+                // factor = 1 - pow(1 - slopRamp, timeScale)
+                const removalFactor = 1 - Math.pow(1 - slopRamp, timeScale);
+
                 // Project inward velocity with ramped strength
                 if (!a.isFixed) {
                     const beforeVx = a.vx;
                     const beforeVy = a.vy;
                     const aInward = a.vx * nx + a.vy * ny;
                     if (aInward > 0) {
-                        a.vx -= aInward * nx * slopRamp;
-                        a.vy -= aInward * ny * slopRamp;
+                        a.vx -= aInward * nx * removalFactor;
+                        a.vy -= aInward * ny * removalFactor;
                     }
                     const dvx = a.vx - beforeVx;
                     const dvy = a.vy - beforeVy;
@@ -63,8 +70,8 @@ export const applyDistanceBiasVelocity = (
                     const beforeVy = b.vy;
                     const bInward = b.vx * nx + b.vy * ny;
                     if (bInward < 0) {
-                        b.vx -= bInward * nx * slopRamp;
-                        b.vy -= bInward * ny * slopRamp;
+                        b.vx -= bInward * nx * removalFactor;
+                        b.vy -= bInward * ny * removalFactor;
                     }
                     const dvx = b.vx - beforeVx;
                     const dvy = b.vy - beforeVy;

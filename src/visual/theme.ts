@@ -122,7 +122,7 @@ export type SkinMode = 'normal' | 'elegant';
 // -------------------------------------------------------------------------
 // Interaction Toggles
 // -------------------------------------------------------------------------
-export const DRAG_ENABLED = false;
+export const DRAG_ENABLED = true;
 
 // -----------------------------------------------------------------------------
 // Normal Skin (Current Look) - Unchanged

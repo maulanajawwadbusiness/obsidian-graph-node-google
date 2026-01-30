@@ -25,14 +25,17 @@ export const applyEdgeRelaxation = (
     engine: PhysicsEngine,
     correctionAccum: Map<string, { dx: number; dy: number }>,
     nodeDegreeEarly: Map<string, number>,
-    stats: DebugStats
+    stats: DebugStats,
+    dt: number
 ) => {
     // =====================================================================
     // POST-SOLVE EDGE RELAXATION (Shape nudge, not a force)
     // Gently nudge each edge toward target length after physics is done.
     // This creates perceptual uniformity without fighting physics.
     // =====================================================================
-    const relaxStrength = 0.02; // 2% correction per frame
+    // =====================================================================
+    const timeScale = dt * 60.0;
+    const relaxStrength = 0.02 * timeScale; // 2% correction per frame (baseline)
     const targetLen = engine.config.linkRestLength;
 
     const passStats = getPassStats(stats, 'EdgeRelaxation');
@@ -104,6 +107,7 @@ export const applySpacingConstraints = (
     energy: number,
     stats: DebugStats,
     spacingGate: number,
+    dt: number,
     pairStride: number = 1,
     pairOffset: number = 0
 ) => {
@@ -117,9 +121,10 @@ export const applySpacingConstraints = (
 
     const passStats = getPassStats(stats, 'SpacingConstraints');
     const affected = new Set<string>();
+    const timeScale = dt * 60.0;
     const D_soft = D_hard * engine.config.softDistanceMultiplier;
     const softExponent = engine.config.softRepulsionExponent;
-    const softMaxCorr = engine.config.softMaxCorrectionPx;
+    const softMaxCorr = engine.config.softMaxCorrectionPx * timeScale;
 
     const shouldSkipPair = (a: PhysicsNode, b: PhysicsNode) => {
         if (pairStride <= 1) return false;
@@ -157,7 +162,7 @@ export const applySpacingConstraints = (
             corr = s * softMaxCorr;
         }
 
-        const maxCorr = engine.config.maxCorrectionPerFrame;
+        const maxCorr = engine.config.maxCorrectionPerFrame * timeScale;
         const corrApplied = Math.min(corr * spacingGate, maxCorr);
 
         // Request correction via accumulator (equal split)
@@ -218,7 +223,8 @@ export const applyTriangleAreaConstraints = (
     correctionAccum: Map<string, { dx: number; dy: number }>,
     nodeDegreeEarly: Map<string, number>,
     energy: number,
-    stats: DebugStats
+    stats: DebugStats,
+    dt: number
 ) => {
     // =====================================================================
     // TRIANGLE AREA SPRING (Face-level constraint, not spacing)
@@ -229,7 +235,8 @@ export const applyTriangleAreaConstraints = (
     // Rest area for equilateral triangle with edge = linkRestLength
     const L = engine.config.linkRestLength;
     const restArea = (Math.sqrt(3) / 4) * L * L;
-    const areaStrength = 0.0005 * energy;  // Very soft, fades with energy
+    const timeScale = dt * 60.0;
+    const areaStrength = 0.0005 * energy * timeScale;  // Very soft, fades with energy
 
     // Build adjacency set for triangle detection
     const connectedPairs = new Set<string>();
@@ -330,6 +337,7 @@ export const applySafetyClamp = (
     nodeDegreeEarly: Map<string, number>,
     energy: number,
     stats: DebugStats,
+    dt: number,
     pairStride: number = 1,
     pairOffset: number = 0
 ) => {
@@ -368,7 +376,8 @@ export const applySafetyClamp = (
             if (penetration > 5) {
                 stats.safety.clampTriggers += 1;
 
-                const emergencyCorrection = Math.min(penetration - 5, 0.3);
+                const timeScale = dt * 60.0;
+                const emergencyCorrection = Math.min(penetration - 5, 0.3 * timeScale);
                 const aAccum = correctionAccum.get(a.id);
                 const bAccum = correctionAccum.get(b.id);
                 const aDeg = nodeDegreeEarly.get(a.id) || 0;

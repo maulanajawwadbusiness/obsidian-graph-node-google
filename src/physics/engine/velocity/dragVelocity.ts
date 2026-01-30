@@ -13,21 +13,25 @@ export const applyDragVelocity = (
     const node = engine.nodes.get(engine.draggedNodeId);
     if (!node) return;
 
-    const dx = engine.dragTarget.x - node.x;
-    const dy = engine.dragTarget.y - node.y;
+    const targetX = engine.dragTarget.x;
+    const targetY = engine.dragTarget.y;
 
-    const dvx = dx * 2.0 * dt;
-    const dvy = dy * 2.0 * dt;
+    // KINEMATIC AUTHORITY: Override position directly (0 lag)
+    const prevX = node.x;
+    const prevY = node.y;
 
-    if (!node.isFixed) {
-        node.vx += dvx;
-        node.vy += dvy;
+    node.x = targetX;
+    node.y = targetY;
+
+    // Infer velocity for momentum preservation (so release feels right)
+    // vx = delta / dt
+    if (dt > 0) {
+        node.vx = (targetX - prevX) / dt;
+        node.vy = (targetY - prevY) / dt;
     }
 
+    // Lock stats
     const passStats = getPassStats(stats, 'DragVelocity');
-    const deltaMag = Math.sqrt(dvx * dvx + dvy * dvy);
-    if (deltaMag > 0) {
-        passStats.velocity += deltaMag;
-        passStats.nodes += 1;
-    }
+    passStats.nodes += 1;
+    // We don't log velocity magnitude here as it's not a force application
 };

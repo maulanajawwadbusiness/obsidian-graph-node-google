@@ -9,7 +9,7 @@ import {
 } from '../graphPlaygroundStyles';
 
 // Toggle to show/hide debug controls buttons (Debug, Theme, Controls)
-const SHOW_DEBUG_CONTROLS = false;
+const SHOW_DEBUG_CONTROLS = true;
 
 const stopPropagation = (e: React.MouseEvent) => e.stopPropagation();
 type CanvasOverlaysProps = {

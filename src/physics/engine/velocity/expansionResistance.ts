@@ -7,7 +7,8 @@ export const applyExpansionResistance = (
     nodeList: PhysicsNode[],
     nodeDegree: Map<string, number>,
     energy: number,
-    stats: DebugStats
+    stats: DebugStats,
+    dt: number
 ) => {
     if (energy <= 0.7) return;
 
@@ -83,7 +84,10 @@ export const applyExpansionResistance = (
             }
         }
 
-        const damp = 1 - resistance * expResist * dampScale;
+        const resistanceScale = resistance * expResist * dampScale;
+        // resistanceScale is the fraction removed per 60hz tick.
+        // Time corrected:
+        const damp = Math.pow(1 - resistanceScale, dt * 60.0);
         node.vx *= damp;
         node.vy *= damp;
 

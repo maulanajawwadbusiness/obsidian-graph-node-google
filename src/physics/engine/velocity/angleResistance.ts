@@ -7,7 +7,8 @@ export const applyAngleResistanceVelocity = (
     nodeList: PhysicsNode[],
     nodeDegreeEarly: Map<string, number>,
     energy: number,
-    stats: DebugStats
+    stats: DebugStats,
+    dt: number
 ) => {
     const passStats = getPassStats(stats, 'AngleResistance');
     const affected = new Set<string>();
@@ -115,7 +116,7 @@ export const applyAngleResistanceVelocity = (
             if (!currNb || !nextNb) continue;
 
             // Force magnitude (no expansion boost - gating handles expansion)
-            const force = resistance * angleForceStrength;
+            const force = resistance * angleForceStrength * dt;
 
             // Apply tangential force (push edges apart along angle bisector)
             // currNb rotates clockwise, nextNb rotates counter-clockwise

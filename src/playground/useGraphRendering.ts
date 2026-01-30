@@ -593,6 +593,11 @@ export const useGraphRendering = ({
                 settingsRef.current.pixelSnapping
             );
             transform.applyToContext(ctx);
+            // Fix 22: Local projection helper for draw functions
+            // This captures the exact camera state used for this frame's render.
+            const project = (x: number, y: number) => transform.worldToScreen(x, y);
+            // Alias for legacy calls if needed (though we only use project now or pass it)
+            const worldToScreen = project;
 
             if (settingsRef.current.showDebugGrid) {
                 ctx.save();

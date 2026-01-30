@@ -33,7 +33,10 @@ The Canvas (Graph) is the substrate. Panels (Chat, Docs) and the Analysis Overla
 
 ## 3. Safe Workflow
 
-1.  **Scan**: Read `docs/repo_xray.md` and related code first. `docs/repo_physics.md` if your work focus on the physics engine. Do not guess.
+1.  **Scan**: Read `docs/repo_xray.md`.
+    *   **Physics Work**: Read `docs/physics_xray.md`.
+    *   **Render/DPR Work**: Read `docs/onboarding_dpr_rendering.md`. **Mandatory for avoiding visual regressions.**
+    *   Do not guess.
 2.  **Dissect**: Identify load-bearing logic (runIds, refs, context priorities).
 3.  **Instrument**: Add minimal metrics/logs before changing behavior.
 4.  **Implement**: Make small, verifiable changes. Use `console.log` tags like `[PhysicsPerf]`.

@@ -11,15 +11,6 @@ import type {
 } from './renderingTypes';
 import { CameraTransform } from './camera';
 
-// Fix 61: Frame Snapshot Unity
-export type FrameSnapshot = {
-    readonly rect: DOMRect;
-    readonly dpr: number;
-    readonly camera: CameraState;
-    readonly timestamp: number;
-    readonly frameId: number;
-};
-
 type HoverControllerDeps = {
     engineRef: RefObject<PhysicsEngine>;
     settingsRef: MutableRefObject<RenderSettingsRef>;
@@ -254,40 +245,15 @@ export const createHoverController = ({
         };
     };
 
-    // Fix 61: Unified Snapshot Consumption
-    const clientToWorld = (
-        clientX: number,
-        clientY: number,
-        source: DOMRect | FrameSnapshot,
-        dprOverride?: number,
-        snapOverride?: boolean // Fix 63: Input Snapping Control
-    ) => {
-        let rect: DOMRect;
-        let dpr: number;
-        let camera: CameraState;
-
-        // Auto-detect Snapshot vs Legacy Rect
-        if ('camera' in source) {
-            rect = source.rect;
-            dpr = source.dpr;
-            camera = source.camera;
-        } else {
-            rect = source;
-            dpr = dprOverride || window.devicePixelRatio || 1;
-            camera = cameraRef.current;
-        }
-
+    const clientToWorld = (clientX: number, clientY: number, rect: DOMRect) => {
+        const camera = cameraRef.current;
         const engine = engineRef.current;
-        // Fix 14: Use Captured Pivot from Snapshot (if available) or Camera State
-        // This ensures the rotation anchor matches the visual frame exactly.
-        const centroid = camera.centroid || (engine ? engine.getCentroid() : { x: 0, y: 0 });
+        const centroid = engine ? engine.getCentroid() : { x: 0, y: 0 };
         const angle = engine ? engine.getGlobalAngle() : 0;
 
         if (rect.width <= 0 || rect.height <= 0) {
             return { x: 0, y: 0, sx: 0, sy: 0 };
         }
-
-        const shouldSnap = snapOverride !== undefined ? snapOverride : settingsRef.current.pixelSnapping;
 
         const transform = new CameraTransform(
             rect.width,
@@ -297,8 +263,7 @@ export const createHoverController = ({
             camera.panY,
             angle,
             centroid,
-            dpr,
-            shouldSnap
+            settingsRef.current.pixelSnapping
         );
 
         const world = transform.clientToWorld(clientX, clientY, rect);
@@ -309,29 +274,10 @@ export const createHoverController = ({
         return { x: world.x, y: world.y, sx: sxRaw, sy: syRaw };
     };
 
-    const worldToScreen = (
-        worldX: number,
-        worldY: number,
-        source: DOMRect | FrameSnapshot,
-        dprOverride?: number
-    ) => {
-        let rect: DOMRect;
-        let dpr: number;
-        let camera: CameraState;
-
-        if ('camera' in source) {
-            rect = source.rect;
-            dpr = source.dpr;
-            camera = source.camera;
-        } else {
-            rect = source;
-            dpr = dprOverride || window.devicePixelRatio || 1;
-            camera = cameraRef.current;
-        }
-
+    const worldToScreen = (worldX: number, worldY: number, rect: DOMRect) => {
+        const camera = cameraRef.current;
         const engine = engineRef.current;
-        // Fix 14: Use Captured Pivot from Snapshot
-        const centroid = camera.centroid || (engine ? engine.getCentroid() : { x: 0, y: 0 });
+        const centroid = engine ? engine.getCentroid() : { x: 0, y: 0 };
         const angle = engine ? engine.getGlobalAngle() : 0;
 
         const transform = new CameraTransform(
@@ -342,7 +288,6 @@ export const createHoverController = ({
             camera.panY,
             angle,
             centroid,
-            dpr,
             settingsRef.current.pixelSnapping
         );
 
@@ -439,25 +384,12 @@ export const createHoverController = ({
     const updateHoverSelection = (
         clientX: number,
         clientY: number,
-        source: DOMRect | FrameSnapshot, // Fix 61: Unified Source
+        rect: DOMRect,
         theme: ThemeConfig,
         reason: 'pointer' | 'camera',
-        lockedNodeId: string | null = null,
-        dprOverride?: number // Optional if source is snapshot
+        lockedNodeId: string | null = null // Fix 46: Unify Cues (Single Pick Truth)
     ) => {
-        // Fix 63: Disable Snapping for Pointer Input?
-        // Actually, we generally WANT pointer mapping to be precise (float) for selection logic,
-        // unless we strictly want to select what is "visually" snapped?
-        // But for Dragging, we MUST disable snapping.
-        // For selection, float is better for hit-testing accuracy.
-        // Let's default to FALSE (No snapping) for all pointer ops?
-        // But visuals are snapped. If I click on a snapped pixel...
-        // CameraTransform is pure float mapping anyway for clientToWorld.
-        // But constructor takes 'pixelSnapping'.
-        // If 'pixelSnapping' is true, does clientToWorld behave differently?
-        // Analysis of camera.ts says NO. It ignores it.
-        // So this change is mostly hygienic/future-proofing.
-        const { x: worldX, y: worldY, sx, sy } = clientToWorld(clientX, clientY, source, dprOverride, false);
+        const { x: worldX, y: worldY, sx, sy } = clientToWorld(clientX, clientY, rect);
 
         hoverStateRef.current.cursorWorldX = worldX;
         hoverStateRef.current.cursorWorldY = worldY;

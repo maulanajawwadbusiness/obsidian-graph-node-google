@@ -11,9 +11,9 @@ Excluding: `node_modules`, `dist`, `build`, `.git`
 .
 ├── docs/                      # Extensive system documentation
 │   ├── system.md              # MAIN SYSTEM DOC
+│   ├── forensic_render_perf_fix_1-55_2026-01-31.md # FORENSIC REPORT (Fixes 1-55)
 │   ├── physics_xray.md        # PHYSICS DOCTRINE
 │   ├── AGENTS.md              # AGENT BEHAVIOR RULES (New)
-│   ├── comprehensive_forensic_hardening_report_2026-01-30.md # DAILY REPORT
 │   └── ... (rendering/input forensic reports)
 ├── src/
 │   ├── ai/                    # AI Layer (Provider Agnostic)

@@ -45,8 +45,11 @@ User interaction must never feel degraded.
 *   **Mechanism 2: Knife-Sharp Drag**:
     *   **Trigger**: `moveDrag`.
     *   **Start**: **Deferred** (`setPendingDrag`) to render loop to sync with Frame Camera (Fix #36).
-    *   **Update**: Position updates are applied **immediately** to the node object during render, bypassing the 16ms physics tick.
-    *   **Result**: 1:1 Hardware Cursor Sync (Zero Lag).
+    *   **Law Lock**: Dragged nodes are treated as Fixed (infinite mass), bypassing integration.
+*   **Determinism & Scaling**:
+    *   **Constraint Ordering**: Fixed pipeline (Mouse -> Drag -> Link -> NonOverlap).
+    *   **Dt Clamp**: Frame deltas capped at 32ms (max 2 substeps) to prevent "spiral of death".
+    *   **Idle Mode**: Debt is aggressively shed (dropped) during idle to ensure instant "wake up" without catch-up lag.
 
 ## 6. Move-Leak Hardening (01–22 + Interaction)
 **Status**: Secured.

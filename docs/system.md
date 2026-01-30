@@ -93,9 +93,21 @@ Post-Fixes #01–#22, the system guarantees:
         *   **Gesture Truth**: Click vs Drag is resolved by a 5px threshold (No accidental micromoves).
 
 ## 4. Interaction Contract (The "King" Layer)
+*   **Screen<->World Mapping Contract**:
+    *   **Single Truth**: `CameraTransform` + `SurfaceSnapshot` = The only valid conversion.
+    *   **Frame Lock**: Input events queue actions. The *Render Loop* executes them using the *Frame's* Snapshot. (No "Live" vs "Render" skew).
+    *   **Overlay Glue**: HTML overlays receive their position `(x, y)` from the `graph-render-tick` event, guaranteeing sync with the canvas.
+*   **Catastrophic Safety Rails**:
+    *   **Last Good Surface**: If browser reports `0x0` rect, we **Freeze**. The canvas is never resized to 0.
+    *   **DPR Guard**: If `dpr` is standard, `0`, or `NaN`, we fallback to `1.0` or last known good. 4-frame hysteresis prevents flapping.
+    *   **NaN Camera**: Invalid camera math triggers instant rollback to previous valid state.
+*   **Perf Cliffs & Detection**:
+    *   **O(N) Cliff**: Rendering > 2000 nodes without culling. *Watch*: `[RenderPerf]` frame times.
+    *   **GC Cliff**: Allocating objects in `render()`. *Watch*: Heap spikes in DevTools. *Fix*: Use `scratchVec` pools.
+    *   **DPR Cliff**: Resizing canvas on high-DPI (4k@2x) is expensive (~15ms). *Mitigation*: Debounce resize events.
 *   **Hand Authority**: When dragging a node:
     *   It follows the cursor 1:1 **instantly** (bypasses physics tick for "Knife-Sharp" feel).
-    *   **Deferred Anchoring** (Fix #36): Drag start is queued (`setPendingDrag`) and executed at the *start* of the Render Frame to ensure Camera/Input synchronization.
+    *   **Deferred Anchoring** (Fix #36): Drag start is queued (`setPendingDrag`) and executed at the *start* of the Render Frame.
     *   **Immutable Physics Object**: `isFixed=true` via `engine.grabNode`.
 *   **Capture Safety**: Centralized `safeEndDrag` handles `pointerup`, `cancel`, `lostcapture`, and `window.blur` to prevent stuck drags.
 *   **Input Hygiene**:

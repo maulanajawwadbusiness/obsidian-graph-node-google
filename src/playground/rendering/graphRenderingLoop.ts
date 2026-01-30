@@ -14,7 +14,8 @@ import {
     HoverState,
     RenderSettings,
     PendingPointerState,
-    RenderDebugInfo
+    RenderDebugInfo,
+    SurfaceSnapshot
 } from './renderingTypes';
 import { gradientCache } from './gradientCache';
 import { isDebugEnabled } from './debugUtils';
@@ -51,6 +52,7 @@ type GraphRenderLoopDeps = {
     lastSafeCameraRef: Ref<CameraState>;
     activeDprRef: Ref<number>;
     dprStableFramesRef: Ref<number>;
+    surfaceSnapshotRef: Ref<SurfaceSnapshot>;
     clientToWorld: (clientX: number, clientY: number, rect: DOMRect) => { x: number; y: number };
     updateHoverSelection: UpdateHoverSelection;
     clearHover: (reason: string, id: number, source: string) => void;
@@ -127,9 +129,6 @@ const ensureSeededGraph = (engine: PhysicsEngine, config: ForceConfig, seed: num
         const { nodes, links } = generateRandomGraph(spawnCount, config.targetSpacing, config.initScale, seed);
         nodes.forEach(n => engine.addNode(n));
         links.forEach(l => engine.addLink(l));
-    }
-};
-
     }
 };
 

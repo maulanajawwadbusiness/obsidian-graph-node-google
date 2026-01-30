@@ -129,6 +129,33 @@ export class CameraTransform {
 
         return { x: wx, y: wy };
     }
+    public getVisibleBounds(paddingPx: number = 0): { minX: number, maxX: number, minY: number, maxY: number } {
+        // Fix 51: Visible Set Culling (O(N) -> O(Visible))
+        // Map 4 screen corners to world space to detect visible region
+        const w = this.width;
+        const h = this.height;
+        const r = { left: 0, top: 0, width: w, height: h } as DOMRect;
+
+        // We use clientToWorld with screen coordinates (which are client coords here effectively)
+        const tl = this.clientToWorld(0, 0, r);
+        const tr = this.clientToWorld(w, 0, r);
+        const bl = this.clientToWorld(0, h, r);
+        const br = this.clientToWorld(w, h, r);
+
+        let minX = Math.min(tl.x, tr.x, bl.x, br.x);
+        let maxX = Math.max(tl.x, tr.x, bl.x, br.x);
+        let minY = Math.min(tl.y, tr.y, bl.y, br.y);
+        let maxY = Math.max(tl.y, tr.y, bl.y, br.y);
+
+        // Account for world-space padding (approximate via zoom)
+        const worldPadding = paddingPx / this.zoom;
+        minX -= worldPadding;
+        maxX += worldPadding;
+        minY -= worldPadding;
+        maxY += worldPadding;
+
+        return { minX, maxX, minY, maxY };
+    }
 }
 
 /**

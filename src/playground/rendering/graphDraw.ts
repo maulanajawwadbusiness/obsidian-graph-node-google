@@ -18,7 +18,9 @@ export const drawLinks = (
     ctx: CanvasRenderingContext2D,
     engine: PhysicsEngine,
     theme: ThemeConfig,
-    worldToScreen: (x: number, y: number) => { x: number; y: number }
+    theme: ThemeConfig,
+    worldToScreen: (x: number, y: number) => { x: number; y: number },
+    visibleBounds: { minX: number; maxX: number; minY: number; maxY: number }
 ) => {
     ctx.save();
     resetRenderState(ctx);
@@ -47,34 +49,33 @@ export const drawLinks = (
 
     try {
         engine.links.forEach((link) => {
-            const source = engine.nodes.get(link.source);
-            const target = engine.nodes.get(link.target);
-            if (source && target) {
-                // Fix 42: Manual Projection (Snapped)
-                const s = worldToScreen(source.x, source.y);
-                const t = worldToScreen(target.x, target.y);
-
-                // CULLING: Simple AABB check
-                // If both points are to the left, right, top, or bottom of strict viewport -> SKIP
-                // (Note: This is conservative. Intersecting lines might still be culled if we aren't careful, 
-                // but "both left" etc is safe for lines.)
-                const minX = -margin;
-                const maxX = vWidth + margin;
-                const minY = -margin;
-                const maxY = vHeight + margin;
+            const s = engine.nodes.get(link.source);
+            const t = engine.nodes.get(link.target);
+            if (s && t) {
+                // FIX 51: World Space Culling (Faster than Projecting)
+                // Check if link bounding box overlaps visible bounds
+                // Simple AABB check: (s.x, t.x range) vs (minX, maxX)
+                const lMinX = Math.min(s.x, t.x);
+                const lMaxX = Math.max(s.x, t.x);
+                const lMinY = Math.min(s.y, t.y);
+                const lMaxY = Math.max(s.y, t.y);
 
                 if (
-                    (s.x < minX && t.x < minX) ||
-                    (s.x > maxX && t.x > maxX) ||
-                    (s.y < minY && t.y < minY) ||
-                    (s.y > maxY && t.y > maxY)
+                    lMaxX < visibleBounds.minX ||
+                    lMinX > visibleBounds.maxX ||
+                    lMaxY < visibleBounds.minY ||
+                    lMinY > visibleBounds.maxY
                 ) {
                     culledCount++;
                     return;
                 }
 
-                ctx.moveTo(s.x, s.y);
-                ctx.lineTo(t.x, t.y);
+                // Fix 42: Manual Projection (Snapped)
+                const screenS = worldToScreen(s.x, s.y);
+                const screenT = worldToScreen(t.x, t.y);
+
+                ctx.moveTo(screenS.x, screenS.y);
+                ctx.lineTo(screenT.x, screenT.y);
                 drawnCount++;
             }
         });
@@ -101,8 +102,10 @@ export const drawNodes = (
     hoverStateRef: MutableRefObject<HoverState>,
     zoom: number,
     renderDebugRef: MutableRefObject<RenderDebugInfo> | undefined,
+    renderDebugRef: MutableRefObject<RenderDebugInfo> | undefined,
     dpr: number, // Fix 22: Pass DPR
-    worldToScreen: (x: number, y: number) => { x: number; y: number }
+    worldToScreen: (x: number, y: number) => { x: number; y: number },
+    visibleBounds: { minX: number; maxX: number; minY: number; maxY: number }
 ) => {
     // Screen Space Widths
     const ringWidthPx = theme.ringWidth;
@@ -130,13 +133,19 @@ export const drawNodes = (
     const maxY = vHeight + margin;
 
     engine.nodes.forEach((node) => {
-        // Fix 42: Manual Projection & Scaling
-        let screen = worldToScreen(node.x, node.y); // Snapped if enabled
-
-        // CULLING 6: Offscreen
-        if (screen.x < minX || screen.x > maxX || screen.y < minY || screen.y > maxY) {
+        // FIX 51: World Space Culling
+        // Much faster than projecting first
+        if (
+            node.x + node.radius < visibleBounds.minX ||
+            node.x - node.radius > visibleBounds.maxX ||
+            node.y + node.radius < visibleBounds.minY ||
+            node.y - node.radius > visibleBounds.maxY
+        ) {
             return;
         }
+
+        // Fix 42: Manual Projection & Scaling
+        let screen = worldToScreen(node.x, node.y); // Snapped if enabled
 
         // Fix 22: Half-Pixel Stroke Alignment (Phase 6: Guarded by Hysteresis)
         if (settingsRef.current.pixelSnapping && hoverStateRef.current.snapEnabled) {
@@ -255,7 +264,7 @@ export const drawNodes = (
             }
 
             // 3. Glow (energy-driven: brightens + expands as hover energy rises)
-            // OPTIMIZATION: Skip glow if node scale is tiny (< 2px) and no energy
+            // Fix 52: Glow LOD. Skip if node is tiny (< 2px) and no energy.
             if (radiusPx > 2 || nodeEnergy > 0.01) {
                 if (theme.useTwoLayerGlow) {
                     if (sampleIdle && renderDebug) {
@@ -346,8 +355,10 @@ export const drawLabels = (
     settingsRef: MutableRefObject<RenderSettings>,
     hoverStateRef: MutableRefObject<HoverState>,
     zoom: number,
+    zoom: number,
     dpr: number, // Fix 21: Need DPR for Text Quantization
-    worldToScreen: (x: number, y: number) => { x: number; y: number }
+    worldToScreen: (x: number, y: number) => { x: number; y: number },
+    visibleBounds: { minX: number; maxX: number; minY: number; maxY: number }
 ) => {
     if (!theme.labelEnabled) return;
 
@@ -373,9 +384,13 @@ export const drawLabels = (
     const maxY = vHeight + margin;
 
     engine.nodes.forEach((node) => {
-        // Optimization: Quick cull before expensive calculations
-        const screen = worldToScreen(node.x, node.y);
-        if (screen.x < minX || screen.x > maxX || screen.y < minY || screen.y > maxY) {
+        // FIX 51: World Space Culling
+        if (
+            node.x < visibleBounds.minX ||
+            node.x > visibleBounds.maxX ||
+            node.y < visibleBounds.minY ||
+            node.y > visibleBounds.maxY
+        ) {
             return;
         }
 
@@ -386,10 +401,14 @@ export const drawLabels = (
         const nodeScale = getNodeScale(nodeEnergy, theme);
         const renderRadiusPx = baseRenderRadius * nodeScale * zoom;
 
-        // Skip labels if node is too small (e.g. < 4px) and not hovered
-        // This is a powerful optimization for zoomed-out graphs.
-        if (renderRadiusPx < 4 && nodeEnergy < 0.1) {
-            return;
+        // FIX 52: Label LOD (Zoom Threshold)
+        // If zoomed out (< 0.4) and NOT hovered, skip label entirely.
+        // Also skip if dot is tiny (< 4px) and not hovered.
+        const isHovered = nodeEnergy > 0.1 || node.id === hoverStateRef.current.hoveredNodeId;
+
+        if (!isHovered) {
+            if (zoom < 0.4) return;
+            if (renderRadiusPx < 3) return;
         }
 
         const label = node.label || node.id;  // Fallback to node ID

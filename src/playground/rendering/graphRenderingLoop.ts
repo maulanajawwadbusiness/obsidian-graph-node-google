@@ -20,6 +20,7 @@ import {
 import { gradientCache } from './gradientCache';
 import { isDebugEnabled } from './debugUtils';
 import { textMetricsCache } from './textCache';
+import { RenderScratch } from './renderScratch';
 
 type Ref<T> = { current: T };
 
@@ -31,7 +32,8 @@ type UpdateHoverSelection = (
     rect: DOMRect,
     theme: ThemeConfig,
     reason: 'pointer' | 'camera',
-    draggedNodeId: string | null
+    draggedNodeId: string | null,
+    renderScratch?: RenderScratch
 ) => void;
 
 type GraphRenderLoopDeps = {
@@ -301,13 +303,15 @@ export const updateHoverSelectionIfNeeded = (
     rect: DOMRect,
     theme: ThemeConfig,
     surfaceChanged: boolean,
+    renderScratch: RenderScratch, // Fix 54
     updateHoverSelection: (
         x: number,
         y: number,
         rect: DOMRect,
         theme: ThemeConfig,
         trigger: 'pointer' | 'camera',
-        draggedNodeId: string | null
+        draggedNodeId: string | null,
+        renderScratch?: RenderScratch // Optional in callback type
     ) => void
 ) => {
     // 1. Detect Environmental Changes (Surface or Camera)
@@ -379,7 +383,8 @@ export const updateHoverSelectionIfNeeded = (
                 rect,
                 theme,
                 'camera',
-                engine.draggedNodeId
+                engine.draggedNodeId,
+                renderScratch // Fix 54
             );
             hoverStateRef.current.lastSelectionTime = now;
         }

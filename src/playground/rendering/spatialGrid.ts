@@ -1,104 +1,83 @@
-import { PhysicsNode } from '../../physics/types';
-
-/**
- * FIX 54: Sublinear Hit Testing
- * A GC-friendly spatial hash grid that reuses internal arrays to avoid allocation storms.
- * Rebuilt once per frame.
- */
 export class SpatialGrid {
     private cellSize: number;
-    // Map key -> Array of Node IDs
-    private buckets: Map<string, string[]> = new Map();
-    // Cache of allocated arrays to reuse (Object Pool pattern)
-    private arrayPool: string[][] = [];
+    private buckets: Map<number, number[]>;
+    // Cache array reuse to reduce GC
+    private arrayPool: number[][] = [];
     private poolIndex: number = 0;
 
     constructor(cellSize: number = 100) {
         this.cellSize = cellSize;
+        this.buckets = new Map();
     }
 
-    private getKey(x: number, y: number): string {
-        const kx = Math.floor(x / this.cellSize);
-        const ky = Math.floor(y / this.cellSize);
-        return `${kx}:${ky}`;
-    }
-
-    /**
-     * Clear the grid without releasing memory if possible.
-     */
     public clear() {
-        // Return all arrays to pool? 
-        // Strategy: 
-        // 1. Traverse buckets.
-        // 2. Clear each array (length=0).
-        // 3. Keep them in the bucket map?
-        // Actually, cleaner approach for JS:
-        // Use a simple list of "active keys" to reset.
-
-        // Simpler "GC-Light" approach:
-        // We just clear the Map. JS engines optimize Map clearing usually.
-        // But for "Zero-GC", we want to reuse the arrays.
-
-        // Reset pool pointer
-        this.poolIndex = 0;
-
-        // We DO NOT iterate existing map.
-        // We just create a new map? No, that allocates.
-        // We assume rebuilding is cheap.
-
-        // Let's try the logical clear:
-        this.buckets.clear();
-        // NOTE: Map.clear() is O(N) internally but efficient.
-        // To be super safe against GC, we'd reuse the arrays.
-        // Let's stick to Map.clear() for now, as it's typically fine for <10k items.
-        // The arrays inside are lost -> GC. this is (55) risk.
-
-        // Robust GC Strategy:
-        // Don't use Map.clear(). Iterate active keys? Too slow.
-        // Let's rely on generational GC for now unless it proves problematic.
-        // Optimization: if we have a robust Array Pool, we can just grab from it.
-    }
-
-    public rebuild(nodes: Map<string, PhysicsNode>) {
-        this.buckets.clear(); // We accept some GC here for simplicity, optimizing later if needed.
-
-        nodes.forEach(node => {
-            const key = this.getKey(node.x, node.y);
-            let bucket = this.buckets.get(key);
-            if (!bucket) {
-                bucket = []; // Allocating new array. 
-                this.buckets.set(key, bucket);
+        // Return arrays to pool logic? 
+        // Simpler: iterate buckets, clear them (length=0), keep them in map?
+        // Actually, just clearing the map is cleaner but allocs new buckets.
+        // Let's reuse arrays.
+        for (const bucket of this.buckets.values()) {
+            bucket.length = 0;
+            if (this.poolIndex < this.arrayPool.length) {
+                this.arrayPool[this.poolIndex] = bucket;
+            } else {
+                this.arrayPool.push(bucket);
             }
-            bucket.push(node.id);
-        });
+            this.poolIndex++;
+        }
+        this.buckets.clear();
+        // Reset pool index for next frame use? No, wait.
+        // We put them INTO the pool.
+        // When we need a bucket, we take from pool.
     }
 
-    public query(x: number, y: number, radius: number): string[] {
-        const minX = x - radius;
-        const maxX = x + radius;
-        const minY = y - radius;
-        const maxY = y + radius;
+    private getKey(x: number, y: number): number {
+        // Int32 hash: key = (x & 0xFFFF) | ((y & 0xFFFF) << 16)
+        // Works fine for reasonable coordinate ranges.
+        // Shift x, y to positive domain if usage implies logic, 
+        // but bitwise on floats truncates toward zero.
+        // We use Math.floor
+        const cx = Math.floor(x / this.cellSize);
+        const cy = Math.floor(y / this.cellSize);
+        // Scramble to reduce collisions if needed, but simple shift is usually fine for visual grid
+        // Limit to 16 bits to fit in SMI.
+        return ((cx & 0xFFFF) << 16) | (cy & 0xFFFF);
+    }
 
-        const minKx = Math.floor(minX / this.cellSize);
-        const maxKx = Math.floor(maxX / this.cellSize);
-        const minKy = Math.floor(minY / this.cellSize);
-        const maxKy = Math.floor(maxY / this.cellSize);
+    public add(x: number, y: number, index: number) {
+        const key = this.getKey(x, y);
+        let bucket = this.buckets.get(key);
+        if (!bucket) {
+            if (this.poolIndex > 0) {
+                this.poolIndex--;
+                bucket = this.arrayPool[this.poolIndex];
+            } else {
+                bucket = [];
+            }
+            this.buckets.set(key, bucket);
+        }
+        bucket.push(index);
+    }
 
-        const candidates: string[] = [];
+    public query(x: number, y: number, callback: (index: number) => void) {
+        const key = this.getKey(x, y);
+        // Check center and 8 neighbors
+        // ... Or just checking center for point hit? 
+        // Nodes have radius. We need neighbors.
 
-        for (let kx = minKx; kx <= maxKx; kx++) {
-            for (let ky = minKy; ky <= maxKy; ky++) {
-                const key = `${kx}:${ky}`;
-                const bucket = this.buckets.get(key);
+        // Optimize: just iterate 3x3
+        const cx = Math.floor(x / this.cellSize);
+        const cy = Math.floor(y / this.cellSize);
+
+        for (let dy = -1; dy <= 1; dy++) {
+            for (let dx = -1; dx <= 1; dx++) {
+                const k = (((cx + dx) & 0xFFFF) << 16) | ((cy + dy) & 0xFFFF);
+                const bucket = this.buckets.get(k);
                 if (bucket) {
-                    // Push all items (faster than concat)
                     for (let i = 0; i < bucket.length; i++) {
-                        candidates.push(bucket[i]);
+                        callback(bucket[i]);
                     }
                 }
             }
         }
-
-        return candidates;
     }
 }

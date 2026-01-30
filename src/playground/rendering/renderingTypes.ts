@@ -1,4 +1,7 @@
 import type { SkinMode } from '../../visual/theme';
+import type { MutableRefObject } from 'react';
+
+export type { MutableRefObject };
 
 export type RenderSettings = {
     useVariedSize: boolean;

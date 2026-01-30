@@ -19,6 +19,15 @@ export class PhysicsEngine {
     public dragTarget: { x: number, y: number } | null = null;
     public grabOffset: { x: number, y: number } | null = null; // Fix 18: Grab Offset (Prevents Jump)
 
+    // Fix: Determinism Lock (Laws don't change during interaction)
+    public interactionLock: boolean = false;
+    public interactionLockReason: string | null = null;
+
+    // FIX 44: Idle Rest Mode (Solver Coma)
+    // Tracks frames where simple energy < threshold. 
+    // If > N, we hard skip physics.
+    public idleFrames: number = 0;
+
     // Lifecycle State (Startup Animation)
     public lifecycle: number = 0;
     public hasFiredImpulse: boolean = false;
@@ -100,6 +109,46 @@ export class PhysicsEngine {
 
     constructor(config: Partial<ForceConfig> = {}) {
         this.config = { ...DEFAULT_PHYSICS_CONFIG, ...config };
+    }
+
+    /**
+     * Lock physics rules (degrade mode) to current state.
+     */
+    lockInteraction(reason: string) {
+        if (!this.interactionLock) {
+            this.interactionLock = true;
+            this.interactionLockReason = reason;
+            if (this.config.debugPerf) {
+                console.log(`[PhysicsLock] Locked (${reason})`);
+            }
+        }
+    }
+
+    /**
+     * Unlock physics rules.
+     */
+    unlockInteraction() {
+        if (this.interactionLock) {
+            this.interactionLock = false;
+            this.interactionLockReason = null;
+            if (this.config.debugPerf) {
+                console.log(`[PhysicsLock] Unlocked`);
+            }
+        }
+    }
+
+    /**
+     * Get stable array of nodes (cached).
+     * Faster than .values() iterator for heavy loops.
+     */
+    public getNodeList(): PhysicsNode[] {
+        if (this.nodeListDirty) {
+            this.nodeListCache = Array.from(this.nodes.values());
+            this.nodeListDirty = false;
+            // Also reset awake/sleep lists if needed? 
+            // Usually managed by engineTick.
+        }
+        return this.nodeListCache;
     }
 
     /**
@@ -233,6 +282,20 @@ export class PhysicsEngine {
         severity: 'NONE' | 'SOFT' | 'HARD',
         budgetMs: number
     ) {
+        // FIX: Interaction Lock (Prevent mode switching during drag)
+        if (this.interactionLock) {
+            // Allow FATAL updates or resets, but block normal fluctuations
+            if (severity !== 'HARD' && level !== 0) {
+                // But wait, if we are locked, we want to STAY in current mode.
+                // So we just return and ignore the scheduler's suggestion.
+                return;
+            }
+            // Actually, we should probably ignore EVERYTHING except maybe emergency checks?
+            // User requested: "freeze mode (normal/degrade/stressed)".
+            // So we simply ignore this call if locked.
+            return;
+        }
+
         if (this.degradeLevel !== level) {
             this.invalidateWarmStart('MODE_CHANGE');
         }
@@ -431,7 +494,8 @@ export class PhysicsEngine {
         // Hard clear all drag state
         this.draggedNodeId = null;
         this.dragTarget = null;
-        this.lastDraggedNodeId = null; // Also clear focus history to stop local boost
+        this.lastDraggedNodeId = null;
+        this.idleFrames = 0; // FIX 44: Wake Up
     }
 
     /**
@@ -455,6 +519,7 @@ export class PhysicsEngine {
         fireInitialImpulse(this, now);
         this.lastImpulseTime = now;
         this.hasFiredImpulse = true;
+        this.idleFrames = 0; // FIX 44: Wake Up
     }
 
     /**
@@ -478,6 +543,9 @@ export class PhysicsEngine {
             for (const node of this.nodes.values()) {
                 this.nodeListCache.push(node);
             }
+            // FIX: Deterministic Ordering (Sort by ID)
+            this.nodeListCache.sort((a, b) => a.id.localeCompare(b.id));
+
             this.nodeListDirty = false;
             this.perfCounters.nodeListBuilds += 1;
         }

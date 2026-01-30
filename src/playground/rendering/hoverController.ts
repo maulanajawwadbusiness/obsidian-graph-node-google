@@ -10,7 +10,7 @@ import type {
     RenderSettings
 } from './renderingTypes';
 import { CameraTransform } from './camera';
-import type { SpatialGrid } from './spatialGrid';
+import { RenderScratch } from './renderScratch';
 
 type HoverControllerDeps = {
     engineRef: RefObject<PhysicsEngine>;
@@ -127,7 +127,12 @@ export const createHoverController = ({
         };
     };
 
-    const findNearestNode = (worldX: number, worldY: number, theme: ThemeConfig, spatialGrid?: SpatialGrid) => {
+    const findNearestNode = (
+        worldX: number,
+        worldY: number,
+        theme: ThemeConfig,
+        renderScratch?: RenderScratch
+    ) => {
         const engine = engineRef.current;
         if (!engine) return {
             nodeId: null,
@@ -147,67 +152,40 @@ export const createHoverController = ({
         let scanned = 0;
 
         const zoom = cameraRef.current.zoom;
+        const nodes = engine.getNodeList(); // Cached array
 
-        // FIX 54: Spatial Grid Lookup
-        // Define search radius (screen space padding / zoom + max radius)
-        // Heuristic: Max node radius is ~20px world space usually? 
-        // Better: 150px (bucket size) is safe.
-        const searchNodes = spatialGrid
-            ? spatialGrid.query(worldX, worldY, 1500) // Broad phase: 1500 world units?
-            // Actually, we need to know the 'max possible interaction radius'.
-            // Max node radius + halo + hit padding.
-            // Let's assume 200 world units covers 99% of cases.
-            // If spatialGrid.query returns IDs, we map them to nodes.
-            : engine.nodes.values();
-
-        // If using iterator from values(), it's an iterable.
-        // If string[], we need to map to nodes.
-
-        const iter = spatialGrid
-            ? (function* () {
-                const ids = spatialGrid.query(worldX, worldY, 200 / zoom); // Adjust for zoom? No, world units.
-                // 200 world units is usually enough unless huge nodes.
-                for (const id of ids) {
-                    const n = engine.nodes.get(id);
-                    if (n) yield n;
-                }
-            })()
-            : engine.nodes.values();
-
-        for (const node of iter) {
+        const checkCandidate = (node: any) => {
             scanned++;
-            // Pass checkLabel=true for primary hit test
             const candidate = evaluateNode(node, worldX, worldY, theme, zoom, true);
 
-            if (candidate.targetEnergy > 0) {
-                // Optimization: if perfect hit (energy=1), take it immediately?
-                // No, keep searching for closest in case of overlap (Z-order isn't strict yet)
-                // But dist=0 (label hit) should precise win.
-            }
-
-            // Use evaluateNode's result directly instead of recomputing
-            // Fix 8: Z-Order Determinism. Use <= to allow "Last Winner" (Top Visual) to override "First Winner" (Bottom Visual)
-            // when distances are equal (perfect overlap).
+            // Fix 8: Z-Order Determinism
             if (candidate.dist <= candidate.haloRadius && candidate.dist <= nearestDist) {
                 nearestId = candidate.nodeId;
                 nearestDist = candidate.dist;
                 nearestRenderedRadius = candidate.renderedRadius;
                 nearestHitRadius = candidate.hitRadius;
                 nearestHaloRadius = candidate.haloRadius;
+            }
+        };
 
-                // If direct hit on label or core
-                if (nearestDist === 0 || nearestDist <= candidate.hitRadius) {
-                    // Keep looking only if we want to support overlapping dense nodes better
-                    // But for now, this is good enough.
+        if (renderScratch) {
+            // FIX 54: Spatial Grid Query (O(1))
+            renderScratch.hitGrid.query(worldX, worldY, (index) => {
+                if (index < nodes.length) {
+                    checkCandidate(nodes[index]);
                 }
+            });
+            // If grid missed but we are in valid bounds? 
+            // Grid covers all visible nodes. If cursor is on a visible node, grid finds it.
+        } else {
+            // Fallback O(N)
+            for (const node of engine.nodes.values()) {
+                checkCandidate(node);
             }
         }
 
         let targetEnergy = 0;
         if (nearestId !== null) {
-            // Re-evaluate to get precise energy for the winner? 
-            // We can just trust nearestDist logic if we map back to energy.
-            // But strict logic:
             if (nearestDist <= nearestHitRadius) {
                 targetEnergy = 1;
             } else {
@@ -415,8 +393,8 @@ export const createHoverController = ({
         rect: DOMRect,
         theme: ThemeConfig,
         reason: 'pointer' | 'camera',
-        lockedNodeId: string | null = null, // Fix 46: Unify Cues (Single Pick Truth)
-        spatialGrid?: SpatialGrid // FIX 54: Spatial Acceleration
+        lockedNodeId: string | null = null,
+        renderScratch?: RenderScratch // Fix 54
     ) => {
         const { x: worldX, y: worldY, sx, sy } = clientToWorld(clientX, clientY, rect);
 
@@ -477,7 +455,7 @@ export const createHoverController = ({
         } else {
             // NORMAL SEARCH LOGIC
             if (currentHoveredId === null) {
-                const result = findNearestNode(worldX, worldY, theme, spatialGrid);
+                const result = findNearestNode(worldX, worldY, theme, renderScratch);
                 nodesScanned = result.scanned;
                 shouldSwitch = result.nodeId !== null;
                 if (shouldSwitch) {

@@ -19,6 +19,7 @@ import { MapTitleBlock } from './components/MapTitleBlock';
 import { BrandLabel } from './components/BrandLabel';
 import { PopupProvider, usePopup } from '../popup/PopupStore';
 import { PopupPortal } from '../popup/PopupPortal';
+import { RotationCompass } from './components/RotationCompass';
 import { FullChatProvider, FullChatbar, FullChatToggle, useFullChat } from '../fullchat';
 
 // -----------------------------------------------------------------------------
@@ -377,6 +378,7 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
                 {SHOW_MAP_TITLE && <MapTitleBlock />}
                 {SHOW_BRAND_LABEL && <BrandLabel />}
                 <PopupPortal />
+                <RotationCompass engineRef={engineRef} />
                 <FullChatToggle />
             </div>
 

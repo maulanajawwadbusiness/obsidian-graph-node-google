@@ -70,6 +70,9 @@ export const useGraphRendering = ({
     const hoverStateRef = useRef<HoverState>(createInitialHoverState());
     const renderDebugRef = useRef<RenderDebugInfo>(createInitialRenderDebug());
 
+    // FIX 18: Rotation Anchor Freeze (Stop World Swap)
+    const dragAnchorRef = useRef<{ x: number, y: number } | null>(null);
+
     const {
         clientToWorld,
         worldToScreen,
@@ -161,12 +164,18 @@ export const useGraphRendering = ({
             const maxStepsPerFrame = engine.config.maxStepsPerFrame || 2;
             const maxPhysicsBudgetMs = engine.config.maxPhysicsBudgetMs ?? fixedStepMs * maxStepsPerFrame;
             const dtHugeMs = engine.config.dtHugeMs ?? 250;
-            engine.setDegradeState(
-                overloadState.degradeLevel,
-                overloadState.degradeReason,
-                overloadState.severity,
-                maxPhysicsBudgetMs
-            );
+
+            // FIX 16: Mode Lock during Drag (Stable Laws)
+            // Do NOT change physics laws (degrade level) while user is handling a node.
+            // This ensures consistent friction/responsiveness under the hand.
+            if (!engine.draggedNodeId) {
+                engine.setDegradeState(
+                    overloadState.degradeLevel,
+                    overloadState.degradeReason,
+                    overloadState.severity,
+                    maxPhysicsBudgetMs
+                );
+            }
             const rawDeltaMs = now - lastTime;
             // FIX #4: No dt clamp. Allow full time to flow (prevent syrup).
             // We handle huge spikes via overload/debt-drop instead of dilating time.
@@ -533,7 +542,21 @@ export const useGraphRendering = ({
 
             ctx.save();
             const camera = cameraRef.current;
-            const centroid = engine.getCentroid();
+
+            // FIX 18: Rotation Anchor Freeze
+            // Capture centroid at start of drag and HOLD it.
+            // This prevents the world from rotating/shifting under the hand due to
+            // centroid changes caused by the drag itself.
+            let centroid = engine.getCentroid();
+            if (engine.draggedNodeId) {
+                if (!dragAnchorRef.current) {
+                    dragAnchorRef.current = { ...centroid };
+                }
+                centroid = dragAnchorRef.current;
+            } else {
+                dragAnchorRef.current = null;
+            }
+
             const globalAngle = engine.getGlobalAngle();
 
             const transform = new CameraTransform(

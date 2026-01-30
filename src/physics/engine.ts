@@ -43,6 +43,7 @@ export class PhysicsEngine {
     // Interaction State
     public draggedNodeId: string | null = null;
     public dragTarget: { x: number, y: number } | null = null;
+    public grabOffset: { x: number, y: number } | null = null; // Fix 18: Grab Offset (Prevents Jump)
 
     // Lifecycle State (Startup Animation)
     public lifecycle: number = 0;

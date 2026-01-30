@@ -37,7 +37,42 @@ The application layers, ordered by z-index (lowest to highest):
     *   **Highest Layer**. Dims the screen during AI parsing/analysis.
     *   **Shielding Rule**: Blocks all pointer, wheel, and touch events to prevent graph disturbance during critical AI operations.
 
-## 3. AI Architecture
+## 3. Physics Architecture & Contract
+The graph is driven by a **Hybrid Solver** (`src/physics/`) prioritizing "Visual Dignity" over pure simulation accuracy.
+
+### A. The Hybrid Solver
+1.  **Forces (Soft)**: Repulsion, Springs, Center Gravity. Drive organic layout.
+2.  **PBD Constraints (Hard)**: Position-Based Dynamics for Non-Penetration (`applySafetyClamp`) and Spacing.
+3.  **Diffusion**: Inertia relaxation and phase diffusion to kill "boiling" energy in dense clusters.
+4.  **Drift**: Buoyancy and slight center pull to keep unconnected nodes visible.
+
+### B. Performance Doctrine (The Sacred 60)
+**"Interaction > Simulation"**
+*   **0-Slush Scheduler**: Time must remain 1:1 with reality.
+    *   **Overload Mode**: If the renderer falls behind (accumulator > budget), we **Drop Debt** (Stutter) rather than "Syrup" (Slow Motion).
+    *   **Rule**: `accumulatorMs` is hard-reset if it exceeds `maxStepsPerFrame` capacity. 
+*   **Bounded Work**: Cost per frame is capped regardless of N.
+    *   **Edge Case 01 (O(N²))**: Fixed by prime-modulo strided sampling (`pairwiseMaxChecks`).
+    *   **Edge Case 02 (Dense Balls)**: Fixed by `maxCorrectionPerFrame` budgets and inertia dampeners.
+    *   **Edge Case 03 (Cascades)**: Fixed by energy gating and phase staggering (Repulsion/Spacing run on different frames).
+
+### C. Time Consistency (dt-Normalization)
+*   **Stiffness Invariance**: Spring strength and damping are normalized against `dt` so behavior doesn't change at 30fps vs 120fps.
+*   **Correction Budgets**: Non-linear constraints use `timeScale` derived from `dt` to ensure consistent convergence speed.
+
+### D. Adaptive Operating Envelope
+The engine shifts modes based on Node count (N) and Edge count (E):
+*   **Normal**: Full fidelity (60hz).
+*   **Stressed** (N>250): Spacing pass throttled.
+*   **Emergency** (N>500): Springs staggered, angular resistance simplified.
+*   **Fatal** (N>900): Heavy passes disabled to preserve app survival.
+
+## 4. Interaction Contract
+*   **Hand Authority**: When dragging a node, it must follow the cursor 1:1. Physics ignores mass/forces for the dragged node (`isFixed=true`).
+*   **Wake Propagation**: Interaction wakes up the local cluster ("Wake-on-Drag") to allow natural settling, but not the entire graph.
+*   **Input Ownership**: UI panels (Chat, Docs) fully consume pointer events. The graph does not pan/zoom when you scroll a chat window.
+
+## 5. AI Architecture
 
 Arnvoid uses a unified AI layer (`src/ai/`) that abstracts provider details behind a strict interface.
 
@@ -46,51 +81,28 @@ Arnvoid uses a unified AI layer (`src/ai/`) that abstracts provider details behi
 *   **Provider Agnostic**: The application logic does not know if it's talking to OpenAI, OpenRouter, or a local model.
 *   **Factory**: `createLLMClient` in `src/ai/index.ts` determines the implementation based on config.
 
-### B. Current & Future State
-*   **Current Reality**: We primarily use `OpenAIClient` which leverages the **Responses API** (`v1/responses`) for text and streaming.
-*   **Future Unification**: We are moving towards a "Single SDK" model where we use the official OpenAI SDK for *both* OpenAI and OpenRouter (by swapping `baseURL` to `https://openrouter.ai/api/v1`).
-    *   *Why*: Reduces code drift and unifies parsing logic.
-    *   *Status*: Architecture defined, refactor pending.
+### B. Current State
+*   **Primary**: `OpenAIClient` using the **Responses API** (`v1/responses`) for text and streaming.
+*   **Behavior Doctrine**:
+    *   **Mode Switch**: `VITE_AI_MODE='real'` vs `'mock'`.
+    *   **Abort Model**: Every AI loop uses an `AbortController`. Quick kill on navigation.
+    *   **Fake Streaming**: Client-side character ticking (15ms) used where backend streaming is unavailable.
 
-### C. Core Modules
-*   **Paper Analyzer (`src/ai/paperAnalyzer.ts`)**: Distills documents into 1 Main Topic + 4 Detailed Points.
-*   **FullChat AI (`src/fullchat/fullChatAi.ts`)**: Handles the reasoning panel and handoff prefill.
-*   **MiniChat AI (`src/popup/PopupStore.tsx`)**: Directly integrated into the popup store for node-specific queries.
-
-### D. Behavior Doctrine
-*   **Mode Switch**: `VITE_AI_MODE='real'` vs `'mock'`.
-*   **Abort Model**: Every AI loop uses an `AbortController`. Quick kill on navigation.
-*   **Fake Streaming**: Client-side character ticking (15ms) used where backend streaming is unavailable or for UI effect.
-*   **Fallback**: Timeouts (15s for FullChat, 2.5s for Prefill) trigger graceful mock fallbacks.
-
-## 4. Context Doctrine
-
+## 6. Context Doctrine
 Intelligence is relative to context. We maintain three levels:
-
-1.  **Node Knowledge**: A specific node's `sourceTitle` and `sourceSummary` generated by the analyzer. Lives in `node.meta`.
-2.  **Document Context**: The full `documentText` and the metadata (inferred title) held in `DocumentStore`.
+1.  **Node Knowledge**: A node's `sourceTitle` and `sourceSummary` generated by the analyzer. Lives in `node.meta`.
+2.  **Document Context**: The full `documentText` and metadata held in `DocumentStore`.
 3.  **Handoff Context**: When moving from Mini -> Full, the `pendingContext` object preserves history + specific node knowledge so the reasoning is coherent.
 
-## 5. Performance Doctrine (The Sacred 60)
+## 7. Telemetry & Logs (Debug Keys)
+Enable `debugPerf: true` in `config.ts` to see:
 
-*   **Hot Loops**: No network calls, no state updates inside the physics tick.
-*   **Streaming**: Autosize and DOM updates for streaming text are throttled (~50ms) to prevent layout thrashing.
-*   **Throttled Scroll**: `safeScrollToBottom` uses `requestAnimationFrame` and near-bottom detection to avoid jarring jumps.
-*   **Tick Decoupling**: Physics ticks are capped at `targetTickHz` (default 60) and do not scale with monitor refresh rate.
-*   **Adaptive Degradation**: The engine shifts into `stressed`/`emergency`/`fatal` modes based on N/E thresholds with hysteresis; expensive passes throttle instead of cliffing.
-*   **Fatal-Mode Guardrail**: If N/E exceed the safe envelope, heavy passes are skipped and the sim stays responsive rather than attempting full n^2.
-
-### A. Operating Envelope
-*   **Intended**: Paper-essence graphs and small clusters (roughly N <= 250, E <= 1200).
-*   **Stressed**: N >= 250 or E >= 1200; spacing frequency reduces.
-*   **Emergency**: N >= 500 or E >= 2000; springs staggered, spacing reduced further.
-*   **Fatal**: N >= 900 or E >= 3000; heavy passes disabled to avoid app melt.
-
-### B. Telemetry & Logs
-Enable `debugPerf: true` to get per-second metrics:
-*   `[RenderPerf]` -> `ticksPerSecond`, `avgTickMs`, `p95TickMs`, `maxTickMs`, `ticksPerFrame`, `droppedMs`.
-*   `[PhysicsPerf]` -> per-pass ms, `nodes`, `links`, `mode`, `allocs`, `topoDrop`, `topoDup`.
-*   `[PhysicsMode]` -> mode transitions.
-*   `[PhysicsTopology]` -> edge cap drops.
-*   `[PhysicsFatal]` -> fatal mode active (once per second).
-
+*   **Render/Scheduler**:
+    *   `[RenderPerf]`: `droppedMs` (stutter events), `ticksPerSecond`, `avgTickMs`.
+    *   `reason=OVERLOAD`: Indicates frame deadline missed and debt dropped.
+*   **Physics Loop**:
+    *   `[PhysicsPerf]`: Breakdown of ms per pass (Repulsion, Spacing, Springs).
+    *   `[PhysicsSlushWarn]`: **CRITICAL**. Indicates accumulator backlog warning (potential syrup).
+*   **Lifecycle**:
+    *   `[PhysicsMode]`: Transitions (Normal -> Stressed).
+    *   `[PhysicsTopology]`: Links dropped due to density caps.

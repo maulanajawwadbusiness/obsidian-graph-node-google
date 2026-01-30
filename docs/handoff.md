@@ -20,20 +20,18 @@ When the handoff is triggered, `MiniChatbar` constructs a payload and sends it t
 ## 3. Propagation & Authority
 The `FullChatStore` stores this as `pendingContext`.
 
-### Context Preservation Logic
-In `FullChatbar.tsx`, the `handleSend` function follows this priority:
-1.  **Handoff Priority**: If `pendingContext.content` exists, use that `title` as the reasoning anchor and the `summary` as the foundational text.
-2.  **Document Fallback**: If no handoff exists, fall back to the generic `activeDocument` text.
+### A. Context Priority
+In `FullChatbar.tsx`, the `handleSend` function follows this strict priority:
+1.  **Handoff (Explicit)**: If `pendingContext` exists, its `content` (Title/Summary) is the primary reasoning anchor.
+2.  **Document (Fallback)**: If no handoff exists, fall back to the generic `activeDocument` text.
 
-`nodeLabel` is also overridden by `pendingContext.nodeLabel` when present, otherwise it uses the current focused dot label.
-
-### Prefill V4 Integration
-*   The **Refine Packet** builder (`prefillSuggestion.ts`) now consumes the `content` field.
-*   The AI uses the `summary` to generate a much more relevant "next step" suggestion than just looking at the node label.
+### B. Prefill Integration (V4)
+*   The **Refine Packet** builder (`prefillSuggestion.ts`) consumes the `content` field.
+*   The AI uses the `summary` to generate a relevant "next step" suggestion (e.g., "Analyze the connection between [Node] and [Concept]...") rather than a generic prompt.
 
 ## 4. UI/UX Requirements
-*   **Zero Jitter**: Autosize logic in `FullChatbar` must be throttled.
-*   **Breath is Intentional**: The 500ms pause during prefill allows the `refinePromptAsync` call (LLM) to complete so it can stream the finished suggestion.
+*   **Zero Jitter**: Autosize logic in `FullChatbar` must be throttled (~32ms) to prevent layout thrashing.
+*   **Breath is Intentional**: The ~500ms pause during prefill allows the `refinePromptAsync` call (LLM) to complete so it can stream the finished suggestion.
 *   **Handoff Visibility**: When a handoff happens, the `FullChatbar` header/badge should reflect the node being discussed.
 *   **Perf Isolation**: Physics/perf throttles do not alter handoff payload or context priority.
 
@@ -61,4 +59,3 @@ Filter for `[MiniChatAI]` and `[Prefill]`:
 *   `[Prefill] phase seed` -> Handoff received, animation starting.
 *   `[Prefill] refine_ready` -> AI context has arrived at the boundary.
 *   `[MiniChat] Sent context to Full Chat (v2)` -> Handoff payload dispatched.
-

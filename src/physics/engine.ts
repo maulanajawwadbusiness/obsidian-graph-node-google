@@ -110,6 +110,9 @@ export class PhysicsEngine {
     };
     private lastDraggedNodeId: string | null = null;
 
+    // Fix #11: Impulse Guard State
+    private lastImpulseTime: number = 0;
+
     constructor(config: Partial<ForceConfig> = {}) {
         this.config = { ...DEFAULT_PHYSICS_CONFIG, ...config };
     }
@@ -343,6 +346,31 @@ export class PhysicsEngine {
     }
 
     /**
+     * Request an impulse kick.
+     * FIX #11: Strict cooldown (>1s) + Interaction Guard (no drag).
+     */
+    requestImpulse() {
+        const now = getNowMs();
+
+        // Guard 1: Cooldown (1000ms)
+        if (now - this.lastImpulseTime < 1000) {
+            console.log(`[Impulse] REJECTED: Cooldown (${(now - this.lastImpulseTime).toFixed(0)}ms < 1000ms)`);
+            return;
+        }
+
+        // Guard 2: Interaction (Don't kick while user holds a node)
+        if (this.draggedNodeId) {
+            console.log(`[Impulse] REJECTED: User Dragging`);
+            return;
+        }
+
+        // Fire!
+        fireInitialImpulse(this, now);
+        this.lastImpulseTime = now;
+        this.hasFiredImpulse = true;
+    }
+
+    /**
      * Get the most recent debug stats snapshot (if enabled in the engine loop).
      */
     getDebugStats(): DebugStats | null {
@@ -406,9 +434,12 @@ export class PhysicsEngine {
             runPreRollPhase(this, nodeList, debugStats);
         }
 
-        // 0. FIRE IMPULSE (One Shot)
+        // 0. FIRE IMPULSE (One Shot, Guarded)
+        // FIX #11: Guarded Impulse Kick
+        // Logic moved to requestImpulse() to enforce cooldowns and safeguards.
+        // We only auto-fire if lifecycle is young and we haven't fired yet.
         if (!preRollActive && this.lifecycle < 0.1 && !this.hasFiredImpulse) {
-            fireInitialImpulse(this);
+            this.requestImpulse();
         }
 
         advanceEscapeWindow(this);
@@ -586,10 +617,29 @@ export class PhysicsEngine {
 
 
         if (this.perfMode === 'fatal') {
+            // FIX #10: Fatal Mode Containment
+            // Even in fatal mode, we MUST apply boundary constraints to prevent
+            // the graph from drifting off-screen or exploding.
+            applyBoundaryForce(nodeList, this.config, this.worldWidth, this.worldHeight);
+
+            for (const node of nodeList) {
+                // We do NOT clear forces here if we just applied boundary force!
+                // We only clear the *other* forces by not calculating them.
+                // But wait, applyBoundaryForce ADDS to fx/fy.
+                // So we should clear first.
+                node.fx = 0;
+                node.fy = 0;
+            }
+            // Re-apply boundary force AFTER clearing (oops, the order above was wrong)
+            // Let's do: Clear -> Apply Boundary -> Integrate.
+
+            // Correct Order:
             for (const node of nodeList) {
                 node.fx = 0;
                 node.fy = 0;
             }
+            applyBoundaryForce(nodeList, this.config, this.worldWidth, this.worldHeight);
+
             applyDragVelocity(this, nodeList, dt, debugStats);
             applyPreRollVelocity(this, nodeList, preRollActive, debugStats);
             integrateNodes(this, nodeList, dt, energy, effectiveDamping, maxVelocityEffective, debugStats, preRollActive);

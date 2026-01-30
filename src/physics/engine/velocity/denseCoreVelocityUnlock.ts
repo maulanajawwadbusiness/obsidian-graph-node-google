@@ -56,6 +56,21 @@ export const applyDenseCoreVelocityDeLocking = (
         const avgVMag = Math.sqrt(avgVx * avgVx + avgVy * avgVy);
         if (avgVMag < 0.1) continue;
 
+        // FIX #12: STAGNATION GATING
+        // Only apply de-locking if the system is actually stuck (micro-jammed).
+        // If nodes are moving freely, we don't need to break locks.
+        // We infer stagnation if the maximum velocity in the system is low, OR 
+        // if we had a persistent stagnation tracking metric (which we simulate here by a threshold).
+        // Actually, we can check stats from the previous frame if available, but for now
+        // let's be conservative: only delock if average velocity is small.
+        // If `avgVMag` (local group velocity) is high, the group is moving, so don't break it.
+
+        // Correction: The original requirement said "Gate de-locking tightly: only apply when system is truly stuck".
+        // We already compute `avgVMag`.
+        // Let's add a "Max De-Lock Velocity" gate. If group moves faster than 2.0px/frame, it's not locked.
+        if (avgVMag > 2.0) continue;
+
+        // Normal de-locking logic...
         // Normalize average velocity direction
         const avgUx = avgVx / avgVMag;
         const avgUy = avgVy / avgVMag;
@@ -82,5 +97,7 @@ export const applyDenseCoreVelocityDeLocking = (
     passStats.nodes += affected.size;
 
     // DEBUG: log for early expansion
-    logVelocityDeLocking(affected.size);
+    if (affected.size > 0) {
+        logVelocityDeLocking(affected.size);
+    }
 };

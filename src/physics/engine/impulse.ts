@@ -1,6 +1,6 @@
 import type { PhysicsEngine } from '../engine';
 
-export const fireInitialImpulse = (engine: PhysicsEngine) => {
+export const fireInitialImpulse = (engine: PhysicsEngine, timestamp: number = 0) => {
     const { targetSpacing, snapImpulseScale } = engine.config;
 
     // Map to store accumulated impulses
@@ -71,5 +71,5 @@ export const fireInitialImpulse = (engine: PhysicsEngine) => {
     engine.globalAngularVel = (Math.random() - 0.5) * 0.3; // ±0.15 rad/s
 
     engine.hasFiredImpulse = true;
-    console.log(`[LotusLeaf] Medium initialized: ω=${engine.globalAngularVel.toFixed(4)} rad/s`);
+    console.log(`[LotusLeaf] Medium initialized: ω=${engine.globalAngularVel.toFixed(4)} rad/s at t=${timestamp.toFixed(0)}`);
 };

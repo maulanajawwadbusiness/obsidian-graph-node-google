@@ -6,7 +6,7 @@ import { getTheme, SkinMode } from '../visual/theme';
 import { generateRandomGraph } from './graphRandom';
 import { PlaygroundMetrics } from './playgroundTypes';
 import { CameraTransform, updateCameraContainment, verifyMappingIntegrity } from './rendering/camera';
-import { drawVignetteBackground, withCtx } from './rendering/canvasUtils';
+import { drawVignetteBackground, syncCanvasSizing, withCtx } from './rendering/canvasUtils';
 import { createHoverController } from './rendering/hoverController';
 import { updateHoverEnergy } from './rendering/hoverEnergy';
 import { drawHoverDebugOverlay, drawLabels, drawLinks, drawNodes, drawPointerCrosshair } from './rendering/graphDraw';
@@ -165,8 +165,22 @@ export const useGraphRendering = ({
         }
 
         if (canvas) {
-            engine.updateBounds(canvas.width, canvas.height);
+            // Initial sync
+            if (ctx) syncCanvasSizing(canvas, ctx, lastDPR, true);
+            const rect = canvas.getBoundingClientRect();
+            engine.updateBounds(rect.width, rect.height);
         }
+
+        // Fix: ResizeObserver for robust layout changes
+        const resizeObserver = new ResizeObserver(() => {
+            if (!canvas || !ctx) return;
+            const sizeChanged = syncCanvasSizing(canvas, ctx, lastDPR, true);
+            if (sizeChanged) {
+                const rect = canvas.getBoundingClientRect();
+                engine.updateBounds(rect.width, rect.height);
+            }
+        });
+        resizeObserver.observe(canvas);
 
         const render = () => {
             const now = performance.now();
@@ -464,27 +478,24 @@ export const useGraphRendering = ({
             }
 
             const rect = canvas.getBoundingClientRect();
-            const dpr = window.devicePixelRatio || 1;
 
-            // Fix 56: Browser Zoom / DPR Resync
-            // Detect if DPR changed (Ctrl+/-) OR if Rect changed (Resize).
-            // Force immediate resync of backing size to ensure 1:1 pixel mapping.
-            const dprChanged = dpr !== lastDPR.current;
-            const displayWidth = Math.max(1, Math.round(rect.width * dpr));
-            const displayHeight = Math.max(1, Math.round(rect.height * dpr));
-            const sizeChanged = canvas.width !== displayWidth || canvas.height !== displayHeight;
+            // Fix 56: Centralized Sync (Idempotent)
+            // Handles DPR change, CSS resize, and Context restoration.
+            const sizeChanged = syncCanvasSizing(canvas, ctx, lastDPR, engine.config.debugPerf);
 
-            if (dprChanged || sizeChanged) {
-                lastDPR.current = dpr;
-                canvas.width = displayWidth;
-                canvas.height = displayHeight;
+            if (sizeChanged) {
+                // If size changed, we must inform the engine of the new world bounds (in CSS pixels)
+                // engine.updateBounds expects logical pixels, so we pass rect.width not canvas.width
                 engine.updateBounds(rect.width, rect.height);
-                console.log(`[Resync] DPR=${dpr.toFixed(2)} Size=${displayWidth}x${displayHeight}`);
             }
+
+            // Guard Rail: Ensure transform is strictly set to DPR for this frame's drawing
+            // syncCanvasSizing does this on resize, but we enforce it every frame to prevent drift
+            const dpr = window.devicePixelRatio || 1;
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
             const width = rect.width;
             const height = rect.height;
-            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
             const theme = getTheme(settingsRef.current.skinMode);
 
@@ -758,6 +769,12 @@ export const useGraphRendering = ({
             clearHover('window blur', -1, 'unknown');
         };
         window.addEventListener('blur', handleBlur);
+
+        return () => {
+            window.removeEventListener('blur', handleBlur);
+            cancelAnimationFrame(frameId);
+            resizeObserver.disconnect();
+        };
 
         // FIX 23: Unambiguous Wheel Handling (Native Listener for preventDefault)
         // Explicitly own the wheel on canvas to prevent page scroll.

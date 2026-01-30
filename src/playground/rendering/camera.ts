@@ -1,5 +1,5 @@
 import type { CameraState } from './renderingTypes';
-import { quantizeToDevicePixel } from './renderingMath';
+import { snapToGrid } from './renderingMath';
 
 export class CameraTransform {
     private width: number;
@@ -11,6 +11,7 @@ export class CameraTransform {
     private cx: number;
     private cy: number;
     private dpr: number;
+    private pixelSnapping: boolean; // Explicit property
 
     constructor(
         width: number,
@@ -84,15 +85,13 @@ export class CameraTransform {
         const sx = zx + width / 2;
         const sy = zy + height / 2;
 
-        // Fix 41: Post-Projection Device Pixel Quantization
-        if (this.pixelSnapping) {
-            return {
-                x: quantizeToDevicePixel(sx, dpr),
-                y: quantizeToDevicePixel(sy, dpr)
-            };
-        }
-
-        return { x: sx, y: sy };
+        // Fix 41: Post-Projection Device Pixel Quantization (Phase 6: Canonical)
+        // We always use snapToGrid, which handles 'enabled' flag internally.
+        // This is the SINGLE authority on whether a world point lands on a solid pixel.
+        return {
+            x: snapToGrid(sx, dpr, this.pixelSnapping),
+            y: snapToGrid(sy, dpr, this.pixelSnapping)
+        };
     }
 
     public clientToWorld(clientX: number, clientY: number, rect: DOMRect): { x: number, y: number } {

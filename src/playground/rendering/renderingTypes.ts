@@ -72,6 +72,11 @@ export type HoverState = {
     lastClientX: number;
     lastClientY: number;
 
+    // Snap Hysteresis (Phase 6)
+    isMoving: boolean;
+    lastMoveTime: number;
+    snapEnabled: boolean;
+
     // Debug / Perf
     debugNodeRadius: number;
     debugOuterRadius: number;
@@ -176,6 +181,10 @@ export const createInitialHoverState = (): HoverState => ({
     lastInsideMs: 0,
     pendingSwitchId: null,
     pendingSwitchSinceMs: 0,
+    // Snap Hysteresis
+    isMoving: false,
+    lastMoveTime: 0,
+    snapEnabled: true,
     // Debug: glow energy values
     debugGlowInnerAlpha: 0,
     debugGlowInnerBlur: 0,

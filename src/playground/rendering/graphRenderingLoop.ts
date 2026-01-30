@@ -4,16 +4,14 @@ import type { ForceConfig } from '../../physics/types';
 import { getTheme } from '../../visual/theme';
 import { generateRandomGraph } from '../graphRandom';
 import type { PlaygroundMetrics } from '../playgroundTypes';
-import { CameraTransform } from './renderingMath';
-import { updateCameraContainment, verifyMappingIntegrity } from './camera';
+import { updateCameraContainment, enforceCameraSafety, CameraTransform } from './camera';
 import { drawVignetteBackground, withCtx } from './canvasUtils';
 import { updateHoverEnergy } from './hoverEnergy';
 import { drawHoverDebugOverlay, drawLabels, drawLinks, drawNodes, drawPointerCrosshair } from './graphDraw';
 import { createMetricsTracker } from './metrics';
 import {
     CameraState,
-    CameraTransform, // Ensure this class is exported from somewhere, usually renderingMath or Types
-    HoverState,
+    HoverState, // Removed duplicate CameraTransform from here
     RenderSettings,
     MutableRefObject
 } from './renderingTypes';
@@ -842,6 +840,44 @@ export const startGraphRenderLoop = (deps: GraphRenderLoopDeps) => {
 
         enforceCameraSafety(cameraRef, lastSafeCameraRef);
 
+        // --- PHASE 6: SNAP HYSTERESIS ---
+        // Detect motion
+        const isSceneMoving =
+            schedulerResult.physicsMs > 0 || // Physics active
+            Math.abs(schedulerResult.dtMs - 16.6) > 20 || // Heavy lag/catchup (heuristic)
+            pendingPointerRef.current || // Mouse moving
+            engine.getGlobalAngle() !== 0 || // Rotation usually implies motion
+            hoverStateRef.current.energy > 0.01; // Hover animation active
+
+        // Check Camera Motion (heuristic comparison with last frame)
+        // We already have 'cameraChanged' logic in updateHoverSelection?
+        // Let's use cameraKey from Phase 5 logic if available, or just check camera properties.
+        const camKey = `${camera.panX.toFixed(2)}:${camera.panY.toFixed(2)}:${camera.zoom.toFixed(3)}`;
+        const cameraMoved = hoverStateRef.current.cameraKey !== camKey; // Note: cameraKey update logic is in updateHoverSelection loop, careful with order.
+
+        // Actually, we can just detect if targeted pan/zoom differs from current? no, that's animation.
+        // Let's stick to simple "Are we effectively moving?"
+
+        const isMoving = isSceneMoving || cameraMoved;
+
+        if (isMoving) {
+            hoverStateRef.current.isMoving = true;
+            hoverStateRef.current.lastMoveTime = now;
+            hoverStateRef.current.snapEnabled = false; // Disable immediately on motion
+        } else {
+            hoverStateRef.current.isMoving = false;
+            // Hysteresis: Enable snap only if stable for > 150ms
+            if (now - hoverStateRef.current.lastMoveTime > 150) {
+                hoverStateRef.current.snapEnabled = true;
+            }
+        }
+
+        // Force snap ON if user explicitly requests "Pixel Snapping" setting?
+        // Or does the user setting mean "Allow snapping behavior"?
+        // Usually, user settings.pixelSnapping means "Enable the feature".
+        // So we combine: settings.pixelSnapping AND hoverState.snapEnabled.
+        const effectiveSnapping = settingsRef.current.pixelSnapping && hoverStateRef.current.snapEnabled;
+
         const transform = new CameraTransform(
             width,
             height,
@@ -851,7 +887,7 @@ export const startGraphRenderLoop = (deps: GraphRenderLoopDeps) => {
             globalAngle,
             centroid,
             dpr,
-            settingsRef.current.pixelSnapping
+            effectiveSnapping
         );
 
         const project = (x: number, y: number) => transform.worldToScreen(x, y);

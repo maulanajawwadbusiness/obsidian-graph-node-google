@@ -1,10 +1,15 @@
-// Fix 40: Device Pixel Quantization
+// Fix 40 & Phase 6: Canonical Snap Helper
 // Unifies snapping across Render/Overlay/Input layers.
-export const quantizeToDevicePixel = (px: number, dpr: number) => {
+// If enabled is false, acts as a pass-through.
+export const snapToGrid = (px: number, dpr: number, enabled: boolean = true) => {
+    if (!enabled) return px;
     // Avoid degenerate dpr
     const safeDpr = Math.max(0.1, dpr);
     return Math.round(px * safeDpr) / safeDpr;
 };
+
+// Backwards compatibility alias if needed, or just update callers
+export const quantizeToDevicePixel = (px: number, dpr: number) => snapToGrid(px, dpr, true);
 
 // Fix 22: Half-Pixel Stroke Alignment
 // If stroke width (in device pixels) is ODD, we strictly need to snap to (N + 0.5) pixels.

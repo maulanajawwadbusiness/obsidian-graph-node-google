@@ -1,11 +1,10 @@
-import type { MutableRefObject } from 'react';
 import type { PhysicsEngine } from '../../physics/engine';
 import { getNodeRadius, getNodeScale, getOcclusionRadius, lerpColor } from '../../visual/theme';
 import type { ThemeConfig } from '../../visual/theme';
 import { drawGradientRing, drawTwoLayerGlow, withCtx } from './canvasUtils';
-import { quantizeToDevicePixel, quantizeForStroke } from './renderingMath';
+import { snapToGrid, quantizeForStroke } from './renderingMath';
 import { guardStrictRenderSettings, resetRenderState } from './renderGuard';
-import type { HoverState, RenderDebugInfo, RenderSettingsRef } from './renderingTypes';
+import type { HoverState, RenderDebugInfo, RenderSettings, MutableRefObject } from './renderingTypes';
 
 // ... (omitted)
 
@@ -98,7 +97,7 @@ export const drawNodes = (
     ctx: CanvasRenderingContext2D,
     engine: PhysicsEngine,
     theme: ThemeConfig,
-    settingsRef: MutableRefObject<RenderSettingsRef>,
+    settingsRef: MutableRefObject<RenderSettings>,
     hoverStateRef: MutableRefObject<HoverState>,
     zoom: number,
     renderDebugRef: MutableRefObject<RenderDebugInfo> | undefined,
@@ -139,8 +138,8 @@ export const drawNodes = (
             return;
         }
 
-        // Fix 22: Half-Pixel Stroke Alignment
-        if (settingsRef.current.pixelSnapping) {
+        // Fix 22: Half-Pixel Stroke Alignment (Phase 6: Guarded by Hysteresis)
+        if (settingsRef.current.pixelSnapping && hoverStateRef.current.snapEnabled) {
             const width = theme.nodeStyle === 'ring' ? ringWidthPx : strokeWidthPx;
             screen = {
                 x: quantizeForStroke(screen.x, width, dpr),
@@ -344,7 +343,7 @@ export const drawLabels = (
     ctx: CanvasRenderingContext2D,
     engine: PhysicsEngine,
     theme: ThemeConfig,
-    settingsRef: MutableRefObject<RenderSettingsRef>,
+    settingsRef: MutableRefObject<RenderSettings>,
     hoverStateRef: MutableRefObject<HoverState>,
     zoom: number,
     dpr: number, // Fix 21: Need DPR for Text Quantization
@@ -394,7 +393,8 @@ export const drawLabels = (
         }
 
         const label = node.label || node.id;  // Fallback to node ID
-        drawNodeLabel(ctx, node.x, node.y, renderRadiusPx, label, nodeEnergy, theme, dpr, worldToScreen);
+        const snapEnabled = hoverStateRef.current.snapEnabled && settingsRef.current.pixelSnapping;
+        drawNodeLabel(ctx, node.x, node.y, renderRadiusPx, label, nodeEnergy, theme, dpr, worldToScreen, snapEnabled);
     });
 
     ctx.restore();
@@ -409,7 +409,8 @@ export function drawNodeLabel(
     nodeEnergy: number,
     theme: ThemeConfig,
     dpr: number,
-    worldToScreen: (x: number, y: number) => { x: number; y: number }
+    worldToScreen: (x: number, y: number) => { x: number; y: number },
+    snapEnabled: boolean = true
 ) {
     if (!label) return;
 
@@ -423,13 +424,14 @@ export function drawNodeLabel(
 
     const labelX = screen.x;
 
-    // Fix 21: Text Baseline Quantization Logic
-    const snappedX = quantizeToDevicePixel(screen.x, dpr);
+    // Fix 21: Text Baseline Quantization Logic (Phase 6: Guarded by Hysteresis)
+    // We only snap text pos if scene is stable.
+    const snappedX = snapToGrid(screen.x, dpr, snapEnabled);
     const isSnapped = Math.abs(screen.x - snappedX) < 1e-9;
 
     let labelY = screen.y + offsetY;
     if (isSnapped) {
-        labelY = quantizeToDevicePixel(labelY, dpr);
+        labelY = snapToGrid(labelY, dpr, snapEnabled);
     }
 
     // Assumes Context State is already set by caller (drawLabels)

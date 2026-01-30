@@ -5,7 +5,7 @@ import { ForceConfig } from '../physics/types';
 import { getTheme, SkinMode } from '../visual/theme';
 import { generateRandomGraph } from './graphRandom';
 import { PlaygroundMetrics } from './playgroundTypes';
-import { applyCameraTransform, updateCameraContainment } from './rendering/camera';
+import { CameraTransform, updateCameraContainment, verifyMappingIntegrity } from './rendering/camera';
 import { drawVignetteBackground, withCtx } from './rendering/canvasUtils';
 import { createHoverController } from './rendering/hoverController';
 import { updateHoverEnergy } from './rendering/hoverEnergy';
@@ -34,6 +34,10 @@ type UseGraphRenderingProps = {
     spawnCount: number;
     useVariedSize: boolean;
     skinMode: SkinMode;
+    cameraLocked: boolean;
+    showDebugGrid: boolean;
+    pixelSnapping: boolean;
+    debugNoRenderMotion: boolean;
 };
 
 export const useGraphRendering = ({
@@ -44,7 +48,11 @@ export const useGraphRendering = ({
     setMetrics,
     spawnCount,
     useVariedSize,
-    skinMode
+    skinMode,
+    cameraLocked,
+    showDebugGrid,
+    pixelSnapping,
+    debugNoRenderMotion
 }: UseGraphRenderingProps) => {
     const cameraRef = useRef<CameraState>({
         panX: 0,
@@ -52,7 +60,9 @@ export const useGraphRendering = ({
         zoom: 1.0,
         targetPanX: 0,
         targetPanY: 0,
-        targetZoom: 1.0
+        targetZoom: 1.0,
+        lastRecenterCentroidX: 0,
+        lastRecenterCentroidY: 0
     });
 
     const settingsRef = useRef<RenderSettingsRef>(createInitialRenderSettings());
@@ -81,7 +91,11 @@ export const useGraphRendering = ({
     useEffect(() => {
         settingsRef.current.useVariedSize = useVariedSize;
         settingsRef.current.skinMode = skinMode;
-    }, [useVariedSize, skinMode]);
+        settingsRef.current.cameraLocked = cameraLocked;
+        settingsRef.current.showDebugGrid = showDebugGrid;
+        settingsRef.current.pixelSnapping = pixelSnapping;
+        settingsRef.current.debugNoRenderMotion = debugNoRenderMotion;
+    }, [useVariedSize, skinMode, cameraLocked, showDebugGrid, pixelSnapping, debugNoRenderMotion]);
 
     useEffect(() => {
         const canvas = canvasRef.current;
@@ -242,6 +256,10 @@ export const useGraphRendering = ({
                         const tickStart = performance.now();
                         engine.tick(fixedStepMs / 1000);
                         recordTick(performance.now() - tickStart);
+                        // FORENSIC VERIFICATION: Run knife test occasionally if perf enabled
+                        if (stepsThisFrame === 0 && Math.random() < 0.05) {
+                            verifyMappingIntegrity();
+                        }
                     } else {
                         engine.tick(fixedStepMs / 1000);
                     }
@@ -453,6 +471,12 @@ export const useGraphRendering = ({
 
             updateHoverEnergy(hoverStateRef, theme, dtMs);
 
+            // Fix 6: Kill Render Motion
+            if (settingsRef.current.debugNoRenderMotion) {
+                hoverStateRef.current.energy = 0;
+                hoverStateRef.current.targetEnergy = 0;
+            }
+
             ctx.clearRect(0, 0, width, height);
 
             withCtx(ctx, () => {
@@ -466,7 +490,14 @@ export const useGraphRendering = ({
             });
 
             const nodes = engine.getNodeList();
-            updateCameraContainment(cameraRef, nodes, width, height);
+            updateCameraContainment(
+                cameraRef,
+                nodes,
+                width,
+                height,
+                dtMs / 1000,
+                settingsRef.current.cameraLocked
+            );
 
             const pendingPointer = pendingPointerRef.current;
             const selectionCamera = cameraRef.current;
@@ -498,7 +529,50 @@ export const useGraphRendering = ({
             const camera = cameraRef.current;
             const centroid = engine.getCentroid();
             const globalAngle = engine.getGlobalAngle();
-            applyCameraTransform(ctx, camera, width, height, centroid, globalAngle);
+
+            const transform = new CameraTransform(
+                width,
+                height,
+                camera.zoom,
+                camera.panX,
+                camera.panY,
+                globalAngle,
+                centroid,
+                settingsRef.current.pixelSnapping
+            );
+            transform.applyToContext(ctx);
+
+            if (settingsRef.current.showDebugGrid) {
+                ctx.save();
+                const scale = 1 / camera.zoom;
+                ctx.lineWidth = scale;
+
+                // Cyan Grid at World 0,0
+                ctx.strokeStyle = 'rgba(0, 255, 255, 0.2)';
+                ctx.beginPath();
+                for (let i = -1000; i <= 1000; i += 100) {
+                    ctx.moveTo(i, -1000); ctx.lineTo(i, 1000);
+                    ctx.moveTo(-1000, i); ctx.lineTo(1000, i);
+                }
+                ctx.stroke();
+
+                // World Origin
+                ctx.strokeStyle = 'rgba(0, 255, 255, 0.8)';
+                ctx.lineWidth = scale * 2;
+                ctx.beginPath();
+                ctx.moveTo(-50, 0); ctx.lineTo(50, 0);
+                ctx.moveTo(0, -50); ctx.lineTo(0, 50);
+                ctx.stroke();
+
+                // Magenta Centroid
+                ctx.strokeStyle = 'rgba(255, 0, 255, 0.8)';
+                ctx.beginPath();
+                ctx.moveTo(centroid.x - 30, centroid.y); ctx.lineTo(centroid.x + 30, centroid.y);
+                ctx.moveTo(centroid.x, centroid.y - 30); ctx.lineTo(centroid.x, centroid.y + 30);
+                ctx.stroke();
+
+                ctx.restore();
+            }
 
             const renderDebug = renderDebugRef.current;
             const defaultState = { globalCompositeOperation: 'source-over', globalAlpha: 1, filter: 'none' };

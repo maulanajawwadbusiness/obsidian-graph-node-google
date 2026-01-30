@@ -7,7 +7,7 @@ import { generateRandomGraph } from './graphRandom';
 import { PlaygroundMetrics } from './playgroundTypes';
 import { CameraTransform, updateCameraContainment, verifyMappingIntegrity } from './rendering/camera';
 import { drawVignetteBackground, withCtx } from './rendering/canvasUtils';
-import { createHoverController, FrameSnapshot } from './rendering/hoverController';
+import { createHoverController } from './rendering/hoverController';
 import { updateHoverEnergy } from './rendering/hoverEnergy';
 import { drawHoverDebugOverlay, drawLabels, drawLinks, drawNodes, drawPointerCrosshair } from './rendering/graphDraw';
 import { createMetricsTracker } from './rendering/metrics';
@@ -38,7 +38,6 @@ type UseGraphRenderingProps = {
     showDebugGrid: boolean;
     pixelSnapping: boolean;
     debugNoRenderMotion: boolean;
-    onTick?: (engine: PhysicsEngine) => void; // Fix 52: Frame Hook
 };
 
 export const useGraphRendering = ({
@@ -53,20 +52,17 @@ export const useGraphRendering = ({
     cameraLocked,
     showDebugGrid,
     pixelSnapping,
-    debugNoRenderMotion,
-    onTick
+    debugNoRenderMotion
 }: UseGraphRenderingProps) => {
     const cameraRef = useRef<CameraState>({
         panX: 0,
         panY: 0,
-        zoom: 0.6, // Start slightly zoomed in
+        zoom: 1.0,
         targetPanX: 0,
         targetPanY: 0,
-        targetZoom: 0.6,
+        targetZoom: 1.0,
         lastRecenterCentroidX: 0,
-        lastRecenterCentroidY: 0,
-        // Fix 14: Pivot Initialization
-        centroid: { x: 0, y: 0 }
+        lastRecenterCentroidY: 0
     });
 
     const settingsRef = useRef<RenderSettingsRef>(createInitialRenderSettings());
@@ -78,43 +74,6 @@ export const useGraphRendering = ({
     const dragAnchorRef = useRef<{ x: number, y: number } | null>(null);
     // FIX 33: Stable Centroid (Stop Idle Wobble)
     const stableCentroidRef = useRef<{ x: number, y: number }>({ x: 0, y: 0 });
-
-    // Fix 56: DPR Tracker
-    const lastDPR = useRef(window.devicePixelRatio || 1);
-
-    // Fix DPR-Sync: Fail-Safe State (Prevent map disappearance on 0-size)
-    const lastGoodSync = useRef({
-        backingW: 0,
-        backingH: 0,
-        dpr: 1,
-        rectW: 0,
-        rectH: 0,
-        rectRaw: null as DOMRect | null // Fix 59: Store full rect
-    });
-
-    // Fix 59: Rect Stability Filter
-    const surfaceStabilityRef = useRef({
-        frames: 0,
-        lastCandidates: { w: 0, h: 0, l: 0, t: 0 }
-    });
-
-    // Fix 19 & 20: Snapping Hysteresis (Motion Detector)
-    // We only enable pixel snapping when the scene is "Rock Solid" to prevent
-    // jitter during drag/zoom/physics-settle.
-    const snapStabilityRef = useRef({
-        isStable: false,
-        lastMotionAt: 0,
-        highEnergyFrames: 0
-    });
-
-    // Fix 58 & 61: Unified Frame Snapshot (Single Source of Truth)
-    // Bundles Rect + DPR + Camera State for 1:1 input/render alignment.
-    const frameSnapshotRef = useRef<FrameSnapshot | null>(null);
-
-    // Fix 52: Parallax Lock (Ref Pattern)
-    // Ensure render loop always sees latest callback without restarting loop
-    const onTickRef = useRef(onTick);
-    onTickRef.current = onTick;
 
     const {
         clientToWorld,
@@ -494,135 +453,20 @@ export const useGraphRendering = ({
                 }
             }
 
-            // =================================================================
-            // IMPL: ROBUST SURFACE SYNC (Atomic DPR/Rect/Backing)
-            // =================================================================
-            const rectRaw = canvas.getBoundingClientRect();
-            const dprRaw = window.devicePixelRatio || 1;
+            const rect = canvas.getBoundingClientRect();
+            const dpr = window.devicePixelRatio || 1;
+            const displayWidth = Math.max(1, Math.round(rect.width * dpr));
+            const displayHeight = Math.max(1, Math.round(rect.height * dpr));
 
-            // Guard 1: NaN protection (Fail-safe defaults)
-            const dpr = (!dprRaw || dprRaw <= 0 || isNaN(dprRaw)) ? 1 : dprRaw;
-
-            // Guard 2: Zero/Invalid Rect Protection (Fail-Safe)
-            // If layout thrashes and gives us 0x0, or window is minimized, 
-            // we MUST NOT resize canvas to 0 (which destroys the map).
-            const isRectInvalid = rectRaw.width <= 0 || rectRaw.height <= 0;
-
-            let backingW = 0;
-            let backingH = 0;
-            let cssW = 0;
-            let cssH = 0;
-
-            const approxEq = (a: number, b: number) => Math.abs(a - b) < 0.5;
-
-            let stableRect = rectRaw;
-
-            if (isRectInvalid) {
-                // Invalid: Reset stability counter, keep last good (if available)
-                surfaceStabilityRef.current.frames = 0;
-                // Use last good RAW rect for continuity if possible, else current raw
-                stableRect = lastGoodSync.current.rectRaw || rectRaw;
-            } else if (
-                approxEq(rectRaw.width, surfaceStabilityRef.current.lastCandidates.w) &&
-                approxEq(rectRaw.height, surfaceStabilityRef.current.lastCandidates.h) &&
-                approxEq(rectRaw.left, surfaceStabilityRef.current.lastCandidates.l) &&
-                approxEq(rectRaw.top, surfaceStabilityRef.current.lastCandidates.t)
-            ) {
-                // Stable matches candidate
-                surfaceStabilityRef.current.frames++;
-            } else {
-                // Changed: Reset counter, update candidate
-                surfaceStabilityRef.current.frames = 0;
-                surfaceStabilityRef.current.lastCandidates = {
-                    w: rectRaw.width, h: rectRaw.height, l: rectRaw.left, t: rectRaw.top
-                };
+            if (canvas.width !== displayWidth || canvas.height !== displayHeight) {
+                canvas.width = displayWidth;
+                canvas.height = displayHeight;
+                engine.updateBounds(rect.width, rect.height);
             }
 
-            // Accept new rect only if stable for >1 frame (OR if we have no valid state yet)
-            const acceptNewRect = surfaceStabilityRef.current.frames >= 1 || lastGoodSync.current.backingW === 0;
-
-            if (acceptNewRect) {
-                stableRect = rectRaw;
-            } else if (lastGoodSync.current.rectRaw) {
-                // Use last good rect (visual freeze during thrash)
-                stableRect = lastGoodSync.current.rectRaw;
-            }
-
-            if (isRectInvalid) { // Re-check invalidity or fallback necessity
-                if (lastGoodSync.current.backingW > 0) {
-                    // FAIL-SAFE: Use last good known state
-                    backingW = lastGoodSync.current.backingW;
-                    backingH = lastGoodSync.current.backingH;
-                    cssW = lastGoodSync.current.rectW;
-                    cssH = lastGoodSync.current.rectH;
-                    // Keep existing stableRect (which was set to lastGoodSync.rectRaw above)
-                } else {
-                    // No history, must abort
-                    frameId = requestAnimationFrame(render);
-                    return;
-                }
-            } else {
-                // Valid Layout: Compute Target from STABLE rect
-                backingW = Math.max(1, Math.round(stableRect.width * dpr));
-                backingH = Math.max(1, Math.round(stableRect.height * dpr));
-                cssW = stableRect.width;
-                cssH = stableRect.height;
-
-                // Commit to Last Good
-                lastGoodSync.current = {
-                    backingW,
-                    backingH,
-                    dpr,
-                    rectW: cssW,
-                    rectH: cssH,
-                    rectRaw: stableRect // Fix 59: Store full rect
-                };
-
-                // PUBLISH SNAPSHOT (Unified Single Truth)
-                // Fix 61: Capture Camera State AT RENDER TIME
-                // This ensures that input mapping (hover/drag) matches EXACTLY what was drawn.
-                // Fix 14: Capture Pivot (Centroid) for shared anchor
-                const currentCentroid = engine.getCentroid();
-                cameraRef.current.centroid = currentCentroid;
-
-                const now = performance.now();
-                frameSnapshotRef.current = {
-                    rect: stableRect,
-                    dpr,
-                    camera: { ...cameraRef.current }, // Clone to freeze state for this frame
-                    timestamp: now,
-                    frameId
-                };
-            }
-
-            // Sync Check
-            const backingChanged = canvas.width !== backingW || canvas.height !== backingH;
-            const dprChanged = dpr !== lastDPR.current;
-
-            if (backingChanged || dprChanged) {
-                lastDPR.current = dpr;
-
-                // 1. Resize Backing Store (Destructive: Clears Context)
-                canvas.width = backingW;
-                canvas.height = backingH;
-
-                // 2. Update Engine Bounds (Containment uses CSS pixels)
-                engine.updateBounds(cssW, cssH);
-
-                // Stabilize Transform every frame (Protects against external context resets)
-                ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-            }
-
-            // Fix 24: Cadence Sync
-            // Notify overlays (NodePopup) that the frame is ready and anchors are valid.
-            // This ensures they update in the SAME tick, preventing 1-frame lag.
-            window.dispatchEvent(new Event('graph-render-tick'));
-
-            // Use guarded dimensions for drawing
-            const rect = frameSnapshotRef.current ? frameSnapshotRef.current.rect : rectRaw; // Fix 59: Use Snapshot if available
-            const width = cssW;
-            const height = cssH;
-
+            const width = rect.width;
+            const height = rect.height;
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
             const theme = getTheme(settingsRef.current.skinMode);
 
@@ -738,37 +582,6 @@ export const useGraphRendering = ({
 
             const globalAngle = engine.getGlobalAngle();
 
-            // Fix 19 & 20: Motion Hysteresis Logic
-            // Detect if ANYTHING is moving (Camera, Nodes, Input)
-            const isDragging = !!engine.draggedNodeId || pendingPointer.hasPending || hoverStateRef.current.hasPointer;
-            // Energy check: default to false if engine not running? Assume running.
-            // visualEnergy > 0.01 is "visible motion"
-            const systemEnergy = hoverStateRef.current.energy;
-            const isHighEnergy = systemEnergy > 0.1; // Threshold for "Active Physics"
-
-            // Camera Motion Check (Simple diff)
-            const cameraSpeed = Math.abs(camera.panX - camera.targetPanX) +
-                Math.abs(camera.panY - camera.targetPanY) +
-                Math.abs(camera.zoom - camera.targetZoom) * 100;
-            const isCameraMoving = cameraSpeed > 0.5;
-
-            const isMoving = isDragging || isHighEnergy || isCameraMoving;
-            const nowTime = performance.now();
-
-            if (isMoving) {
-                snapStabilityRef.current.isStable = false;
-                snapStabilityRef.current.lastMotionAt = nowTime;
-            } else {
-                // Settle Timer (200ms of pure silence required to lock)
-                const timeSinceMotion = nowTime - snapStabilityRef.current.lastMotionAt;
-                if (timeSinceMotion > 200) {
-                    snapStabilityRef.current.isStable = true;
-                }
-            }
-
-            // Fix A: Only snap if GLOBALLY enabled AND Locally Stable
-            const effectiveSnapping = settingsRef.current.pixelSnapping && snapStabilityRef.current.isStable;
-
             const transform = new CameraTransform(
                 width,
                 height,
@@ -777,16 +590,12 @@ export const useGraphRendering = ({
                 camera.panY,
                 globalAngle,
                 centroid,
-                dpr, // Fix 57: Pass Fractional DPR
-                effectiveSnapping // Fix 19: Dynamic Snapping (Motion-Aware)
+                settingsRef.current.pixelSnapping
             );
-            // Disable Global CTM (Fix 17/18: Post-Projection Snapping)
-            // transform.applyToContext(ctx);
-            const project = (x: number, y: number) => transform.worldToScreen(x, y);
+            transform.applyToContext(ctx);
 
             if (settingsRef.current.showDebugGrid) {
                 ctx.save();
-                transform.applyToContext(ctx); // Legacy CTM for Grid
                 const scale = 1 / camera.zoom;
                 ctx.lineWidth = scale;
 
@@ -832,32 +641,9 @@ export const useGraphRendering = ({
             renderDebug.activeRingStateBefore = defaultState;
             renderDebug.activeRingStateAfter = defaultState;
 
-            // FIX 55: Continuous Drag Projection (Resize/Scroll Stability)
-            // Always re-project the drag target from client coordinates using the LATEST rect and camera.
-            // This ensures that if the window resizes or camera moves, the node stays under the cursor.
-            if (engine.draggedNodeId && hoverStateRef.current.hasPointer) {
-                const { x: wx, y: wy } = clientToWorld(
-                    hoverStateRef.current.cursorClientX,
-                    hoverStateRef.current.cursorClientY,
-                    frameSnapshotRef.current || lastGoodSync.current.rectRaw || canvas.getBoundingClientRect(),
-                    undefined,
-                    false // Fix 63: Force Snapping OFF for Drag Input (Knife-Sharp)
-                );
-                engine.moveDrag({ x: wx, y: wy });
-
-                // FIX 63: Zero-Latency Draw (Kill 1-Frame Lag)
-                // tick() ran BEFORE this block, so it set node.x/y to the *old* target.
-                // We just updated the target. We MUST update the node.x/y NOW so drawNodes()
-                // sees the fresh position.
-                const draggedNode = engine.nodes.get(engine.draggedNodeId);
-                if (draggedNode) {
-                    draggedNode.x = wx;
-                    draggedNode.y = wy;
-                }
-            }
-
             // FIX 28: Render-Rate Drag Coupling (Visual Dignity)
             // Force update the dragged node to the cursor position EVERY VSRE frame.
+            // This ensures smooth movement even if physics ticks are dropped or quantized (e.g. 60hz physics on 144hz screen).
             if (engine.draggedNodeId && engine.dragTarget) {
                 const dragged = engine.nodes.get(engine.draggedNodeId);
                 if (dragged) {
@@ -866,45 +652,15 @@ export const useGraphRendering = ({
                 }
             }
 
-            const zoom = camera.zoom;
-
-            // Draw Links
             drawLinks(ctx, engine, theme, project);
-
-            // Draw Nodes
-            drawNodes(
-                ctx,
-                engine,
-                theme,
-                settingsRef,
-                hoverStateRef,
-                zoom,
-                renderDebugRef,
-                dpr, // Fix 22: Pass DPR
-                project
-            );
-
-            // Draw Labels (Zoom + Project, No Angle)
-            drawLabels(
-                ctx,
-                engine,
-                theme,
-                settingsRef,
-                hoverStateRef,
-                zoom,
-                dpr, // Fix 21: Pass DPR for Text Quantization
-                project
-            );
+            drawNodes(ctx, engine, theme, settingsRef, hoverStateRef, renderDebugRef);
+            drawLabels(ctx, engine, theme, settingsRef, hoverStateRef, globalAngle);
 
             if (
                 theme.hoverDebugEnabled &&
                 (hoverStateRef.current.hoveredNodeId || hoverStateRef.current.hoverDisplayNodeId)
             ) {
-                // Legacy CTM for Debug Overlay
-                ctx.save();
-                transform.applyToContext(ctx);
                 drawHoverDebugOverlay(ctx, engine, hoverStateRef);
-                ctx.restore();
             }
 
             ctx.restore();
@@ -947,9 +703,6 @@ export const useGraphRendering = ({
             }
 
             trackMetrics(now, engine);
-
-            // Fix 52: Parallax Lock (Frame Callback)
-            if (onTickRef.current) onTickRef.current(engine);
 
             frameId = requestAnimationFrame(render);
         };
@@ -1037,7 +790,6 @@ export const useGraphRendering = ({
         clientToWorld,
         worldToScreen,
         hoverStateRef,
-        getFrameSnapshot: () => frameSnapshotRef.current, // Fix 61: Frame Accessor
         updateHoverSelection // Expose for drag initiation
     };
 };

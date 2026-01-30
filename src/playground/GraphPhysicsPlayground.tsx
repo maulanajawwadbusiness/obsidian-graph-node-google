@@ -50,9 +50,13 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
         aspectRatio: 0,
         lifecycleMs: 0
     });
-    const [spawnCount, setSpawnCount] = useState(6);
+    const [spawnCount, setSpawnCount] = useState(60);
     const [seed, setSeed] = useState(Date.now()); // Seed for deterministic generation
     const [skinMode, setSkinMode] = useState<SkinMode>('elegant'); // Skin toggle (default: elegant)
+    const [cameraLocked, setCameraLocked] = useState(false);
+    const [showDebugGrid, setShowDebugGrid] = useState(false);
+    const [pixelSnapping, setPixelSnapping] = useState(false);
+    const [debugNoRenderMotion, setDebugNoRenderMotion] = useState(false);
 
     const {
         handlePointerMove,
@@ -72,15 +76,32 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
         setMetrics,
         spawnCount,
         useVariedSize,
-        skinMode
+        skinMode,
+        cameraLocked,
+        showDebugGrid,
+        pixelSnapping,
+        debugNoRenderMotion
     });
+
+
 
     // Wrap hook handlers for pointer events
     const onPointerMove = (e: React.PointerEvent) => {
         const canvas = canvasRef.current;
         if (!canvas) return;
         const rect = canvas.getBoundingClientRect();
+
+        // 1. Hover Update
         handlePointerMove(e.pointerId, e.pointerType, e.clientX, e.clientY, rect);
+
+        // 2. Physics Drag Update
+        if (!DRAG_ENABLED) {
+            engineRef.current.releaseNode();
+            return;
+        }
+        // Transform screen coords to world coords (camera + rotation aware)
+        const { x, y } = clientToWorld(e.clientX, e.clientY, rect);
+        engineRef.current.moveDrag({ x, y });
     };
 
     const onPointerEnter = (e: React.PointerEvent) => {
@@ -93,6 +114,8 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
 
     const onPointerCancel = (e: React.PointerEvent) => {
         handlePointerCancel(e.pointerId, e.pointerType);
+        // Ensure drag is released on cancel
+        engineRef.current.releaseNode();
     };
 
     const onPointerUp = (e: React.PointerEvent) => {
@@ -101,6 +124,8 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
             canvas.releasePointerCapture(e.pointerId);
         }
         handlePointerUp(e.pointerId, e.pointerType);
+        // Release drag
+        engineRef.current.releaseNode();
     };
 
     const onPointerDown = (e: React.PointerEvent) => {
@@ -115,82 +140,14 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
         // POINTER CAPTURE: Ensure we receive events even if cursor leaves window
         canvas.setPointerCapture(e.pointerId);
 
-        // Check if a node is currently hovered
-        const hoveredId = hoverStateRef.current.hoveredNodeId;
-        if (!hoveredId) return;
-
-        // Get node screen position for popup anchor
-        const engine = engineRef.current;
-        if (!engine) return;
-
-        const node = engine.nodes.get(hoveredId);
-        if (!node) return;
-
-        const rect = canvas.getBoundingClientRect();
-        const screenPos = worldToScreen(node.x, node.y, rect);
-        const screenRadius = node.radius * 5;  // Approximate screen radius
-
-        // Open popup at node position
-        const metaContent = node.meta ? {
-            title: node.meta.sourceTitle,
-            summary: node.meta.sourceSummary
-        } : undefined;
-
-        popupContext.openPopup(hoveredId, {
-            x: screenPos.x,
-            y: screenPos.y,
-            radius: screenRadius
-        }, metaContent);
-
-        console.log('[Popup] Opened for node:', hoveredId);
-    };
-
-    // Keyboard shortcut: "U" toggles both UI panels (sidebar + debug)
-    useEffect(() => {
-        const isTypingTarget = (target: EventTarget | null) => {
-            const el = target as HTMLElement | null;
-            if (!el) return false;
-            const tag = el.tagName?.toLowerCase();
-            return tag === 'input' || tag === 'textarea' || tag === 'select' || el.isContentEditable;
-        };
-
-        const onKeyDown = (e: KeyboardEvent) => {
-            if (isTypingTarget(e.target)) return;
-            if (e.key !== 'u' && e.key !== 'U') return;
-
-            e.preventDefault();
-            setSidebarOpen((v) => !v);
-            setDebugOpen((v) => !v);
-        };
-
-        window.addEventListener('keydown', onKeyDown);
-        return () => window.removeEventListener('keydown', onKeyDown);
-    }, []);
-
-    useEffect(() => {
-        if (!DRAG_ENABLED) {
-            engineRef.current.releaseNode();
-        }
-    }, [DRAG_ENABLED]);
-
-    // ---------------------------------------------------------------------------
-    // Interaction Handlers (Drag & Drop)
-    // ---------------------------------------------------------------------------
-    const getWorldPos = (e: React.MouseEvent) => {
-        const canvas = canvasRef.current;
-        if (!canvas) return { x: 0, y: 0 };
-        const rect = canvas.getBoundingClientRect();
-        // Transform screen coords to world coords (camera + rotation aware)
-        const { x, y } = clientToWorld(e.clientX, e.clientY, rect);
-        return { x, y };
-    };
-
-    const handleMouseDown = (e: React.MouseEvent) => {
+        // --- Logic Merged from handleMouseDown ---
         if (!DRAG_ENABLED) {
             engineRef.current.releaseNode();
             return;
         }
-        const { x, y } = getWorldPos(e);
+
+        const rect = canvas.getBoundingClientRect();
+        const { x, y } = clientToWorld(e.clientX, e.clientY, rect);
 
         // Find node under cursor
         // Simple naive search (checking all nodes). Fine for <1000 nodes.
@@ -211,19 +168,32 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
         if (hitId) {
             engineRef.current.grabNode(hitId, { x, y });
         }
-    };
+        // -----------------------------------------
 
-    const handleMouseMove = (e: React.MouseEvent) => {
-        if (!DRAG_ENABLED) {
-            engineRef.current.releaseNode();
-            return;
-        }
-        const { x, y } = getWorldPos(e);
-        engineRef.current.moveDrag({ x, y });
-    };
+        // Check if a node is currently hovered (for popup logic)
+        // Use the hitId we just found or fallback to hover state
+        const targetNodeId = hitId || hoverStateRef.current.hoveredNodeId;
+        if (!targetNodeId) return;
 
-    const handleMouseUp = () => {
-        engineRef.current.releaseNode();
+        const node = engineRef.current.nodes.get(targetNodeId);
+        if (!node) return;
+
+        const screenPos = worldToScreen(node.x, node.y, rect);
+        const screenRadius = node.radius * 5;  // Approximate screen radius
+
+        // Open popup at node position
+        const metaContent = node.meta ? {
+            title: node.meta.sourceTitle,
+            summary: node.meta.sourceSummary
+        } : undefined;
+
+        popupContext.openPopup(targetNodeId, {
+            x: screenPos.x,
+            y: screenPos.y,
+            radius: screenRadius
+        }, metaContent);
+
+        console.log('[Popup] Opened for node:', targetNodeId);
     };
 
     // ---------------------------------------------------------------------------
@@ -365,10 +335,6 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
             />
             <div
                 style={MAIN_STYLE}
-                onMouseDown={handleMouseDown}
-                onMouseMove={handleMouseMove}
-                onMouseUp={handleMouseUp}
-                onMouseLeave={handleMouseUp}
                 onPointerDown={onPointerDown}
                 onPointerEnter={onPointerEnter}
                 onPointerMove={onPointerMove}
@@ -390,6 +356,14 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
                     sidebarOpen={sidebarOpen}
                     skinMode={skinMode}
                     viewerOpen={documentContext.state.previewOpen}
+                    cameraLocked={cameraLocked}
+                    showDebugGrid={showDebugGrid}
+                    onToggleCameraLock={() => setCameraLocked(v => !v)}
+                    onToggleDebugGrid={() => setShowDebugGrid(v => !v)}
+                    pixelSnapping={pixelSnapping}
+                    debugNoRenderMotion={debugNoRenderMotion}
+                    onTogglePixelSnapping={() => setPixelSnapping(v => !v)}
+                    onToggleNoRenderMotion={() => setDebugNoRenderMotion(v => !v)}
                 />
                 <TextPreviewButton onToggle={toggleViewer} />
                 <AIActivityGlyph />

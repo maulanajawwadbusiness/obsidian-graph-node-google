@@ -109,9 +109,14 @@ function computePopupPosition(
     const originY = anchor.y - top;
 
     return { left, top, originX, originY };
+    return { left, top, originX, originY };
 }
 
-export const NodePopup: React.FC = () => {
+interface NodePopupProps {
+    trackNode?: (nodeId: string) => { x: number; y: number; radius: number } | null;
+}
+
+export const NodePopup: React.FC<NodePopupProps> = ({ trackNode }) => {
     const { selectedNodeId, anchorGeometry, closePopup, sendMessage, setPopupRect, content } = usePopup();
     const popupRef = useRef<HTMLDivElement>(null);
     const [isVisible, setIsVisible] = useState(false);
@@ -203,6 +208,30 @@ export const NodePopup: React.FC = () => {
     const contentTransition: React.CSSProperties = contentVisible
         ? { opacity: 1, transform: 'translateY(0)', transition: 'opacity 300ms ease-out, transform 300ms ease-out' }
         : { opacity: 0, transform: 'translateY(8px)', transition: 'opacity 300ms ease-out, transform 300ms ease-out' };
+
+    // Fix 52: Parallax Lock (Direct Tracking)
+    useEffect(() => {
+        if (!trackNode || !selectedNodeId || !isVisible) return;
+
+        let rAF = 0;
+        const update = () => {
+            const geom = trackNode(selectedNodeId);
+            if (geom && popupRef.current) {
+                const width = popupRef.current.offsetWidth;
+                const height = popupRef.current.offsetHeight;
+                const pos = computePopupPosition(geom, width, height);
+                popupRef.current.style.left = `${pos.left}px`;
+                popupRef.current.style.top = `${pos.top}px`;
+                // Also update transform origin for zoom/open effects
+                popupRef.current.style.transformOrigin = `${pos.originX}px ${pos.originY}px`;
+            }
+            rAF = requestAnimationFrame(update);
+        };
+
+        // Start loop
+        rAF = requestAnimationFrame(update);
+        return () => cancelAnimationFrame(rAF);
+    }, [selectedNodeId, trackNode, isVisible]);
 
     const finalStyle: React.CSSProperties = {
         ...POPUP_STYLE,

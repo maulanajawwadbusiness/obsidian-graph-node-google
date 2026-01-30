@@ -11,7 +11,11 @@ import { usePopup } from './PopupStore';
  * Future: Can be extended to support seed popup mode.
  */
 
-export const PopupPortal: React.FC = () => {
+interface PopupPortalProps {
+    trackNode?: (nodeId: string) => { x: number; y: number; radius: number } | null;
+}
+
+export const PopupPortal: React.FC<PopupPortalProps> = ({ trackNode }) => {
     const { isOpen, chatbarOpen, messages, sendMessage, closeChatbar } = usePopup();
 
     // Don't render portal if nothing is open
@@ -21,7 +25,7 @@ export const PopupPortal: React.FC = () => {
 
     return (
         <PopupOverlayContainer>
-            {isOpen && <NodePopup />}
+            {isOpen && <NodePopup trackNode={trackNode} />}
             {chatbarOpen && (
                 <MiniChatbar
                     messages={messages}

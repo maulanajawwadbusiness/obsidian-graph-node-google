@@ -38,6 +38,7 @@ type UseGraphRenderingProps = {
     showDebugGrid: boolean;
     pixelSnapping: boolean;
     debugNoRenderMotion: boolean;
+    onTick?: (engine: PhysicsEngine) => void; // Fix 52: Frame Hook
 };
 
 export const useGraphRendering = ({
@@ -52,7 +53,8 @@ export const useGraphRendering = ({
     cameraLocked,
     showDebugGrid,
     pixelSnapping,
-    debugNoRenderMotion
+    debugNoRenderMotion,
+    onTick
 }: UseGraphRenderingProps) => {
     const cameraRef = useRef<CameraState>({
         panX: 0,
@@ -74,6 +76,11 @@ export const useGraphRendering = ({
     const dragAnchorRef = useRef<{ x: number, y: number } | null>(null);
     // FIX 33: Stable Centroid (Stop Idle Wobble)
     const stableCentroidRef = useRef<{ x: number, y: number }>({ x: 0, y: 0 });
+
+    // Fix 52: Parallax Lock (Ref Pattern)
+    // Ensure render loop always sees latest callback without restarting loop
+    const onTickRef = useRef(onTick);
+    onTickRef.current = onTick;
 
     const {
         clientToWorld,
@@ -641,9 +648,20 @@ export const useGraphRendering = ({
             renderDebug.activeRingStateBefore = defaultState;
             renderDebug.activeRingStateAfter = defaultState;
 
+            // FIX 55: Continuous Drag Projection (Resize/Scroll Stability)
+            // Always re-project the drag target from client coordinates using the LATEST rect and camera.
+            // This ensures that if the window resizes or camera moves, the node stays under the cursor.
+            if (engine.draggedNodeId && hoverStateRef.current.hasPointer) {
+                const { x: wx, y: wy } = clientToWorld(
+                    hoverStateRef.current.cursorClientX,
+                    hoverStateRef.current.cursorClientY,
+                    rect
+                );
+                engine.moveDrag({ x: wx, y: wy });
+            }
+
             // FIX 28: Render-Rate Drag Coupling (Visual Dignity)
             // Force update the dragged node to the cursor position EVERY VSRE frame.
-            // This ensures smooth movement even if physics ticks are dropped or quantized (e.g. 60hz physics on 144hz screen).
             if (engine.draggedNodeId && engine.dragTarget) {
                 const dragged = engine.nodes.get(engine.draggedNodeId);
                 if (dragged) {
@@ -651,7 +669,6 @@ export const useGraphRendering = ({
                     dragged.y = engine.dragTarget.y;
                 }
             }
-            ctx.restore();
 
             const zoom = camera.zoom;
 
@@ -719,6 +736,9 @@ export const useGraphRendering = ({
             }
 
             trackMetrics(now, engine);
+
+            // Fix 52: Parallax Lock (Frame Callback)
+            if (onTickRef.current) onTickRef.current(engine);
 
             frameId = requestAnimationFrame(render);
         };

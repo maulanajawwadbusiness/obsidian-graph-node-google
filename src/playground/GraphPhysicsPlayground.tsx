@@ -404,7 +404,19 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
                 <AnalysisOverlay />
                 {SHOW_MAP_TITLE && <MapTitleBlock />}
                 {SHOW_BRAND_LABEL && <BrandLabel />}
-                <PopupPortal />
+                <PopupPortal trackNode={(nodeId) => {
+                    const engine = engineRef.current;
+                    const node = engine?.nodes.get(nodeId);
+                    const canvas = canvasRef.current;
+                    if (!node || !canvas) return null;
+
+                    const rect = canvas.getBoundingClientRect();
+                    const { x, y } = worldToScreen(node.x, node.y, rect);
+                    // Dynamic radius for zoom-aware spacing
+                    const zoom = hoverStateRef.current.lastSelectionZoom || 1;
+                    const r = useVariedSize ? node.radius : 5;
+                    return { x, y, radius: r * zoom };
+                }} />
                 <RotationCompass engineRef={engineRef} />
                 <FullChatToggle />
             </div>

@@ -44,7 +44,8 @@ User interaction must never feel degraded.
     *   **Effect**: The dragged node + its direct neighbors (`focusActive`) are forced into **Level 0** (Full Physics).
 *   **Mechanism 2: Knife-Sharp Drag**:
     *   **Trigger**: `moveDrag`.
-    *   **Effect**: Position updates are applied **immediately** to the node object, bypassing the 16ms physics tick.
+    *   **Start**: **Deferred** (`setPendingDrag`) to render loop to sync with Frame Camera (Fix #36).
+    *   **Update**: Position updates are applied **immediately** to the node object during render, bypassing the 16ms physics tick.
     *   **Result**: 1:1 Hardware Cursor Sync (Zero Lag).
 
 ## 6. Move-Leak Hardening (01–22 + Interaction)

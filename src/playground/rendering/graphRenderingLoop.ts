@@ -334,7 +334,6 @@ export const updateHoverSelectionIfNeeded = (
 const applyDragTargetSync = (
     engine: PhysicsEngine,
     hoverStateRef: Ref<HoverState>,
-    hoverStateRef: Ref<HoverState>,
     clientToWorld: (clientX: number, clientY: number, rect: DOMRect, camera?: CameraState) => { x: number; y: number },
     rect: DOMRect,
     camera: CameraState

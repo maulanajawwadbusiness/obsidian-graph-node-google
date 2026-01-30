@@ -12,8 +12,9 @@ Excluding: `node_modules`, `dist`, `build`, `.git`
 ├── docs/                      # Extensive system documentation
 │   ├── system.md              # MAIN SYSTEM DOC
 │   ├── physics_xray.md        # PHYSICS DOCTRINE
-│   ├── onboarding_dpr_rendering.md # RENDERER DOCTRINE
-│   └── ... (forensic reports)
+│   ├── AGENTS.md              # AGENT BEHAVIOR RULES (New)
+│   ├── comprehensive_forensic_hardening_report_2026-01-30.md # DAILY REPORT
+│   └── ... (rendering/input forensic reports)
 ├── src/
 │   ├── ai/                    # AI Layer (Provider Agnostic)
 │   │   ├── clientTypes.ts     # Interfaces

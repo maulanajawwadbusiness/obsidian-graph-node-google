@@ -95,17 +95,20 @@ Post-Fixes #01–#22, the system guarantees:
 ## 4. Interaction Contract (The "King" Layer)
 *   **Hand Authority**: When dragging a node:
     *   It follows the cursor 1:1 **instantly** (bypasses physics tick for "Knife-Sharp" feel).
-    *   It is an **Immutable Physics Object** (`isFixed=true` + immunity to constraints). No elasticity.
-    *   **Grab Offset**: The node maintains its relative offset to the cursor (no snap-to-center).
-*   **Capture Safety**: Window blur (Alt-Tab) or pointer cancel **must** release the drag to prevent stuck states.
-*   **Local Boost (Interaction Bubble)**: Dragging wakes neighbors and forces them into **Bucket A** (Full Physics).
-*   **Impulse Safety**: `requestImpulse` strictly enforces cooldown (1s).
-*   **Input Ownership**: UI panels (Chat, Docs) fully consume pointer events (Overlay Shield).
-*   **Release Snap**: Releasing a drag instantly clears valid velocity/force history to prevent "Ghost Slides".
-*   **Input Decoupling**: Pointer events are sampled (referenced) but processed strictly inside the `rAF` loop to ensure zero-lag synchronization with the Camera.
-*   **Layout Safety**: `ResizeObserver` caches rects to prevent layout thrash. Zero-size canvases abort formatting.
+    *   **Deferred Anchoring** (Fix #36): Drag start is queued (`setPendingDrag`) and executed at the *start* of the Render Frame to ensure Camera/Input synchronization.
+    *   **Immutable Physics Object**: `isFixed=true` via `engine.grabNode`.
+*   **Capture Safety**: Centralized `safeEndDrag` handles `pointerup`, `cancel`, `lostcapture`, and `window.blur` to prevent stuck drags.
+*   **Input Hygiene**:
+    *   **Sampling**: Pointer events write to `SharedPointerState`.
+    *   **Processing**: `render()` loop reads `SharedPointerState` to update physics/hover.
+    *   **Wheel Ownership**: `passive: false` + `preventDefault` prevents browser zoom/scroll conflicts.
+    *   **OS Normalization**: Wheel deltas are clamped (`+/- 150`) to handle Windows/Mac variance.
+    *   **Inertia Killer**: Small deltas (`< 4.0`) are ignored to strictly eliminate trackpad drift tails.
+*   **Overlay Coherence**:
+    *   **Shared Snapshot**: Graph broadcasts `transform`, `dpr`, and `snapEnabled` via `graph-render-tick`.
+    *   **Unified Rounding**: Popups match Canvas snapping (Float on move, Int on rest).
+*   **Layout Safety**: `ResizeObserver` caches rects to prevent layout thrash.
 *   **DPR Stability**: Rapid monitor swaps are stabilized via hysteresis (4-frame debounce).
-*   **Camera Safety**: NaNs trigger instant rollback to last known good state.
 
 ## 5. AI Architecture
 Arnvoid uses a unified AI layer (`src/ai/`) that abstracts provider details behind a strict interface.

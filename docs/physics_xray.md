@@ -46,10 +46,6 @@ User interaction must never feel degraded.
     *   **Trigger**: `moveDrag`.
     *   **Effect**: Position updates are applied **immediately** to the node object, bypassing the 16ms physics tick.
     *   **Result**: 1:1 Hardware Cursor Sync (Zero Lag).
-*   **Mechanism 3: Law Lock**:
-    *   **Trigger**: Interaction Active (`draggedNodeId`).
-    *   **Effect**: `maxPhysicsBudgetMs = Infinity`. The engine MUST solve every sub-step requried by the scheduling, regardless of frame cost.
-    *   **Result**: 100% Determinism during interaction. No "skipped beats" or "popping" meshes.
 
 ## 6. Move-Leak Hardening (01–22 + Interaction)
 **Status**: Secured.
@@ -62,6 +58,8 @@ User interaction must never feel degraded.
     *   **Overlay Shield**: `e.target === canvas` prevents click-through.
     *   **Gesture Policy**: 5px threshold prevents accidental drags.
     *   **Z-Order**: Top-most node always wins the click.
+    *   **Pixel Alignment** (New): Stroking logic quantizes to `N.5` or `N.0` pixels for visual crispness.
+    *   **Overlay Glue** (New): Popup positions are locked to the render loop via `graph-render-tick` event (Zero Lag).
 
 ### B. Critical Mechanisms
 *   **Correction Residue**: Unpaid constraint budget is stored as debt (`correctionResidual`), preventing dense clusters from crawling.

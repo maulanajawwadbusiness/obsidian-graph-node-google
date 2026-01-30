@@ -59,17 +59,19 @@ Excluding: `node_modules`, `dist`, `build`, `.git`
 *Note: Counts are based on specific file scan.*
 
 1.  `src/physics/engine.ts` (950+ lines) - **Core Physics Logic & Degrade State**
-2.  `src/playground/useGraphRendering.ts` (600+ lines) - **Scheduler, Law Lock & DPR Tracker**
+2.  `src/playground/useGraphRendering.ts` (600+ lines) - **Scheduler & Overload Controller**
 3.  `src/physics/engine/constraints.ts` (372 lines) - **PBD Constraints & Spacing**
-4.  `src/playground/GraphPhysicsPlayground.tsx` (378 lines) - **Main UI Controller & Input Gate**
+4.  `src/playground/GraphPhysicsPlayground.tsx` (378 lines) - **Main UI Controller**
 5.  `src/physics/engine/integration.ts` (200+ lines) - **Time Steps & Dt Skew**
 6.  `src/physics/engine/corrections.ts` (170+ lines) - **Diffusion & Jitter Control**
 7.  `src/physics/engine/velocity/dragVelocity.ts` (40 lines) - **Critical Interaction Logic**
 8.  `src/playground/rendering/hoverController.ts` (300+ lines) - **Interaction Source of Truth (Hit/Touch/Hover)**
 9.  `src/playground/rendering/camera.ts` (New) - **Render Authority & Unified Transform**
-10. `src/physics/engine/forcePass.ts` (202 lines) - **Force Calculations**
-11. `src/fullchat/FullChatStore.tsx` (227 lines) - **Chat State Manager**
-12. `src/ArnvoidDocumentViewer/ArnvoidDocumentViewer.tsx` (312 lines) - **Doc Viewer UI**
+10. `src/playground/rendering/canvasUtils.ts` (New) - **Gradient Glow (GPU Optimized)**
+11. `src/playground/rendering/renderingMath.ts` (New) - **Sub-pixel Quantization & Alignment**
+12. `src/physics/engine/forcePass.ts` (202 lines) - **Force Calculations**
+13. `src/fullchat/FullChatStore.tsx` (227 lines) - **Chat State Manager**
+14. `src/ArnvoidDocumentViewer/ArnvoidDocumentViewer.tsx` (312 lines) - **Doc Viewer UI**
 
 ## 3. Core Runtime Loops
 

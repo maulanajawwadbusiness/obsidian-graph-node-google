@@ -1,6 +1,6 @@
 import type { SkinMode } from '../../visual/theme';
 
-export type RenderSettingsRef = {
+export type RenderSettings = {
     useVariedSize: boolean;
     skinMode: SkinMode;
     cameraLocked: boolean;
@@ -66,7 +66,13 @@ export type HoverState = {
     debugGlowOuterAlpha: number;
     debugGlowOuterBlur: number;
     debugNodeEnergy: number;
-    // Debug: occlusion disk sizing
+    // State Generation Tracking (Phase 5)
+    surfaceGeneration: number;
+    cameraKey: string;
+    lastClientX: number;
+    lastClientY: number;
+
+    // Debug / Perf
     debugNodeRadius: number;
     debugOuterRadius: number;
     debugOcclusionRadius: number;
@@ -110,7 +116,7 @@ export type CameraState = {
     lastRecenterCentroidY: number;
 };
 
-export const createInitialRenderSettings = (): RenderSettingsRef => ({
+export const createInitialRenderSettings = (): RenderSettings => ({
     useVariedSize: true,
     skinMode: 'normal',
     cameraLocked: false,

@@ -27,6 +27,9 @@ export class GradientCache {
         let grad = this.cache.get(key);
         if (grad) {
             this.hits++;
+            // LRU: Promote to newest
+            this.cache.delete(key);
+            this.cache.set(key, grad);
             return grad;
         }
 
@@ -38,9 +41,13 @@ export class GradientCache {
             grad.addColorStop(stop.offset, stop.color);
         }
 
-        this.cache.set(key, grad);
-        this.checkSize();
+        // LRU: Evict oldest if full
+        if (this.cache.size >= this.maxCacheSize) {
+            const oldestKey = this.cache.keys().next().value;
+            this.cache.delete(oldestKey);
+        }
 
+        this.cache.set(key, grad);
         return grad;
     }
 

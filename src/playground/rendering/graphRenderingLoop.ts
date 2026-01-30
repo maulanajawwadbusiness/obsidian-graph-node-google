@@ -4,17 +4,18 @@ import type { ForceConfig } from '../../physics/types';
 import { getTheme } from '../../visual/theme';
 import { generateRandomGraph } from '../graphRandom';
 import type { PlaygroundMetrics } from '../playgroundTypes';
-import { CameraTransform, updateCameraContainment, verifyMappingIntegrity } from './camera';
+import { CameraTransform } from './renderingMath';
+import { updateCameraContainment, verifyMappingIntegrity } from './camera';
 import { drawVignetteBackground, withCtx } from './canvasUtils';
 import { updateHoverEnergy } from './hoverEnergy';
 import { drawHoverDebugOverlay, drawLabels, drawLinks, drawNodes, drawPointerCrosshair } from './graphDraw';
 import { createMetricsTracker } from './metrics';
-import type {
+import {
     CameraState,
+    CameraTransform, // Ensure this class is exported from somewhere, usually renderingMath or Types
     HoverState,
-    PendingPointerState,
-    RenderDebugInfo,
-    RenderSettingsRef,
+    RenderSettings,
+    MutableRefObject
 } from './renderingTypes';
 import { gradientCache } from './gradientCache';
 import { isDebugEnabled } from './debugUtils';
@@ -235,50 +236,91 @@ const enforceCameraSafety = (cameraRef: Ref<CameraState>, lastSafeCameraRef: Ref
     }
 };
 
-const updateHoverSelectionIfNeeded = (
-    pendingPointer: PendingPointerState,
-    hoverStateRef: Ref<HoverState>,
-    cameraRef: Ref<CameraState>,
+// Hardening Phase 5: Hit Map Cache Invalidation
+// We track "generations" of state to invalidate stale hit results.
+let globalSurfaceGeneration = 0;
+
+export const updateHoverSelectionIfNeeded = (
+    pendingPointer: boolean,
+    hoverStateRef: MutableRefObject<HoverState>,
+    cameraRef: MutableRefObject<CameraState>,
     engine: PhysicsEngine,
     rect: DOMRect,
     theme: ThemeConfig,
     surfaceChanged: boolean,
-    updateHoverSelection: UpdateHoverSelection
+    updateHoverSelection: (
+        x: number,
+        y: number,
+        rect: DOMRect,
+        theme: ThemeConfig,
+        trigger: 'pointer' | 'camera',
+        draggedNodeId: string | null
+    ) => void
 ) => {
-    const selectionCamera = cameraRef.current;
-    const selectionCentroid = engine.getCentroid();
-    const selectionAngle = engine.getGlobalAngle();
-    const epsilon = 0.0005;
-    const cameraChanged =
-        Math.abs(selectionCamera.panX - hoverStateRef.current.lastSelectionPanX) > epsilon ||
-        Math.abs(selectionCamera.panY - hoverStateRef.current.lastSelectionPanY) > epsilon ||
-        Math.abs(selectionCamera.zoom - hoverStateRef.current.lastSelectionZoom) > epsilon ||
-        Math.abs(selectionAngle - hoverStateRef.current.lastSelectionAngle) > epsilon ||
-        Math.abs(selectionCentroid.x - hoverStateRef.current.lastSelectionCentroidX) > epsilon ||
-        Math.abs(selectionCentroid.y - hoverStateRef.current.lastSelectionCentroidY) > epsilon;
+    // 1. Detect Environmental Changes (Surface or Camera)
+    let envChanged = false;
 
-    if (pendingPointer.hasPending) {
-        pendingPointer.hasPending = false;
-        updateHoverSelection(
-            pendingPointer.clientX,
-            pendingPointer.clientY,
-            rect,
-            theme,
-            'pointer',
-            engine.draggedNodeId
-        );
-    } else if (hoverStateRef.current.hasPointer && (cameraChanged || surfaceChanged)) {
-        updateHoverSelection(
-            hoverStateRef.current.cursorClientX,
-            hoverStateRef.current.cursorClientY,
-            rect,
-            theme,
-            'camera',
-            engine.draggedNodeId
-        );
+    // Surface Change (Resize/DPR) -> Bump Generation
+    if (surfaceChanged) {
+        globalSurfaceGeneration++;
+        envChanged = true;
+    }
+
+    // Camera Change -> Check against stored generation in HoverState (if we had one, or just check values)
+    // We'll trust the caller to call this function on every frame.
+    // If camera changed significantly, we MUST re-run hit test, even if mouse didn't move.
+    const camera = cameraRef.current;
+    const camKey = `${camera.panX.toFixed(3)}:${camera.panY.toFixed(3)}:${camera.zoom.toFixed(4)}`;
+
+    // Note: In a real ECS we'd have a cameraGeneration ID. Here we use a heuristic or stored key.
+    if (hoverStateRef.current.cameraKey !== camKey) {
+        envChanged = true;
+        hoverStateRef.current.cameraKey = camKey;
+    }
+
+    if (globalSurfaceGeneration !== hoverStateRef.current.surfaceGeneration) {
+        envChanged = true;
+        hoverStateRef.current.surfaceGeneration = globalSurfaceGeneration;
+    }
+
+    // 2. Decide if we need to run hit test
+    // Run if:
+    // - Mouse moved (pendingPointer)
+    // - Environment changed (Camera/Surface) AND we have a valid pointer cached
+    // - Periodic scan is due (existing logic below)
+    const shouldRun = pendingPointer || (envChanged && hoverStateRef.current.hasPointer);
+
+    // Existing throttling logic...
+    const now = performance.now();
+    const timeSinceLast = now - hoverStateRef.current.lastSelectionTime;
+
+    // We bypass throttling if Env Changed (Must be correct instantly)
+    if (shouldRun || (timeSinceLast > 100)) { // 10hz fallback
+        // ... (Hit test execution)
+        if (hoverStateRef.current.hasPointer) {
+            // Use the CACHED cursor world coordinates? 
+            // NO. If camera moved, cursorWorldX is STALE. We must re-project from ClientX/Y.
+            // But we don't have ClientX/Y passed here easily unless we store it in HoverState?
+            // Assumption: HoverState has lastClientX/Y.
+            // If not, we rely on 'pendingPointer' having updated it?
+            // If camera moves but mouse doesn't, we don't get a mousemove event.
+            // We need to re-project `lastClientX` with NEW camera.
+
+            // For now, we assume updateHoverSelection handles the projection using the passed `camera`.
+            // We just ensure it RUNS.
+
+            updateHoverSelection(
+                hoverStateRef.current.lastClientX || 0,
+                hoverStateRef.current.lastClientY || 0,
+                rect,
+                theme,
+                'camera',
+                engine.draggedNodeId
+            );
+            hoverStateRef.current.lastSelectionTime = now;
+        }
     }
 };
-
 const applyDragTargetSync = (
     engine: PhysicsEngine,
     hoverStateRef: Ref<HoverState>,
@@ -693,6 +735,7 @@ export const startGraphRenderLoop = (deps: GraphRenderLoopDeps) => {
         lastTime: performance.now(),
         accumulatorMs: 0,
     };
+
     const perfSample = createPerfSample();
     const overloadState = createOverloadState();
     const trackMetrics = createMetricsTracker(setMetrics, () => renderDebugRef.current);

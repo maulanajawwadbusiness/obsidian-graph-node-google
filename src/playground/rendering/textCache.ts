@@ -24,16 +24,21 @@ export class TextMetricsCache {
 
         const cached = this.cache.get(key);
         if (cached !== undefined) {
+            // LRU: Promote to newest
+            this.cache.delete(key);
+            this.cache.set(key, cached);
             return cached;
         }
 
         const width = ctx.measureText(text).width;
-        this.cache.set(key, width);
 
-        if (this.cache.size > this.maxCacheSize) {
-            this.cache.clear(); // Simple flush strategy
+        // LRU: Evict oldest if full
+        if (this.cache.size >= this.maxCacheSize) {
+            const oldestKey = this.cache.keys().next().value;
+            this.cache.delete(oldestKey);
         }
 
+        this.cache.set(key, width);
         return width;
     }
 

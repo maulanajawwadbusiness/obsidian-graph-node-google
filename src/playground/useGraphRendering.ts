@@ -119,6 +119,9 @@ export const useGraphRendering = ({
             lastFreezeAt: 0,
             pendingHardFreeze: false,
             pendingReason: 'NONE',
+            degradeLevel: 0,
+            degradeReason: 'NONE',
+            degradeHoldFrames: 0,
         };
 
         const engine = engineRef.current;
@@ -144,6 +147,12 @@ export const useGraphRendering = ({
             const maxStepsPerFrame = engine.config.maxStepsPerFrame || 2;
             const maxPhysicsBudgetMs = engine.config.maxPhysicsBudgetMs ?? fixedStepMs * maxStepsPerFrame;
             const dtHugeMs = engine.config.dtHugeMs ?? 250;
+            engine.setDegradeState(
+                overloadState.degradeLevel,
+                overloadState.degradeReason,
+                overloadState.severity,
+                maxPhysicsBudgetMs
+            );
             const rawDeltaMs = now - lastTime;
             const frameDeltaMs = Math.min(rawDeltaMs, maxFrameDeltaMs);
             const dtMs = frameDeltaMs;
@@ -340,6 +349,18 @@ export const useGraphRendering = ({
                 overloadState.freezeCount += 1;
                 overloadState.debtFrames = 0;
                 overloadState.lastFreezeAt = now;
+            }
+
+            const nextDegradeLevel = overloadSeverity === 'HARD' ? 2 : overloadSeverity === 'SOFT' ? 1 : 0;
+            if (nextDegradeLevel > 0) {
+                overloadState.degradeLevel = nextDegradeLevel;
+                overloadState.degradeReason = overloadReason;
+                overloadState.degradeHoldFrames = nextDegradeLevel === 2 ? 12 : 6;
+            } else if (overloadState.degradeHoldFrames > 0) {
+                overloadState.degradeHoldFrames -= 1;
+            } else {
+                overloadState.degradeLevel = 0;
+                overloadState.degradeReason = 'NONE';
             }
 
             if (engine.config.debugPerf) {

@@ -20,7 +20,13 @@ export const applyForcePass = (
     pairOffset: number = 0,
     repulsionEnabled: boolean = true,
     collisionEnabled: boolean = true,
-    springsEnabled: boolean = true
+    springsEnabled: boolean = true,
+    focusActive?: PhysicsNode[],
+    focusSleeping?: PhysicsNode[],
+    focusRepulsionEnabled: boolean = false,
+    focusCollisionEnabled: boolean = false,
+    focusPairStride: number = 1,
+    focusPairOffset: number = 0
 ) => {
     const now =
         nowFn ??
@@ -179,6 +185,17 @@ export const applyForcePass = (
                 timing.collisionMs += now() - collisionStart;
             }
 
+            if (focusActive && focusSleeping) {
+                const focusStart = now();
+                if (focusRepulsionEnabled) {
+                    applyRepulsion(nodeList, focusActive, focusSleeping, engine.config, energy, focusPairStride, focusPairOffset);
+                }
+                if (focusCollisionEnabled) {
+                    applyCollision(nodeList, focusActive, focusSleeping, engine.config, 1.0, focusPairStride, focusPairOffset + 1);
+                }
+                timing.collisionMs += now() - focusStart;
+            }
+
             if (springsEnabled) {
                 const springsStart = now();
                 applySprings(engine.nodes, engine.links, engine.config, 1.0, forceScale, frameIndex || 0);
@@ -190,6 +207,14 @@ export const applyForcePass = (
             }
             if (collisionEnabled) {
                 applyCollision(nodeList, activeNodes, sleepingNodes, engine.config, 1.0, pairStride, pairOffset + 1);
+            }
+            if (focusActive && focusSleeping) {
+                if (focusRepulsionEnabled) {
+                    applyRepulsion(nodeList, focusActive, focusSleeping, engine.config, energy, focusPairStride, focusPairOffset);
+                }
+                if (focusCollisionEnabled) {
+                    applyCollision(nodeList, focusActive, focusSleeping, engine.config, 1.0, focusPairStride, focusPairOffset + 1);
+                }
             }
             if (springsEnabled) {
                 applySprings(engine.nodes, engine.links, engine.config, 1.0, forceScale, frameIndex || 0);

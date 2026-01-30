@@ -8,13 +8,16 @@ export const applyCorrectionsWithDiffusion = (
     correctionAccum: Map<string, { dx: number; dy: number }>,
     energy: number,
     spacingGate: number,
-    stats: DebugStats
+    stats: DebugStats,
+    dt: number,
+    maxDiffusionNeighbors?: number
 ) => {
     // =====================================================================
     // FINAL PASS: APPLY CLAMPED CORRECTIONS WITH DIFFUSION
     // Degree-weighted resistance + neighbor diffusion to prevent pressure concentration
     // =====================================================================
-    const nodeBudget = engine.config.maxNodeCorrectionPerFrame;
+    const timeScale = dt * 60.0;
+    const nodeBudget = engine.config.maxNodeCorrectionPerFrame * timeScale;
 
     // Compute node degree and neighbor map
     const nodeDegree = new Map<string, number>();
@@ -107,7 +110,11 @@ export const applyCorrectionsWithDiffusion = (
 
             // Neighbors get 60% split
             const neighbors = nodeNeighbors.get(node.id) || [];
-            for (const nbId of neighbors) {
+            const neighborLimit = maxDiffusionNeighbors && maxDiffusionNeighbors > 0
+                ? Math.min(neighbors.length, maxDiffusionNeighbors)
+                : neighbors.length;
+            for (let i = 0; i < neighborLimit; i++) {
+                const nbId = neighbors[i];
                 const nbDiff = diffusedCorrection.get(nbId);
                 if (nbDiff) {
                     // Neighbors receive opposite direction (they move to absorb)
@@ -127,7 +134,10 @@ export const applyCorrectionsWithDiffusion = (
         if (!node.lastCorrectionDir) {
             node.lastCorrectionDir = { x: newDir.x, y: newDir.y };
         } else {
-            const lerpFactor = 0.3;
+            // Original: lerpFactor = 0.3
+            // Time-correct: factor = 1 - pow(1 - 0.3, dt * 60)
+            // 0.3 means we keep 70% of old value.
+            const lerpFactor = 1 - Math.pow(0.7, timeScale);
             const lx = node.lastCorrectionDir.x * (1 - lerpFactor) + newDir.x * lerpFactor;
             const ly = node.lastCorrectionDir.y * (1 - lerpFactor) + newDir.y * lerpFactor;
             const lmag = Math.sqrt(lx * lx + ly * ly);

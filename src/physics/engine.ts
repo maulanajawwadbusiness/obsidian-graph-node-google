@@ -88,6 +88,14 @@ export class PhysicsEngine {
     private perfModeLogAt: number = 0;
     private spacingLogAt: number = 0;
     private passLogAt: number = 0;
+    private degradeLevel: number = 0;
+    private degradeReason: string = 'NONE';
+    private degradeSeverity: 'NONE' | 'SOFT' | 'HARD' = 'NONE';
+    private degradeBudgetMs: number = 0;
+    private degradeLogAt: number = 0;
+    private handLogAt: number = 0;
+    private dragLagSamples: number[] = [];
+    private localBoostFrames: number = 0;
     private perfTiming = {
         lastReportAt: 0,
         frameCount: 0,
@@ -100,6 +108,7 @@ export class PhysicsEngine {
             totalMs: 0,
         },
     };
+    private lastDraggedNodeId: string | null = null;
 
     constructor(config: Partial<ForceConfig> = {}) {
         this.config = { ...DEFAULT_PHYSICS_CONFIG, ...config };
@@ -177,6 +186,21 @@ export class PhysicsEngine {
     updateConfig(newConfig: Partial<ForceConfig>) {
         this.config = { ...this.config, ...newConfig };
         this.wakeAll();
+    }
+
+    /**
+     * Update overload-driven degrade state from the scheduler.
+     */
+    setDegradeState(
+        level: number,
+        reason: string,
+        severity: 'NONE' | 'SOFT' | 'HARD',
+        budgetMs: number
+    ) {
+        this.degradeLevel = Math.max(0, Math.min(2, Math.floor(level)));
+        this.degradeReason = reason;
+        this.degradeSeverity = severity;
+        this.degradeBudgetMs = budgetMs;
     }
 
     // =========================================================================
@@ -267,13 +291,19 @@ export class PhysicsEngine {
         if (this.nodes.has(nodeId)) {
             this.draggedNodeId = nodeId;
             this.dragTarget = { ...position };
+            this.lastDraggedNodeId = nodeId;
+
+            // KINEMATIC LOCK: Clear old forces/velocities to prevent fighting
+            const node = this.nodes.get(nodeId);
+            if (node) {
+                node.vx = 0;
+                node.vy = 0;
+                node.fx = 0;
+                node.fy = 0;
+            }
+
             this.wakeNode(nodeId);
             this.wakeNeighbors(nodeId);
-
-            // Note: We don't change restState when dragging
-            // The node is marked isFixed and will move with cursor
-            // On release, it stays where dropped (no elastic rebound)
-            // The hard stop check allows drag to bypass (checks draggedNodeId)
         }
     }
 
@@ -292,6 +322,22 @@ export class PhysicsEngine {
      * Release the node.
      */
     releaseNode() {
+        if (this.draggedNodeId) {
+            const node = this.nodes.get(this.draggedNodeId);
+            if (node) {
+                // RELEASE DAMPING: Clamp velocity to prevent slingshot
+                const speed = Math.sqrt(node.vx * node.vx + node.vy * node.vy);
+                const maxLaunch = 200.0; // Reasonable fling cap
+                if (speed > maxLaunch) {
+                    const scale = maxLaunch / speed;
+                    node.vx *= scale;
+                    node.vy *= scale;
+                }
+                // Optional: apply immediate extra damping to stabilize
+                node.vx *= 0.8;
+                node.vy *= 0.8;
+            }
+        }
         this.draggedNodeId = null;
         this.dragTarget = null;
     }
@@ -329,7 +375,7 @@ export class PhysicsEngine {
         for (let i = 0; i < nodeList.length; i++) {
             const node = nodeList[i];
             node.listIndex = i;
-            const isSleeping = node.isFixed || node.isSleeping === true;
+            const isSleeping = (node.isFixed || node.isSleeping === true) && node.id !== this.draggedNodeId;
             if (isSleeping) {
                 this.sleepingList.push(node);
             } else {
@@ -342,6 +388,13 @@ export class PhysicsEngine {
         this.frameIndex++;
 
         this.updatePerfMode(nodeList.length, this.links.length);
+        const degradeLevel = this.degradeLevel;
+        if (this.draggedNodeId) {
+            this.localBoostFrames = 8;
+        } else if (this.localBoostFrames > 0) {
+            this.localBoostFrames -= 1;
+        }
+        const localBoostActive = this.localBoostFrames > 0;
 
         // =====================================================================
         // SOFT PRE-ROLL PHASE (Gentle separation before expansion)
@@ -365,13 +418,14 @@ export class PhysicsEngine {
         // =====================================================================
         const { energy, forceScale, effectiveDamping, maxVelocityEffective } = computeEnergyEnvelope(this.lifecycle);
 
-        const pairBudgetScale = this.perfMode === 'normal'
+        const degradePairScale = degradeLevel === 0 ? 1 : degradeLevel === 1 ? 0.7 : 0.4;
+        const pairBudgetScale = (this.perfMode === 'normal'
             ? 1
             : this.perfMode === 'stressed'
                 ? 0.7
                 : this.perfMode === 'emergency'
                     ? 0.4
-                    : 0;
+                    : 0) * degradePairScale;
         const pairStrideBase = pairBudgetScale > 0
             ? computePairStride(
                 nodeList.length,
@@ -418,12 +472,23 @@ export class PhysicsEngine {
         const spacingPhase = this.config.spacingCascadeSpacingPhase;
         const spacingPhaseActive = !cascadeActive || cascadePhase === spacingPhase;
         const runPairwiseForces = !cascadeActive || cascadePhase !== spacingPhase;
-        const spacingEvery = this.perfMode === 'normal'
+        const spacingEveryBase = this.perfMode === 'normal'
             ? 1
             : this.perfMode === 'stressed'
                 ? 2
                 : 4;
+        const spacingEvery = spacingEveryBase * (degradeLevel === 0 ? 1 : degradeLevel === 1 ? 2 : 3);
         const spacingWillRun = spacingEnabled && spacingPhaseActive && this.frameIndex % spacingEvery === 0;
+        const repulsionEvery = degradeLevel === 0 ? 1 : degradeLevel === 1 ? 2 : 3;
+        const collisionEvery = degradeLevel === 0 ? 1 : degradeLevel === 1 ? 2 : 3;
+        const springsEvery = degradeLevel === 0 ? 1 : degradeLevel === 1 ? 2 : 3;
+        const triangleEvery = degradeLevel === 0 ? 1 : degradeLevel === 1 ? 2 : 4;
+        const safetyEvery = degradeLevel === 0 ? 1 : degradeLevel === 1 ? 2 : 3;
+        const edgeRelaxEvery = degradeLevel === 0 ? 1 : degradeLevel === 1 ? 2 : 3;
+        const microEvery = degradeLevel === 0 ? 1 : degradeLevel === 1 ? 2 : 4;
+
+        const repulsionEnabled = runPairwiseForces && this.frameIndex % repulsionEvery === 0;
+        const collisionEnabled = runPairwiseForces && (this.frameIndex + 1) % collisionEvery === 0;
 
         if (perfEnabled) {
             const now = getNowMs();
@@ -450,8 +515,54 @@ export class PhysicsEngine {
                     `cascade=${cascadeActive} ` +
                     `phase=${cascadeActive ? cascadePhase : -1}`
                 );
+
+                // [PhysicsFeel] Instrumentation
+                // Show effective per-second values to verify time-consistency
+                // damping(0.9) @ 60hz => 0.9^60 per sec
+                const dampPerSec = Math.pow(Math.exp(-effectiveDamping * 5.0 * dt), 1 / dt);
+                // correctionBudget(1.5) @ 60hz => 1.5 * 60 per sec
+                const budgetPerSec = this.config.maxCorrectionPerFrame * 60;
+                // spacingStrength
+                const spacingStr = spacingGate;
+
+                console.log(
+                    `[PhysicsFeel] mode=${this.perfMode} ` +
+                    `dt=${(dt * 1000).toFixed(1)}ms ` +
+                    `dampPerSec=${dampPerSec.toFixed(3)} ` +
+                    `corrBudgetPerSec=${budgetPerSec.toFixed(1)}px ` +
+                    `spacingGate=${spacingStr.toFixed(3)}`
+                );
+
+                if (this.draggedNodeId && this.dragTarget) {
+                    const node = this.nodes.get(this.draggedNodeId);
+                    if (node) {
+                        const dx = node.x - this.dragTarget.x;
+                        const dy = node.y - this.dragTarget.y;
+                        const lag = Math.sqrt(dx * dx + dy * dy);
+                        console.log(`[Input] Drag Lag: ${lag.toFixed(2)}px (Goal: 0.00)`);
+                    }
+                }
+            }
+            if (now - this.degradeLogAt >= 1000) {
+                this.degradeLogAt = now;
+                console.log(
+                    `[Degrade] level=${degradeLevel} ` +
+                    `reason=${this.degradeReason} ` +
+                    `budgetMs=${this.degradeBudgetMs.toFixed(1)} ` +
+                    `passes={repel:${repulsionEnabled ? 'Y' : 'N'} ` +
+                    `coll:${collisionEnabled ? 'Y' : 'N'} ` +
+                    `space:${spacingWillRun ? 'Y' : 'N'} ` +
+                    `spring:${springsEnabled ? 'Y' : 'N'} ` +
+                    `tri:${(this.perfMode === 'normal' || this.perfMode === 'stressed') && this.frameIndex % triangleEvery === 0 ? 'Y' : 'N'} ` +
+                    `safety:${this.frameIndex % safetyEvery === 0 ? 'Y' : 'N'} ` +
+                    `diff:Y micro:${this.frameIndex % microEvery === 0 ? 'Y' : 'N'}} ` +
+                    `k={repel:${repulsionEvery} coll:${collisionEvery} spring:${springsEvery} ` +
+                    `space:${spacingEvery} tri:${triangleEvery} safety:${safetyEvery} micro:${microEvery}} ` +
+                    `pairBudget={pairStride:${pairStrideBase} spacingStride:${spacingStride}}`
+                );
             }
         }
+
 
         if (this.perfMode === 'fatal') {
             for (const node of nodeList) {
@@ -468,7 +579,27 @@ export class PhysicsEngine {
             return;
         }
 
-        const springsEnabled = this.perfMode !== 'emergency' || this.frameIndex % 2 === 0;
+        const baseSpringsEnabled = this.perfMode !== 'emergency' || this.frameIndex % 2 === 0;
+        const springsEnabled = baseSpringsEnabled && this.frameIndex % springsEvery === 0;
+
+        let focusActive: PhysicsNode[] = [];
+        let focusSleeping: PhysicsNode[] = [];
+        const focusCenterId = this.draggedNodeId ?? this.lastDraggedNodeId;
+        if (localBoostActive && focusCenterId) {
+            const focusIds = new Set<string>();
+            focusIds.add(focusCenterId);
+            for (const link of this.links) {
+                if (link.source === focusCenterId) focusIds.add(link.target);
+                if (link.target === focusCenterId) focusIds.add(link.source);
+            }
+            for (const node of nodeList) {
+                if (focusIds.has(node.id)) {
+                    focusActive.push(node);
+                } else {
+                    focusSleeping.push(node);
+                }
+            }
+        }
 
         // 2. Apply Core Forces (scaled by energy)
         applyForcePass(
@@ -486,9 +617,15 @@ export class PhysicsEngine {
             perfEnabled ? getNowMs : undefined,
             pairStrideBase,
             pairOffset,
-            runPairwiseForces,
-            runPairwiseForces,
-            springsEnabled
+            repulsionEnabled,
+            collisionEnabled,
+            springsEnabled,
+            localBoostActive && !repulsionEnabled ? focusActive : undefined,
+            localBoostActive && !repulsionEnabled ? focusSleeping : undefined,
+            localBoostActive && !repulsionEnabled,
+            localBoostActive && !collisionEnabled,
+            1,
+            pairOffset + 7
         );
         applyDragVelocity(this, nodeList, dt, debugStats);
         applyPreRollVelocity(this, nodeList, preRollActive, debugStats);
@@ -502,25 +639,28 @@ export class PhysicsEngine {
         // =====================================================================
         const nodeDegreeEarly = computeNodeDegrees(this, nodeList);
 
-        applyExpansionResistance(this, nodeList, nodeDegreeEarly, energy, debugStats);
+        applyExpansionResistance(this, nodeList, nodeDegreeEarly, energy, debugStats, dt);
 
-        // Dense-core velocity de-locking (micro-slip) - breaks rigid-body lock
-        applyDenseCoreVelocityDeLocking(this, nodeList, energy, debugStats);
+        const microEnabled = this.frameIndex % microEvery === 0;
+        if (microEnabled) {
+            // Dense-core velocity de-locking (micro-slip) - breaks rigid-body lock
+            applyDenseCoreVelocityDeLocking(this, nodeList, energy, debugStats);
 
-        // Static friction bypass - breaks zero-velocity rest state
-        applyStaticFrictionBypass(this, nodeList, energy, debugStats);
+            // Static friction bypass - breaks zero-velocity rest state
+            applyStaticFrictionBypass(this, nodeList, energy, debugStats);
 
-        // Angular velocity decoherence - breaks velocity orientation correlation
-        applyAngularVelocityDecoherence(this, nodeList, energy, debugStats);
+            // Angular velocity decoherence - breaks velocity orientation correlation
+            applyAngularVelocityDecoherence(this, nodeList, energy, debugStats);
 
-        // Local phase diffusion - breaks oscillation synchronization (shape memory eraser)
-        applyLocalPhaseDiffusion(this, nodeList, energy, debugStats);
+            // Local phase diffusion - breaks oscillation synchronization (shape memory eraser)
+            applyLocalPhaseDiffusion(this, nodeList, energy, debugStats);
 
-        // Low-force stagnation escape - breaks rest-position preference (edge shear version)
-        applyEdgeShearStagnationEscape(this, nodeList, energy, debugStats);
+            // Low-force stagnation escape - breaks rest-position preference (edge shear version)
+            applyEdgeShearStagnationEscape(this, nodeList, energy, debugStats);
 
-        // Dense-core inertia relaxation - erases momentum memory in jammed nodes
-        applyDenseCoreInertiaRelaxation(this, nodeList, energy, debugStats);
+            // Dense-core inertia relaxation - erases momentum memory in jammed nodes
+            applyDenseCoreInertiaRelaxation(this, nodeList, energy, debugStats);
+        }
 
         // =====================================================================
         // PER-NODE CORRECTION BUDGET SYSTEM
@@ -534,7 +674,10 @@ export class PhysicsEngine {
         }
 
         if (!preRollActive) {
-            applyEdgeRelaxation(this, correctionAccum, nodeDegreeEarly, debugStats);
+            const edgeRelaxEnabled = this.frameIndex % edgeRelaxEvery === 0;
+            if (edgeRelaxEnabled) {
+                applyEdgeRelaxation(this, correctionAccum, nodeDegreeEarly, debugStats, dt);
+            }
             if (spacingWillRun) {
                 if (perfEnabled && frameTiming) {
                     const spacingStart = getNowMs();
@@ -547,6 +690,7 @@ export class PhysicsEngine {
                         energy,
                         debugStats,
                         spacingGate,
+                        dt,
                         spacingStride,
                         pairOffset + 2
                     );
@@ -561,31 +705,104 @@ export class PhysicsEngine {
                         energy,
                         debugStats,
                         spacingGate,
+                        dt,
                         spacingStride,
                         pairOffset + 2
                     );
                 }
+            } else if (localBoostActive && focusActive.length > 0) {
+                applySpacingConstraints(
+                    this,
+                    focusActive,
+                    focusSleeping,
+                    correctionAccum,
+                    nodeDegreeEarly,
+                    energy,
+                    debugStats,
+                    spacingGate,
+                    dt,
+                    1,
+                    pairOffset + 5
+                );
             }
-            if (this.perfMode === 'normal' || this.perfMode === 'stressed') {
-                applyTriangleAreaConstraints(this, nodeList, correctionAccum, nodeDegreeEarly, energy, debugStats);
+            const triangleEnabled = (this.perfMode === 'normal' || this.perfMode === 'stressed') &&
+                this.frameIndex % triangleEvery === 0;
+            if (triangleEnabled) {
+                applyTriangleAreaConstraints(this, nodeList, correctionAccum, nodeDegreeEarly, energy, debugStats, dt);
             }
-            applyAngleResistanceVelocity(this, nodeList, nodeDegreeEarly, energy, debugStats);
-            applyDistanceBiasVelocity(this, nodeList, debugStats);
-            applySafetyClamp(
+            applyAngleResistanceVelocity(this, nodeList, nodeDegreeEarly, energy, debugStats, dt);
+            applyDistanceBiasVelocity(this, nodeList, debugStats, dt);
+            const safetyEnabled = this.frameIndex % safetyEvery === 0;
+            if (safetyEnabled) {
+                applySafetyClamp(
+                    this,
+                    this.awakeList,
+                    this.sleepingList,
+                    correctionAccum,
+                    nodeDegreeEarly,
+                    energy,
+                    debugStats,
+                    dt,
+                    pairStrideBase,
+                    pairOffset + 3
+                );
+            } else if (localBoostActive && focusActive.length > 0) {
+                applySafetyClamp(
+                    this,
+                    focusActive,
+                    focusSleeping,
+                    correctionAccum,
+                    nodeDegreeEarly,
+                    energy,
+                    debugStats,
+                    dt,
+                    1,
+                    pairOffset + 6
+                );
+            }
+            const maxDiffusionNeighbors = degradeLevel === 0 ? undefined : degradeLevel === 1 ? 4 : 2;
+            applyCorrectionsWithDiffusion(
                 this,
-                this.awakeList,
-                this.sleepingList,
+                nodeList,
                 correctionAccum,
-                nodeDegreeEarly,
                 energy,
+                spacingGate,
                 debugStats,
-                pairStrideBase,
-                pairOffset + 3
+                dt,
+                maxDiffusionNeighbors
             );
-            applyCorrectionsWithDiffusion(this, nodeList, correctionAccum, energy, spacingGate, debugStats);
         }
         if (perfEnabled && frameTiming) {
             frameTiming.pbdMs += getNowMs() - pbdStart;
+        }
+
+        if (this.draggedNodeId && this.dragTarget) {
+            const node = this.nodes.get(this.draggedNodeId);
+            if (node) {
+                const dx = node.x - this.dragTarget.x;
+                const dy = node.y - this.dragTarget.y;
+                const lag = Math.sqrt(dx * dx + dy * dy);
+                this.dragLagSamples.push(lag);
+            }
+        }
+
+        if (perfEnabled) {
+            const now = getNowMs();
+            if (now - this.handLogAt >= 1000) {
+                this.handLogAt = now;
+                let lagP95 = 0;
+                if (this.dragLagSamples.length > 0) {
+                    const sorted = this.dragLagSamples.slice().sort((a, b) => a - b);
+                    const idx = Math.min(sorted.length - 1, Math.floor(sorted.length * 0.95));
+                    lagP95 = sorted[idx] ?? 0;
+                }
+                console.log(
+                    `[Hand] dragging=${this.draggedNodeId ? 'Y' : 'N'} ` +
+                    `localBoost=${localBoostActive ? 'Y' : 'N'} ` +
+                    `lagP95Px=${lagP95.toFixed(2)}`
+                );
+                this.dragLagSamples.length = 0;
+            }
         }
 
         logEnergyDebug(this.lifecycle, energy, effectiveDamping, maxVelocityEffective);

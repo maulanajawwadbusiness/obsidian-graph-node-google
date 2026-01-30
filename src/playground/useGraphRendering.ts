@@ -6,7 +6,7 @@ import { getTheme, SkinMode } from '../visual/theme';
 import { generateRandomGraph } from './graphRandom';
 import { PlaygroundMetrics } from './playgroundTypes';
 import { CameraTransform, updateCameraContainment, verifyMappingIntegrity } from './rendering/camera';
-import { drawVignetteBackground, syncCanvasSizing, withCtx } from './rendering/canvasUtils';
+import { drawVignetteBackground, withCtx } from './rendering/canvasUtils';
 import { createHoverController } from './rendering/hoverController';
 import { updateHoverEnergy } from './rendering/hoverEnergy';
 import { drawHoverDebugOverlay, drawLabels, drawLinks, drawNodes, drawPointerCrosshair } from './rendering/graphDraw';
@@ -79,6 +79,15 @@ export const useGraphRendering = ({
 
     // Fix 56: DPR Tracker
     const lastDPR = useRef(window.devicePixelRatio || 1);
+
+    // Fix DPR-Sync: Fail-Safe State (Prevent map disappearance on 0-size)
+    const lastGoodSync = useRef({
+        backingW: 0,
+        backingH: 0,
+        dpr: 1,
+        rectW: 0,
+        rectH: 0
+    });
 
     // Fix 52: Parallax Lock (Ref Pattern)
     // Ensure render loop always sees latest callback without restarting loop
@@ -165,21 +174,8 @@ export const useGraphRendering = ({
         }
 
         if (canvas) {
-            // Initial sync
-            if (ctx) syncCanvasSizing(canvas, ctx, lastDPR, true);
-            const rect = canvas.getBoundingClientRect();
-            engine.updateBounds(rect.width, rect.height);
+            engine.updateBounds(canvas.width, canvas.height);
         }
-
-        // Fix: ResizeObserver for robust layout changes
-        const resizeObserver = new ResizeObserver(() => {
-            if (!canvas || !ctx) return;
-            // FIX: Do NOT synchronously resize here. It clears the canvas after render but before paint.
-            // The rAF loop polls syncCanvasSizing at the start of every frame, which covers this.
-            // We keep the observer if we need to wake the engine or log, but for now we trust the loop.
-            // engine.updateBounds is also called in rAF if size changed.
-        });
-        resizeObserver.observe(canvas);
 
         const render = () => {
             const now = performance.now();
@@ -476,25 +472,83 @@ export const useGraphRendering = ({
                 }
             }
 
-            const rect = canvas.getBoundingClientRect();
+            // =================================================================
+            // IMPL: ROBUST SURFACE SYNC (Atomic DPR/Rect/Backing)
+            // =================================================================
+            const rectRaw = canvas.getBoundingClientRect();
+            const dprRaw = window.devicePixelRatio || 1;
 
-            // Fix 56: Centralized Sync (Idempotent)
-            // Handles DPR change, CSS resize, and Context restoration.
-            const sizeChanged = syncCanvasSizing(canvas, ctx, lastDPR, engine.config.debugPerf);
+            // Guard 1: NaN protection (Fail-safe defaults)
+            const dpr = (!dprRaw || dprRaw <= 0 || isNaN(dprRaw)) ? 1 : dprRaw;
 
-            if (sizeChanged) {
-                // If size changed, we must inform the engine of the new world bounds (in CSS pixels)
-                // engine.updateBounds expects logical pixels, so we pass rect.width not canvas.width
-                engine.updateBounds(rect.width, rect.height);
+            // Guard 2: Zero/Invalid Rect Protection (Fail-Safe)
+            // If layout thrashes and gives us 0x0, or window is minimized, 
+            // we MUST NOT resize canvas to 0 (which destroys the map).
+            const isRectInvalid = rectRaw.width <= 0 || rectRaw.height <= 0;
+
+            let backingW = 0;
+            let backingH = 0;
+            let cssW = 0;
+            let cssH = 0;
+
+            if (isRectInvalid) {
+                // FAIL-SAFE: Use last good known state
+                if (lastGoodSync.current.backingW > 0) {
+                    backingW = lastGoodSync.current.backingW;
+                    backingH = lastGoodSync.current.backingH;
+                    cssW = lastGoodSync.current.rectW;
+                    cssH = lastGoodSync.current.rectH;
+                } else {
+                    // Startup panic or unavailable state? Skip frame safely.
+                    frameId = requestAnimationFrame(render);
+                    return;
+                }
+            } else {
+                // Valid Layout: Compute Target
+                backingW = Math.max(1, Math.round(rectRaw.width * dpr));
+                backingH = Math.max(1, Math.round(rectRaw.height * dpr));
+                cssW = rectRaw.width;
+                cssH = rectRaw.height;
+
+                // Commit to Last Good
+                lastGoodSync.current = {
+                    backingW,
+                    backingH,
+                    dpr,
+                    rectW: cssW,
+                    rectH: cssH
+                };
             }
 
-            // Guard Rail: Ensure transform is strictly set to DPR for this frame's drawing
-            // syncCanvasSizing does this on resize, but we enforce it every frame to prevent drift
-            const dpr = window.devicePixelRatio || 1;
-            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+            // Sync Check
+            const backingChanged = canvas.width !== backingW || canvas.height !== backingH;
+            const dprChanged = dpr !== lastDPR.current;
 
-            const width = rect.width;
-            const height = rect.height;
+            if (backingChanged || dprChanged) {
+                lastDPR.current = dpr;
+
+                // 1. Resize Backing Store (Destructive: Clears Context)
+                canvas.width = backingW;
+                canvas.height = backingH;
+
+                // 2. Update Engine Bounds (Containment uses CSS pixels)
+                engine.updateBounds(cssW, cssH);
+
+                // 3. ATOMIC TRANSFORM RESET
+                // Restore coordinate system immediately: Backing(Px) -> CSS(Px)
+                ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+                console.log(`[Resync] Atomic Sync: DPR=${dpr.toFixed(2)} Backing=${backingW}x${backingH} CSS=${cssW.toFixed(0)}x${cssH.toFixed(0)}`);
+            } else {
+                // Stabilize Transform every frame (Protects against external context resets)
+                ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+            }
+
+            // Use guarded dimensions for drawing
+            const rect = rectRaw; // Keep raw rect for clientToWorld offset calculations (needs .left/.top)
+            const width = cssW;
+            const height = cssH;
+
 
             const theme = getTheme(settingsRef.current.skinMode);
 
@@ -768,12 +822,6 @@ export const useGraphRendering = ({
             clearHover('window blur', -1, 'unknown');
         };
         window.addEventListener('blur', handleBlur);
-
-        return () => {
-            window.removeEventListener('blur', handleBlur);
-            cancelAnimationFrame(frameId);
-            resizeObserver.disconnect();
-        };
 
         // FIX 23: Unambiguous Wheel Handling (Native Listener for preventDefault)
         // Explicitly own the wheel on canvas to prevent page scroll.

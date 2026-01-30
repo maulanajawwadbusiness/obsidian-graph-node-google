@@ -693,11 +693,22 @@ export const useGraphRendering = ({
             const cx = e.clientX - rect.left;
             const cy = e.clientY - rect.top;
 
+            // FIX 27: Tunable Sensitivity Knobs
+            const ZOOM_SENSITIVITY = 0.002;
+            const PAN_SENSITIVITY = 1.0;
+
+            // FIX 25: Normalize Delta (Trackpad vs Mouse)
+            // deltaMode: 0=Pixels, 1=Lines, 2=Pages
+            let delta = e.deltaY;
+            if (e.deltaMode === 1) {
+                delta *= 33; // ~Line height
+            } else if (e.deltaMode === 2) {
+                delta *= 800; // ~Page height
+            }
+
             // Zoom Factor
-            // Normalize delta (some mice 100, trackpads 1-10)
-            const delta = e.deltaY;
-            const zoomSensitivity = 0.001;
-            const scale = Math.exp(-delta * zoomSensitivity);
+            // Use normalized delta
+            const scale = Math.exp(-delta * ZOOM_SENSITIVITY);
 
             // Apply Zoom centered on cursor
             // NewZoom = OldZoom * scale
@@ -715,10 +726,11 @@ export const useGraphRendering = ({
             const vy = cy - rect.height / 2;
 
             // Shift Pan to maintain world position under cursor
-            const rx = vx / oldZoom;
-            const ry = vy / oldZoom;
-            const rxx = vx / newZoom;
-            const ryy = vy / newZoom;
+            // FIX 27: Apply Sensitivity
+            const rx = (vx / oldZoom) * PAN_SENSITIVITY;
+            const ry = (vy / oldZoom) * PAN_SENSITIVITY;
+            const rxx = (vx / newZoom) * PAN_SENSITIVITY;
+            const ryy = (vy / newZoom) * PAN_SENSITIVITY;
 
             // Pan Correction
             camera.targetPanX += (rx - rxx);

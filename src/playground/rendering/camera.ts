@@ -225,8 +225,10 @@ export const updateCameraContainment = (
     // New: Lerp with time constant.
     // 0.15 at 60hz => ~90% correction in ~14 frames (~230ms)
     // Decay factor lambda: target = current + (target - current) * (1 - exp(-lambda * dt))
-    // lambda = 5.0 (approx 200ms settling)
-    const lambda = 4.0;
+    // FIX 26: Human Snappiness (Remove Syrup)
+    // Old: lambda=4.0 (Too slow, ~600ms settle)
+    // New: lambda=15.0 (Snappy, ~150ms settle). Small moves are instant, big moves are smooth.
+    const lambda = 15.0;
     const alpha = 1.0 - Math.exp(-lambda * dt);
 
     camera.panX += (camera.targetPanX - camera.panX) * alpha;

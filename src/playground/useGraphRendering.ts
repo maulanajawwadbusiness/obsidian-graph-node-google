@@ -840,10 +840,21 @@ export const useGraphRendering = ({
                 const { x: wx, y: wy } = clientToWorld(
                     hoverStateRef.current.cursorClientX,
                     hoverStateRef.current.cursorClientY,
-                    rect,
-                    dpr // Fix 57: Pass DPR
+                    frameSnapshotRef.current || lastGoodSync.current.rectRaw || canvas.getBoundingClientRect(),
+                    undefined,
+                    false // Fix 63: Force Snapping OFF for Drag Input (Knife-Sharp)
                 );
                 engine.moveDrag({ x: wx, y: wy });
+
+                // FIX 63: Zero-Latency Draw (Kill 1-Frame Lag)
+                // tick() ran BEFORE this block, so it set node.x/y to the *old* target.
+                // We just updated the target. We MUST update the node.x/y NOW so drawNodes()
+                // sees the fresh position.
+                const draggedNode = engine.nodes.get(engine.draggedNodeId);
+                if (draggedNode) {
+                    draggedNode.x = wx;
+                    draggedNode.y = wy;
+                }
             }
 
             // FIX 28: Render-Rate Drag Coupling (Visual Dignity)

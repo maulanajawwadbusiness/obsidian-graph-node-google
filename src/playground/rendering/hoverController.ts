@@ -259,7 +259,8 @@ export const createHoverController = ({
         clientX: number,
         clientY: number,
         source: DOMRect | FrameSnapshot,
-        dprOverride?: number
+        dprOverride?: number,
+        snapOverride?: boolean // Fix 63: Input Snapping Control
     ) => {
         let rect: DOMRect;
         let dpr: number;
@@ -286,6 +287,8 @@ export const createHoverController = ({
             return { x: 0, y: 0, sx: 0, sy: 0 };
         }
 
+        const shouldSnap = snapOverride !== undefined ? snapOverride : settingsRef.current.pixelSnapping;
+
         const transform = new CameraTransform(
             rect.width,
             rect.height,
@@ -295,7 +298,7 @@ export const createHoverController = ({
             angle,
             centroid,
             dpr,
-            settingsRef.current.pixelSnapping
+            shouldSnap
         );
 
         const world = transform.clientToWorld(clientX, clientY, rect);
@@ -442,7 +445,19 @@ export const createHoverController = ({
         lockedNodeId: string | null = null,
         dprOverride?: number // Optional if source is snapshot
     ) => {
-        const { x: worldX, y: worldY, sx, sy } = clientToWorld(clientX, clientY, source, dprOverride);
+        // Fix 63: Disable Snapping for Pointer Input?
+        // Actually, we generally WANT pointer mapping to be precise (float) for selection logic,
+        // unless we strictly want to select what is "visually" snapped?
+        // But for Dragging, we MUST disable snapping.
+        // For selection, float is better for hit-testing accuracy.
+        // Let's default to FALSE (No snapping) for all pointer ops?
+        // But visuals are snapped. If I click on a snapped pixel...
+        // CameraTransform is pure float mapping anyway for clientToWorld.
+        // But constructor takes 'pixelSnapping'.
+        // If 'pixelSnapping' is true, does clientToWorld behave differently?
+        // Analysis of camera.ts says NO. It ignores it.
+        // So this change is mostly hygienic/future-proofing.
+        const { x: worldX, y: worldY, sx, sy } = clientToWorld(clientX, clientY, source, dprOverride, false);
 
         hoverStateRef.current.cursorWorldX = worldX;
         hoverStateRef.current.cursorWorldY = worldY;

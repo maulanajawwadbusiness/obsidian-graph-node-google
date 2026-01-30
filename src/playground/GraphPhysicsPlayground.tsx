@@ -113,7 +113,8 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
             return;
         }
         // Transform screen coords to world coords (camera + rotation aware)
-        const { x, y } = clientToWorld(e.clientX, e.clientY, effectiveSource);
+        // Fix 63: Disable Snapping for Drag Input
+        const { x, y } = clientToWorld(e.clientX, e.clientY, effectiveSource, undefined, false);
         engineRef.current.moveDrag({ x, y });
     };
 
@@ -211,7 +212,8 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
         const hitId = hoverStateRef.current.hoveredNodeId;
 
         if (hitId) {
-            const { x, y } = clientToWorld(e.clientX, e.clientY, effectiveSource);
+            // Fix 63: Disable Snapping for Grab Input
+            const { x, y } = clientToWorld(e.clientX, e.clientY, effectiveSource, undefined, false);
             engineRef.current.grabNode(hitId, { x, y });
         }
         // -----------------------------------------

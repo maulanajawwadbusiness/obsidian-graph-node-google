@@ -74,6 +74,8 @@ export const useGraphRendering = ({
     const dragAnchorRef = useRef<{ x: number, y: number } | null>(null);
     // FIX 33: Stable Centroid (Stop Idle Wobble)
     const stableCentroidRef = useRef<{ x: number, y: number }>({ x: 0, y: 0 });
+    // FIX 39: Camera NaN Safety Backup
+    const lastSafeCameraRef = useRef<CameraState>({ ...cameraRef.current });
 
     const {
         clientToWorld,
@@ -443,6 +445,14 @@ export const useGraphRendering = ({
             }
 
             const rect = canvas.getBoundingClientRect();
+
+            // FIX 38: Zero-Size Guard (Prevent Vanishing Map)
+            if (rect.width <= 0 || rect.height <= 0) {
+                // Skip frame, but keep loop alive
+                frameId = requestAnimationFrame(render);
+                return;
+            }
+
             const dpr = window.devicePixelRatio || 1;
             const displayWidth = Math.max(1, Math.round(rect.width * dpr));
             const displayHeight = Math.max(1, Math.round(rect.height * dpr));
@@ -574,6 +584,26 @@ export const useGraphRendering = ({
             }
 
             const globalAngle = engine.getGlobalAngle();
+
+            // FIX 39: Camera NaN Safety (Prevent Crashes)
+            if (isNaN(camera.zoom) || isNaN(camera.panX) || isNaN(camera.panY) || !isFinite(camera.zoom)) {
+                // Restore from last good known state to prevent crash/blink
+                const safe = lastSafeCameraRef.current;
+                camera.zoom = safe.zoom;
+                camera.panX = safe.panX;
+                camera.panY = safe.panY;
+                camera.targetZoom = safe.targetZoom;
+                camera.targetPanX = safe.targetPanX;
+                camera.targetPanY = safe.targetPanY;
+            } else {
+                // Update backup
+                lastSafeCameraRef.current.zoom = camera.zoom;
+                lastSafeCameraRef.current.panX = camera.panX;
+                lastSafeCameraRef.current.panY = camera.panY;
+                lastSafeCameraRef.current.targetZoom = camera.targetZoom;
+                lastSafeCameraRef.current.targetPanX = camera.targetPanX;
+                lastSafeCameraRef.current.targetPanY = camera.targetPanY;
+            }
 
             const transform = new CameraTransform(
                 width,

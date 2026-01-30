@@ -106,6 +106,8 @@ export type CameraState = {
     targetPanX: number;
     targetPanY: number;
     targetZoom: number;
+    // Fix 14: Shared Pivot (Anchor Correctness)
+    centroid: { x: number; y: number };
     lastRecenterCentroidX: number;
     lastRecenterCentroidY: number;
 };

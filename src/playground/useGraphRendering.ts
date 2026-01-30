@@ -59,12 +59,14 @@ export const useGraphRendering = ({
     const cameraRef = useRef<CameraState>({
         panX: 0,
         panY: 0,
-        zoom: 1.0,
+        zoom: 0.6, // Start slightly zoomed in
         targetPanX: 0,
         targetPanY: 0,
-        targetZoom: 1.0,
+        targetZoom: 0.6,
         lastRecenterCentroidX: 0,
-        lastRecenterCentroidY: 0
+        lastRecenterCentroidY: 0,
+        // Fix 14: Pivot Initialization
+        centroid: { x: 0, y: 0 }
     });
 
     const settingsRef = useRef<RenderSettingsRef>(createInitialRenderSettings());
@@ -570,6 +572,10 @@ export const useGraphRendering = ({
                 // PUBLISH SNAPSHOT (Unified Single Truth)
                 // Fix 61: Capture Camera State AT RENDER TIME
                 // This ensures that input mapping (hover/drag) matches EXACTLY what was drawn.
+                // Fix 14: Capture Pivot (Centroid) for shared anchor
+                const currentCentroid = engine.getCentroid();
+                cameraRef.current.centroid = currentCentroid;
+
                 const now = performance.now();
                 frameSnapshotRef.current = {
                     rect: stableRect,

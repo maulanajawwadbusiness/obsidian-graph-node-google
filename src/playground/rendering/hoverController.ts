@@ -277,7 +277,9 @@ export const createHoverController = ({
         }
 
         const engine = engineRef.current;
-        const centroid = engine ? engine.getCentroid() : { x: 0, y: 0 };
+        // Fix 14: Use Captured Pivot from Snapshot (if available) or Camera State
+        // This ensures the rotation anchor matches the visual frame exactly.
+        const centroid = camera.centroid || (engine ? engine.getCentroid() : { x: 0, y: 0 });
         const angle = engine ? engine.getGlobalAngle() : 0;
 
         if (rect.width <= 0 || rect.height <= 0) {
@@ -325,7 +327,8 @@ export const createHoverController = ({
         }
 
         const engine = engineRef.current;
-        const centroid = engine ? engine.getCentroid() : { x: 0, y: 0 };
+        // Fix 14: Use Captured Pivot from Snapshot
+        const centroid = camera.centroid || (engine ? engine.getCentroid() : { x: 0, y: 0 });
         const angle = engine ? engine.getGlobalAngle() : 0;
 
         const transform = new CameraTransform(

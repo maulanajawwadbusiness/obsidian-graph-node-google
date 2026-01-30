@@ -531,14 +531,22 @@ export const useGraphRendering = ({
 
             if (pendingPointer.hasPending) {
                 pendingPointer.hasPending = false;
-                updateHoverSelection(pendingPointer.clientX, pendingPointer.clientY, rect, theme, 'pointer');
+                updateHoverSelection(
+                    pendingPointer.clientX,
+                    pendingPointer.clientY,
+                    rect,
+                    theme,
+                    'pointer',
+                    engine.draggedNodeId // Fix 46: Lock cue to dragged node
+                );
             } else if (hoverStateRef.current.hasPointer && cameraChanged) {
                 updateHoverSelection(
                     hoverStateRef.current.cursorClientX,
                     hoverStateRef.current.cursorClientY,
                     rect,
                     theme,
-                    'camera'
+                    'camera',
+                    engine.draggedNodeId // Fix 46: Lock cue to dragged node
                 );
             }
 

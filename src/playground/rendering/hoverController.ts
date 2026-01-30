@@ -386,7 +386,8 @@ export const createHoverController = ({
         clientY: number,
         rect: DOMRect,
         theme: ThemeConfig,
-        reason: 'pointer' | 'camera'
+        reason: 'pointer' | 'camera',
+        lockedNodeId: string | null = null // Fix 46: Unify Cues (Single Pick Truth)
     ) => {
         const { x: worldX, y: worldY, sx, sy } = clientToWorld(clientX, clientY, rect);
 
@@ -404,6 +405,8 @@ export const createHoverController = ({
 
         let newHoveredId = currentHoveredId;
         let shouldSwitch = false;
+
+        // Hoisted variables (Fix 46 Scope Issue)
         let decision = 'kept';
         let nextTargetEnergy = hoverStateRef.current.targetEnergy;
         let nextRenderedRadius = hoverStateRef.current.renderedRadius;
@@ -415,93 +418,74 @@ export const createHoverController = ({
         let nextPendingSwitchId = hoverStateRef.current.pendingSwitchId;
         let nextPendingSinceMs = hoverStateRef.current.pendingSwitchSinceMs;
 
-        if (currentHoveredId === null) {
-            const result = findNearestNode(worldX, worldY, theme);
-            nodesScanned = result.scanned;
-            shouldSwitch = result.nodeId !== null;
-            if (shouldSwitch) {
-                newHoveredId = result.nodeId;
-                nextTargetEnergy = result.targetEnergy;
+        // FIX 46: Locked Mode (Drag Force)
+        // If locked (drag in progress), bypass search.
+        if (lockedNodeId) {
+            if (currentHoveredId !== lockedNodeId) {
+                // Force switch
+                shouldSwitch = true;
+                newHoveredId = lockedNodeId;
+                decision = 'locked (drag)';
+            }
+            // Ensure visualization parameters are fresh for the locked node (keep it glowing)
+            const engine = engineRef.current;
+            const node = engine ? engine.nodes.get(lockedNodeId) : null;
+            if (node) {
+                const result = evaluateNode(node, worldX, worldY, theme, cameraRef.current.zoom);
+                nextTargetEnergy = 1.0; // Force full energy
                 nextRenderedRadius = result.renderedRadius;
                 nextHitRadius = result.hitRadius;
                 nextHaloRadius = result.haloRadius;
                 nextDist = result.dist;
-                nextHoldUntil = nowMs + theme.minHoverHoldMs;
                 nextLastInsideMs = nowMs;
-                nextPendingSwitchId = null;
-                nextPendingSinceMs = 0;
-                decision = 'switched (acquire)';
+                nextHoldUntil = nowMs + theme.minHoverHoldMs;
             }
-            hoverStateRef.current.nearestCandidateId = result.nodeId;
-            hoverStateRef.current.nearestCandidateDist = result.dist;
+            // Skip the search block below
         } else {
-            const engine = engineRef.current;
-            const currentNode = engine ? engine.nodes.get(currentHoveredId) : null;
-            const currentEval = currentNode ? evaluateNode(currentNode, worldX, worldY, theme, cameraRef.current.zoom) : null;
-
-            if (currentEval) {
-                const stickyHalo = currentEval.haloRadius * theme.hoverStickyExitMultiplier;
-                hoverStateRef.current.nearestCandidateId = null;
-                hoverStateRef.current.nearestCandidateDist = Infinity;
-                nodesScanned = 1;
-
-                if (currentEval.dist <= currentEval.haloRadius) {
+            // NORMAL SEARCH LOGIC
+            if (currentHoveredId === null) {
+                const result = findNearestNode(worldX, worldY, theme);
+                nodesScanned = result.scanned;
+                shouldSwitch = result.nodeId !== null;
+                if (shouldSwitch) {
+                    newHoveredId = result.nodeId;
+                    nextTargetEnergy = result.targetEnergy;
+                    nextRenderedRadius = result.renderedRadius;
+                    nextHitRadius = result.hitRadius;
+                    nextHaloRadius = result.haloRadius;
+                    nextDist = result.dist;
+                    nextHoldUntil = nowMs + theme.minHoverHoldMs;
                     nextLastInsideMs = nowMs;
+                    nextPendingSwitchId = null;
+                    nextPendingSinceMs = 0;
+                    decision = 'switched (acquire)';
                 }
+                hoverStateRef.current.nearestCandidateId = result.nodeId;
+                hoverStateRef.current.nearestCandidateDist = result.dist;
+            } else {
+                const engine = engineRef.current;
+                const currentNode = engine ? engine.nodes.get(currentHoveredId) : null;
+                const currentEval = currentNode ? evaluateNode(currentNode, worldX, worldY, theme, cameraRef.current.zoom) : null;
 
-                const exitGracePassed = !theme.calmModeEnabled ||
-                    nowMs - nextLastInsideMs > theme.exitGraceMs;
+                if (currentEval) {
+                    const stickyHalo = currentEval.haloRadius * theme.hoverStickyExitMultiplier;
+                    hoverStateRef.current.nearestCandidateId = null;
+                    hoverStateRef.current.nearestCandidateDist = Infinity;
+                    nodesScanned = 1;
 
-                if (currentEval.dist > stickyHalo && exitGracePassed) {
-                    const candidate = findNearestNodeExcluding(worldX, worldY, theme, null);
-                    nodesScanned = candidate.scanned;
-                    hoverStateRef.current.nearestCandidateId = candidate.nodeId;
-                    hoverStateRef.current.nearestCandidateDist = candidate.dist;
-                    if (candidate.nodeId !== null) {
-                        shouldSwitch = true;
-                        newHoveredId = candidate.nodeId;
-                        nextTargetEnergy = candidate.targetEnergy;
-                        nextRenderedRadius = candidate.renderedRadius;
-                        nextHitRadius = candidate.hitRadius;
-                        nextHaloRadius = candidate.haloRadius;
-                        nextDist = candidate.dist;
-                        nextHoldUntil = nowMs + theme.minHoverHoldMs;
+                    if (currentEval.dist <= currentEval.haloRadius) {
                         nextLastInsideMs = nowMs;
-                        nextPendingSwitchId = null;
-                        nextPendingSinceMs = 0;
-                        decision = 'switched (exited)';
-                    } else {
-                        shouldSwitch = true;
-                        newHoveredId = null;
-                        nextTargetEnergy = 0;
-                        nextRenderedRadius = 0;
-                        nextHitRadius = 0;
-                        nextHaloRadius = 0;
-                        nextDist = currentEval.dist;
-                        nextHoldUntil = 0;
-                        nextPendingSwitchId = null;
-                        nextPendingSinceMs = 0;
-                        decision = 'exited (beyond halo)';
                     }
-                } else if (currentEval.dist > stickyHalo && !exitGracePassed) {
-                    shouldSwitch = true;
-                    newHoveredId = currentHoveredId;
-                    nextTargetEnergy = currentEval.targetEnergy;
-                    nextRenderedRadius = currentEval.renderedRadius;
-                    nextHitRadius = currentEval.hitRadius;
-                    nextHaloRadius = currentEval.haloRadius;
-                    nextDist = currentEval.dist;
-                    decision = 'kept (exit grace)';
-                } else if (reason === 'pointer') {
-                    const candidate = findNearestNodeExcluding(worldX, worldY, theme, currentHoveredId);
-                    nodesScanned = candidate.scanned;
-                    hoverStateRef.current.nearestCandidateId = candidate.nodeId;
-                    hoverStateRef.current.nearestCandidateDist = candidate.dist;
-                    if (
-                        candidate.nodeId &&
-                        candidate.dist + theme.hoverSwitchMarginPx < currentEval.dist
-                    ) {
-                        if (!theme.calmModeEnabled || theme.switchDebounceMs <= 0) {
+
+                    const exitGracePassed = !theme.calmModeEnabled ||
+                        nowMs - nextLastInsideMs > theme.exitGraceMs;
+
+                    if (currentEval.dist > stickyHalo && exitGracePassed) {
+                        const candidate = findNearestNodeExcluding(worldX, worldY, theme, null);
+                        nodesScanned = candidate.scanned;
+                        hoverStateRef.current.nearestCandidateId = candidate.nodeId;
+                        hoverStateRef.current.nearestCandidateDist = candidate.dist;
+                        if (candidate.nodeId !== null) {
                             shouldSwitch = true;
                             newHoveredId = candidate.nodeId;
                             nextTargetEnergy = candidate.targetEnergy;
@@ -513,29 +497,39 @@ export const createHoverController = ({
                             nextLastInsideMs = nowMs;
                             nextPendingSwitchId = null;
                             nextPendingSinceMs = 0;
-                            decision = 'switched (margin)';
-                        } else if (theme.calmModeEnabled && nowMs < nextHoldUntil) {
-                            shouldSwitch = true;
-                            newHoveredId = currentHoveredId;
-                            nextTargetEnergy = currentEval.targetEnergy;
-                            nextRenderedRadius = currentEval.renderedRadius;
-                            nextHitRadius = currentEval.hitRadius;
-                            nextHaloRadius = currentEval.haloRadius;
-                            nextDist = currentEval.dist;
-                            decision = 'kept: hold';
+                            decision = 'switched (exited)';
                         } else {
-                            if (nextPendingSwitchId !== candidate.nodeId) {
-                                nextPendingSwitchId = candidate.nodeId;
-                                nextPendingSinceMs = nowMs;
-                                shouldSwitch = true;
-                                newHoveredId = currentHoveredId;
-                                nextTargetEnergy = currentEval.targetEnergy;
-                                nextRenderedRadius = currentEval.renderedRadius;
-                                nextHitRadius = currentEval.hitRadius;
-                                nextHaloRadius = currentEval.haloRadius;
-                                nextDist = currentEval.dist;
-                                decision = 'kept: debounce';
-                            } else if (nowMs - nextPendingSinceMs >= theme.switchDebounceMs) {
+                            shouldSwitch = true;
+                            newHoveredId = null;
+                            nextTargetEnergy = 0;
+                            nextRenderedRadius = 0;
+                            nextHitRadius = 0;
+                            nextHaloRadius = 0;
+                            nextDist = currentEval.dist;
+                            nextHoldUntil = 0;
+                            nextPendingSwitchId = null;
+                            nextPendingSinceMs = 0;
+                            decision = 'exited (beyond halo)';
+                        }
+                    } else if (currentEval.dist > stickyHalo && !exitGracePassed) {
+                        shouldSwitch = true;
+                        newHoveredId = currentHoveredId;
+                        nextTargetEnergy = currentEval.targetEnergy;
+                        nextRenderedRadius = currentEval.renderedRadius;
+                        nextHitRadius = currentEval.hitRadius;
+                        nextHaloRadius = currentEval.haloRadius;
+                        nextDist = currentEval.dist;
+                        decision = 'kept (exit grace)';
+                    } else if (reason === 'pointer') {
+                        const candidate = findNearestNodeExcluding(worldX, worldY, theme, currentHoveredId);
+                        nodesScanned = candidate.scanned;
+                        hoverStateRef.current.nearestCandidateId = candidate.nodeId;
+                        hoverStateRef.current.nearestCandidateDist = candidate.dist;
+                        if (
+                            candidate.nodeId &&
+                            candidate.dist + theme.hoverSwitchMarginPx < currentEval.dist
+                        ) {
+                            if (!theme.calmModeEnabled || theme.switchDebounceMs <= 0) {
                                 shouldSwitch = true;
                                 newHoveredId = candidate.nodeId;
                                 nextTargetEnergy = candidate.targetEnergy;
@@ -547,8 +541,8 @@ export const createHoverController = ({
                                 nextLastInsideMs = nowMs;
                                 nextPendingSwitchId = null;
                                 nextPendingSinceMs = 0;
-                                decision = 'switched: debounce satisfied';
-                            } else {
+                                decision = 'switched (margin)';
+                            } else if (theme.calmModeEnabled && nowMs < nextHoldUntil) {
                                 shouldSwitch = true;
                                 newHoveredId = currentHoveredId;
                                 nextTargetEnergy = currentEval.targetEnergy;
@@ -556,8 +550,54 @@ export const createHoverController = ({
                                 nextHitRadius = currentEval.hitRadius;
                                 nextHaloRadius = currentEval.haloRadius;
                                 nextDist = currentEval.dist;
-                                decision = 'kept: debounce';
+                                decision = 'kept: hold';
+                            } else {
+                                if (nextPendingSwitchId !== candidate.nodeId) {
+                                    nextPendingSwitchId = candidate.nodeId;
+                                    nextPendingSinceMs = nowMs;
+                                    shouldSwitch = true;
+                                    newHoveredId = currentHoveredId;
+                                    nextTargetEnergy = currentEval.targetEnergy;
+                                    nextRenderedRadius = currentEval.renderedRadius;
+                                    nextHitRadius = currentEval.hitRadius;
+                                    nextHaloRadius = currentEval.haloRadius;
+                                    nextDist = currentEval.dist;
+                                    decision = 'kept: debounce';
+                                } else if (nowMs - nextPendingSinceMs >= theme.switchDebounceMs) {
+                                    shouldSwitch = true;
+                                    newHoveredId = candidate.nodeId;
+                                    nextTargetEnergy = candidate.targetEnergy;
+                                    nextRenderedRadius = candidate.renderedRadius;
+                                    nextHitRadius = candidate.hitRadius;
+                                    nextHaloRadius = candidate.haloRadius;
+                                    nextDist = candidate.dist;
+                                    nextHoldUntil = nowMs + theme.minHoverHoldMs;
+                                    nextLastInsideMs = nowMs;
+                                    nextPendingSwitchId = null;
+                                    nextPendingSinceMs = 0;
+                                    decision = 'switched: debounce satisfied';
+                                } else {
+                                    shouldSwitch = true;
+                                    newHoveredId = currentHoveredId;
+                                    nextTargetEnergy = currentEval.targetEnergy;
+                                    nextRenderedRadius = currentEval.renderedRadius;
+                                    nextHitRadius = currentEval.hitRadius;
+                                    nextHaloRadius = currentEval.haloRadius;
+                                    nextDist = currentEval.dist;
+                                    decision = 'kept: debounce';
+                                }
                             }
+                        } else {
+                            shouldSwitch = true;
+                            newHoveredId = currentHoveredId;
+                            nextTargetEnergy = currentEval.targetEnergy;
+                            nextRenderedRadius = currentEval.renderedRadius;
+                            nextHitRadius = currentEval.hitRadius;
+                            nextHaloRadius = currentEval.haloRadius;
+                            nextDist = currentEval.dist;
+                            nextPendingSwitchId = null;
+                            nextPendingSinceMs = 0;
+                            decision = 'kept (active)';
                         }
                     } else {
                         shouldSwitch = true;
@@ -573,30 +613,19 @@ export const createHoverController = ({
                     }
                 } else {
                     shouldSwitch = true;
-                    newHoveredId = currentHoveredId;
-                    nextTargetEnergy = currentEval.targetEnergy;
-                    nextRenderedRadius = currentEval.renderedRadius;
-                    nextHitRadius = currentEval.hitRadius;
-                    nextHaloRadius = currentEval.haloRadius;
-                    nextDist = currentEval.dist;
+                    newHoveredId = null;
+                    nextTargetEnergy = 0;
+                    nextRenderedRadius = 0;
+                    nextHitRadius = 0;
+                    nextHaloRadius = 0;
+                    nextDist = Infinity;
+                    nextHoldUntil = 0;
                     nextPendingSwitchId = null;
                     nextPendingSinceMs = 0;
-                    decision = 'kept (active)';
+                    decision = 'exited (missing node)';
                 }
-            } else {
-                shouldSwitch = true;
-                newHoveredId = null;
-                nextTargetEnergy = 0;
-                nextRenderedRadius = 0;
-                nextHitRadius = 0;
-                nextHaloRadius = 0;
-                nextDist = Infinity;
-                nextHoldUntil = 0;
-                nextPendingSwitchId = null;
-                nextPendingSinceMs = 0;
-                decision = 'exited (missing node)';
             }
-        }
+        } // END IF/ELSE (Locked vs Normal)
 
         hoverStateRef.current.nodesScannedLastSelection = nodesScanned;
         hoverStateRef.current.selectionRunCount += 1;

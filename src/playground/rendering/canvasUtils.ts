@@ -146,32 +146,37 @@ export function drawTwoLayerGlow(
     }
 
     // Outer glow (purple-leaning, wider atmosphere)
-    // Use theme.glowOuterColor as base but let alpha vary
+    // FIX 48: Center Glow (Radial Gradient)
+    // Use mathematical gradient instead of filter: blur() to ensure perfect centering.
     withCtx(ctx, () => {
+        const gRadius = radius + outerBlur * 2.0; // Extend far enough
+        const grad = ctx.createRadialGradient(x, y, radius, x, y, gRadius);
+        // Fade from color to transparent
+        // Use regex or parsing to handle opacity if needed, but assuming simple hex/rgba for now.
+        // For simplicity and perf, we just fade opacity.
+        // Actually, easiest way is to use transparent color stop.
+
+        grad.addColorStop(0, theme.deepPurple); // Start at edge of node
+        grad.addColorStop(1, 'rgba(0,0,0,0)'); // End at extent
+
+        ctx.fillStyle = grad;
+        ctx.globalAlpha = outerAlpha; // Master alpha
         ctx.beginPath();
-        ctx.arc(x, y, radius + outerBlur, 0, Math.PI * 2);
-        ctx.globalAlpha = outerAlpha;
-        ctx.globalCompositeOperation = 'source-over';
-        ctx.shadowBlur = 0;
-        ctx.shadowColor = 'transparent';
-        // Use deep purple for outer glow atmosphere
-        ctx.fillStyle = theme.deepPurple;
-        ctx.filter = `blur(${outerBlur}px)`;
+        ctx.arc(x, y, gRadius, 0, Math.PI * 2);
         ctx.fill();
     });
 
     // Inner glow (blue-leaning, closer to ring)
-    // Tint toward current primaryBlue for cohesion
     withCtx(ctx, () => {
-        ctx.beginPath();
-        ctx.arc(x, y, radius + innerBlur, 0, Math.PI * 2);
+        const gRadius = radius + innerBlur * 2.0;
+        const grad = ctx.createRadialGradient(x, y, radius, x, y, gRadius);
+        grad.addColorStop(0, primaryBlue);
+        grad.addColorStop(1, 'rgba(0,0,0,0)');
+
+        ctx.fillStyle = grad;
         ctx.globalAlpha = innerAlpha;
-        ctx.globalCompositeOperation = 'source-over';
-        ctx.shadowBlur = 0;
-        ctx.shadowColor = 'transparent';
-        // Use lerped primaryBlue for inner glow cohesion with ring
-        ctx.fillStyle = primaryBlue;
-        ctx.filter = `blur(${innerBlur}px)`;
+        ctx.beginPath();
+        ctx.arc(x, y, gRadius, 0, Math.PI * 2);
         ctx.fill();
     });
 

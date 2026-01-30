@@ -383,9 +383,14 @@ export class PhysicsEngine {
             this.dragTarget = { ...position };
             this.lastDraggedNodeId = nodeId;
 
-            // KINEMATIC LOCK: Clear old forces/velocities to prevent fighting
+            // KINEMATIC LOCK: Override position directly (0 lag)
             const node = this.nodes.get(nodeId);
             if (node) {
+                // FIX 14: Immutable Drag (Prevent Jitter)
+                // Mark as fixed so constraints/integrator skip it entirely.
+                // We become the sole writer to node.x/y via moveDrag.
+                node.isFixed = true;
+
                 node.vx = 0;
                 node.vy = 0;
                 node.fx = 0;
@@ -424,27 +429,22 @@ export class PhysicsEngine {
         if (this.draggedNodeId) {
             const node = this.nodes.get(this.draggedNodeId);
             if (node) {
-                // RELEASE DAMPING: Clamp velocity to prevent slingshot
-                const speed = Math.sqrt(node.vx * node.vx + node.vy * node.vy);
-                const maxLaunch = 200.0; // Reasonable fling cap
-                if (speed > maxLaunch) {
-                    const scale = maxLaunch / speed;
-                    node.vx *= scale;
-                    node.vy *= scale;
-                }
-                // FIX #8: Stale Drag & Leash Cleanup
-                // Hard damping on release to kill residual momentum
-                node.vx *= 0.1;
-                node.vy *= 0.1;
-
-                // Clear force memory to prevent "ghost pulls" from previous frames
-                node.prevFx = 0;
-                node.prevFy = 0;
+                // FIX 13: Atomic Release (Kill Ghost Slide)
+                // Zero out ALL motion history so it stops dead.
+                node.vx = 0;
+                node.vy = 0;
                 node.fx = 0;
                 node.fy = 0;
+                node.prevFx = 0;
+                node.prevFy = 0;
 
-                // Clear directional inertia
+                // Clear constraint debt
+                node.correctionResidual = undefined;
                 delete node.lastCorrectionDir;
+                node.lastCorrectionMag = 0;
+
+                // Unlock
+                node.isFixed = false;
             }
         }
         // Hard clear all drag state

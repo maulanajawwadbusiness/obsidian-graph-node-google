@@ -490,14 +490,20 @@ export const useGraphRendering = ({
             });
 
             const nodes = engine.getNodeList();
-            updateCameraContainment(
-                cameraRef,
-                nodes,
-                width,
-                height,
-                dtMs / 1000,
-                settingsRef.current.cameraLocked
-            );
+
+            // FIX 15: Camera Lock during Drag
+            // Do NOT recenter or smooth camera while user is holding a node.
+            // This prevents "shifting earth" feel.
+            if (!engine.draggedNodeId) {
+                updateCameraContainment(
+                    cameraRef,
+                    nodes,
+                    width,
+                    height,
+                    dtMs / 1000,
+                    settingsRef.current.cameraLocked
+                );
+            }
 
             const pendingPointer = pendingPointerRef.current;
             const selectionCamera = cameraRef.current;

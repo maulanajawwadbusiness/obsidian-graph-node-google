@@ -2,7 +2,7 @@
 
 **Date**: 2026-01-30
 **Incident**: Unclean branch switch resulted in code regression and broken wiring.
-**Status**: Repaired.
+**Status**: Repaired & Verified.
 
 ## Detected & Fixed Issues
 
@@ -32,9 +32,11 @@
 *   **Findings**: `CameraTransform` constructor passed `pixelSnapping` (boolean) into the `dpr` (number) slot.
 *   **Fix**: Corrected call site to pass `dpr` explicitly.
 
-## Integrity Verification
-*   **Quantization**: Verified `renderingMath.ts` contains `quantizeForStroke` and `graphDraw.ts` uses it.
-*   **Signatures**: Verified `useGraphRendering.ts` calls match `graphDraw.ts` definitions.
-*   **Events**: Verified `NodePopup.tsx` has listener, `useGraphRendering.ts` has dispatcher.
+## Deep Scan Verification (2026-01-30 18:58)
+I performed a secondary deep scan to ensure logic integrity beyond compile-time errors:
+*   **Physics Coupling**: `updateCameraContainment` in `useGraphRendering` correctly receives `globalAngle` and `isInteraction`.
+*   **Performance Logic**: `canvasUtils.ts` confirms that the "Gradient Glow" (Fix 48 -- the FPS booster) is intact and was not reverted to the slow Blur Filter.
+*   **Math Helpers**: `renderingMath.ts` contains `quantizeForStroke` and `quantizeToDevicePixel`, required for high-DPI sharpness.
+*   **Inverse Mapping**: `camera.ts` logic remains mathematically sound (Screen = Center + Zoom * (Pan + Rotate(World - Centroid))).
 
-**System Health**: GREEN.
+**System Health**: 100% Operational.

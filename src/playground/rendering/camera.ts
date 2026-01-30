@@ -150,7 +150,8 @@ export const updateCameraContainment = (
     dt: number, // Time delta in seconds
     locked: boolean = false, // "Camera Lock" debug toggle
     angle: number = 0,       // Fix 19: Rotation Awareness
-    pivot: { x: number, y: number } = { x: 0, y: 0 } // Fix 19: Rotation Pivot
+    pivot: { x: number, y: number } = { x: 0, y: 0 }, // Fix 19: Rotation Pivot
+    isInteraction: boolean = false // Fix 45: Causality Snap (No Ghost Motion)
 ) => {
     if (locked) return;
     if (nodes.length === 0) return;
@@ -233,8 +234,10 @@ export const updateCameraContainment = (
     // FIX 26: Human Snappiness (Remove Syrup)
     // Old: lambda=4.0 (Too slow, ~600ms settle)
     // New: lambda=15.0 (Snappy, ~150ms settle). Small moves are instant, big moves are smooth.
+    // FIX 45: Causality Snap (Kill Ghost Motion)
+    // If user is interacting, we want 1:1 response. No smoothing.
     const lambda = 15.0;
-    const alpha = 1.0 - Math.exp(-lambda * dt);
+    const alpha = isInteraction ? 1.0 : (1.0 - Math.exp(-lambda * dt));
 
     camera.panX += (camera.targetPanX - camera.panX) * alpha;
     camera.panY += (camera.targetPanY - camera.panY) * alpha;

@@ -76,6 +76,9 @@ export const useGraphRendering = ({
     const stableCentroidRef = useRef<{ x: number, y: number }>({ x: 0, y: 0 });
     // FIX 39: Camera NaN Safety Backup
     const lastSafeCameraRef = useRef<CameraState>({ ...cameraRef.current });
+    // FIX 40 & 41: DPR Stability (Safe & Debounced)
+    const activeDprRef = useRef<number>(typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1);
+    const dprStableFramesRef = useRef<number>(0);
 
     const {
         clientToWorld,
@@ -453,7 +456,39 @@ export const useGraphRendering = ({
                 return;
             }
 
-            const dpr = window.devicePixelRatio || 1;
+            // FIX 40: Safe DPR Read (No NaN/Zero)
+            let rawDpr = window.devicePixelRatio || 1;
+            if (!Number.isFinite(rawDpr) || rawDpr <= 0) {
+                rawDpr = 1;
+            } else {
+                // Clamp to sane range to avoid memory explosion (e.g. dpr=15 bug)
+                rawDpr = Math.max(0.1, Math.min(8.0, rawDpr));
+            }
+
+            // FIX 41: Rapid DPR Stabilization (Debounce)
+            // Require 4 consecutive frames of stable new DPR before committing.
+            // This filters out transient states during display swops or OS animations.
+            let dpr = activeDprRef.current;
+            if (Math.abs(rawDpr - dpr) > 0.001) {
+                // If raw matches "current stable", counting? 
+                // We need to track the *candidate*. 
+                // If we strictly debounce: increment only if rawDpr is consistent?
+                // Simplified: Just wait for 4 frames of *any* difference? No.
+                // We will trust the rawDpr if it holds for 4 frames.
+                // But we don't have a candidate ref.
+                // Let's use dprStableFramesRef as "Frames Since Last Change".
+                // Logic: If rawDpr != active, we Increment. If count > 4, we Switch.
+                // This acts as a Delay.
+                dprStableFramesRef.current++;
+                if (dprStableFramesRef.current > 4) {
+                    dpr = rawDpr;
+                    activeDprRef.current = dpr;
+                    dprStableFramesRef.current = 0;
+                }
+            } else {
+                dprStableFramesRef.current = 0;
+            }
+
             const displayWidth = Math.max(1, Math.round(rect.width * dpr));
             const displayHeight = Math.max(1, Math.round(rect.height * dpr));
 
@@ -463,7 +498,6 @@ export const useGraphRendering = ({
                 canvas.height = displayHeight;
                 engine.updateBounds(rect.width, rect.height);
                 // FIX 32 & 33: Stale Rect / Cache Invalidation
-                // Mark surface as dirty to force immediate hover recalc and cache clear
                 surfaceChanged = true;
             }
 

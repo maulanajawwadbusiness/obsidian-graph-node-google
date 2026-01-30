@@ -447,11 +447,16 @@ export function drawNodeLabel(
     }
 }
 
+import { isDebugEnabled } from './debugUtils';
+
 export const drawHoverDebugOverlay = (
     ctx: CanvasRenderingContext2D,
     engine: PhysicsEngine,
     hoverStateRef: MutableRefObject<HoverState>
 ) => {
+    // GATE: Production Safety
+    if (!isDebugEnabled(true)) return; // Accessing theme prop would be cleaner, but caller passes ref
+
     withCtx(ctx, () => {
         const displayId = hoverStateRef.current.hoverDisplayNodeId ?? hoverStateRef.current.hoveredNodeId;
         const hoveredNode = engine.nodes.get(displayId ?? '');
@@ -583,6 +588,9 @@ export const drawPointerCrosshair = (
     hoverStateRef: MutableRefObject<HoverState>,
     worldToScreen: (worldX: number, worldY: number, rect: DOMRect) => { x: number; y: number }
 ) => {
+    // GATE: Production Safety (Implicitly debug feature)
+    if (!isDebugEnabled(hoverStateRef.current.hasPointer)) return;
+
     const screen = worldToScreen(
         hoverStateRef.current.cursorWorldX,
         hoverStateRef.current.cursorWorldY,

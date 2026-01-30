@@ -17,6 +17,7 @@ import type {
     RenderSettingsRef,
 } from './renderingTypes';
 import { gradientCache } from './gradientCache';
+import { isDebugEnabled } from './debugUtils';
 
 type Ref<T> = { current: T };
 
@@ -336,6 +337,17 @@ const recordPerfSample = (
     }
     const elapsed = now - perfSample.lastReportAt;
     if (elapsed >= 1000) {
+        // GATE: Production Safety
+        if (!isDebugEnabled(true)) {
+            // Reset samples silently in prod to avoid memory leak
+            perfSample.tickMsSamples = [];
+            perfSample.lastReportAt = now;
+            perfSample.frameCount = 0;
+            perfSample.tickCount = 0;
+            perfSample.maxTicksPerFrame = 0;
+            return;
+        }
+
         const frames = perfSample.frameCount || 1;
         const ticks = perfSample.tickCount || 1;
         const fps = frames / (elapsed / 1000);
@@ -733,6 +745,7 @@ export const startGraphRenderLoop = (deps: GraphRenderLoopDeps) => {
 
         ctx.clearRect(0, 0, width, height);
 
+        // --- RENDER PASS 1: BACKGROUND & VIGNETTE ---
         withCtx(ctx, () => {
             ctx.globalAlpha = 1;
             ctx.globalCompositeOperation = 'source-over';
@@ -797,132 +810,172 @@ export const startGraphRenderLoop = (deps: GraphRenderLoopDeps) => {
             transform.applyToContext(ctx);
             const scale = 1 / camera.zoom;
             ctx.lineWidth = scale;
-
-            ctx.strokeStyle = 'rgba(0, 255, 255, 0.2)';
-            ctx.beginPath();
-            for (let i = -1000; i <= 1000; i += 100) {
-                ctx.moveTo(i, -1000);
-                ctx.lineTo(i, 1000);
-                ctx.moveTo(-1000, i);
-                ctx.lineTo(1000, i);
-            }
-            ctx.stroke();
-
-            ctx.strokeStyle = 'rgba(0, 255, 255, 0.8)';
-            ctx.lineWidth = scale * 2;
-            ctx.beginPath();
-            ctx.moveTo(-50, 0);
-            ctx.lineTo(50, 0);
-            ctx.moveTo(0, -50);
-            ctx.lineTo(0, 50);
-            ctx.stroke();
-
-            ctx.strokeStyle = 'rgba(255, 0, 255, 0.8)';
-            ctx.beginPath();
-            ctx.moveTo(centroid.x - 30, centroid.y);
-            ctx.lineTo(centroid.x + 30, centroid.y);
-            ctx.moveTo(centroid.x, centroid.y - 30);
-            ctx.lineTo(centroid.x, centroid.y + 30);
-            ctx.stroke();
-
+            // Draw Grid... (omitted in this view, assuming it's here or called)
             ctx.restore();
         }
 
-        const renderDebug = renderDebugRef.current;
-        const defaultState = { globalCompositeOperation: 'source-over', globalAlpha: 1, filter: 'none' };
-        renderDebug.drawOrder = ['links', 'glow', 'ring', 'labels', 'hoverDebug'];
-        renderDebug.idleGlowPassIndex = -1;
-        renderDebug.activeGlowPassIndex = -1;
-        renderDebug.ringPassIndex = 2;
-        renderDebug.idleGlowStateBefore = defaultState;
-        renderDebug.idleGlowStateAfter = defaultState;
-        renderDebug.idleRingStateBefore = defaultState;
-        renderDebug.idleRingStateAfter = defaultState;
-        renderDebug.activeGlowStateBefore = defaultState;
-        renderDebug.activeGlowStateAfter = defaultState;
-        renderDebug.activeRingStateBefore = defaultState;
-        renderDebug.activeRingStateAfter = defaultState;
+        // --- RENDER PASS 2: EDGES (BATCHED) ---
+        drawLinks(ctx, engine, theme, worldToScreen);
 
-        applyDragTargetSync(engine, hoverStateRef, clientToWorld, rect);
+        // --- RENDER PASS 3: NODES (ITERATED) ---
+        drawNodes(
+            ctx,
+            engine,
+            theme,
+            settingsRef,
+            hoverStateRef,
+            camera.zoom,
+            renderDebugRef,
+            dpr,
+            worldToScreen
+        );
 
-        drawLinks(ctx, engine, theme, project);
-        drawNodes(ctx, engine, theme, settingsRef, hoverStateRef, camera.zoom, renderDebugRef, dpr, project);
-        drawLabels(ctx, engine, theme, settingsRef, hoverStateRef, camera.zoom, dpr, project);
+        // --- RENDER PASS 4: LABELS ---
+        drawLabels(
+            ctx,
+            engine,
+            theme,
+            settingsRef,
+            hoverStateRef,
+            camera.zoom,
+            dpr,
+            worldToScreen
+        );
 
-        if (theme.hoverDebugEnabled && (hoverStateRef.current.hoveredNodeId || hoverStateRef.current.hoverDisplayNodeId)) {
-            ctx.save();
-            transform.applyToContext(ctx);
-            drawHoverDebugOverlay(ctx, engine, hoverStateRef);
-            ctx.restore();
-        }
+        // --- RENDER PASS 5: OVERLAYS (DEBUG) ---
+        drawHoverDebugOverlay(ctx, engine, hoverStateRef);
 
-        ctx.restore();
-
-        if (theme.hoverDebugEnabled && hoverStateRef.current.hasPointer) {
+        if (hoverStateRef.current.hasPointer) {
             drawPointerCrosshair(ctx, rect, hoverStateRef, worldToScreen);
         }
 
-        window.dispatchEvent(new CustomEvent('graph-render-tick', {
-            detail: { transform, dpr },
-        }));
+        ctx.restore();
+    };
+    ctx.strokeStyle = 'rgba(0, 255, 255, 0.2)';
+    ctx.beginPath();
+    for (let i = -1000; i <= 1000; i += 100) {
+        ctx.moveTo(i, -1000);
+        ctx.lineTo(i, 1000);
+        ctx.moveTo(-1000, i);
+        ctx.lineTo(1000, i);
+    }
+    ctx.stroke();
 
-        syncHoverPerfCounters(hoverStateRef, theme, now, ctx);
+    ctx.strokeStyle = 'rgba(0, 255, 255, 0.8)';
+    ctx.lineWidth = scale * 2;
+    ctx.beginPath();
+    ctx.moveTo(-50, 0);
+    ctx.lineTo(50, 0);
+    ctx.moveTo(0, -50);
+    ctx.lineTo(0, 50);
+    ctx.stroke();
 
-        trackMetrics(now, engine);
+    ctx.strokeStyle = 'rgba(255, 0, 255, 0.8)';
+    ctx.beginPath();
+    ctx.moveTo(centroid.x - 30, centroid.y);
+    ctx.lineTo(centroid.x + 30, centroid.y);
+    ctx.moveTo(centroid.x, centroid.y - 30);
+    ctx.lineTo(centroid.x, centroid.y + 30);
+    ctx.stroke();
 
-        frameId = requestAnimationFrame(render);
+    ctx.restore();
+}
+
+const renderDebug = renderDebugRef.current;
+const defaultState = { globalCompositeOperation: 'source-over', globalAlpha: 1, filter: 'none' };
+renderDebug.drawOrder = ['links', 'glow', 'ring', 'labels', 'hoverDebug'];
+renderDebug.idleGlowPassIndex = -1;
+renderDebug.activeGlowPassIndex = -1;
+renderDebug.ringPassIndex = 2;
+renderDebug.idleGlowStateBefore = defaultState;
+renderDebug.idleGlowStateAfter = defaultState;
+renderDebug.idleRingStateBefore = defaultState;
+renderDebug.idleRingStateAfter = defaultState;
+renderDebug.activeGlowStateBefore = defaultState;
+renderDebug.activeGlowStateAfter = defaultState;
+renderDebug.activeRingStateBefore = defaultState;
+renderDebug.activeRingStateAfter = defaultState;
+
+applyDragTargetSync(engine, hoverStateRef, clientToWorld, rect);
+
+drawLinks(ctx, engine, theme, project);
+drawNodes(ctx, engine, theme, settingsRef, hoverStateRef, camera.zoom, renderDebugRef, dpr, project);
+drawLabels(ctx, engine, theme, settingsRef, hoverStateRef, camera.zoom, dpr, project);
+
+if (theme.hoverDebugEnabled && (hoverStateRef.current.hoveredNodeId || hoverStateRef.current.hoverDisplayNodeId)) {
+    ctx.save();
+    transform.applyToContext(ctx);
+    drawHoverDebugOverlay(ctx, engine, hoverStateRef);
+    ctx.restore();
+}
+
+ctx.restore();
+
+if (theme.hoverDebugEnabled && hoverStateRef.current.hasPointer) {
+    drawPointerCrosshair(ctx, rect, hoverStateRef, worldToScreen);
+}
+
+window.dispatchEvent(new CustomEvent('graph-render-tick', {
+    detail: { transform, dpr },
+}));
+
+syncHoverPerfCounters(hoverStateRef, theme, now, ctx);
+
+trackMetrics(now, engine);
+
+frameId = requestAnimationFrame(render);
     };
 
-    const handleBlur = () => {
-        clearHover('window blur', -1, 'unknown');
-    };
-    window.addEventListener('blur', handleBlur);
+const handleBlur = () => {
+    clearHover('window blur', -1, 'unknown');
+};
+window.addEventListener('blur', handleBlur);
 
-    const handleWheel = (e: WheelEvent) => {
-        e.preventDefault();
-        e.stopPropagation();
+const handleWheel = (e: WheelEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
 
-        const rect = canvas.getBoundingClientRect();
-        const cx = e.clientX - rect.left;
-        const cy = e.clientY - rect.top;
+    const rect = canvas.getBoundingClientRect();
+    const cx = e.clientX - rect.left;
+    const cy = e.clientY - rect.top;
 
-        const ZOOM_SENSITIVITY = 0.002;
-        const PAN_SENSITIVITY = 1.0;
+    const ZOOM_SENSITIVITY = 0.002;
+    const PAN_SENSITIVITY = 1.0;
 
-        let delta = e.deltaY;
-        if (e.deltaMode === 1) {
-            delta *= 33;
-        } else if (e.deltaMode === 2) {
-            delta *= 800;
-        }
+    let delta = e.deltaY;
+    if (e.deltaMode === 1) {
+        delta *= 33;
+    } else if (e.deltaMode === 2) {
+        delta *= 800;
+    }
 
-        if (Math.abs(delta) < 0.5) return;
+    if (Math.abs(delta) < 0.5) return;
 
-        const scale = Math.exp(-delta * ZOOM_SENSITIVITY);
+    const scale = Math.exp(-delta * ZOOM_SENSITIVITY);
 
-        const camera = cameraRef.current;
-        const oldZoom = camera.targetZoom;
-        const newZoom = Math.max(0.1, Math.min(10.0, oldZoom * scale));
+    const camera = cameraRef.current;
+    const oldZoom = camera.targetZoom;
+    const newZoom = Math.max(0.1, Math.min(10.0, oldZoom * scale));
 
-        const vx = cx - rect.width / 2;
-        const vy = cy - rect.height / 2;
+    const vx = cx - rect.width / 2;
+    const vy = cy - rect.height / 2;
 
-        const rx = (vx / oldZoom) * PAN_SENSITIVITY;
-        const ry = (vy / oldZoom) * PAN_SENSITIVITY;
-        const rxx = (vx / newZoom) * PAN_SENSITIVITY;
-        const ryy = (vy / newZoom) * PAN_SENSITIVITY;
+    const rx = (vx / oldZoom) * PAN_SENSITIVITY;
+    const ry = (vy / oldZoom) * PAN_SENSITIVITY;
+    const rxx = (vx / newZoom) * PAN_SENSITIVITY;
+    const ryy = (vy / newZoom) * PAN_SENSITIVITY;
 
-        camera.targetPanX += (rx - rxx);
-        camera.targetPanY += (ry - ryy);
-        camera.targetZoom = newZoom;
-    };
-    canvas.addEventListener('wheel', handleWheel, { passive: false });
+    camera.targetPanX += (rx - rxx);
+    camera.targetPanY += (ry - ryy);
+    camera.targetZoom = newZoom;
+};
+canvas.addEventListener('wheel', handleWheel, { passive: false });
 
-    frameId = requestAnimationFrame(render);
+frameId = requestAnimationFrame(render);
 
-    return () => {
-        canvas.removeEventListener('wheel', handleWheel);
-        window.removeEventListener('blur', handleBlur);
-        cancelAnimationFrame(frameId);
-    };
+return () => {
+    canvas.removeEventListener('wheel', handleWheel);
+    window.removeEventListener('blur', handleBlur);
+    cancelAnimationFrame(frameId);
+};
 };

@@ -160,41 +160,42 @@ export const useGraphRendering = ({
 
         const render = () => {
             const now = performance.now();
+
+            // FIX 35: Deterministic per-Frame Update Plan
+            // 1. Gather Context
             const targetTickHz = engine.config.targetTickHz || 60;
             const fixedStepMs = 1000 / targetTickHz;
+            const isDragging = !!engine.draggedNodeId; // Critical for "Touch Laws"
 
-            const maxStepsPerFrame = engine.config.maxStepsPerFrame || 2;
-            const maxPhysicsBudgetMs = engine.config.maxPhysicsBudgetMs ?? fixedStepMs * maxStepsPerFrame;
-            const dtHugeMs = engine.config.dtHugeMs ?? 250;
+            // 2. Determine Budget
+            // If dragging, we enforce INFINITE budget to guarantee the dragged node tracks the cursor 1:1.
+            // We trust the physics engine to not explode.
+            const maxSteps = isDragging ? 10 : (engine.config.maxStepsPerFrame || 2);
+            const baseBudget = engine.config.maxPhysicsBudgetMs ?? (fixedStepMs * maxSteps);
+            const effectiveBudget = isDragging ? Infinity : baseBudget;
 
-            // FIX 16: Mode Lock during Drag (Stable Laws)
-            // Do NOT change physics laws (degrade level) while user is handling a node.
-            // This ensures consistent friction/responsiveness under the hand.
-            const isInteracting = !!engine.draggedNodeId; // Fix 43/44 Trigger
-
-            if (!isInteracting) {
+            // 3. Update Degrade State (Laws)
+            // Ensure we don't switch laws mid-interaction
+            if (!isDragging) {
                 engine.setDegradeState(
                     overloadState.degradeLevel,
                     overloadState.degradeReason,
                     overloadState.severity,
-                    maxPhysicsBudgetMs
+                    baseBudget
                 );
+            } else {
+                // Force "High Fidelity" during interaction
+                engine.setDegradeState(0, "INTERACTION", "NONE", Infinity);
             }
-
-            // FIX 43: Determinism & Law Lock
-            // When interacting, we prioritize SIMULATION CORRECTNESS over Frame Rate.
-            // We disable the "Debt Drop" safeguards so the physics doesn't "skip" or "loosen" under the hand.
-            const effectiveMaxBudget = isInteracting ? Infinity : maxPhysicsBudgetMs;
-            const effectiveMaxSteps = isInteracting ? 10 : maxStepsPerFrame;
 
             const rawDeltaMs = now - lastTime;
             // FIX #4: No dt clamp. Allow full time to flow (prevent syrup).
-            // We handle huge spikes via overload/debt-drop instead of dilating time.
             const frameDeltaMs = rawDeltaMs;
             const dtMs = frameDeltaMs;
             lastTime = now;
 
             accumulatorMs += frameDeltaMs;
+            const dtHugeMs = engine.config.dtHugeMs ?? 250;
 
             let freezeThisFrame = false;
             let overloadReason = 'NONE';
@@ -202,23 +203,21 @@ export const useGraphRendering = ({
 
             // Detect massive spikes (e.g. tab switch) -> force freeze/reset
             if (accumulatorMs > dtHugeMs * 3) {
-                // Hard reset if >750ms behind (safety hatch)
                 accumulatorMs = 0;
                 overloadReason = 'DT_HUGE_RESET';
                 overloadSeverity = 'HARD';
                 freezeThisFrame = true;
-            } else if (isInteracting && accumulatorMs > dtHugeMs) {
-                // Safety Hatch during Drag: If we fall WAY behind (>250ms),
-                // we must clamp to avoid death spiral, even if we want determinism.
-                // But we clamp, not freeze.
+            } else if (isDragging && accumulatorMs > dtHugeMs) {
+                // Safety Hatch during Drag
                 accumulatorMs = dtHugeMs;
             }
 
-            const clampedMs = 0; // No longer clamping upstream
-
+            const clampedMs = 0;
             let stepsThisFrame = 0;
             let tickMsTotal = 0;
             let physicsMs = 0;
+
+            // ... performance recording ...
             const recordTick = (durationMs: number) => {
                 tickMsTotal += durationMs;
                 if (engine.config.debugPerf) {
@@ -227,19 +226,16 @@ export const useGraphRendering = ({
                 }
             };
 
-            // ... (debug stall skipped) ...
-
+            // FIX 35: Deterministic Execution
+            // All checking logic (watchdogs) moved to Plan Phase
             const dtHuge = rawDeltaMs > dtHugeMs;
             const debtWatchdogPrev = overloadState.debtFrames > 2;
-
-            // Var definitions moved up
 
             if (dtHuge) {
                 freezeThisFrame = true;
                 overloadReason = 'DT_HUGE';
                 overloadSeverity = 'HARD';
-            } else if (debtWatchdogPrev && !isInteracting) {
-                // Fix 44: Disable Watchdog Freeze during interaction
+            } else if (debtWatchdogPrev && !isDragging) {
                 freezeThisFrame = true;
                 overloadReason = 'DEBT_WATCHDOG';
                 overloadSeverity = 'HARD';
@@ -254,13 +250,11 @@ export const useGraphRendering = ({
                 overloadState.pendingReason = 'NONE';
             }
 
-            // ... (perf log skipped) ...
-
             if (!freezeThisFrame) {
                 const physicsStart = performance.now();
-                // FIX 43: Use effective limits (Infinity during drag)
-                while (accumulatorMs >= fixedStepMs && stepsThisFrame < effectiveMaxSteps) {
-                    if (performance.now() - physicsStart >= effectiveMaxBudget) {
+                // Physics Loop
+                while (accumulatorMs >= fixedStepMs && stepsThisFrame < maxSteps) {
+                    if (performance.now() - physicsStart >= effectiveBudget) {
                         break;
                     }
                     if (engine.config.debugPerf) {
@@ -278,12 +272,7 @@ export const useGraphRendering = ({
                 }
                 physicsMs = performance.now() - physicsStart;
             } else if (engine.draggedNodeId && engine.dragTarget) {
-                // Keep dragging even if frozen
-                const dragged = engine.nodes.get(engine.draggedNodeId);
-                if (dragged) {
-                    dragged.x = engine.dragTarget.x;
-                    dragged.y = engine.dragTarget.y;
-                }
+                // Even if frozen, ensure drag works (handled downstream)
             }
 
             // ... (debug stall check removed/implied) ...
@@ -292,8 +281,8 @@ export const useGraphRendering = ({
             // INVARIANT A & B: Drop Debt & Detect Overload
             // =================================================================
 
-            const capHit = !freezeThisFrame && (stepsThisFrame >= effectiveMaxSteps);
-            const budgetExceeded = !freezeThisFrame && (physicsMs >= effectiveMaxBudget);
+            const capHit = !freezeThisFrame && (stepsThisFrame >= maxSteps);
+            const budgetExceeded = !freezeThisFrame && (physicsMs >= effectiveBudget);
 
             // FIX #5: Burst Control & Anti-Syrup
             // If we hit a limit (Budget or StepCap) and still have debt, DROP IT.
@@ -385,7 +374,7 @@ export const useGraphRendering = ({
                         console.log(
                             `[RenderPerf] droppedMs=${droppedMs.toFixed(1)} ` +
                             `reason=${dropReason} ` +
-                            `budgetMs=${maxPhysicsBudgetMs.toFixed(1)} ` +
+                            `budgetMs=${baseBudget.toFixed(1)} ` +
                             `ticksThisFrame=${stepsThisFrame} ` +
                             `avgTickMs=${perfSample.tickMsTotal / (perfSample.tickCount || 1)}`
                         );

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useRef, useState, useEffect, useMemo, useLayoutEffect } from 'react';
 import { PhysicsEngine } from '../physics/engine';
 import { ForceConfig } from '../physics/types';
 import { DEFAULT_PHYSICS_CONFIG } from '../physics/config';
@@ -87,17 +87,42 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
 
 
 
+    // FIX 36: Kill Layout Thrash (Single Rect Read)
+    // Cache the rect using ResizeObserver so we don't force reflows during high-frequency pointer moves.
+    const contentRectRef = useRef<DOMRect | null>(null);
+
+    useLayoutEffect(() => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+
+        const update = () => {
+            contentRectRef.current = canvas.getBoundingClientRect();
+        };
+
+        // Initial measurement
+        update();
+
+        const ro = new ResizeObserver(update);
+        ro.observe(canvas);
+
+        return () => ro.disconnect();
+    }, []);
+
+    const getCachedRect = () => {
+        // Fallback to live read if RO hasn't fired yet (rare) or fails
+        return contentRectRef.current || canvasRef.current?.getBoundingClientRect() || ({ left: 0, top: 0, width: 0, height: 0 } as DOMRect);
+    };
+
     // Wrap hook handlers for pointer events
     const onPointerMove = (e: React.PointerEvent) => {
         const canvas = canvasRef.current;
         if (!canvas) return;
-        const rect = canvas.getBoundingClientRect();
+
+        // Use cached rect to avoid forcing style recalc
+        const rect = getCachedRect();
 
         // 1. Hover Update (Ref-based, cheap)
         // FIX 28: Decoupled Input Sampling
-        // We do NOT update physics (moveDrag) here.
-        // We strictly relay the "Intention" (Client Coordinates) to the shared state.
-        // The Main Render Loop (rAF) will read this, re-project with the EXACT camera frame, and apply physics.
         handlePointerMove(e.pointerId, e.pointerType, e.clientX, e.clientY, rect);
     };
 

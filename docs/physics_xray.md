@@ -46,6 +46,10 @@ User interaction must never feel degraded.
     *   **Trigger**: `moveDrag`.
     *   **Effect**: Position updates are applied **immediately** to the node object, bypassing the 16ms physics tick.
     *   **Result**: 1:1 Hardware Cursor Sync (Zero Lag).
+*   **Mechanism 3: Law Lock**:
+    *   **Trigger**: Interaction Active (`draggedNodeId`).
+    *   **Effect**: `maxPhysicsBudgetMs = Infinity`. The engine MUST solve every sub-step requried by the scheduling, regardless of frame cost.
+    *   **Result**: 100% Determinism during interaction. No "skipped beats" or "popping" meshes.
 
 ## 6. Move-Leak Hardening (01–22 + Interaction)
 **Status**: Secured.

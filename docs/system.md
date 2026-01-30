@@ -89,6 +89,9 @@ Post-Fixes #01–#22, the system guarantees:
 ## 4. Interaction Contract (The "King" Layer)
 *   **Hand Authority**: When dragging a node:
     *   It follows the cursor 1:1 **instantly** (bypasses physics tick for "Knife-Sharp" feel).
+    *   **Law Lock**: Physics degradation is DISABLED. We spend `Infinity` budget to ensure the simulation never "slips" or "pops" under the hand.
+    *   **Camera Causality**: Camera smoothing is DISABLED (`alpha=1.0`) during interaction. When the hand stops, the view stops.
+    *   **Resync Truth**: If browser Zoom or Window Size changes mid-drag, the world coordinate system resyncs immediately, preserving the cursor-to-node lock.
     *   It is an **Immutable Physics Object** (`isFixed=true` + immunity to constraints). No elasticity.
     *   **Grab Offset**: The node maintains its relative offset to the cursor (no snap-to-center).
 *   **Capture Safety**: Window blur (Alt-Tab) or pointer cancel **must** release the drag to prevent stuck states.

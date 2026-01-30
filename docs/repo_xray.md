@@ -59,9 +59,9 @@ Excluding: `node_modules`, `dist`, `build`, `.git`
 *Note: Counts are based on specific file scan.*
 
 1.  `src/physics/engine.ts` (950+ lines) - **Core Physics Logic & Degrade State**
-2.  `src/playground/useGraphRendering.ts` (600+ lines) - **Scheduler & Overload Controller**
+2.  `src/playground/useGraphRendering.ts` (600+ lines) - **Scheduler, Law Lock & DPR Tracker**
 3.  `src/physics/engine/constraints.ts` (372 lines) - **PBD Constraints & Spacing**
-4.  `src/playground/GraphPhysicsPlayground.tsx` (378 lines) - **Main UI Controller**
+4.  `src/playground/GraphPhysicsPlayground.tsx` (378 lines) - **Main UI Controller & Input Gate**
 5.  `src/physics/engine/integration.ts` (200+ lines) - **Time Steps & Dt Skew**
 6.  `src/physics/engine/corrections.ts` (170+ lines) - **Diffusion & Jitter Control**
 7.  `src/physics/engine/velocity/dragVelocity.ts` (40 lines) - **Critical Interaction Logic**

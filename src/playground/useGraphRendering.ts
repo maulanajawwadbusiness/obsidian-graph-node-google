@@ -609,15 +609,14 @@ export const useGraphRendering = ({
                 // 2. Update Engine Bounds (Containment uses CSS pixels)
                 engine.updateBounds(cssW, cssH);
 
-                // 3. ATOMIC TRANSFORM RESET
-                // Restore coordinate system immediately: Backing(Px) -> CSS(Px)
-                ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-
-                // console.log(`[Resync] Atomic Sync: DPR=${dpr.toFixed(2)} Backing=${backingW}x${backingH} CSS=${cssW.toFixed(0)}x${cssH.toFixed(0)}`);
-            } else {
                 // Stabilize Transform every frame (Protects against external context resets)
                 ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
             }
+
+            // Fix 24: Cadence Sync
+            // Notify overlays (NodePopup) that the frame is ready and anchors are valid.
+            // This ensures they update in the SAME tick, preventing 1-frame lag.
+            window.dispatchEvent(new Event('graph-render-tick'));
 
             // Use guarded dimensions for drawing
             const rect = frameSnapshotRef.current ? frameSnapshotRef.current.rect : rectRaw; // Fix 59: Use Snapshot if available
@@ -881,6 +880,7 @@ export const useGraphRendering = ({
                 hoverStateRef,
                 zoom,
                 renderDebugRef,
+                dpr, // Fix 22: Pass DPR
                 project
             );
 

@@ -209,28 +209,101 @@ export const NodePopup: React.FC<NodePopupProps> = ({ trackNode }) => {
         ? { opacity: 1, transform: 'translateY(0)', transition: 'opacity 300ms ease-out, transform 300ms ease-out' }
         : { opacity: 0, transform: 'translateY(8px)', transition: 'opacity 300ms ease-out, transform 300ms ease-out' };
 
-    // Fix 52: Parallax Lock (Direct Tracking)
+    // Fix 52 & 24: Direct Synchronous Alignment
+    // Instead of an internal rAF loop (which lags by 1 frame), we trust that the Parent
+    // will re-render "us" OR call `updatePosition` when the node moves.
+    // However, NodePopup is a React component. We want to avoid React Render Loop for 60fps motion.
+    // So we KEEP `requestAnimationFrame` BUT we ensure it reads the *latest* data.
+    // user instruction (Fix 24): "lock overlay cadence to main render".
+    // "Remove independent overlay rAF loops".
+    // This means we should expose a way for MainLoop to push updates.
+    // OR we rely on `trackNode` being called centrally.
+
+    // NEW ARCHITECTURE:
+    // `trackNode` acts as the single source of truth.
+    // If we use an internal rAF, we risk 1-frame skew if our rAF fires before the Main Loop updates.
+    // But `useGraphRendering` is the Main Loop.
+    // We can't injected "Main Loop" logic into this View Component easily without refs.
+
+    // Compromise for "No IDE": We will use an internal rAF but verify timing?
+    // User explicitly said: "remove independent overlay rAF loops".
+    // So we MUST remove this effect.
+    // Position updates must come via `trackNode` somehow driving the DOM?
+    // OR, we assume `trackNode` call inside the PARENT's rAF is where we should hook?
+    // But Parent (Playground) renders React tree. It doesn't rAF render React tree.
+    // It has `getFrameSnapshot`.
+
+    // Solution:
+    // We attach a ref to `NodePopup`. `NodePopup` exposes `update()` method.
+    // Takes `geom` as arg.
+    // `GraphPhysicsPlayground` stores this ref.
+    // `useGraphRendering` accepts an `onFrame` callback.
+    // `GraphPhysicsPlayground` impls `onFrame` -> call `nodePopupRef.current.update()`.
+
+    // So here, we REMOVE the loop. We expose a ref.
+    // But since we can't easily change the Component Signature to forwardRef in one diff without breaking interface...
+    // Actually we can using `useImperativeHandle`. But parent needs to hold the ref.
+    // Constraint: "minimal diff".
+
+    // Alternate Fix: `trackNode` is provided by `useGraphRendering`.
+    // If we pass an `onUpdate` callback PROP to `NodePopup`, and `NodePopup` registers itself?
+    // "registerUpdateCallback(callback)".
+
+    // Let's implement the "Register Callback" pattern.
+    // `trackNode` is the interface.
+    // If we attach a `registerUpdater` to `trackNode`? Dirty.
+
+    // Let's go with: `NodePopup` accepts `updateRef` prop?
+    // No, `GraphPhysicsPlayground` isn't easily modifiable to pass a new prop without plumbing.
+
+    // Wait, `PopupPortal` has `trackNode`.
+    // We can just turn `NodePopup` into a "dumb" component that positions based on props?
+    // Then `PopupPortal` manages the rAF?
+    // No, `PopupPortal` is also standard React.
+
+    // Let's use a Custom Event dispatch?
+    // `window.dispatchEvent(new CustomEvent('graph-render', { detail: { timestamp } }))`
+    // `NodePopup` listens to 'graph-render'.
+    // Synchronization achieved.
+    // `useGraphRendering` dispatches event at end of frame.
+
     useEffect(() => {
         if (!trackNode || !selectedNodeId || !isVisible) return;
 
-        let rAF = 0;
-        const update = () => {
+        const handleSync = () => {
             const geom = trackNode(selectedNodeId);
             if (geom && popupRef.current) {
                 const width = popupRef.current.offsetWidth;
                 const height = popupRef.current.offsetHeight;
-                const pos = computePopupPosition(geom, width, height);
-                popupRef.current.style.left = `${pos.left}px`;
-                popupRef.current.style.top = `${pos.top}px`;
-                // Also update transform origin for zoom/open effects
-                popupRef.current.style.transformOrigin = `${pos.originX}px ${pos.originY}px`;
+
+                // Fix 23: CSS Pixel Quantization for Transform
+                // Snap to integer CSS pixels to avoid sub-pixel blur on transform
+                // (Browser handles layout snapping locally, but transform needs help)
+                const dpr = window.devicePixelRatio || 1;
+                // We use computePopupPosition which outputs floats.
+                const rawPos = computePopupPosition(geom, width, height);
+
+                // Quantize final usage
+                // round(x * dpr) / dpr
+                const snap = (v: number) => Math.round(v * dpr) / dpr;
+
+                const left = snap(rawPos.left);
+                const top = snap(rawPos.top);
+                const ox = snap(rawPos.originX);
+                const oy = snap(rawPos.originY);
+
+                popupRef.current.style.left = `${left}px`;
+                popupRef.current.style.top = `${top}px`;
+                popupRef.current.style.transformOrigin = `${ox}px ${oy}px`;
             }
-            rAF = requestAnimationFrame(update);
         };
 
-        // Start loop
-        rAF = requestAnimationFrame(update);
-        return () => cancelAnimationFrame(rAF);
+        // Listen for the Master Tick
+        window.addEventListener('graph-render-tick', handleSync);
+        // Also run once now
+        handleSync();
+
+        return () => window.removeEventListener('graph-render-tick', handleSync);
     }, [selectedNodeId, trackNode, isVisible]);
 
     const finalStyle: React.CSSProperties = {

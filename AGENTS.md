@@ -4,11 +4,11 @@
 
 ### A. 60fps Is Sacred (No Syrup)
 Jitter, layout thrashing, and frame drops are critical bugs.
-*   **0-Slush Scheduler**: Time must remain 1:1 with reality. If the renderer falls behind, **Drop Debt** (Stutter) rather than "Syrup" (Slow Motion).
-*   **No Hot Loops**: Never block the main thread.
-*   **Throttle**: All scroll/resize handlers (Streaming text autosize should be ~50ms).
-*   **Decouple**: Physics ticks are capped at `targetTickHz` (default 60) and do not bind to monitor refresh.
-*   **Bounds**: Work per frame must be bounded (e.g., strided sampling for O(N²) interactions).
+*   **0-Slush Scheduler**: Time must remain 1:1 with reality. If the renderer falls behind, **Drop Debt** (Stutter).
+*   **Zero Thrash**: Input handlers must never touch the DOM (Caching).
+*   **Decouple**: Input sampled asynchronously; Ticked synchronously in `rAF` (Fix 34).
+*   **Throttle**: All scroll/resize handlers (~50ms).
+*   **Bounds**: Work per frame must be bounded.
 
 ### B. Panels = Input Black Holes
 The Canvas (Graph) is the substrate. Panels (Chat, Docs) and the Analysis Overlay float above it.
@@ -43,8 +43,9 @@ The Canvas (Graph) is the substrate. Panels (Chat, Docs) and the Analysis Overla
 
 ## 4. CRITICAL WARNINGS
 
-### NEVER Use `task_boundary` or Browser Testing Tools
-These tools are currently broken or unreliable. Manage your own context through code analysis and manual reporting.
+### Use `task_boundary` Sparingly (3+2 Rule)
+Only use `task_boundary` for distinct, complex sub-tasks (~1 per 5 steps).
+**NEVER use Browser Testing Tools.**
 
 ### POWERSHELL CAUTION
 Do NOT use `&&` in the terminal. It breaks the parser. Use separate commands or use `;` correctly.

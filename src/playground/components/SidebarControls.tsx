@@ -32,7 +32,7 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
     spawnCount,
     useVariedSize
 }) => (
-    <div className="gp-sidebar" style={SIDEBAR_STYLE}>
+    <div className="gp-sidebar" style={SIDEBAR_STYLE} onWheel={(e) => e.stopPropagation()}>
         <button
             type="button"
             style={SIDEBAR_CLOSE_STYLE}

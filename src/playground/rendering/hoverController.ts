@@ -269,6 +269,7 @@ export const createHoverController = ({
             camera.panY,
             angle,
             centroid,
+            1.0, // Fix 58: Pass explicit DPR (1.0 for World coords)
             settingsRef.current.pixelSnapping
         );
 
@@ -294,6 +295,7 @@ export const createHoverController = ({
             camera.panY,
             angle,
             centroid,
+            1.0, // Fix 58: Pass explicit 1.0 (or we need true DPR from somewhere)
             settingsRef.current.pixelSnapping
         );
 
@@ -409,6 +411,24 @@ export const createHoverController = ({
         // FIX 35: Stale Hover (Persist Pointer)
         hoverStateRef.current.lastClientX = clientX;
         hoverStateRef.current.lastClientY = clientY;
+
+        // [HoverDbg] Forensic Instrumentation
+        if (theme.hoverDebugEnabled && renderScratch) {
+            // Check if we are "live" but grid is empty
+            const gridStats = renderScratch.hitGrid.stats();
+            if (gridStats.items === 0 && engineRef.current && engineRef.current.nodes.size > 0) {
+                // Throttle warning
+                if (Math.random() < 0.05) {
+                    console.warn(`[HoverDbg] Grid EMPTY but nodes exist! (n=${engineRef.current.nodes.size})`);
+                }
+            }
+            if (Math.random() < 0.01) {
+                console.log(
+                    `[HoverDbg] world=(${worldX.toFixed(1)}, ${worldY.toFixed(1)}) ` +
+                    `grid={b:${gridStats.buckets}, i:${gridStats.items}}`
+                );
+            }
+        }
 
         const nowMs = performance.now();
         const currentHoveredId = hoverStateRef.current.hoveredNodeId;

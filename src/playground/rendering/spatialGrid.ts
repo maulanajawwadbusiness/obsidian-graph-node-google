@@ -10,6 +10,17 @@ export class SpatialGrid {
         this.buckets = new Map();
     }
 
+    public stats() {
+        let items = 0;
+        for (const bucket of this.buckets.values()) {
+            items += bucket.length;
+        }
+        return {
+            buckets: this.buckets.size,
+            items
+        };
+    }
+
     public clear() {
         // Return arrays to pool logic? 
         // Simpler: iterate buckets, clear them (length=0), keep them in map?

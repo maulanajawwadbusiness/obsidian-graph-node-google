@@ -145,6 +145,11 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
 
         // 1. Hover Update (Ref-based, cheap)
         // FIX 28: Decoupled Input Sampling
+        // FORENSIC LOG: Pointer Move (Sampled)
+        if (Math.random() < 0.05) {
+            const canvas = canvasRef.current;
+            console.log(`[PointerTrace] Move id=${e.pointerId} captured=${canvas?.hasPointerCapture(e.pointerId)} x=${e.clientX.toFixed(0)}`);
+        }
         handlePointerMove(e.pointerId, e.pointerType, e.clientX, e.clientY, rect);
     };
 
@@ -185,6 +190,12 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
 
         const rect = canvas.getBoundingClientRect();
         const theme = getTheme(skinMode);
+
+        // FORENSIC LOG: Pointer Down
+        if (DRAG_ENABLED) {
+            console.log(`[PointerTrace] Down id=${e.pointerId} type=${e.pointerType} buttons=${e.buttons} captured=${canvas.hasPointerCapture(e.pointerId)} target=${(e.target as HTMLElement).tagName} current=${(e.currentTarget as HTMLElement).tagName}`);
+        }
+
         updateHoverSelection(e.clientX, e.clientY, rect, theme, 'pointer');
 
         const hitId = hoverStateRef.current.hoveredNodeId;
@@ -201,6 +212,7 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
             // Don't grab immediately. Queue it for the next render tick.
             // This ensures we calculate the anchor using the exact camera state of the frame.
             if (DRAG_ENABLED) {
+                console.log(`[PointerTrace] Queueing DragStart for ${hitId} at ${e.clientX},${e.clientY}`);
                 handleDragStart(hitId, e.clientX, e.clientY);
             }
         }
@@ -208,9 +220,10 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
 
     const onPointerUp = (e: React.PointerEvent) => {
         const canvas = canvasRef.current;
-        if (canvas && canvas.hasPointerCapture(e.pointerId)) {
-            canvas.releasePointerCapture(e.pointerId);
-        }
+        if (!canvas) return;
+
+        canvas.releasePointerCapture(e.pointerId);
+        console.log(`[PointerTrace] Up id=${e.pointerId} captured=${canvas.hasPointerCapture(e.pointerId)}`);
         handlePointerUp(e.pointerId, e.pointerType);
 
         // GESTURE LOGIC: Click vs Drag
@@ -222,22 +235,12 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
 
             // Threshold: < 5px is a Click
             if (dist < 5) {
-                // It was a click (not a drag)
                 const node = engineRef.current.nodes.get(start.nodeId);
-                // Verify node still exists and matches
                 if (node) {
-                    const rect = canvas!.getBoundingClientRect();
+                    const rect = canvas.getBoundingClientRect();
                     const screenPos = worldToScreen(node.x, node.y, rect);
-                    // Standard visual radius estimate (can be refined via renderDebug)
                     const cameraZoom = hoverStateRef.current.lastSelectionZoom || 1;
-                    const visualRadius = node.radius * cameraZoom; // Basic radius
-                    // Popups usually attach to the "bubble" which includes glow/padding.
-                    // Let's use `visualRadius` but maybe pad it?
-                    // The old code `radius * 5` suggests nodes are drawn small but hit area is huge?
-                    // Actually, nodes are drawn small (r=3-5) but we want popup to spawn outside the "cluster"?
-                    // Let's stick to `visualRadius` but maybe add a margin in the Popup logic itself.
-                    // Actually, `computePopupPosition` uses `radius` to push it away.
-                    // Let's pass the actual visual radius.
+                    const visualRadius = node.radius * cameraZoom;
 
                     const metaContent = node.meta ? {
                         title: node.meta.sourceTitle,
@@ -261,328 +264,329 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
         handleDragEnd();
     };
 
-    // ---------------------------------------------------------------------------
-    // Drag & Drop Handlers (Document Upload)
-    // ---------------------------------------------------------------------------
-    const handleDragOver = (e: React.DragEvent) => {
-        e.preventDefault();
-        e.stopPropagation();
-    };
-
-    const handleDrop = async (e: React.DragEvent) => {
-        e.preventDefault();
-        e.stopPropagation();
-
-        const files = Array.from(e.dataTransfer.files);
-        if (files.length === 0) return;
-
-        const file = files[0];
-        console.log('[Drop] File dropped:', file.name, file.type);
-        setLastDroppedFile(file);
-
-        // Convert drop coordinates to world space
-        const canvas = canvasRef.current;
-        if (!canvas) return;
-        const rect = canvas.getBoundingClientRect();
-        const world = clientToWorld(e.clientX, e.clientY, rect);
-        console.log('[Drop] World position:', world.x.toFixed(2), world.y.toFixed(2));
-
-        // Parse file in worker and get document immediately
-        const document = await documentContext.parseFile(file);
-
-        // Apply first 5 words to node labels (fast, synchronous)
-        if (document) {
-            applyFirstWordsToNodes(engineRef.current, document);
-
-            // Trigger AI label rewrite (async, non-blocking)
-            // Capture docId now to avoid races with documentContext updates.
-            const docId = document.id;
-            applyAnalysisToNodes(
-                engineRef.current,
-                document.text,
-                docId,
-                () => docId,
-                documentContext.setAIActivity,
-                documentContext.setInferredTitle
-            );
-        }
-    };
-
-    // ---------------------------------------------------------------------------
-    // Config Updates
-    // ---------------------------------------------------------------------------
-    const handleConfigChange = (key: keyof ForceConfig, value: number | boolean) => {
-        const newConfig = { ...config, [key]: value };
-        setConfig(newConfig);
-        engineRef.current?.updateConfig(newConfig);
-    };
-
-    // Capture Safety: Release drag on window blur (Alt-Tab)
-    useEffect(() => {
-        const handleBlur = () => {
-            if (engineRef.current.draggedNodeId) {
-                handleDragEnd();
-            }
-        };
-        window.addEventListener('blur', handleBlur);
-        return () => window.removeEventListener('blur', handleBlur);
-    }, [handleDragEnd]);
-
-    // FIX 40: Global Shortcut Gate (Focus Truth)
-    // Prevent browser defaults (e.g. Page Scroll on Space/Arrows) when interacting with Canvas.
-    // Allow them if user is typing in Chat/Input.
-    useEffect(() => {
-        const handleGlobalKeydown = (e: KeyboardEvent) => {
-            // 1. Focus Check: Is user typing?
-            const target = e.target as HTMLElement;
-            const isInput = target.tagName === 'INPUT' ||
-                target.tagName === 'TEXTAREA' ||
-                target.isContentEditable;
-
-            if (isInput) {
-                // User is typing. Let browser/app handle it (e.g. space in text).
-                // Do NOT block.
-                return;
-            }
-
-            // 2. Block List: Keys that cause unwanted browser scrolling/nav on Canvas
-            // Space, Arrows
-            if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) {
-                e.preventDefault();
-                // e.stopPropagation(); // Optional: Stop bubble if we had conflicting listeners up-tree
-            }
-        };
-
-        window.addEventListener('keydown', handleGlobalKeydown, { capture: true }); // Capture to intercept early
-        return () => window.removeEventListener('keydown', handleGlobalKeydown, { capture: true });
-    }, []);
-
-    const spawnGraph = (count: number, newSeed: number) => {
-        const engine = engineRef.current;
-        if (!engine) return;
-        engine.clear();
-        setSeed(newSeed);
-        const { nodes, links } = generateRandomGraph(
-            count,
-            config.targetSpacing,
-            config.initScale,
-            newSeed,
-            config.initStrategy
-        );
-        nodes.forEach(n => engine.addNode(n));
-        links.forEach(l => engine.addLink(l));
-        engine.resetLifecycle();
-    };
-
-    const handleSpawn = () => {
-        // Generate new random seed for each spawn
-        const newSeed = Date.now();
-        spawnGraph(spawnCount, newSeed);
-    };
-
-    const handleReset = () => {
-        const engine = engineRef.current;
-        if (!engine) return;
-        // Just randomize positions of existing nodes
-        engine.nodes.forEach(n => {
-            // SINGULARITY RESET
-            n.x = (Math.random() - 0.5) * 1.0;
-            n.y = (Math.random() - 0.5) * 1.0;
-            n.vx = 0;
-            n.vy = 0;
-            n.warmth = 1.0;
-        });
-        engine.resetLifecycle();
-    };
-
-    const handleLogPreset = () => {
-        const preset = {
-            // Core spacing
-            targetSpacing: config.targetSpacing,
-            initScale: config.initScale,
-            snapImpulseScale: config.snapImpulseScale,
-
-            // Physics timing
-            dampingSnap: 0.30,     // From engine.ts Flight phase
-            dampingSettle: 0.90,   // From engine.ts Settle phase
-            maxVelocity: config.maxVelocity,
-            sleepThreshold: config.velocitySleepThreshold,
-
-            // Springs
-            springStiffness: config.springStiffness,
-
-            // Collision
-            collisionPadding: config.collisionPadding,
-            collisionStrength: config.collisionStrength,
-
-            // Repulsion
-            repulsionStrength: config.repulsionStrength,
-            repulsionDistanceMax: config.repulsionDistanceMax,
-
-            // Generation
-            seed: seed,
-            nodeCount: spawnCount
-        };
-
-        console.log('='.repeat(60));
-        console.log('PRESET CAPTURE');
-        console.log('='.repeat(60));
-        console.log(JSON.stringify(preset, null, 2));
-        console.log('='.repeat(60));
-    };
-
-    const handleSpawnPreset = (count: number) => {
-        const fixedSeed = 1337 + count;
-        setSpawnCount(count);
-        setHudScenarioLabel(`Preset N=${count} (seed ${fixedSeed})`);
-        setHudDragTargetId(null);
-        spawnGraph(count, fixedSeed);
-    };
-
-    const handleSettleScenario = () => {
-        const fixedSeed = 1337 + spawnCount;
-        setHudScenarioLabel('Settle test: wait for settle → sleep, then record.');
-        setHudDragTargetId(null);
-        spawnGraph(spawnCount, fixedSeed);
-    };
-
-    const handleDragScenario = () => {
-        const engine = engineRef.current;
-        if (!engine) return;
-        const degreeMap = new Map<string, number>();
-        for (const link of engine.links) {
-            degreeMap.set(link.source, (degreeMap.get(link.source) || 0) + 1);
-            degreeMap.set(link.target, (degreeMap.get(link.target) || 0) + 1);
-        }
-        let targetId: string | null = null;
-        let bestDeg = -1;
-        for (const node of engine.nodes.values()) {
-            const deg = degreeMap.get(node.id) || 0;
-            if (deg > bestDeg) {
-                bestDeg = deg;
-                targetId = node.id;
-            }
-        }
-        setHudDragTargetId(targetId);
-        setHudScenarioLabel('Drag test: drag highlighted dot for 2s, then release.');
-    };
-
-    const handleRecordHudScore = () => {
-        if (!metrics.physicsHud) return;
-        const count = metrics.nodes;
-        setHudScores(prev => ({
-            ...prev,
-            [count]: {
-                settleMs: metrics.physicsHud.lastSettleMs,
-                jitter: metrics.physicsHud.jitterAvg,
-                conflictPct: metrics.physicsHud.conflictPct5s,
-                energy: metrics.physicsHud.energyProxy,
-                degradePct: metrics.physicsHud.degradePct5s,
-            }
-        }));
-    };
-
-    // Get theme for container styling
-    const activeTheme = getTheme(skinMode);
-
-    const toggleViewer = () => {
-        clearHover('viewer toggle', -1, 'unknown');
-        documentContext.togglePreview();
-    };
-
-    return (
-        <div style={{ ...CONTAINER_STYLE, background: activeTheme.background }}>
-            <HalfLeftWindow
-                open={documentContext.state.previewOpen}
-                onClose={() => {
-                    clearHover('viewer close', -1, 'unknown');
-                    documentContext.setPreviewOpen(false);
-                }}
-                rawFile={lastDroppedFile}
-            />
-            <div
-                style={MAIN_STYLE}
-                onPointerDown={onPointerDown}
-                onPointerEnter={onPointerEnter}
-                onPointerMoveCapture={onPointerMove}
-                onPointerLeave={onPointerLeave}
-                onPointerCancel={onPointerCancel}
-                onLostPointerCapture={onLostPointerCapture}
-                onPointerUp={onPointerUp}
-                onDragOver={handleDragOver}
-                onDrop={handleDrop}
-            >
-                <canvas ref={canvasRef} style={{ width: '100%', height: '100%', background: activeTheme.background }} />
-                <CanvasOverlays
-                    config={config}
-                    onConfigChange={handleConfigChange}
-                    debugOpen={debugOpen}
-                    metrics={metrics}
-                    onCloseDebug={() => setDebugOpen(false)}
-                    onShowDebug={() => setDebugOpen(true)}
-                    onToggleSidebar={() => setSidebarOpen((v) => !v)}
-                    onToggleTheme={() => setSkinMode(skinMode === 'elegant' ? 'normal' : 'elegant')}
-                    showThemeToggle={SHOW_THEME_TOGGLE}
-                    sidebarOpen={sidebarOpen}
-                    skinMode={skinMode}
-                    viewerOpen={documentContext.state.previewOpen}
-                    cameraLocked={cameraLocked}
-                    showDebugGrid={showDebugGrid}
-                    onToggleCameraLock={() => setCameraLocked(v => !v)}
-                    onToggleDebugGrid={() => setShowDebugGrid(v => !v)}
-                    pixelSnapping={pixelSnapping}
-                    debugNoRenderMotion={debugNoRenderMotion}
-                    onTogglePixelSnapping={() => setPixelSnapping(v => !v)}
-                    onToggleNoRenderMotion={() => setDebugNoRenderMotion(v => !v)}
-                    showRestMarkers={showRestMarkers}
-                    showConflictMarkers={showConflictMarkers}
-                    markerIntensity={markerIntensity}
-                    forceShowRestMarkers={forceShowRestMarkers}
-                    onToggleRestMarkers={() => setShowRestMarkers(v => !v)}
-                    onToggleConflictMarkers={() => setShowConflictMarkers(v => !v)}
-                    onToggleForceShowRestMarkers={() => setForceShowRestMarkers(v => !v)}
-                    onMarkerIntensityChange={setMarkerIntensity}
-                    onSpawnPreset={handleSpawnPreset}
-                    onRunSettleScenario={handleSettleScenario}
-                    onRunDragScenario={handleDragScenario}
-                    onRecordHudScore={handleRecordHudScore}
-                    hudScenarioLabel={hudScenarioLabel}
-                    hudDragTargetId={hudDragTargetId}
-                    hudScores={hudScores}
-                />
-                <TextPreviewButton onToggle={toggleViewer} />
-                <AIActivityGlyph />
-                <AnalysisOverlay />
-                {SHOW_MAP_TITLE && <MapTitleBlock />}
-                {SHOW_BRAND_LABEL && <BrandLabel />}
-                <PopupPortal engineRef={engineRef} />
-                <RotationCompass engineRef={engineRef} />
-                <FullChatToggle />
-            </div>
-
-            {sidebarOpen && !fullChatOpen && (
-                <SidebarControls
-                    config={config}
-                    onClose={() => setSidebarOpen(false)}
-                    onConfigChange={handleConfigChange}
-                    onLogPreset={handleLogPreset}
-                    onReset={handleReset}
-                    onSpawn={handleSpawn}
-                    onToggleVariedSize={setUseVariedSize}
-                    seed={seed}
-                    setSeed={setSeed}
-                    setSpawnCount={setSpawnCount}
-                    spawnCount={spawnCount}
-                    useVariedSize={useVariedSize}
-                />
-            )}
-
-            {fullChatOpen && (
-                <FullChatbar engineRef={engineRef} />
-            )}
-        </div>
-    );
+// ---------------------------------------------------------------------------
+// Drag & Drop Handlers (Document Upload)
+// ---------------------------------------------------------------------------
+const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
 };
+
+const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const files = Array.from(e.dataTransfer.files);
+    if (files.length === 0) return;
+
+    const file = files[0];
+    console.log('[Drop] File dropped:', file.name, file.type);
+    setLastDroppedFile(file);
+
+    // Convert drop coordinates to world space
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const world = clientToWorld(e.clientX, e.clientY, rect);
+    console.log('[Drop] World position:', world.x.toFixed(2), world.y.toFixed(2));
+
+    // Parse file in worker and get document immediately
+    const document = await documentContext.parseFile(file);
+
+    // Apply first 5 words to node labels (fast, synchronous)
+    if (document) {
+        applyFirstWordsToNodes(engineRef.current, document);
+
+        // Trigger AI label rewrite (async, non-blocking)
+        // Capture docId now to avoid races with documentContext updates.
+        const docId = document.id;
+        applyAnalysisToNodes(
+            engineRef.current,
+            document.text,
+            docId,
+            () => docId,
+            documentContext.setAIActivity,
+            documentContext.setInferredTitle
+        );
+    }
+};
+
+// ---------------------------------------------------------------------------
+// Config Updates
+// ---------------------------------------------------------------------------
+const handleConfigChange = (key: keyof ForceConfig, value: number | boolean) => {
+    const newConfig = { ...config, [key]: value };
+    setConfig(newConfig);
+    engineRef.current?.updateConfig(newConfig);
+};
+
+// Capture Safety: Release drag on window blur (Alt-Tab)
+useEffect(() => {
+    const handleBlur = () => {
+        if (engineRef.current.draggedNodeId) {
+            handleDragEnd();
+        }
+    };
+    window.addEventListener('blur', handleBlur);
+    return () => window.removeEventListener('blur', handleBlur);
+}, [handleDragEnd]);
+
+// FIX 40: Global Shortcut Gate (Focus Truth)
+// Prevent browser defaults (e.g. Page Scroll on Space/Arrows) when interacting with Canvas.
+// Allow them if user is typing in Chat/Input.
+useEffect(() => {
+    const handleGlobalKeydown = (e: KeyboardEvent) => {
+        // 1. Focus Check: Is user typing?
+        const target = e.target as HTMLElement;
+        const isInput = target.tagName === 'INPUT' ||
+            target.tagName === 'TEXTAREA' ||
+            target.isContentEditable;
+
+        if (isInput) {
+            // User is typing. Let browser/app handle it (e.g. space in text).
+            // Do NOT block.
+            return;
+        }
+
+        // 2. Block List: Keys that cause unwanted browser scrolling/nav on Canvas
+        // Space, Arrows
+        if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) {
+            e.preventDefault();
+            // e.stopPropagation(); // Optional: Stop bubble if we had conflicting listeners up-tree
+        }
+    };
+
+    window.addEventListener('keydown', handleGlobalKeydown, { capture: true }); // Capture to intercept early
+    return () => window.removeEventListener('keydown', handleGlobalKeydown, { capture: true });
+}, []);
+
+const spawnGraph = (count: number, newSeed: number) => {
+    const engine = engineRef.current;
+    if (!engine) return;
+    engine.clear();
+    setSeed(newSeed);
+    const { nodes, links } = generateRandomGraph(
+        count,
+        config.targetSpacing,
+        config.initScale,
+        newSeed,
+        config.initStrategy
+    );
+    nodes.forEach(n => engine.addNode(n));
+    links.forEach(l => engine.addLink(l));
+    engine.resetLifecycle();
+};
+
+const handleSpawn = () => {
+    // Generate new random seed for each spawn
+    const newSeed = Date.now();
+    spawnGraph(spawnCount, newSeed);
+};
+
+const handleReset = () => {
+    const engine = engineRef.current;
+    if (!engine) return;
+    // Just randomize positions of existing nodes
+    engine.nodes.forEach(n => {
+        // SINGULARITY RESET
+        n.x = (Math.random() - 0.5) * 1.0;
+        n.y = (Math.random() - 0.5) * 1.0;
+        n.vx = 0;
+        n.vy = 0;
+        n.warmth = 1.0;
+    });
+    engine.resetLifecycle();
+};
+
+const handleLogPreset = () => {
+    const preset = {
+        // Core spacing
+        targetSpacing: config.targetSpacing,
+        initScale: config.initScale,
+        snapImpulseScale: config.snapImpulseScale,
+
+        // Physics timing
+        dampingSnap: 0.30,     // From engine.ts Flight phase
+        dampingSettle: 0.90,   // From engine.ts Settle phase
+        maxVelocity: config.maxVelocity,
+        sleepThreshold: config.velocitySleepThreshold,
+
+        // Springs
+        springStiffness: config.springStiffness,
+
+        // Collision
+        collisionPadding: config.collisionPadding,
+        collisionStrength: config.collisionStrength,
+
+        // Repulsion
+        repulsionStrength: config.repulsionStrength,
+        repulsionDistanceMax: config.repulsionDistanceMax,
+
+        // Generation
+        seed: seed,
+        nodeCount: spawnCount
+    };
+
+    console.log('='.repeat(60));
+    console.log('PRESET CAPTURE');
+    console.log('='.repeat(60));
+    console.log(JSON.stringify(preset, null, 2));
+    console.log('='.repeat(60));
+};
+
+const handleSpawnPreset = (count: number) => {
+    const fixedSeed = 1337 + count;
+    setSpawnCount(count);
+    setHudScenarioLabel(`Preset N=${count} (seed ${fixedSeed})`);
+    setHudDragTargetId(null);
+    spawnGraph(count, fixedSeed);
+};
+
+const handleSettleScenario = () => {
+    const fixedSeed = 1337 + spawnCount;
+    setHudScenarioLabel('Settle test: wait for settle → sleep, then record.');
+    setHudDragTargetId(null);
+    spawnGraph(spawnCount, fixedSeed);
+};
+
+const handleDragScenario = () => {
+    const engine = engineRef.current;
+    if (!engine) return;
+    const degreeMap = new Map<string, number>();
+    for (const link of engine.links) {
+        degreeMap.set(link.source, (degreeMap.get(link.source) || 0) + 1);
+        degreeMap.set(link.target, (degreeMap.get(link.target) || 0) + 1);
+    }
+    let targetId: string | null = null;
+    let bestDeg = -1;
+    for (const node of engine.nodes.values()) {
+        const deg = degreeMap.get(node.id) || 0;
+        if (deg > bestDeg) {
+            bestDeg = deg;
+            targetId = node.id;
+        }
+    }
+    setHudDragTargetId(targetId);
+    setHudScenarioLabel('Drag test: drag highlighted dot for 2s, then release.');
+};
+
+const handleRecordHudScore = () => {
+    if (!metrics.physicsHud) return;
+    const count = metrics.nodes;
+    setHudScores(prev => ({
+        ...prev,
+        [count]: {
+            settleMs: metrics.physicsHud.lastSettleMs,
+            jitter: metrics.physicsHud.jitterAvg,
+            conflictPct: metrics.physicsHud.conflictPct5s,
+            energy: metrics.physicsHud.energyProxy,
+            degradePct: metrics.physicsHud.degradePct5s,
+        }
+    }));
+};
+
+// Get theme for container styling
+const activeTheme = getTheme(skinMode);
+
+const toggleViewer = () => {
+    clearHover('viewer toggle', -1, 'unknown');
+    documentContext.togglePreview();
+};
+
+return (
+    <div style={{ ...CONTAINER_STYLE, background: activeTheme.background }}>
+        <HalfLeftWindow
+            open={documentContext.state.previewOpen}
+            onClose={() => {
+                clearHover('viewer close', -1, 'unknown');
+                documentContext.setPreviewOpen(false);
+            }}
+            rawFile={lastDroppedFile}
+        />
+        <div
+            style={MAIN_STYLE}
+            onPointerDown={onPointerDown}
+            onPointerEnter={onPointerEnter}
+            onPointerMoveCapture={onPointerMove}
+            onPointerLeave={onPointerLeave}
+            onPointerCancel={onPointerCancel}
+            onLostPointerCapture={onLostPointerCapture}
+            onPointerUp={onPointerUp}
+            onDragOver={handleDragOver}
+            onDrop={handleDrop}
+        >
+            <canvas ref={canvasRef} style={{ width: '100%', height: '100%', background: activeTheme.background }} />
+            <CanvasOverlays
+                config={config}
+                onConfigChange={handleConfigChange}
+                debugOpen={debugOpen}
+                metrics={metrics}
+                onCloseDebug={() => setDebugOpen(false)}
+                onShowDebug={() => setDebugOpen(true)}
+                onToggleSidebar={() => setSidebarOpen((v) => !v)}
+                onToggleTheme={() => setSkinMode(skinMode === 'elegant' ? 'normal' : 'elegant')}
+                showThemeToggle={SHOW_THEME_TOGGLE}
+                sidebarOpen={sidebarOpen}
+                skinMode={skinMode}
+                viewerOpen={documentContext.state.previewOpen}
+                cameraLocked={cameraLocked}
+                showDebugGrid={showDebugGrid}
+                onToggleCameraLock={() => setCameraLocked(v => !v)}
+                onToggleDebugGrid={() => setShowDebugGrid(v => !v)}
+                pixelSnapping={pixelSnapping}
+                debugNoRenderMotion={debugNoRenderMotion}
+                onTogglePixelSnapping={() => setPixelSnapping(v => !v)}
+                onToggleNoRenderMotion={() => setDebugNoRenderMotion(v => !v)}
+                showRestMarkers={showRestMarkers}
+                showConflictMarkers={showConflictMarkers}
+                markerIntensity={markerIntensity}
+                forceShowRestMarkers={forceShowRestMarkers}
+                onToggleRestMarkers={() => setShowRestMarkers(v => !v)}
+                onToggleConflictMarkers={() => setShowConflictMarkers(v => !v)}
+                onToggleForceShowRestMarkers={() => setForceShowRestMarkers(v => !v)}
+                onMarkerIntensityChange={setMarkerIntensity}
+                onSpawnPreset={handleSpawnPreset}
+                onRunSettleScenario={handleSettleScenario}
+                onRunDragScenario={handleDragScenario}
+                onRecordHudScore={handleRecordHudScore}
+                hudScenarioLabel={hudScenarioLabel}
+                hudDragTargetId={hudDragTargetId}
+                hudScores={hudScores}
+            />
+            <TextPreviewButton onToggle={toggleViewer} />
+            <AIActivityGlyph />
+            <AnalysisOverlay />
+            {SHOW_MAP_TITLE && <MapTitleBlock />}
+            {SHOW_BRAND_LABEL && <BrandLabel />}
+            <PopupPortal engineRef={engineRef} />
+            <RotationCompass engineRef={engineRef} />
+            <FullChatToggle />
+        </div>
+
+        {sidebarOpen && !fullChatOpen && (
+            <SidebarControls
+                config={config}
+                onClose={() => setSidebarOpen(false)}
+                onConfigChange={handleConfigChange}
+                onLogPreset={handleLogPreset}
+                onReset={handleReset}
+                onSpawn={handleSpawn}
+                onToggleVariedSize={setUseVariedSize}
+                seed={seed}
+                setSeed={setSeed}
+                setSpawnCount={setSpawnCount}
+                spawnCount={spawnCount}
+                useVariedSize={useVariedSize}
+            />
+        )}
+
+        {fullChatOpen && (
+            <FullChatbar engineRef={engineRef} />
+        )}
+    </div>
+);
+
+}; // close GraphPhysicsPlaygroundInternal
 
 // Wrapper with DocumentProvider, PopupProvider, and FullChatProvider
 export const GraphPhysicsPlayground: React.FC = () => (

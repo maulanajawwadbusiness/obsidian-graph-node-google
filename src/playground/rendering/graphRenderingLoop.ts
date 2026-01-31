@@ -832,11 +832,21 @@ export const startGraphRenderLoop = (deps: GraphRenderLoopDeps) => {
         // FIX 36: Deferred Drag Start (First Frame Continuity)
         // Apply the grab using the EXACT camera/surface state of this frame.
         if (pendingPointerRef.current.pendingDragStart) {
-            const { nodeId, clientX, clientY } = pendingPointerRef.current.pendingDragStart;
-            const rect = canvas.getBoundingClientRect(); // Live rect for instant sync
-            const { x, y } = clientToWorld(clientX, clientY, rect);
-            engine.grabNode(nodeId, { x, y });
-            pendingPointerRef.current.pendingDragStart = null;
+            // FIX: Secondary Gate (Phantom Grab Protection)
+            // If interactionLock is FALSE, it means handleDragEnd ran between the click and this frame.
+            // We must drop the stale start request.
+            if (!engine.interactionLock) {
+                console.warn(`[StuckLockTrace] RenderLoop: Dropping stale pendingDragStart (Lock=FALSE).`);
+                pendingPointerRef.current.pendingDragStart = null;
+            } else {
+                const { nodeId, clientX, clientY } = pendingPointerRef.current.pendingDragStart;
+                console.log(`[StuckLockTrace] RenderLoop: Consuming pendingDragStart for ${nodeId} (Race Check: isFixed=${engine.nodes.get(nodeId)?.isFixed})`);
+                const rect = canvas.getBoundingClientRect(); // Live rect for instant sync
+                const { x, y } = clientToWorld(clientX, clientY, rect);
+                engine.grabNode(nodeId, { x, y });
+                console.log(`[PointerTrace] RenderLoop: Grabbed node ${nodeId} at ${x.toFixed(1)},${y.toFixed(1)} (dragged=${engine.draggedNodeId})`);
+                pendingPointerRef.current.pendingDragStart = null;
+            }
         }
 
         const now = performance.now();
@@ -1066,6 +1076,11 @@ export const startGraphRenderLoop = (deps: GraphRenderLoopDeps) => {
         }
 
         applyDragTargetSync(engine, hoverStateRef, clientToWorld, rect, camera);
+
+        if (engine.draggedNodeId && Math.random() < 0.05) {
+            const { cursorClientX, cursorClientY } = hoverStateRef.current;
+            console.log(`[PointerTrace] Sync: Moving drag ${engine.draggedNodeId} to client=${cursorClientX.toFixed(0)},${cursorClientY.toFixed(0)}`);
+        }
 
         window.dispatchEvent(new CustomEvent('graph-render-tick', {
             detail: { transform, dpr, snapEnabled: effectiveSnapping },

@@ -38,7 +38,7 @@ The ticking loop (`src/physics/engine/engineTick.ts`) execution order:
 5.  **Correction Diffusion** -> *Smoothes jitter*
 
 ### MotionPolicy (Energy → Ramps)
-Energy thresholds are now routed through a unified `MotionPolicy` ramp set (early-expansion, expansion, diffusion, hub relief). This avoids hard law flips and keeps constraint/velocity gating continuous.
+Energy thresholds are now routed through a unified `MotionPolicy` ramp set (early-expansion, expansion, diffusion, hub relief). Note: Start-only ramps (like Carrier Flow) are **disabled** under the `spread` init strategy.
 
 ## 4.1 Initialization Strategy (No Explosion Start)
 The default init strategy is now **`spread`**, which seeds dots in a wide, deterministic spiral/disc with a minimum separation epsilon. This removes the need for pre-roll or impulse kicks while still preventing true `distance=0` singularities. Use `initStrategy: "legacy"` only when you explicitly want the previous pre-roll/impulse behavior.

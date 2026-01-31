@@ -180,7 +180,9 @@ export const useGraphRendering = ({
         if (!engine) return;
 
         // FIX: Lock Laws during interaction
+        const wasLocked = engine.interactionLock;
         engine.lockInteraction('drag');
+        console.log(`[PointerTrace] handleDragStart: locked interaction (prev=${wasLocked}) for nodeId=${nodeId}`);
 
         pendingPointerRef.current.pendingDragStart = { nodeId, clientX, clientY };
     };
@@ -188,9 +190,18 @@ export const useGraphRendering = ({
     const handleDragEnd = () => {
         const engine = engineRef.current;
         if (engine) {
+            // FIX: Phantom Grab Race Condition
+            // Ensure no pending drag start is consumed next frame if we are ending now.
+            if (pendingPointerRef.current.pendingDragStart) {
+                console.warn(`[StuckLockTrace] handleDragEnd: Aborting pending drag start for ${pendingPointerRef.current.pendingDragStart.nodeId}`);
+                pendingPointerRef.current.pendingDragStart = null;
+            }
+
+            console.log(`[PointerTrace] handleDragEnd: releasing node (dragged=${engine.draggedNodeId})`);
             engine.releaseNode();
             // FIX: Unlock Laws
             engine.unlockInteraction();
+            console.log(`[PointerTrace] handleDragEnd: unlocked interaction`);
         }
     };
 

@@ -2,6 +2,8 @@ import type { PhysicsEngine } from '../engine';
 import type { PhysicsNode } from '../types';
 import { getPassStats, type DebugStats } from './stats';
 import { applyCarrierFlowAndPersistence, applyHubVelocityScaling } from './velocityPass';
+import type { MotionPolicy } from './motionPolicy';
+import { smoothstep, type UnifiedMotionState } from './unifiedMotionState';
 import { applyBaseIntegration, clampVelocity } from './velocity/baseIntegration';
 import { applyDamping } from './velocity/damping';
 
@@ -15,6 +17,8 @@ export const integrateNodes = (
     nodeList: PhysicsNode[],
     dt: number,
     energy: number,
+    motionState: UnifiedMotionState,
+    motionPolicy: MotionPolicy,
     effectiveDamping: number,
     maxVelocityEffective: number,
     stats: DebugStats,
@@ -62,7 +66,9 @@ export const integrateNodes = (
     // During early expansion, nodes integrate in deterministic priority order
     // Lower priority moves first EVERY frame → symmetry cannot reform
     // =====================================================================
-    const earlyExpansion = energy > 0.85;
+    const earlyExpansionT = smoothstep(0.72, 0.9, motionState.temperature);
+    const hubLagT = smoothstep(0.6, 0.85, motionState.temperature);
+    const earlyExpansion = earlyExpansionT > 0.01;
     let integrationOrder = nodeList;
 
     if (earlyExpansion && !preRollActive) {
@@ -109,7 +115,7 @@ export const integrateNodes = (
         let effectiveFx = node.fx;
         let effectiveFy = node.fy;
 
-        if (!preRollActive && energy > 0.8 && inertiaDeg >= 3) {
+        if (!preRollActive && hubLagT > 0.001 && inertiaDeg >= 3) {
             // Initialize force memory on first use
             if (node.prevFx === undefined) node.prevFx = 0;
             if (node.prevFy === undefined) node.prevFy = 0;
@@ -123,7 +129,7 @@ export const integrateNodes = (
                 node.prevFx = node.fx;
                 node.prevFy = node.fy;
             } else {
-                const alpha = 0.3;  // 30% previous, 70% current (temporal lag)
+                const alpha = 0.3 * hubLagT;  // Scale lag continuously with temperature
                 effectiveFx = alpha * node.prevFx + (1 - alpha) * node.fx;
                 effectiveFy = alpha * node.prevFy + (1 - alpha) * node.fy;
             }
@@ -140,7 +146,7 @@ export const integrateNodes = (
         // TEMPORAL DECOHERENCE: deterministic dt skew during early expansion
         // Breaks time symmetry so equilibrium cannot form
         let nodeDt = dt;
-        if (!preRollActive && energy > 0.85) {
+        if (!preRollActive && earlyExpansionT > 0.001) {
             // Hash-based dt skew: ±3% variation
             let hash = 0;
             for (let i = 0; i < node.id.length; i++) {
@@ -156,7 +162,7 @@ export const integrateNodes = (
             // Default to uniform DT (skew=0) to prevent cluster drift.
             // Only enable skew if debug is active for stress testing.
             const isInteracting = node.id === engine.draggedNodeId;
-            const skewMagnitude = (engine.config.debugPerf && !isInteracting) ? 0.02 : 0;
+            const skewMagnitude = (engine.config.debugPerf && !isInteracting) ? 0.02 * earlyExpansionT : 0;
 
             const dtMultiplier = (1.0 - skewMagnitude) + skew * (2 * skewMagnitude); // 0.98 to 1.02
             nodeDt = dt * dtMultiplier;
@@ -173,7 +179,7 @@ export const integrateNodes = (
         applyBaseIntegration(node, ax, ay, nodeDt);
 
         if (!preRollActive) {
-            applyCarrierFlowAndPersistence(engine, nodeList, node, energy, stats);
+            applyCarrierFlowAndPersistence(engine, nodeList, node, energy, motionPolicy, stats);
         }
 
         // Apply unified damping (increases as energy falls) - use nodeDt
@@ -192,43 +198,6 @@ export const integrateNodes = (
         // Update Position - use nodeDt for temporal decoherence
         node.x += node.vx * nodeDt;
         node.y += node.vy * nodeDt;
-
-        // Sleep Check (Smart Force-Aware)
-        // FIX #7: Only sleep if velocity is low AND acting force is low.
-        // Prevents nodes from sleeping while under tension (e.g. held by springs).
-        const sleepThreshold = engine.config.velocitySleepThreshold;
-        if (sleepThreshold) {
-            const velSq = node.vx * node.vx + node.vy * node.vy;
-            const threshSq = sleepThreshold * sleepThreshold;
-
-            // Force check: F = ma. If F/m is large, we will accelerate soon.
-            // Threshold: if acceleration * dt > sleepThreshold, we shouldn't sleep.
-            const accX = node.fx / (node.mass || 1);
-            const accY = node.fy / (node.mass || 1);
-            const accSq = accX * accX + accY * accY;
-            // Allow sleep only if force is negligible (< 1% of velocity threshold impact)
-            // FIX 31: Stricter Force Silence (was 0.1, now 0.01)
-            const forceSilent = accSq * (dt * dt) < (threshSq * 0.01);
-
-            // FIX 13: Pressure Check (Constraint Residuals)
-            // Prevent sleeping if under significant constraint stress (e.g. pulled by spring)
-            // FIX 31: Stricter Pressure Silence (was 0.1 check, now 0.01)
-            const pressureSilent = (node.lastCorrectionMag ?? 0) < 0.01;
-
-            const sleepFramesRequired = engine.config.sleepFramesThreshold ?? 30;
-
-            if (velSq < threshSq && forceSilent && pressureSilent) {
-                node.sleepFrames = (node.sleepFrames ?? 0) + 1;
-                if (node.sleepFrames >= sleepFramesRequired) {
-                    node.isSleeping = true;
-                    node.vx = 0;
-                    node.vy = 0;
-                }
-            } else {
-                node.sleepFrames = 0;
-                node.isSleeping = false;
-            }
-        }
 
         const dvx = node.vx - beforeVx;
         const dvy = node.vy - beforeVy;

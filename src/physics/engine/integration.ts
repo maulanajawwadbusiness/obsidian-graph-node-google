@@ -64,7 +64,7 @@ export const integrateNodes = (
     // During early expansion, nodes integrate in deterministic priority order
     // Lower priority moves first EVERY frame → symmetry cannot reform
     // =====================================================================
-    const earlyExpansion = energy > 0.85;
+    const earlyExpansion = policy.earlyExpansion > 0.01;
     let integrationOrder = nodeList;
 
     if (earlyExpansion && !preRollActive) {
@@ -111,7 +111,7 @@ export const integrateNodes = (
         let effectiveFx = node.fx;
         let effectiveFy = node.fy;
 
-        if (!preRollActive && energy > 0.8 && inertiaDeg >= 3) {
+        if (!preRollActive && earlyExpansion && inertiaDeg >= 3) {
             // Initialize force memory on first use
             if (node.prevFx === undefined) node.prevFx = 0;
             if (node.prevFy === undefined) node.prevFy = 0;
@@ -142,7 +142,7 @@ export const integrateNodes = (
         // TEMPORAL DECOHERENCE: deterministic dt skew during early expansion
         // Breaks time symmetry so equilibrium cannot form
         let nodeDt = dt;
-        if (!preRollActive && energy > 0.85) {
+        if (!preRollActive && earlyExpansion) {
             // Hash-based dt skew: ±3% variation
             let hash = 0;
             for (let i = 0; i < node.id.length; i++) {

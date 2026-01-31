@@ -28,6 +28,7 @@ export const DEFAULT_PHYSICS_CONFIG: ForceConfig = {
     targetSpacing: 375,        // Actual spring rest length (Phase 4: 25% reduction from 500)
     initScale: 0.1,           // Current ratio (springLength * 0.1 for initial positions)
     snapImpulseScale: 0.4,    // Current ratio (springLength * 0.4 for impulse, clamped 120-600)
+    initStrategy: 'spread',   // Default to spread seeding (no explosion start)
 
     // ---------------------------------------------------------------------------
     // ANCHOR: Center-of-Mass (Comfort Field)

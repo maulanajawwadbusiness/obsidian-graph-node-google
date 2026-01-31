@@ -12,13 +12,53 @@ export function generateRandomGraph(
     nodeCount: number,
     targetSpacing: number = 500,
     initScale: number = 0.1,
-    seed: number = Date.now()
+    seed: number = Date.now(),
+    initStrategy: 'spread' | 'legacy' = 'legacy'
 ) {
     const nodes: PhysicsNode[] = [];
     const links: PhysicsLink[] = [];
 
     // Initialize seeded RNG for deterministic generation
     const rng = new SeededRandom(seed);
+
+    const minSpawnSpacing = 2; // 2px epsilon to avoid singularity overlaps
+
+    const generateSpreadPositions = () => {
+        const positions: Array<{ x: number; y: number }> = [];
+        const goldenAngle = Math.PI * (3 - Math.sqrt(5));
+        const radiusBase = Math.max(targetSpacing * 0.8, targetSpacing * Math.sqrt(nodeCount) * 0.2);
+        const minSpacingSq = minSpawnSpacing * minSpawnSpacing;
+
+        for (let i = 0; i < nodeCount; i++) {
+            const t = (i + 0.5) / nodeCount;
+            const baseRadius = Math.sqrt(t) * radiusBase;
+            let angle = i * goldenAngle + (rng.next() - 0.5) * 0.35;
+            let radius = baseRadius;
+            let x = Math.cos(angle) * radius;
+            let y = Math.sin(angle) * radius;
+
+            for (let attempt = 0; attempt < 6; attempt++) {
+                let tooClose = false;
+                for (const pos of positions) {
+                    const dx = x - pos.x;
+                    const dy = y - pos.y;
+                    if (dx * dx + dy * dy < minSpacingSq) {
+                        tooClose = true;
+                        break;
+                    }
+                }
+                if (!tooClose) break;
+                angle += goldenAngle * 0.35;
+                radius = baseRadius + minSpawnSpacing * (attempt + 1) * 0.5;
+                x = Math.cos(angle) * radius;
+                y = Math.sin(angle) * radius;
+            }
+
+            positions.push({ x, y });
+        }
+
+        return positions;
+    };
 
     // 0. Helper: Create Node (initially at 0,0, moved later)
     // SPAWN MICRO-CLOUD: Hash-based disc distribution to destroy symmetry bowl
@@ -200,6 +240,16 @@ export function generateRandomGraph(
             lengthBias: 1.5, // LONG
             stiffnessBias: 0.4 // LOOSE (Soft)
         });
+    }
+
+    if (initStrategy === 'spread') {
+        const spreadPositions = generateSpreadPositions();
+        for (let i = 0; i < nodes.length; i++) {
+            const pos = spreadPositions[i];
+            if (!pos) continue;
+            nodes[i].x = pos.x;
+            nodes[i].y = pos.y;
+        }
     }
 
     return { nodes, links };

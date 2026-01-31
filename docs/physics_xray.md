@@ -40,6 +40,9 @@ The ticking loop (`src/physics/engine/engineTick.ts`) execution order:
 ### MotionPolicy (Energy → Ramps)
 Energy thresholds are now routed through a unified `MotionPolicy` ramp set (early-expansion, expansion, diffusion, hub relief). This avoids hard law flips and keeps constraint/velocity gating continuous.
 
+## 4.1 Initialization Strategy (No Explosion Start)
+The default init strategy is now **`spread`**, which seeds dots in a wide, deterministic spiral/disc with a minimum separation epsilon. This removes the need for pre-roll or impulse kicks while still preventing true `distance=0` singularities. Use `initStrategy: "legacy"` only when you explicitly want the previous pre-roll/impulse behavior.
+
 ## 5. Locality Protection (Interaction Bubble)
 User interaction must never feel degraded.
 *   **Mechanism 1: Local Boost**:

@@ -372,7 +372,13 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
         if (!engine) return;
         engine.clear();
         setSeed(newSeed);
-        const { nodes, links } = generateRandomGraph(count, config.targetSpacing, config.initScale, newSeed);
+        const { nodes, links } = generateRandomGraph(
+            count,
+            config.targetSpacing,
+            config.initScale,
+            newSeed,
+            config.initStrategy
+        );
         nodes.forEach(n => engine.addNode(n));
         links.forEach(l => engine.addLink(l));
         engine.resetLifecycle();

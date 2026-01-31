@@ -84,6 +84,7 @@ export interface ForceConfig {
   targetSpacing: number;      // Actual spring rest length (replaces springLength semantically)
   initScale: number;          // Initial placement compression (e.g., 0.1 = tight start)
   snapImpulseScale: number;   // Impulse force multiplier (e.g., 0.4 = current ratio)
+  initStrategy: 'spread' | 'legacy'; // Spawn strategy for initial layout
 
   // Gravity (Center)
   gravityCenterStrength: number; // Pull toward (0,0) usually

@@ -409,7 +409,8 @@ export const runPhysicsTick = (engine: PhysicsEngineTickContext, dt: number) => 
     // Springs at 10%, spacing on, angle off, velocity-only corrections
     // Runs for ~5 frames before expansion starts
     // =====================================================================
-    const preRollActive = engine.preRollFrames > 0 && !engine.hasFiredImpulse;
+    const allowLegacyStart = engine.config.initStrategy === 'legacy';
+    const preRollActive = allowLegacyStart && engine.preRollFrames > 0 && !engine.hasFiredImpulse;
     if (preRollActive) {
         runPreRollPhase(engine, nodeList, debugStats);
     }
@@ -418,7 +419,7 @@ export const runPhysicsTick = (engine: PhysicsEngineTickContext, dt: number) => 
     // FIX #11: Guarded Impulse Kick
     // Logic moved to requestImpulse() to enforce cooldowns and safeguards.
     // We only auto-fire if lifecycle is young and we haven't fired yet.
-    if (!preRollActive && engine.lifecycle < 0.1 && !engine.hasFiredImpulse) {
+    if (allowLegacyStart && !preRollActive && engine.lifecycle < 0.1 && !engine.hasFiredImpulse) {
         engine.requestImpulse();
     }
 
@@ -428,7 +429,7 @@ export const runPhysicsTick = (engine: PhysicsEngineTickContext, dt: number) => 
     // EXPONENTIAL COOLING: Energy decays asymptotically, never stops
     // =====================================================================
     const { energy, forceScale, effectiveDamping, maxVelocityEffective } = computeEnergyEnvelope(engine.lifecycle);
-    const motionPolicy = createMotionPolicy(energy);
+    const motionPolicy = createMotionPolicy(energy, allowLegacyStart);
 
     const degradePairScale = degradeLevel === 0 ? 1 : degradeLevel === 1 ? 0.7 : 0.4;
 

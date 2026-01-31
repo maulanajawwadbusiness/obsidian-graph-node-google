@@ -25,7 +25,8 @@ export function applyRepulsion(
     // DENSITY-DEPENDENT REPULSION (early expansion only)
     // Nodes in dense regions experience stronger repulsion
     // Creates "center has higher potential" without explicit centroid
-    const earlyExpansion = energy !== undefined && energy > 0.85;
+    const allowEarlyExpansion = config.initStrategy === 'legacy';
+    const earlyExpansion = allowEarlyExpansion && energy !== undefined && energy > 0.85;
     const densityRadius = 25;  // Radius to count neighbors
     const localDensity = new Map<string, number>();
 
@@ -282,7 +283,8 @@ export function applySprings(
         const targetDeg = nodeDegree.get(link.target) || 0;
         const sourceIsHub = sourceDeg >= 3;
         const targetIsHub = targetDeg >= 3;
-        const earlyExpansion = energy > 0.8;
+        const allowEarlyExpansion = config.initStrategy === 'legacy';
+        const earlyExpansion = allowEarlyExpansion && energy > 0.8;
 
         // Dead-zone is 0 for hubs during early expansion, normal otherwise
         const sourceDeadZone = (sourceIsHub && earlyExpansion) ? 0 : restLength * config.springDeadZone;
@@ -341,7 +343,7 @@ export function applySprings(
         // Allows nodes to shear/rotate relative to neighbors
         // Dense core "melts" via internal rearrangement, not explosion
         // NOW: smooth ramp based on density AND compression ratio
-        const applyTangentialSoftening = energy > 0.85;
+        const applyTangentialSoftening = allowEarlyExpansion && energy > 0.85;
 
         // DEBUG: track min tangent scale
         let debugMinTangentScale = 1.0;
@@ -448,7 +450,7 @@ export function applySprings(
         // Zero-mean over time, no geometric encoding
         const ditherStrength = 0.02;  // Tiny force magnitude
         const ditherDensityThreshold = 4;
-        const ditherEnergyGate = energy > 0.85;
+        const ditherEnergyGate = allowEarlyExpansion && energy > 0.85;
 
         if (ditherEnergyGate && (sourceDensity >= ditherDensityThreshold || targetDensity >= ditherDensityThreshold)) {
             // Hash edge ID + frameIndex for deterministic time-varying phase

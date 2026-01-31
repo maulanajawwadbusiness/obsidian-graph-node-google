@@ -119,6 +119,7 @@ export class PhysicsEngine {
 
     constructor(config: Partial<ForceConfig> = {}) {
         this.config = { ...DEFAULT_PHYSICS_CONFIG, ...config };
+        this.preRollFrames = this.config.initStrategy === 'legacy' ? 5 : 0;
     }
 
     /**
@@ -361,7 +362,7 @@ export class PhysicsEngine {
     resetLifecycle() {
         this.lifecycle = 0;
         this.hasFiredImpulse = false;
-        this.preRollFrames = 5;  // Reset pre-roll
+        this.preRollFrames = this.config.initStrategy === 'legacy' ? 5 : 0;  // Reset pre-roll
         this.spacingGate = 0;
         this.spacingGateActive = false;
         this.wakeAll();
@@ -521,6 +522,9 @@ export class PhysicsEngine {
      * FIX #11: Strict cooldown (>1s) + Interaction Guard (no drag).
      */
     requestImpulse() {
+        if (this.config.initStrategy !== 'legacy') {
+            return;
+        }
         const now = getNowMs();
 
         // Guard 1: Cooldown (1000ms)

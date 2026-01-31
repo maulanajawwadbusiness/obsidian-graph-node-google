@@ -129,7 +129,13 @@ const createOverloadState = (): OverloadState => ({
 
 const ensureSeededGraph = (engine: PhysicsEngine, config: ForceConfig, seed: number, spawnCount: number) => {
     if (engine.nodes.size === 0) {
-        const { nodes, links } = generateRandomGraph(spawnCount, config.targetSpacing, config.initScale, seed);
+        const { nodes, links } = generateRandomGraph(
+            spawnCount,
+            config.targetSpacing,
+            config.initScale,
+            seed,
+            config.initStrategy
+        );
         nodes.forEach(n => engine.addNode(n));
         links.forEach(l => engine.addLink(l));
     }

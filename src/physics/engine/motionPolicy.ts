@@ -20,9 +20,9 @@ const smoothstep = (edge0: number, edge1: number, x: number) => {
     return t * t * (3 - 2 * t);
 };
 
-export const createMotionPolicy = (temperature: number): MotionPolicy => {
-    const earlyExpansion = smoothstep(0.72, 0.9, temperature);
-    const expansion = smoothstep(0.55, 0.75, temperature);
+export const createMotionPolicy = (temperature: number, allowEarlyExpansion: boolean = true): MotionPolicy => {
+    const earlyExpansion = allowEarlyExpansion ? smoothstep(0.72, 0.9, temperature) : 0;
+    const expansion = allowEarlyExpansion ? smoothstep(0.55, 0.75, temperature) : 0;
     const diffusion = smoothstep(0.05, 0.2, temperature);
     const hubConstraintRelief = earlyExpansion;
     const hubInertiaBlend = 1 - smoothstep(0.7, 0.88, temperature);

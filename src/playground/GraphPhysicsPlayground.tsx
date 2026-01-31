@@ -82,7 +82,9 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
         clientToWorld,
         worldToScreen,
         hoverStateRef,
-        updateHoverSelection
+        updateHoverSelection,
+        handleDragStart,
+        handleDragEnd
     } = useGraphRendering({
         canvasRef,
         config,
@@ -157,13 +159,13 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
     const onPointerCancel = (e: React.PointerEvent) => {
         handlePointerCancel(e.pointerId, e.pointerType);
         // FIX 29: Lifecycle Safety
-        engineRef.current.releaseNode();
+        handleDragEnd();
     };
 
     const onLostPointerCapture = (e: React.PointerEvent) => {
         // Treat as cancel/up
         handlePointerUp(e.pointerId, e.pointerType);
-        engineRef.current.releaseNode();
+        handleDragEnd();
     };
 
     // Track gesture start for Click vs Drag distinction
@@ -198,20 +200,8 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
             // FIX 36: Deferred Drag Start (First Frame Continuity)
             // Don't grab immediately. Queue it for the next render tick.
             // This ensures we calculate the anchor using the exact camera state of the frame.
-            // const { x, y } = clientToWorld(e.clientX, e.clientY, rect);
-            // engineRef.current.grabNode(hitId, { x, y });
-            if (DRAG_ENABLED) { // Check again just to be safe, though checked above
-                // We need to access pendingPointerRef, but we don't have it exposed from hook?
-                // Wait, useGraphRendering does NOT expose pendingPointerRef.
-                // We need to expose it or pass a function to set it.
-                // Let's check useGraphRendering.ts.
-                // Actually, we can just expose a "startDrag" or "setPendingDrag" from the hook.
-                // OR, since we are in `GraphPhysicsPlayground`, we typically don't touch refs directly if not exposed.
-                // Let's see if we can expose pendingPointerRef from `useGraphRendering`.
-                // FOR NOW: I will assume I can update useGraphRendering to expose `pendingPointerRef`.
-                // BUT I CAN'T change multiple files in parallel if I need to verify.
-                // Let's modify useGraphRendering first or use a callback from the hook.
-                // Better: `startGraphDrag(nodeId, clientX, clientY)` exposed from hook.
+            if (DRAG_ENABLED) {
+                handleDragStart(hitId, e.clientX, e.clientY);
             }
         }
     };
@@ -268,7 +258,7 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
         }
 
         gestureStartRef.current = null; // Reset
-        engineRef.current.releaseNode();
+        handleDragEnd();
     };
 
     // ---------------------------------------------------------------------------
@@ -331,12 +321,12 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
     useEffect(() => {
         const handleBlur = () => {
             if (engineRef.current.draggedNodeId) {
-                engineRef.current.releaseNode();
+                handleDragEnd();
             }
         };
         window.addEventListener('blur', handleBlur);
         return () => window.removeEventListener('blur', handleBlur);
-    }, []);
+    }, [handleDragEnd]);
 
     // FIX 40: Global Shortcut Gate (Focus Truth)
     // Prevent browser defaults (e.g. Page Scroll on Space/Arrows) when interacting with Canvas.

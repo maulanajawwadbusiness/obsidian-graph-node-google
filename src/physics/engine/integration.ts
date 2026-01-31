@@ -1,5 +1,6 @@
 import type { PhysicsEngine } from '../engine';
 import type { PhysicsNode } from '../types';
+import type { MotionPolicy } from './motionPolicy';
 import { getPassStats, type DebugStats } from './stats';
 import { applyCarrierFlowAndPersistence, applyHubVelocityScaling } from './velocityPass';
 import { applyBaseIntegration, clampVelocity } from './velocity/baseIntegration';
@@ -15,6 +16,7 @@ export const integrateNodes = (
     nodeList: PhysicsNode[],
     dt: number,
     energy: number,
+    policy: MotionPolicy,
     effectiveDamping: number,
     maxVelocityEffective: number,
     stats: DebugStats,
@@ -173,14 +175,14 @@ export const integrateNodes = (
         applyBaseIntegration(node, ax, ay, nodeDt);
 
         if (!preRollActive) {
-            applyCarrierFlowAndPersistence(engine, nodeList, node, energy, stats);
+            applyCarrierFlowAndPersistence(engine, nodeList, node, policy, stats);
         }
 
         // Apply unified damping (increases as energy falls) - use nodeDt
         applyDamping(node, preRollActive, effectiveDamping, nodeDt);
 
         if (!preRollActive) {
-            applyHubVelocityScaling(engine, node, stats, energy, nodeList);
+            applyHubVelocityScaling(engine, node, stats, policy, nodeList);
         }
 
         // Clamp Velocity

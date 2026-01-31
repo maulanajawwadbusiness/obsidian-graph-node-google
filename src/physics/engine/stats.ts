@@ -24,6 +24,7 @@ export type DebugStats = {
     safety: SafetyStats;
     expansionResistance: ExpansionResistanceStats;
     dtSkew?: { min: number; max: number };
+    correctionConflictCount: number;
 };
 
 export const createDebugStats = (): DebugStats => ({
@@ -40,6 +41,7 @@ export const createDebugStats = (): DebugStats => ({
         avgHubSpeedBefore: 0,
         avgHubSpeedAfter: 0,
     },
+    correctionConflictCount: 0,
 });
 
 export const getPassStats = (stats: DebugStats, name: string): PassStats => {

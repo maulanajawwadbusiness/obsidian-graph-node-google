@@ -1,16 +1,18 @@
 import type { PhysicsEngine } from '../../engine';
 import type { PhysicsNode } from '../../types';
+import type { MotionPolicy } from '../motionPolicy';
 import { getPassStats, type DebugStats } from '../stats';
 
 export const applyExpansionResistance = (
     engine: PhysicsEngine,
     nodeList: PhysicsNode[],
     nodeDegree: Map<string, number>,
-    energy: number,
+    policy: MotionPolicy,
     stats: DebugStats,
     dt: number
 ) => {
-    if (energy <= 0.7) return;
+    const expansionStrength = policy.expansion;
+    if (expansionStrength <= 0.01) return;
 
     const passStats = getPassStats(stats, 'ExpansionResistance');
     const affected = new Set<string>();
@@ -25,11 +27,12 @@ export const applyExpansionResistance = (
 
     // DENSE-CORE DAMPING BYPASS
     // During early expansion, skip resistance for nodes in dense clusters
-    const earlyExpansion = energy > 0.85;
+    const denseBypass = policy.denseBypass;
+    const useDenseBypass = denseBypass > 0.01;
     const denseRadius = engine.config.minNodeDistance * 0.8;
     const denseNodeSet = new Set<string>();
 
-    if (earlyExpansion) {
+    if (useDenseBypass) {
         for (const node of nodeList) {
             let nearNeighborCount = 0;
             for (const other of nodeList) {
@@ -54,9 +57,8 @@ export const applyExpansionResistance = (
         if (degree <= 1) continue;  // Only affects multi-connected nodes
 
         // Skip resistance for dense nodes during early expansion
-        if (earlyExpansion && denseNodeSet.has(node.id)) {
-            continue; // 100% bypass
-        }
+        const denseBypassScale = denseNodeSet.has(node.id) ? (1 - denseBypass) : 1;
+        if (denseBypassScale <= 0.001) continue;
 
         // Normalize degree: (degree-1)/4 → 0..1
         const degNorm = Math.min((degree - 1) / 4, 1);
@@ -84,7 +86,7 @@ export const applyExpansionResistance = (
             }
         }
 
-        const resistanceScale = resistance * expResist * dampScale;
+        const resistanceScale = resistance * expResist * dampScale * expansionStrength * denseBypassScale;
         // resistanceScale is the fraction removed per 60hz tick.
         // Time corrected:
         const damp = Math.pow(1 - resistanceScale, dt * 60.0);

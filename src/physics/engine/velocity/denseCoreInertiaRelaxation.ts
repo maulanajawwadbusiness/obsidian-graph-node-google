@@ -1,5 +1,6 @@
 import type { PhysicsEngine } from '../../engine';
 import type { PhysicsNode } from '../../types';
+import type { MotionPolicy } from '../motionPolicy';
 import { getPassStats, type DebugStats } from '../stats';
 
 /**
@@ -29,11 +30,11 @@ import { getPassStats, type DebugStats } from '../stats';
 export const applyDenseCoreInertiaRelaxation = (
     _engine: PhysicsEngine,
     nodeList: PhysicsNode[],
-    energy: number,
+    policy: MotionPolicy,
     stats: DebugStats
 ) => {
-    // Only during early expansion
-    if (energy <= 0.85) return;
+    const relaxGate = policy.earlyExpansion;
+    if (relaxGate <= 0.01) return;
 
     const passStats = getPassStats(stats, 'InertiaRelax');
     const affected = new Set<string>();
@@ -97,7 +98,7 @@ export const applyDenseCoreInertiaRelaxation = (
         avgVy /= neighborCount;
 
         // Blend velocity toward neighborhood flow
-        const effectiveRelax = relaxStrength * stuckness;
+        const effectiveRelax = relaxStrength * stuckness * relaxGate;
 
         const beforeVx = node.vx;
         const beforeVy = node.vy;

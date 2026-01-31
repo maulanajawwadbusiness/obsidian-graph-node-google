@@ -1,5 +1,6 @@
 import type { PhysicsEngine } from '../../engine';
 import type { PhysicsNode } from '../../types';
+import type { MotionPolicy } from '../motionPolicy';
 import { getPassStats, type DebugStats } from '../stats';
 
 /**
@@ -20,11 +21,11 @@ import { getPassStats, type DebugStats } from '../stats';
 export const applyAngularVelocityDecoherence = (
     _engine: PhysicsEngine,
     nodeList: PhysicsNode[],
-    energy: number,
+    policy: MotionPolicy,
     stats: DebugStats
 ) => {
-    // Only during early expansion
-    if (energy <= 0.85) return;
+    const decohereStrength = policy.earlyExpansion;
+    if (decohereStrength <= 0.01) return;
 
     const passStats = getPassStats(stats, 'AngularDecoherence');
     const affected = new Set<string>();
@@ -67,7 +68,7 @@ export const applyAngularVelocityDecoherence = (
         const normalizedHash = (Math.abs(hash) % 1000) / 1000;  // 0-1
         const minAngle = 0.5 * Math.PI / 180;  // 0.5 degrees
         const maxAngle = 1.5 * Math.PI / 180;  // 1.5 degrees
-        const angle = minAngle + normalizedHash * (maxAngle - minAngle);
+        const angle = (minAngle + normalizedHash * (maxAngle - minAngle)) * decohereStrength;
 
         // Alternate sign based on hash parity (half CW, half CCW)
         const angleSign = (hash % 2 === 0) ? 1 : -1;

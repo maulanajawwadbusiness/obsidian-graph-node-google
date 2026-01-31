@@ -1,12 +1,13 @@
 import type { PhysicsEngine } from '../engine';
 import type { PhysicsNode } from '../types';
+import type { MotionPolicy } from './motionPolicy';
 import { getPassStats, type DebugStats } from './stats';
 
 export const applyCorrectionsWithDiffusion = (
     engine: PhysicsEngine,
     nodeList: PhysicsNode[],
     correctionAccum: Map<string, { dx: number; dy: number }>,
-    energy: number,
+    policy: MotionPolicy,
     spacingGate: number,
     stats: DebugStats,
     dt: number,
@@ -29,6 +30,8 @@ export const applyCorrectionsWithDiffusion = (
     // Compute node degree and neighbor map
     const nodeDegree = new Map<string, number>();
     const nodeNeighbors = new Map<string, string[]>();
+    let conflictCount = 0;
+
     for (const node of nodeList) {
         nodeDegree.set(node.id, 0);
         nodeNeighbors.set(node.id, []);
@@ -89,7 +92,7 @@ export const applyCorrectionsWithDiffusion = (
         // FIX 34: Invisible Settling (Energy Gate)
         // Disable diffusion at low energy to prevent visible "relaxation" or creep.
         const diffusionThreshold = 0.5; // px per frame
-        const enableDiffusion = totalMag > diffusionThreshold && energy > 0.1;
+        const enableDiffusion = totalMag > diffusionThreshold && policy.diffusion > 0.01;
 
         // FIX 17: Track budget hits/Residuals
         let clipped = false;
@@ -117,7 +120,7 @@ export const applyCorrectionsWithDiffusion = (
         // PHASE-AWARE HUB INERTIA
         const hubFactor = Math.min(Math.max((degree - 2) / 3, 0), 1);
         const inertiaStrength = 0.6;
-        const hubInertiaScale = energy < 0.8 ? (1 - hubFactor * inertiaStrength) : 1.0;
+        const hubInertiaScale = 1 - (hubFactor * inertiaStrength * policy.hubInertiaBlend);
 
         // Clamp to budget and apply attenuation + degree scaling + hub inertia
         const budgetScale = Math.min(1, nodeBudget / totalMag);
@@ -125,6 +128,10 @@ export const applyCorrectionsWithDiffusion = (
 
         const corrDx = accDx * scale;
         const corrDy = accDy * scale;
+        const correctionOpposesVelocity = (corrDx * node.vx + corrDy * node.vy) < 0;
+        if (correctionOpposesVelocity) {
+            conflictCount += 1;
+        }
 
         // FIX 17: Store Residual
         if (clipped || scale < 1.0) {
@@ -172,7 +179,7 @@ export const applyCorrectionsWithDiffusion = (
                 engine.config.correctionDiffusionMin,
                 Math.min(1, densityAttenuation * spacingAttenuation)
             );
-            const neighborShareTotal = engine.config.correctionDiffusionBase * diffusionScale;
+            const neighborShareTotal = engine.config.correctionDiffusionBase * diffusionScale * policy.diffusion;
             const selfShare = 1 - neighborShareTotal;
             const neighborShare = neighborShareTotal / degree;
 
@@ -255,7 +262,12 @@ export const applyCorrectionsWithDiffusion = (
         node.y += diff.dy * diffScale;
         passStats.correction += Math.sqrt((diff.dx * diffScale) ** 2 + (diff.dy * diffScale) ** 2);
         affected.add(node.id);
+        const diffusionOpposesVelocity = (diff.dx * node.vx + diff.dy * node.vy) < 0;
+        if (diffusionOpposesVelocity) {
+            conflictCount += 1;
+        }
     }
 
     passStats.nodes += affected.size;
+    stats.correctionConflictCount += conflictCount;
 };

@@ -1,5 +1,6 @@
 import type { PhysicsEngine } from '../../engine';
 import type { PhysicsNode } from '../../types';
+import type { MotionPolicy } from '../motionPolicy';
 import { getPassStats, type DebugStats } from '../stats';
 
 /**
@@ -14,7 +15,7 @@ import { getPassStats, type DebugStats } from '../stats';
  * 
  * Trigger conditions:
  * - Dense core (localDensity >= threshold)
- * - Early expansion (energy > 0.85)
+ * - Early expansion (policy-ramped)
  * - Edge near rest length (|dist - restLength| < restEps)
  * - Both nodes have low relative velocity
  * - Both nodes have low net force
@@ -30,11 +31,11 @@ import { getPassStats, type DebugStats } from '../stats';
 export const applyEdgeShearStagnationEscape = (
     engine: PhysicsEngine,
     nodeList: PhysicsNode[],
-    energy: number,
+    policy: MotionPolicy,
     stats: DebugStats
 ) => {
-    // Only during early expansion
-    if (energy <= 0.85) return;
+    const shearStrength = policy.earlyExpansion;
+    if (shearStrength <= 0.01) return;
 
     const passStats = getPassStats(stats, 'EdgeShearEscape');
     let unlockedPairs = 0;
@@ -44,7 +45,7 @@ export const applyEdgeShearStagnationEscape = (
     const restEps = 5.0;      // Edge must be within 5px of rest length
     const velEps = 0.3;       // Relative velocity threshold
     const forceEps = 0.8;     // Force magnitude threshold
-    const baseSlip = 0.03;    // Base shear magnitude (px/frame)
+    const baseSlip = 0.03 * shearStrength;    // Base shear magnitude (px/frame)
 
     // Pre-compute local density
     const localDensity = new Map<string, number>();

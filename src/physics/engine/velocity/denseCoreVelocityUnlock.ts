@@ -1,8 +1,9 @@
 import type { PhysicsEngine } from '../../engine';
 import type { PhysicsNode } from '../../types';
+import type { MotionPolicy } from '../motionPolicy';
 import { getPassStats, type DebugStats } from '../stats';
 import { logVelocityDeLocking } from './debugVelocity';
-import { isDense, isEarlyExpansion } from './energyGates';
+import { isDense } from './energyGates';
 import {
     computeAverageNeighborVelocity,
     projectVelocityComponents,
@@ -19,18 +20,18 @@ import {
 export const applyDenseCoreVelocityDeLocking = (
     _engine: PhysicsEngine,
     nodeList: PhysicsNode[],
-    energy: number,
+    policy: MotionPolicy,
     stats: DebugStats
 ) => {
-    // Only during early expansion
-    if (!isEarlyExpansion(energy)) return;
+    const delockStrength = policy.microSlip;
+    if (delockStrength <= 0.01) return;
 
     const passStats = getPassStats(stats, 'VelocityDeLocking');
     const affected = new Set<string>();
 
     const densityRadius = 30;  // Same as other dense-core detection
     const densityThreshold = 4;
-    const parallelReduction = 0.2;  // Reduce parallel by 20%
+    const parallelReduction = 0.2 * delockStrength;  // Reduce parallel by 20%
 
     const avgVelocity: VelocityAccumulator = { vx: 0, vy: 0 };
     const projection: VelocityProjection = {

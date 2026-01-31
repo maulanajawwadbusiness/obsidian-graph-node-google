@@ -58,6 +58,15 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
     const [showDebugGrid, setShowDebugGrid] = useState(false);
     const [pixelSnapping, setPixelSnapping] = useState(false);
     const [debugNoRenderMotion, setDebugNoRenderMotion] = useState(false);
+    const [hudScenarioLabel, setHudScenarioLabel] = useState('');
+    const [hudDragTargetId, setHudDragTargetId] = useState<string | null>(null);
+    const [hudScores, setHudScores] = useState<Record<number, {
+        settleMs: number;
+        jitter: number;
+        conflictPct: number;
+        energy: number;
+        degradePct: number;
+    }>>({});
 
     const {
         handlePointerMove,
@@ -84,6 +93,10 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
         pixelSnapping,
         debugNoRenderMotion
     });
+
+    useEffect(() => {
+        hoverStateRef.current.hoverDisplayNodeId = hudDragTargetId;
+    }, [hudDragTargetId, hoverStateRef]);
 
 
 
@@ -346,16 +359,21 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
         return () => window.removeEventListener('keydown', handleGlobalKeydown, { capture: true });
     }, []);
 
-    const handleSpawn = () => {
+    const spawnGraph = (count: number, newSeed: number) => {
         const engine = engineRef.current;
         if (!engine) return;
         engine.clear();
-        // Generate new random seed for each spawn
-        const newSeed = Date.now();
         setSeed(newSeed);
-        const { nodes, links } = generateRandomGraph(spawnCount, config.targetSpacing, config.initScale, newSeed);
+        const { nodes, links } = generateRandomGraph(count, config.targetSpacing, config.initScale, newSeed);
         nodes.forEach(n => engine.addNode(n));
         links.forEach(l => engine.addLink(l));
+        engine.resetLifecycle();
+    };
+
+    const handleSpawn = () => {
+        // Generate new random seed for each spawn
+        const newSeed = Date.now();
+        spawnGraph(spawnCount, newSeed);
     };
 
     const handleReset = () => {
@@ -409,6 +427,57 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
         console.log('='.repeat(60));
     };
 
+    const handleSpawnPreset = (count: number) => {
+        const fixedSeed = 1337 + count;
+        setSpawnCount(count);
+        setHudScenarioLabel(`Preset N=${count} (seed ${fixedSeed})`);
+        setHudDragTargetId(null);
+        spawnGraph(count, fixedSeed);
+    };
+
+    const handleSettleScenario = () => {
+        const fixedSeed = 1337 + spawnCount;
+        setHudScenarioLabel('Settle test: wait for settle → sleep, then record.');
+        setHudDragTargetId(null);
+        spawnGraph(spawnCount, fixedSeed);
+    };
+
+    const handleDragScenario = () => {
+        const engine = engineRef.current;
+        if (!engine) return;
+        const degreeMap = new Map<string, number>();
+        for (const link of engine.links) {
+            degreeMap.set(link.source, (degreeMap.get(link.source) || 0) + 1);
+            degreeMap.set(link.target, (degreeMap.get(link.target) || 0) + 1);
+        }
+        let targetId: string | null = null;
+        let bestDeg = -1;
+        for (const node of engine.nodes.values()) {
+            const deg = degreeMap.get(node.id) || 0;
+            if (deg > bestDeg) {
+                bestDeg = deg;
+                targetId = node.id;
+            }
+        }
+        setHudDragTargetId(targetId);
+        setHudScenarioLabel('Drag test: drag highlighted dot for 2s, then release.');
+    };
+
+    const handleRecordHudScore = () => {
+        if (!metrics.physicsHud) return;
+        const count = metrics.nodes;
+        setHudScores(prev => ({
+            ...prev,
+            [count]: {
+                settleMs: metrics.physicsHud.lastSettleMs,
+                jitter: metrics.physicsHud.jitterAvg,
+                conflictPct: metrics.physicsHud.conflictPct5s,
+                energy: metrics.physicsHud.energyProxy,
+                degradePct: metrics.physicsHud.degradePct5s,
+            }
+        }));
+    };
+
     // Get theme for container styling
     const activeTheme = getTheme(skinMode);
 
@@ -459,6 +528,13 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
                     debugNoRenderMotion={debugNoRenderMotion}
                     onTogglePixelSnapping={() => setPixelSnapping(v => !v)}
                     onToggleNoRenderMotion={() => setDebugNoRenderMotion(v => !v)}
+                    onSpawnPreset={handleSpawnPreset}
+                    onRunSettleScenario={handleSettleScenario}
+                    onRunDragScenario={handleDragScenario}
+                    onRecordHudScore={handleRecordHudScore}
+                    hudScenarioLabel={hudScenarioLabel}
+                    hudDragTargetId={hudDragTargetId}
+                    hudScores={hudScores}
                 />
                 <TextPreviewButton onToggle={toggleViewer} />
                 <AIActivityGlyph />

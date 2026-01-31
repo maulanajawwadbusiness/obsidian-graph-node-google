@@ -2,6 +2,7 @@ import { PhysicsNode, PhysicsLink, ForceConfig } from './types';
 import { DEFAULT_PHYSICS_CONFIG } from './config';
 import { fireInitialImpulse } from './engine/impulse';
 import { type DebugStats } from './engine/stats';
+import { createInitialPhysicsHudHistory, createInitialPhysicsHudSnapshot, type PhysicsHudHistory, type PhysicsHudSnapshot } from './engine/physicsHud';
 import { getNowMs } from './engine/engineTime';
 import { runPhysicsTick, type PhysicsEngineTickContext } from './engine/engineTick';
 
@@ -53,6 +54,10 @@ export class PhysicsEngine {
     public frameIndex: number = 0;
 
     private lastDebugStats: DebugStats | null = null;
+    public hudSnapshot: PhysicsHudSnapshot = createInitialPhysicsHudSnapshot();
+    public hudHistory: PhysicsHudHistory = createInitialPhysicsHudHistory();
+    public hudSettleState: PhysicsHudSnapshot['settleState'] = 'moving';
+    public hudSettleStateAt: number = getNowMs();
     private spacingGate: number = 0;
     private spacingGateActive: boolean = false;
     private nodeListCache: PhysicsNode[] = [];
@@ -261,6 +266,10 @@ export class PhysicsEngine {
         this.spacingGateActive = false;
         this.globalAngle = 0;
         this.globalAngularVel = 0;
+        this.hudSnapshot = createInitialPhysicsHudSnapshot();
+        this.hudHistory = createInitialPhysicsHudHistory();
+        this.hudSettleState = 'moving';
+        this.hudSettleStateAt = getNowMs();
     }
 
     /**
@@ -352,6 +361,10 @@ export class PhysicsEngine {
         this.spacingGateActive = false;
         this.wakeAll();
         this.invalidateWarmStart('RESET_LIFECYCLE');
+        this.hudSnapshot = createInitialPhysicsHudSnapshot();
+        this.hudHistory = createInitialPhysicsHudHistory();
+        this.hudSettleState = 'moving';
+        this.hudSettleStateAt = getNowMs();
     }
 
     /**
@@ -527,6 +540,13 @@ export class PhysicsEngine {
      */
     getDebugStats(): DebugStats | null {
         return this.lastDebugStats;
+    }
+
+    /**
+     * Get the most recent HUD snapshot (live physics metrics).
+     */
+    getHudSnapshot(): PhysicsHudSnapshot {
+        return this.hudSnapshot;
     }
 
     /**

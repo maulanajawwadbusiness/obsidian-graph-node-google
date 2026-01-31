@@ -366,21 +366,25 @@ export const updateHoverSelectionIfNeeded = (
     // Heartbeat: Force reliable 10Hz updates even if input loop is stalled
     const heartbeat = timeSinceLast > 100;
 
-    // P1: Loop Gate Probe (Throttled 1Hz)
-    if (theme.hoverDebugEnabled && now - (hoverStateRef.current as any).lastGateLog > 1000) {
+    // P1: Loop Gate Probe (Unconditional, Throttled 1Hz)
+    // FIX: Removing debug flag blindness to prove loop execution
+    if (now - (hoverStateRef.current as any).lastGateLog > 1000) {
         (hoverStateRef.current as any).lastGateLog = now;
         console.log(`[HoverDbg] Gate: pending=${pendingPointer} ` +
             `hasPtr=${hoverStateRef.current.hasPointer} ` +
             `env=${envChanged} ` +
             `heart=${heartbeat} ` +
-            `refId=${(hoverStateRef as any).__debugId}`);
+            `refId=${(hoverStateRef as any).__debugId} ` +
+            `themeDbg=${theme.hoverDebugEnabled} ` +
+            `skin=${settingsRef.current.skinMode}`);
     }
 
     // We bypass throttling if Env Changed (Must be correct instantly)
     if (shouldRun || heartbeat) { // 10hz fallback
         if (hoverStateRef.current.hasPointer) {
-            // P2: Call Probe
-            if (theme.hoverDebugEnabled && Math.random() < 0.05) {
+            // P2: Call Probe (Unconditional, Throttled)
+            if (now - (hoverStateRef.current as any).lastCallLog > 1000) {
+                (hoverStateRef.current as any).lastCallLog = now;
                 console.log('[HoverDbg] Call updateHoverSelection');
             }
 

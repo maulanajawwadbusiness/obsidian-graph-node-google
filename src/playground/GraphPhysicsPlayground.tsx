@@ -58,6 +58,9 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
     const [showDebugGrid, setShowDebugGrid] = useState(false);
     const [pixelSnapping, setPixelSnapping] = useState(false);
     const [debugNoRenderMotion, setDebugNoRenderMotion] = useState(false);
+    const [showRestMarkers, setShowRestMarkers] = useState(false);
+    const [showConflictMarkers, setShowConflictMarkers] = useState(false);
+    const [markerIntensity, setMarkerIntensity] = useState(1);
     const [hudScenarioLabel, setHudScenarioLabel] = useState('');
     const [hudDragTargetId, setHudDragTargetId] = useState<string | null>(null);
     const [hudScores, setHudScores] = useState<Record<number, {
@@ -91,7 +94,10 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
         cameraLocked,
         showDebugGrid,
         pixelSnapping,
-        debugNoRenderMotion
+        debugNoRenderMotion,
+        showRestMarkers,
+        showConflictMarkers,
+        markerIntensity
     });
 
     useEffect(() => {
@@ -528,6 +534,12 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
                     debugNoRenderMotion={debugNoRenderMotion}
                     onTogglePixelSnapping={() => setPixelSnapping(v => !v)}
                     onToggleNoRenderMotion={() => setDebugNoRenderMotion(v => !v)}
+                    showRestMarkers={showRestMarkers}
+                    showConflictMarkers={showConflictMarkers}
+                    markerIntensity={markerIntensity}
+                    onToggleRestMarkers={() => setShowRestMarkers(v => !v)}
+                    onToggleConflictMarkers={() => setShowConflictMarkers(v => !v)}
+                    onMarkerIntensityChange={setMarkerIntensity}
                     onSpawnPreset={handleSpawnPreset}
                     onRunSettleScenario={handleSettleScenario}
                     onRunDragScenario={handleDragScenario}

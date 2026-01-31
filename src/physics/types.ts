@@ -52,6 +52,10 @@ export interface PhysicsNode {
 
   // Correction Debt (Fix 17)
   correctionResidual?: { dx: number; dy: number }; // Unpaid correction due to budget clipping
+
+  // Conflict Signal (HUD Feel Markers)
+  conflictEma?: number; // EMA of correction-vs-velocity conflict
+  conflictThisFrame?: number; // 0/1 marker for current frame
 }
 
 export interface PhysicsLink {

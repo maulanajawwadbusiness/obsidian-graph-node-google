@@ -189,8 +189,6 @@ export const runPhysicsTick = (engine: PhysicsEngineTickContext, dtIn: number) =
     if (debugStats) {
         debugStats.outlierCount = outlierCount;
         debugStats.calmPercent = calmPercent * 100;
-        // Diffusion Gate Visualization (Future proofing)
-        debugStats.diffusionGate = Math.pow(1 - (motionPolicy ? motionPolicy.settleScalar : 0), 2);
     }
 
     // Load Sensor (Continuous Degrade)
@@ -237,6 +235,13 @@ export const runPhysicsTick = (engine: PhysicsEngineTickContext, dtIn: number) =
     // Hard cutoff for Sleep safety
     if (calmPercent > 0.98) {
         motionPolicy.settleScalar = 1.0;
+    }
+
+    // FIX: TDZ & Stale Stats
+    if (debugStats) {
+        const diffusionSettleGate = Math.pow(1 - motionPolicy.settleScalar, 2);
+        debugStats.diffusionGate = diffusionSettleGate;
+        debugStats.diffusionStrengthNow = diffusionSettleGate;
     }
 
     let spacingStride = 1;

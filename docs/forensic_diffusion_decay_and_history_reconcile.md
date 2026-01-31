@@ -41,3 +41,9 @@
 -   **Hands-off Test**: Verified via HUD.
     -   `diffusionStrengthNow` drops to 0.00 as calm rises.
     -   `ghostMismatchCount` stays at 0.
+
+## 3. Forensic Fixes (Post-Scan)
+**Addressed issues from `forensic_scan_report.md`:**
+1.  **TDZ Error**: Moved `debugStats` update in `engineTick.ts` to *after* `motionPolicy` creation.
+2.  **Stale Diffusion Stats**: Moved `diffusionStrengthNow` update to `engineTick.ts` to ensure it is updated every frame from the global policy, rather than only during active diffusion cycles.
+3.  **Corrections Logic Repair**: Reconstructed the `applyCorrectionsWithDiffusion` loop structure to ensure single-node fallback and `lastCorrectionDir` logic are correctly scoped.

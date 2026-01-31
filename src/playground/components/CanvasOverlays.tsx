@@ -105,6 +105,8 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
     const baseScore = hudScores[5];
 
     const [showAdvanced, setShowAdvanced] = React.useState(false);
+    const [showLegacyControls, setShowLegacyControls] = React.useState(false);
+    const [showLegacyDiagnostics, setShowLegacyDiagnostics] = React.useState(false);
 
     return (
         <>
@@ -209,42 +211,54 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
                         <div style={{ fontSize: '10px', color: '#666', marginBottom: '4px' }}>
                             HUD v1.1 (fight-ledger enabled)
                         </div>
-                        <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', cursor: 'pointer' }}>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', cursor: 'pointer', color: '#aaa' }}>
                             <input
                                 type="checkbox"
-                                checked={cameraLocked}
-                                onChange={onToggleCameraLock}
-                                style={{ cursor: 'pointer' }}
+                                checked={showLegacyControls}
+                                onChange={(e) => setShowLegacyControls(e.target.checked)}
                             />
-                            Lock Camera
+                            Show Standard Controls
                         </label>
-                        <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', cursor: 'pointer' }}>
-                            <input
-                                type="checkbox"
-                                checked={showDebugGrid}
-                                onChange={onToggleDebugGrid}
-                                style={{ cursor: 'pointer' }}
-                            />
-                            Show Grid/Axes
-                        </label>
-                        <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', cursor: 'pointer' }}>
-                            <input
-                                type="checkbox"
-                                checked={pixelSnapping}
-                                onChange={onTogglePixelSnapping}
-                                style={{ cursor: 'pointer' }}
-                            />
-                            Pixel Snapping
-                        </label>
-                        <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', cursor: 'pointer' }}>
-                            <input
-                                type="checkbox"
-                                checked={debugNoRenderMotion}
-                                onChange={onToggleNoRenderMotion}
-                                style={{ cursor: 'pointer' }}
-                            />
-                            Kill Render Motion
-                        </label>
+                        {showLegacyControls && (
+                            <div style={{ paddingLeft: '8px', borderLeft: '1px solid #333', marginTop: '4px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', cursor: 'pointer' }}>
+                                    <input
+                                        type="checkbox"
+                                        checked={cameraLocked}
+                                        onChange={onToggleCameraLock}
+                                        style={{ cursor: 'pointer' }}
+                                    />
+                                    Lock Camera
+                                </label>
+                                <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', cursor: 'pointer' }}>
+                                    <input
+                                        type="checkbox"
+                                        checked={showDebugGrid}
+                                        onChange={onToggleDebugGrid}
+                                        style={{ cursor: 'pointer' }}
+                                    />
+                                    Show Grid/Axes
+                                </label>
+                                <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', cursor: 'pointer' }}>
+                                    <input
+                                        type="checkbox"
+                                        checked={pixelSnapping}
+                                        onChange={onTogglePixelSnapping}
+                                        style={{ cursor: 'pointer' }}
+                                    />
+                                    Pixel Snapping
+                                </label>
+                                <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', cursor: 'pointer' }}>
+                                    <input
+                                        type="checkbox"
+                                        checked={debugNoRenderMotion}
+                                        onChange={onToggleNoRenderMotion}
+                                        style={{ cursor: 'pointer' }}
+                                    />
+                                    Kill Render Motion
+                                </label>
+                            </div>
+                        )}
                         {IS_DEV && (
                             <>
                                 <strong style={{ fontWeight: 700, marginTop: '6px' }}>Feel Markers</strong>
@@ -511,13 +525,27 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
                         </tbody>
                     </table>
                     <br />
-                    <strong style={{ fontWeight: 700 }}>Performance</strong><br />
-                    Avg Vel: {metrics.avgVel.toFixed(4)} <br />
-                    <strong style={{ fontWeight: 700 }}>Shape Diagnostics</strong><br />
-                    Spread (R_mean): {metrics.avgDist.toFixed(2)} px <br />
-                    Irregularity (R_std): {metrics.stdDist.toFixed(2)} px <br />
-                    CV (Std/Mean): {(metrics.avgDist > 0 ? (metrics.stdDist / metrics.avgDist) : 0).toFixed(3)} <br />
-                    Aspect Ratio (W/H): {metrics.aspectRatio.toFixed(3)}
+                    <br />
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', cursor: 'pointer', color: '#aaa', marginTop: '4px' }}>
+                        <input
+                            type="checkbox"
+                            checked={showLegacyDiagnostics}
+                            onChange={(e) => setShowLegacyDiagnostics(e.target.checked)}
+                        />
+                        Show Diagnostics
+                    </label>
+
+                    {showLegacyDiagnostics && (
+                        <div style={{ paddingLeft: '8px', borderLeft: '1px solid #333', marginTop: '4px' }}>
+                            <strong style={{ fontWeight: 700 }}>Performance</strong><br />
+                            Avg Vel: {metrics.avgVel.toFixed(4)} <br />
+                            <strong style={{ fontWeight: 700 }}>Shape Diagnostics</strong><br />
+                            Spread (R_mean): {metrics.avgDist.toFixed(2)} px <br />
+                            Irregularity (R_std): {metrics.stdDist.toFixed(2)} px <br />
+                            CV (Std/Mean): {(metrics.avgDist > 0 ? (metrics.stdDist / metrics.avgDist) : 0).toFixed(3)} <br />
+                            Aspect Ratio (W/H): {metrics.aspectRatio.toFixed(3)}
+                        </div>
+                    )}
                 </div >
             )}
         </>

@@ -3,7 +3,8 @@
 ## Debug Panel Controls
 The Debug Panel overlays the simulation and provides forensic tools.
 
-### Standard Controls
+### Standard Controls (Hidden by Default)
+*Toggle "Show Standard Controls" to view:*
 *   **Lock Camera**: Freezes camera movement.
 *   **Show Grid/Axes**: Displays spatial reference.
 *   **Pixel Snapping**: Visually aligns nodes to pixels.

@@ -28,6 +28,18 @@ export const applyCorrectionsWithDiffusion = (
         nodeBudget *= 3.0; // 3x budget allows instant resolution of most overlaps
     }
 
+    // SOFT RECONCILE (Secondary)
+    // Fade out corrections as system cools to prevent micro-jitter near rest.
+    // We use the energy envelope (policy.temperature) or similar proxy.
+    // If energy < 0.2, we scale budget down.
+    if (policy.temperature < 0.2) {
+        // Ramp from 1.0 down to 0.0
+        const fade = Math.max(0, policy.temperature / 0.2);
+        // Curve it (smoothstep) -> 3x^2 - 2x^3
+        const smooth = fade * fade * (3 - 2 * fade);
+        nodeBudget *= smooth;
+    }
+
     // Compute node degree and neighbor map
     const nodeDegree = new Map<string, number>();
     const nodeNeighbors = new Map<string, string[]>();
@@ -130,10 +142,27 @@ export const applyCorrectionsWithDiffusion = (
 
         const corrDx = accDx * scale;
         const corrDy = accDy * scale;
-        const correctionOpposesVelocity = (corrDx * node.vx + corrDy * node.vy) < 0;
-        if (correctionOpposesVelocity) {
+
+        // CORRECTION TAX (Knife-Cut)
+        // If velocity opposes correction, it is feeding a limit cycle (fighting).
+        // We MUST tax this velocity to break the cycle.
+        const vDotCorr = node.vx * corrDx + node.vy * corrDy;
+        if (vDotCorr < 0) {
             conflictCount += 1;
             node.conflictThisFrame = 1;
+
+            // Project V onto C and kill the opposing component
+            // C is (corrDx, corrDy). 
+            const cMagSq = corrDx * corrDx + corrDy * corrDy;
+            if (cMagSq > 0.000001) {
+                const projFactor = vDotCorr / cMagSq; // (V . C) / (C . C) (Negative value)
+                // V_parallel = projFactor * C represents the component of V fighting C.
+                // We subtract a large portion of it (Correction Tax).
+                // Tax Rate: 0.9 (90% damping of fighting component)
+                const taxRate = 0.9;
+                node.vx -= (projFactor * corrDx) * taxRate;
+                node.vy -= (projFactor * corrDy) * taxRate;
+            }
         }
 
         // FIX 17: Store Residual

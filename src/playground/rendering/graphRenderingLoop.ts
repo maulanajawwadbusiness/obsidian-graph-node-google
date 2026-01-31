@@ -993,11 +993,23 @@ export const startGraphRenderLoop = (deps: GraphRenderLoopDeps) => {
         const project = (x: number, y: number) => transform.worldToScreen(x, y);
         const worldToScreen = project;
         const visibleBounds = transform.getVisibleBounds(200);
-        if (theme.hoverDebugEnabled && Math.random() < 0.01) {
-            console.log(`[HoverDbg] Loop Check: pending=${pendingPointerRef.current.hasPending} hasPtr=${hoverStateRef.current.hasPointer}`);
+        // P: Seam Probe
+        const seamNow = performance.now();
+        const lastSeam = (hoverStateRef.current as any).lastSeamLog || 0;
+        const doLog = (seamNow - lastSeam > 1000);
+
+        if (doLog) {
+            (hoverStateRef.current as any).lastSeamLog = seamNow;
+            console.log(`[HoverDbg] Render Seam: Pre-Prepare pending=${pendingPointerRef.current.hasPending}`);
         }
 
-        renderScratch.prepare(engine, visibleBounds);
+        try {
+            renderScratch.prepare(engine, visibleBounds);
+            if (doLog) console.log(`[HoverDbg] Render Seam: Post-Prepare (Success)`);
+        } catch (e: any) {
+            console.error(`[HoverDbg] CRITICAL CRASH in renderScratch.prepare:`, e);
+            if (doLog) console.log(`[HoverDbg] Render Seam: Post-Prepare (FAILED)`);
+        }
         updateHoverSelectionIfNeeded(
             pendingPointerRef.current.hasPending,
             hoverStateRef,

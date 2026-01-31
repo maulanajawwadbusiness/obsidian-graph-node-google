@@ -4,6 +4,7 @@ import { fireInitialImpulse } from './engine/impulse';
 import { type DebugStats } from './engine/stats';
 import { getNowMs } from './engine/engineTime';
 import { runPhysicsTick, type PhysicsEngineTickContext } from './engine/engineTick';
+import { createFeelMetrics, resetFeelMetrics } from './engine/feelMetrics';
 
 export class PhysicsEngine {
     public nodes: Map<string, PhysicsNode> = new Map();
@@ -97,6 +98,7 @@ export class PhysicsEngine {
         },
     };
     private lastDraggedNodeId: string | null = null;
+    public feelMetrics = createFeelMetrics();
 
     // Fix #11: Impulse Guard State
     private lastImpulseTime: number = 0;
@@ -261,6 +263,7 @@ export class PhysicsEngine {
         this.spacingGateActive = false;
         this.globalAngle = 0;
         this.globalAngularVel = 0;
+        resetFeelMetrics(this.feelMetrics);
     }
 
     /**
@@ -352,6 +355,7 @@ export class PhysicsEngine {
         this.spacingGateActive = false;
         this.wakeAll();
         this.invalidateWarmStart('RESET_LIFECYCLE');
+        resetFeelMetrics(this.feelMetrics);
     }
 
     /**

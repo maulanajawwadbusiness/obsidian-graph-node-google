@@ -358,6 +358,21 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
         links.forEach(l => engine.addLink(l));
     };
 
+    const handleScaleSpawn = (count: number) => {
+        const engine = engineRef.current;
+        if (!engine) return;
+        engine.clear();
+        const newSeed = Date.now();
+        setSeed(newSeed);
+        setSpawnCount(count);
+        const { nodes, links } = generateRandomGraph(count, config.targetSpacing, config.initScale, newSeed);
+        nodes.forEach(n => engine.addNode(n));
+        links.forEach(l => engine.addLink(l));
+        if (config.debugPerf) {
+            console.log(`[ScaleHarness] spawn count=${count} seed=${newSeed}`);
+        }
+    };
+
     const handleReset = () => {
         const engine = engineRef.current;
         if (!engine) return;
@@ -484,6 +499,7 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
                     setSpawnCount={setSpawnCount}
                     spawnCount={spawnCount}
                     useVariedSize={useVariedSize}
+                    onScaleSpawn={handleScaleSpawn}
                 />
             )}
 

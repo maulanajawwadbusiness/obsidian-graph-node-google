@@ -28,6 +28,7 @@ import {
     applyStaticFrictionBypass,
 } from './velocityPass';
 import { logEnergyDebug } from './debug';
+import { updateFeelMetrics, type FeelMetricsState } from './feelMetrics';
 import { createDebugStats, type DebugStats } from './stats';
 import { getNowMs } from './engineTime';
 
@@ -61,6 +62,7 @@ export type PhysicsEngineTickContext = {
     handLogAt: number;
     dragLagSamples: number[];
     lastDraggedNodeId: string | null;
+    feelMetrics: FeelMetricsState;
     correctionAccumCache: Map<string, { dx: number; dy: number }>;
     perfCounters: {
         nodeListBuilds: number;
@@ -755,6 +757,39 @@ export const runPhysicsTick = (engine: PhysicsEngineTickContext, dt: number) => 
     }
 
     logEnergyDebug(engine.lifecycle, energy, effectiveDamping, maxVelocityEffective);
+
+    if (perfEnabled) {
+        const feelRepulsionEnabled = !preRollActive && repulsionEnabled;
+        const feelCollisionEnabled = !preRollActive && collisionEnabled;
+        const feelSpringsEnabled = !preRollActive && springsEnabled;
+        const feelSpacingEnabled = !preRollActive && spacingWillRun;
+        const feelTriangleEnabled = !preRollActive &&
+            (engine.perfMode === 'normal' || engine.perfMode === 'stressed') &&
+            engine.frameIndex % triangleEvery === 0;
+        const feelSafetyEnabled = !preRollActive && engine.frameIndex % safetyEvery === 0;
+
+        updateFeelMetrics(
+            engine.feelMetrics,
+            {
+                config: engine.config,
+                lifecycle: engine.lifecycle,
+                links: engine.links,
+                draggedNodeId: engine.draggedNodeId,
+            },
+            nodeList,
+            debugStats,
+            {
+                degradeLevel,
+                repulsionEnabled: feelRepulsionEnabled,
+                collisionEnabled: feelCollisionEnabled,
+                springsEnabled: feelSpringsEnabled,
+                spacingEnabled: feelSpacingEnabled,
+                triangleEnabled: feelTriangleEnabled,
+                safetyEnabled: feelSafetyEnabled,
+                microEnabled: !preRollActive && microEnabled,
+            }
+        );
+    }
     engine.lastDebugStats = debugStats;
 
     if (perfEnabled && frameTiming) {

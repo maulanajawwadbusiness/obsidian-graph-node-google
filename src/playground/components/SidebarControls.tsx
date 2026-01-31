@@ -16,6 +16,7 @@ type SidebarControlsProps = {
     setSpawnCount: (value: number) => void;
     spawnCount: number;
     useVariedSize: boolean;
+    onScaleSpawn: (count: number) => void;
 };
 
 export const SidebarControls: React.FC<SidebarControlsProps> = ({
@@ -30,7 +31,8 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
     setSeed,
     setSpawnCount,
     spawnCount,
-    useVariedSize
+    useVariedSize,
+    onScaleSpawn
 }) => (
     <div className="gp-sidebar" style={SIDEBAR_STYLE} onWheel={(e) => e.stopPropagation()}>
         <button
@@ -70,6 +72,24 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
                 onChange={(e) => setSpawnCount(Number(e.target.value))}
                 style={{ width: '100%' }}
             />
+        </div>
+
+        <div style={{ marginTop: '12px' }}>
+            <div style={{ fontSize: '12px', marginBottom: '6px' }}>Scale Harness</div>
+            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                {[5, 20, 60, 250, 500].map((count) => (
+                    <button
+                        key={count}
+                        onClick={() => onScaleSpawn(count)}
+                        style={{ fontSize: '11px' }}
+                    >
+                        N={count}
+                    </button>
+                ))}
+            </div>
+            <div style={{ fontSize: '11px', color: '#888', marginTop: '4px' }}>
+                Spawns immediately with a new seed.
+            </div>
         </div>
 
         <div style={{ marginTop: '12px' }}>

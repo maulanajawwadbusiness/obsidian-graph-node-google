@@ -175,7 +175,7 @@ export const applyForcePass = (
         if (timing) {
             const repulsionStart = now();
             if (repulsionEnabled) {
-                applyRepulsion(nodeList, activeNodes, sleepingNodes, engine.config, energy, pairStride, pairOffset);
+                applyRepulsion(nodeList, activeNodes, sleepingNodes, engine.config, stats, energy, pairStride, pairOffset, engine.neighborCache);
                 timing.repulsionMs += now() - repulsionStart;
             }
 
@@ -188,7 +188,7 @@ export const applyForcePass = (
             if (focusActive && focusSleeping) {
                 const focusStart = now();
                 if (focusRepulsionEnabled) {
-                    applyRepulsion(nodeList, focusActive, focusSleeping, engine.config, energy, focusPairStride, focusPairOffset);
+                    applyRepulsion(nodeList, focusActive, focusSleeping, engine.config, stats, energy, focusPairStride, focusPairOffset);
                 }
                 if (focusCollisionEnabled) {
                     applyCollision(nodeList, focusActive, focusSleeping, engine.config, 1.0, focusPairStride, focusPairOffset + 1);
@@ -203,14 +203,14 @@ export const applyForcePass = (
             }
         } else {
             if (repulsionEnabled) {
-                applyRepulsion(nodeList, activeNodes, sleepingNodes, engine.config, energy, pairStride, pairOffset);
+                applyRepulsion(nodeList, activeNodes, sleepingNodes, engine.config, stats, energy, pairStride, pairOffset, engine.neighborCache);
             }
             if (collisionEnabled) {
                 applyCollision(nodeList, activeNodes, sleepingNodes, engine.config, 1.0, pairStride, pairOffset + 1);
             }
             if (focusActive && focusSleeping) {
                 if (focusRepulsionEnabled) {
-                    applyRepulsion(nodeList, focusActive, focusSleeping, engine.config, energy, focusPairStride, focusPairOffset);
+                    applyRepulsion(nodeList, focusActive, focusSleeping, engine.config, stats, energy, focusPairStride, focusPairOffset);
                 }
                 if (focusCollisionEnabled) {
                     applyCollision(nodeList, focusActive, focusSleeping, engine.config, 1.0, focusPairStride, focusPairOffset + 1);

@@ -5,11 +5,19 @@ import { type DebugStats } from './engine/stats';
 import { createInitialPhysicsHudHistory, createInitialPhysicsHudSnapshot, type PhysicsHudHistory, type PhysicsHudSnapshot } from './engine/physicsHud';
 import { getNowMs } from './engine/engineTime';
 import { runPhysicsTick, type PhysicsEngineTickContext } from './engine/engineTick';
+import { TimePolicy } from './engine/dtPolicy';
 
 export class PhysicsEngine {
     public nodes: Map<string, PhysicsNode> = new Map();
     public links: PhysicsLink[] = [];
     public config: ForceConfig;
+
+    // DT Policy (Time Hardening)
+    public timePolicy = new TimePolicy();
+
+    // DT Simulation Helpers (Dev Only)
+    public debugSimulateJitterUntil: number = 0;
+    public debugSimulateSpikeFrames: number = 0;
 
     // World Bounds for Containment
     public worldWidth: number = 2000;
@@ -75,6 +83,9 @@ export class PhysicsEngine {
 
     // Fix 22: Prioritize unresolved constraints (Hot Pairs) to prevent crawl
     public spacingHotPairs = new Set<string>();
+
+    // Forensic Phase 2: Neighbor Hysteresis Cache
+    public neighborCache = new Map<string, Set<string>>();
 
     public perfCounters = {
         nodeListBuilds: 0,
@@ -276,6 +287,7 @@ export class PhysicsEngine {
         this.nodeLinkCounts.clear();
         this.adjacencyMap.clear(); // Fix 12
         this.spacingHotPairs.clear(); // Fix 22
+        this.neighborCache.clear();
         this.lifecycle = 0;
         this.hasFiredImpulse = false;
         this.spacingGate = 0;

@@ -1,3 +1,4 @@
+// type check enabled
 import type { CameraState } from './renderingTypes';
 import { snapToGrid } from './renderingMath';
 
@@ -45,7 +46,7 @@ export class CameraTransform {
      * T(Center) * S(Zoom) * T(Pan) * T(C) * R(Angle) * T(-C)
      */
     public applyToContext(ctx: CanvasRenderingContext2D) {
-        let { width, height, zoom, panX, panY, angle, cx, cy, dpr } = this;
+        let { width, height, zoom, panX, panY, angle, cx, cy } = this;
 
         // Fix 5 & 18 & 40: Canonical Float Transform
         // We do NOT snap the camera matrix (prevents sticky motion).
@@ -99,7 +100,7 @@ export class CameraTransform {
         if (rect.width === 0 || rect.height === 0) {
             return { x: this.cx, y: this.cy };
         }
-        let { zoom, panX, panY, angle, cx, cy, dpr } = this;
+        let { zoom, panX, panY, angle, cx, cy } = this;
 
         // Fix 18: No Input Snapping (Smooth Drag)
 
@@ -324,6 +325,7 @@ export const verifyMappingIntegrity = () => {
         -20.123,    // PanY 
         0.5,        // Angle
         { x: 300, y: 300 }, // Centroid
+        1.0,        // DPR
         true        // Snapping ENABLED (Hardest Case)
     );
 

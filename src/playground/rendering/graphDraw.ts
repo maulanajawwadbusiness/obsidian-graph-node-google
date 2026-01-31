@@ -5,7 +5,7 @@ import { drawGradientRing, drawTwoLayerGlow, withCtx } from './canvasUtils';
 import { snapToGrid, quantizeForStroke } from './renderingMath';
 import { guardStrictRenderSettings, resetRenderState } from './renderGuard';
 import type { HoverState, RenderDebugInfo, RenderSettings, MutableRefObject } from './renderingTypes';
-import { RenderScratch } from './renderScratch';
+import type { RenderScratch } from './renderScratch';
 
 // ... (omitted)
 
@@ -36,9 +36,7 @@ export const drawLinks = (
 
     // Viewport Culling Bounds (Screen Space)
     // Add margin for stroke width and general safety
-    const margin = 50;
-    const vWidth = ctx.canvas.width;
-    const vHeight = ctx.canvas.height;
+    // (Unused vars removed)
 
     // BATCHING: Single Path
     ctx.beginPath();
@@ -85,9 +83,7 @@ export const drawLinks = (
             ctx.stroke();
         }
 
-        if (process.env.NODE_ENV !== 'production' && Math.random() < 0.01) {
-            // console.log(`[BatchLinks] drawn=${drawnCount} culled=${culledCount}`);
-        }
+        // (Debug logging removed)
 
     } finally {
         ctx.restore();
@@ -124,13 +120,7 @@ export const drawNodes = (
     ctx.lineJoin = 'miter';
 
     // Viewport Bounds for Culling
-    const vWidth = ctx.canvas.width;
-    const vHeight = ctx.canvas.height;
-    const margin = 100; // Generous margin for glow/shadow
-    const minX = -margin;
-    const maxX = vWidth + margin;
-    const minY = -margin;
-    const maxY = vHeight + margin;
+    // (Unused vars removed)
 
     const nodeList = engine.getNodeList();
     const showRestMarkers = isDebugEnabled(settingsRef.current.showRestMarkers);
@@ -213,8 +203,6 @@ export const drawNodes = (
         const radiusPx = baseRenderRadius * nodeScale * zoom;
 
         if (theme.nodeStyle === 'ring') {
-            const isHoveredNode = node.id === hoverStateRef.current.hoveredNodeId;
-
             // Fix 52: Glow LOD. Skip if node is tiny (< 2px) and no energy.
             if (radiusPx > 2 || nodeEnergy > 0.01) {
                 if (theme.useTwoLayerGlow) {
@@ -228,7 +216,7 @@ export const drawNodes = (
                     // We skip the complex debug sampling "active" branches for brevity in this optimized loop
                     // unless strictly needed. But let's try to keep it correct:
 
-                    const glowParams = drawTwoLayerGlow(
+                    drawTwoLayerGlow(
                         ctx,
                         screen.x,
                         screen.y,
@@ -453,14 +441,7 @@ export const drawLabels = (
     ctx.textBaseline = 'middle';
 
     // Viewport Bounds for Culling Labels
-    // Use wider margin for labels
-    const vWidth = ctx.canvas.width;
-    const vHeight = ctx.canvas.height;
-    const margin = 200;
-    const minX = -margin;
-    const maxX = vWidth + margin;
-    const minY = -margin;
-    const maxY = vHeight + margin;
+    // (Unused vars removed)
 
     engine.nodes.forEach((node) => {
         // FIX 51: World Space Culling

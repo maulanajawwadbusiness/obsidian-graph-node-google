@@ -1,4 +1,5 @@
 import type { PhysicsEngine } from '../engine';
+import { pseudoRandom } from './random';
 
 export const fireInitialImpulse = (engine: PhysicsEngine, timestamp: number = 0) => {
     const { targetSpacing, snapImpulseScale } = engine.config;
@@ -68,7 +69,9 @@ export const fireInitialImpulse = (engine: PhysicsEngine, timestamp: number = 0)
     // Initialize the global spin (the medium) at birth
     // Small random spin to give the lotus leaf its initial drift
     // This is NOT derived from node velocities - it's the medium itself
-    engine.globalAngularVel = (Math.random() - 0.5) * 0.3; // ±0.15 rad/s
+    // KICK: Small random rotation to break symmetry
+    const seed = engine.nodes.size + engine.links.length;
+    engine.globalAngularVel = (pseudoRandom(seed) - 0.5) * 0.3; // ±0.15 rad/s
 
     engine.hasFiredImpulse = true;
     console.log(`[LotusLeaf] Medium initialized: ω=${engine.globalAngularVel.toFixed(4)} rad/s at t=${timestamp.toFixed(0)}`);

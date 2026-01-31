@@ -142,25 +142,6 @@ const ensureSeededGraph = (engine: PhysicsEngine, config: ForceConfig, seed: num
     }
 };
 
-// FIX 50: Context State Restoration (Canonical State)
-const restoreContextState = (ctx: CanvasRenderingContext2D, dpr: number) => {
-    // 1. Reset Transform to DPR scale
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-
-    // 2. Reset Composition
-    ctx.globalAlpha = 1.0;
-    ctx.globalCompositeOperation = 'source-over';
-
-    // 3. Reset Styling
-    ctx.filter = 'none';
-    ctx.imageSmoothingEnabled = true;
-    ctx.shadowBlur = 0;
-    ctx.shadowColor = 'transparent';
-    ctx.lineWidth = 1;
-    ctx.lineCap = 'butt';
-    ctx.lineJoin = 'miter';
-};
-
 const updateCanvasSurface = (
     canvas: HTMLCanvasElement,
     rect: DOMRect,
@@ -239,9 +220,7 @@ const updateCanvasSurface = (
         gradientCache.clear();
         textMetricsCache.clear();
 
-        if (process.env.NODE_ENV !== 'production' && Math.random() < 0.05) {
-            // console.log('[RenderLoop] Caches cleared due to surface change');
-        }
+        // (Debug logging removed)
     }
 
     return { dpr, surfaceChanged };
@@ -590,15 +569,20 @@ const runPhysicsScheduler = (
         engine.setDegradeState(0, 'INTERACTION', 'NONE', Infinity);
     }
 
-    const rawDeltaMs = now - schedulerState.lastTime;
+    let rawDeltaMs = now - schedulerState.lastTime;
 
-    // FIX: DT Clamping (Safety Cap)
-    // Limit delta time to ~35ms (approx 28fps minimum). 
-    // If the frame takes longer (e.g. 100ms), we only simulate 35ms of physics.
-    // This slows down the simulation "clock" relative to real time ("Visual Dignity"),
-    // but prevents the solver from exploding or needing 100 sub-steps.
-    const dtCap = 35;
-    const frameDeltaMs = Math.min(rawDeltaMs, dtCap);
+    // FIX: Simulation Injection (Dev Tools)
+    if (engine.debugSimulateSpikeFrames > 0) {
+        rawDeltaMs = 250;
+        engine.debugSimulateSpikeFrames--;
+    } else if (now < engine.debugSimulateJitterUntil) {
+        rawDeltaMs += (Math.random() - 0.5) * 20; // +/- 10ms jitter
+        if (rawDeltaMs < 1) rawDeltaMs = 1;
+    }
+
+    // FIX: DT Clamping via Central Policy
+    const policy = engine.timePolicy.evaluate(rawDeltaMs);
+    const frameDeltaMs = policy.dtUseMs;
 
     const dtMs = frameDeltaMs;
     schedulerState.lastTime = now;

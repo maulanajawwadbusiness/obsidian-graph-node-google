@@ -11,6 +11,8 @@ type SidebarControlsProps = {
     onReset: () => void;
     onSpawn: () => void;
     onToggleVariedSize: (checked: boolean) => void;
+    onSimulateJitter: () => void;
+    onSimulateSpike: () => void;
     seed: number;
     setSeed: (value: number) => void;
     setSpawnCount: (value: number) => void;
@@ -26,6 +28,8 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
     onReset,
     onSpawn,
     onToggleVariedSize,
+    onSimulateJitter,
+    onSimulateSpike,
     seed,
     setSeed,
     setSpawnCount,
@@ -83,6 +87,16 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
             />
             <div style={{ fontSize: '11px', color: '#888', marginTop: '4px' }}>
                 Same seed = identical graph. Click "Spawn New" to use current seed.
+            </div>
+        </div>
+
+        <hr style={{ border: '0', borderTop: '1px solid #444', width: '100%' }} />
+
+        <div style={{ marginBottom: '16px' }}>
+            <div style={{ fontSize: '12px', fontWeight: 'bold', marginBottom: '8px', color: '#f88' }}>Dev Tools</div>
+            <div style={{ display: 'flex', gap: '8px' }}>
+                <button onClick={onSimulateJitter} style={{ fontSize: '11px', padding: '4px 8px' }}>Sim Jitter (5s)</button>
+                <button onClick={onSimulateSpike} style={{ fontSize: '11px', padding: '4px 8px' }}>Sim Spike</button>
             </div>
         </div>
 

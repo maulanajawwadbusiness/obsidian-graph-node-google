@@ -27,7 +27,7 @@ export const applyExpansionResistance = (
 
     // DENSE-CORE DAMPING BYPASS
     // During early expansion, skip resistance for nodes in dense clusters
-    const denseBypass = policy.denseBypass;
+    const denseBypass = policy.earlyExpansion;
     const useDenseBypass = denseBypass > 0.01;
     const denseRadius = engine.config.minNodeDistance * 0.8;
     const denseNodeSet = new Set<string>();

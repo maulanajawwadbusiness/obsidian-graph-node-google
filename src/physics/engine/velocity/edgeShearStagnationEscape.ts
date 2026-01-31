@@ -111,6 +111,11 @@ export const applyEdgeShearStagnationEscape = (
         // Gate 2: Both relative velocity components must be small (truly jammed)
         if (relVelAlongEdge >= velEps || relVelPerp >= velEps) continue;
 
+        // FIX: Cooldown Check
+        const nowMs = engine.lifecycle * 1000;
+        if (nowMs - (source.lastMicroSlipMs || 0) < 1000) continue;
+        if (nowMs - (target.lastMicroSlipMs || 0) < 1000) continue;
+
         // Gate 3: Both nodes have low net force (stagnant equilibrium)
         const srcForceMag = Math.sqrt(source.fx * source.fx + source.fy * source.fy);
         const tgtForceMag = Math.sqrt(target.fx * target.fx + target.fy * target.fy);
@@ -137,7 +142,21 @@ export const applyEdgeShearStagnationEscape = (
             pairHash = ((pairHash << 5) - pairHash) + pairKey.charCodeAt(i);
             pairHash |= 0;
         }
-        const shearSign = (pairHash % 2 === 0) ? 1 : -1;
+        let shearSign = (pairHash % 2 === 0) ? 1 : -1;
+
+        // FIX: Constraint Awareness
+        // Ensure shear doesn't fight PBD corrections combined
+        const sx = perpX * slip * shearSign;
+        const sy = perpY * slip * shearSign;
+
+        // Source gets (+sx, +sy), Target gets (-sx, -sy)
+        const dotSrc = sx * (source.lastCorrectionX || 0) + sy * (source.lastCorrectionY || 0);
+        const dotTgt = (-sx) * (target.lastCorrectionX || 0) + (-sy) * (target.lastCorrectionY || 0);
+
+        if ((dotSrc + dotTgt) < -0.0001) {
+            shearSign *= -1; // Flip to assist
+            if (stats.injectors) stats.injectors.escapeLoopSuspectCount++;
+        }
 
         // Apply pairwise symmetric perpendicular shear
         // Source gets +perp, target gets -perp (or vice versa based on sign)
@@ -152,6 +171,13 @@ export const applyEdgeShearStagnationEscape = (
 
         passStats.velocity += slip * 2;  // Both nodes affected
         unlockedPairs++;
+
+        source.lastMicroSlipMs = nowMs;
+        target.lastMicroSlipMs = nowMs;
+        if (stats.injectors) {
+            stats.injectors.microSlipFires += 2;
+            stats.injectors.escapeFires += 2;
+        }
     }
 
     passStats.nodes += unlockedPairs * 2;

@@ -451,6 +451,40 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
                                             Reorder Rates: {hud.neighborReorderRate || 0}<br />
                                         </div>
                                     )}
+                                    {hud && (
+                                        <div style={{ marginTop: '4px', paddingTop: '4px', borderTop: '1px solid #444', color: '#aaf' }}>
+                                            <strong>Forensic: Micro-Slip</strong><br />
+                                            Fires/Sec: {hud.microSlipFiresPerSec?.toFixed(1) || 0}<br />
+                                            Stuck Score (Avg): {hud.stuckScoreAvg?.toFixed(3) || 0}<br />
+                                            Count: {hud.microSlipCount || 0}<br />
+                                            Injector: {hud.lastInjector || '-'}<br />
+                                        </div>
+                                    )}
+                                    {hud && (
+                                        <div style={{ marginTop: '4px', paddingTop: '4px', borderTop: '1px solid #444', color: '#afa' }}>
+                                            <strong>Forensic: Escape</strong><br />
+                                            Fires/Sec: {hud.escapeFiresPerSec?.toFixed(1) || 0}<br />
+                                            Loop Suspects: {hud.escapeLoopSuspectCount || 0}<br />
+                                        </div>
+                                    )}
+                                    {hud && (
+                                        <div style={{ marginTop: '4px', paddingTop: '4px', borderTop: '1px solid #444', color: '#fea' }}>
+                                            <strong>Forensic: Rest</strong><br />
+                                            State: <strong>{hud.settleState}</strong> ({(hud.lastSettleMs || 0).toFixed(0)}ms)<br />
+                                            Flips/10s: {hud.stateFlipCount || 0}<br />
+                                            Outliers: {hud.outlierCount || 0}<br />
+                                            Calm: {(hud.calmPercent || 0).toFixed(1)}%<br />
+                                            Blockers: {(hud.settleBlockers || []).join(', ') || 'None'}<br />
+                                        </div>
+                                    )}
+                                    {hud && (
+                                        <div style={{ marginTop: '4px', paddingTop: '4px', borderTop: '1px solid #444', color: '#faa' }}>
+                                            <strong>Law Pop Diagnostics</strong><br />
+                                            Hub Flips: {hud.hubFlipCount || 0} (N={hud.hubNodeCount || 0})<br />
+                                            Degrade Flips: {hud.degradeFlipCount || 0}<br />
+                                            Pop Score: {(hud.lawPopScore || 0).toFixed(4)}<br />
+                                        </div>
+                                    )}
                                 </div>
 
                                 {/* REST MARKER FORENSIC (Collapsible) */}

@@ -70,7 +70,6 @@ export class SpatialGrid {
     }
 
     public query(x: number, y: number, callback: (index: number) => void) {
-        const key = this.getKey(x, y);
         // Check center and 8 neighbors
         // ... Or just checking center for point hit? 
         // Nodes have radius. We need neighbors.

@@ -1,5 +1,5 @@
-// @ts-nocheck
-import React, { useRef, useState, useEffect, useMemo, useLayoutEffect } from 'react';
+// type check enabled
+import React, { useRef, useState, useEffect, useLayoutEffect } from 'react';
 import { PhysicsEngine } from '../physics/engine';
 import { ForceConfig } from '../physics/types';
 import { DEFAULT_PHYSICS_CONFIG } from '../physics/config';
@@ -54,7 +54,7 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
     });
     const [spawnCount, setSpawnCount] = useState(30);
     const [seed, setSeed] = useState(Date.now()); // Seed for deterministic generation
-    const [skinMode, setSkinMode] = useState<SkinMode>('normal'); // Skin toggle (default: elegant)
+    const [skinMode, setSkinMode] = useState<SkinMode>('elegant'); // Skin toggle (default: elegant)
     const [cameraLocked, setCameraLocked] = useState(false);
     const [showDebugGrid, setShowDebugGrid] = useState(false);
     const [pixelSnapping, setPixelSnapping] = useState(false);
@@ -130,10 +130,7 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
         return () => ro.disconnect();
     }, []);
 
-    const getCachedRect = () => {
-        // Fallback to live read if RO hasn't fired yet (rare) or fails
-        return contentRectRef.current || canvasRef.current?.getBoundingClientRect() || ({ left: 0, top: 0, width: 0, height: 0 } as DOMRect);
-    };
+    // (getCachedRect removed - unused)
 
     // Wrap hook handlers for pointer events
     const onPointerMove = (e: React.PointerEvent) => {
@@ -179,7 +176,6 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
         // FIX: Capture on Container (e.currentTarget) to ensure events aren't lost
         // even if e.target was a child element (like an overlay) or we drag off-screen.
         const container = e.currentTarget as HTMLElement;
-        const canvas = canvasRef.current;
 
         // FORENSIC LOG: Routing Debug
         if (DRAG_ENABLED) {
@@ -485,17 +481,30 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
         setHudScenarioLabel('Drag test: drag highlighted dot for 2s, then release.');
     };
 
+    const handleSimulateJitter = () => {
+        if (!engineRef.current) return;
+        engineRef.current.debugSimulateJitterUntil = performance.now() + 5000;
+        console.log('[Dev] Simulating Jitter for 5s');
+    };
+
+    const handleSimulateSpike = () => {
+        if (!engineRef.current) return;
+        engineRef.current.debugSimulateSpikeFrames = 1;
+        console.log('[Dev] Simulating Spike (250ms)');
+    };
+
     const handleRecordHudScore = () => {
-        if (!metrics.physicsHud) return;
+        const hud = metrics.physicsHud;
+        if (!hud) return;
         const count = metrics.nodes;
         setHudScores(prev => ({
             ...prev,
             [count]: {
-                settleMs: metrics.physicsHud.lastSettleMs,
-                jitter: metrics.physicsHud.jitterAvg,
-                conflictPct: metrics.physicsHud.conflictPct5s,
-                energy: metrics.physicsHud.energyProxy,
-                degradePct: metrics.physicsHud.degradePct5s,
+                settleMs: hud.lastSettleMs,
+                jitter: hud.jitterAvg,
+                conflictPct: hud.conflictPct5s,
+                energy: hud.energyProxy,
+                degradePct: hud.degradePct5s,
             }
         }));
     };
@@ -587,6 +596,8 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
                     onReset={handleReset}
                     onSpawn={handleSpawn}
                     onToggleVariedSize={setUseVariedSize}
+                    onSimulateJitter={handleSimulateJitter}
+                    onSimulateSpike={handleSimulateSpike}
                     seed={seed}
                     setSeed={setSeed}
                     setSpawnCount={setSpawnCount}

@@ -122,7 +122,7 @@ export const applyAngleResistanceVelocity = (
 
                 // EARLY-PHASE HUB PRIVILEGE + ESCAPE WINDOW
                 const nbEscape = engine.escapeWindow.has(nb.id);
-                const hubRelief = nbDeg >= 3 ? policy.hubConstraintRelief : 0;
+                const hubRelief = nbDeg >= 3 ? policy.earlyExpansion : 0;
                 const hubScale = 1 - hubRelief;
                 if (nbEscape || hubScale <= 0.001) return;
 

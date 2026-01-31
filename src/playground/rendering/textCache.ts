@@ -34,8 +34,10 @@ export class TextMetricsCache {
 
         // LRU: Evict oldest if full
         if (this.cache.size >= this.maxCacheSize) {
-            const oldestKey = this.cache.keys().next().value;
-            this.cache.delete(oldestKey);
+            const result = this.cache.keys().next();
+            if (!result.done && result.value) { // Ensure value is not undefined (though !done implies it for Map keys)
+                this.cache.delete(result.value);
+            }
         }
 
         this.cache.set(key, width);

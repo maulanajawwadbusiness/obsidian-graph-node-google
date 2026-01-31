@@ -18,20 +18,24 @@ export const applyStaticFrictionBypass = (
     policy: MotionPolicy,
     stats: DebugStats
 ) => {
-    const frictionStrength = policy.microSlip;
-    if (frictionStrength <= 0.01) return;
+    // FIX: Gate by settle confidence (Continuous Law)
+    const settleGate = Math.pow(1 - (policy.settleScalar || 0), 2);
+    const frictionStrength = policy.diffusion * settleGate;
 
-    // FIX 20: MICRO-NOISE MISGATING
-    // Disable during interaction to prevent "fighting" the hand
+    if (frictionStrength <= 0.001) return;
     if (engine.draggedNodeId) return;
+
+    // FIX: Cooldown & Stuckness
+    const STUCK_THRESH = 0.5;
+    const COOLDOWN_SEC = 1.0;
+    const nowSec = engine.lifecycle;
 
     const passStats = getPassStats(stats, 'StaticFrictionBypass');
     const affected = new Set<string>();
 
     const densityRadius = 30;
     const densityThreshold = 4;
-    const relVelEpsilon = 0.05;  // FIX 20: Stricter activation (was 0.5)
-    const microSlip = 0.01 * frictionStrength;      // FIX 20: Reduced amplitude (was 0.02)
+    const microSlip = 0.01 * frictionStrength;
 
     // Pre-compute local density for all nodes
     const localDensity = new Map<string, number>();
@@ -65,7 +69,22 @@ export const applyStaticFrictionBypass = (
         const relVMag = Math.sqrt(relativeVelocity.x * relativeVelocity.x + relativeVelocity.y * relativeVelocity.y);
 
         // Only apply when relative velocity is near zero (static friction regime)
-        if (relVMag >= relVelEpsilon) continue;
+        // FIX: Replaced with STUCK SCORE + COOLDOWN
+        const srcStuck = source.stuckScore || 0;
+        const tgtStuck = target.stuckScore || 0;
+
+        // 1. Must be stuck (Pressure + Low Speed)
+        if (srcStuck < STUCK_THRESH && tgtStuck < STUCK_THRESH) continue;
+
+        // 2. Cooldown (Heartbeat Protection)
+        const nowMs = nowSec * 1000;
+        if ((nowMs - (source.lastMicroSlipMs || 0)) < COOLDOWN_SEC * 1000) continue;
+        if ((nowMs - (target.lastMicroSlipMs || 0)) < COOLDOWN_SEC * 1000) continue;
+
+        // 3. Keep Low RelVel check as safety?
+        // If stuckScore is high, speed MUST be low (by definition of stuckScore).
+        // So explicit relVel check is redundant but harmless.
+        if (relVMag >= 0.1) continue; // Safety guard against high-speed firing
 
         // Compute spring direction
         const dx = target.x - source.x;
@@ -106,13 +125,29 @@ export const applyStaticFrictionBypass = (
         const tgtDelta = Math.sqrt(
             (target.vx - beforeTgtVx) ** 2 + (target.vy - beforeTgtVy) ** 2
         );
-        if (srcDelta > 0) affected.add(source.id);
-        if (tgtDelta > 0) affected.add(target.id);
+        if (srcDelta > 0) {
+            affected.add(source.id);
+            source.lastMicroSlipMs = nowMs;
+        }
+        if (tgtDelta > 0) {
+            affected.add(target.id);
+            target.lastMicroSlipMs = nowMs;
+        }
+        if (srcDelta > 0 || tgtDelta > 0) {
+            if (stats.injectors) stats.injectors.microSlipFires += (srcDelta > 0 ? 1 : 0) + (tgtDelta > 0 ? 1 : 0);
+        }
         passStats.velocity += srcDelta + tgtDelta;
     }
 
     passStats.nodes += affected.size;
 
     // DEBUG
+    if (affected.size > 0) {
+        if (stats.injectors) {
+            stats.injectors.microSlipCount += affected.size;
+            stats.injectors.microSlipDv += passStats.velocity;
+            stats.injectors.lastInjector = 'FrictionBypass';
+        }
+    }
     logStaticFrictionBypass(affected.size);
 };

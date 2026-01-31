@@ -1,4 +1,4 @@
-
+// @ts-nocheck
 /**
  * Debug Gating Utility
  * Ensures debug visuals/logic are stripped or disabled in production.

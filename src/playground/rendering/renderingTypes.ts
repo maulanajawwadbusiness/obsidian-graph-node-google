@@ -113,6 +113,7 @@ export type RenderDebugInfo = {
     idleGlowStateAfter: CanvasStateDebug;
     idleRingStateBefore: CanvasStateDebug;
     idleRingStateAfter: CanvasStateDebug;
+    activeGlowStateBefore: CanvasStateDebug;
     activeGlowStateAfter: CanvasStateDebug;
     activeRingStateBefore: CanvasStateDebug;
     activeRingStateAfter: CanvasStateDebug;

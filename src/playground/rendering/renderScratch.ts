@@ -1,5 +1,5 @@
 import { PhysicsEngine } from '../../physics/engine';
-import { PhysicsNode } from '../../physics/types';
+// (Unused import removed)
 import { SpatialGrid } from './spatialGrid';
 
 export class RenderScratch {

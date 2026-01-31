@@ -45,6 +45,18 @@ export interface PhysicsNode {
   prevFx?: number; // Previous frame's force for low-pass filtering
   prevFy?: number;
 
+  // Law Pop Prevention
+  hubStrength?: number; // 0.0 (Leaf) to 1.0 (Super Hub). Continuous.
+  wasHub?: boolean;     // Forensic: did we flip?
+
+  // Micro-Slip State
+  lastMicroSlipMs?: number;
+  stuckScore?: number; // 0.0 (Free) to 1.0 (Totally Stuck)
+
+  // Constraint Awareness
+  lastCorrectionX?: number; // Accumulated PBD correction vector X
+  lastCorrectionY?: number; // Accumulated PBD correction vector Y
+
   // Knowledge Metadata (Paper Analyzer)
   meta?: {
     docId: string;

@@ -118,6 +118,11 @@ export const applyLowForceStagnationEscape = (
         const nx = dx / dist;
         const ny = dy / dist;
 
+        // FIX: Cooldown & Stuckness
+        const nowMs = engine.lifecycle * 1000;
+        if ((node.stuckScore || 0) < 0.3) continue;
+        if (nowMs - (node.lastMicroSlipMs || 0) < 1000) continue;
+
         // Hash-based sign alternation (50% drift toward, 50% drift away)
         // This ensures pairwise balance over time
         let hash = 0;
@@ -125,7 +130,21 @@ export const applyLowForceStagnationEscape = (
             hash = ((hash << 5) - hash) + node.id.charCodeAt(i);
             hash |= 0;
         }
-        const driftSign = (hash % 2 === 0) ? 1 : -1;
+        let driftSign = (hash % 2 === 0) ? 1 : -1;
+
+        // FIX: Constraint Awareness (Don't fight PBD)
+        const lcx = node.lastCorrectionX || 0;
+        const lcy = node.lastCorrectionY || 0;
+        const driftX = nx * driftMagnitude * driftSign;
+        const driftY = ny * driftMagnitude * driftSign;
+
+        // Dot product: > 0 means helping, < 0 means fighting
+        const dot = driftX * lcx + driftY * lcy;
+        if (dot < -0.0001) {
+            // Fighting constraints! Flip direction to assist instead.
+            driftSign *= -1;
+            if (stats.injectors) stats.injectors.escapeLoopSuspectCount++;
+        }
 
         // Apply sub-pixel drift to velocity
         const beforeVx = node.vx;
@@ -140,6 +159,12 @@ export const applyLowForceStagnationEscape = (
         if (deltaMag > 0) {
             passStats.velocity += deltaMag;
             affected.add(node.id);
+            affected.add(node.id);
+            node.lastMicroSlipMs = nowMs;
+            if (stats.injectors) {
+                stats.injectors.microSlipFires++;
+                stats.injectors.escapeFires++;
+            }
         }
     }
 

@@ -15,7 +15,7 @@ export const integrateNodes = (
     engine: PhysicsEngine,
     nodeList: PhysicsNode[],
     dt: number,
-    energy: number,
+    _energy: number,
     policy: MotionPolicy,
     effectiveDamping: number,
     maxVelocityEffective: number,
@@ -48,13 +48,28 @@ export const integrateNodes = (
         // Gate behind energy threshold to ensure Dead-Still Idle.
         // Only active when graph is "awake" or user is interacting.
         // =====================================================================
-        if (engine.config.enableMicroDrift && energy > 0.05) {
-            const t = engine.lifecycle;
-            const microDrift =
-                Math.sin(t * 0.3) * 0.0008 +
-                Math.sin(t * 0.7) * 0.0004 +
-                Math.sin(t * 1.1) * 0.0002;
-            engine.globalAngle += microDrift * dt;
+        if (engine.config.enableMicroDrift) {
+            // FIX: Gate drift by settle confidence (kill at rest)
+            const settleConfidence = policy.settleScalar || 0;
+            const driftGate = Math.pow(1 - settleConfidence, 3); // Steep falloff (0.01 at 0.8)
+
+            if (driftGate > 0.001) {
+                const t = engine.lifecycle;
+                const microDrift =
+                    Math.sin(t * 0.3) * 0.0008 +
+                    Math.sin(t * 0.7) * 0.0004 +
+                    Math.sin(t * 1.1) * 0.0002;
+
+                const dAngle = microDrift * dt * driftGate;
+                engine.globalAngle += dAngle;
+
+                // Forensics
+                if (stats.injectors) {
+                    stats.injectors.driftCount++;
+                    stats.injectors.driftDv += Math.abs(dAngle); // Not strictly dv, but injector load
+                    stats.injectors.lastInjector = 'MicroDrift';
+                }
+            }
         }
     }
 
@@ -139,37 +154,11 @@ export const integrateNodes = (
         node.prevFx = node.fx;
         node.prevFy = node.fy;
 
-        // TEMPORAL DECOHERENCE: deterministic dt skew during early expansion
-        // Breaks time symmetry so equilibrium cannot form
-        let nodeDt = dt;
-        if (!preRollActive && earlyExpansion) {
-            // Hash-based dt skew: ±3% variation
-            let hash = 0;
-            for (let i = 0; i < node.id.length; i++) {
-                hash = ((hash << 5) - hash) + node.id.charCodeAt(i);
-                hash |= 0;
-            }
-            const skew = (Math.abs(hash) % 100) / 100; // 0-1
+        // FIXED: Single Clock consistency. No per-node DT skew.
+        // Temporal Decoherence removed to prevent leak/jitter.
+        const nodeDt = dt;
 
-            // FIX #15: CONSTRAINED DT SKEW
-            // Reduced max skew from ±3% to ±1% for better determinism.
-            // Disabled entirely if node is interacting (dragged) to ensure hand authority.
-            // FIX #21: TEMPORAL COHERENCE
-            // Default to uniform DT (skew=0) to prevent cluster drift.
-            // Only enable skew if debug is active for stress testing.
-            const isInteracting = node.id === engine.draggedNodeId;
-            const skewMagnitude = (engine.config.debugPerf && !isInteracting) ? 0.02 : 0;
-
-            const dtMultiplier = (1.0 - skewMagnitude) + skew * (2 * skewMagnitude); // 0.98 to 1.02
-            nodeDt = dt * dtMultiplier;
-
-            // Track min/max for debug (first 10 frames)
-            if (engine.frameIndex <= 10) {
-                if (!stats.dtSkew) stats.dtSkew = { min: Infinity, max: -Infinity };
-                stats.dtSkew.min = Math.min(stats.dtSkew.min, nodeDt);
-                stats.dtSkew.max = Math.max(stats.dtSkew.max, nodeDt);
-            }
-        }
+        // (Original code removed: Skew logic was here)
 
         // Update Velocity (with temporal decoherence)
         applyBaseIntegration(node, ax, ay, nodeDt);
@@ -187,7 +176,7 @@ export const integrateNodes = (
 
         // Clamp Velocity
         const velocityCap = preRollActive ? 8.0 : maxVelocityEffective;
-        if (clampVelocity(node, velocityCap)) {
+        if (clampVelocity(node, velocityCap, dt)) {
             clampHitCount++;
         }
 

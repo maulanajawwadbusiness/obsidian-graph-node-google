@@ -102,17 +102,43 @@ export const applyCorrectionsWithDiffusion = (
         }
 
         // FIX 11: DIFFUSION PRESSURE GATE
-        // Only diffuse if there is significant local pressure.
-        // FIX 34: Invisible Settling (Energy Gate)
-        // Disable diffusion at low energy to prevent visible "relaxation" or creep.
-        const diffusionThreshold = 0.5; // px per frame
-        const enableDiffusion = totalMag > diffusionThreshold && policy.diffusion > 0.01;
+        // Stop Diffusion Motor: Gate by settle confidence
+        const settleConfidence = policy.settleScalar || 0;
+        const diffusionSettleGate = Math.pow(1 - settleConfidence, 2); // 0.0 at rest
+
+        const magScalar = Math.min(1, Math.max(0, (totalMag - 0.2) / 0.6));
+        const enableDiffusion = magScalar > 0.01 &&
+            policy.diffusion > 0.01 &&
+            diffusionSettleGate > 0.01;
+
+        // Scale diffusion strength by our confidence
+        // If system is degraded, we might want to reduce diffusion neighbors? 
+        // For now, enableDiffusion is just a gate.
+
 
         // FIX 17: Track budget hits/Residuals
         let clipped = false;
-        if (totalMag > nodeBudget) {
+
+        // ADAPTIVE CAP (Fix 46)
+        // If node was clipped recently, give it a temporary bonus.
+        // This prevents "persistent twitching" by allowing release.
+        if (node.correctionClipped && node.correctionClipped > 1.0) {
+            // Boost budget for next frame
+            node.budgetBonus = Math.min((node.budgetBonus || 0) + nodeBudget * 0.1, nodeBudget * 1.0);
+        } else {
+            // Decay bonus
+            node.budgetBonus = (node.budgetBonus || 0) * 0.9;
+        }
+
+        const effectiveBudget = nodeBudget + (node.budgetBonus || 0);
+
+        if (totalMag > effectiveBudget) {
             stats.safety.correctionBudgetHits += 1;
+            stats.safety.corrClippedTotal += (totalMag - effectiveBudget);
+            node.correctionClipped = totalMag - effectiveBudget;
             clipped = true;
+        } else {
+            node.correctionClipped = 0;
         }
 
         // Degree-weighted resistance (hubs act heavier)
@@ -124,11 +150,20 @@ export const applyCorrectionsWithDiffusion = (
 
         // Check directional continuity
         let attenuationFactor = 1.0;
+        let signFlip = false;
+
         if (node.lastCorrectionDir) {
             const dot = newDir.x * node.lastCorrectionDir.x + newDir.y * node.lastCorrectionDir.y;
-            if (dot < 0) {
+            if (dot < -0.5) { // Significant reversal (>120 deg)
                 attenuationFactor = 0.2;
+                signFlip = true;
+                node.corrSignFlip = true;
+                stats.corrSignFlipCount++;
+            } else {
+                node.corrSignFlip = false;
             }
+        } else {
+            node.corrSignFlip = false;
         }
 
         // PHASE-AWARE HUB INERTIA
@@ -137,7 +172,7 @@ export const applyCorrectionsWithDiffusion = (
         const hubInertiaScale = 1 - (hubFactor * inertiaStrength * policy.hubInertiaBlend);
 
         // Clamp to budget and apply attenuation + degree scaling + hub inertia
-        const budgetScale = Math.min(1, nodeBudget / totalMag);
+        const budgetScale = Math.min(1, effectiveBudget / totalMag);
         const scale = budgetScale * attenuationFactor * degreeScale * hubInertiaScale;
 
         const corrDx = accDx * scale;
@@ -184,12 +219,22 @@ export const applyCorrectionsWithDiffusion = (
                 // Decay debt (0.8) to prevent explosion
                 // FIX 35: Bounded Debt (Snap to Zero)
                 // If residual is small, kill it immediately to prevent long-tail "ghost movement".
-                const residualDx = remDx * 0.8;
-                const residualDy = remDy * 0.8;
+                // FIX 40: Over-constraint Relaxation
+                // If we are heavily clipping (budgetScale small), we must decay debt faint faster
+                // to prevent accumulation of "impossible" constraints.
+                // budgetScale = 1.0 (no clip) -> decay 0.8
+                // budgetScale = 0.1 (hard clip) -> decay 0.5 (flush it out)
+                const decayBase = 0.8;
+                const decay = budgetOnlyScale < 0.5 ? 0.5 : decayBase;
+
+                const residualDx = remDx * decay;
+                const residualDy = remDy * decay;
                 const resMag = Math.sqrt(residualDx * residualDx + residualDy * residualDy);
 
                 if (resMag > 0.5) {
                     node.correctionResidual = { dx: residualDx, dy: residualDy };
+                    // Track global debt
+                    stats.safety.debtTotal += resMag;
                 } else {
                     node.correctionResidual = undefined;
                 }
@@ -201,6 +246,26 @@ export const applyCorrectionsWithDiffusion = (
         } else {
             node.correctionResidual = undefined;
         }
+
+        // Helper: Reconcile Velocity (Ghost Velocity Fix - Strategy A: History Follow)
+        // Principle: Positional corrections are teleports to valid state.
+        // They should NOT affect momentum (v).
+        const reconcile = (_nx: number, _ny: number) => {
+            // Original "reconcile" added v += dx/dt, which created kinetic energy from PBD.
+            // We now DISABLE this injection to stop ghost velocity.
+
+            /* GHOST VELOCITY FIX: DISABLED
+            if (diffusionSettleGate < 0.01) return;
+            const vxImplicit = nx / dt;
+            const vyImplicit = ny / dt;
+            const vMag = Math.sqrt(vxImplicit * vxImplicit + vyImplicit * vyImplicit);
+            const maxReconcileSpeed = 500;
+            let safeScale = 1.0;
+            if (vMag > maxReconcileSpeed) safeScale = maxReconcileSpeed / vMag;
+            node.vx += vxImplicit * safeScale * diffusionSettleGate;
+            node.vy += vyImplicit * safeScale * diffusionSettleGate;
+            */
+        };
 
         // DIFFUSION: split correction between self and neighbors
         // FIX 11: Gate diffusion by pressure threshold
@@ -216,9 +281,15 @@ export const applyCorrectionsWithDiffusion = (
             const neighborShare = neighborShareTotal / degree;
 
             // Self gets share
-            node.x += corrDx * selfShare;
-            node.y += corrDy * selfShare;
-            passStats.correction += Math.sqrt((corrDx * selfShare) ** 2 + (corrDy * selfShare) ** 2);
+            const selfDx = corrDx * selfShare;
+            const selfDy = corrDy * selfShare;
+            node.x += selfDx;
+            node.y += selfDy;
+            if (node.prevX !== undefined) node.prevX += selfDx;
+            if (node.prevY !== undefined) node.prevY += selfDy;
+            reconcile(selfDx, selfDy);
+
+            passStats.correction += Math.sqrt(selfDx ** 2 + selfDy ** 2);
             affected.add(node.id);
 
             // Neighbors get share
@@ -243,6 +314,10 @@ export const applyCorrectionsWithDiffusion = (
             // Single connection - apply full correction
             node.x += corrDx;
             node.y += corrDy;
+            if (node.prevX !== undefined) node.prevX += corrDx;
+            if (node.prevY !== undefined) node.prevY += corrDy;
+            reconcile(corrDx, corrDy);
+
             passStats.correction += Math.sqrt(corrDx * corrDx + corrDy * corrDy);
             affected.add(node.id);
         }
@@ -287,9 +362,14 @@ export const applyCorrectionsWithDiffusion = (
                     // Apply local damping to diffusion reception
                     const diffScale = Math.min(1, nodeBudget / diffMag) * localDamping;
 
-                    node.x += diff.dx * diffScale;
-                    node.y += diff.dy * diffScale;
-                    passStats.correction += Math.sqrt((diff.dx * diffScale) ** 2 + (diff.dy * diffScale) ** 2);
+                    const dbx = diff.dx * diffScale;
+                    const dby = diff.dy * diffScale;
+                    node.x += dbx;
+                    node.y += dby;
+                    if (node.prevX !== undefined) node.prevX += dbx;
+                    if (node.prevY !== undefined) node.prevY += dby;
+
+                    passStats.correction += Math.sqrt(dbx ** 2 + dby ** 2);
                     affected.add(node.id);
                     const diffusionOpposesVelocity = (diff.dx * node.vx + diff.dy * node.vy) < 0;
                     if (diffusionOpposesVelocity) {

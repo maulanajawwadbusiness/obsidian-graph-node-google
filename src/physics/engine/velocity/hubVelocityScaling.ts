@@ -17,7 +17,7 @@ export const applyHubVelocityScaling = (
     if (nodeDeg > 2) {
         // DENSE-CORE DAMPING BYPASS
         // During early expansion, skip damping for nodes in dense clusters
-        const denseBypass = policy.denseBypass;
+        const denseBypass = policy.earlyExpansion;
         let isDense = false;
 
         if (denseBypass > 0.01) {

@@ -715,10 +715,7 @@ export const createHoverController = ({
 
                 if (changed || (now - last > 1000)) {
                     (hoverStateRef.current as any).lastResultLog = now;
-                    const camera = cameraRef.current;
-                    const engine = engineRef.current;
-                    const centroid = engine ? engine.getCentroid() : { x: 0, y: 0 };
-                    const angle = engine ? engine.getGlobalAngle() : 0;
+                    // (Unused vars removed)
                     console.log(
                         `hover: ${hoverStateRef.current.lastLoggedId} -> ${newHoveredId} ` +
                         `(dist=${nextDist.toFixed(1)}, r=${nextRenderedRadius.toFixed(1)}, ` +

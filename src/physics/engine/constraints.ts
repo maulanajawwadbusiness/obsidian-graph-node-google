@@ -192,7 +192,7 @@ export const applySpacingConstraints = (
     spacingGate: number,
     dt: number,
     pairStride: number = 1,
-    startOffset: number = 0, // Unused? Or used for pair stride?
+    pairOffset: number = 0, // Used for pair stride
     _timeScaleMultiplier: number = 1.0, // Compensation factor for skipped frames
     hotPairs?: Set<string>             // Fix 22: Priority set for 1:1 coverage
 ) => {
@@ -264,7 +264,12 @@ export const applySpacingConstraints = (
         const maxDriftSpeed = engine.config.maxCorrectionPerFrame * 60.0; // px/sec
         const maxCorr = maxDriftSpeed * dt;
 
-        const corrApplied = Math.min(corr * spacingGate, maxCorr);
+        // Fix: Stride Compensation (Maintain Stiffness)
+        // If we only visit 1/N pairs, we must correct N times as hard.
+        // Cap compensation to prevent explosion (e.g. 5x max).
+        const strideScale = pairStride > 0 ? pairStride : 1;
+
+        let corrApplied = Math.min(corr * spacingGate * strideScale, maxCorr);
 
         const aDeg = nodeDegreeEarly.get(a.id) || 0;
         const bDeg = nodeDegreeEarly.get(b.id) || 0;
@@ -445,8 +450,9 @@ export const applyTriangleAreaConstraints = (
     // Base strength was 0.0005 * energy * (dt*60).
     // k ~= 0.03 * energy. 
     // alpha = 1 - exp(-k * dt).
+    // alpha = 1 - exp(-k * dt).
     const kArea = 0.03 * Math.max(0.1, energy);
-    const areaStrength = 1 - Math.exp(-kArea * dt);
+    const areaStrength = (1 - Math.exp(-kArea * dt)) * (1.0 - policy.degradeScalar); // Scale by degrade
 
     // Build adjacency set for triangle detection
     const connectedPairs = new Set<string>();

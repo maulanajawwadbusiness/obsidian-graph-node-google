@@ -43,8 +43,10 @@ export class GradientCache {
 
         // LRU: Evict oldest if full
         if (this.cache.size >= this.maxCacheSize) {
-            const oldestKey = this.cache.keys().next().value;
-            this.cache.delete(oldestKey);
+            const result = this.cache.keys().next();
+            if (!result.done) {
+                this.cache.delete(result.value);
+            }
         }
 
         this.cache.set(key, grad);
@@ -56,16 +58,7 @@ export class GradientCache {
         return stops.map(s => `${s.offset.toFixed(2)}:${s.color}`).join('|');
     }
 
-    private checkSize() {
-        if (this.cache.size > this.maxCacheSize) {
-            // Simple clear. LRU is overkill for this specific frame-loop pattern 
-            // where the working set is usually usually small (N varieties of glow).
-            // If we have >2000 variations, we have bigger problems.
-            this.cache.clear();
-            // Optionally log?
-            // console.warn('[GradientCache] Flush');
-        }
-    }
+    // (checkSize removed - unused)
 
     public clear() {
         this.cache.clear();

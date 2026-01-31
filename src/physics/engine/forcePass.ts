@@ -2,6 +2,7 @@ import type { PhysicsEngine } from '../engine';
 import type { PhysicsNode } from '../types';
 import { applyRepulsion, applySprings, applyBoundaryForce, applyCollision } from '../forces';
 import { getPassStats, type DebugStats } from './stats';
+import { pseudoRandom } from './random';
 
 export const applyForcePass = (
     engine: PhysicsEngine,
@@ -62,8 +63,14 @@ export const applyForcePass = (
             let dx = target.x - source.x;
             let dy = target.y - source.y;
             if (dx === 0 && dy === 0) {
-                dx = (Math.random() - 0.5) * 0.1;
-                dy = (Math.random() - 0.5) * 0.1;
+                // DETERMINISTIC SINGULARITY GUARD
+                // Use listIndex if available, else id length
+                const sIdx = source.listIndex || source.id.length;
+                const tIdx = target.listIndex || target.id.length;
+                const seed = (frameIndex || 0) * 1000 + sIdx * 37 + tIdx;
+
+                dx = (pseudoRandom(seed) - 0.5) * 0.1;
+                dy = (pseudoRandom(seed + 1) - 0.5) * 0.1;
             }
             const d = Math.sqrt(dx * dx + dy * dy);
             const restLength = engine.config.linkRestLength;
@@ -76,10 +83,16 @@ export const applyForcePass = (
             const fy = (dy / d) * forceMagnitude;
 
             // Hub scaling: degree >= 3 gets 25% of spring force, fading back to 100%
-            const sourceDeg = preRollDegree.get(link.source) || 0;
-            const targetDeg = preRollDegree.get(link.target) || 0;
-            const sourceHubScale = sourceDeg >= 3 ? (0.25 + 0.75 * topologyFade) : 1.0;
-            const targetHubScale = targetDeg >= 3 ? (0.25 + 0.75 * topologyFade) : 1.0;
+            // Hub scaling: Continuous blend based on hubStrength
+            // degree >= 3 equivalent logic: hubStrength > ~0.15
+            // Target: Linear blend from 1.0 down to (0.25 + ...) as strength goes 0 -> 1
+            const sourceHubStr = source.hubStrength || 0;
+            const targetHubStr = target.hubStrength || 0;
+
+            const minScale = 0.25 + 0.75 * topologyFade;
+            // lerp(1.0, minScale, strength)
+            const sourceHubScale = 1.0 + (minScale - 1.0) * sourceHubStr;
+            const targetHubScale = 1.0 + (minScale - 1.0) * targetHubStr;
 
             if (!source.isFixed) {
                 source.fx += fx * sourceHubScale;
@@ -111,16 +124,17 @@ export const applyForcePass = (
         // Precompute which nodes are in "null-force" state
         const isNullForce = new Map<string, boolean>();
         for (const node of nodeList) {
-            const deg = preRollDegree.get(node.id) || 0;
+            // hubStrength > 0.15 corresponds approx to degree >= 3
+            // We use the continuous metric heavily smoothed in engineTick
+            const isHub = (node.hubStrength || 0) > 0.15;
             const fMag = Math.sqrt(node.fx * node.fx + node.fy * node.fy);
-            isNullForce.set(node.id, deg >= 3 && fMag < epsilon);
+            isNullForce.set(node.id, isHub && fMag < epsilon);
         }
 
         for (const node of nodeList) {
             if (node.isFixed) continue;
 
-            const deg = preRollDegree.get(node.id) || 0;
-            if (deg < 3) continue;  // Only hubs
+            if ((node.hubStrength || 0) < 0.15) continue;  // Only hubs
 
             const fMag = Math.sqrt(node.fx * node.fx + node.fy * node.fy);
             if (fMag >= epsilon) continue;  // Has meaningful force, no bias needed

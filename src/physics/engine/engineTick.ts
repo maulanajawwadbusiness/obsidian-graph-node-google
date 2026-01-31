@@ -77,6 +77,7 @@ export type PhysicsEngineTickContext = {
         topologySkipped: number;
         topologyDuplicates: number;
     };
+    nodeLinkCounts: Map<string, number>;
     perfTiming: {
         lastReportAt: number;
         frameCount: number;
@@ -102,6 +103,21 @@ export type PhysicsEngineTickContext = {
     debugDisableDiffusion?: boolean;
     debugDisableMicroSlip?: boolean;
     debugDisableRepulsion?: boolean;
+    debugDisableConstraints?: boolean;
+    firewallStats: {
+        nanResets: number;
+        velClamps: number;
+        dtClamps: number;
+    };
+    firewallStats: {
+        nanResets: number;
+        velClamps: number;
+        dtClamps: number;
+    };
+    timePolicy: import('./dtPolicy').TimePolicy;
+    // Rest Logic
+    settleConfidence: number; // 0.0 (Active) to 1.0 (Calm)
+    stateFlipTracking: { count: number; lastFlipMs: number; windowStartMs: number; flipHistory: number[] };
 };
 
 const computePairStride = (nodeCount: number, targetChecks: number, maxStride: number) => {
@@ -130,7 +146,62 @@ export const runPhysicsTick = (engine: PhysicsEngineTickContext, dtIn: number) =
     let maxSpeedSq = 0;
     let velClampCount = 0;
 
+    // Law Pop Diagnostics
+    let frameHubFlips = 0;
+    let frameHubNodeCount = 0;
+
+    // Micro-Slip Diagnostics
+    let frameStuckScoreSum = 0;
+
     for (const node of nodeList) {
+        // Ghost Velocity Forensic: Snapshot history
+        node.prevX = node.x;
+        node.prevY = node.y;
+
+        // DISCRETE -> CONTINUOUS HUB TRANSITION
+        // Compute hubStrength based on degree (Continuous)
+        // degree < 3: 0.0
+        // degree > 6: 1.0
+        // Smoothstep in between.
+        const deg = engine.nodeLinkCounts.get(node.id) || 0;
+        // smoothstep(edge0, edge1, x)
+        const tHub = Math.max(0, Math.min(1, (deg - 2) / (6 - 2)));
+        const targetHubStrength = tHub * tHub * (3 - 2 * tHub);
+
+        const prevStrength = node.hubStrength ?? targetHubStrength;
+        // Temporal Smoothing (avoid flicker)
+        node.hubStrength = prevStrength * 0.9 + targetHubStrength * 0.1;
+
+        // Track Flips (Diagnostic only - physics does not use this boolean)
+        // Check if we crossed 0.5 threshold (Arbitrary "Hub" definition for stats)
+        const wasHub = node.wasHub ?? (prevStrength > 0.5);
+        const isHub = node.hubStrength > 0.5;
+
+        if (isHub) frameHubNodeCount++;
+        if (wasHub !== isHub) frameHubFlips++;
+        node.wasHub = isHub;
+
+        // MICRO-SLIP: Compute Stuck Score (True Stuckness)
+        // Stuck = Low Speed AND (High Pressure OR High Conflict)
+        const vSq = node.vx * node.vx + node.vy * node.vy;
+        const speed = Math.sqrt(vSq);
+
+        // 1. Calm Factor: 1.0 at rest, 0.0 at > 1.0 px/frame
+        const calmFactor = Math.max(0, 1.0 - speed / 1.0);
+
+        // 2. Pressure Factor: 0.0 at 0 pressure, 1.0 at > 2.0 px/frame correction
+        const lastCorr = node.lastCorrectionMag || 0;
+        const pressureFactor = Math.min(1.0, lastCorr / 2.0);
+
+        // 3. Combined Score
+        node.stuckScore = calmFactor * pressureFactor;
+
+        // Dragging overrides (never stuck while dragged)
+        if (node.id === engine.draggedNodeId || node.isFixed) {
+            node.stuckScore = 0;
+        }
+        frameStuckScoreSum += node.stuckScore;
+
         const finiteX = Number.isFinite(node.x);
         const finiteY = Number.isFinite(node.y);
         const finiteVx = Number.isFinite(node.vx);
@@ -162,6 +233,9 @@ export const runPhysicsTick = (engine: PhysicsEngineTickContext, dtIn: number) =
                 node.vx = 0;
                 node.vy = 0;
             }
+            // HISTORY FIX: Teleport history to match new position (kill phantom velocity)
+            node.prevX = node.x;
+            node.prevY = node.y;
             node.fx = 0;
             node.fy = 0;
             continue;
@@ -202,13 +276,23 @@ export const runPhysicsTick = (engine: PhysicsEngineTickContext, dtIn: number) =
         }
     }
 
-    // Input DT clamping
-    let dt = dtIn;
-    const maxDt = Math.min(isStartup ? 0.032 : 0.064, engine.config.maxFrameDeltaMs / 1000);
-    if (dt > maxDt) {
-        dt = maxDt;
+    // CONST Time Hardening (DT Policy)
+    const policyResult = engine.timePolicy.evaluate(dtIn * 1000);
+    const dt = policyResult.dtUseSec;
+    const dtRawMs = dtIn * 1000;
+
+    // Update Firewall Stats from Policy
+    if (policyResult.isSpike) {
         engine.firewallStats.dtClamps += 1;
         if (isStartup) engine.startupStats.dtClamps++;
+    }
+
+    // Forensics to HUD
+    if (engine.hudSnapshot) {
+        engine.hudSnapshot.dtRawMs = dtRawMs;
+        engine.hudSnapshot.dtUseMs = policyResult.dtUseMs;
+        engine.hudSnapshot.dtSpikeCount = policyResult.spikeCount;
+        engine.hudSnapshot.quarantineStrength = policyResult.quarantineStrength;
     }
 
 
@@ -225,6 +309,10 @@ export const runPhysicsTick = (engine: PhysicsEngineTickContext, dtIn: number) =
     }
 
     const debugStats = createDebugStats();
+    debugStats.hubFlipCount = frameHubFlips;
+    debugStats.hubNodeCount = frameHubNodeCount;
+    debugStats.injectors.stuckScoreSum = frameStuckScoreSum;
+
     const perfEnabled = engine.config.debugPerf === true;
     const allocCounter = perfEnabled ? { newEntries: 0 } : undefined;
     const frameTiming = perfEnabled
@@ -290,20 +378,78 @@ export const runPhysicsTick = (engine: PhysicsEngineTickContext, dtIn: number) =
 
     const updateHudSnapshot = (
         nowMs: number,
+        dtMs: number, // Pass dt for velocity checks
         nodes: PhysicsNode[],
         stats: DebugStats,
         settleStateOverride?: PhysicsHudSnapshot['settleState']
     ) => {
         const nodeCount = nodes.length || 1;
         let avgVelSq = 0;
+        let maxPrevGap = 0;
+        let ghostVelSuspectCount = 0;
+
         for (const node of nodes) {
             avgVelSq += node.vx * node.vx + node.vy * node.vy;
+
+            if (node.prevX !== undefined && node.prevY !== undefined) {
+                const dx = node.x - node.prevX;
+                const dy = node.y - node.prevY;
+                const gap = Math.sqrt(dx * dx + dy * dy);
+                if (gap > maxPrevGap) maxPrevGap = gap;
+
+                // VERIFICATION: Check Verlet Consistency
+                // (x - prev)/dt should equal v
+                // Diff = |(dx/dt) - v|
+                const dtSec = dtMs / 1000;
+                if (dtSec > 0.000001) {
+                    const vxImplied = dx / dtSec;
+                    const vyImplied = dy / dtSec;
+                    const vDiffX = vxImplied - node.vx;
+                    const vDiffY = vyImplied - node.vy;
+                    const mismatch = Math.sqrt(vDiffX * vDiffX + vDiffY * vDiffY);
+
+                    node.historyMismatch = mismatch;
+                    // Threshold: 10 px/s mismatch is suspicious?
+                    // Actually, with float errors, usage of floats -> maybe 1.0?
+                    if (mismatch > 50.0) ghostVelSuspectCount++;
+                }
+            }
         }
         avgVelSq /= nodeCount;
 
         const corrections = stats.passes.Corrections?.correction ?? 0;
         const jitterSample = nodeCount > 0 ? corrections / nodeCount : 0;
         const conflictFrame = stats.correctionConflictCount > 0;
+
+        stats.safety.correctionBudgetHits = 0;
+        stats.safety.corrClippedTotal = 0;
+        stats.safety.debtTotal = 0;
+        stats.correctionConflictCount = 0;
+        stats.corrSignFlipCount = 0;
+        // restFlapCount is accumulated over a window, or per frame?
+        // Let's reset it here if it's per-frame, but we want a rate.
+        // Actually, restFlapCount should be incremented when state changes.
+        // We will reset the accumulator for the snapshot, but we need persistent tracking.
+        // Let's reset per frame and use HUD history to smooth it?
+        // Or accumulating over 1s?
+        // Let's reset it here, and logic below will increment it.
+        stats.restFlapCount = 0;
+
+        stats.corrSignFlipCount = 0;
+        stats.restFlapCount = 0;
+
+        stats.safety.minPairDist = 99999;
+        stats.safety.nearOverlapCount = 0;
+        stats.safety.repulsionMaxMag = 0;
+        stats.safety.repulsionClampedCount = 0;
+
+        // Law Pop Stats Copy
+        stats.neighborReorderRate = stats.neighborReorderRate || 0;
+        stats.hubFlipCount = stats.hubFlipCount || 0;
+        stats.degradeFlipCount = stats.degradeFlipCount || 0;
+        stats.lawPopScore = stats.lawPopScore || 0;
+        stats.hubNodeCount = stats.hubNodeCount || 0;
+
 
         const pruneWindow = <T extends { t: number }>(arr: T[], windowMs: number) => {
             const cutoff = nowMs - windowMs;
@@ -329,23 +475,50 @@ export const runPhysicsTick = (engine: PhysicsEngineTickContext, dtIn: number) =
             ? jitterSamples.reduce((sum, sample) => sum + sample.value, 0) / jitterSamples.length
             : 0;
 
-        let settleState: PhysicsHudSnapshot['settleState'];
-        if (settleStateOverride) {
-            settleState = settleStateOverride;
-        } else if (avgVelSq > 0.25) {
-            settleState = 'moving';
-        } else if (avgVelSq > 0.04) {
-            settleState = 'cooling';
-        } else if (avgVelSq > 0.0004) {
-            settleState = 'microkill';
+        // FIX: Rest Hysteresis (Schmitt Trigger) to prevent flapping
+        // Define Thresholds
+        const T_Micro = 0.0004;
+        const T_Cool = 0.04;
+        const T_Move = 0.25;
+
+        // Hysteresis Gap (e.g. 20% buffer)
+        const H = 1.2; // Exit threshold multiplier
+
+        // Current state
+        const current = engine.hudSettleState;
+        let next = current;
+
+        // State Machine with Hysteresis
+        if (current === 'microkill') {
+            if (avgVelSq > T_Micro * H) next = 'cooling';
+            if (avgVelSq > T_Move) next = 'moving'; // Fast Escalation
+        } else if (current === 'cooling') {
+            if (avgVelSq < T_Micro) next = 'microkill'; // Enter micro
+            if (avgVelSq > T_Cool * H) next = 'moving'; // Exit cooling
+        } else if (current === 'moving') {
+            if (avgVelSq < T_Cool) next = 'cooling'; // Enter cooling
+        } else if (current === 'sleep') {
+            // Wake up
+            if (avgVelSq > T_Micro) next = 'microkill'; // Any motion wakes
         } else {
-            settleState = 'microkill';
+            next = 'moving'; // Default
         }
 
-        if (settleState !== engine.hudSettleState) {
-            engine.hudSettleState = settleState;
+        if (settleStateOverride) next = settleStateOverride;
+
+        if (next !== current) {
+            engine.hudSettleState = next;
             engine.hudSettleStateAt = nowMs;
+
+            // Flap Detection: Logic
+            // If we switch Micro <-> Cooling rapidly, that's a flap.
+            // Check last switch time.
+            if (nowMs - engine.hudSettleStateAt < 500) { // < 500ms duration
+                stats.restFlapCount++;
+            }
         }
+
+        const settleState = engine.hudSettleState;
 
         engine.hudSnapshot = {
             degradeLevel: engine.degradeLevel,
@@ -360,6 +533,50 @@ export const runPhysicsTick = (engine: PhysicsEngineTickContext, dtIn: number) =
             startupInfCount: engine.startupStats.infCount,
             startupMaxSpeed: engine.startupStats.maxSpeed,
             startupDtClamps: engine.startupStats.dtClamps,
+
+            // Fix: DT Consistency & Coverage Diagnostics
+            dtSkewMaxMs: stats.dtSkew ? (stats.dtSkew.max - stats.dtSkew.min) * 1000 : 0, // Convert to ms
+            perDotUpdateCoveragePct: spacingStride > 1 ? (100 / spacingStride) : 100, // Approximate based on stride
+            coverageMode: spacingStride > 1 ? 'strided' : 'full',
+            coverageStride: spacingStride,
+            ageMaxFrames: spacingStride, // If stride is N, worst case is N frames
+            ageP95Frames: spacingStride,
+
+            // Ghost Velocity Forensics
+            maxPrevGap,
+            maxPosDeltaConstraints: jitterSample, // Consolidating with existing "jitter" metric for now
+            ghostVelSuspectCount,
+
+            // Degeneracy
+            degenerateTriangleCount: stats.degenerateTriangleCount,
+            correctionBudgetHits: stats.safety.correctionBudgetHits,
+            corrClippedTotal: stats.safety.corrClippedTotal,
+            debtTotal: stats.safety.debtTotal,
+            orderMode: 'rotated', // Since we implemented rotation
+
+            // Oscillation
+            corrSignFlipRate: nodeCount > 0 ? (stats.corrSignFlipCount / nodeCount) * 100 : 0,
+            restFlapRate: stats.restFlapCount,
+
+            // Singularity
+            minPairDist: stats.safety.minPairDist === 99999 ? 0 : stats.safety.minPairDist,
+            nearOverlapCount: stats.safety.nearOverlapCount,
+            repulsionMaxMag: stats.safety.repulsionMaxMag,
+            repulsionClampedCount: stats.safety.repulsionClampedCount,
+
+            // Forensics
+            neighborReorderRate: stats.neighborReorderRate,
+            hubFlipCount: stats.hubFlipCount,
+            degradeFlipCount: stats.degradeFlipCount,
+            lawPopScore: stats.lawPopScore,
+            hubNodeCount: stats.hubNodeCount,
+
+            // Micro-Slip Forensics
+            microSlipCount: stats.injectors.microSlipCount,
+            microSlipFiresPerSec: stats.injectors.microSlipFires * (1000 / dtMs), // Instantaneous rate
+            stuckScoreAvg: nodeCount > 0 ? (stats.injectors.stuckScoreSum / nodeCount) : 0,
+            lastInjector: stats.injectors.lastInjector,
+            driftCount: stats.injectors.driftCount,
         };
     };
 
@@ -413,7 +630,11 @@ export const runPhysicsTick = (engine: PhysicsEngineTickContext, dtIn: number) =
     // =====================================================================
     // 1. MOTION POLICY (The "Brain")
     // =====================================================================
-    const { energy, forceScale, effectiveDamping, maxVelocityEffective } = computeEnergyEnvelope(engine.lifecycle);
+    const { energy, forceScale: rawForceScale, effectiveDamping, maxVelocityEffective } = computeEnergyEnvelope(engine.lifecycle);
+
+    // Quarantine: Dampen forces during spike to prevent explosion
+    const forceScale = rawForceScale * (1.0 - (policyResult.quarantineStrength * 0.5));
+
     const allowEarlyExpansion = engine.config.initStrategy === 'legacy' && engine.config.debugAllowEarlyExpansion === true;
     const motionPolicy = createMotionPolicy(energy, engine.degradeLevel, avgVelSq, allowEarlyExpansion);
 
@@ -427,7 +648,7 @@ export const runPhysicsTick = (engine: PhysicsEngineTickContext, dtIn: number) =
                 node.vx = 0; node.vy = 0;
                 node.fx = 0; node.fy = 0;
             }
-            updateHudSnapshot(getNowMs(), nodeList, debugStats, 'sleep');
+            updateHudSnapshot(getNowMs(), dtRawMs, nodeList, debugStats, 'sleep');
             return;
         }
     } else if (engine.lifecycle < 2.0 && motionPolicy.settleScalar < 0.99) {
@@ -448,7 +669,9 @@ export const runPhysicsTick = (engine: PhysicsEngineTickContext, dtIn: number) =
 
     // Impulse Logic (Quarantined)
     if (allowLegacyStart && !preRollActive && engine.lifecycle < 0.1 && !engine.hasFiredImpulse) {
-        engine.requestImpulse();
+        if (policyResult.quarantineStrength < 0.5) {
+            engine.requestImpulse();
+        }
     }
 
     advanceEscapeWindow(engine as any);
@@ -659,7 +882,7 @@ export const runPhysicsTick = (engine: PhysicsEngineTickContext, dtIn: number) =
         engine.sleepingList,
         forceScale,
         dt,
-        debugStats,
+        debugStats, // This is already passed as 7th arg. Check applyForcePass definition!
         preRollActive,
         energy,
         engine.frameIndex,
@@ -703,7 +926,9 @@ export const runPhysicsTick = (engine: PhysicsEngineTickContext, dtIn: number) =
     }
 
     const microEnabled = engine.frameIndex % microEvery === 0;
-    if (microEnabled && !engine.config.debugDisableAllVMods) {
+    const quarantineActive = policyResult.quarantineStrength > 0.5;
+
+    if (microEnabled && !engine.config.debugDisableAllVMods && !quarantineActive) {
         if (!engine.config.debugDisableMicroSlip) {
             // Dense-core velocity de-locking (micro-slip) - breaks rigid-body lock
             applyDenseCoreVelocityDeLocking(engine as any, nodeList, motionPolicy, debugStats);
@@ -797,9 +1022,10 @@ export const runPhysicsTick = (engine: PhysicsEngineTickContext, dtIn: number) =
                     1,
                     pairOffset + 5
                 );
+
             }
-            const triangleEnabled = (engine.perfMode === 'normal' || engine.perfMode === 'stressed') &&
-                engine.frameIndex % triangleEvery === 0;
+            // Fix: Law Continuity - Always run triangle pass, but scale strength internally
+            const triangleEnabled = engine.frameIndex % triangleEvery === 0;
             if (triangleEnabled) {
                 applyTriangleAreaConstraints(engine as any, nodeList, correctionAccum, nodeDegreeEarly, energy, motionPolicy, debugStats, dt);
             }
@@ -844,6 +1070,24 @@ export const runPhysicsTick = (engine: PhysicsEngineTickContext, dtIn: number) =
         const reconcileDisabled = !!engine.config.debugDisableReconcile;
         const maxDiffusionNeighbors = engine.degradeLevel === 0 ? undefined : engine.degradeLevel === 1 ? 4 : 2;
 
+        // FORENSICS: Snapshot Position/Velocity before Corrections
+        let maxPosDeltaConstraint = 0;
+        let maxVelDeltaConstraint = 0;
+        let maxPrevGap = 0;
+        const captureForensics = !engine.config.debugDisableConstraints && engine.frameIndex % 4 === 0;
+        // reuse cache if possible, or just alloc (it's debug only)
+        const forensicSnapshot = captureForensics ? new Float64Array(nodeList.length * 4) : null;
+
+        if (forensicSnapshot) {
+            for (let i = 0; i < nodeList.length; i++) {
+                const n = nodeList[i];
+                forensicSnapshot[i * 4 + 0] = n.x;
+                forensicSnapshot[i * 4 + 1] = n.y;
+                forensicSnapshot[i * 4 + 2] = n.vx;
+                forensicSnapshot[i * 4 + 3] = n.vy;
+            }
+        }
+
         if (!engine.config.debugDisableDiffusion && !reconcileDisabled) {
             applyCorrectionsWithDiffusion(
                 engine as any,
@@ -856,7 +1100,52 @@ export const runPhysicsTick = (engine: PhysicsEngineTickContext, dtIn: number) =
                 maxDiffusionNeighbors
             );
         }
+
+        // FORENSICS: Compare After
+        if (forensicSnapshot) {
+            for (let i = 0; i < nodeList.length; i++) {
+                const n = nodeList[i];
+                const prevX = forensicSnapshot[i * 4 + 0];
+                const prevY = forensicSnapshot[i * 4 + 1];
+                const prevVx = forensicSnapshot[i * 4 + 2];
+                const prevVy = forensicSnapshot[i * 4 + 3];
+
+                const dx = n.x - prevX;
+                const dy = n.y - prevY;
+                const dMag = Math.sqrt(dx * dx + dy * dy);
+                if (dMag > maxPosDeltaConstraint) maxPosDeltaConstraint = dMag;
+
+                const dvx = n.vx - prevVx;
+                const dvy = n.vy - prevVy;
+                const duMag = Math.sqrt(dvx * dvx + dvy * dvy);
+                if (duMag > maxVelDeltaConstraint) maxVelDeltaConstraint = duMag;
+
+                // Gap Check (Implicit History vs Actual)
+                // If we assume LastGoodX is "History" (previous frame), Gap is |Pos - PrevPos|
+                // But here we want |Pos - IntegratedPos| ? No, User said |pos - prevPos|.
+                // If 'prevPos' means 'last frame', we use lastGoodX.
+                if (Number.isFinite(n.lastGoodX)) {
+                    const gx = n.x - (n.lastGoodX ?? n.x);
+                    const gy = n.y - (n.lastGoodY ?? n.y);
+                    const gMag = Math.sqrt(gx * gx + gy * gy);
+                    if (gMag > maxPrevGap) maxPrevGap = gMag;
+                }
+            }
+        }
+
         currentEnergy = measureEnergy('PostCorrect', currentEnergy);
+
+        // Populate HUD
+        engine.hudSnapshot.maxPosDeltaConstraint = maxPosDeltaConstraint;
+        engine.hudSnapshot.maxVelDeltaConstraint = maxVelDeltaConstraint;
+        engine.hudSnapshot.maxPrevGap = maxPrevGap;
+        engine.hudSnapshot.postCorrectEnergy = currentEnergy;
+
+        // Injectors
+        engine.hudSnapshot.microSlipCount = debugStats.injectors.microSlipCount;
+        engine.hudSnapshot.driftCount = debugStats.injectors.driftCount;
+        engine.hudSnapshot.lastInjector = debugStats.injectors.lastInjector;
+
         measureFight('PostReconcile'); // Uses stats.conflict count
     }
     if (perfEnabled && frameTiming) {
@@ -889,131 +1178,280 @@ export const runPhysicsTick = (engine: PhysicsEngineTickContext, dtIn: number) =
         }
     }
 
-    // FIX 1: Per-Node Sleep Detection (Canonical)
+    // FIX 1: Per-Node Sleep Detection (Canonical + Adaptive + Forensic)
     // Run after all forces/corrections/integration are final.
-    const restSpeedSq = 0.001;
+
+    // Speed Tracker
+    // (Removed legacy min/max trackers)
+    let fRestCandidates = 0;
+
+    // Breakdown Counters (Failures)
+    let cFailSpeed = 0;
+    let cFailForce = 0;
+    let cFailPressure = 0;
+    let cFailJitter = 0; // if we had a jitter metric
+
+    // ADAPTIVE THRESHOLDS (Step 3)
+    // Scale thresholds by nominal length to work across N=5 to N=250
+    const nominalL = engine.config.linkRestLength || 50;
+    const baseSpeedThresh = nominalL * 0.05; // 5% of link length per second (approx 0.04px/frame @ 60fps)
+    const restSpeedSq = baseSpeedThresh * baseSpeedThresh;
+
+    // Pressure threshold: 2% of link length per frame is a "large" correction
+    const pressureThresh = nominalL * 0.02;
+
+    // Force threshold: F=ma. A force that produces > 10% of restSpeed change in 1 frame
+    // a = F/m. dv = a*dt. dv = (F/m)*dt.
+    // We want dv < restSpeed * 0.1
+    // F/m < (restSpeed * 0.1) / dt
+    // F < m * (restSpeed * 0.1) / dt
+    // Simplified: Force should be negligible.
+    // We'll stick to the implicit ratio check used before relative to gravity/springs
+
     const restFramesRequired = 60;
     let sleepCandidates = 0;
 
     for (const node of nodeList) {
-        // Authority nodes are never sleeping (they are user-controlled)
+        // Authority nodes are never sleeping
         if (node.isFixed || node.id === engine.draggedNodeId) {
             node.sleepFrames = 0;
             node.isSleeping = false;
-            continue;
-        }
 
-        const speedSq = node.vx * node.vx + node.vy * node.vy;
-        if (speedSq < restSpeedSq) {
-            node.sleepFrames = (node.sleepFrames || 0) + 1;
-            sleepCandidates++;
-        } else {
-            node.sleepFrames = 0;
-            node.isSleeping = false;
-        }
+            // =====================================================================
+            // 4. REST DETECTION (Adaptive & Confidence-Based)
+            // =====================================================================
+            const T_Speed = 0.05;  // Relaxed from 0.0001
+            const T_Force = 0.1;
+            const T_Pressure = 0.25;
 
-        if (node.sleepFrames >= restFramesRequired) {
-            node.isSleeping = true;
-        }
-    }
+            let calmCount = 0;
+            const outliers: string[] = [];
+            const blockers: string[] = [];
 
-    // Wire hudSettleState to engine for external access (Fix 2)
-    // (Already satisfied by updateHudSnapshot logic above, but ensure it sticks)
-    if (engine.draggedNodeId && engine.dragTarget) {
-        const node = engine.nodes.get(engine.draggedNodeId);
-        if (node) {
-            const dx = node.x - engine.dragTarget.x;
-            const dy = node.y - engine.dragTarget.y;
-            const lag = Math.sqrt(dx * dx + dy * dy);
-            engine.dragLagSamples.push(lag);
-        }
-    }
+            // Check all nodes
+            for (const node of nodeList) {
+                if (node.isFixed) {
+                    calmCount++;
+                    continue;
+                }
 
-    if (perfEnabled) {
-        const now = getNowMs();
-        if (now - engine.handLogAt >= 1000) {
-            engine.handLogAt = now;
-            let lagP95 = 0;
-            if (engine.dragLagSamples.length > 0) {
-                const sorted = engine.dragLagSamples.slice().sort((a, b) => a - b);
-                const idx = Math.min(sorted.length - 1, Math.floor(sorted.length * 0.95));
-                lagP95 = sorted[idx] ?? 0;
+                const speed = Math.sqrt(node.vx * node.vx + node.vy * node.vy);
+                const force = Math.sqrt(node.fx * node.fx + node.fy * node.fy);
+                const press = node.lastCorrectionMag || 0;
+
+                const isCalm = speed < T_Speed && force < T_Force && press < T_Pressure;
+
+                if (isCalm && node.id !== engine.draggedNodeId) {
+                    calmCount++;
+                    node.sleepFrames = (node.sleepFrames || 0) + 1;
+
+                    // Auto-sleep individual nodes if they are SUPER stable for long time (independent of global state)
+                    if (node.sleepFrames > 120) {
+                        // Optional: node.isSleeping = true; 
+                        // We rely on global sleep for now to avoid waking issues
+                    }
+                } else {
+                    node.sleepFrames = 0;
+                    if (outliers.length < 3) {
+                        outliers.push(node.id); // Sample IDs
+                    }
+                }
             }
-            console.log(
-                `[Hand] dragging=${engine.draggedNodeId ? 'Y' : 'N'} ` +
-                `localBoost=${localBoostActive ? 'Y' : 'N'} ` +
-                `lagP95Px=${lagP95.toFixed(2)}`
-            );
-            engine.dragLagSamples.length = 0;
+
+            // Confidence Update
+            const totalNodes = nodeList.length || 1;
+            const calmPercent = (calmCount / totalNodes) * 100;
+            // We require 95% of nodes to be calm to start building confidence
+            const targetConf = calmPercent >= 95 ? 1.0 : 0.0;
+            const alpha = 0.05; // EMA Speed
+
+            // Init if undefined
+            if (typeof engine.settleConfidence === 'undefined') engine.settleConfidence = 0;
+
+            engine.settleConfidence = engine.settleConfidence * (1 - alpha) + targetConf * alpha;
+
+            // Interaction Overrides
+            // Interaction Overrides
+            if (engine.draggedNodeId) {
+                engine.settleConfidence = 0;
+            }
+
+            // Populate Blockers
+            if (calmPercent < 95) blockers.push(`Calm ${calmPercent.toFixed(1)}% < 95%`);
+            // STATE MACHINE (Single Source of Truth)
+            const current = engine.hudSettleState;
+            let next = current;
+            const conf = engine.settleConfidence;
+
+            // State Ladder
+            if (current === 'moving') {
+                if (conf > 0.5) next = 'cooling';
+            } else if (current === 'cooling') {
+                if (conf > 0.95) next = 'sleep';
+                else if (conf < 0.2) next = 'moving';
+            } else if (current === 'sleep') {
+                if (conf < 0.8) next = 'moving'; // Wake up
+            } else {
+                next = 'moving';
+            }
+
+            // Init flip tracking
+            if (!engine.stateFlipTracking) engine.stateFlipTracking = { count: 0, lastFlipMs: 0, windowStartMs: getNowMs(), flipHistory: [] };
+
+            if (next !== current) {
+                engine.hudSettleState = next;
+                engine.hudSettleStateAt = getNowMs();
+
+                // Track Flip
+                const now = getNowMs();
+                engine.stateFlipTracking.flipHistory.push(now);
+                // Prune old
+                engine.stateFlipTracking.flipHistory = engine.stateFlipTracking.flipHistory.filter(t => now - t < 10000);
+                engine.stateFlipTracking.count = engine.stateFlipTracking.flipHistory.length;
+            }
+
+            // Apply Sleep
+            if (engine.hudSettleState === 'sleep') {
+                for (const node of nodeList) {
+                    if (!node.isFixed && node.id !== engine.draggedNodeId) {
+                        node.vx = 0;
+                        node.vy = 0;
+                        node.isSleeping = true;
+                    }
+                }
+            } else {
+                // Wake up everyone if not sleep
+                for (const node of nodeList) node.isSleeping = false;
+            }
+
+            // FORENSICS: Update HUD with Truth Metrics
+            if (engine.hudSnapshot) {
+                engine.hudSnapshot.settleState = engine.hudSettleState;
+                engine.hudSnapshot.lastSettleMs = getNowMs() - engine.hudSettleStateAt;
+
+                // Legacy compat (Zeroed out)
+                engine.hudSnapshot.minSpeedSq = 0;
+                engine.hudSnapshot.breakdownSpeed = 0;
+                engine.hudSnapshot.breakdownForce = 0;
+                engine.hudSnapshot.breakdownPressure = 0;
+                engine.hudSnapshot.breakdownJitter = 0;
+
+                engine.hudSnapshot.restCandidates = calmCount;
+                engine.hudSnapshot.calmPercent = calmPercent;
+                engine.hudSnapshot.outlierCount = totalNodes - calmCount;
+                engine.hudSnapshot.settleBlockers = blockers;
+            }
         }
-    }
 
-    logEnergyDebug(engine.lifecycle, energy, effectiveDamping, maxVelocityEffective);
-    engine.lastDebugStats = debugStats;
-    updateHudSnapshot(getNowMs(), nodeList, debugStats);
-
-    // Firewall: refresh last-good state after a clean tick
-    for (const node of nodeList) {
-        if (
-            Number.isFinite(node.x) &&
-            Number.isFinite(node.y) &&
-            Number.isFinite(node.vx) &&
-            Number.isFinite(node.vy)
-        ) {
-            node.lastGoodX = node.x;
-            node.lastGoodY = node.y;
-            node.lastGoodVx = node.vx;
-            node.lastGoodVy = node.vy;
+        if (engine.draggedNodeId && engine.dragTarget) {
+            const node = engine.nodes.get(engine.draggedNodeId);
+            if (node) {
+                const dx = node.x - engine.dragTarget.x;
+                const dy = node.y - engine.dragTarget.y;
+                const lag = Math.sqrt(dx * dx + dy * dy);
+                engine.dragLagSamples.push(lag);
+            }
         }
-    }
 
-    if (perfEnabled && frameTiming) {
-        const tickEnd = getNowMs();
-        frameTiming.totalMs = tickEnd - tickStart;
-
-        const perf = engine.perfTiming;
-        perf.frameCount += 1;
-        perf.totals.repulsionMs += frameTiming.repulsionMs;
-        perf.totals.collisionMs += frameTiming.collisionMs;
-        perf.totals.springsMs += frameTiming.springsMs;
-        perf.totals.spacingMs += frameTiming.spacingMs;
-        perf.totals.pbdMs += frameTiming.pbdMs;
-        perf.totals.totalMs += frameTiming.totalMs;
-
-        if (perf.lastReportAt === 0) {
-            perf.lastReportAt = tickEnd;
+        if (perfEnabled) {
+            const now = getNowMs();
+            if (now - engine.handLogAt >= 1000) {
+                engine.handLogAt = now;
+                let lagP95 = 0;
+                if (engine.dragLagSamples.length > 0) {
+                    const sorted = engine.dragLagSamples.slice().sort((a, b) => a - b);
+                    const idx = Math.min(sorted.length - 1, Math.floor(sorted.length * 0.95));
+                    lagP95 = sorted[idx] ?? 0;
+                }
+                console.log(
+                    `[Hand] dragging=${engine.draggedNodeId ? 'Y' : 'N'} ` +
+                    `localBoost=${localBoostActive ? 'Y' : 'N'} ` +
+                    `lagP95Px=${lagP95.toFixed(2)}`
+                );
+                engine.dragLagSamples.length = 0;
+            }
         }
-        const elapsed = tickEnd - perf.lastReportAt;
-        if (elapsed >= 1000) {
-            const frames = perf.frameCount || 1;
-            const avg = (value: number) => (value / frames).toFixed(3);
-            console.log(
-                `[PhysicsPerf] avgMs repulsion=${avg(perf.totals.repulsionMs)} ` +
-                `collision=${avg(perf.totals.collisionMs)} ` +
-                `springs=${avg(perf.totals.springsMs)} ` +
-                `spacing=${avg(perf.totals.spacingMs)} ` +
-                `pbd=${avg(perf.totals.pbdMs)} ` +
-                `total=${avg(perf.totals.totalMs)} ` +
-                `nodes=${nodeList.length} ` +
-                `links=${engine.links.length} ` +
-                `mode=${engine.perfMode} ` +
-                `allocs=${engine.perfCounters.nodeListBuilds + engine.perfCounters.correctionNewEntries} ` +
-                `topoDrop=${engine.perfCounters.topologySkipped} ` +
-                `topoDup=${engine.perfCounters.topologyDuplicates} ` +
-                `frames=${frames}`
-            );
-            perf.frameCount = 0;
-            perf.totals.repulsionMs = 0;
-            perf.totals.collisionMs = 0;
-            perf.totals.springsMs = 0;
-            perf.totals.spacingMs = 0;
-            perf.totals.pbdMs = 0;
-            perf.totals.totalMs = 0;
-            perf.lastReportAt = tickEnd;
-            engine.perfCounters.nodeListBuilds = 0;
-            engine.perfCounters.correctionNewEntries = 0;
-            engine.perfCounters.topologySkipped = 0;
+
+        logEnergyDebug(engine.lifecycle, energy, effectiveDamping, maxVelocityEffective);
+        if (engine.frameIndex % 4 === 0) {
+            updateHudSnapshot(getNowMs(), dtRawMs, nodeList, debugStats);
+        }
+        // Firewall: refresh last-good state after a clean tick
+        for (const node of nodeList) {
+            if (
+                Number.isFinite(node.x) &&
+                Number.isFinite(node.y) &&
+                Number.isFinite(node.vx) &&
+                Number.isFinite(node.vy)
+            ) {
+                node.lastGoodX = node.x;
+                node.lastGoodY = node.y;
+                node.lastGoodVx = node.vx;
+                node.lastGoodVy = node.vy;
+            }
+        }
+
+        if (perfEnabled && frameTiming) {
+            const tickEnd = getNowMs();
+            frameTiming.totalMs = tickEnd - tickStart;
+
+            const perf = engine.perfTiming;
+            perf.frameCount += 1;
+            perf.totals.repulsionMs += frameTiming.repulsionMs;
+            perf.totals.collisionMs += frameTiming.collisionMs;
+            perf.totals.springsMs += frameTiming.springsMs;
+            perf.totals.spacingMs += frameTiming.spacingMs;
+            perf.totals.pbdMs += frameTiming.pbdMs;
+            perf.totals.totalMs += frameTiming.totalMs;
+
+            if (perf.lastReportAt === 0) {
+                perf.lastReportAt = tickEnd;
+            }
+            const elapsed = tickEnd - perf.lastReportAt;
+            if (elapsed >= 1000) {
+                const frames = perf.frameCount || 1;
+                const avg = (value: number) => (value / frames).toFixed(3);
+                console.log(
+                    `[PhysicsPerf] avgMs repulsion=${avg(perf.totals.repulsionMs)} ` +
+                    `collision=${avg(perf.totals.collisionMs)} ` +
+                    `springs=${avg(perf.totals.springsMs)} ` +
+                    `spacing=${avg(perf.totals.spacingMs)} ` +
+                    `pbd=${avg(perf.totals.pbdMs)} ` +
+                    `total=${avg(perf.totals.totalMs)} ` +
+                    `nodes=${nodeList.length} ` +
+                    `links=${engine.links.length} ` +
+                    `mode=${engine.perfMode} ` +
+                    `allocs=${engine.perfCounters.nodeListBuilds + engine.perfCounters.correctionNewEntries} ` +
+                    `topoDrop=${engine.perfCounters.topologySkipped} ` +
+                    `topoDup=${engine.perfCounters.topologyDuplicates} ` +
+                    `frames=${frames}`
+                );
+                perf.frameCount = 0;
+                perf.totals.repulsionMs = 0;
+                perf.totals.collisionMs = 0;
+                perf.totals.springsMs = 0;
+                perf.totals.spacingMs = 0;
+                perf.totals.pbdMs = 0;
+                perf.totals.totalMs = 0;
+                perf.lastReportAt = tickEnd;
+                engine.perfCounters.nodeListBuilds = 0;
+                engine.perfCounters.correctionNewEntries = 0;
+                engine.perfCounters.topologySkipped = 0;
+                engine.perfCounters.topologyDuplicates = 0;
+            }
             engine.perfCounters.topologyDuplicates = 0;
         }
     }
+
+    // FORENSICS: Store Constraint Vectors for Next Frame
+    // (Used by Stagnation Escape to avoid fighting constraints)
+    for (const [id, vec] of engine.correctionAccumCache) {
+        const node = engine.nodes.get(id);
+        if (node) {
+            node.lastCorrectionX = vec.dx;
+            node.lastCorrectionY = vec.dy;
+        }
+    }
+
+    engine.lastDebugStats = debugStats;
 };

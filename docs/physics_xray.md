@@ -20,8 +20,14 @@ When frame budget (`maxPhysicsBudgetMs`) is exceeded, we do NOT lower spring sti
 
 ### Bucket Strategy
 1.  **Bucket A (Sacred)**:
-    *   **Integration**: Always runs.
-    *   **Interaction**: Dragged node + Neighbors (Local Boost) always get full physics (Level 0 priority).
+    *   **Integration**: `integration.ts` (Verlet with `timePolicy`)
+    *   **Stagnation Escape**:
+        *   `velocity/lowForceStagnationEscape.ts` (Constraint-Aware Drift)
+        *   `velocity/edgeShearStagnationEscape.ts` (Constraint-Aware Shear)
+        *   `velocity/staticFrictionBypass.ts` (Heartbeat-Protected Micro-Slip)
+    *   **Utilities**:
+        *   `random.ts` (Deterministic Pseudo-Random Generator)
+        *   `stats.ts` (Telemetry & Loop Detection) full physics (Level 0 priority).
 2.  **Bucket B (Structural)**:
     *   **Springs/Repulsion**: Frequency scales (1/1 -> 1/2 -> 1/3).
     *   **Constraint**: Stiffness constant is normalized by `dt` to remain invariant.
@@ -31,10 +37,10 @@ When frame budget (`maxPhysicsBudgetMs`) is exceeded, we do NOT lower spring sti
 
 ## 4. The Hybrid Solver Pipeline
 The ticking loop (`src/physics/engine/engineTick.ts`) execution order:
-1.  **Force Pass** (Soft: Repulsion, Springs) -> *Modulate by Degrade Schedule*
+1.  **Force Pass** (Soft: Repulsion, Springs) -> *includes Deterministic Singularity Handling*
 2.  **Velocity Pass** (Damping, Drag, Inertia, Local Boost Logic)
 3.  **Integration** (Euler) -> *Updates x = x + v*
-4.  **Constraints** (PBD via Accumulator) -> *Safety Clamp (Hard) + Spacing (Soft)*
+4.  **Constraints** (PBD via Accumulator) -> *Safety Clamp + Gentle Overlap Resolver ($d < 0.1$)*
 5.  **Correction Diffusion** -> *Smoothes jitter*
 
 ### MotionPolicy (Energy → Ramps)
@@ -68,6 +74,13 @@ User interaction must never feel degraded.
     *   **Overlay Shield**: `e.target === canvas` prevents click-through.
     *   **Gesture Policy**: 5px threshold prevents accidental drags.
     *   **Z-Order**: Top-most node always wins the click.
+    ### 6. Rest & Settle (Truthful)
+    - **Concept**: Adaptive thresholds with confidence-based hysteresis.
+    - **Logic**:
+        - `isSafeToSleep`: Speed < 0.05, Pressure < 0.25.
+        - `settleConfidence`: EMA tracking global calm % (Target 95%).
+        - **Ladder**: Moving -> Cooling (Conf>0.5) -> Sleep (Conf>0.95).
+    - **Files**: `engineTick.ts` (State Machine), `physicsHud.ts` (Diagnostics).
     *   **Pixel Alignment (Hysteresis)**: Motion is smooth (float), Rest is crisp (integer snapped). 150ms settling period.
     *   **Overlay Glue** (New): Popup positions are locked to the render loop via `graph-render-tick` event (Zero Lag).
     *   **Decoupled Input**: `useGraphRendering` samples pointers but applies them in `rAF` using the **Frame Camera** (Fix 34).

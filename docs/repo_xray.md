@@ -13,6 +13,9 @@ Excluding: `node_modules`, `dist`, `build`, `.git`
 │   ├── system.md              # MAIN SYSTEM DOC
 │   ├── forensic_render_perf_fix_1-55_2026-01-31.md # FORENSIC REPORT (Fixes 1-55)
 │   ├── forensic_report_2026_01_31.md          # HUD Cleanup & Constraint Forensics
+│   ├── forensic_rest_thresholds_and_state_ladder_oscillation.md # Fix for insomnia/oscillation.
+│   ├── forensic_stagnation_escape_determinism_and_direction.md # Fix for constraint fighting.
+│   ├── report_2026_02_01_comprehensive_physics_hardening.md # Summary of determinism & rest fixes.
 │   ├── forensic_remove_singularity_explosion_start_2026_01_31.md # SINGULARITY REMOVAL
 │   ├── singularity_explosion_forensics.md     # Singularity Theory & Prevention
 │   ├── physics_xray.md        # PHYSICS DOCTRINE
@@ -72,7 +75,7 @@ Excluding: `node_modules`, `dist`, `build`, `.git`
 2.  `src/physics/engine/engineTick.ts` (750+ lines) - **Core Physics Logic & Degrade State**
 3.  `src/physics/engine.ts` (480+ lines) - **Engine State Container**
 4.  `src/playground/useGraphRendering.ts` (Hook Shell)
-3.  `src/physics/engine/constraints.ts` (372 lines) - **PBD Constraints & Spacing**
+3.  `src/physics/engine/constraints.ts` (372 lines) - **PBD Constraints & Gentle Overlap Resolver**
 4.  `src/playground/GraphPhysicsPlayground.tsx` (378 lines) - **Main UI Controller**
 5.  `src/physics/engine/integration.ts` (200+ lines) - **Time Steps & Dt Skew**
 6.  `src/physics/engine/corrections.ts` (170+ lines) - **Diffusion & Jitter Control**
@@ -81,7 +84,7 @@ Excluding: `node_modules`, `dist`, `build`, `.git`
 9.  `src/playground/rendering/camera.ts` (New) - **Render Authority & Unified Transform**
 10. `src/playground/rendering/canvasUtils.ts` (New) - **Gradient Glow (GPU Optimized)**
 11. `src/playground/rendering/renderingMath.ts` (New) - **Sub-pixel Quantization & Alignment**
-12. `src/physics/engine/forcePass.ts` (202 lines) - **Force Calculations**
+12. `src/physics/engine/forcePass.ts` (202 lines) - **Force Calculations (Deterministic Singularity)**
 13. `src/fullchat/FullChatStore.tsx` (227 lines) - **Chat State Manager**
 14. `src/ArnvoidDocumentViewer/ArnvoidDocumentViewer.tsx` (312 lines) - **Doc Viewer UI**
 

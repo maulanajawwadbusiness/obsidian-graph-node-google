@@ -23,8 +23,11 @@ export const applyDenseCoreVelocityDeLocking = (
     policy: MotionPolicy,
     stats: DebugStats
 ) => {
-    const delockStrength = policy.microSlip;
-    if (delockStrength <= 0.01) return;
+    // FIX: Gate by settle confidence
+    const settleGate = Math.pow(1 - (policy.settleScalar || 0), 2);
+    const delockStrength = policy.diffusion * settleGate;
+
+    if (delockStrength <= 0.001) return;
 
     const passStats = getPassStats(stats, 'VelocityDeLocking');
     const affected = new Set<string>();
@@ -99,6 +102,11 @@ export const applyDenseCoreVelocityDeLocking = (
 
     // DEBUG: log for early expansion
     if (affected.size > 0) {
+        if (stats.injectors) {
+            stats.injectors.microSlipCount += affected.size;
+            stats.injectors.microSlipDv += passStats.velocity;
+            stats.injectors.lastInjector = 'DenseCoreUnlock';
+        }
         logVelocityDeLocking(affected.size);
     }
 };

@@ -45,7 +45,8 @@ The graph is driven by a **Hybrid Solver** (`src/physics/`) prioritizing "Visual
 2.  **PBD Constraints (Hard)**: Position-Based Dynamics for Non-Penetration (`applySafetyClamp`) and Spacing.
 3.  **Diffusion**: Inertia relaxation and phase diffusion to kill "boiling" energy in dense clusters.
 4.  **Drift**: Buoyancy and slight center pull to keep unconnected nodes visible.
-5.  **Initialization**: "Spread" strategy seeds nodes in a micro-cloud (2px min separation) to prevent "Big Bang" singularities.
+5.  **Initialization**: "Spread" strategy seeds nodes in a micro-cloud (2px min separation).
+6.  **Singularity & Overlap**: Deterministic ID-based resolution for exact overlaps ($d \approx 0$) and "Gentle Resolver" for deep overlaps ($d < 0.1$).
 
 ### B. Performance Doctrine (The Sacred 60)
 **"Interaction > Simulation"**

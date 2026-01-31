@@ -41,12 +41,24 @@ export type DebugStats = {
     injectors: {
         microSlipCount: number;
         microSlipDv: number;
+        microSlipFires: number; // Count of individual firings (per dot)
+        stuckScoreSum: number;  // Sum of stuck scores for average
         driftCount: number;
         driftDv: number;
         unstuckCount: number;
         lastInjector: string;
+
+        // Escape Forensics
+        escapeFires: number;
+        escapeLoopSuspectCount: number; // Count of fires opposing constraint
     };
     neighborReorderRate: number; // Forensic: Stability Metric
+    // Law Pop Diagnostics
+    hubFlipCount: number;
+    degradeFlipCount: number;
+    lawPopScore: number;
+    hubNodeCount: number;
+
 };
 
 export const createDebugStats = (): DebugStats => ({
@@ -78,12 +90,21 @@ export const createDebugStats = (): DebugStats => ({
     injectors: {
         microSlipCount: 0,
         microSlipDv: 0,
+        microSlipFires: 0,
+        stuckScoreSum: 0,
         driftCount: 0,
         driftDv: 0,
         unstuckCount: 0,
         lastInjector: '',
+
+        escapeFires: 0,
+        escapeLoopSuspectCount: 0,
     },
     neighborReorderRate: 0,
+    hubFlipCount: 0,
+    degradeFlipCount: 0,
+    lawPopScore: 0,
+    hubNodeCount: 0,
 });
 
 export const getPassStats = (stats: DebugStats, name: string): PassStats => {

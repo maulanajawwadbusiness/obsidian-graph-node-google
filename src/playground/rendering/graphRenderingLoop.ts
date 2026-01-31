@@ -364,15 +364,26 @@ export const updateHoverSelectionIfNeeded = (
     const timeSinceLast = now - hoverStateRef.current.lastSelectionTime;
 
     // Heartbeat: Force reliable 10Hz updates even if input loop is stalled
-    // This allows "camera-only" moves to trigger hover updates if mouse is still.
-    // Also recovers if a pointer-move flag was dropped.
     const heartbeat = timeSinceLast > 100;
+
+    // P1: Loop Gate Probe (Throttled 1Hz)
+    if (theme.hoverDebugEnabled && now - (hoverStateRef.current as any).lastGateLog > 1000) {
+        (hoverStateRef.current as any).lastGateLog = now;
+        console.log(`[HoverDbg] Gate: pending=${pendingPointer} ` +
+            `hasPtr=${hoverStateRef.current.hasPointer} ` +
+            `env=${envChanged} ` +
+            `heart=${heartbeat} ` +
+            `refId=${(hoverStateRef as any).__debugId}`);
+    }
 
     // We bypass throttling if Env Changed (Must be correct instantly)
     if (shouldRun || heartbeat) { // 10hz fallback
-        // ... (Hit test execution)
         if (hoverStateRef.current.hasPointer) {
-            // ...
+            // P2: Call Probe
+            if (theme.hoverDebugEnabled && Math.random() < 0.05) {
+                console.log('[HoverDbg] Call updateHoverSelection');
+            }
+
             updateHoverSelection(
                 hoverStateRef.current.lastClientX || 0,
                 hoverStateRef.current.lastClientY || 0,

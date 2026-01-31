@@ -450,6 +450,16 @@ export const createHoverController = ({
             }
         }
 
+        // P3: Entry Probe (Throttled)
+        if (theme.hoverDebugEnabled) {
+            const now = performance.now();
+            const last = (hoverStateRef.current as any).lastEntryLog || 0;
+            if (now - last > 1000) {
+                (hoverStateRef.current as any).lastEntryLog = now;
+                console.log(`[HoverDbg] Enter updateHoverSelection: client=(${clientX.toFixed(0)},${clientY.toFixed(0)}) refId=${(hoverStateRef as any).__debugId}`);
+            }
+        }
+
         const nowMs = performance.now();
         const currentHoveredId = hoverStateRef.current.hoveredNodeId;
         let nodesScanned = 0;
@@ -706,32 +716,30 @@ export const createHoverController = ({
             hoverStateRef.current.pendingSwitchSinceMs = nextPendingSinceMs;
             hoverStateRef.current.lastDecision = decision;
 
-            if (theme.hoverDebugEnabled && (
-                newHoveredId !== hoverStateRef.current.lastLoggedId ||
-                decision.startsWith('switched') ||
-                decision.startsWith('exited')
-            )) {
-                const camera = cameraRef.current;
-                const engine = engineRef.current;
-                const centroid = engine ? engine.getCentroid() : { x: 0, y: 0 };
-                const angle = engine ? engine.getGlobalAngle() : 0;
-                console.log(
-                    `hover: ${hoverStateRef.current.lastLoggedId} -> ${newHoveredId} ` +
-                    `(dist=${nextDist.toFixed(1)}, r=${nextRenderedRadius.toFixed(1)}, ` +
-                    `hit=${nextHitRadius.toFixed(1)}, halo=${nextHaloRadius.toFixed(1)}, ` +
-                    `energy=${nextTargetEnergy.toFixed(2)}) ` +
-                    `hold=${Math.max(0, nextHoldUntil - nowMs).toFixed(0)}ms ` +
-                    `pending=${nextPendingSwitchId ?? 'null'} ` +
-                    `pendingAge=${nextPendingSwitchId ? (nowMs - nextPendingSinceMs).toFixed(0) : 0}ms ` +
-                    `client=(${clientX.toFixed(1)},${clientY.toFixed(1)}) ` +
-                    `sx=${sx.toFixed(1)} sy=${sy.toFixed(1)} ` +
-                    `world=(${worldX.toFixed(1)},${worldY.toFixed(1)}) ` +
-                    `cam=(${camera.panX.toFixed(1)},${camera.panY.toFixed(1)}) z=${camera.zoom.toFixed(3)} ` +
-                    `angle=${angle.toFixed(3)} ` +
-                    `centroid=(${centroid.x.toFixed(1)},${centroid.y.toFixed(1)}) ` +
-                    `decision=${decision}`
-                );
-                hoverStateRef.current.lastLoggedId = newHoveredId;
+            if (theme.hoverDebugEnabled) {
+                const now = performance.now();
+                const last = (hoverStateRef.current as any).lastResultLog || 0;
+                const changed = newHoveredId !== hoverStateRef.current.lastLoggedId;
+
+                if (changed || (now - last > 1000)) {
+                    (hoverStateRef.current as any).lastResultLog = now;
+                    const camera = cameraRef.current;
+                    const engine = engineRef.current;
+                    const centroid = engine ? engine.getCentroid() : { x: 0, y: 0 };
+                    const angle = engine ? engine.getGlobalAngle() : 0;
+                    console.log(
+                        `hover: ${hoverStateRef.current.lastLoggedId} -> ${newHoveredId} ` +
+                        `(dist=${nextDist.toFixed(1)}, r=${nextRenderedRadius.toFixed(1)}, ` +
+                        `hit=${nextHitRadius.toFixed(1)}, halo=${nextHaloRadius.toFixed(1)}, ` +
+                        `energy=${nextTargetEnergy.toFixed(2)}) ` +
+                        `hold=${Math.max(0, nextHoldUntil - nowMs).toFixed(0)}ms ` +
+                        `pending=${nextPendingSwitchId ?? 'null'} ` +
+                        `client=(${clientX.toFixed(1)},${clientY.toFixed(1)}) ` +
+                        `world=(${worldX.toFixed(1)},${worldY.toFixed(1)}) ` +
+                        `decision=${decision}`
+                    );
+                    hoverStateRef.current.lastLoggedId = newHoveredId;
+                }
             }
         }
 

@@ -60,6 +60,7 @@ The graph is driven by a **Hybrid Solver** (`src/physics/`) prioritizing "Visual
 
 #### 2. Degrade-1:1 Policy ("No Mud")
 When stressed (`degradeLevel > 0`), we reduce workload by **skipping entire passes**, NOT by weakening forces.
+*   **Concept**: `MotionPolicy` (New) centralized response curves (Degrade vs Temperature).
 *   **Bucket A (Sacred)**: Integration, Dragged Node Physics (Local Boost), Canvas Release. *Never degraded.*
 *   **Bucket B (Structural)**: Springs, Repulsion. *Frequency reduced (1:2, 1:3) but stiffness normalized to dt.*
 *   **Bucket C (Luxury)**: Far-field Spacing, Deep Diffusion. *Aggressively throttled.*
@@ -93,6 +94,8 @@ Post-Fixes #01–#22, the system guarantees:
         *   **Z-Order Truth**: Picking logic (`hoverController`) strictly respects draw order (Last=Top wins).
         *   **Hitbox Truth**: Visual radius (with glow) equals touch radius. Labels have bounding boxes.
         *   **Gesture Truth**: Click vs Drag is resolved by a 5px threshold (No accidental micromoves).
+        *   **Numeric Rebase**: "Ghost Energy" is purged by snapping near-zero deltas when calm, preventing infinite drift.
+        *   **Cross-Browser Checksum**: Real-time position hash ensures different JS engines produce bit-identical results.
 
 ## 4. Interaction Contract (The "King" Layer)
 *   **Screen<->World Mapping Contract**:
@@ -160,7 +163,8 @@ Enable `debugPerf: true` in `config.ts` to see:
     *   `[PhysicsMode]`: Transitions (Normal -> Stressed).
 
 ## 8. Where to Edit (Entrypoints)
-*   **Scheduler Logic**: `src/playground/rendering/graphRenderingLoop.ts` (Look for `runPhysicsScheduler`, `render` loop).
-*   **Pass Scheduling**: `src/physics/engine/engineTick.ts` (Look for `runPhysicsTick`).
-*   **Force Logic**: `src/physics/engine/forcePass.ts`.
-*   **Constraint Logic**: `src/physics/engine/constraints.ts`.
+*   **Scheduler Logic**: `src/playground/rendering/renderLoopScheduler.ts` (Loop orchestration).
+*   **Pass Scheduling**: `src/physics/engine/engineTick.ts` (Main Physics Tick).
+*   **Force Logic**: `src/physics/engine/forcePass.ts` & `src/physics/engine/constraints.ts`.
+*   **Velocity/Motion**: `src/physics/engine/velocityPass.ts` & `src/physics/engine/motionPolicy.ts`.
+*   **Engine State**: `src/physics/engine.ts`.

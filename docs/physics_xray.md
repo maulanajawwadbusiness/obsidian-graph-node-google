@@ -37,11 +37,13 @@ When frame budget (`maxPhysicsBudgetMs`) is exceeded, we do NOT lower spring sti
 
 ## 4. The Hybrid Solver Pipeline
 The ticking loop (`src/physics/engine/engineTick.ts`) execution order:
-1.  **Force Pass** (Soft: Repulsion, Springs) -> *includes Deterministic Singularity Handling*
-2.  **Velocity Pass** (Damping, Drag, Inertia, Local Boost Logic)
-3.  **Integration** (Euler) -> *Updates x = x + v*
-4.  **Constraints** (PBD via Accumulator) -> *Safety Clamp + Gentle Overlap Resolver ($d < 0.1$)*
-5.  **Correction Diffusion** -> *Smoothes jitter*
+1.  **Ticket Preflight**: Firewall checks (NaN/Inf) and Hub/StuckScore analysis.
+2.  **MotionPolicy**: Computes global temperature and degrade scalars.
+3.  **Force Pass** (Soft: Repulsion, Springs) -> *includes Deterministic Singularity Handling*
+4.  **Velocity Pass** (Damping, Drag, Inertia, Local Boost Logic)
+5.  **Integration** (Euler) -> *Updates x = x + v*
+6.  **Constraints** (PBD via Accumulator) -> *Safety Clamp + Gentle Overlap Resolver ($d < 0.1$)*
+7.  **Correction Diffusion** -> *Smoothes jitter*
 
 ### MotionPolicy (Energy → Ramps)
 Energy thresholds are now routed through a unified `MotionPolicy` ramp set (early-expansion, expansion, diffusion, hub relief). Note: Start-only ramps (like Carrier Flow) are **disabled** under the `spread` init strategy.
@@ -93,6 +95,11 @@ User interaction must never feel degraded.
 *   **Hub Snap**: Velocity low-pass filters snap to 0.00 when input ceases.
 *   **Triangle Ramp**: Degenerate triangles fade force to 0.
 
+### C. 2026-02-01 Hardening (Determinism & Rest)
+*   **Micro-Slip Heartbeat**: Replaced simple velocity check with `StuckScore` (Pressure + Low Speed) and 1.0s cooldown to prevent active vibration (Fix #44).
+*   **Determinism**: All `Math.random` replaced with seeded `pseudoRandom`. Simulation is now bit-exact reproducible on Reset.
+*   **Rest Truth**: Sleep requires global calm (95% nodes < speed threshold) for >10 frames (`idleFrames`).
+*   **Constraint-Aware Escape**: Stagnation escape currents check `dot(Force, Constraint)` to avoid fighting PBD.
 ## 7. Observability
 New telemetry in `[RenderPerf]` and `[PhysicsPasses]`:
 
@@ -109,3 +116,11 @@ New telemetry in `[RenderPerf]` and `[PhysicsPasses]`:
     *   **Energy Ledger**: Real-time v² breakdown per stage (Input, Spring, Repulse, Constrain) to find energy leaks.
     *   **Fight Ledger**: Conflict% and correction mag per constraint stage.
 *   **Feel Markers (Debug Panel)**: Dev-only canvas markers show rest state (cyan/amber) and conflict halos per dot.
+
+## 8. Cross-Browser Determinism (Bit-Exact)
+To ensure reliable replication of bugs and identical layouts across engines:
+1.  **Stable Sets**: All constraint sets (`hotPairs`) are sorted before iteration.
+2.  **Numeric Rebase**:
+    *   **Local**: Calm nodes snap `v` to `0.0`.
+    *   **Global**: World shifts to centroid if `maxPos > 50,000` to prevent float precision loss.
+3.  **Checksum**: HUD shows `chk: [HEX]` hash of quantized positions.

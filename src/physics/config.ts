@@ -169,4 +169,5 @@ export const DEFAULT_PHYSICS_CONFIG: ForceConfig = {
     debugPerf: false,
     debugStall: false,
     enableMicroDrift: false, // Fix #16: Stable by default
+    debugAllowEarlyExpansion: false,
 };

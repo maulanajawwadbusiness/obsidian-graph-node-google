@@ -53,7 +53,7 @@ export class PhysicsEngine {
     // Frame counter for staggered integration
     public frameIndex: number = 0;
 
-    private lastDebugStats: DebugStats | null = null;
+    public lastDebugStats: DebugStats | null = null;
     public hudSnapshot: PhysicsHudSnapshot = createInitialPhysicsHudSnapshot();
     public hudHistory: PhysicsHudHistory = createInitialPhysicsHudHistory();
     public hudSettleState: PhysicsHudSnapshot['settleState'] = 'moving';
@@ -63,38 +63,49 @@ export class PhysicsEngine {
     public debugDisableDiffusion: boolean = false;
     public debugDisableMicroSlip: boolean = false;
     public debugDisableRepulsion: boolean = false;
-    private spacingGate: number = 0;
-    private spacingGateActive: boolean = false;
-    private nodeListCache: PhysicsNode[] = [];
-    private nodeListDirty: boolean = true;
-    private awakeList: PhysicsNode[] = [];
-    private sleepingList: PhysicsNode[] = [];
-    private correctionAccumCache = new Map<string, { dx: number; dy: number }>();
-    private topologyLinkKeys = new Set<string>();
-    private nodeLinkCounts = new Map<string, number>();
+    public spacingGate: number = 0;
+    public spacingGateActive: boolean = false;
+    public nodeListCache: PhysicsNode[] = [];
+    public nodeListDirty: boolean = true;
+    public awakeList: PhysicsNode[] = [];
+    public sleepingList: PhysicsNode[] = [];
+    public correctionAccumCache = new Map<string, { dx: number; dy: number }>();
+    public topologyLinkKeys = new Set<string>();
+    public nodeLinkCounts = new Map<string, number>();
 
     // Fix 22: Prioritize unresolved constraints (Hot Pairs) to prevent crawl
     public spacingHotPairs = new Set<string>();
 
-    private perfCounters = {
+    public perfCounters = {
         nodeListBuilds: 0,
         correctionNewEntries: 0,
         topologySkipped: 0,
         topologyDuplicates: 0,
     };
-    private perfMode: 'normal' | 'stressed' | 'emergency' | 'fatal' = 'normal';
-    private perfModeLogAt: number = 0;
-    private spacingLogAt: number = 0;
-    private passLogAt: number = 0;
-    private degradeLevel: number = 0;
-    private degradeReason: string = 'NONE';
-    private degradeSeverity: 'NONE' | 'SOFT' | 'HARD' = 'NONE';
-    private degradeBudgetMs: number = 0;
-    private degradeLogAt: number = 0;
-    private handLogAt: number = 0;
-    private dragLagSamples: number[] = [];
-    private localBoostFrames: number = 0;
-    private perfTiming = {
+    public startupStats = {
+        nanCount: 0,
+        infCount: 0,
+        maxSpeed: 0,
+        dtClamps: 0
+    };
+    public firewallStats = {
+        nanResets: 0,
+        velClamps: 0,
+        dtClamps: 0,
+    };
+    public perfMode: 'normal' | 'stressed' | 'emergency' | 'fatal' = 'normal';
+    public perfModeLogAt: number = 0;
+    public spacingLogAt: number = 0;
+    public passLogAt: number = 0;
+    public degradeLevel: number = 0;
+    public degradeReason: string = 'NONE';
+    public degradeSeverity: 'NONE' | 'SOFT' | 'HARD' = 'NONE';
+    public degradeBudgetMs: number = 0;
+    public degradeLogAt: number = 0;
+    public handLogAt: number = 0;
+    public dragLagSamples: number[] = [];
+    public localBoostFrames: number = 0;
+    public perfTiming = {
         lastReportAt: 0,
         frameCount: 0,
         totals: {
@@ -106,20 +117,27 @@ export class PhysicsEngine {
             totalMs: 0,
         },
     };
-    private lastDraggedNodeId: string | null = null;
+    public lastDraggedNodeId: string | null = null;
 
     // Fix #11: Impulse Guard State
-    private lastImpulseTime: number = 0;
+    public lastImpulseTime: number = 0;
 
     // Fix #14: Wake Throttling State
-    private lastWakeTime: number = 0;
+    public lastWakeTime: number = 0;
 
     // Adjacency Cache for O(1) wake lookups (Fix 12)
-    private adjacencyMap = new Map<string, string[]>();
+    public adjacencyMap = new Map<string, string[]>();
 
     constructor(config: Partial<ForceConfig> = {}) {
         this.config = { ...DEFAULT_PHYSICS_CONFIG, ...config };
         this.preRollFrames = this.config.initStrategy === 'legacy' ? 5 : 0;
+    }
+
+    private resetStartupStats() {
+        this.startupStats.nanCount = 0;
+        this.startupStats.infCount = 0;
+        this.startupStats.maxSpeed = 0;
+        this.startupStats.dtClamps = 0;
     }
 
     /**
@@ -148,25 +166,17 @@ export class PhysicsEngine {
         }
     }
 
-    /**
-     * Get stable array of nodes (cached).
-     * Faster than .values() iterator for heavy loops.
-     */
-    public getNodeList(): PhysicsNode[] {
-        if (this.nodeListDirty) {
-            this.nodeListCache = Array.from(this.nodes.values());
-            this.nodeListDirty = false;
-            // Also reset awake/sleep lists if needed? 
-            // Usually managed by engineTick.
-        }
-        return this.nodeListCache;
-    }
+
 
     /**
      * Add a node to the simulation.
      */
     addNode(node: PhysicsNode) {
         this.nodes.set(node.id, node);
+        node.lastGoodX = node.x;
+        node.lastGoodY = node.y;
+        node.lastGoodVx = node.vx;
+        node.lastGoodVy = node.vy;
         this.nodeListDirty = true;
         if (!this.nodeLinkCounts.has(node.id)) {
             this.nodeLinkCounts.set(node.id, 0);
@@ -276,6 +286,7 @@ export class PhysicsEngine {
         this.hudHistory = createInitialPhysicsHudHistory();
         this.hudSettleState = 'moving';
         this.hudSettleStateAt = getNowMs();
+        this.resetStartupStats();
     }
 
     /**
@@ -371,6 +382,7 @@ export class PhysicsEngine {
         this.hudHistory = createInitialPhysicsHudHistory();
         this.hudSettleState = 'moving';
         this.hudSettleStateAt = getNowMs();
+        this.resetStartupStats();
     }
 
     /**

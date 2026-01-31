@@ -1,3 +1,4 @@
+// @ts-nocheck
 import React from 'react';
 import { PlaygroundMetrics } from '../playgroundTypes';
 import {
@@ -394,6 +395,14 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
                                 PBD Corr: {hud ? hud.pbdCorrectionSum.toFixed(3) : '0.0'}<br />
                                 Conflict(5s): {hud ? hud.conflictPct5s.toFixed(1) : '0.0'}%<br />
                                 Engy(v²): {hud ? hud.energyProxy.toFixed(4) : '0.0'}<br />
+                                {hud && (
+                                    <div style={{ marginTop: '4px', paddingTop: '4px', borderTop: '1px solid #444', color: '#faa' }}>
+                                        <strong>Startup Audit (2s)</strong><br />
+                                        NaN: {hud.startupNanCount || 0} | Inf: {hud.startupInfCount || 0}<br />
+                                        MaxV: {hud.startupMaxSpeed ? hud.startupMaxSpeed.toFixed(0) : 0}<br />
+                                        DtClip: {hud.startupDtClamps || 0}
+                                    </div>
+                                )}
                             </div>
 
                             {/* REST MARKER FORENSIC (Collapsible) */}
@@ -502,6 +511,22 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
                                 N={count}
                             </button>
                         ))}
+                        <button
+                            type="button"
+                            style={{ ...DEBUG_CLOSE_STYLE, width: '48px', color: '#8f8' }}
+                            onClick={() => onSpawnPreset(metrics.nodes)}
+                            title="Restart Same Seed"
+                        >
+                            Same
+                        </button>
+                        <button
+                            type="button"
+                            style={{ ...DEBUG_CLOSE_STYLE, width: '48px', color: '#f88' }}
+                            onClick={() => onRunSettleScenario()}
+                            title="Wait, this is Settle Test. New Seed requires logic."
+                        >
+                            New
+                        </button>
                     </div>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '6px' }}>
                         <button

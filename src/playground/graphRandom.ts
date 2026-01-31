@@ -13,7 +13,8 @@ export function generateRandomGraph(
     targetSpacing: number = 500,
     initScale: number = 0.1,
     seed: number = Date.now(),
-    initStrategy: 'spread' | 'legacy' = 'legacy'
+    initStrategy: 'spread' | 'legacy' = 'legacy',
+    minNodeDistance: number = 0
 ) {
     const nodes: PhysicsNode[] = [];
     const links: PhysicsLink[] = [];
@@ -21,13 +22,60 @@ export function generateRandomGraph(
     // Initialize seeded RNG for deterministic generation
     const rng = new SeededRandom(seed);
 
-    const minSpawnSpacing = 2; // 2px epsilon to avoid singularity overlaps
-
     const generateSpreadPositions = () => {
         const positions: Array<{ x: number; y: number }> = [];
         const goldenAngle = Math.PI * (3 - Math.sqrt(5));
         const radiusBase = Math.max(targetSpacing * 0.8, targetSpacing * Math.sqrt(nodeCount) * 0.2);
-        const minSpacingSq = minSpawnSpacing * minSpawnSpacing;
+        const marginPx = 2;
+        const epsilon = 0.1;
+        const maxDotRadius = nodes.length > 0
+            ? nodes.reduce((max, node) => Math.max(max, node.radius || 0), 0)
+            : 8;
+        const minSpacing = Math.max(
+            (2 * maxDotRadius) + marginPx,
+            minNodeDistance * 0.5,
+            epsilon
+        );
+        const cellSize = minSpacing;
+
+
+        const getKey = (x: number, y: number) => {
+            const gx = Math.floor(x / cellSize);
+            const gy = Math.floor(y / cellSize);
+            return `${gx}:${gy}`;
+        };
+
+
+
+        // Better: Map<string, {x,y}[]>
+        const gridMap = new Map<string, Array<{ x: number, y: number }>>();
+        const checkExactCollision = (x: number, y: number) => {
+            const gx = Math.floor(x / cellSize);
+            const gy = Math.floor(y / cellSize);
+            const minSq = minSpacing * minSpacing;
+
+            for (let dx = -1; dx <= 1; dx++) {
+                for (let dy = -1; dy <= 1; dy++) {
+                    const key = `${gx + dx}:${gy + dy}`;
+                    const cellNodes = gridMap.get(key);
+                    if (cellNodes) {
+                        for (const other of cellNodes) {
+                            const ddx = x - other.x;
+                            const ddy = y - other.y;
+                            if (ddx * ddx + ddy * ddy < minSq) return true;
+                        }
+                    }
+                }
+            }
+            return false;
+        };
+
+        const addPosition = (x: number, y: number) => {
+            positions.push({ x, y });
+            const key = getKey(x, y);
+            if (!gridMap.has(key)) gridMap.set(key, []);
+            gridMap.get(key)!.push({ x, y });
+        };
 
         for (let i = 0; i < nodeCount; i++) {
             const t = (i + 0.5) / nodeCount;
@@ -37,24 +85,36 @@ export function generateRandomGraph(
             let x = Math.cos(angle) * radius;
             let y = Math.sin(angle) * radius;
 
-            for (let attempt = 0; attempt < 6; attempt++) {
-                let tooClose = false;
-                for (const pos of positions) {
-                    const dx = x - pos.x;
-                    const dy = y - pos.y;
-                    if (dx * dx + dy * dy < minSpacingSq) {
-                        tooClose = true;
-                        break;
-                    }
+            let placed = false;
+            // Attempt 16 times with spiral jitter.
+            for (let attempt = 0; attempt < 16; attempt++) {
+                if (!checkExactCollision(x, y)) {
+                    addPosition(x, y);
+                    placed = true;
+                    break;
                 }
-                if (!tooClose) break;
-                angle += goldenAngle * 0.35;
-                radius = baseRadius + minSpawnSpacing * (attempt + 1) * 0.5;
+                // Spiraling jitter strategy
+                angle += goldenAngle * 0.35; // Twist
+                radius += minSpacing * 0.8; // Push out
                 x = Math.cos(angle) * radius;
                 y = Math.sin(angle) * radius;
             }
 
-            positions.push({ x, y });
+            // Fallback: keep walking outward until we find a free cell.
+            if (!placed) {
+                let guard = 0;
+                while (checkExactCollision(x, y)) {
+                    angle += goldenAngle;
+                    radius += minSpacing;
+                    x = Math.cos(angle) * radius;
+                    y = Math.sin(angle) * radius;
+                    guard += 1;
+                    if (guard % 128 === 0) {
+                        console.warn('[SpawnSpread] Long search for free slot.', { guard, minSpacing });
+                    }
+                }
+                addPosition(x, y);
+            }
         }
 
         return positions;

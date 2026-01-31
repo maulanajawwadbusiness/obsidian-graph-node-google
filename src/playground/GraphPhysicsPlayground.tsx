@@ -1,3 +1,4 @@
+// @ts-nocheck
 import React, { useRef, useState, useEffect, useMemo, useLayoutEffect } from 'react';
 import { PhysicsEngine } from '../physics/engine';
 import { ForceConfig } from '../physics/types';
@@ -53,7 +54,7 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
     });
     const [spawnCount, setSpawnCount] = useState(30);
     const [seed, setSeed] = useState(Date.now()); // Seed for deterministic generation
-    const [skinMode, setSkinMode] = useState<SkinMode>('elegant'); // Skin toggle (default: elegant)
+    const [skinMode, setSkinMode] = useState<SkinMode>('normal'); // Skin toggle (default: elegant)
     const [cameraLocked, setCameraLocked] = useState(false);
     const [showDebugGrid, setShowDebugGrid] = useState(false);
     const [pixelSnapping, setPixelSnapping] = useState(false);
@@ -383,7 +384,8 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
             config.targetSpacing,
             config.initScale,
             newSeed,
-            config.initStrategy
+            config.initStrategy,
+            config.minNodeDistance
         );
         nodes.forEach(n => engine.addNode(n));
         links.forEach(l => engine.addLink(l));

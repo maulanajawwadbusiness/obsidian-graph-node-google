@@ -25,7 +25,7 @@ export function applyRepulsion(
     // DENSITY-DEPENDENT REPULSION (early expansion only)
     // Nodes in dense regions experience stronger repulsion
     // Creates "center has higher potential" without explicit centroid
-    const allowEarlyExpansion = config.initStrategy === 'legacy';
+    const allowEarlyExpansion = config.initStrategy === 'legacy' && config.debugAllowEarlyExpansion === true;
     const earlyExpansion = allowEarlyExpansion && energy !== undefined && energy > 0.85;
     const densityRadius = 25;  // Radius to count neighbors
     const localDensity = new Map<string, number>();
@@ -283,7 +283,7 @@ export function applySprings(
         const targetDeg = nodeDegree.get(link.target) || 0;
         const sourceIsHub = sourceDeg >= 3;
         const targetIsHub = targetDeg >= 3;
-        const allowEarlyExpansion = config.initStrategy === 'legacy';
+        const allowEarlyExpansion = config.initStrategy === 'legacy' && config.debugAllowEarlyExpansion === true;
         const earlyExpansion = allowEarlyExpansion && energy > 0.8;
 
         // Dead-zone is 0 for hubs during early expansion, normal otherwise

@@ -56,6 +56,12 @@ export interface PhysicsNode {
   // Conflict Signal (HUD Feel Markers)
   conflictEma?: number; // EMA of correction-vs-velocity conflict
   conflictThisFrame?: number; // 0/1 marker for current frame
+
+  // Firewall fallback state (last known good)
+  lastGoodX?: number;
+  lastGoodY?: number;
+  lastGoodVx?: number;
+  lastGoodVy?: number;
 }
 
 export interface PhysicsLink {
@@ -193,6 +199,7 @@ export interface ForceConfig {
   debugPerf?: boolean; // Enable per-pass timing logs (once per second)
   debugStall?: boolean; // Simulate heavy load
   enableMicroDrift?: boolean; // Enable "water" micro-drift (default: false)
+  debugAllowEarlyExpansion?: boolean; // Dev-only: allow early-expansion ramps (default: false)
   // Forensics Kill Switches
   debugDisableDiffusion?: boolean;
   debugDisableMicroSlip?: boolean;

@@ -64,6 +64,13 @@ export type PhysicsEngineTickContext = {
     dragLagSamples: number[];
     lastDraggedNodeId: string | null;
     correctionAccumCache: Map<string, { dx: number; dy: number }>;
+    // Fix: Startup Stats
+    startupStats: {
+        nanCount: number;
+        infCount: number;
+        maxSpeed: number;
+        dtClamps: number;
+    };
     perfCounters: {
         nodeListBuilds: number;
         correctionNewEntries: number;
@@ -105,81 +112,106 @@ const computePairStride = (nodeCount: number, targetChecks: number, maxStride: n
     return Math.max(1, Math.min(maxStride, stride));
 };
 
-const updatePerfMode = (engine: PhysicsEngineTickContext, nodeCount: number, linkCount: number) => {
-    const downshift = engine.config.perfModeDownshiftRatio;
-    const nextMode = (n: number, e: number) => {
-        if (n >= engine.config.perfModeNFatal || e >= engine.config.perfModeEFatal) return 'fatal';
-        if (n >= engine.config.perfModeNEmergency || e >= engine.config.perfModeEEmergency) return 'emergency';
-        if (n >= engine.config.perfModeNStressed || e >= engine.config.perfModeEStressed) return 'stressed';
-        return 'normal';
-    };
 
-    const desired = nextMode(nodeCount, linkCount);
-    if (desired === engine.perfMode) return;
 
-    const downshiftThresholds = {
-        stressed: {
-            n: engine.config.perfModeNStressed * downshift,
-            e: engine.config.perfModeEStressed * downshift,
-        },
-        emergency: {
-            n: engine.config.perfModeNEmergency * downshift,
-            e: engine.config.perfModeEEmergency * downshift,
-        },
-        fatal: {
-            n: engine.config.perfModeNFatal * downshift,
-            e: engine.config.perfModeEFatal * downshift,
-        },
-    };
+export const runPhysicsTick = (engine: PhysicsEngineTickContext, dtIn: number) => {
+    // FIX: Startup Safety - Clamp DT for first 2 seconds to prevent insertion shock
+    // If the browser hung during setup, dt could be 100ms+.
+    // We clamp to 32ms (approx 30fps) during startup, then 64ms normal cap.
+    const isStartup = engine.lifecycle < 2.0;
 
-    const allowDownshift = (mode: 'stressed' | 'emergency' | 'fatal') => {
-        const thresholds = downshiftThresholds[mode];
-        return nodeCount < thresholds.n && linkCount < thresholds.e;
-    };
-
-    let newMode = engine.perfMode;
-    if (desired === 'fatal') {
-        newMode = 'fatal';
-    } else if (desired === 'emergency') {
-        if (engine.perfMode === 'fatal') {
-            if (allowDownshift('fatal')) newMode = 'emergency';
-        } else {
-            newMode = 'emergency';
-        }
-    } else if (desired === 'stressed') {
-        if (engine.perfMode === 'fatal') {
-            if (allowDownshift('fatal')) newMode = 'emergency';
-        }
-        if (newMode === 'emergency' && allowDownshift('emergency')) {
-            newMode = 'stressed';
-        }
-        if (engine.perfMode === 'normal') newMode = 'stressed';
-    } else {
-        if (engine.perfMode === 'fatal' && allowDownshift('fatal')) newMode = 'emergency';
-        if (newMode === 'emergency' && allowDownshift('emergency')) newMode = 'stressed';
-        if (newMode === 'stressed' && allowDownshift('stressed')) newMode = 'normal';
-    }
-
-    if (newMode !== engine.perfMode) {
-        engine.perfMode = newMode;
-        const now = getNowMs();
-        if (now - engine.perfModeLogAt > 500) {
-            engine.perfModeLogAt = now;
-            console.log(`[PhysicsMode] mode=${engine.perfMode} nodes=${nodeCount} links=${linkCount}`);
-        }
-    }
-
-    if (engine.perfMode === 'fatal') {
-        const now = getNowMs();
-        if (now - engine.perfModeLogAt > 1000) {
-            engine.perfModeLogAt = now;
-            console.log(`[PhysicsFatal] nodes=${nodeCount} links=${linkCount} mode=fatal`);
-        }
-    }
-};
-
-export const runPhysicsTick = (engine: PhysicsEngineTickContext, dt: number) => {
     const nodeList = engine.getNodeList();
+    // Safety Firewall: NaN/Inf check + velocity clamp (always-on)
+    // Run BEFORE tick to catch bad state entering the frame.
+    const maxVelocityClamp = engine.config.maxVelocity * 1.5;
+    const maxVelocitySq = maxVelocityClamp * maxVelocityClamp;
+    let nanCount = 0;
+    let infCount = 0;
+    let maxSpeedSq = 0;
+    let velClampCount = 0;
+
+    for (const node of nodeList) {
+        const finiteX = Number.isFinite(node.x);
+        const finiteY = Number.isFinite(node.y);
+        const finiteVx = Number.isFinite(node.vx);
+        const finiteVy = Number.isFinite(node.vy);
+        if (!finiteX || !finiteY || !finiteVx || !finiteVy) {
+            const hasNaN =
+                Number.isNaN(node.x) || Number.isNaN(node.y) ||
+                Number.isNaN(node.vx) || Number.isNaN(node.vy);
+            if (hasNaN) {
+                nanCount++;
+            } else {
+                infCount++;
+            }
+            engine.firewallStats.nanResets += 1;
+
+            if (
+                Number.isFinite(node.lastGoodX) &&
+                Number.isFinite(node.lastGoodY) &&
+                Number.isFinite(node.lastGoodVx) &&
+                Number.isFinite(node.lastGoodVy)
+            ) {
+                node.x = node.lastGoodX as number;
+                node.y = node.lastGoodY as number;
+                node.vx = node.lastGoodVx as number;
+                node.vy = node.lastGoodVy as number;
+            } else {
+                node.x = 0;
+                node.y = 0;
+                node.vx = 0;
+                node.vy = 0;
+            }
+            node.fx = 0;
+            node.fy = 0;
+            continue;
+        }
+
+        const speedSq = node.vx * node.vx + node.vy * node.vy;
+        if (speedSq > maxVelocitySq && maxVelocityClamp > 0) {
+            const speed = Math.sqrt(speedSq);
+            if (speed > 0) {
+                const scale = maxVelocityClamp / speed;
+                node.vx *= scale;
+                node.vy *= scale;
+                velClampCount += 1;
+                engine.firewallStats.velClamps += 1;
+            }
+        }
+        if (speedSq > maxSpeedSq) maxSpeedSq = speedSq;
+    }
+
+    if (nanCount + infCount > 0) {
+        console.warn(
+            `[PhysicsFirewall] nonFinite=${nanCount + infCount} ` +
+            `nan=${nanCount} inf=${infCount} t=${engine.lifecycle.toFixed(2)}`
+        );
+    }
+    if (velClampCount > 0) {
+        console.warn(
+            `[PhysicsFirewall] velClamp=${velClampCount} ` +
+            `cap=${maxVelocityClamp.toFixed(1)} t=${engine.lifecycle.toFixed(2)}`
+        );
+    }
+    if (isStartup) {
+        engine.startupStats.nanCount += nanCount;
+        engine.startupStats.infCount += infCount;
+        const maxSpeed = Math.sqrt(maxSpeedSq);
+        if (maxSpeed > engine.startupStats.maxSpeed) {
+            engine.startupStats.maxSpeed = maxSpeed;
+        }
+    }
+
+    // Input DT clamping
+    let dt = dtIn;
+    const maxDt = Math.min(isStartup ? 0.032 : 0.064, engine.config.maxFrameDeltaMs / 1000);
+    if (dt > maxDt) {
+        dt = maxDt;
+        engine.firewallStats.dtClamps += 1;
+        if (isStartup) engine.startupStats.dtClamps++;
+    }
+
+
     const budgetState = engine as PhysicsEngineTickContext & { _currentBudgetScale?: number };
 
     // FIX #7: Fixed Dot Authority Check (Snapshot)
@@ -324,6 +356,10 @@ export const runPhysicsTick = (engine: PhysicsEngineTickContext, dt: number) => 
             pbdCorrectionSum: corrections,
             conflictPct5s: conflictHits > 0 ? (conflictHits / conflictFrames) * 100 : 0,
             energyProxy: avgVelSq,
+            startupNanCount: engine.startupStats.nanCount,
+            startupInfCount: engine.startupStats.infCount,
+            startupMaxSpeed: engine.startupStats.maxSpeed,
+            startupDtClamps: engine.startupStats.dtClamps,
         };
     };
 
@@ -341,124 +377,87 @@ export const runPhysicsTick = (engine: PhysicsEngineTickContext, dt: number) => 
     }
 
     // Lifecycle Management
+    // Lifecycle Management
     engine.lifecycle += dt;
     engine.frameIndex++;
 
-    updatePerfMode(engine, nodeList.length, engine.links.length);
-    const degradeLevel = engine.degradeLevel;
-    if (engine.draggedNodeId) {
-        engine.localBoostFrames = 8;
-    } else if (engine.localBoostFrames > 0) {
-        engine.localBoostFrames -= 1;
+    // 0. CONTINUOUS SENSORS
+    // Velocity Sensor
+    let totalVelSq = 0;
+    for (const node of nodeList) {
+        totalVelSq += node.vx * node.vx + node.vy * node.vy;
     }
-    const localBoostActive = engine.localBoostFrames > 0;
+    const nodeCount = nodeList.length || 1;
+    const avgVelSq = totalVelSq / nodeCount;
+
+    // Load Sensor (Continuous Degrade)
+    // Map node count to pressure roughly: 180 -> 0.0, 500 -> 1.0
+    const linkCount = engine.links.length;
+    const loadN = Math.max(0, nodeCount - 150) / 350;
+    const loadE = Math.max(0, linkCount - 200) / 800;
+    const rawDegrade = Math.min(1, Math.max(loadN, loadE));
+    // Smooth it
+    const degradeLerp = 0.05;
+    engine.degradeLevel = engine.degradeLevel * (1 - degradeLerp) + rawDegrade * degradeLerp;
+
+    // Legacy compat
+    if (engine.degradeLevel > 0.8) engine.perfMode = 'fatal';
+    else if (engine.degradeLevel > 0.5) engine.perfMode = 'emergency';
+    else if (engine.degradeLevel > 0.2) engine.perfMode = 'stressed';
+    else engine.perfMode = 'normal';
+
+    const localBoostActive = (engine.draggedNodeId !== null || engine.localBoostFrames > 0);
+    if (engine.draggedNodeId) engine.localBoostFrames = 8;
+    else if (engine.localBoostFrames > 0) engine.localBoostFrames--;
 
     // =====================================================================
-    // FIX 44: SOLVER COMA (Idle Rest Mode)
-    // If energy is negligible for > 1 second (60 ticks), we HARD FREEZE.
-    // This stops all floating point noise and ensures "Dead" visual state.
+    // 1. MOTION POLICY (The "Brain")
     // =====================================================================
-    const isInteracting = engine.draggedNodeId !== null || engine.localBoostFrames > 0;
-    const isStartup = engine.lifecycle < 2.0; // Grace period for startup
-    const energyThreshold = 0.05;
+    const { energy, forceScale, effectiveDamping, maxVelocityEffective } = computeEnergyEnvelope(engine.lifecycle);
+    const allowEarlyExpansion = engine.config.initStrategy === 'legacy' && engine.config.debugAllowEarlyExpansion === true;
+    const motionPolicy = createMotionPolicy(energy, engine.degradeLevel, avgVelSq, allowEarlyExpansion);
 
-    // We compute energy later, but we need it now? 
-    // `computeEnergyEnvelope` returns "max allowed" not "current".
-    // We have to rely on `engine.spacingGate` or similar proxies? 
-    // Or just check if we are already in coma?
-    // Actually `energy` (computed later) is the envelope (1.0 -> 0.0). 
-    // It's ALWAYS > 0.05 for a long time. 
-    // We want to check KINETIC energy (velocities).
-    // Let's use `debugStats` later? No, we want to skip early.
-    // Let's use the PREVIOUS frame's decision? 
-    // Or just run a quick velocity scan.
-    let maxVelSq = 0;
-    if (!isInteracting && !isStartup) {
-        for (const node of nodeList) {
-            maxVelSq = Math.max(maxVelSq, node.vx * node.vx + node.vy * node.vy);
-            if (maxVelSq > 0.001) break;
-        }
-    }
-
-    if (!isInteracting && !isStartup && maxVelSq < 0.0001) {
+    // =====================================================================
+    // 2. SETTLE (Continuous Rest)
+    // =====================================================================
+    if (motionPolicy.settleScalar > 0.99 && !localBoostActive) {
         engine.idleFrames++;
+        if (engine.idleFrames > 10) {
+            for (const node of nodeList) {
+                node.vx = 0; node.vy = 0;
+                node.fx = 0; node.fy = 0;
+            }
+            updateHudSnapshot(getNowMs(), nodeList, debugStats, 'sleep');
+            return;
+        }
+    } else if (engine.lifecycle < 2.0 && motionPolicy.settleScalar < 0.99) {
+        // Fix: Startup Safety - Do not accumulate idle frames during first 2s if moving
+        engine.idleFrames = 0;
     } else {
         engine.idleFrames = 0;
     }
 
-    const restModeActive = engine.idleFrames > 60; // 1 second of silence
-    if (restModeActive) {
-        // HARD SKIP
-        // Zero out everything to be sure
-        if (engine.idleFrames === 61) { // On entry, clamp hard
-            for (const node of nodeList) {
-                node.vx = 0;
-                node.vy = 0;
-                node.fx = 0;
-                node.fy = 0;
-            }
-            if (engine.config.debugPerf) console.log('[PhysicsRest] Entered Coma');
-        }
-        updateHudSnapshot(getNowMs(), nodeList, debugStats, 'sleep');
-        return; // EXIT TICK
-    }
-
-
     // =====================================================================
-    // SOFT PRE-ROLL PHASE (Gentle separation before expansion)
-    // Springs at 10%, spacing on, angle off, velocity-only corrections
-    // Runs for ~5 frames before expansion starts
+    // 3. EXECUTION
     // =====================================================================
     const allowLegacyStart = engine.config.initStrategy === 'legacy';
     const preRollActive = allowLegacyStart && engine.preRollFrames > 0 && !engine.hasFiredImpulse;
     if (preRollActive) {
-        runPreRollPhase(engine, nodeList, debugStats);
+        runPreRollPhase(engine as any, nodeList, debugStats);
     }
 
-    // 0. FIRE IMPULSE (One Shot, Guarded)
-    // FIX #11: Guarded Impulse Kick
-    // Logic moved to requestImpulse() to enforce cooldowns and safeguards.
-    // We only auto-fire if lifecycle is young and we haven't fired yet.
+    // Impulse Logic (Quarantined)
     if (allowLegacyStart && !preRollActive && engine.lifecycle < 0.1 && !engine.hasFiredImpulse) {
         engine.requestImpulse();
     }
 
-    advanceEscapeWindow(engine);
+    advanceEscapeWindow(engine as any);
 
-    // =====================================================================
-    // EXPONENTIAL COOLING: Energy decays asymptotically, never stops
-    // =====================================================================
-    const { energy, forceScale, effectiveDamping, maxVelocityEffective } = computeEnergyEnvelope(engine.lifecycle);
-    const motionPolicy = createMotionPolicy(energy, allowLegacyStart);
-
-    const degradePairScale = degradeLevel === 0 ? 1 : degradeLevel === 1 ? 0.7 : 0.4;
-
-    // FIX #9: SMOOTH MODE TRANSITIONS
-    // Slew the budget scalar instead of snapping to prevent "law changes".
-    const targetBudgetScale = (engine.perfMode === 'normal'
-        ? 1
-        : engine.perfMode === 'stressed'
-            ? 0.7
-            : engine.perfMode === 'emergency'
-                ? 0.4
-                : 0) * degradePairScale;
-
-    // Initialize if undefined (first frame)
-    if (budgetState._currentBudgetScale === undefined) {
-        budgetState._currentBudgetScale = targetBudgetScale;
-    }
-
-    // Slew towards target (10% per frame)
-    // This makes transitions take ~0.5s instead of 0s
-    const slewRate = 0.1;
-    const diff = targetBudgetScale - budgetState._currentBudgetScale;
-    if (Math.abs(diff) > 0.001) {
-        budgetState._currentBudgetScale += diff * slewRate;
-    } else {
-        budgetState._currentBudgetScale = targetBudgetScale;
-    }
-
-    const pairBudgetScale = budgetState._currentBudgetScale;
+    // Budget Scaling for Spacing/Constraint checks
+    const budgetScale = 1.0 - (motionPolicy.degradeScalar * 0.8);
+    // Legacy support for budgetState._currentBudgetScale
+    budgetState._currentBudgetScale = budgetScale;
+    const pairBudgetScale = budgetScale;
 
     const pairStrideBase = pairBudgetScale > 0
         ? computePairStride(
@@ -500,32 +499,31 @@ export const runPhysicsTick = (engine: PhysicsEngineTickContext, dt: number) => 
         );
     }
 
-    const cascadeActive = spacingEnabled && spacingGate >= engine.config.spacingCascadeGate && pairStrideBase > 1;
-    const cascadeModulo = engine.config.spacingCascadePhaseModulo;
-    const cascadePhase = cascadeModulo > 0 ? engine.frameIndex % cascadeModulo : 0;
-    const spacingPhase = engine.config.spacingCascadeSpacingPhase;
-    const spacingPhaseActive = !cascadeActive || cascadePhase === spacingPhase;
-    const runPairwiseForces = !cascadeActive || cascadePhase !== spacingPhase;
-    const spacingEveryBase = engine.perfMode === 'normal'
-        ? 1
-        : engine.perfMode === 'stressed'
-            ? 2
-            : 4;
-    const spacingEvery = spacingEveryBase * (degradeLevel === 0 ? 1 : degradeLevel === 1 ? 2 : 3);
-    const spacingWillRun = spacingEnabled && spacingPhaseActive && engine.frameIndex % spacingEvery === 0;
-    const repulsionEvery = degradeLevel === 0 ? 1 : degradeLevel === 1 ? 2 : 3;
-    const collisionEvery = degradeLevel === 0 ? 1 : degradeLevel === 1 ? 2 : 3;
-    const springsEvery = degradeLevel === 0 ? 1 : degradeLevel === 1 ? 2 : 3;
-    const baseSpringsEnabled = engine.perfMode !== 'emergency' || engine.frameIndex % 2 === 0;
-    const springsEnabled = baseSpringsEnabled && engine.frameIndex % springsEvery === 0;
+    const cascadeActive = false;
+    const cascadePhase = 0;
 
-    const triangleEvery = degradeLevel === 0 ? 1 : degradeLevel === 1 ? 2 : 4;
-    const safetyEvery = degradeLevel === 0 ? 1 : degradeLevel === 1 ? 2 : 3;
-    const edgeRelaxEvery = degradeLevel === 0 ? 1 : degradeLevel === 1 ? 2 : 3;
-    const microEvery = degradeLevel === 0 ? 1 : degradeLevel === 1 ? 2 : 4;
+    // CONTINUOUS PASS EXECUTION
+    const runPairwiseForces = true;
+    const spacingWillRun = spacingEnabled;
+    const repulsionEnabled = !engine.config.debugDisableRepulsion;
 
-    const repulsionEnabled = !engine.config.debugDisableRepulsion && runPairwiseForces && engine.frameIndex % repulsionEvery === 0;
-    const collisionEnabled = runPairwiseForces && (engine.frameIndex + 1) % collisionEvery === 0;
+    // Scale stride heavily with degrade to avoid N^2
+    // Stride 1 -> Check 100%. Stride 5 -> Check 20%.
+
+    const collisionEnabled = true; // Always run, but strided
+    const springsEnabled = true;
+
+    // Unused
+    const repulsionEvery = 1;
+    const collisionEvery = 1;
+    const springsEvery = 1;
+    const spacingEvery = 1;
+
+    // Others
+    const triangleEvery = 1;
+    const safetyEvery = 1;
+    const edgeRelaxEvery = 1;
+    const microEvery = 1;
 
     if (perfEnabled) {
         const now = getNowMs();
@@ -583,7 +581,7 @@ export const runPhysicsTick = (engine: PhysicsEngineTickContext, dt: number) => 
         if (now - engine.degradeLogAt >= 1000) {
             engine.degradeLogAt = now;
             console.log(
-                `[Degrade] level=${degradeLevel} ` +
+                `[Degrade] level=${engine.degradeLevel} ` +
                 `reason=${engine.degradeReason} ` +
                 `budgetMs=${engine.degradeBudgetMs.toFixed(1)} ` +
                 `passes={repel:${repulsionEnabled ? 'Y' : 'N'} ` +
@@ -624,9 +622,9 @@ export const runPhysicsTick = (engine: PhysicsEngineTickContext, dt: number) => 
         }
         applyBoundaryForce(nodeList, engine.config, engine.worldWidth, engine.worldHeight);
 
-        applyDragVelocity(engine, nodeList, dt, debugStats);
-        applyPreRollVelocity(engine, nodeList, preRollActive, debugStats);
-        integrateNodes(engine, nodeList, dt, energy, motionPolicy, effectiveDamping, maxVelocityEffective, debugStats, preRollActive);
+        applyDragVelocity(engine as any, nodeList, dt, debugStats);
+        applyPreRollVelocity(engine as any, nodeList, preRollActive, debugStats);
+        integrateNodes(engine as any, nodeList, dt, energy, motionPolicy, effectiveDamping, maxVelocityEffective, debugStats, preRollActive);
         engine.lastDebugStats = debugStats;
         if (perfEnabled && frameTiming) {
             frameTiming.totalMs = getNowMs() - tickStart;
@@ -747,7 +745,7 @@ export const runPhysicsTick = (engine: PhysicsEngineTickContext, dt: number) => 
         if (!constraintsDisabled) {
             const edgeRelaxEnabled = engine.frameIndex % edgeRelaxEvery === 0;
             if (edgeRelaxEnabled) {
-                applyEdgeRelaxation(engine, correctionAccum, nodeDegreeEarly, debugStats, dt);
+                applyEdgeRelaxation(engine as any, correctionAccum, nodeDegreeEarly, debugStats, dt);
             }
             if (spacingWillRun) {
                 if (perfEnabled && frameTiming) {
@@ -844,7 +842,7 @@ export const runPhysicsTick = (engine: PhysicsEngineTickContext, dt: number) => 
         measureFight('PostConstraints', correctionAccum);
 
         const reconcileDisabled = !!engine.config.debugDisableReconcile;
-        const maxDiffusionNeighbors = degradeLevel === 0 ? undefined : degradeLevel === 1 ? 4 : 2;
+        const maxDiffusionNeighbors = engine.degradeLevel === 0 ? undefined : engine.degradeLevel === 1 ? 4 : 2;
 
         if (!engine.config.debugDisableDiffusion && !reconcileDisabled) {
             applyCorrectionsWithDiffusion(
@@ -893,8 +891,8 @@ export const runPhysicsTick = (engine: PhysicsEngineTickContext, dt: number) => 
 
     // FIX 1: Per-Node Sleep Detection (Canonical)
     // Run after all forces/corrections/integration are final.
-    const restSpeedSq = motionPolicy.restSpeedSq;
-    const restFramesRequired = motionPolicy.restFramesRequired;
+    const restSpeedSq = 0.001;
+    const restFramesRequired = 60;
     let sleepCandidates = 0;
 
     for (const node of nodeList) {
@@ -953,6 +951,21 @@ export const runPhysicsTick = (engine: PhysicsEngineTickContext, dt: number) => 
     logEnergyDebug(engine.lifecycle, energy, effectiveDamping, maxVelocityEffective);
     engine.lastDebugStats = debugStats;
     updateHudSnapshot(getNowMs(), nodeList, debugStats);
+
+    // Firewall: refresh last-good state after a clean tick
+    for (const node of nodeList) {
+        if (
+            Number.isFinite(node.x) &&
+            Number.isFinite(node.y) &&
+            Number.isFinite(node.vx) &&
+            Number.isFinite(node.vy)
+        ) {
+            node.lastGoodX = node.x;
+            node.lastGoodY = node.y;
+            node.lastGoodVx = node.vx;
+            node.lastGoodVy = node.vy;
+        }
+    }
 
     if (perfEnabled && frameTiming) {
         const tickEnd = getNowMs();

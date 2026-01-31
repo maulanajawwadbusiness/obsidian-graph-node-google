@@ -134,7 +134,8 @@ const ensureSeededGraph = (engine: PhysicsEngine, config: ForceConfig, seed: num
             config.targetSpacing,
             config.initScale,
             seed,
-            config.initStrategy
+            config.initStrategy,
+            config.minNodeDistance
         );
         nodes.forEach(n => engine.addNode(n));
         links.forEach(l => engine.addLink(l));

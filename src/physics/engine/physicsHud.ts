@@ -7,6 +7,11 @@ export type PhysicsHudSnapshot = {
     pbdCorrectionSum: number;
     conflictPct5s: number;
     energyProxy: number;
+    // Startup Audit
+    startupNanCount?: number;
+    startupInfCount?: number;
+    startupMaxSpeed?: number;
+    startupDtClamps?: number;
 };
 
 export type PhysicsHudHistory = {

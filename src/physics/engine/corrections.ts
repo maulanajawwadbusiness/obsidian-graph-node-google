@@ -176,10 +176,30 @@ export const applyCorrectionsWithDiffusion = (
             const selfShare = 1 - neighborShareTotal;
             const neighborShare = neighborShareTotal / degree;
 
+
             // Self gets share
-            node.x += corrDx * selfShare;
-            node.y += corrDy * selfShare;
-            passStats.correction += Math.sqrt((corrDx * selfShare) ** 2 + (corrDy * selfShare) ** 2);
+            const finalDx = corrDx * selfShare;
+            const finalDy = corrDy * selfShare;
+
+            node.x += finalDx;
+            node.y += finalDy;
+
+            const mag = Math.sqrt(finalDx * finalDx + finalDy * finalDy);
+            passStats.correction += mag;
+            stats.pbd.totalDisplacement += mag;
+
+            // Forensic V3: Conflict Check
+            if (mag > 0.0001) {
+                const dot = node.vx * finalDx + node.vy * finalDy;
+                if (dot < 0) {
+                    stats.pbd.opposingCount++;
+                    stats.pbd.opposingMag += mag;
+                } else {
+                    stats.pbd.alignedCount++;
+                    stats.pbd.alignedMag += mag;
+                }
+            }
+
             affected.add(node.id);
 
             // Neighbors get share
@@ -204,7 +224,23 @@ export const applyCorrectionsWithDiffusion = (
             // Single connection - apply full correction
             node.x += corrDx;
             node.y += corrDy;
-            passStats.correction += Math.sqrt(corrDx * corrDx + corrDy * corrDy);
+
+            const mag = Math.sqrt(corrDx * corrDx + corrDy * corrDy);
+            passStats.correction += mag;
+            stats.pbd.totalDisplacement += mag;
+
+            // Forensic V3: Conflict Check
+            if (mag > 0.0001) {
+                const dot = node.vx * corrDx + node.vy * corrDy;
+                if (dot < 0) {
+                    stats.pbd.opposingCount++;
+                    stats.pbd.opposingMag += mag;
+                } else {
+                    stats.pbd.alignedCount++;
+                    stats.pbd.alignedMag += mag;
+                }
+            }
+
             affected.add(node.id);
         }
 

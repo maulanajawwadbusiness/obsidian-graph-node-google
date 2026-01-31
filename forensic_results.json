@@ -1,0 +1,32 @@
+[
+  {
+    "n": 5,
+    "settleMs": -1,
+    "maxOvershoot": 192.08709876992663,
+    "jitterAvg": "N/A",
+    "finalEnergy": 0.10949874491267997,
+    "pbdPerFrame": "0.28",
+    "conflictRatio": "32.0%",
+    "perfMode": "normal"
+  },
+  {
+    "n": 20,
+    "settleMs": -1,
+    "maxOvershoot": 293.9095417369029,
+    "jitterAvg": "N/A",
+    "finalEnergy": 2.6922904922527144,
+    "pbdPerFrame": "1.34",
+    "conflictRatio": "19.1%",
+    "perfMode": "normal"
+  },
+  {
+    "n": 60,
+    "settleMs": -1,
+    "maxOvershoot": 381.3962206583704,
+    "jitterAvg": "N/A",
+    "finalEnergy": 99.55120141220151,
+    "pbdPerFrame": "5.65",
+    "conflictRatio": "8.4%",
+    "perfMode": "normal"
+  }
+]

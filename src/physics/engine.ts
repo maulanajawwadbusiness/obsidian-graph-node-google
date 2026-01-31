@@ -495,7 +495,6 @@ export class PhysicsEngine {
 
             // FIX #14: THROTTLED WAKE PROPAGATION
             // Only wake neighbors every 100ms to prevent "boil" (energy pumping)
-            const now = getNowMs();
             if (now - this.lastWakeTime > 100) {
                 this.wakeNeighbors(this.draggedNodeId);
                 this.lastWakeTime = now;

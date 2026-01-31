@@ -20,10 +20,19 @@ export type ExpansionResistanceStats = {
 };
 
 export type DebugStats = {
+
     passes: Record<string, PassStats>;
     safety: SafetyStats;
     expansionResistance: ExpansionResistanceStats;
     dtSkew?: { min: number; max: number };
+    // Forensic V3: PBD Conflict Tracking
+    pbd: {
+        totalDisplacement: number;
+        opposingCount: number;
+        opposingMag: number;
+        alignedCount: number;
+        alignedMag: number;
+    };
 };
 
 export const createDebugStats = (): DebugStats => ({
@@ -39,6 +48,13 @@ export const createDebugStats = (): DebugStats => ({
         skippedHubCount: 0,
         avgHubSpeedBefore: 0,
         avgHubSpeedAfter: 0,
+    },
+    pbd: {
+        totalDisplacement: 0,
+        opposingCount: 0,
+        opposingMag: 0,
+        alignedCount: 0,
+        alignedMag: 0,
     },
 });
 

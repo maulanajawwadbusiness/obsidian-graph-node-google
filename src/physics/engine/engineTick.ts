@@ -802,6 +802,24 @@ export const runPhysicsTick = (engine: PhysicsEngineTickContext, dt: number) => 
         const now = getNowMs();
         if (now - engine.pbdReconLogAt >= 1000) {
             engine.pbdReconLogAt = now;
+            const passValues = Object.values(debugStats.passes);
+            let forceSum = 0;
+            let correctionSum = 0;
+            for (const pass of passValues) {
+                forceSum += pass.force;
+                correctionSum += pass.correction;
+            }
+            let opposing = 0;
+            let total = 0;
+            for (const node of nodeList) {
+                if (!node.lastCorrectionDir) continue;
+                const speed = Math.hypot(node.vx, node.vy);
+                if (speed < 0.01) continue;
+                const dot = node.vx * node.lastCorrectionDir.x + node.vy * node.lastCorrectionDir.y;
+                total += 1;
+                if (dot < 0) opposing += 1;
+            }
+            const corrOpposePct = total > 0 ? (opposing / total) * 100 : 0;
             console.log(
                 `[PhysicsPerf] pbdDeltaSum=${pbdReconStats.pbdDeltaSum.toFixed(3)} ` +
                 `vReconAppliedSum=${pbdReconStats.vReconAppliedSum.toFixed(3)}`
@@ -810,6 +828,10 @@ export const runPhysicsTick = (engine: PhysicsEngineTickContext, dt: number) => 
                 `[DegradeSummary] budgetScale=${(pairBudgetScale ?? 0).toFixed(2)} ` +
                 `level=${degradeLevel} ` +
                 `pbdCorrections=${pbdReconStats.pbdDeltaSum.toFixed(3)}`
+            );
+            console.log(
+                `[PhysicsConflict] corrOpposePct=${corrOpposePct.toFixed(1)} ` +
+                `corrToForce=${(forceSum > 0 ? correctionSum / forceSum : 0).toFixed(3)}`
             );
         }
     }

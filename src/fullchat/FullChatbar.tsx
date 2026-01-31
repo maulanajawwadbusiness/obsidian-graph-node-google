@@ -1,11 +1,26 @@
-import React, { useState, useRef, useEffect, useCallback, memo } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useFullChat } from './FullChatStore';
 import { usePopup } from '../popup/PopupStore';
 import { useDocument } from '../store/documentStore';
 import type { PhysicsEngine } from '../physics/engine';
-import type { FullChatMessage, AiContext } from './fullChatTypes';
+import type { AiContext } from './fullChatTypes';
 import { SendButton } from '../components/SendButton';
 import { t } from '../i18n/t';
+import { FullChatbarMessages } from './FullChatbarMessages';
+import { getMessageStyle } from './FullChatbarMessageStyle';
+import {
+    CLOSE_BUTTON_STYLE,
+    CONTEXT_BADGE_STYLE,
+    HEADER_STYLE,
+    INPUT_CONTAINER_STYLE,
+    INPUT_FIELD_STYLE,
+    MAX_HEIGHT,
+    MIN_HEIGHT,
+    PANEL_STYLE,
+    SCROLL_BOTTOM_THRESHOLD,
+    TITLE_STYLE,
+    VOID,
+} from './FullChatbarStyles';
 
 /**
  * FullChatbar - Right-docked reasoning panel
@@ -29,93 +44,6 @@ interface FullChatbarProps {
 const stop = (e: React.SyntheticEvent) => e.stopPropagation();
 const stopWheel = (e: React.WheelEvent) => e.stopPropagation();
 
-// =============================================================================
-// DARK ELEGANCE TOKENS — The Void with Energy Leaking Through
-// =============================================================================
-const VOID = {
-    // The abyss — near black, deep, mesmerizing
-    deepest: '#08080c',
-    deep: '#0c0c12',
-    surface: '#101016',
-    elevated: '#14141c',
-
-    // Text — soft glow against the void
-    textBright: 'rgba(255, 255, 255, 0.92)',
-    textSoft: 'rgba(200, 210, 225, 0.7)',
-    textDim: 'rgba(140, 150, 170, 0.5)',
-    // Input text — slightly softer, "ink about to be committed"
-    textInput: 'rgba(255, 255, 255, 0.85)',
-
-    // The energy that escapes — use SPARINGLY
-    energy: '#56C4FF',
-    energyGlow: 'rgba(86, 196, 255, 0.8)',
-    energySubtle: 'rgba(86, 196, 255, 0.15)',
-    energyFaint: 'rgba(86, 196, 255, 0.06)',
-
-    // Borders — barely visible lines in the dark
-    line: 'rgba(255, 255, 255, 0.04)',
-    lineEnergy: 'rgba(86, 196, 255, 0.12)',
-};
-
-// =============================================================================
-// STYLES — Depth and Darkness
-// =============================================================================
-
-const PANEL_STYLE: React.CSSProperties = {
-    flex: '0 0 30%',
-    minWidth: '320px',
-    maxWidth: '480px',
-    height: '100%',
-    // The void — gradient creates depth
-    background: `linear-gradient(180deg, ${VOID.deep} 0%, ${VOID.deepest} 100%)`,
-    // Faint energy line on the left edge — light escaping
-    borderLeft: `1px solid ${VOID.lineEnergy}`,
-    boxShadow: `inset 1px 0 20px ${VOID.energyFaint}`,
-    zIndex: 500,
-    display: 'flex',
-    flexDirection: 'column',
-    fontFamily: "system-ui, -apple-system, sans-serif",
-    color: VOID.textSoft,
-    position: 'relative',
-    pointerEvents: 'auto',
-    // CSS variables for scroll fades
-    '--panel-bg-rgb': '8, 8, 12',
-    '--panel-bg-opacity': '1',
-} as React.CSSProperties;
-
-const HEADER_STYLE: React.CSSProperties = {
-    height: '56px',
-    padding: '0 24px',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    borderBottom: `1px solid ${VOID.line}`,
-    flexShrink: 0,
-};
-
-const TITLE_STYLE: React.CSSProperties = {
-    fontSize: '13px',
-    fontWeight: 500,
-    letterSpacing: '0.5px',
-    textTransform: 'uppercase' as const,
-    // The energy leaking through — this is THE accent
-    color: VOID.energyGlow,
-    textShadow: `0 0 20px ${VOID.energySubtle}`,
-};
-
-const CLOSE_BUTTON_STYLE: React.CSSProperties = {
-    background: 'transparent',
-    border: 'none',
-    color: VOID.textDim,
-    cursor: 'pointer',
-    width: '28px',
-    height: '28px',
-    display: 'inline-flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    fontSize: '18px',
-    borderRadius: '4px',
-};
 // Unused (commented out to fix build)
 // const CLOSE_BUTTON_SVG = (
 //     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -123,142 +51,6 @@ const CLOSE_BUTTON_STYLE: React.CSSProperties = {
 //         <line x1="6" y1="6" x2="18" y2="18"></line>
 //     </svg>
 // );
-
-const CONTEXT_BADGE_STYLE: React.CSSProperties = {
-    padding: '12px 24px',
-    background: VOID.surface,
-    borderBottom: `1px solid ${VOID.line}`,
-    display: 'flex',
-    alignItems: 'center',
-    gap: '10px',
-};
-
-// Wrapper for scroll fades
-const MESSAGES_WRAPPER_STYLE: React.CSSProperties = {
-    flex: 1,
-    minHeight: 0,
-    position: 'relative',
-    overflow: 'hidden',
-};
-
-const MESSAGES_CONTAINER_STYLE: React.CSSProperties = {
-    height: '100%',
-    overflowY: 'auto',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '20px',
-    fontSize: '14px',
-    lineHeight: '1.65',
-    padding: '24px',
-    paddingRight: 'var(--scrollbar-gutter, 12px)',
-};
-
-const MESSAGE_STYLE_USER: React.CSSProperties = {
-    alignSelf: 'flex-end',
-    // Elevated surface — slightly visible against void
-    background: VOID.elevated,
-    padding: '14px 18px',
-    borderRadius: '8px',
-    maxWidth: '85%',
-    color: VOID.textBright,
-    fontSize: '14px',
-    lineHeight: '1.6',
-    // Subtle inner glow
-    boxShadow: `inset 0 1px 0 ${VOID.line}`,
-};
-
-const MESSAGE_STYLE_AI: React.CSSProperties = {
-    alignSelf: 'flex-start',
-    padding: '8px 0',
-    maxWidth: '90%',
-    color: VOID.textSoft,
-    fontSize: '14px',
-    lineHeight: '1.65',
-};
-
-const INPUT_CONTAINER_STYLE: React.CSSProperties = {
-    padding: '20px 24px',
-    borderTop: `1px solid ${VOID.line}`,
-    display: 'flex',
-    gap: '12px',
-    alignItems: 'flex-end',
-    background: VOID.surface,
-};
-
-const INPUT_FIELD_STYLE: React.CSSProperties = {
-    flex: 1,
-    padding: '8px 14px',
-    fontSize: '14px',
-    background: VOID.deep,
-    border: `1px solid ${VOID.line}`,
-    borderRadius: '8px',
-    color: VOID.textInput,  // Softer, "ink about to be committed"
-    caretColor: VOID.energy,  // Energy-colored caret
-    outline: 'none',
-    resize: 'none',
-    overflow: 'hidden',
-    fontFamily: 'inherit',
-    lineHeight: '1.4',
-};
-
-const EMPTY_STATE_STYLE: React.CSSProperties = {
-    flex: 1,
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: '32px',
-    textAlign: 'center',
-    gap: '16px',
-};
-
-const JUMP_TO_LATEST_STYLE: React.CSSProperties = {
-    position: 'absolute',
-    bottom: '12px',
-    right: '24px',
-    background: VOID.elevated,
-    border: `1px solid ${VOID.lineEnergy}`,
-    borderRadius: '16px',
-    padding: '6px 14px',
-    color: VOID.textSoft,
-    fontSize: '11px',
-    cursor: 'pointer',
-    zIndex: 10,
-    display: 'flex',
-    alignItems: 'center',
-    gap: '4px',
-    transition: 'opacity 150ms ease',
-};
-
-// Auto-expand: compact single-line default, grows to max 5 lines
-const MIN_HEIGHT = 36;
-const MAX_HEIGHT = 116;
-
-// Threshold for "at bottom" detection (pixels from bottom)
-const SCROLL_BOTTOM_THRESHOLD = 50;
-
-// =============================================================================
-// STREAMING DOTS — Subtle thinking indicator
-// =============================================================================
-const STREAMING_DOTS_STYLE: React.CSSProperties = {
-    display: 'inline-flex',
-    gap: '3px',
-    marginLeft: '4px',
-    opacity: 0.35,
-};
-
-const DOT_STYLE: React.CSSProperties = {
-    fontSize: '16px',
-    lineHeight: 1,
-};
-
-const StreamingDots: React.FC = memo(() => (
-    <span style={STREAMING_DOTS_STYLE}>
-        <span style={DOT_STYLE}>·</span>
-        <span style={DOT_STYLE}>·</span>
-        <span style={DOT_STYLE}>·</span>
-    </span>
-));
 
 // =============================================================================
 // COMPONENT
@@ -922,23 +714,7 @@ export const FullChatbar: React.FC<FullChatbarProps> = ({ engineRef }) => {
 
     // Get message style with turn spacing
     // Optimized to not recreate on every message update during streaming
-    const getMessageStyle = useCallback((msg: FullChatMessage, prevMsg: FullChatMessage | undefined): React.CSSProperties => {
-        const base = msg.role === 'user' ? MESSAGE_STYLE_USER : MESSAGE_STYLE_AI;
-
-        // Extra top margin when switching from AI to User (new turn)
-        const isNewTurn = prevMsg && prevMsg.role === 'ai' && msg.role === 'user';
-
-        if (!isNewTurn) return base;
-
-        return {
-            ...base,
-            marginTop: '12px',
-        };
-    }, []);
-
     if (!fullChat.isOpen) return null;
-
-    const hasMessages = fullChat.messages.length > 0;
 
     return (
         <div
@@ -983,66 +759,16 @@ export const FullChatbar: React.FC<FullChatbarProps> = ({ engineRef }) => {
                 </div>
             )}
 
-            {/* Messages or Empty State */}
-            {hasMessages ? (
-                <div style={MESSAGES_WRAPPER_STYLE} className="arnvoid-scroll-fades">
-                    <div
-                        ref={messagesContainerRef}
-                        style={MESSAGES_CONTAINER_STYLE}
-                        className="arnvoid-scroll"
-                        onScroll={handleScroll}
-                    >
-                        {fullChat.messages.map((msg, i) => (
-                            <div
-                                key={msg.timestamp}
-                                style={getMessageStyle(msg, fullChat.messages[i - 1])}
-                            >
-                                {msg.text}
-                                {msg.status === 'streaming' && <StreamingDots />}
-                            </div>
-                        ))}
-                        <div ref={messagesEndRef} />
-                    </div>
-
-                    {/* Jump to Latest pill */}
-                    {showJumpToLatest && (
-                        <button
-                            style={JUMP_TO_LATEST_STYLE}
-                            onClick={() => safeScrollToBottom('jump_button')}
-                            onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
-                            onMouseLeave={(e) => e.currentTarget.style.opacity = '0.9'}
-                        >
-                            <span>↓</span>
-                            {t('fullChat.jumpToLatest')}
-                        </button>
-                    )}
-                </div>
-            ) : (
-                <div style={EMPTY_STATE_STYLE}>
-                    {/* Minimal — just a faint ring with energy glow */}
-                    <div style={{
-                        width: '48px',
-                        height: '48px',
-                        borderRadius: '50%',
-                        border: `1px solid ${VOID.energySubtle}`,
-                        boxShadow: `0 0 30px ${VOID.energyFaint}, inset 0 0 20px ${VOID.energyFaint}`,
-                        marginBottom: '8px',
-                    }} />
-                    <div style={{
-                        color: VOID.textSoft,
-                        fontSize: '14px',
-                    }}>
-                        {focusLabel ? t('fullChat.emptyStateThinking', { label: focusLabel }) : t('fullChat.emptyStateDesc')}
-                    </div>
-                    <div style={{
-                        color: VOID.textDim,
-                        fontSize: '12px',
-                        maxWidth: '220px',
-                    }}>
-                        {focusLabel ? t('fullChat.emptyStateTrace') : t('fullChat.emptyStateTraceDefault')}
-                    </div>
-                </div>
-            )}
+            <FullChatbarMessages
+                messages={fullChat.messages}
+                focusLabel={focusLabel}
+                showJumpToLatest={showJumpToLatest}
+                messagesContainerRef={messagesContainerRef}
+                messagesEndRef={messagesEndRef}
+                onScroll={handleScroll}
+                onJumpToLatest={() => safeScrollToBottom('jump_button')}
+                getMessageStyle={getMessageStyle}
+            />
 
             {/* Input */}
             <div style={{ ...INPUT_CONTAINER_STYLE, position: 'relative' }}>

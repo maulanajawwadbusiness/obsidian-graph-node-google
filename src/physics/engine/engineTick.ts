@@ -14,6 +14,7 @@ import {
     initializeCorrectionAccum,
 } from './constraints';
 import { applyCorrectionsWithDiffusion } from './corrections';
+import { createMotionPolicy } from './motionPolicy';
 import {
     applyAngleResistanceVelocity,
     applyAngularVelocityDecoherence,
@@ -29,6 +30,7 @@ import {
 } from './velocityPass';
 import { logEnergyDebug } from './debug';
 import { createDebugStats, type DebugStats } from './stats';
+import type { PhysicsHudHistory, PhysicsHudSnapshot } from './physicsHud';
 import { getNowMs } from './engineTime';
 
 export type PhysicsEngineTickContext = {
@@ -81,6 +83,10 @@ export type PhysicsEngineTickContext = {
         };
     };
     lastDebugStats: DebugStats | null;
+    hudSnapshot: PhysicsHudSnapshot;
+    hudHistory: PhysicsHudHistory;
+    hudSettleState: PhysicsHudSnapshot['settleState'];
+    hudSettleStateAt: number;
     worldWidth: number;
     worldHeight: number;
     getNodeList: () => PhysicsNode[];
@@ -196,6 +202,76 @@ export const runPhysicsTick = (engine: PhysicsEngineTickContext, dt: number) => 
         }
         : null;
     const tickStart = perfEnabled ? getNowMs() : 0;
+    const updateHudSnapshot = (
+        nowMs: number,
+        nodes: PhysicsNode[],
+        stats: DebugStats,
+        settleStateOverride?: PhysicsHudSnapshot['settleState']
+    ) => {
+        const nodeCount = nodes.length || 1;
+        let avgVelSq = 0;
+        for (const node of nodes) {
+            avgVelSq += node.vx * node.vx + node.vy * node.vy;
+        }
+        avgVelSq /= nodeCount;
+
+        const corrections = stats.passes.Corrections?.correction ?? 0;
+        const jitterSample = nodeCount > 0 ? corrections / nodeCount : 0;
+        const conflictFrame = stats.correctionConflictCount > 0;
+
+        const pruneWindow = <T extends { t: number }>(arr: T[], windowMs: number) => {
+            const cutoff = nowMs - windowMs;
+            while (arr.length > 0 && arr[0].t < cutoff) {
+                arr.shift();
+            }
+        };
+
+        engine.hudHistory.degradeFrames.push({ t: nowMs, degraded: engine.degradeLevel > 0 });
+        engine.hudHistory.conflictFrames.push({ t: nowMs, conflict: conflictFrame });
+        engine.hudHistory.jitterSamples.push({ t: nowMs, value: jitterSample });
+
+        pruneWindow(engine.hudHistory.degradeFrames, 5000);
+        pruneWindow(engine.hudHistory.conflictFrames, 5000);
+        pruneWindow(engine.hudHistory.jitterSamples, 1000);
+
+        const degradeFrames = engine.hudHistory.degradeFrames.length || 1;
+        const degradeHits = engine.hudHistory.degradeFrames.filter(sample => sample.degraded).length;
+        const conflictFrames = engine.hudHistory.conflictFrames.length || 1;
+        const conflictHits = engine.hudHistory.conflictFrames.filter(sample => sample.conflict).length;
+        const jitterSamples = engine.hudHistory.jitterSamples;
+        const jitterAvg = jitterSamples.length > 0
+            ? jitterSamples.reduce((sum, sample) => sum + sample.value, 0) / jitterSamples.length
+            : 0;
+
+        let settleState: PhysicsHudSnapshot['settleState'];
+        if (settleStateOverride) {
+            settleState = settleStateOverride;
+        } else if (avgVelSq > 0.25) {
+            settleState = 'moving';
+        } else if (avgVelSq > 0.04) {
+            settleState = 'cooling';
+        } else if (avgVelSq > 0.0004) {
+            settleState = 'microkill';
+        } else {
+            settleState = 'microkill';
+        }
+
+        if (settleState !== engine.hudSettleState) {
+            engine.hudSettleState = settleState;
+            engine.hudSettleStateAt = nowMs;
+        }
+
+        engine.hudSnapshot = {
+            degradeLevel: engine.degradeLevel,
+            degradePct5s: degradeHits > 0 ? (degradeHits / degradeFrames) * 100 : 0,
+            settleState,
+            lastSettleMs: Math.max(0, nowMs - engine.hudSettleStateAt),
+            jitterAvg,
+            pbdCorrectionSum: corrections,
+            conflictPct5s: conflictHits > 0 ? (conflictHits / conflictFrames) * 100 : 0,
+            energyProxy: avgVelSq,
+        };
+    };
 
     engine.awakeList.length = 0;
     engine.sleepingList.length = 0;
@@ -269,6 +345,7 @@ export const runPhysicsTick = (engine: PhysicsEngineTickContext, dt: number) => 
             }
             if (engine.config.debugPerf) console.log('[PhysicsRest] Entered Coma');
         }
+        updateHudSnapshot(getNowMs(), nodeList, debugStats, 'sleep');
         return; // EXIT TICK
     }
 
@@ -297,6 +374,7 @@ export const runPhysicsTick = (engine: PhysicsEngineTickContext, dt: number) => 
     // EXPONENTIAL COOLING: Energy decays asymptotically, never stops
     // =====================================================================
     const { energy, forceScale, effectiveDamping, maxVelocityEffective } = computeEnergyEnvelope(engine.lifecycle);
+    const motionPolicy = createMotionPolicy(energy);
 
     const degradePairScale = degradeLevel === 0 ? 1 : degradeLevel === 1 ? 0.7 : 0.4;
 
@@ -493,7 +571,7 @@ export const runPhysicsTick = (engine: PhysicsEngineTickContext, dt: number) => 
 
         applyDragVelocity(engine, nodeList, dt, debugStats);
         applyPreRollVelocity(engine, nodeList, preRollActive, debugStats);
-        integrateNodes(engine, nodeList, dt, energy, effectiveDamping, maxVelocityEffective, debugStats, preRollActive);
+        integrateNodes(engine, nodeList, dt, energy, motionPolicy, effectiveDamping, maxVelocityEffective, debugStats, preRollActive);
         engine.lastDebugStats = debugStats;
         if (perfEnabled && frameTiming) {
             frameTiming.totalMs = getNowMs() - tickStart;
@@ -550,7 +628,7 @@ export const runPhysicsTick = (engine: PhysicsEngineTickContext, dt: number) => 
     applyPreRollVelocity(engine as any, nodeList, preRollActive, debugStats);
 
     // 4. Integrate (always runs, never stops)
-    integrateNodes(engine as any, nodeList, dt, energy, effectiveDamping, maxVelocityEffective, debugStats, preRollActive);
+    integrateNodes(engine as any, nodeList, dt, energy, motionPolicy, effectiveDamping, maxVelocityEffective, debugStats, preRollActive);
 
     // =====================================================================
     // COMPUTE Dot DEGREES (needed early for degree-1 exclusion)
@@ -558,27 +636,27 @@ export const runPhysicsTick = (engine: PhysicsEngineTickContext, dt: number) => 
     // =====================================================================
     const nodeDegreeEarly = computeNodeDegrees(engine as any, nodeList);
 
-    applyExpansionResistance(engine as any, nodeList, nodeDegreeEarly, energy, debugStats, dt);
+    applyExpansionResistance(engine as any, nodeList, nodeDegreeEarly, motionPolicy, debugStats, dt);
 
     const microEnabled = engine.frameIndex % microEvery === 0;
     if (microEnabled) {
         // Dense-core velocity de-locking (micro-slip) - breaks rigid-body lock
-        applyDenseCoreVelocityDeLocking(engine as any, nodeList, energy, debugStats);
+        applyDenseCoreVelocityDeLocking(engine as any, nodeList, motionPolicy, debugStats);
 
         // Static friction bypass - breaks zero-velocity rest state
-        applyStaticFrictionBypass(engine as any, nodeList, energy, debugStats);
+        applyStaticFrictionBypass(engine as any, nodeList, motionPolicy, debugStats);
 
         // Angular velocity decoherence - breaks velocity orientation correlation
-        applyAngularVelocityDecoherence(engine as any, nodeList, energy, debugStats);
+        applyAngularVelocityDecoherence(engine as any, nodeList, motionPolicy, debugStats);
 
         // Local phase diffusion - breaks oscillation synchronization (shape memory eraser)
-        applyLocalPhaseDiffusion(engine as any, nodeList, energy, debugStats);
+        applyLocalPhaseDiffusion(engine as any, nodeList, motionPolicy, debugStats);
 
         // Low-force stagnation escape - breaks rest-position preference (edge shear version)
-        applyEdgeShearStagnationEscape(engine as any, nodeList, energy, debugStats);
+        applyEdgeShearStagnationEscape(engine as any, nodeList, motionPolicy, debugStats);
 
         // Dense-core inertia relaxation - erases momentum memory in jammed dots
-        applyDenseCoreInertiaRelaxation(engine as any, nodeList, energy, debugStats);
+        applyDenseCoreInertiaRelaxation(engine as any, nodeList, motionPolicy, debugStats);
     }
 
     // =====================================================================
@@ -606,7 +684,7 @@ export const runPhysicsTick = (engine: PhysicsEngineTickContext, dt: number) => 
                     engine.sleepingList,
                     correctionAccum,
                     nodeDegreeEarly,
-                    energy,
+                    motionPolicy,
                     debugStats,
                     spacingGate,
                     dt,
@@ -623,7 +701,7 @@ export const runPhysicsTick = (engine: PhysicsEngineTickContext, dt: number) => 
                     engine.sleepingList,
                     correctionAccum,
                     nodeDegreeEarly,
-                    energy,
+                    motionPolicy,
                     debugStats,
                     spacingGate,
                     dt,
@@ -640,7 +718,7 @@ export const runPhysicsTick = (engine: PhysicsEngineTickContext, dt: number) => 
                 focusSleeping,
                 correctionAccum,
                 nodeDegreeEarly,
-                energy,
+                motionPolicy,
                 debugStats,
                 spacingGate,
                 dt,
@@ -651,9 +729,9 @@ export const runPhysicsTick = (engine: PhysicsEngineTickContext, dt: number) => 
         const triangleEnabled = (engine.perfMode === 'normal' || engine.perfMode === 'stressed') &&
             engine.frameIndex % triangleEvery === 0;
         if (triangleEnabled) {
-            applyTriangleAreaConstraints(engine as any, nodeList, correctionAccum, nodeDegreeEarly, energy, debugStats, dt);
+            applyTriangleAreaConstraints(engine as any, nodeList, correctionAccum, nodeDegreeEarly, energy, motionPolicy, debugStats, dt);
         }
-        applyAngleResistanceVelocity(engine as any, nodeList, nodeDegreeEarly, energy, debugStats, dt);
+        applyAngleResistanceVelocity(engine as any, nodeList, nodeDegreeEarly, motionPolicy, debugStats, dt);
         applyDistanceBiasVelocity(engine as any, nodeList, debugStats, dt);
         const safetyEnabled = engine.frameIndex % safetyEvery === 0;
         if (safetyEnabled) {
@@ -663,7 +741,7 @@ export const runPhysicsTick = (engine: PhysicsEngineTickContext, dt: number) => 
                 engine.sleepingList,
                 correctionAccum,
                 nodeDegreeEarly,
-                energy,
+                motionPolicy,
                 debugStats,
                 dt,
                 pairStrideBase,
@@ -676,7 +754,7 @@ export const runPhysicsTick = (engine: PhysicsEngineTickContext, dt: number) => 
                 focusSleeping,
                 correctionAccum,
                 nodeDegreeEarly,
-                energy,
+                motionPolicy,
                 debugStats,
                 dt,
                 1,
@@ -688,7 +766,7 @@ export const runPhysicsTick = (engine: PhysicsEngineTickContext, dt: number) => 
             engine as any,
             nodeList,
             correctionAccum,
-            energy,
+            motionPolicy,
             spacingGate,
             debugStats,
             dt,
@@ -756,6 +834,7 @@ export const runPhysicsTick = (engine: PhysicsEngineTickContext, dt: number) => 
 
     logEnergyDebug(engine.lifecycle, energy, effectiveDamping, maxVelocityEffective);
     engine.lastDebugStats = debugStats;
+    updateHudSnapshot(getNowMs(), nodeList, debugStats);
 
     if (perfEnabled && frameTiming) {
         const tickEnd = getNowMs();

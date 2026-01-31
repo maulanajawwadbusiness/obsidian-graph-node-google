@@ -1,8 +1,9 @@
 import type { PhysicsEngine } from '../../engine';
 import type { PhysicsNode } from '../../types';
+import type { MotionPolicy } from '../motionPolicy';
 import { getPassStats, type DebugStats } from '../stats';
 import { logStaticFrictionBypass } from './debugVelocity';
-import { isDense, isEarlyExpansion } from './energyGates';
+import { isDense } from './energyGates';
 import { computeRelativeVelocity } from './relativeVelocityUtils';
 
 /**
@@ -14,11 +15,11 @@ import { computeRelativeVelocity } from './relativeVelocityUtils';
 export const applyStaticFrictionBypass = (
     engine: PhysicsEngine,
     nodeList: PhysicsNode[],
-    energy: number,
+    policy: MotionPolicy,
     stats: DebugStats
 ) => {
-    // Only during early expansion
-    if (!isEarlyExpansion(energy)) return;
+    const frictionStrength = policy.microSlip;
+    if (frictionStrength <= 0.01) return;
 
     // FIX 20: MICRO-NOISE MISGATING
     // Disable during interaction to prevent "fighting" the hand
@@ -30,7 +31,7 @@ export const applyStaticFrictionBypass = (
     const densityRadius = 30;
     const densityThreshold = 4;
     const relVelEpsilon = 0.05;  // FIX 20: Stricter activation (was 0.5)
-    const microSlip = 0.01;      // FIX 20: Reduced amplitude (was 0.02)
+    const microSlip = 0.01 * frictionStrength;      // FIX 20: Reduced amplitude (was 0.02)
 
     // Pre-compute local density for all nodes
     const localDensity = new Map<string, number>();

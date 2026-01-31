@@ -1,15 +1,17 @@
 import type { PhysicsEngine } from '../../engine';
 import type { PhysicsNode } from '../../types';
+import type { MotionPolicy } from '../motionPolicy';
 import { getPassStats, type DebugStats } from '../stats';
 
 export const applyCarrierFlowAndPersistence = (
     engine: PhysicsEngine,
     nodeList: PhysicsNode[],
     node: PhysicsNode,
-    energy: number,
+    policy: MotionPolicy,
     stats: DebugStats
 ) => {
-    if (energy <= 0.7) return;
+    const carrierStrength = policy.carrierFlow;
+    if (carrierStrength <= 0.01) return;
 
     const passStats = getPassStats(stats, 'CarrierFlow');
     let nodeVelocityDelta = 0;
@@ -64,15 +66,12 @@ export const applyCarrierFlowAndPersistence = (
                     const perpY = toCx / toD;
 
                     // Fade: 1.0 at energy=1.0, 0.0 at energy=0.7
-                    const fade = Math.min((energy - 0.7) / 0.3, 1);
-                    const smoothFade = fade * fade * (3 - 2 * fade);
-
                     // Very small velocity bias
-                    const carrierStrength = 0.05 * smoothFade;
+                    const carrierMagnitude = 0.05 * carrierStrength;
 
-                    node.vx += perpX * carrierStrength;
-                    node.vy += perpY * carrierStrength;
-                    nodeVelocityDelta += Math.abs(carrierStrength);
+                    node.vx += perpX * carrierMagnitude;
+                    node.vy += perpY * carrierMagnitude;
+                    nodeVelocityDelta += Math.abs(carrierMagnitude);
 
                     // RELIABILITY GATE: only store direction if well-defined
                     const centroidEpsilon = 2.0;  // Minimum centroid distance

@@ -11,6 +11,7 @@ export const createMetricsTracker = (
 ): MetricsUpdater => {
     let frameCount = 0;
     let lastFpsTime = performance.now();
+    let smoothedFps = 0;
 
     return (now, engine) => {
         frameCount++;
@@ -20,7 +21,9 @@ export const createMetricsTracker = (
             return;
         }
 
-        const fps = Math.round((frameCount * 1000) / fpsDelta);
+        const fpsRaw = (frameCount * 1000) / fpsDelta;
+        smoothedFps = smoothedFps === 0 ? fpsRaw : (smoothedFps * 0.8 + fpsRaw * 0.2);
+        const fps = Number(smoothedFps.toFixed(1));
 
         let totalVel = 0;
         let activeNodes = 0;
@@ -67,7 +70,8 @@ export const createMetricsTracker = (
             stdDist,
             aspectRatio: aspect,
             lifecycleMs: Math.round(engine.lifecycle * 1000),
-            renderDebug: getRenderDebug ? getRenderDebug() : undefined
+            renderDebug: getRenderDebug ? getRenderDebug() : undefined,
+            physicsHud: engine.getHudSnapshot()
         });
 
         frameCount = 0;

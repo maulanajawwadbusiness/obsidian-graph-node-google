@@ -368,7 +368,8 @@ export const updateHoverSelectionIfNeeded = (
 
     // P1: Loop Gate Probe (Unconditional, Throttled 1Hz)
     // FIX: Removing debug flag blindness to prove loop execution
-    if (now - (hoverStateRef.current as any).lastGateLog > 1000) {
+    const lastGate = (hoverStateRef.current as any).lastGateLog || 0;
+    if (now - lastGate > 1000) {
         (hoverStateRef.current as any).lastGateLog = now;
         console.log(`[HoverDbg] Gate: pending=${pendingPointer} ` +
             `hasPtr=${hoverStateRef.current.hasPointer} ` +
@@ -382,7 +383,8 @@ export const updateHoverSelectionIfNeeded = (
     if (shouldRun || heartbeat) { // 10hz fallback
         if (hoverStateRef.current.hasPointer) {
             // P2: Call Probe (Unconditional, Throttled)
-            if (now - (hoverStateRef.current as any).lastCallLog > 1000) {
+            const lastCall = (hoverStateRef.current as any).lastCallLog || 0;
+            if (now - lastCall > 1000) {
                 (hoverStateRef.current as any).lastCallLog = now;
                 console.log('[HoverDbg] Call updateHoverSelection');
             }

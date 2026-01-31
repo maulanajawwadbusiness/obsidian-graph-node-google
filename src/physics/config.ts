@@ -131,7 +131,7 @@ export const DEFAULT_PHYSICS_CONFIG: ForceConfig = {
     // Soft pre-zone before hard barrier
     softDistanceMultiplier: 1.5,  // D_soft = D_hard * 1.5
     softRepulsionExponent: 2.5,   // How sharply resistance ramps up
-    softMaxCorrectionPx: 2.0,     // Max correction in soft zone
+    softMaxCorrectionWorld: 2.0,     // Max correction in soft zone
     maxCorrectionPerFrame: 1.5,   // Global max to prevent snapping
     hardSoftnessBand: 0.2,        // Fraction of minDist for smoothstep ramp
     clampHysteresisMargin: 25,    // Wide buffer to make clamp imperceptible

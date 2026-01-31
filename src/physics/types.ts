@@ -15,6 +15,11 @@ export interface PhysicsNode {
   fx: number;
   fy: number;
 
+  // History (Ghost Velocity Forensic)
+  // Used for maxPrevGap and verifying Euler consistency
+  prevX?: number;
+  prevY?: number;
+
   // Physical properties
   mass: number;    // Affects how hard it is to move
   radius: number;  // For collision/repulsion radius
@@ -56,6 +61,22 @@ export interface PhysicsNode {
   // Conflict Signal (HUD Feel Markers)
   conflictEma?: number; // EMA of correction-vs-velocity conflict
   conflictThisFrame?: number; // 0/1 marker for current frame
+
+  // Projection Verification
+  lastSnapMag?: number; // Magnitude of last positional snap/teleport
+  lastVClampRel?: number; // Magnitude of velocity clamp adjustment relative to v
+  historyMismatch?: number; // |(x-prevX)/dt - v|
+
+  // Degeneracy (Per Node)
+  degenerateAreaCount?: number; // How many degenerate triangles this node touched
+
+  // Budget Forensics
+  correctionClipped?: number; // Amount of correction clipped this frame
+  correctionDebt?: number; // Current debt (residual)
+  budgetBonus?: number; // Adaptive budget bonus
+
+  // Oscillation Forensics
+  corrSignFlip?: boolean; // Did correction flip sign vs last frame?
 
   // Firewall fallback state (last known good)
   lastGoodX?: number;
@@ -157,7 +178,7 @@ export interface ForceConfig {
   // Soft pre-zone before hard barrier
   softDistanceMultiplier: number; // D_soft = D_hard * multiplier (default 1.5)
   softRepulsionExponent: number;  // How sharply resistance ramps up (default 2.5)
-  softMaxCorrectionPx: number;    // Max correction per pair per frame in soft zone (default 2.0)
+  softMaxCorrectionWorld: number;    // Max correction per pair per frame in soft zone (default 2.0)
   maxCorrectionPerFrame: number;  // Global max correction per pair per frame (default 1.5)
   hardSoftnessBand: number;       // Fraction of minDist for smoothstep ramp (default 0.2)
   clampHysteresisMargin: number;  // Buffer above minDist before releasing clamp (default 5px)

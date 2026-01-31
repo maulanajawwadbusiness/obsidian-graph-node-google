@@ -26,6 +26,7 @@ export const MAIN_STYLE: React.CSSProperties = {
     position: 'relative',
     cursor: 'grab',
     touchAction: 'none', // FIX 41: Prevent browser pan/zoom gestures on canvas
+    userSelect: 'none', // FIX 42: Prevent text selection during drag
 };
 
 export const SIDEBAR_STYLE: React.CSSProperties = {

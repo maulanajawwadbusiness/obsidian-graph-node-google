@@ -192,4 +192,11 @@ export interface ForceConfig {
   debugPerf?: boolean; // Enable per-pass timing logs (once per second)
   debugStall?: boolean; // Simulate heavy load
   enableMicroDrift?: boolean; // Enable "water" micro-drift (default: false)
+  // Forensics Kill Switches
+  debugDisableDiffusion?: boolean;
+  debugDisableMicroSlip?: boolean;
+  debugDisableRepulsion?: boolean;
+  debugDisableConstraints?: boolean;
+  debugDisableReconcile?: boolean;
+  debugDisableAllVMods?: boolean;
 }

@@ -58,6 +58,11 @@ export class PhysicsEngine {
     public hudHistory: PhysicsHudHistory = createInitialPhysicsHudHistory();
     public hudSettleState: PhysicsHudSnapshot['settleState'] = 'moving';
     public hudSettleStateAt: number = getNowMs();
+
+    // Fix: Micro-Jitter Forensic Kill-Switches (Dev Only)
+    public debugDisableDiffusion: boolean = false;
+    public debugDisableMicroSlip: boolean = false;
+    public debugDisableRepulsion: boolean = false;
     private spacingGate: number = 0;
     private spacingGateActive: boolean = false;
     private nodeListCache: PhysicsNode[] = [];

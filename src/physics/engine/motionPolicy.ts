@@ -9,6 +9,8 @@ export type MotionPolicy = {
     microSlip: number;
     carrierFlow: number;
     angleResistanceRelief: number;
+    restSpeedSq: number;
+    restFramesRequired: number;
 };
 
 const clamp01 = (value: number) => Math.max(0, Math.min(1, value));
@@ -29,6 +31,14 @@ export const createMotionPolicy = (temperature: number): MotionPolicy => {
     const carrierFlow = expansion;
     const angleResistanceRelief = expansion;
 
+    // Fix 1: Rest Thresholds (Unified Scalar)
+    // When temp is high, we require stricter rest (lower speed to sleep?)
+    // Actually, when temp is high, nothing should sleep.
+    // So restSpeedSq should be tiny? Or just constant?
+    // Let's make it constant for now, but carried by policy as requested.
+    const restSpeedSq = 0.01 * 0.01; // 0.01 velocity
+    const restFramesRequired = 60; // 1 second
+
     return {
         temperature,
         earlyExpansion,
@@ -40,5 +50,7 @@ export const createMotionPolicy = (temperature: number): MotionPolicy => {
         microSlip,
         carrierFlow,
         angleResistanceRelief,
+        restSpeedSq,
+        restFramesRequired,
     };
 };

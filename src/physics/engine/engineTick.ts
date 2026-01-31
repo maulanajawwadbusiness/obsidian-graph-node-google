@@ -91,6 +91,10 @@ export type PhysicsEngineTickContext = {
     worldHeight: number;
     getNodeList: () => PhysicsNode[];
     requestImpulse: () => void;
+    // Fix: Kill-Switches
+    debugDisableDiffusion?: boolean;
+    debugDisableMicroSlip?: boolean;
+    debugDisableRepulsion?: boolean;
 };
 
 const computePairStride = (nodeCount: number, targetChecks: number, maxStride: number) => {
@@ -202,6 +206,56 @@ export const runPhysicsTick = (engine: PhysicsEngineTickContext, dt: number) => 
         }
         : null;
     const tickStart = perfEnabled ? getNowMs() : 0;
+
+    // FORENSICS: Energy Ledger
+    // Helper to compute total kinetic energy proxy (sum v^2)
+    const measureEnergy = (stageName: string, lastE: number) => {
+        let e = 0;
+        for (const node of nodeList) {
+            e += node.vx * node.vx + node.vy * node.vy;
+        }
+        debugStats.energyLedger.push({
+            stage: stageName,
+            energy: e,
+            delta: e - lastE
+        });
+        return e;
+    };
+    let currentEnergy = measureEnergy('PreTick', 0); // Init
+
+    // FORENSICS: Fight Ledger
+    const measureFight = (stageName: string, accum?: Map<string, { dx: number; dy: number }>) => {
+        let avgCorr = 0;
+        let conflictCount = 0;
+        let nodeCount = nodeList.length || 1;
+
+        if (accum) {
+            let sumCorr = 0;
+            for (const node of nodeList) {
+                const c = accum.get(node.id);
+                if (c) {
+                    const mag = Math.sqrt(c.dx * c.dx + c.dy * c.dy);
+                    sumCorr += mag;
+                    if ((c.dx * node.vx + c.dy * node.vy) < 0) {
+                        conflictCount++;
+                    }
+                }
+            }
+            avgCorr = sumCorr / nodeCount;
+        } else {
+            // Fallback: use stats if available (post-correction)
+            conflictCount = debugStats.correctionConflictCount;
+        }
+
+        debugStats.fightLedger.push({
+            stage: stageName,
+            conflictPct: (conflictCount / nodeCount) * 100,
+            avgCorr: avgCorr
+        });
+    };
+    measureFight('PreTick');
+
+
     const updateHudSnapshot = (
         nowMs: number,
         nodes: PhysicsNode[],
@@ -469,7 +523,7 @@ export const runPhysicsTick = (engine: PhysicsEngineTickContext, dt: number) => 
     const edgeRelaxEvery = degradeLevel === 0 ? 1 : degradeLevel === 1 ? 2 : 3;
     const microEvery = degradeLevel === 0 ? 1 : degradeLevel === 1 ? 2 : 4;
 
-    const repulsionEnabled = runPairwiseForces && engine.frameIndex % repulsionEvery === 0;
+    const repulsionEnabled = !engine.config.debugDisableRepulsion && runPairwiseForces && engine.frameIndex % repulsionEvery === 0;
     const collisionEnabled = runPairwiseForces && (engine.frameIndex + 1) % collisionEvery === 0;
 
     if (perfEnabled) {
@@ -621,14 +675,23 @@ export const runPhysicsTick = (engine: PhysicsEngineTickContext, dt: number) => 
         localBoostActive && !repulsionEnabled ? focusSleeping : undefined,
         localBoostActive && !repulsionEnabled,
         localBoostActive && !collisionEnabled,
-        1,
         pairOffset + 7
     );
-    applyDragVelocity(engine as any, nodeList, dt, debugStats);
-    applyPreRollVelocity(engine as any, nodeList, preRollActive, debugStats);
+    measureFight('PostForces');
+
+    currentEnergy = measureEnergy('PostForces', currentEnergy);
+
+    if (!engine.config.debugDisableAllVMods) {
+        applyDragVelocity(engine as any, nodeList, dt, debugStats);
+        applyPreRollVelocity(engine as any, nodeList, preRollActive, debugStats);
+    }
+    currentEnergy = measureEnergy('PostVMods', currentEnergy); // Includes drag/preroll
+    measureFight('PostVMods');
 
     // 4. Integrate (always runs, never stops)
     integrateNodes(engine as any, nodeList, dt, energy, motionPolicy, effectiveDamping, maxVelocityEffective, debugStats, preRollActive);
+    currentEnergy = measureEnergy('PostInteg', currentEnergy);
+    measureFight('PostInteg');
 
     // =====================================================================
     // COMPUTE Dot DEGREES (needed early for degree-1 exclusion)
@@ -636,12 +699,16 @@ export const runPhysicsTick = (engine: PhysicsEngineTickContext, dt: number) => 
     // =====================================================================
     const nodeDegreeEarly = computeNodeDegrees(engine as any, nodeList);
 
-    applyExpansionResistance(engine as any, nodeList, nodeDegreeEarly, motionPolicy, debugStats, dt);
+    if (!engine.config.debugDisableAllVMods) {
+        applyExpansionResistance(engine as any, nodeList, nodeDegreeEarly, motionPolicy, debugStats, dt);
+    }
 
     const microEnabled = engine.frameIndex % microEvery === 0;
-    if (microEnabled) {
-        // Dense-core velocity de-locking (micro-slip) - breaks rigid-body lock
-        applyDenseCoreVelocityDeLocking(engine as any, nodeList, motionPolicy, debugStats);
+    if (microEnabled && !engine.config.debugDisableAllVMods) {
+        if (!engine.config.debugDisableMicroSlip) {
+            // Dense-core velocity de-locking (micro-slip) - breaks rigid-body lock
+            applyDenseCoreVelocityDeLocking(engine as any, nodeList, motionPolicy, debugStats);
+        }
 
         // Static friction bypass - breaks zero-velocity rest state
         applyStaticFrictionBypass(engine as any, nodeList, motionPolicy, debugStats);
@@ -657,6 +724,9 @@ export const runPhysicsTick = (engine: PhysicsEngineTickContext, dt: number) => 
 
         // Dense-core inertia relaxation - erases momentum memory in jammed dots
         applyDenseCoreInertiaRelaxation(engine as any, nodeList, motionPolicy, debugStats);
+
+        currentEnergy = measureEnergy('PostMicro', currentEnergy);
+        measureFight('PostMicro');
     }
 
     // =====================================================================
@@ -671,107 +741,124 @@ export const runPhysicsTick = (engine: PhysicsEngineTickContext, dt: number) => 
     }
 
     if (!preRollActive) {
-        const edgeRelaxEnabled = engine.frameIndex % edgeRelaxEvery === 0;
-        if (edgeRelaxEnabled) {
-            applyEdgeRelaxation(engine, correctionAccum, nodeDegreeEarly, debugStats, dt);
-        }
-        if (spacingWillRun) {
-            if (perfEnabled && frameTiming) {
-                const spacingStart = getNowMs();
+        const constraintsDisabled = !!engine.config.debugDisableConstraints;
+
+        if (!constraintsDisabled) {
+            const edgeRelaxEnabled = engine.frameIndex % edgeRelaxEvery === 0;
+            if (edgeRelaxEnabled) {
+                applyEdgeRelaxation(engine, correctionAccum, nodeDegreeEarly, debugStats, dt);
+            }
+            if (spacingWillRun) {
+                if (perfEnabled && frameTiming) {
+                    const spacingStart = getNowMs();
+                    applySpacingConstraints(
+                        engine as any,
+                        engine.awakeList,
+                        engine.sleepingList,
+                        correctionAccum,
+                        nodeDegreeEarly,
+                        motionPolicy,
+                        debugStats,
+                        spacingGate,
+                        dt,
+                        spacingStride,
+                        pairOffset + 2,
+                        1.0,
+                        engine.spacingHotPairs
+                    );
+                    frameTiming.spacingMs += getNowMs() - spacingStart;
+                } else {
+                    applySpacingConstraints(
+                        engine as any,
+                        engine.awakeList,
+                        engine.sleepingList,
+                        correctionAccum,
+                        nodeDegreeEarly,
+                        motionPolicy,
+                        debugStats,
+                        spacingGate,
+                        dt,
+                        spacingStride,
+                        pairOffset + 2,
+                        1.0,
+                        engine.spacingHotPairs
+                    );
+                }
+            } else if (localBoostActive && focusActive.length > 0) {
                 applySpacingConstraints(
                     engine as any,
-                    engine.awakeList,
-                    engine.sleepingList,
+                    focusActive,
+                    focusSleeping,
                     correctionAccum,
                     nodeDegreeEarly,
                     motionPolicy,
                     debugStats,
                     spacingGate,
                     dt,
-                    spacingStride,
-                    pairOffset + 2,
-                    1.0,
-                    engine.spacingHotPairs
-                );
-                frameTiming.spacingMs += getNowMs() - spacingStart;
-            } else {
-                applySpacingConstraints(
-                    engine as any,
-                    engine.awakeList,
-                    engine.sleepingList,
-                    correctionAccum,
-                    nodeDegreeEarly,
-                    motionPolicy,
-                    debugStats,
-                    spacingGate,
-                    dt,
-                    spacingStride,
-                    pairOffset + 2,
-                    1.0,
-                    engine.spacingHotPairs
+                    1,
+                    pairOffset + 5
                 );
             }
-        } else if (localBoostActive && focusActive.length > 0) {
-            applySpacingConstraints(
-                engine as any,
-                focusActive,
-                focusSleeping,
-                correctionAccum,
-                nodeDegreeEarly,
-                motionPolicy,
-                debugStats,
-                spacingGate,
-                dt,
-                1,
-                pairOffset + 5
-            );
-        }
-        const triangleEnabled = (engine.perfMode === 'normal' || engine.perfMode === 'stressed') &&
-            engine.frameIndex % triangleEvery === 0;
-        if (triangleEnabled) {
-            applyTriangleAreaConstraints(engine as any, nodeList, correctionAccum, nodeDegreeEarly, energy, motionPolicy, debugStats, dt);
-        }
-        applyAngleResistanceVelocity(engine as any, nodeList, nodeDegreeEarly, motionPolicy, debugStats, dt);
-        applyDistanceBiasVelocity(engine as any, nodeList, debugStats, dt);
-        const safetyEnabled = engine.frameIndex % safetyEvery === 0;
-        if (safetyEnabled) {
-            applySafetyClamp(
-                engine as any,
-                engine.awakeList,
-                engine.sleepingList,
-                correctionAccum,
-                nodeDegreeEarly,
-                motionPolicy,
-                debugStats,
-                dt,
-                pairStrideBase,
-                pairOffset + 3
-            );
-        } else if (localBoostActive && focusActive.length > 0) {
-            applySafetyClamp(
-                engine as any,
-                focusActive,
-                focusSleeping,
-                correctionAccum,
-                nodeDegreeEarly,
-                motionPolicy,
-                debugStats,
-                dt,
-                1,
-                pairOffset + 6
-            );
-        }
+            const triangleEnabled = (engine.perfMode === 'normal' || engine.perfMode === 'stressed') &&
+                engine.frameIndex % triangleEvery === 0;
+            if (triangleEnabled) {
+                applyTriangleAreaConstraints(engine as any, nodeList, correctionAccum, nodeDegreeEarly, energy, motionPolicy, debugStats, dt);
+            }
+            applyAngleResistanceVelocity(engine as any, nodeList, nodeDegreeEarly, motionPolicy, debugStats, dt);
+
+            // NOTE: DistanceBias is a Velocity Mod, but lives in constraints block?
+            // Moving it to respect VMod flag if needed, but for now kept here.
+            applyDistanceBiasVelocity(engine as any, nodeList, debugStats, dt);
+
+            const safetyEnabled = engine.frameIndex % safetyEvery === 0;
+            if (safetyEnabled) {
+                applySafetyClamp(
+                    engine as any,
+                    engine.awakeList,
+                    engine.sleepingList,
+                    correctionAccum,
+                    nodeDegreeEarly,
+                    motionPolicy,
+                    debugStats,
+                    dt,
+                    pairStrideBase,
+                    pairOffset + 3
+                );
+            } else if (localBoostActive && focusActive.length > 0) {
+                applySafetyClamp(
+                    engine as any,
+                    focusActive,
+                    focusSleeping,
+                    correctionAccum,
+                    nodeDegreeEarly,
+                    motionPolicy,
+                    debugStats,
+                    dt,
+                    1,
+                    pairOffset + 6
+                );
+            }
+        } // End constraintsDisabled check
+
+        measureFight('PostConstraints', correctionAccum);
+
+        const reconcileDisabled = !!engine.config.debugDisableReconcile;
         const maxDiffusionNeighbors = degradeLevel === 0 ? undefined : degradeLevel === 1 ? 4 : 2;
-        applyCorrectionsWithDiffusion(
-            engine as any,
-            nodeList,
-            correctionAccum,
-            motionPolicy,
-            spacingGate,
-            debugStats,
-            dt,
-            maxDiffusionNeighbors
-        );
+
+        if (!engine.config.debugDisableDiffusion && !reconcileDisabled) {
+            applyCorrectionsWithDiffusion(
+                engine as any,
+                nodeList,
+                correctionAccum,
+                motionPolicy,
+                spacingGate,
+                debugStats,
+                dt,
+                maxDiffusionNeighbors
+            );
+        }
+        currentEnergy = measureEnergy('PostCorrect', currentEnergy);
+        measureFight('PostReconcile'); // Uses stats.conflict count
     }
     if (perfEnabled && frameTiming) {
         frameTiming.pbdMs += getNowMs() - pbdStart;
@@ -803,6 +890,36 @@ export const runPhysicsTick = (engine: PhysicsEngineTickContext, dt: number) => 
         }
     }
 
+    // FIX 1: Per-Node Sleep Detection (Canonical)
+    // Run after all forces/corrections/integration are final.
+    const restSpeedSq = motionPolicy.restSpeedSq;
+    const restFramesRequired = motionPolicy.restFramesRequired;
+    let sleepCandidates = 0;
+
+    for (const node of nodeList) {
+        // Authority nodes are never sleeping (they are user-controlled)
+        if (node.isFixed || node.id === engine.draggedNodeId) {
+            node.sleepFrames = 0;
+            node.isSleeping = false;
+            continue;
+        }
+
+        const speedSq = node.vx * node.vx + node.vy * node.vy;
+        if (speedSq < restSpeedSq) {
+            node.sleepFrames = (node.sleepFrames || 0) + 1;
+            sleepCandidates++;
+        } else {
+            node.sleepFrames = 0;
+            node.isSleeping = false;
+        }
+
+        if (node.sleepFrames >= restFramesRequired) {
+            node.isSleeping = true;
+        }
+    }
+
+    // Wire hudSettleState to engine for external access (Fix 2)
+    // (Already satisfied by updateHudSnapshot logic above, but ensure it sticks)
     if (engine.draggedNodeId && engine.dragTarget) {
         const node = engine.nodes.get(engine.draggedNodeId);
         if (node) {

@@ -60,6 +60,18 @@ export const createMetricsTracker = (
         const shapeH = maxY - minY;
         const aspect = (shapeH > 0.1) ? shapeW / shapeH : 1.0;
 
+        const debugStats = engine.getDebugStats();
+        const renderDebugBase = getRenderDebug ? getRenderDebug() : undefined;
+        let renderDebug = renderDebugBase;
+
+        if (renderDebugBase && debugStats) {
+            renderDebug = {
+                ...renderDebugBase,
+                energyLedger: debugStats.energyLedger,
+                fightLedger: debugStats.fightLedger
+            };
+        }
+
         setMetrics({
             nodes: engine.nodes.size,
             links: engine.links.length,
@@ -70,7 +82,7 @@ export const createMetricsTracker = (
             stdDist,
             aspectRatio: aspect,
             lifecycleMs: Math.round(engine.lifecycle * 1000),
-            renderDebug: getRenderDebug ? getRenderDebug() : undefined,
+            renderDebug,
             physicsHud: engine.getHudSnapshot()
         });
 

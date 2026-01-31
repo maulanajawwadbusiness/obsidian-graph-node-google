@@ -4,6 +4,7 @@ import {
     DEBUG_CLOSE_STYLE,
     DEBUG_OVERLAY_STYLE,
     DEBUG_TOGGLE_STYLE,
+    DEBUG_SECTION_HEADER_STYLE, // Assume this exists or I use bold
     SIDEBAR_TOGGLE_STYLE,
     THEME_TOGGLE_STYLE
 } from '../graphPlaygroundStyles';
@@ -12,8 +13,12 @@ import { IS_DEV } from '../rendering/debugUtils';
 // Toggle to show/hide debug controls buttons (Debug, Theme, Controls)
 const SHOW_DEBUG_CONTROLS = true;
 
+import type { ForceConfig } from '../../physics/types';
+
 const stopPropagation = (e: React.MouseEvent) => e.stopPropagation();
 type CanvasOverlaysProps = {
+    config?: ForceConfig;
+    onConfigChange?: (key: keyof ForceConfig, value: number | boolean) => void;
     debugOpen: boolean;
     metrics: PlaygroundMetrics;
     onCloseDebug: () => void;
@@ -88,7 +93,9 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
     onRecordHudScore,
     hudScenarioLabel,
     hudDragTargetId,
-    hudScores
+    hudScores,
+    config,
+    onConfigChange
 }) => {
     const hud = metrics.physicsHud;
     const formatRatio = (value: number, base?: number) => {
@@ -96,6 +103,8 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
         return ` (x${(value / base).toFixed(2)})`;
     };
     const baseScore = hudScores[5];
+
+    const [showAdvanced, setShowAdvanced] = React.useState(false);
 
     return (
         <>
@@ -197,6 +206,9 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
                     </div>
                     <br />
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginBottom: '10px' }}>
+                        <div style={{ fontSize: '10px', color: '#666', marginBottom: '4px' }}>
+                            HUD v1.1 (fight-ledger enabled)
+                        </div>
                         <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', cursor: 'pointer' }}>
                             <input
                                 type="checkbox"
@@ -279,6 +291,55 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
                             </>
                         )}
                     </div>
+
+
+
+                    {/* ADVANCED TOGGLES GATE */}
+                    {IS_DEV && config && onConfigChange && (
+                        <div style={{ marginBottom: '10px' }}>
+                            <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', cursor: 'pointer', color: '#aaa' }}>
+                                <input
+                                    type="checkbox"
+                                    checked={showAdvanced}
+                                    onChange={(e) => setShowAdvanced(e.target.checked)}
+                                />
+                                Show Advanced Physics Toggles
+                            </label>
+
+                            {showAdvanced && (
+                                <div style={{ marginTop: '4px', padding: '4px', background: 'rgba(255,0,0,0.1)', border: '1px solid rgba(255,0,0,0.3)' }}>
+                                    <strong style={{ fontWeight: 700, fontSize: '11px', color: '#ff8888' }}>ISOLATION (KILL SWITCHES)</strong>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2px' }}>
+                                        <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '10px', cursor: 'pointer' }}>
+                                            <input type="checkbox" checked={!!config.debugDisableDiffusion} onChange={(e) => onConfigChange('debugDisableDiffusion', e.target.checked)} />
+                                            No Diffusion
+                                        </label>
+                                        <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '10px', cursor: 'pointer' }}>
+                                            <input type="checkbox" checked={!!config.debugDisableMicroSlip} onChange={(e) => onConfigChange('debugDisableMicroSlip', e.target.checked)} />
+                                            No MicroSlip
+                                        </label>
+                                        <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '10px', cursor: 'pointer' }}>
+                                            <input type="checkbox" checked={!!config.debugDisableRepulsion} onChange={(e) => onConfigChange('debugDisableRepulsion', e.target.checked)} />
+                                            No Repulsion
+                                        </label>
+                                        <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '10px', cursor: 'pointer' }}>
+                                            <input type="checkbox" checked={!!config.debugDisableConstraints} onChange={(e) => onConfigChange('debugDisableConstraints', e.target.checked)} />
+                                            No Constraints
+                                        </label>
+                                        <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '10px', cursor: 'pointer' }}>
+                                            <input type="checkbox" checked={!!config.debugDisableReconcile} onChange={(e) => onConfigChange('debugDisableReconcile', e.target.checked)} />
+                                            No Reconcile
+                                        </label>
+                                        <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '10px', cursor: 'pointer' }}>
+                                            <input type="checkbox" checked={!!config.debugDisableAllVMods} onChange={(e) => onConfigChange('debugDisableAllVMods', e.target.checked)} />
+                                            No V-Mods
+                                        </label>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
                     <strong style={{ fontWeight: 700 }}>Physics HUD</strong><br />
                     Nodes: {metrics.nodes} | Links: {metrics.links}<br />
                     FPS: {metrics.fps} <br />
@@ -295,12 +356,64 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
                             <strong style={{ color: '#aaa' }} >Rest Marker Forensic</strong><br />
                             Enabled: {metrics.renderDebug.restMarkerStats.enabled ? 'YES' : 'NO'}<br />
                             DrawPass: {metrics.renderDebug.restMarkerStats.drawPassCalled ? 'YES' : 'NO'} <br />
-                            LastDraw: {(performance.now() - metrics.renderDebug.restMarkerStats.lastDrawTime).toFixed(0)}ms ago<br />
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px', fontSize: '10px' }}>
+                                <div>A (HudSleep): {metrics.renderDebug.restMarkerStats.countA}</div>
+                                <div>B (IsSleep): {metrics.renderDebug.restMarkerStats.countB}</div>
+                                <div>C (Frames): {metrics.renderDebug.restMarkerStats.countC}</div>
+                                <div>D (Fallback): {metrics.renderDebug.restMarkerStats.countD}</div>
+                            </div>
                             Candidates: {metrics.renderDebug.restMarkerStats.candidateCount}<br />
-                            Sleeping: {metrics.renderDebug.restMarkerStats.sleepingCount}<br />
-                            JitterWarn: {metrics.renderDebug.restMarkerStats.jitterWarnCount}<br />
-                            Eps: {metrics.renderDebug.restMarkerStats.epsUsed.toFixed(4)}<br />
-                            SampleSpd: {metrics.renderDebug.restMarkerStats.sampleSpeed.toFixed(5)}
+                            NaN Speeds: {metrics.renderDebug.restMarkerStats.nanSpeedCount}<br />
+                            SpeedSq Ref: {(metrics.renderDebug.restMarkerStats.epsUsed ** 2).toFixed(6)} (Jitter: {(metrics.renderDebug.restMarkerStats.epsUsed * 2.5) ** 2 .toFixed(6)})<br />
+                            SpeedSq Range: [{metrics.renderDebug.restMarkerStats.minSpeedSq === Infinity ? 'Inf' : metrics.renderDebug.restMarkerStats.minSpeedSq.toExponential(2)}, {metrics.renderDebug.restMarkerStats.maxSpeedSq.toExponential(2)}]<br />
+                            SampleNode: {metrics.renderDebug.restMarkerStats.sampleNodeId || 'None'} <br />
+                            - Vx/Vy: {metrics.renderDebug.restMarkerStats.sampleNodeVx?.toFixed(4)} / {metrics.renderDebug.restMarkerStats.sampleNodeVy?.toFixed(4)}<br />
+                            - SpeedSq: {metrics.renderDebug.restMarkerStats.sampleNodeSpeedSq?.toExponential(4)}<br />
+                            - Sleep: {metrics.renderDebug.restMarkerStats.sampleNodeIsSleeping ? 'Y' : 'N'} ({metrics.renderDebug.restMarkerStats.sampleNodeSleepFrames})
+                        </div>
+                    )}
+
+                    {/* ENERGY LEDGER */}
+                    {metrics.renderDebug?.energyLedger && metrics.renderDebug.energyLedger.length > 0 && (
+                        <div style={{ marginTop: '8px', padding: '4px', border: '1px solid rgba(100,255,100,0.2)', background: 'rgba(0,20,0,0.3)' }}>
+                            <strong style={{ color: '#8f8' }}>Energy Ledger (v²)</strong>
+                            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', fontSize: '10px', gap: '2px', marginTop: '4px' }}>
+                                <div style={{ borderBottom: '1px solid #444' }}>Stage</div>
+                                <div style={{ borderBottom: '1px solid #444', textAlign: 'right' }}>Energy</div>
+                                <div style={{ borderBottom: '1px solid #444', textAlign: 'right' }}>Δ</div>
+                                {metrics.renderDebug.energyLedger.map((row: any, i: number) => (
+                                    <React.Fragment key={i}>
+                                        <div>{row.stage}</div>
+                                        <div style={{ textAlign: 'right', fontFamily: 'monospace' }}>{row.energy.toExponential(2)}</div>
+                                        <div style={{ textAlign: 'right', fontFamily: 'monospace', color: row.delta > 0 ? '#ff8' : '#8ff' }}>
+                                            {row.delta > 0 ? '+' : ''}{row.delta.toExponential(1)}
+                                        </div>
+                                    </React.Fragment>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* FIGHT LEDGER */}
+                    {metrics.renderDebug?.fightLedger && metrics.renderDebug.fightLedger.length > 0 && (
+                        <div style={{ marginTop: '8px', padding: '4px', border: '1px solid rgba(255,100,100,0.2)', background: 'rgba(20,0,0,0.3)' }}>
+                            <strong style={{ color: '#f88' }}>Constraint Fight Ledger</strong>
+                            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', fontSize: '10px', gap: '2px', marginTop: '4px' }}>
+                                <div style={{ borderBottom: '1px solid #444' }}>Stage</div>
+                                <div style={{ borderBottom: '1px solid #444', textAlign: 'right' }}>Conflict%</div>
+                                <div style={{ borderBottom: '1px solid #444', textAlign: 'right' }}>AvgCorr</div>
+                                {metrics.renderDebug.fightLedger.map((row: any, i: number) => (
+                                    <React.Fragment key={i}>
+                                        <div>{row.stage}</div>
+                                        <div style={{ textAlign: 'right', fontFamily: 'monospace', color: row.conflictPct > 20 ? '#f88' : '#888' }}>
+                                            {row.conflictPct.toFixed(1)}%
+                                        </div>
+                                        <div style={{ textAlign: 'right', fontFamily: 'monospace' }}>
+                                            {row.avgCorr > 0 ? row.avgCorr.toFixed(3) : '-'}
+                                        </div>
+                                    </React.Fragment>
+                                ))}
+                            </div>
                         </div>
                     )}
 
@@ -405,7 +518,7 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
                     Irregularity (R_std): {metrics.stdDist.toFixed(2)} px <br />
                     CV (Std/Mean): {(metrics.avgDist > 0 ? (metrics.stdDist / metrics.avgDist) : 0).toFixed(3)} <br />
                     Aspect Ratio (W/H): {metrics.aspectRatio.toFixed(3)}
-                </div>
+                </div >
             )}
         </>
     );

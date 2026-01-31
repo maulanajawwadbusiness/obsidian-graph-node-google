@@ -117,6 +117,8 @@ export type RenderDebugInfo = {
     activeRingStateBefore: CanvasStateDebug;
     activeRingStateAfter: CanvasStateDebug;
     restMarkerStats?: RestMarkerStats;
+    energyLedger?: { stage: string; energy: number; delta: number }[];
+    fightLedger?: { stage: string; conflictPct: number; avgCorr: number }[];
 };
 
 export type RestMarkerStats = {
@@ -128,6 +130,22 @@ export type RestMarkerStats = {
     jitterWarnCount: number;
     epsUsed: number;
     sampleSpeed: number;
+    // Forensic Predicate Counts
+    countA: number; // hudSettleState === 'sleep'
+    countB: number; // isSleeping === true
+    countC: number; // sleepFrames > 0
+    countD: number; // speedSq < jitterWarnSq
+    // Speed Sanity
+    minSpeedSq: number;
+    meanSpeedSq: number;
+    maxSpeedSq: number;
+    nanSpeedCount: number;
+    sampleNodeId?: string;
+    sampleNodeVx?: number;
+    sampleNodeVy?: number;
+    sampleNodeSpeedSq?: number;
+    sampleNodeSleepFrames?: number;
+    sampleNodeIsSleeping?: boolean;
 };
 
 // FIX 46: Surface Safety Snapshot (Last Good State)
@@ -252,7 +270,9 @@ export const createInitialRenderDebug = (): RenderDebugInfo => ({
     activeGlowStateBefore: { globalCompositeOperation: 'source-over', globalAlpha: 1, filter: 'none' },
     activeGlowStateAfter: { globalCompositeOperation: 'source-over', globalAlpha: 1, filter: 'none' },
     activeRingStateBefore: { globalCompositeOperation: 'source-over', globalAlpha: 1, filter: 'none' },
-    activeRingStateAfter: { globalCompositeOperation: 'source-over', globalAlpha: 1, filter: 'none' }
+    activeRingStateAfter: { globalCompositeOperation: 'source-over', globalAlpha: 1, filter: 'none' },
+    energyLedger: [],
+    fightLedger: []
 });
 
 export interface RenderTickDetail {

@@ -25,6 +25,9 @@ export type DebugStats = {
     expansionResistance: ExpansionResistanceStats;
     dtSkew?: { min: number; max: number };
     correctionConflictCount: number;
+    // New: Micro-Jitter Forensics
+    energyLedger: { stage: string; energy: number; delta: number }[];
+    fightLedger: { stage: string; conflictPct: number; avgCorr: number }[];
 };
 
 export const createDebugStats = (): DebugStats => ({
@@ -42,6 +45,8 @@ export const createDebugStats = (): DebugStats => ({
         avgHubSpeedAfter: 0,
     },
     correctionConflictCount: 0,
+    energyLedger: [],
+    fightLedger: [],
 });
 
 export const getPassStats = (stats: DebugStats, name: string): PassStats => {

@@ -518,6 +518,8 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
             >
                 <canvas ref={canvasRef} style={{ width: '100%', height: '100%', background: activeTheme.background }} />
                 <CanvasOverlays
+                    config={config}
+                    onConfigChange={handleConfigChange}
                     debugOpen={debugOpen}
                     metrics={metrics}
                     onCloseDebug={() => setDebugOpen(false)}

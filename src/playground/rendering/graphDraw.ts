@@ -159,7 +159,15 @@ export const drawNodes = (
             sleepingCount: 0,
             jitterWarnCount: 0,
             epsUsed: restSpeedEpsilon,
-            sampleSpeed: 0
+            sampleSpeed: 0,
+            countA: 0,
+            countB: 0,
+            countC: 0,
+            countD: 0,
+            minSpeedSq: Infinity,
+            meanSpeedSq: 0,
+            maxSpeedSq: 0,
+            nanSpeedCount: 0
         };
     }
 
@@ -284,15 +292,60 @@ export const drawNodes = (
             const markerY = screen.y + radiusPx + markerOffset;
 
             if (showRestMarkers || forceShow) {
-                const restCandidate = engine.hudSettleState === 'sleep' || node.isSleeping === true || (node.sleepFrames ?? 0) > 0;
+                // FIX 3: Speed-Only Fallback
+                const speedSq = node.vx * node.vx + node.vy * node.vy;
+
+                const termA = engine.hudSettleState === 'sleep';
+                const termB = node.isSleeping === true;
+                const termC = (node.sleepFrames ?? 0) > 0;
+                const termD = !isNaN(speedSq) && speedSq < jitterWarnSq;
+
+                const restCandidate = termA || termB || termC || termD;
 
                 // Stats Tracking
                 if (renderDebugRef?.current?.restMarkerStats) {
                     const stats = renderDebugRef.current.restMarkerStats;
-                    const speedSq = node.vx * node.vx + node.vy * node.vy;
+
                     if (restCandidate) stats.candidateCount++;
-                    if (node.isSleeping) stats.sleepingCount++;
-                    if (stats.sampleSpeed === 0) stats.sampleSpeed = Math.sqrt(speedSq);
+                    if (termB) stats.sleepingCount++;
+
+                    // Forensic Counts
+                    if (termA) stats.countA++;
+                    if (termB) stats.countB++;
+                    if (termC) stats.countC++;
+                    if (termD) stats.countD++;
+
+                    // Speed Sanity
+                    if (isNaN(speedSq)) {
+                        stats.nanSpeedCount++;
+                    } else {
+                        if (speedSq < stats.minSpeedSq) stats.minSpeedSq = speedSq;
+                        if (speedSq > stats.maxSpeedSq) stats.maxSpeedSq = speedSq;
+                        // Accumulate mean (we'll divide by node count later if needed, or just sum for now and divide in overlay?)
+                        // To keep it simple in loop, just accum sum and count valid nodes?
+                        // Actually, let's just use sampleSpeed for RMS (existing) and update logic.
+                        // We will repurpose meanSpeedSq as sum for now, dividing at end of frame? 
+                        // Actually graphDraw doesn't have "end of frame" hook easily accessible for stats finalization 
+                        // except "drawNodes" start. But `restMarkerStats` is reset at start of frame? 
+                        // Yes, lines 154-163 in graphDraw.ts reset it.
+                        // Wait, looking at `graphDraw.ts`:
+                        // It resets stats at the START of `graphDraw.ts`? 
+                        // Yes: `if (renderDebugRef?.current) { renderDebugRef.current.restMarkerStats = ... }`
+                        // So we can accumulate here.
+                        stats.meanSpeedSq += speedSq;
+
+                        // Sample one node (e.g. index 0)
+                        if (!stats.sampleNodeId) {
+                            stats.sampleNodeId = node.id;
+                            stats.sampleNodeVx = node.vx;
+                            stats.sampleNodeVy = node.vy;
+                            stats.sampleNodeSpeedSq = speedSq;
+                            stats.sampleNodeSleepFrames = node.sleepFrames;
+                            stats.sampleNodeIsSleeping = node.isSleeping;
+                        }
+                    }
+
+                    if (stats.sampleSpeed === 0 && !isNaN(speedSq)) stats.sampleSpeed = Math.sqrt(speedSq);
 
                     if (restCandidate && speedSq > jitterWarnSq) {
                         stats.jitterWarnCount++;
@@ -300,7 +353,7 @@ export const drawNodes = (
                 }
 
                 if (restCandidate || forceShow) {
-                    const speedSq = node.vx * node.vx + node.vy * node.vy;
+                    // speedSq already computed above
                     const isFakeRest = speedSq > jitterWarnSq;
                     const isTrueRest = speedSq <= restSpeedSq;
 

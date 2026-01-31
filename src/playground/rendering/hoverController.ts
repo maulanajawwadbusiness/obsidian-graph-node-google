@@ -346,9 +346,12 @@ export const createHoverController = ({
         clientY: number,
         _rect: DOMRect
     ) => {
-        // [HoverDbg] Raw Input Proof
-        if (Math.random() < 0.005) {
-            console.log(`[HoverDbg] Input Active: ${pointerType} at (${clientX},${clientY})`);
+        // [HoverDbg] Input Active (Deterministic Throttle)
+        const now = Date.now();
+        const lastLog = (hoverStateRef.current as any).lastInputLogTime || 0;
+        if (now - lastLog > 1000) {
+            (hoverStateRef.current as any).lastInputLogTime = now;
+            console.log(`[HoverDbg] Input Active: ${pointerType} at (${clientX.toFixed(0)},${clientY.toFixed(0)}) pending=${pendingPointerRef.current.hasPending}`);
         }
 
         if (pointerType === 'touch') {

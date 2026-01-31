@@ -1,11 +1,14 @@
 import { PhysicsNode, PhysicsLink, ForceConfig } from './types';
 import { DEFAULT_PHYSICS_CONFIG } from './config';
-import { fireInitialImpulse } from './engine/impulse';
 import { type DebugStats } from './engine/stats';
 import { createInitialPhysicsHudHistory, createInitialPhysicsHudSnapshot, type PhysicsHudHistory, type PhysicsHudSnapshot } from './engine/physicsHud';
 import { getNowMs } from './engine/engineTime';
-import { runPhysicsTick, type PhysicsEngineTickContext } from './engine/engineTick';
+import { runPhysicsTick } from './engine/engineTick';
+import type { PhysicsEngineTickContext } from './engine/engineTickTypes';
 import { TimePolicy } from './engine/dtPolicy';
+import { addLinkToEngine, addNodeToEngine, clearEngineState, invalidateWarmStart as invalidateWarmStartCaches, updateEngineConfig } from './engine/engineTopology';
+import { grabNode, lockInteraction, moveDrag, releaseNode, requestImpulse, unlockInteraction, updateBounds, wakeAll, wakeNeighbors, wakeNode } from './engine/engineInteraction';
+import { resetLifecycle } from './engine/engineLifecycle';
 
 export class PhysicsEngine {
     public nodes: Map<string, PhysicsNode> = new Map();
@@ -155,26 +158,14 @@ export class PhysicsEngine {
      * Lock physics rules (degrade mode) to current state.
      */
     lockInteraction(reason: string) {
-        if (!this.interactionLock) {
-            this.interactionLock = true;
-            this.interactionLockReason = reason;
-            if (this.config.debugPerf) {
-                console.log(`[PhysicsLock] Locked (${reason})`);
-            }
-        }
+        lockInteraction(this, reason);
     }
 
     /**
      * Unlock physics rules.
      */
     unlockInteraction() {
-        if (this.interactionLock) {
-            this.interactionLock = false;
-            this.interactionLockReason = null;
-            if (this.config.debugPerf) {
-                console.log(`[PhysicsLock] Unlocked`);
-            }
-        }
+        unlockInteraction(this);
     }
 
 
@@ -183,132 +174,35 @@ export class PhysicsEngine {
      * Add a node to the simulation.
      */
     addNode(node: PhysicsNode) {
-        this.nodes.set(node.id, node);
-        node.lastGoodX = node.x;
-        node.lastGoodY = node.y;
-        node.lastGoodVx = node.vx;
-        node.lastGoodVy = node.vy;
-        this.nodeListDirty = true;
-        if (!this.nodeLinkCounts.has(node.id)) {
-            this.nodeLinkCounts.set(node.id, 0);
-        }
-        if (!this.adjacencyMap.has(node.id)) {
-            this.adjacencyMap.set(node.id, []);
-        }
-        this.wakeNode(node.id);
-        this.invalidateWarmStart('TOPOLOGY_CHANGE');
+        addNodeToEngine(this, node);
     }
 
     /**
      * Add a link between two nodes.
      */
     addLink(link: PhysicsLink) {
-        const source = link.source;
-        const target = link.target;
-        // FIX 15: Strict Dedupe (Min:Max)
-        const key = source < target ? `${source}:${target}` : `${target}:${source}`;
-
-        if (this.topologyLinkKeys.has(key)) {
-            this.perfCounters.topologyDuplicates += 1;
-            if (this.config.debugPerf) console.warn(`[Topology] Duplicate rejected: ${key}`);
-            return;
-        }
-
-        const sourceCount = this.nodeLinkCounts.get(source) || 0;
-        const targetCount = this.nodeLinkCounts.get(target) || 0;
-
-        // FIX 15: Degree Cap
-        if (sourceCount >= this.config.maxLinksPerNode || targetCount >= this.config.maxLinksPerNode) {
-            this.perfCounters.topologySkipped += 1;
-            // this.warnTopology('maxLinksPerNode', link); 
-            // Inline warning logic to be safe/explicit
-            if (this.config.debugPerf) {
-                console.warn(`[Topology] Degree Limit s=${sourceCount} t=${targetCount} cap=${this.config.maxLinksPerNode}`);
-            }
-            return;
-        }
-        if (this.links.length >= this.config.maxTotalLinks) {
-            this.perfCounters.topologySkipped += 1;
-            if (this.config.debugPerf) console.warn('[Topology] Max total links reached');
-            return;
-        }
-
-        this.links.push(link);
-        this.topologyLinkKeys.add(key);
-        this.nodeLinkCounts.set(source, sourceCount + 1);
-        this.nodeLinkCounts.set(target, targetCount + 1);
-
-        // Update Adjacency (Fix 12)
-        if (!this.adjacencyMap.has(source)) this.adjacencyMap.set(source, []);
-        if (!this.adjacencyMap.has(target)) this.adjacencyMap.set(target, []);
-        this.adjacencyMap.get(source)?.push(target);
-        this.adjacencyMap.get(target)?.push(source);
-
-        this.wakeNode(link.source);
-        this.wakeNode(link.target);
-        this.invalidateWarmStart('TOPOLOGY_CHANGE');
+        addLinkToEngine(this, link);
     }
 
     /**
      * Clear warm-start caches to prevent phantom pushes (Fix 10).
      */
     public invalidateWarmStart(reason: string) {
-        // Clear Hysteresis
-        this.clampedPairs.clear();
-
-        // Clear directional inertia on all nodes
-        for (const node of this.nodes.values()) {
-            delete node.lastCorrectionDir;
-            node.correctionResidual = undefined; // Fix 16/17: Clear debt on mode switch
-            node.prevFx = 0;
-            node.prevFy = 0;
-            // Reset equilibrium if topology changes significantly? 
-            // Maybe too aggressive, but safer for "no phantom motion".
-            // We'll keep equilibrium for now as it's computed via special algo.
-        }
-
-        if (this.config.debugPerf) {
-            console.log(`[WarmStart] Invalidation Triggered: ${reason}`);
-        }
+        invalidateWarmStartCaches(this, reason);
     }
 
     /**
      * Clear all entities.
      */
     clear() {
-        this.nodes.clear();
-        this.links = [];
-        this.nodeListCache.length = 0;
-        this.awakeList.length = 0;
-        this.sleepingList.length = 0;
-        this.nodeListDirty = true;
-        this.correctionAccumCache.clear();
-        this.topologyLinkKeys.clear();
-        this.nodeLinkCounts.clear();
-        this.adjacencyMap.clear(); // Fix 12
-        this.spacingHotPairs.clear(); // Fix 22
-        this.neighborCache.clear();
-        this.lifecycle = 0;
-        this.hasFiredImpulse = false;
-        this.spacingGate = 0;
-        this.spacingGateActive = false;
-        this.globalAngle = 0;
-        this.globalAngularVel = 0;
-        this.hudSnapshot = createInitialPhysicsHudSnapshot();
-        this.hudHistory = createInitialPhysicsHudHistory();
-        this.hudSettleState = 'moving';
-        this.hudSettleStateAt = getNowMs();
-        this.resetStartupStats();
+        clearEngineState(this);
     }
 
     /**
      * Update configuration at runtime.
      */
     updateConfig(newConfig: Partial<ForceConfig>) {
-        this.config = { ...this.config, ...newConfig };
-        this.wakeAll();
-        // Config changes might alter solver physics => clear caches
-        this.invalidateWarmStart('CONFIG_CHANGE');
+        updateEngineConfig(this, newConfig);
     }
 
     /**
@@ -376,162 +270,56 @@ export class PhysicsEngine {
      * Restart the lifecycle (Explosion effect).
      */
     resetLifecycle() {
-        this.lifecycle = 0;
-        this.hasFiredImpulse = false;
-        this.preRollFrames = this.config.initStrategy === 'legacy' ? 5 : 0;  // Reset pre-roll
-        this.spacingGate = 0;
-        this.spacingGateActive = false;
-        this.wakeAll();
-        this.invalidateWarmStart('RESET_LIFECYCLE');
-        this.hudSnapshot = createInitialPhysicsHudSnapshot();
-        this.hudHistory = createInitialPhysicsHudHistory();
-        this.hudSettleState = 'moving';
-        this.hudSettleStateAt = getNowMs();
-        this.resetStartupStats();
+        resetLifecycle(this);
     }
 
     /**
      * Wake up a specific node.
      */
     wakeNode(nodeId: string) {
-        const node = this.nodes.get(nodeId);
-        if (node) {
-            node.warmth = 1.0;
-            node.isSleeping = false;
-            node.sleepFrames = 0;
-            // FIX 13: Clear pressure memory on wake to prevent "pop"
-            node.lastCorrectionMag = 0;
-
-            // Clear PBD accumulator immediately (in case it was hot)
-            const accum = this.correctionAccumCache.get(nodeId);
-            if (accum) {
-                accum.dx = 0;
-                accum.dy = 0;
-            }
-        }
+        wakeNode(this, nodeId);
     }
 
     /**
      * Wake up a node and its neighbors (Optimized for Fix 12).
      */
     wakeNeighbors(nodeId: string) {
-        // FIX 12: Use O(1) Adjacency Map instead of O(Links)
-        const neighbors = this.adjacencyMap.get(nodeId);
-        if (neighbors) {
-            // FIX 12: Wake propagation limit
-            // Only wake neighbors if they are not already "very hot" to avoid redundant ops?
-            // Actually, we must ensure they are awake. But we can skip if warmth is already 1.0.
-            for (const nbId of neighbors) {
-                this.wakeNode(nbId);
-            }
-        }
+        wakeNeighbors(this, nodeId);
     }
 
     /**
      * Wake up everything (e.g. on config change).
      */
     wakeAll() {
-        for (const node of this.nodes.values()) {
-            node.warmth = 1.0;
-            node.isSleeping = false;
-            node.sleepFrames = 0;
-        }
+        wakeAll(this);
     }
 
     /**
      * Update World Bounds (from Canvas resize).
      */
     updateBounds(width: number, height: number) {
-        this.worldWidth = width;
-        this.worldHeight = height;
-        this.wakeAll();
+        updateBounds(this, width, height);
     }
 
     /**
      * Start dragging a node.
      */
     grabNode(nodeId: string, position: { x: number, y: number }) {
-        if (this.nodes.has(nodeId)) {
-            this.draggedNodeId = nodeId;
-            this.dragTarget = { ...position };
-            this.lastDraggedNodeId = nodeId;
-
-            // KINEMATIC LOCK: Override position directly (0 lag)
-            const node = this.nodes.get(nodeId);
-            if (node) {
-                // FIX 14: Immutable Drag (Prevent Jitter)
-                // Mark as fixed so constraints/integrator skip it entirely.
-                // We become the sole writer to node.x/y via moveDrag.
-                node.isFixed = true;
-
-                node.vx = 0;
-                node.vy = 0;
-                node.fx = 0;
-                node.fy = 0;
-
-                // FIX 22: Clean Slate (Kill Momentum)
-                // Clear all motion history so the dot doesn't "curve" due to past forces.
-                node.prevFx = 0;
-                node.prevFy = 0;
-                node.correctionResidual = undefined;
-                delete node.lastCorrectionDir;
-            }
-
-            this.wakeNode(nodeId);
-            this.wakeNeighbors(nodeId);
-        }
+        grabNode(this, nodeId, position);
     }
 
     /**
      * Update drag position.
      */
     moveDrag(position: { x: number, y: number }) {
-        if (this.draggedNodeId && this.dragTarget) {
-            this.dragTarget = { ...position };
-
-            // Always wake self (ensure velocity is integrated)
-            this.wakeNode(this.draggedNodeId);
-
-            // FIX #14: THROTTLED WAKE PROPAGATION
-            // Only wake neighbors every 100ms to prevent "boil" (energy pumping)
-            const now = getNowMs();
-            if (now - this.lastWakeTime > 100) {
-                this.wakeNeighbors(this.draggedNodeId);
-                this.lastWakeTime = now;
-            }
-        }
+        moveDrag(this, position);
     }
 
     /**
      * Release the node.
      */
     releaseNode() {
-        if (this.draggedNodeId) {
-            const node = this.nodes.get(this.draggedNodeId);
-            if (node) {
-                // FIX 13: Atomic Release (Kill Ghost Slide)
-                // Zero out ALL motion history so it stops dead.
-                node.vx = 0;
-                node.vy = 0;
-                node.fx = 0;
-                node.fy = 0;
-                node.prevFx = 0;
-                node.prevFy = 0;
-
-                // Clear constraint debt
-                node.correctionResidual = undefined;
-                delete node.lastCorrectionDir;
-                node.lastCorrectionMag = 0;
-
-                // Unlock
-                node.isFixed = false;
-            }
-        }
-        // Hard clear all drag state
-        this.draggedNodeId = null;
-        this.dragTarget = null;
-        this.lastDraggedNodeId = null;
-        this.idleFrames = 0; // FIX 44: Wake Up
+        releaseNode(this);
     }
 
     /**
@@ -539,26 +327,7 @@ export class PhysicsEngine {
      * FIX #11: Strict cooldown (>1s) + Interaction Guard (no drag).
      */
     requestImpulse() {
-        if (this.config.initStrategy !== 'legacy') {
-            return;
-        }
-        const now = getNowMs();
-
-        // Guard 1: Cooldown (1000ms)
-        if (now - this.lastImpulseTime < 1000) {
-            return;
-        }
-
-        // Guard 2: Interaction (Don't kick while user holds a node)
-        if (this.draggedNodeId) {
-            return;
-        }
-
-        // Fire!
-        fireInitialImpulse(this, now);
-        this.lastImpulseTime = now;
-        this.hasFiredImpulse = true;
-        this.idleFrames = 0; // FIX 44: Wake Up
+        requestImpulse(this);
     }
 
     /**

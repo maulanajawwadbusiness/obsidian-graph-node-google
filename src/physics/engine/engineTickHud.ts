@@ -1,0 +1,176 @@
+import type { PhysicsNode } from '../types';
+import type { DebugStats } from './stats';
+import type { PhysicsHudSnapshot } from './physicsHud';
+import type { PhysicsEngineTickContext } from './engineTickTypes';
+
+export const updateHudSnapshot = (
+    engine: PhysicsEngineTickContext,
+    nowMs: number,
+    dtMs: number,
+    nodes: PhysicsNode[],
+    stats: DebugStats,
+    spacingStride: number,
+    settleStateOverride?: PhysicsHudSnapshot['settleState']
+) => {
+    const nodeCount = nodes.length || 1;
+    let avgVelSq = 0;
+    let maxPrevGap = 0;
+    let ghostVelSuspectCount = 0;
+
+    for (const node of nodes) {
+        avgVelSq += node.vx * node.vx + node.vy * node.vy;
+
+        if (node.prevX !== undefined && node.prevY !== undefined) {
+            const dx = node.x - node.prevX;
+            const dy = node.y - node.prevY;
+            const gap = Math.sqrt(dx * dx + dy * dy);
+            if (gap > maxPrevGap) maxPrevGap = gap;
+
+            const dtSec = dtMs / 1000;
+            if (dtSec > 0.000001) {
+                const vxImplied = dx / dtSec;
+                const vyImplied = dy / dtSec;
+                const vDiffX = vxImplied - node.vx;
+                const vDiffY = vyImplied - node.vy;
+                const mismatch = Math.sqrt(vDiffX * vDiffX + vDiffY * vDiffY);
+
+                node.historyMismatch = mismatch;
+                if (mismatch > 50.0) ghostVelSuspectCount++;
+            }
+        }
+    }
+    avgVelSq /= nodeCount;
+
+    const corrections = stats.passes.Corrections?.correction ?? 0;
+    const jitterSample = nodeCount > 0 ? corrections / nodeCount : 0;
+    const conflictFrame = stats.correctionConflictCount > 0;
+
+    stats.safety.correctionBudgetHits = 0;
+    stats.safety.corrClippedTotal = 0;
+    stats.safety.debtTotal = 0;
+    stats.correctionConflictCount = 0;
+    stats.corrSignFlipCount = 0;
+    stats.restFlapCount = 0;
+
+    stats.safety.minPairDist = 99999;
+    stats.safety.nearOverlapCount = 0;
+    stats.safety.repulsionMaxMag = 0;
+    stats.safety.repulsionClampedCount = 0;
+
+    stats.neighborReorderRate = stats.neighborReorderRate || 0;
+    stats.hubFlipCount = stats.hubFlipCount || 0;
+    stats.degradeFlipCount = stats.degradeFlipCount || 0;
+    stats.lawPopScore = stats.lawPopScore || 0;
+    stats.hubNodeCount = stats.hubNodeCount || 0;
+
+    const pruneWindow = <T extends { t: number }>(arr: T[], windowMs: number) => {
+        const cutoff = nowMs - windowMs;
+        while (arr.length > 0 && arr[0].t < cutoff) {
+            arr.shift();
+        }
+    };
+
+    engine.hudHistory.degradeFrames.push({ t: nowMs, degraded: engine.degradeLevel > 0 });
+    engine.hudHistory.conflictFrames.push({ t: nowMs, conflict: conflictFrame });
+    engine.hudHistory.jitterSamples.push({ t: nowMs, value: jitterSample });
+
+    pruneWindow(engine.hudHistory.degradeFrames, 5000);
+    pruneWindow(engine.hudHistory.conflictFrames, 5000);
+    pruneWindow(engine.hudHistory.jitterSamples, 1000);
+
+    const degradeFrames = engine.hudHistory.degradeFrames.length || 1;
+    const degradeHits = engine.hudHistory.degradeFrames.filter(sample => sample.degraded).length;
+    const conflictFrames = engine.hudHistory.conflictFrames.length || 1;
+    const conflictHits = engine.hudHistory.conflictFrames.filter(sample => sample.conflict).length;
+    const jitterSamples = engine.hudHistory.jitterSamples;
+    const jitterAvg = jitterSamples.length > 0
+        ? jitterSamples.reduce((sum, sample) => sum + sample.value, 0) / jitterSamples.length
+        : 0;
+
+    const T_Micro = 0.0004;
+    const T_Cool = 0.04;
+    const T_Move = 0.25;
+    const H = 1.2;
+
+    const current = engine.hudSettleState;
+    let next = current;
+
+    if (current === 'microkill') {
+        if (avgVelSq > T_Micro * H) next = 'cooling';
+        if (avgVelSq > T_Move) next = 'moving';
+    } else if (current === 'cooling') {
+        if (avgVelSq < T_Micro) next = 'microkill';
+        if (avgVelSq > T_Cool * H) next = 'moving';
+    } else if (current === 'moving') {
+        if (avgVelSq < T_Cool) next = 'cooling';
+    } else if (current === 'sleep') {
+        if (avgVelSq > T_Micro) next = 'microkill';
+    } else {
+        next = 'moving';
+    }
+
+    if (settleStateOverride) next = settleStateOverride;
+
+    if (next !== current) {
+        engine.hudSettleState = next;
+        engine.hudSettleStateAt = nowMs;
+
+        if (nowMs - engine.hudSettleStateAt < 500) {
+            stats.restFlapCount++;
+        }
+    }
+
+    const settleState = engine.hudSettleState;
+
+    engine.hudSnapshot = {
+        degradeLevel: engine.degradeLevel,
+        degradePct5s: degradeHits > 0 ? (degradeHits / degradeFrames) * 100 : 0,
+        settleState,
+        lastSettleMs: Math.max(0, nowMs - engine.hudSettleStateAt),
+        jitterAvg,
+        pbdCorrectionSum: corrections,
+        conflictPct5s: conflictHits > 0 ? (conflictHits / conflictFrames) * 100 : 0,
+        energyProxy: avgVelSq,
+        startupNanCount: engine.startupStats.nanCount,
+        startupInfCount: engine.startupStats.infCount,
+        startupMaxSpeed: engine.startupStats.maxSpeed,
+        startupDtClamps: engine.startupStats.dtClamps,
+
+        dtSkewMaxMs: stats.dtSkew ? (stats.dtSkew.max - stats.dtSkew.min) * 1000 : 0,
+        perDotUpdateCoveragePct: spacingStride > 1 ? (100 / spacingStride) : 100,
+        coverageMode: spacingStride > 1 ? 'strided' : 'full',
+        coverageStride: spacingStride,
+        ageMaxFrames: spacingStride,
+        ageP95Frames: spacingStride,
+
+        maxPrevGap,
+        maxPosDeltaConstraints: jitterSample,
+        ghostVelSuspectCount,
+
+        degenerateTriangleCount: stats.degenerateTriangleCount,
+        correctionBudgetHits: stats.safety.correctionBudgetHits,
+        corrClippedTotal: stats.safety.corrClippedTotal,
+        debtTotal: stats.safety.debtTotal,
+        orderMode: 'rotated',
+
+        corrSignFlipRate: nodeCount > 0 ? (stats.corrSignFlipCount / nodeCount) * 100 : 0,
+        restFlapRate: stats.restFlapCount,
+
+        minPairDist: stats.safety.minPairDist === 99999 ? 0 : stats.safety.minPairDist,
+        nearOverlapCount: stats.safety.nearOverlapCount,
+        repulsionMaxMag: stats.safety.repulsionMaxMag,
+        repulsionClampedCount: stats.safety.repulsionClampedCount,
+
+        neighborReorderRate: stats.neighborReorderRate,
+        hubFlipCount: stats.hubFlipCount,
+        degradeFlipCount: stats.degradeFlipCount,
+        lawPopScore: stats.lawPopScore,
+        hubNodeCount: stats.hubNodeCount,
+
+        microSlipCount: stats.injectors.microSlipCount,
+        microSlipFiresPerSec: stats.injectors.microSlipFires * (1000 / dtMs),
+        stuckScoreAvg: nodeCount > 0 ? (stats.injectors.stuckScoreSum / nodeCount) : 0,
+        lastInjector: stats.injectors.lastInjector,
+        driftCount: stats.injectors.driftCount,
+    };
+};

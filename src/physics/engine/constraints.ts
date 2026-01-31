@@ -354,7 +354,13 @@ export const applySpacingConstraints = (
     // Process known hot pairs every frame to prevent crawl
     if (hotPairs && hotPairs.size > 0) {
         const resolved = new Set<string>();
-        for (const key of hotPairs) {
+
+        // FIX: Stable Iteration Order
+        // Sets iterate in insertion order. This causes drift if pair activation order varies.
+        // We MUST sort keys before processing accumulation.
+        const sortedKeys = Array.from(hotPairs).sort();
+
+        for (const key of sortedKeys) {
             const [idA, idB] = key.split(':');
             const a = engine.nodes.get(idA);
             const b = engine.nodes.get(idB);

@@ -182,5 +182,8 @@ export const updateHudSnapshot = (
         ghostMismatchCount: stats.ghostMismatchCount,
         diffusionPopScore: stats.diffusionPopScore,
         neighborDeltaRate: stats.neighborDeltaRate,
+        determinismChecksum: stats.determinismChecksum,
+        rebaseCount: stats.rebaseCount,
+        maxAbsPos: stats.maxAbsPos,
     };
 };

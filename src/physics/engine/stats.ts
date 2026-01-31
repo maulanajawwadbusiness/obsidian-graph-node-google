@@ -75,6 +75,11 @@ export type DebugStats = {
     // Diffusion Stability
     diffusionPopScore: number;
     neighborDeltaRate: number;
+
+    // Determinism & Rebase
+    determinismChecksum: string;
+    rebaseCount: number;
+    maxAbsPos: number;
 };
 
 export const createDebugStats = (): DebugStats => ({
@@ -133,6 +138,10 @@ export const createDebugStats = (): DebugStats => ({
 
     diffusionPopScore: 0,
     neighborDeltaRate: 0,
+
+    determinismChecksum: '0000',
+    rebaseCount: 0,
+    maxAbsPos: 0,
 });
 
 export const getPassStats = (stats: DebugStats, name: string): PassStats => {

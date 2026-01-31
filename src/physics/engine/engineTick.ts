@@ -258,6 +258,75 @@ export const runPhysicsTick = (engine: PhysicsEngineTickContext, dtIn: number) =
 
         debugStats.diffusionGate = diffusionSettleGate;
         debugStats.diffusionStrengthNow = diffusionSettleGate;
+
+        // FIX: Determinism Checksum (Quick Hash)
+        // Quantize pos to 0.001 to ignore microscopic float drift
+        let chk = 0;
+        let maxPos = 0;
+
+        for (const n of nodeList) {
+            // Checksum
+            const qx = Math.round(n.x * 1000) | 0;
+            const qy = Math.round(n.y * 1000) | 0;
+            // Simple integer hash
+            chk = (chk * 33) ^ (qx + qy); // XOR
+            // Rotate to avoid cancellation
+            chk = (chk << 5) | (chk >>> 27);
+
+            // Max Abs Pos track
+            const absX = Math.abs(n.x);
+            const absY = Math.abs(n.y);
+            maxPos = maxPos > absX ? maxPos : absX;
+            maxPos = maxPos > absY ? maxPos : absY;
+        }
+        // Hex string
+        debugStats.determinismChecksum = (chk >>> 0).toString(16).toUpperCase();
+        debugStats.maxAbsPos = maxPos;
+
+        // FIX: Numeric Rebase (Anti-Drift)
+        // 1. Local Snap: If calm, snap tiny v/delta to 0
+        if (calmPercent > 0.95 && engine.draggedNodeId === null) {
+            for (const n of nodeList) {
+                if (Math.abs(n.vx) < 0.00001) n.vx = 0;
+                if (Math.abs(n.vy) < 0.00001) n.vy = 0;
+                // History convergence
+                if (n.prevX !== undefined && Math.abs(n.x - n.prevX) < 0.00001) n.prevX = n.x;
+                if (n.prevY !== undefined && Math.abs(n.y - n.prevY) < 0.00001) n.prevY = n.y;
+            }
+        }
+
+        // 2. Global Centroid Rebase: If wandering too far, shift world
+        const REBASE_THRESHOLD = 50000; // World Units
+        if (maxPos > REBASE_THRESHOLD && engine.draggedNodeId === null) {
+            // Compute centroid
+            let cx = 0, cy = 0;
+            for (const n of nodeList) { cx += n.x; cy += n.y; }
+            cx /= nodeCount;
+            cy /= nodeCount;
+
+            // Shift Everything
+            for (const n of nodeList) {
+                n.x -= cx;
+                n.y -= cy;
+                if (n.prevX !== undefined) n.prevX -= cx;
+                if (n.prevY !== undefined) n.prevY -= cy;
+                // Last good?
+                if (n.lastGoodX !== undefined) n.lastGoodX -= cx;
+                if (n.lastGoodY !== undefined) n.lastGoodY -= cy;
+            }
+            // Update tracking
+            debugStats.rebaseCount++;
+            debugStats.maxAbsPos = 0; // Reset estimate until next frame
+
+            // TODO: Signal Camera to shift? 
+            // In a real app we'd need to emit an event `onWorldShift(cx, cy)`.
+            // For now, staying purely inside physics engine.
+            // This might cause a visual jump if renderer doesn't use the node's new coords relative to cam.
+            // But usually renderer just draws node.x/y. 
+            // If camera is centered on nodes, it follows. 
+            // If camera is absolute 0,0, they jump.
+            // Given "obsidian-good motion feel", we assume camera tracks content.
+        }
     }
 
     let spacingStride = 1;

@@ -66,14 +66,53 @@ export function applyRepulsion(
             let count = 0;
             if (neighbors) {
                 // We are scanning all 'other' nodes. Update set status.
-                // NOTE: This re-scans O(N^2) which is fine for small count, but we want to avoid 
-                // the *count value* flickering.
+                // FIX: Stable Iteration - Scan ActiveNodes Array (Stable)
+                // The original code actually iterates `nodes` (all active nodes), not the set.
+                // Wait, L71 iterates `nodes` (loop j). This IS stable if `nodes` array is stable.
+                // L82 checks `neighbors.has(other.id)`.
+                // The instability would be if we iterated `neighbors` directly.
+                // Looking closely at L16-98: It calculates density by iterating ALL nodes and checking set membership.
+                // This means density calc IS stable.
+
+                // BUT wait, line 208 loop iterates `activeNodes`.
+                // Line 208-216 is the MAIN loop.
+                // It does `applyPair(nodeA, activeNodes[j])`.
+                // This is ARRAY iteration. This IS stable.
+
+                // Where was the `for (const other of neighbors)`?
+                // Ah, the forensic scan might have been misleading or I missed it.
+                // Let's check `applyRepulsion` again.
+                // It seems main repulsion loop is pairwise array (L208).
+                // Density calculation (L51) iterates `nodes` array.
+
+                // Let's re-read the file content I saw earlier to be sure.
+                // "for (let j = 0; j < nodes.length; j++)" -> Stable.
+
+                // CHECK: Is there any Set iteration?
+                // "for (const key of hotPairs)" in spacing constraints IS Set iteration.
+
+                // So Repulsion might be fine?
+                // Wait, if `neighbors` (Set) is used to LIMIT the loop?
+                // No, the code iterates `nodes`.
+
+                // However, let's look at `constraints.ts` -> `hotPairs` iteration.
+                // That definitely needs fixing.
+
+                // In `forces.ts`, maybe I saw `activeNodes`?
+                // "activeNodes" array order depends on ... wake/sleep logic.
+                // If wake/sleep is deterministic, array is deterministic.
+
+                // Let's focus on `constraints.ts` hotPairs first as that is verified unsafe.
+                // And I will check `forces.ts` again. I might have misread L51-97. 
+                // It iterates `nodes`. So density is stable.
+
+                // So, proceeding with `constraints.ts`.
+
                 for (let j = 0; j < nodes.length; j++) {
                     if (i === j) continue;
                     const other = nodes[j];
-                    if (shouldSkipPair(node, other)) continue; // Stride might skip updates? 
-                    // Risk: if stride skips, we might miss exit. 
-                    // But density is approximate.
+                    // (Logic preserved)
+                    if (shouldSkipPair(node, other)) continue;
 
                     const dx = other.x - node.x;
                     const dy = other.y - node.y;

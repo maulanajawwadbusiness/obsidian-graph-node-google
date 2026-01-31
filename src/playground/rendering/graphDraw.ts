@@ -139,6 +139,29 @@ export const drawNodes = (
     const restSpeedEpsilon = engine.config.velocitySleepThreshold ?? 0.01;
     const restSpeedSq = restSpeedEpsilon * restSpeedEpsilon;
     const jitterWarnSq = (restSpeedEpsilon * 2.5) * (restSpeedEpsilon * 2.5);
+    const forceShow = settingsRef.current.forceShowRestMarkers;
+
+    // Diagnostic: Big Red Text if Force Show is on
+    if (forceShow) {
+        ctx.save();
+        ctx.font = 'bold 20px monospace';
+        ctx.fillStyle = 'red';
+        ctx.fillText('FORCE SHOW REST MARKERS ACTIVE', 20, 50);
+        ctx.restore();
+    }
+
+    if (renderDebugRef?.current) {
+        renderDebugRef.current.restMarkerStats = {
+            enabled: showRestMarkers || forceShow,
+            drawPassCalled: true,
+            lastDrawTime: performance.now(),
+            candidateCount: 0,
+            sleepingCount: 0,
+            jitterWarnCount: 0,
+            epsUsed: restSpeedEpsilon,
+            sampleSpeed: 0
+        };
+    }
 
     const renderNode = (node: any) => {
         // FIX 51: World Space Culling (Only if not using scratch)
@@ -255,23 +278,58 @@ export const drawNodes = (
             ctx.stroke();
         }
 
-        if (showRestMarkers || showConflictMarkers) {
+        if (showRestMarkers || showConflictMarkers || forceShow) {
             const markerOffset = Math.max(1.5, radiusPx * 0.35);
             const markerBase = Math.max(0.8, radiusPx * 0.12) * markerIntensity;
             const markerY = screen.y + radiusPx + markerOffset;
 
-            if (showRestMarkers) {
+            if (showRestMarkers || forceShow) {
                 const restCandidate = engine.hudSettleState === 'sleep' || node.isSleeping === true || (node.sleepFrames ?? 0) > 0;
-                if (restCandidate) {
+
+                // Stats Tracking
+                if (renderDebugRef?.current?.restMarkerStats) {
+                    const stats = renderDebugRef.current.restMarkerStats;
+                    const speedSq = node.vx * node.vx + node.vy * node.vy;
+                    if (restCandidate) stats.candidateCount++;
+                    if (node.isSleeping) stats.sleepingCount++;
+                    if (stats.sampleSpeed === 0) stats.sampleSpeed = Math.sqrt(speedSq);
+
+                    if (restCandidate && speedSq > jitterWarnSq) {
+                        stats.jitterWarnCount++;
+                    }
+                }
+
+                if (restCandidate || forceShow) {
                     const speedSq = node.vx * node.vx + node.vy * node.vy;
                     const isFakeRest = speedSq > jitterWarnSq;
                     const isTrueRest = speedSq <= restSpeedSq;
-                    if (isFakeRest || isTrueRest) {
+
+                    // Force Show: Draw even if not resting, use 'fake' color if moving
+                    const shouldDraw = forceShow ? true : (isFakeRest || isTrueRest);
+
+                    if (shouldDraw) {
                         ctx.beginPath();
                         ctx.arc(screen.x, markerY, markerBase, 0, Math.PI * 2);
-                        ctx.fillStyle = isFakeRest ? 'rgb(255, 170, 60)' : 'rgb(90, 210, 255)';
+                        // If force shown and moving fast, show as orange (fake rest)
+                        const colorState = (isFakeRest || (forceShow && !isTrueRest))
+                            ? 'rgb(255, 170, 60)'
+                            : 'rgb(90, 210, 255)';
+
+                        ctx.fillStyle = colorState;
+                        const visualBase = forceShow ? Math.max(markerBase, 4) : markerBase;
+
+                        if (forceShow) {
+                            // Draw an X or specific shape? Just a big dot.
+                            ctx.beginPath();
+                            ctx.arc(screen.x, markerY, visualBase, 0, Math.PI * 2);
+                            ctx.fill();
+                        } else {
+                            // Normal path
+                            ctx.fill();
+                        }
+
                         ctx.globalAlpha = Math.min(1, (isFakeRest ? 0.9 : 0.7) * markerIntensity);
-                        ctx.fill();
+                        // ctx.fill(); // Handled above
                         ctx.globalAlpha = 1;
                     }
                 }

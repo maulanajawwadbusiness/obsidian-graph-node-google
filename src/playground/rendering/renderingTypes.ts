@@ -13,6 +13,7 @@ export type RenderSettings = {
     showRestMarkers: boolean;
     showConflictMarkers: boolean;
     markerIntensity: number;
+    forceShowRestMarkers: boolean;
 };
 
 export type PendingPointerState = {
@@ -112,10 +113,21 @@ export type RenderDebugInfo = {
     idleGlowStateAfter: CanvasStateDebug;
     idleRingStateBefore: CanvasStateDebug;
     idleRingStateAfter: CanvasStateDebug;
-    activeGlowStateBefore: CanvasStateDebug;
     activeGlowStateAfter: CanvasStateDebug;
     activeRingStateBefore: CanvasStateDebug;
     activeRingStateAfter: CanvasStateDebug;
+    restMarkerStats?: RestMarkerStats;
+};
+
+export type RestMarkerStats = {
+    enabled: boolean;
+    drawPassCalled: boolean;
+    lastDrawTime: number;
+    candidateCount: number;
+    sleepingCount: number;
+    jitterWarnCount: number;
+    epsUsed: number;
+    sampleSpeed: number;
 };
 
 // FIX 46: Surface Safety Snapshot (Last Good State)
@@ -148,7 +160,8 @@ export const createInitialRenderSettings = (): RenderSettings => ({
     debugNoRenderMotion: false,
     showRestMarkers: false,
     showConflictMarkers: false,
-    markerIntensity: 1
+    markerIntensity: 1,
+    forceShowRestMarkers: false
 });
 
 export const createInitialPendingPointer = (): PendingPointerState => ({

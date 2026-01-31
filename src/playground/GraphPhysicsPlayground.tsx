@@ -60,6 +60,7 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
     const [debugNoRenderMotion, setDebugNoRenderMotion] = useState(false);
     const [showRestMarkers, setShowRestMarkers] = useState(false);
     const [showConflictMarkers, setShowConflictMarkers] = useState(false);
+    const [forceShowRestMarkers, setForceShowRestMarkers] = useState(false);
     const [markerIntensity, setMarkerIntensity] = useState(1);
     const [hudScenarioLabel, setHudScenarioLabel] = useState('');
     const [hudDragTargetId, setHudDragTargetId] = useState<string | null>(null);
@@ -97,7 +98,8 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
         debugNoRenderMotion,
         showRestMarkers,
         showConflictMarkers,
-        markerIntensity
+        markerIntensity,
+        forceShowRestMarkers
     });
 
     useEffect(() => {
@@ -537,8 +539,10 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
                     showRestMarkers={showRestMarkers}
                     showConflictMarkers={showConflictMarkers}
                     markerIntensity={markerIntensity}
+                    forceShowRestMarkers={forceShowRestMarkers}
                     onToggleRestMarkers={() => setShowRestMarkers(v => !v)}
                     onToggleConflictMarkers={() => setShowConflictMarkers(v => !v)}
+                    onToggleForceShowRestMarkers={() => setForceShowRestMarkers(v => !v)}
                     onMarkerIntensityChange={setMarkerIntensity}
                     onSpawnPreset={handleSpawnPreset}
                     onRunSettleScenario={handleSettleScenario}

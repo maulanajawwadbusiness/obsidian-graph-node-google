@@ -38,6 +38,7 @@ type UseGraphRenderingProps = {
     showRestMarkers: boolean;
     showConflictMarkers: boolean;
     markerIntensity: number;
+    forceShowRestMarkers: boolean;
 };
 
 export const useGraphRendering = ({
@@ -55,7 +56,8 @@ export const useGraphRendering = ({
     debugNoRenderMotion,
     showRestMarkers,
     showConflictMarkers,
-    markerIntensity
+    markerIntensity,
+    forceShowRestMarkers
 }: UseGraphRenderingProps) => {
     const cameraRef = useRef<CameraState>({
         panX: 0,
@@ -122,6 +124,7 @@ export const useGraphRendering = ({
         settingsRef.current.showRestMarkers = showRestMarkers;
         settingsRef.current.showConflictMarkers = showConflictMarkers;
         settingsRef.current.markerIntensity = markerIntensity;
+        settingsRef.current.forceShowRestMarkers = forceShowRestMarkers;
     }, [
         useVariedSize,
         skinMode,
@@ -131,7 +134,8 @@ export const useGraphRendering = ({
         debugNoRenderMotion,
         showRestMarkers,
         showConflictMarkers,
-        markerIntensity
+        markerIntensity,
+        forceShowRestMarkers
     ]);
 
     useEffect(() => {

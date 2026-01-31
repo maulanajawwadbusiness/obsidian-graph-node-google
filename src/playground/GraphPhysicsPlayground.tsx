@@ -455,7 +455,7 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
                 style={MAIN_STYLE}
                 onPointerDown={onPointerDown}
                 onPointerEnter={onPointerEnter}
-                onPointerMove={onPointerMove}
+                onPointerMoveCapture={onPointerMove}
                 onPointerLeave={onPointerLeave}
                 onPointerCancel={onPointerCancel}
                 onLostPointerCapture={onLostPointerCapture}

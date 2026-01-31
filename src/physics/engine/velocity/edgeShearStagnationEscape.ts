@@ -1,6 +1,7 @@
 import type { PhysicsEngine } from '../../engine';
 import type { PhysicsNode } from '../../types';
 import { getPassStats, type DebugStats } from '../stats';
+import type { MotionPolicy } from '../motionPolicy';
 
 /**
  * EDGE SHEAR STAGNATION ESCAPE (Null-Gradient Unlock)
@@ -31,6 +32,7 @@ export const applyEdgeShearStagnationEscape = (
     engine: PhysicsEngine,
     nodeList: PhysicsNode[],
     energy: number,
+    motionPolicy: MotionPolicy,
     stats: DebugStats
 ) => {
     // Only during early expansion
@@ -39,12 +41,12 @@ export const applyEdgeShearStagnationEscape = (
     const passStats = getPassStats(stats, 'EdgeShearEscape');
     let unlockedPairs = 0;
 
-    const densityRadius = 30;
-    const densityThreshold = 4;
-    const restEps = 5.0;      // Edge must be within 5px of rest length
-    const velEps = 0.3;       // Relative velocity threshold
-    const forceEps = 0.8;     // Force magnitude threshold
-    const baseSlip = 0.03;    // Base shear magnitude (px/frame)
+    const densityRadius = motionPolicy.densityRadius;
+    const densityThreshold = motionPolicy.densityThreshold;
+    const restEps = motionPolicy.restLengthEpsilon;         // Edge must be near rest length
+    const velEps = motionPolicy.stuckSpeedEpsilon * 0.6;    // Relative velocity threshold
+    const forceEps = motionPolicy.stuckForceEpsilon;        // Force magnitude threshold
+    const baseSlip = motionPolicy.microSlip;                // Base shear magnitude
 
     // Pre-compute local density
     const localDensity = new Map<string, number>();

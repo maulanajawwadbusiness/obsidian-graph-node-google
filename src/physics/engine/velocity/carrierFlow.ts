@@ -1,12 +1,14 @@
 import type { PhysicsEngine } from '../../engine';
 import type { PhysicsNode } from '../../types';
 import { getPassStats, type DebugStats } from '../stats';
+import type { MotionPolicy } from '../motionPolicy';
 
 export const applyCarrierFlowAndPersistence = (
     engine: PhysicsEngine,
     nodeList: PhysicsNode[],
     node: PhysicsNode,
     energy: number,
+    motionPolicy: MotionPolicy,
     stats: DebugStats
 ) => {
     if (energy <= 0.7) return;
@@ -25,8 +27,8 @@ export const applyCarrierFlowAndPersistence = (
         // Detect trapped hub: low net force AND low velocity
         const fMag = Math.sqrt(node.fx * node.fx + node.fy * node.fy);
         const vMag = Math.sqrt(node.vx * node.vx + node.vy * node.vy);
-        const forceEpsilon = 1.0;
-        const velocityThreshold = 0.5;
+        const forceEpsilon = motionPolicy.stuckForceEpsilon * 2;
+        const velocityThreshold = motionPolicy.stuckSpeedEpsilon;
 
         const isTrapped = fMag < forceEpsilon && vMag < velocityThreshold;
 
@@ -58,7 +60,7 @@ export const applyCarrierFlowAndPersistence = (
                 const toCy = node.y - clusterCy;
                 const toD = Math.sqrt(toCx * toCx + toCy * toCy);
 
-                if (toD > 0.1) {
+                if (toD > motionPolicy.distanceEpsilon) {
                     // Perpendicular direction (tangent to centroid)
                     const perpX = -toCy / toD;
                     const perpY = toCx / toD;
@@ -68,15 +70,15 @@ export const applyCarrierFlowAndPersistence = (
                     const smoothFade = fade * fade * (3 - 2 * fade);
 
                     // Very small velocity bias
-                    const carrierStrength = 0.05 * smoothFade;
+                    const carrierStrength = motionPolicy.microSlip * 1.6 * smoothFade;
 
                     node.vx += perpX * carrierStrength;
                     node.vy += perpY * carrierStrength;
                     nodeVelocityDelta += Math.abs(carrierStrength);
 
                     // RELIABILITY GATE: only store direction if well-defined
-                    const centroidEpsilon = 2.0;  // Minimum centroid distance
-                    const forceEpsilon = 0.5;     // Minimum net force
+                    const centroidEpsilon = motionPolicy.distanceEpsilon * 20;
+                    const forceEpsilon = motionPolicy.stuckForceEpsilon;
                     const directionReliable = toD > centroidEpsilon || fMag > forceEpsilon;
 
                     if (directionReliable) {
@@ -107,7 +109,7 @@ export const applyCarrierFlowAndPersistence = (
 
         // Check if velocity exceeds threshold (symmetry broken, persistence no longer needed)
         const vMagNow = Math.sqrt(node.vx * node.vx + node.vy * node.vy);
-        if (vMagNow > 3.0) {
+        if (vMagNow > motionPolicy.stuckSpeedEpsilon * 6) {
             // Clear persistence
             engine.carrierDir.delete(node.id);
             engine.carrierTimer.delete(node.id);

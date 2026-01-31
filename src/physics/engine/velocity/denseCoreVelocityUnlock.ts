@@ -2,7 +2,9 @@ import type { PhysicsEngine } from '../../engine';
 import type { PhysicsNode } from '../../types';
 import { getPassStats, type DebugStats } from '../stats';
 import { logVelocityDeLocking } from './debugVelocity';
-import { isDense, isEarlyExpansion } from './energyGates';
+import type { MotionPolicy } from '../motionPolicy';
+import type { UnifiedMotionState } from '../unifiedMotionState';
+import { getDenseRamp, getEarlyExpansionRamp } from './energyGates';
 import {
     computeAverageNeighborVelocity,
     projectVelocityComponents,
@@ -19,17 +21,19 @@ import {
 export const applyDenseCoreVelocityDeLocking = (
     _engine: PhysicsEngine,
     nodeList: PhysicsNode[],
-    energy: number,
+    motionState: UnifiedMotionState,
+    motionPolicy: MotionPolicy,
     stats: DebugStats
 ) => {
     // Only during early expansion
-    if (!isEarlyExpansion(energy)) return;
+    const expansionRamp = getEarlyExpansionRamp(motionState.temperature);
+    if (expansionRamp <= 0) return;
 
     const passStats = getPassStats(stats, 'VelocityDeLocking');
     const affected = new Set<string>();
 
-    const densityRadius = 30;  // Same as other dense-core detection
-    const densityThreshold = 4;
+    const densityRadius = motionPolicy.densityRadius;
+    const densityThreshold = motionPolicy.densityThreshold;
     const parallelReduction = 0.2;  // Reduce parallel by 20%
 
     const avgVelocity: VelocityAccumulator = { vx: 0, vy: 0 };
@@ -47,7 +51,8 @@ export const applyDenseCoreVelocityDeLocking = (
         const neighborCount = computeAverageNeighborVelocity(node, nodeList, densityRadius, avgVelocity);
 
         // Only apply to dense nodes
-        if (!isDense(neighborCount, densityThreshold)) continue;
+        const densityRamp = getDenseRamp(neighborCount, densityThreshold);
+        if (densityRamp <= 0) continue;
 
         const avgVx = avgVelocity.vx / neighborCount;
         const avgVy = avgVelocity.vy / neighborCount;
@@ -82,8 +87,9 @@ export const applyDenseCoreVelocityDeLocking = (
         const beforeVx = node.vx;
         const beforeVy = node.vy;
 
-        node.vx = projection.perpX + projection.parallelX * (1 - parallelReduction);
-        node.vy = projection.perpY + projection.parallelY * (1 - parallelReduction);
+        const reduction = parallelReduction * expansionRamp * densityRamp;
+        node.vx = projection.perpX + projection.parallelX * (1 - reduction);
+        node.vy = projection.perpY + projection.parallelY * (1 - reduction);
 
         const dvx = node.vx - beforeVx;
         const dvy = node.vy - beforeVy;

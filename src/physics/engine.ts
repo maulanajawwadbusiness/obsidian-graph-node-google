@@ -5,6 +5,9 @@ import { type DebugStats } from './engine/stats';
 import { getNowMs } from './engine/engineTime';
 import { runPhysicsTick, type PhysicsEngineTickContext } from './engine/engineTick';
 import { createFeelMetrics, resetFeelMetrics } from './engine/feelMetrics';
+import { type UnifiedMotionState } from './engine/unifiedMotionState';
+import { computeInteractionAuthorityPolicy } from './engine/interactionAuthority';
+import type { MotionPolicy } from './engine/motionPolicy';
 
 export class PhysicsEngine {
     public nodes: Map<string, PhysicsNode> = new Map();
@@ -77,6 +80,8 @@ export class PhysicsEngine {
     private perfModeLogAt: number = 0;
     private spacingLogAt: number = 0;
     private passLogAt: number = 0;
+    private pbdReconLogAt: number = 0;
+    private settleLogAt: number = 0;
     private degradeLevel: number = 0;
     private degradeReason: string = 'NONE';
     private degradeSeverity: 'NONE' | 'SOFT' | 'HARD' = 'NONE';
@@ -85,6 +90,7 @@ export class PhysicsEngine {
     private handLogAt: number = 0;
     private dragLagSamples: number[] = [];
     private localBoostFrames: number = 0;
+    private pbdReconcileCache: Float32Array = new Float32Array(0);
     private perfTiming = {
         lastReportAt: 0,
         frameCount: 0,
@@ -99,6 +105,18 @@ export class PhysicsEngine {
     };
     private lastDraggedNodeId: string | null = null;
     public feelMetrics = createFeelMetrics();
+    public unifiedMotionState: UnifiedMotionState | null = null;
+    public motionPolicy: MotionPolicy | null = null;
+    private dragVelocity: { vx: number; vy: number } | null = null;
+    private lastDragSample: { x: number; y: number; time: number } | null = null;
+    private settleState: 'moving' | 'cooling' | 'microkill' | 'sleep' = 'moving';
+    private settleStateMs: number = 0;
+    private settleJitterAvg: number = 0;
+    private settlePositionCache: Float32Array = new Float32Array(0);
+    private localBoostStrength: number = 1;
+    private localBoostRadius: number = 0;
+    private lastReleaseLogAt: number = 0;
+    public scaleHarnessRan: boolean = false;
 
     // Fix #11: Impulse Guard State
     private lastImpulseTime: number = 0;
@@ -423,6 +441,8 @@ export class PhysicsEngine {
             this.draggedNodeId = nodeId;
             this.dragTarget = { ...position };
             this.lastDraggedNodeId = nodeId;
+            this.lastDragSample = { x: position.x, y: position.y, time: getNowMs() };
+            this.dragVelocity = { vx: 0, vy: 0 };
 
             // KINEMATIC LOCK: Override position directly (0 lag)
             const node = this.nodes.get(nodeId);
@@ -457,6 +477,19 @@ export class PhysicsEngine {
         if (this.draggedNodeId && this.dragTarget) {
             this.dragTarget = { ...position };
 
+            const now = getNowMs();
+            if (this.lastDragSample) {
+                const dtMs = Math.max(1, now - this.lastDragSample.time);
+                const dt = dtMs / 1000;
+                const vx = (position.x - this.lastDragSample.x) / dt;
+                const vy = (position.y - this.lastDragSample.y) / dt;
+                const blend = 0.25;
+                if (!this.dragVelocity) this.dragVelocity = { vx, vy };
+                this.dragVelocity.vx = this.dragVelocity.vx * (1 - blend) + vx * blend;
+                this.dragVelocity.vy = this.dragVelocity.vy * (1 - blend) + vy * blend;
+                this.lastDragSample = { x: position.x, y: position.y, time: now };
+            }
+
             // Always wake self (ensure velocity is integrated)
             this.wakeNode(this.draggedNodeId);
 
@@ -477,10 +510,16 @@ export class PhysicsEngine {
         if (this.draggedNodeId) {
             const node = this.nodes.get(this.draggedNodeId);
             if (node) {
-                // FIX 13: Atomic Release (Kill Ghost Slide)
-                // Zero out ALL motion history so it stops dead.
-                node.vx = 0;
-                node.vy = 0;
+                const policy = this.motionPolicy
+                    ? computeInteractionAuthorityPolicy(this.motionPolicy, this.dragVelocity)
+                    : null;
+                if (policy?.releaseVelocity) {
+                    node.vx = policy.releaseVelocity.vx;
+                    node.vy = policy.releaseVelocity.vy;
+                } else {
+                    node.vx = 0;
+                    node.vy = 0;
+                }
                 node.fx = 0;
                 node.fy = 0;
                 node.prevFx = 0;
@@ -493,12 +532,24 @@ export class PhysicsEngine {
 
                 // Unlock
                 node.isFixed = false;
+
+                if (this.config.debugPerf && policy) {
+                    const now = getNowMs();
+                    if (now - this.lastReleaseLogAt > 250) {
+                        this.lastReleaseLogAt = now;
+                        console.log(
+                            `[Hand] releaseImpulseApplied=${policy.releaseVelocity ? 'Y' : 'N'} ` +
+                            `reason=${policy.releaseReason ?? 'none'}`
+                        );
+                    }
+                }
             }
         }
         // Hard clear all drag state
         this.draggedNodeId = null;
         this.dragTarget = null;
-        this.lastDraggedNodeId = null;
+        this.dragVelocity = null;
+        this.lastDragSample = null;
         this.idleFrames = 0; // FIX 44: Wake Up
     }
 
@@ -531,6 +582,13 @@ export class PhysicsEngine {
      */
     getDebugStats(): DebugStats | null {
         return this.lastDebugStats;
+    }
+
+    getSettleSnapshot(): { state: 'moving' | 'cooling' | 'microkill' | 'sleep'; jitterAvg: number } {
+        return {
+            state: this.settleState,
+            jitterAvg: this.settleJitterAvg,
+        };
     }
 
     /**

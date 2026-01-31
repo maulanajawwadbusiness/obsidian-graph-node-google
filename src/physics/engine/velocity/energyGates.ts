@@ -1,6 +1,10 @@
-export const isEarlyExpansion = (energy: number): boolean => energy > 0.85;
+import { smoothstep } from '../unifiedMotionState';
 
-export const isDense = (
+export const getEarlyExpansionRamp = (temperature: number): number => (
+    smoothstep(0.7, 0.9, temperature)
+);
+
+export const getDenseRamp = (
     localDensity: number,
     densityThreshold: number = 4
-): boolean => localDensity >= densityThreshold;
+): number => smoothstep(densityThreshold - 1, densityThreshold + 1, localDensity);

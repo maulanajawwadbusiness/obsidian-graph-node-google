@@ -6,17 +6,17 @@
 export const STRINGS = {
     id: {
         // Node Popup
-        "nodePopup.header": "Info Node",
+        "nodePopup.header": "Analisis Node",
         "nodePopup.closeTooltip": "Tutup jendela",
         "nodePopup.fallbackTitle": "Node {id}",
         "nodePopup.fallbackSummary": "Tidak ada analisis detail untuk node ini.",
-        "nodePopup.inputPlaceholder": "Telusuri ini lebih lanjut",
+        "nodePopup.inputPlaceholder": "Analisis ini lebih lanjut",
 
         // Mini Chat
         "miniChat.header": "Analisis Mini",
         "miniChat.closeTooltip": "Tutup",
-        "miniChat.extendTooltip": "Lanjut ke Obrolan Utama",
-        "miniChat.extendAria": "Kirim ke Obrolan Utama",
+        "miniChat.extendTooltip": "Lanjut ke Pembicaraan Utama",
+        "miniChat.extendAria": "Kirim ke Pembicaraan Utama",
         "miniChat.nodeLabel": "Node {label}",
         "miniChat.fallbackNode": "node ini",
 
@@ -26,7 +26,7 @@ export const STRINGS = {
 
         // Tooltips
         "tooltip.close": "Tutup",
-        "tooltip.openChat": "Buka Chatbar",
+        "tooltip.openChat": "Buka Pembicaraan",
         "tooltip.closeChat": "Tutup Chat",
         "tooltip.send": "Kirim",
         "tooltip.uploadDoc": "Unggah Dokumen",
@@ -65,13 +65,13 @@ export const STRINGS = {
         "nodePopup.closeTooltip": "Close window",
         "nodePopup.fallbackTitle": "Node {id}",
         "nodePopup.fallbackSummary": "No detailed analysis available for this node.",
-        "nodePopup.inputPlaceholder": "Trace it further...",
+        "nodePopup.inputPlaceholder": "Analyze this further",
 
         // Mini Chat
-        "miniChat.header": "Mini Chat",
+        "miniChat.header": "Mini Analysis",
         "miniChat.closeTooltip": "Close",
-        "miniChat.extendTooltip": "Extend to main chat",
-        "miniChat.extendAria": "Send to Full Chat",
+        "miniChat.extendTooltip": "Extend to main conversation",
+        "miniChat.extendAria": "Send to Full Analysis",
         "miniChat.nodeLabel": "Node {label}",
         "miniChat.fallbackNode": "this node",
 

@@ -11,56 +11,44 @@ Excluding: `node_modules`, `dist`, `build`, `.git`
 .
 ├── docs/                      # Extensive system documentation
 │   ├── system.md              # MAIN SYSTEM DOC
-│   ├── forensic_render_perf_fix_1-55_2026-01-31.md # FORENSIC REPORT (Fixes 1-55)
-│   ├── forensic_report_2026_01_31.md          # HUD Cleanup & Constraint Forensics
-│   ├── forensic_rest_thresholds_and_state_ladder_oscillation.md # Fix for insomnia/oscillation.
-│   ├── forensic_stagnation_escape_determinism_and_direction.md # Fix for constraint fighting.
-│   ├── report_2026_02_01_comprehensive_physics_hardening.md # Summary of determinism & rest fixes.
-│   ├── forensic_remove_singularity_explosion_start_2026_01_31.md # SINGULARITY REMOVAL
-│   ├── singularity_explosion_forensics.md     # Singularity Theory & Prevention
 │   ├── physics_xray.md        # PHYSICS DOCTRINE
-│   ├── AGENTS.md              # AGENT BEHAVIOR RULES (New)
-│   └── ... (rendering/input forensic reports)
+│   ├── forensic_report_2026_02_01_doc_sync.md # DOCUMENTATION SYNC REPORT
+│   ├── report_2026_01_31_modularization.md    # MODULARIZATION REPORT
+│   ├── report_2026_02_01_comprehensive_physics_hardening.md # HARDENING REPORT
+│   └── ... (forensic reports)
 ├── src/
 │   ├── ai/                    # AI Layer (Provider Agnostic)
 │   │   ├── clientTypes.ts     # Interfaces
-│   │   ├── paperAnalyzer.ts   # Document Analysis Logic
 │   │   └── ...
-│   ├── ArnvoidDocumentViewer/ # PDF/Doc Viewer Module
-│   │   ├── engines/
-│   │   ├── hooks/
-│   │   └── ArnvoidDocumentViewer.tsx
 │   ├── components/            # Shared UI Components
-│   │   ├── AnalysisOverlay.tsx
-│   │   ├── BrandLabel.tsx
-│   │   └── ...
 │   ├── config/                # App Configuration
-│   │   ├── aiModels.ts
-│   │   └── ...
-│   ├── document/              # Document Parsing & Workers
-│   │   ├── parsers/
-│   │   └── ...
 │   ├── fullchat/              # Right-Side Chat Panel
-│   │   ├── FullChatStore.tsx
+│   │   ├── FullChatbar.tsx    # ORCHESTRATOR
+│   │   ├── FullChatbarMessages.tsx # Message Rendering
 │   │   └── ...
 │   ├── physics/               # Core Physics Engine
-│   │   ├── engine/            # Sub-systems (constraints, forces)
+│   │   ├── engine.ts          # ENGINE STATE
 │   │   ├── types.ts           # Physics Types
-│   │   ├── engine.ts          # MAIN CLASS STATE
 │   │   ├── engine/            # Sub-systems
-│   │   │   ├── engineTick.ts  # MAIN TICK LOGIC
-│   │   │   ├── engineTime.ts  # Time Helpers
+│   │   │   ├── engineTick.ts  # MAIN TICK ORCHESTRATOR
+│   │   │   ├── engineTickPreflight.ts # Firewalls
+│   │   │   ├── forcePass.ts   # Forces
+│   │   │   ├── constraints.ts # PBD Constraints
+│   │   │   ├── velocity/      # Velocity Modules (19 files)
+│   │   │   │   ├── staticFrictionBypass.ts # Micro-Slip
+│   │   │   │   └── ...
+│   │   │   ├── motionPolicy.ts # Threshold Logic
 │   │   │   └── ...
 │   ├── playground/            # Main Application Canvas
-│   │   ├── rendering/         # Canvas Drawing
-│   │   │   ├── graphRenderingLoop.ts # RENDER LOOP & SCHEDULER
+│   │   ├── rendering/         # Canvas Drawing & Loop
+│   │   │   ├── graphRenderingLoop.ts # MAIN RENDER LOOP
+│   │   │   ├── renderLoopScheduler.ts # Frame Scheduling
+│   │   │   ├── renderLoopPerf.ts      # Perf Telemetry
+│   │   │   ├── hoverController.ts     # Interaction Truth
 │   │   │   └── ...
-│   │   ├── components/        # Canvas-overlay components
 │   │   ├── useGraphRendering.ts # HOOK WIRING
 │   │   └── GraphPhysicsPlayground.tsx # ROOT CONTAINER
 │   ├── popup/                 # Node Popups & MiniChat
-│   │   ├── PopupStore.tsx
-│   │   └── ...
 │   ├── main.tsx               # Entry Point
 │   └── index.css              # Global Styles
 ├── index.html                 # HTML Entry
@@ -69,24 +57,19 @@ Excluding: `node_modules`, `dist`, `build`, `.git`
 ```
 
 ## 2. Top Source Files (By Line Count)
-*Note: Counts are based on specific file scan.*
+*Note: Counts are estimated post-modularization.*
 
-1.  `src/playground/rendering/graphRenderingLoop.ts` (900+ lines) - **Main Render Loop & Scheduler**
-2.  `src/physics/engine/engineTick.ts` (750+ lines) - **Core Physics Logic & Degrade State**
-3.  `src/physics/engine.ts` (480+ lines) - **Engine State Container**
-4.  `src/playground/useGraphRendering.ts` (Hook Shell)
-3.  `src/physics/engine/constraints.ts` (372 lines) - **PBD Constraints & Gentle Overlap Resolver**
-4.  `src/playground/GraphPhysicsPlayground.tsx` (378 lines) - **Main UI Controller**
-5.  `src/physics/engine/integration.ts` (200+ lines) - **Time Steps & Dt Skew**
-6.  `src/physics/engine/corrections.ts` (170+ lines) - **Diffusion & Jitter Control**
-7.  `src/physics/engine/velocity/dragVelocity.ts` (40 lines) - **Critical Interaction Logic**
-8.  `src/playground/rendering/hoverController.ts` (300+ lines) - **Interaction Source of Truth (Hit/Touch/Hover)**
-9.  `src/playground/rendering/camera.ts` (New) - **Render Authority & Unified Transform**
-10. `src/playground/rendering/canvasUtils.ts` (New) - **Gradient Glow (GPU Optimized)**
-11. `src/playground/rendering/renderingMath.ts` (New) - **Sub-pixel Quantization & Alignment**
-12. `src/physics/engine/forcePass.ts` (202 lines) - **Force Calculations (Deterministic Singularity)**
-13. `src/fullchat/FullChatStore.tsx` (227 lines) - **Chat State Manager**
-14. `src/ArnvoidDocumentViewer/ArnvoidDocumentViewer.tsx` (312 lines) - **Doc Viewer UI**
+1.  `src/fullchat/FullChatbar.tsx` (800+ lines) - **Chat Orchestrator**
+2.  `src/physics/engine/engineTick.ts` (740 lines) - **Physics Orchestrator**
+3.  `src/playground/rendering/graphRenderingLoop.ts` (600+ lines) - **Render Loop**
+4.  `src/playground/rendering/hoverController.ts` (large) - **Interaction/HitTest**
+5.  `src/physics/engine/constraints.ts` (370 lines) - **PBD Constraints**
+6.  `src/playground/GraphPhysicsPlayground.tsx` (378 lines) - **Main UI Controller**
+7.  `src/physics/engine/engine.ts` (300+ lines) - **Engine State Container**
+8.  `src/physics/engine/forcePass.ts` (200 lines) - **Forces**
+9.  `src/ArnvoidDocumentViewer/ArnvoidDocumentViewer.tsx` (312 lines) - **Doc Viewer**
+10. `src/playground/rendering/renderLoopScheduler.ts` (New) - **Loop Logic**
+
 
 ## 3. Core Runtime Loops
 

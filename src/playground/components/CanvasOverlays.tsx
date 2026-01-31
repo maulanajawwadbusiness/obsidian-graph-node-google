@@ -1,11 +1,11 @@
-// @ts-nocheck
+// type check enabled
 import React from 'react';
 import { PlaygroundMetrics } from '../playgroundTypes';
 import {
     DEBUG_CLOSE_STYLE,
     DEBUG_OVERLAY_STYLE,
     DEBUG_TOGGLE_STYLE,
-    DEBUG_SECTION_HEADER_STYLE, // Assume this exists or I use bold
+    // DEBUG_SECTION_HEADER_STYLE, // Removed missing import
     SIDEBAR_TOGGLE_STYLE,
     THEME_TOGGLE_STYLE
 } from '../graphPlaygroundStyles';
@@ -403,6 +403,52 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
                                         DtClip: {hud.startupDtClamps || 0}
                                     </div>
                                 )}
+                                {hud && (
+                                    <div style={{ marginTop: '4px', paddingTop: '4px', borderTop: '1px solid #444', color: '#aaf' }}>
+                                        <strong>DT Consistency</strong><br />
+                                        Skew(Max): {hud.dtSkewMaxMs ? hud.dtSkewMaxMs.toFixed(3) : '0.000'}ms<br />
+                                        Coverage: {hud.perDotUpdateCoveragePct ? hud.perDotUpdateCoveragePct.toFixed(0) : 100}% ({hud.coverageMode || 'full'})<br />
+                                        MaxAge: {hud.ageMaxFrames || 1} frames
+                                    </div>
+                                )}
+                                {hud && (
+                                    <div style={{ marginTop: '4px', paddingTop: '4px', borderTop: '1px solid #444', color: '#afa' }}>
+                                        <strong>Ghost Velocity Audit</strong><br />
+                                        MaxPrevGap: {hud.maxPrevGap ? hud.maxPrevGap.toFixed(2) : 0}px<br />
+                                        V-Mismatch: {hud.ghostVelSuspectCount || 0}
+                                    </div>
+                                )}
+                                {hud && (
+                                    <div style={{ marginTop: '4px', paddingTop: '4px', borderTop: '1px solid #444', color: (hud.degenerateTriangleCount || 0) > 0 ? '#fa8' : '#888' }}>
+                                        <strong>Solver Health</strong><br />
+                                        Degree-1 Tris: {hud.degenerateTriangleCount || 0}<br />
+                                        Budget Hits: {hud.correctionBudgetHits || 0}
+                                    </div>
+                                )}
+                                {hud && (
+                                    <div style={{ marginTop: '4px', paddingTop: '4px', borderTop: '1px solid #444', color: (hud.corrSignFlipRate || 0) > 10 ? '#f88' : '#8f8' }}>
+                                        <strong>Oscillation</strong><br />
+                                        Flip Rate: {(hud.corrSignFlipRate || 0).toFixed(1)}%<br />
+                                        Rest Flaps: {(hud.restFlapRate || 0).toFixed(1)}/s
+                                    </div>
+                                )}
+                                {hud && (
+                                    <div style={{ marginTop: '4px', paddingTop: '4px', borderTop: '1px solid #444', color: (hud.nearOverlapCount || 0) > 0 ? '#f88' : '#888' }}>
+                                        <strong>Singularity</strong><br />
+                                        Min Dist: {(hud.minPairDist || 0).toFixed(1)}px<br />
+                                        Overlaps: {hud.nearOverlapCount || 0}<br />
+                                        Max Repel: {(hud.repulsionMaxMag || 0).toFixed(1)}
+                                    </div>
+                                )}
+                                {hud && (
+                                    <div style={{ marginTop: '4px', paddingTop: '4px', borderTop: '1px solid #444', color: '#ff8' }}>
+                                        <strong>Forensic: Repulsion</strong><br />
+                                        Unit Mode: World (Invariant)<br />
+                                        Clamp: {config ? config.repulsionMaxForce : '?'} world<br />
+                                        Zoom: {window.devicePixelRatio.toFixed(2)}x (DPR)<br />
+                                        Reorder Rates: {hud.neighborReorderRate || 0}<br />
+                                    </div>
+                                )}
                             </div>
 
                             {/* REST MARKER FORENSIC (Collapsible) */}
@@ -427,7 +473,7 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
                                             </div>
                                             Candidates: {metrics.renderDebug.restMarkerStats.candidateCount}<br />
                                             NaN Speeds: {metrics.renderDebug.restMarkerStats.nanSpeedCount}<br />
-                                            SpeedSq Ref: {(metrics.renderDebug.restMarkerStats.epsUsed ** 2).toFixed(6)} (Jit: {(metrics.renderDebug.restMarkerStats.epsUsed * 2.5) ** 2 .toFixed(6)})<br />
+                                            SpeedSq Ref: {(metrics.renderDebug.restMarkerStats.epsUsed ** 2).toFixed(6)} (Jit: {((metrics.renderDebug.restMarkerStats.epsUsed * 2.5) ** 2).toFixed(6)})<br />
                                             SpeedSq Range: [{metrics.renderDebug.restMarkerStats.minSpeedSq === Infinity ? 'Inf' : metrics.renderDebug.restMarkerStats.minSpeedSq.toExponential(2)}, {metrics.renderDebug.restMarkerStats.maxSpeedSq.toExponential(2)}]<br />
                                             SampleNode: {metrics.renderDebug.restMarkerStats.sampleNodeId || 'None'} <br />
                                             - Vx/Vy: {metrics.renderDebug.restMarkerStats.sampleNodeVx?.toFixed(4)} / {metrics.renderDebug.restMarkerStats.sampleNodeVy?.toFixed(4)}<br />

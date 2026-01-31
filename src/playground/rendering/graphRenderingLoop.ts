@@ -375,8 +375,7 @@ export const updateHoverSelectionIfNeeded = (
             `env=${envChanged} ` +
             `heart=${heartbeat} ` +
             `refId=${(hoverStateRef as any).__debugId} ` +
-            `themeDbg=${theme.hoverDebugEnabled} ` +
-            `skin=${settingsRef.current.skinMode}`);
+            `themeDbg=${theme.hoverDebugEnabled}`);
     }
 
     // We bypass throttling if Env Changed (Must be correct instantly)
@@ -828,6 +827,9 @@ export const startGraphRenderLoop = (deps: GraphRenderLoopDeps) => {
         renderScratch,
     } = deps;
 
+    const LOOP_ID = `loop-${Math.floor(Math.random() * 10000)}`;
+    console.log(`[HoverDbg] Start Loop ${LOOP_ID} refId=${(hoverStateRef as any).__debugId}`);
+
     let frameId = 0;
     const schedulerState: SchedulerState = {
         lastTime: performance.now(),
@@ -1173,11 +1175,8 @@ export const startGraphRenderLoop = (deps: GraphRenderLoopDeps) => {
     }
 
     return () => {
-        canvas.removeEventListener('wheel', handleWheel);
+        console.log(`[HoverDbg] Stop Loop ${LOOP_ID}`);
         window.removeEventListener('blur', handleBlur);
-        if (document.fonts) {
-            document.fonts.removeEventListener('loadingdone', handleFontLoad);
-        }
         cancelAnimationFrame(frameId);
     };
 };

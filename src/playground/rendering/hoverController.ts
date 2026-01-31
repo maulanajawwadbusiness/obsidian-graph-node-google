@@ -353,7 +353,7 @@ export const createHoverController = ({
             (hoverStateRef.current as any).lastInputLogTime = now;
             console.log(`[HoverDbg] Input Active: ${pointerType} at (${clientX.toFixed(0)},${clientY.toFixed(0)}) ` +
                 `pending=${pendingPointerRef.current.hasPending} ` +
-                `refId=${(hoverStateRef.current as any).__debugId}`);
+                `refId=${(hoverStateRef as any).__debugId}`);
         }
 
         if (pointerType === 'touch') {

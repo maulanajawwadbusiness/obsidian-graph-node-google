@@ -156,7 +156,7 @@ export const useGraphRendering = ({
         });
 
         return stopLoop;
-    }, []);
+    }, [startGraphRenderLoop]);
 
     const handleDragStart = (nodeId: string, clientX: number, clientY: number) => {
         const engine = engineRef.current;

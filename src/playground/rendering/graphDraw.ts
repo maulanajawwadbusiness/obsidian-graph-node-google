@@ -167,15 +167,16 @@ export const drawNodes = (
         ctx.globalAlpha = 1;
         ctx.globalCompositeOperation = 'source-over';
 
+        let nodeEnergy = 0;
+        let nodeScale = 1;
         if (theme.nodeStyle === 'ring') {
-            const isHoveredNode = node.id === hoverStateRef.current.hoveredNodeId;
             const isDisplayNode = node.id === hoverStateRef.current.hoverDisplayNodeId;
-            const nodeEnergy = isDisplayNode ? hoverStateRef.current.energy : 0;
+            nodeEnergy = isDisplayNode ? hoverStateRef.current.energy : 0;
             if (isDisplayNode && theme.hoverDebugEnabled) {
                 hoverStateRef.current.debugNodeEnergy = nodeEnergy;
             }
 
-            const nodeScale = getNodeScale(nodeEnergy, theme);
+            nodeScale = getNodeScale(nodeEnergy, theme);
             const radiusPx = baseRenderRadius * nodeScale * zoom;
 
             // Fix 52: Glow LOD. Skip if node is tiny (< 2px) and no energy.
@@ -248,6 +249,35 @@ export const drawNodes = (
             ctx.strokeStyle = theme.nodeStrokeColor;
             ctx.lineWidth = strokeWidthPx;
             ctx.stroke();
+        }
+
+        if (settingsRef.current.showRestMarkers || settingsRef.current.showConflictMarkers) {
+            const radiusPx = baseRenderRadius * nodeScale * zoom;
+            const vMagSq = node.vx * node.vx + node.vy * node.vy;
+            const restEpsilon = 0.0004;
+            const jitterEpsilon = 0.02;
+            const isResting = node.isSleeping === true;
+            const isJittering = vMagSq > restEpsilon || (node.lastCorrectionMag ?? 0) > jitterEpsilon;
+
+            if (showRestMarkers && isResting) {
+                const markerRadius = Math.max(1.2, 1.6 * zoom);
+                const markerOffset = radiusPx + 4 * zoom;
+                ctx.beginPath();
+                ctx.fillStyle = isJittering ? 'rgba(255, 178, 86, 0.85)' : 'rgba(140, 210, 255, 0.75)';
+                ctx.arc(screen.x, screen.y + markerOffset, markerRadius, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            if (showConflictMarkers && node.lastCorrectionDir && node.lastCorrectionMag) {
+                const dot = node.vx * node.lastCorrectionDir.x + node.vy * node.lastCorrectionDir.y;
+                if (dot < 0 && node.lastCorrectionMag > 0.05) {
+                    ctx.beginPath();
+                    ctx.strokeStyle = 'rgba(255, 115, 84, 0.3)';
+                    ctx.lineWidth = Math.max(0.75, 1.2 * zoom);
+                    ctx.arc(screen.x, screen.y, radiusPx + 2.5 * zoom, 0, Math.PI * 2);
+                    ctx.stroke();
+                }
+            }
         }
     };
 

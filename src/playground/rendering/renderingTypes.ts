@@ -10,6 +10,8 @@ export type RenderSettings = {
     showDebugGrid: boolean;
     pixelSnapping: boolean;
     debugNoRenderMotion: boolean;
+    showRestMarkers: boolean;
+    showConflictMarkers: boolean;
 };
 
 export type PendingPointerState = {
@@ -142,7 +144,9 @@ export const createInitialRenderSettings = (): RenderSettings => ({
     cameraLocked: false,
     showDebugGrid: false,
     pixelSnapping: false,
-    debugNoRenderMotion: false
+    debugNoRenderMotion: false,
+    showRestMarkers: false,
+    showConflictMarkers: false
 });
 
 export const createInitialPendingPointer = (): PendingPointerState => ({
@@ -241,4 +245,3 @@ export interface RenderTickDetail {
     dpr: number;
     snapEnabled: boolean;
 }
-

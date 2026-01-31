@@ -22,6 +22,10 @@ Use the preset buttons to spawn fixed-seed setups:
 - **Settle Test**: Spawns the current N with fixed seed. Wait until settle state reaches **sleep**, then hit **Record**.
 - **Drag Test**: Highlights a dot. Drag it for ~2 seconds, release, then hit **Record**.
 
+## Visual Feel Markers (Toggles)
+- **Show Rest Markers**: When a dot is sleeping, a tiny marker appears below it. Amber marker means the dot is supposed to be resting but is still jittering above the rest epsilon.
+- **Show Conflict Markers**: A faint ring indicates dots where correction direction is fighting velocity (constraint-vs-velocity conflict).
+
 ## Record Results
 - **Record** stores the current HUD snapshot into the scoreboard table.
 - Ratios are automatically shown versus the **N=5** baseline.

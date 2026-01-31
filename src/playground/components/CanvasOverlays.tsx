@@ -31,6 +31,10 @@ type CanvasOverlaysProps = {
     debugNoRenderMotion: boolean;
     onTogglePixelSnapping: () => void;
     onToggleNoRenderMotion: () => void;
+    showRestMarkers: boolean;
+    showConflictMarkers: boolean;
+    onToggleRestMarkers: () => void;
+    onToggleConflictMarkers: () => void;
     onSpawnPreset: (count: number) => void;
     onRunSettleScenario: () => void;
     onRunDragScenario: () => void;
@@ -65,6 +69,10 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
     debugNoRenderMotion,
     onTogglePixelSnapping,
     onToggleNoRenderMotion,
+    showRestMarkers,
+    showConflictMarkers,
+    onToggleRestMarkers,
+    onToggleConflictMarkers,
     onSpawnPreset,
     onRunSettleScenario,
     onRunDragScenario,
@@ -215,6 +223,24 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
                             style={{ cursor: 'pointer' }}
                         />
                         Kill Render Motion
+                    </label>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', cursor: 'pointer' }}>
+                        <input
+                            type="checkbox"
+                            checked={showRestMarkers}
+                            onChange={onToggleRestMarkers}
+                            style={{ cursor: 'pointer' }}
+                        />
+                        Show Rest Markers
+                    </label>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', cursor: 'pointer' }}>
+                        <input
+                            type="checkbox"
+                            checked={showConflictMarkers}
+                            onChange={onToggleConflictMarkers}
+                            style={{ cursor: 'pointer' }}
+                        />
+                        Show Conflict Markers
                     </label>
                 </div>
                 <strong style={{ fontWeight: 700 }}>Physics HUD</strong><br />

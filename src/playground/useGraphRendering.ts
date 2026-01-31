@@ -67,12 +67,6 @@ export const useGraphRendering = ({
     const pendingPointerRef = useRef<PendingPointerState>(createInitialPendingPointer());
     const hoverStateRef = useRef<HoverState>(createInitialHoverState());
 
-    // [HoverDbg] Ref Identity Stamp
-    if (!(pendingPointerRef as any).__debugId) {
-        (pendingPointerRef as any).__debugId = `ptr-${Math.floor(Math.random() * 1000)}`;
-        (hoverStateRef as any).__debugId = `hvr-${Math.floor(Math.random() * 1000)}`;
-        console.log(`[HoverDbg] Created Refs: ${(pendingPointerRef as any).__debugId}, ${(hoverStateRef as any).__debugId}`);
-    }
     const renderDebugRef = useRef<RenderDebugInfo>(createInitialRenderDebug());
     const renderScratchRef = useRef<RenderScratch>(new RenderScratch());
 

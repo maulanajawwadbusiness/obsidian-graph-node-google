@@ -346,16 +346,6 @@ export const createHoverController = ({
         clientY: number,
         _rect: DOMRect
     ) => {
-        // [HoverDbg] Input Active (Deterministic Throttle)
-        const now = Date.now();
-        const lastLog = (hoverStateRef.current as any).lastInputLogTime || 0;
-        if (now - lastLog > 1000) {
-            (hoverStateRef.current as any).lastInputLogTime = now;
-            console.log(`[HoverDbg] Input Active: ${pointerType} at (${clientX.toFixed(0)},${clientY.toFixed(0)}) ` +
-                `pending=${pendingPointerRef.current.hasPending} ` +
-                `refId=${(hoverStateRef as any).__debugId}`);
-        }
-
         if (pointerType === 'touch') {
             return;
         }

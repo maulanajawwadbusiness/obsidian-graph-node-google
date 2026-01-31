@@ -366,29 +366,9 @@ export const updateHoverSelectionIfNeeded = (
     // Heartbeat: Force reliable 10Hz updates even if input loop is stalled
     const heartbeat = timeSinceLast > 100;
 
-    // P1: Loop Gate Probe (Unconditional, Throttled 1Hz)
-    // FIX: Removing debug flag blindness to prove loop execution
-    const lastGate = (hoverStateRef.current as any).lastGateLog || 0;
-    if (now - lastGate > 1000) {
-        (hoverStateRef.current as any).lastGateLog = now;
-        console.log(`[HoverDbg] Gate: pending=${pendingPointer} ` +
-            `hasPtr=${hoverStateRef.current.hasPointer} ` +
-            `env=${envChanged} ` +
-            `heart=${heartbeat} ` +
-            `refId=${(hoverStateRef as any).__debugId} ` +
-            `themeDbg=${theme.hoverDebugEnabled}`);
-    }
-
     // We bypass throttling if Env Changed (Must be correct instantly)
     if (shouldRun || heartbeat) { // 10hz fallback
         if (hoverStateRef.current.hasPointer) {
-            // P2: Call Probe (Unconditional, Throttled)
-            const lastCall = (hoverStateRef.current as any).lastCallLog || 0;
-            if (now - lastCall > 1000) {
-                (hoverStateRef.current as any).lastCallLog = now;
-                console.log('[HoverDbg] Call updateHoverSelection');
-            }
-
             updateHoverSelection(
                 hoverStateRef.current.lastClientX || 0,
                 hoverStateRef.current.lastClientY || 0,
@@ -829,9 +809,6 @@ export const startGraphRenderLoop = (deps: GraphRenderLoopDeps) => {
         renderScratch,
     } = deps;
 
-    const LOOP_ID = `loop-${Math.floor(Math.random() * 10000)}`;
-    console.log(`[HoverDbg] Start Loop ${LOOP_ID} refId=${(hoverStateRef as any).__debugId}`);
-
     let frameId = 0;
     const schedulerState: SchedulerState = {
         lastTime: performance.now(),
@@ -997,23 +974,8 @@ export const startGraphRenderLoop = (deps: GraphRenderLoopDeps) => {
         const project = (x: number, y: number) => transform.worldToScreen(x, y);
         const worldToScreen = project;
         const visibleBounds = transform.getVisibleBounds(200);
-        // P: Seam Probe
-        const seamNow = performance.now();
-        const lastSeam = (hoverStateRef.current as any).lastSeamLog || 0;
-        const doLog = (seamNow - lastSeam > 1000);
 
-        if (doLog) {
-            (hoverStateRef.current as any).lastSeamLog = seamNow;
-            console.log(`[HoverDbg] Render Seam: Pre-Prepare pending=${pendingPointerRef.current.hasPending}`);
-        }
-
-        try {
-            renderScratch.prepare(engine, visibleBounds);
-            if (doLog) console.log(`[HoverDbg] Render Seam: Post-Prepare (Success)`);
-        } catch (e: any) {
-            console.error(`[HoverDbg] CRITICAL CRASH in renderScratch.prepare:`, e);
-            if (doLog) console.log(`[HoverDbg] Render Seam: Post-Prepare (FAILED)`);
-        }
+        renderScratch.prepare(engine, visibleBounds);
         updateHoverSelectionIfNeeded(
             pendingPointerRef.current.hasPending,
             hoverStateRef,
@@ -1177,7 +1139,6 @@ export const startGraphRenderLoop = (deps: GraphRenderLoopDeps) => {
     }
 
     return () => {
-        console.log(`[HoverDbg] Stop Loop ${LOOP_ID}`);
         window.removeEventListener('blur', handleBlur);
         cancelAnimationFrame(frameId);
     };

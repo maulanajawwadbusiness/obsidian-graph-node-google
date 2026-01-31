@@ -108,41 +108,17 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
         return () => ro.disconnect();
     }, []);
 
-    // [HoverDbg] Window Control (Capture Phase)
-    useEffect(() => {
-        let last = 0;
-        const h = (e: PointerEvent) => {
-            const now = Date.now();
-            if (now - last > 1000) {
-                last = now;
-                console.log(`[HoverDbg] Window Move: (${e.clientX.toFixed(0)},${e.clientY.toFixed(0)})`);
-            }
-        };
-        window.addEventListener('pointermove', h, { capture: true });
-        return () => window.removeEventListener('pointermove', h, { capture: true });
-    }, []);
-
     const getCachedRect = () => {
         // Fallback to live read if RO hasn't fired yet (rare) or fails
         return contentRectRef.current || canvasRef.current?.getBoundingClientRect() || ({ left: 0, top: 0, width: 0, height: 0 } as DOMRect);
     };
 
-    const lastLogRef = useRef(0);
-
     // Wrap hook handlers for pointer events
     const onPointerMove = (e: React.PointerEvent) => {
-        const now = Date.now();
-        const shouldLog = (now - lastLogRef.current > 1000);
-
         // FIX: Reliable Source (currentTarget is the div we listened on)
         // Avoid aborted input due to null canvasRef.
         const target = e.currentTarget as HTMLElement;
         const rect = target.getBoundingClientRect();
-
-        if (shouldLog) {
-            lastLogRef.current = now;
-            console.log(`[HoverDbg] DOM Move: target=${target.tagName} ref=${!!canvasRef.current} rect=${rect.width.toFixed(0)}x${rect.height.toFixed(0)}`);
-        }
 
         // 1. Hover Update (Ref-based, cheap)
         // FIX 28: Decoupled Input Sampling

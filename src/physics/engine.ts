@@ -321,16 +321,9 @@ export class PhysicsEngine {
         budgetMs: number
     ) {
         // FIX: Interaction Lock (Prevent mode switching during drag)
-        if (this.interactionLock) {
-            // Allow FATAL updates or resets, but block normal fluctuations
-            if (severity !== 'HARD' && level !== 0) {
-                // But wait, if we are locked, we want to STAY in current mode.
-                // So we just return and ignore the scheduler's suggestion.
-                return;
-            }
-            // Actually, we should probably ignore EVERYTHING except maybe emergency checks?
-            // User requested: "freeze mode (normal/degrade/stressed)".
-            // So we simply ignore this call if locked.
+        // Allow FATAL updates or resets, but block normal fluctuations
+        if (severity !== 'HARD' && level !== 0) {
+            // If locked, we ignore non-critical updates
             return;
         }
 

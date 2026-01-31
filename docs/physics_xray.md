@@ -88,5 +88,8 @@ New telemetry in `[RenderPerf]` and `[PhysicsPasses]`:
 *   `[Hand]`: `localBoost=Y`.
 *   `[Impulse]`: Logged on trigger or rejection.
 *   `[RenderDrift]`: Logs global angle if micro-drift is active (should be 0).
-*   **Physics HUD (Debug Panel)**: In-app overlay shows degrade%, settle state, jitter, PBD correction sum, conflict%, and energy proxy.
+*   **Physics HUD (Debug Panel)**: 
+    *   **2-Column Layout**: Left (Summary/Controls) | Right (Ledgers).
+    *   **Energy Ledger**: Real-time v² breakdown per stage (Input, Spring, Repulse, Constrain) to find energy leaks.
+    *   **Fight Ledger**: Conflict% and correction mag per constraint stage.
 *   **Feel Markers (Debug Panel)**: Dev-only canvas markers show rest state (cyan/amber) and conflict halos per dot.

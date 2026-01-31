@@ -12,6 +12,7 @@ Excluding: `node_modules`, `dist`, `build`, `.git`
 ├── docs/                      # Extensive system documentation
 │   ├── system.md              # MAIN SYSTEM DOC
 │   ├── forensic_render_perf_fix_1-55_2026-01-31.md # FORENSIC REPORT (Fixes 1-55)
+│   ├── forensic_report_2026_01_31.md          # HUD Cleanup & Constraint Forensics
 │   ├── physics_xray.md        # PHYSICS DOCTRINE
 │   ├── AGENTS.md              # AGENT BEHAVIOR RULES (New)
 │   └── ... (rendering/input forensic reports)

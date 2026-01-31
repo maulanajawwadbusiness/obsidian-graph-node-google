@@ -83,4 +83,8 @@ export type PhysicsEngineTickContext = {
     // Rest Logic
     settleConfidence: number; // 0.0 (Active) to 1.0 (Calm)
     stateFlipTracking: { count: number; lastFlipMs: number; windowStartMs: number; flipHistory: number[] };
+
+    // FIX D: Scale & Determinism
+    localDensityCache: Map<string, number>;
+    onWorldShift?: (dx: number, dy: number) => void;
 };

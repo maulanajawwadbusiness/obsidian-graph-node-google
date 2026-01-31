@@ -18,6 +18,8 @@ export type PhysicsEngineTopologyContext = {
     neighborCache: Map<string, Set<string>>;
     lifecycle: number;
     hasFiredImpulse: boolean;
+    // FIX D: Scale
+    triangleCache: [string, string, string][] | null;
     spacingGate: number;
     spacingGateActive: boolean;
     globalAngle: number;

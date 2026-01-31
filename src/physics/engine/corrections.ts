@@ -127,7 +127,10 @@ export const applyCorrectionsWithDiffusion = (
         const t = Math.max(0, Math.min(1, (totalMag - magLow) / (magHigh - magLow)));
         const magWeight = t * t * (3 - 2 * t);
 
-        magWeight;
+        const diffusionEffective = engine.config.correctionDiffusionBase *
+            policy.diffusion *
+            diffusionSettleGate *
+            magWeight;
 
         // FIX B: HUD Truth - Clear data if gated
         if (policy.diffusion <= 0.001 || diffusionSettleGate <= 0.001) {
@@ -437,9 +440,12 @@ export const applyCorrectionsWithDiffusion = (
 
             // Forensic: Ghost Mismatch Check
             if (node.prevX !== undefined && node.prevY !== undefined) {
-                const shiftP = (node.x - (node.x - corrDx));
-                const shiftPrev = (node.prevX - oldPrevX);
-                if (Math.abs(shiftP - shiftPrev) > 0.0001) {
+                const shiftPx = corrDx;
+                const shiftPy = corrDy;
+                const shiftPrevX = (node.prevX - oldPrevX);
+                const shiftPrevY = (node.prevY - oldPrevY);
+
+                if (Math.abs(shiftPx - shiftPrevX) > 0.0001 || Math.abs(shiftPy - shiftPrevY) > 0.0001) {
                     stats.ghostMismatchCount++;
                 }
             }

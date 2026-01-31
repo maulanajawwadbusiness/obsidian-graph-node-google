@@ -1,7 +1,6 @@
 import type { PhysicsEngine } from '../../engine';
 import type { PhysicsNode } from '../../types';
 import type { MotionPolicy } from '../motionPolicy';
-import type { MotionPolicy } from '../motionPolicy';
 import { getPassStats, type DebugStats } from '../stats';
 import { getNowMs } from '../engineTime';
 

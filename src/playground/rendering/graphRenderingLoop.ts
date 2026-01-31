@@ -303,14 +303,14 @@ const enforceCameraSafety = (cameraRef: Ref<CameraState>, lastSafeCameraRef: Ref
 let globalSurfaceGeneration = 0;
 
 export const updateHoverSelectionIfNeeded = (
-    pendingPointer: boolean,
+    pendingPointerState: PendingPointerState,
     hoverStateRef: MutableRefObject<HoverState>,
     cameraRef: MutableRefObject<CameraState>,
     engine: PhysicsEngine,
     rect: DOMRect,
     theme: ThemeConfig,
     surfaceChanged: boolean,
-    renderScratch: RenderScratch, // Fix 54
+    renderScratch: RenderScratch,
     updateHoverSelection: (
         x: number,
         y: number,
@@ -318,7 +318,7 @@ export const updateHoverSelectionIfNeeded = (
         theme: ThemeConfig,
         trigger: 'pointer' | 'camera',
         draggedNodeId: string | null,
-        renderScratch?: RenderScratch // Optional in callback type
+        renderScratch?: RenderScratch
     ) => void
 ) => {
     // 1. Detect Environmental Changes (Surface or Camera)
@@ -338,8 +338,6 @@ export const updateHoverSelectionIfNeeded = (
     const camera = cameraRef.current;
 
     // FIX 31: Knife-Sharp Hover (High Precision Check)
-    // String key was too coarse (toFixed(2)). Use strict epsilon check.
-    // Check against cached exact values in HoverState.
     const EPSILON = 0.0001;
     const sameCam =
         Math.abs(camera.panX - hoverStateRef.current.lastSelectionPanX) < EPSILON &&
@@ -349,8 +347,6 @@ export const updateHoverSelectionIfNeeded = (
 
     if (!sameCam) {
         envChanged = true;
-        // Update the "Last Selection" values immediately so next check works
-        // (Actually updateHoverSelection will update them, but we need to trigger the run)
     }
 
     if (globalSurfaceGeneration !== hoverStateRef.current.surfaceGeneration) {
@@ -360,10 +356,11 @@ export const updateHoverSelectionIfNeeded = (
 
     // 2. Decide if we need to run hit test
     // Run if:
-    // - Mouse moved (pendingPointer)
+    // - Mouse moved (pendingPointerState.hasPending)
     // - Environment changed (Camera/Surface) AND we have a valid pointer cached
-    // - Periodic scan is due (existing logic below)
-    const shouldRun = pendingPointer || (envChanged && hoverStateRef.current.hasPointer);
+    // - Periodic scan is due
+    const hasPending = pendingPointerState.hasPending;
+    const shouldRun = hasPending || (envChanged && hoverStateRef.current.hasPointer);
 
     // Existing throttling logic...
     const now = performance.now();
@@ -374,15 +371,26 @@ export const updateHoverSelectionIfNeeded = (
 
     // We bypass throttling if Env Changed (Must be correct instantly)
     if (shouldRun || heartbeat) { // 10hz fallback
-        if (hoverStateRef.current.hasPointer) {
+        if (hoverStateRef.current.hasPointer || hasPending) {
+            // FIX: Use FRESH pointer data if available!
+            let targetX = hoverStateRef.current.lastClientX || 0;
+            let targetY = hoverStateRef.current.lastClientY || 0;
+
+            if (hasPending) {
+                targetX = pendingPointerState.clientX;
+                targetY = pendingPointerState.clientY;
+                // CONSUME the pending event so we don't re-process
+                pendingPointerState.hasPending = false;
+            }
+
             updateHoverSelection(
-                hoverStateRef.current.lastClientX || 0,
-                hoverStateRef.current.lastClientY || 0,
+                targetX,
+                targetY,
                 rect,
                 theme,
                 'camera',
                 engine.draggedNodeId,
-                renderScratch // Fix 54
+                renderScratch
             );
             hoverStateRef.current.lastSelectionTime = now;
         }
@@ -993,7 +1001,7 @@ export const startGraphRenderLoop = (deps: GraphRenderLoopDeps) => {
 
         renderScratch.prepare(engine, visibleBounds);
         updateHoverSelectionIfNeeded(
-            pendingPointerRef.current.hasPending,
+            pendingPointerRef.current,
             hoverStateRef,
             cameraRef,
             engine,

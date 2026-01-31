@@ -68,7 +68,13 @@ export type DebugStats = {
     // Diffusion Forensics
     diffusionStrengthNow: number;
     diffusionDeltaP95: number;
+    diffusionStrengthNow: number;
+    diffusionDeltaP95: number;
     ghostMismatchCount: number;
+
+    // Diffusion Stability
+    diffusionPopScore: number;
+    neighborDeltaRate: number;
 };
 
 export const createDebugStats = (): DebugStats => ({
@@ -124,6 +130,9 @@ export const createDebugStats = (): DebugStats => ({
     diffusionStrengthNow: 0,
     diffusionDeltaP95: 0,
     ghostMismatchCount: 0,
+
+    diffusionPopScore: 0,
+    neighborDeltaRate: 0,
 });
 
 export const getPassStats = (stats: DebugStats, name: string): PassStats => {

@@ -67,12 +67,21 @@ export interface PhysicsNode {
   // Constraint Pressure Memory (Fix 13)
   lastCorrectionMag?: number; // Magnitude of PBD correction applied last frame
 
-  // Correction Debt (Fix 17)
+  // Correction Residuals (Fix 17)
   correctionResidual?: { dx: number; dy: number }; // Unpaid correction due to budget clipping
 
-  // Conflict Signal (HUD Feel Markers)
+  // Conflict Signal
   conflictEma?: number; // EMA of correction-vs-velocity conflict
   conflictThisFrame?: number; // 0/1 marker for current frame
+
+  // Forensics & Budget
+  corrSignFlip?: boolean; // Did correction flip sign vs last frame?
+  correctionClipped?: number; // Amount of correction clipped this frame
+  budgetBonus?: number; // Adaptive budget bonus
+  correctionDebt?: number; // Current debt (residual)
+
+  // Diffusion Jitter Check
+  lastNeighborHash?: number; // Cheap checksum of neighbor set
 
   // Projection Verification
   lastSnapMag?: number; // Magnitude of last positional snap/teleport
@@ -80,17 +89,9 @@ export interface PhysicsNode {
   historyMismatch?: number; // |(x-prevX)/dt - v|
 
   // Degeneracy (Per Node)
-  degenerateAreaCount?: number; // How many degenerate triangles this node touched
+  degenerateAreaCount?: number;
 
-  // Budget Forensics
-  correctionClipped?: number; // Amount of correction clipped this frame
-  correctionDebt?: number; // Current debt (residual)
-  budgetBonus?: number; // Adaptive budget bonus
-
-  // Oscillation Forensics
-  corrSignFlip?: boolean; // Did correction flip sign vs last frame?
-
-  // Firewall fallback state (last known good)
+  // Firewall fallback state
   lastGoodX?: number;
   lastGoodY?: number;
   lastGoodVx?: number;

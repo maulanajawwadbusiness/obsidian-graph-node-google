@@ -101,19 +101,28 @@ export const applyCorrectionsWithDiffusion = (
             continue;  // Skip tiny corrections
         }
 
-        // FIX 11: DIFFUSION PRESSURE GATE
+        // FIX 11: DIFFUSION PRESSURE GATE (Continuous)
         // Stop Diffusion Motor: Gate by settle confidence
         const settleConfidence = policy.settleScalar || 0;
-        const diffusionSettleGate = Math.pow(1 - settleConfidence, 2); // 0.0 at rest
+        const diffusionSettleGate = Math.pow(1 - settleConfidence, 2);
 
-        const magScalar = Math.min(1, Math.max(0, (totalMag - 0.2) / 0.6));
-        const enableDiffusion = magScalar > 0.01 &&
-            policy.diffusion > 0.01 &&
-            diffusionSettleGate > 0.01;
+        // Continuous Entry: 0.1 -> 0.3 (Smoothstep)
+        // Previous (totalMag - 0.2) / 0.6 was effectively a linear ramp starting at 0.2
+        // We use smoothstep for nicer falloff
+        const magLow = 0.1;
+        const magHigh = 0.3;
+        const t = Math.max(0, Math.min(1, (totalMag - magLow) / (magHigh - magLow)));
+        const magWeight = t * t * (3 - 2 * t);
+
+        const diffusionEffective = engine.config.correctionDiffusionBase *
+            policy.diffusion *
+            diffusionSettleGate *
+            magWeight;
 
         // Scale diffusion strength by our confidence
-        // If system is degraded, we might want to reduce diffusion neighbors? 
-        // For now, enableDiffusion is just a gate.
+        // gate > 0.0001
+
+        // FIX 17: Track budget hits/Residuals
 
 
         // FIX 17: Track budget hits/Residuals
@@ -269,16 +278,28 @@ export const applyCorrectionsWithDiffusion = (
 
         // DIFFUSION: split correction between self and neighbors
         // FIX 11: Gate diffusion by pressure threshold
-        if (degree > 1 && enableDiffusion) {
+        if (degree > 1 && diffusionEffective > 0.0001) {
             const densityAttenuation = 1 / (1 + Math.max(0, degree - 2) * engine.config.correctionDiffusionDensityScale);
             const spacingAttenuation = 1 - spacingGate * engine.config.correctionDiffusionSpacingScale;
+            // Note: magWeight now handles the magnitude gate, so we don't need double gating here unless config implies it?
+            // Actually config.correctionDiffusionMin logic was to FLOOR it? 
+            // "correctionDiffusionMin" name suggests a floor for the SCALE factor.
+            // Let's keep the attenuation logic but multiply by our continuous weight.
+
             const diffusionScale = Math.max(
                 engine.config.correctionDiffusionMin,
                 Math.min(1, densityAttenuation * spacingAttenuation)
             );
-            const neighborShareTotal = engine.config.correctionDiffusionBase * diffusionScale * policy.diffusion;
-            const selfShare = 1 - neighborShareTotal;
-            const neighborShare = neighborShareTotal / degree;
+
+            // "neighborShareTotal" = strength * scale
+            // diffusionEffective already includes policy.diffusion + settleGate + magWeight
+            // So we just multiply by the structural attenuations
+            const neighborShareTotal = diffusionEffective * diffusionScale;
+
+            // Safety cap: Never give away more than 90%
+            const safeShare = Math.min(neighborShareTotal, 0.9);
+            const selfShare = 1 - safeShare;
+            const neighborShare = safeShare / degree;
 
             // Self gets share
             const selfDx = corrDx * selfShare;
@@ -294,11 +315,60 @@ export const applyCorrectionsWithDiffusion = (
 
             // Neighbors get share
             const neighbors = nodeNeighbors.get(node.id) || [];
-            const neighborLimit = maxDiffusionNeighbors && maxDiffusionNeighbors > 0
-                ? Math.min(neighbors.length, maxDiffusionNeighbors)
-                : neighbors.length;
+
+            // FIX: Stable Neighbor Selection (Anti-Jitter)
+            // If we have more neighbors than limit, we MUST be deterministic about which ones we pick.
+            // Using raw array order is unstable if links change or engine reorders.
+            // Sort by: (1) Distance Squared (Physical Closeness), (2) ID (Deterministic Tie-break)
+            // Only sort if we actually need to truncate.
+            let activeNeighbors = neighbors;
+            if (maxDiffusionNeighbors && maxDiffusionNeighbors > 0 && neighbors.length > maxDiffusionNeighbors) {
+                // Sort in place? No, copy to avoid mutating cache (though map value arrays might be fresh?) 
+                // Note: nodeNeighbors is rebuilt frame-by-frame in this file (lines 45-58), so mutation is safe within frame.
+                // HOWEVER: Calculating distSq for all neighbors is expensive?
+                // Most nodes have < 10 neighbors. Sorting 10 items is trivial.
+
+                // We need to access neighbor nodes to get positions.
+                activeNeighbors.sort((aId, bId) => {
+                    const nA = engine.nodes.get(aId);
+                    const nB = engine.nodes.get(bId);
+                    if (!nA || !nB) return 0;
+                    const dSqA = (nA.x - node.x) ** 2 + (nA.y - node.y) ** 2;
+                    const dSqB = (nB.x - node.x) ** 2 + (nB.y - node.y) ** 2;
+                    if (Math.abs(dSqA - dSqB) > 0.0001) return dSqA - dSqB; // Ascending Distance
+                    return aId.localeCompare(bId); // Stable ID fallback
+                });
+                // Truncate
+                activeNeighbors = activeNeighbors.slice(0, maxDiffusionNeighbors);
+            }
+
+            // Forensic: Neighbor Jitter Check
+            // Calculate cheap checksum of active neighbors
+            if (activeNeighbors.length > 0) {
+                let checkSum = 0;
+                // Simple XOR sum of string lengths + first char + last char
+                // This is O(N) but N is small (limit is usually < 8).
+                // To be robust against sorting, sorting must have happened.
+                // We did sort above.
+                for (let k = 0; k < activeNeighbors.length; k++) {
+                    const nid = activeNeighbors[k];
+                    const code = nid.charCodeAt(0) + (nid.length << 8);
+                    checkSum = (checkSum + code) & 0xFFFFFF;
+                    // Rotate
+                    checkSum = ((checkSum << 1) | (checkSum >>> 23));
+                }
+
+                if (node.lastNeighborHash !== undefined && node.lastNeighborHash !== checkSum) {
+                    stats.neighborDeltaRate++;
+                }
+                node.lastNeighborHash = checkSum;
+            } else {
+                node.lastNeighborHash = 0;
+            }
+
+            const neighborLimit = activeNeighbors.length;
             for (let i = 0; i < neighborLimit; i++) {
-                const nbId = neighbors[i];
+                const nbId = activeNeighbors[i];
                 // FIX #7: Do not diffuse corrections TO fixed nodes
                 const neighborNode = engine.nodes.get(nbId);
                 if (neighborNode && neighborNode.isFixed) continue;

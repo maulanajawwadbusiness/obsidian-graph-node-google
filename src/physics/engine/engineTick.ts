@@ -182,6 +182,11 @@ export const runPhysicsTick = (engine: PhysicsEngineTickContext, dtIn: number) =
     const nodeCount = nodeList.length || 1;
     const avgVelSq = totalVelSq / nodeCount;
 
+    // Normalize Neighbor Delta Rate (Count -> Rate 0..1)
+    if (debugStats && nodeCount > 0) {
+        debugStats.neighborDeltaRate = debugStats.neighborDeltaRate / nodeCount;
+    }
+
     // FORENSIC STATS
     const outlierCount = nodeCount - calmCount;
     const calmPercent = (calmCount / nodeCount);
@@ -239,7 +244,18 @@ export const runPhysicsTick = (engine: PhysicsEngineTickContext, dtIn: number) =
 
     // FIX: TDZ & Stale Stats
     if (debugStats) {
+        // Track Pop Score
+        const prevStrength = debugStats.diffusionStrengthNow || 0;
+
         const diffusionSettleGate = Math.pow(1 - motionPolicy.settleScalar, 2);
+
+        // Re-calculate effective strength relative to BASE (approx)
+        // Since we don't have exact magWeight here (it's per node), we use a proxy or just track the global gate.
+        // Let's track the global gate pop, as that's the main on/off switch.
+        // Actually, let's just track diffusionSettleGate pop.
+        const diff = Math.abs(diffusionSettleGate - prevStrength);
+        debugStats.diffusionPopScore = diff; // Frame delta
+
         debugStats.diffusionGate = diffusionSettleGate;
         debugStats.diffusionStrengthNow = diffusionSettleGate;
     }

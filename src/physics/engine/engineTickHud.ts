@@ -180,5 +180,7 @@ export const updateHudSnapshot = (
 
         diffusionStrengthNow: stats.diffusionStrengthNow,
         ghostMismatchCount: stats.ghostMismatchCount,
+        diffusionPopScore: stats.diffusionPopScore,
+        neighborDeltaRate: stats.neighborDeltaRate,
     };
 };

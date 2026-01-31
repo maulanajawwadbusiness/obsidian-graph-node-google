@@ -30,6 +30,8 @@ export type PhysicsHudSnapshot = {
     diffusionGate: number;
     diffusionStrengthNow: number;
     ghostMismatchCount: number;
+    diffusionPopScore: number;
+    neighborDeltaRate: number;
 
     escapeFiresPerSec?: number;
     escapeLoopSuspectCount?: number;
@@ -114,6 +116,8 @@ export const createInitialPhysicsHudSnapshot = (): PhysicsHudSnapshot => ({
     escapeLoopSuspectCount: 0,
     diffusionStrengthNow: 0,
     ghostMismatchCount: 0,
+    diffusionPopScore: 0,
+    neighborDeltaRate: 0,
 
     outlierCount: 0,
     stateFlipCount: 0,

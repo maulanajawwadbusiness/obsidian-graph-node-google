@@ -1,7 +1,7 @@
 import type { PhysicsEngine } from '../../engine';
 import type { PhysicsNode } from '../../types';
-import { getPassStats, type DebugStats } from '../stats';
 import type { MotionPolicy } from '../motionPolicy';
+import { getPassStats, type DebugStats } from '../stats';
 
 /**
  * EDGE SHEAR STAGNATION ESCAPE (Null-Gradient Unlock)
@@ -15,7 +15,7 @@ import type { MotionPolicy } from '../motionPolicy';
  * 
  * Trigger conditions:
  * - Dense core (localDensity >= threshold)
- * - Early expansion (energy > 0.85)
+ * - Early expansion (policy-ramped)
  * - Edge near rest length (|dist - restLength| < restEps)
  * - Both nodes have low relative velocity
  * - Both nodes have low net force
@@ -31,22 +31,21 @@ import type { MotionPolicy } from '../motionPolicy';
 export const applyEdgeShearStagnationEscape = (
     engine: PhysicsEngine,
     nodeList: PhysicsNode[],
-    energy: number,
-    motionPolicy: MotionPolicy,
+    policy: MotionPolicy,
     stats: DebugStats
 ) => {
-    // Only during early expansion
-    if (energy <= 0.85) return;
+    const shearStrength = policy.earlyExpansion;
+    if (shearStrength <= 0.01) return;
 
     const passStats = getPassStats(stats, 'EdgeShearEscape');
     let unlockedPairs = 0;
 
-    const densityRadius = motionPolicy.densityRadius;
-    const densityThreshold = motionPolicy.densityThreshold;
-    const restEps = motionPolicy.restLengthEpsilon;         // Edge must be near rest length
-    const velEps = motionPolicy.stuckSpeedEpsilon * 0.6;    // Relative velocity threshold
-    const forceEps = motionPolicy.stuckForceEpsilon;        // Force magnitude threshold
-    const baseSlip = motionPolicy.microSlip;                // Base shear magnitude
+    const densityRadius = 30;
+    const densityThreshold = 4;
+    const restEps = 5.0;      // Edge must be within 5px of rest length
+    const velEps = 0.3;       // Relative velocity threshold
+    const forceEps = 0.8;     // Force magnitude threshold
+    const baseSlip = 0.03 * shearStrength;    // Base shear magnitude (px/frame)
 
     // Pre-compute local density
     const localDensity = new Map<string, number>();

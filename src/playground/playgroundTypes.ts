@@ -1,4 +1,5 @@
 import type { RenderDebugInfo } from './rendering/renderingTypes';
+import type { PhysicsHudSnapshot } from '../physics/engine/physicsHud';
 
 export type PlaygroundMetrics = {
     nodes: number;
@@ -11,4 +12,5 @@ export type PlaygroundMetrics = {
     aspectRatio: number;
     lifecycleMs: number;
     renderDebug?: RenderDebugInfo;
+    physicsHud?: PhysicsHudSnapshot;
 };

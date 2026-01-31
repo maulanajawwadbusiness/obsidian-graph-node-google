@@ -31,6 +31,19 @@ type CanvasOverlaysProps = {
     debugNoRenderMotion: boolean;
     onTogglePixelSnapping: () => void;
     onToggleNoRenderMotion: () => void;
+    onSpawnPreset: (count: number) => void;
+    onRunSettleScenario: () => void;
+    onRunDragScenario: () => void;
+    onRecordHudScore: () => void;
+    hudScenarioLabel: string;
+    hudDragTargetId: string | null;
+    hudScores: Record<number, {
+        settleMs: number;
+        jitter: number;
+        conflictPct: number;
+        energy: number;
+        degradePct: number;
+    }>;
 };
 
 export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
@@ -51,9 +64,24 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
     pixelSnapping,
     debugNoRenderMotion,
     onTogglePixelSnapping,
-    onToggleNoRenderMotion
-}) => (
-    <>
+    onToggleNoRenderMotion,
+    onSpawnPreset,
+    onRunSettleScenario,
+    onRunDragScenario,
+    onRecordHudScore,
+    hudScenarioLabel,
+    hudDragTargetId,
+    hudScores
+}) => {
+    const hud = metrics.physicsHud;
+    const formatRatio = (value: number, base?: number) => {
+        if (!base || base <= 0) return '';
+        return ` (x${(value / base).toFixed(2)})`;
+    };
+    const baseScore = hudScores[5];
+
+    return (
+        <>
         {SHOW_DEBUG_CONTROLS && !debugOpen && (
             <button
                 type="button"
@@ -118,6 +146,9 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
                 onMouseMove={stopPropagation}
                 onMouseUp={stopPropagation}
                 onWheel={stopPropagation}
+                onPointerDown={stopPropagation}
+                onPointerMove={stopPropagation}
+                onPointerUp={stopPropagation}
             >
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
                     <strong>Time: T+{metrics.lifecycleMs}ms</strong>
@@ -186,12 +217,111 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
                         Kill Render Motion
                     </label>
                 </div>
-                <strong style={{ fontWeight: 700 }}>Performance</strong><br />
+                <strong style={{ fontWeight: 700 }}>Physics HUD</strong><br />
+                Nodes: {metrics.nodes} | Links: {metrics.links}<br />
                 FPS: {metrics.fps} <br />
-                Nodes: {metrics.nodes} (Active: {metrics.activeNodes}) <br />
-                Links: {metrics.links} <br />
-                Avg Vel: {metrics.avgVel.toFixed(4)} <br />
+                Degrade: {hud ? hud.degradeLevel : 0} ({hud ? hud.degradePct5s.toFixed(1) : '0.0'}%)<br />
+                Settle: {hud ? hud.settleState : 'moving'} ({hud ? Math.round(hud.lastSettleMs) : 0}ms)<br />
+                JitterAvg (1s): {hud ? hud.jitterAvg.toFixed(4) : '0.0000'}<br />
+                PBD Corr/frame: {hud ? hud.pbdCorrectionSum.toFixed(3) : '0.000'}<br />
+                Conflict% (5s): {hud ? hud.conflictPct5s.toFixed(1) : '0.0'}%<br />
+                Energy Proxy (avg v²): {hud ? hud.energyProxy.toFixed(4) : '0.0000'}<br />
+                {hudScenarioLabel && (
+                    <>
+                        <br />
+                        <strong>Scenario:</strong> {hudScenarioLabel}
+                        {hudDragTargetId && (
+                            <div>Drag Target: {hudDragTargetId}</div>
+                        )}
+                    </>
+                )}
                 <br />
+                <strong style={{ fontWeight: 700 }}>Harness</strong><br />
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', margin: '6px 0' }}>
+                    {[5, 20, 60, 250, 500].map((count) => (
+                        <button
+                            key={count}
+                            type="button"
+                            style={{ ...DEBUG_CLOSE_STYLE, width: '48px' }}
+                            onClick={() => onSpawnPreset(count)}
+                        >
+                            N={count}
+                        </button>
+                    ))}
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '6px' }}>
+                    <button
+                        type="button"
+                        style={{ ...DEBUG_CLOSE_STYLE, width: '86px' }}
+                        onClick={onRunSettleScenario}
+                    >
+                        Settle Test
+                    </button>
+                    <button
+                        type="button"
+                        style={{ ...DEBUG_CLOSE_STYLE, width: '86px' }}
+                        onClick={onRunDragScenario}
+                    >
+                        Drag Test
+                    </button>
+                    <button
+                        type="button"
+                        style={{ ...DEBUG_CLOSE_STYLE, width: '86px' }}
+                        onClick={onRecordHudScore}
+                    >
+                        Record
+                    </button>
+                </div>
+                <strong style={{ fontWeight: 700 }}>Scoreboard</strong><br />
+                <table style={{ width: '100%', fontSize: '11px', borderCollapse: 'collapse' }}>
+                    <thead>
+                        <tr>
+                            <th style={{ textAlign: 'left' }}>N</th>
+                            <th style={{ textAlign: 'left' }}>settleMs</th>
+                            <th style={{ textAlign: 'left' }}>jitter</th>
+                            <th style={{ textAlign: 'left' }}>conflict%</th>
+                            <th style={{ textAlign: 'left' }}>energy</th>
+                            <th style={{ textAlign: 'left' }}>degrade%</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {Object.keys(hudScores).length === 0 && (
+                            <tr>
+                                <td colSpan={6} style={{ opacity: 0.7 }}>No records yet.</td>
+                            </tr>
+                        )}
+                        {Object.entries(hudScores)
+                            .sort(([a], [b]) => Number(a) - Number(b))
+                            .map(([count, score]) => (
+                                <tr key={count}>
+                                    <td>{count}</td>
+                                    <td>
+                                        {Math.round(score.settleMs)}
+                                        {formatRatio(score.settleMs, baseScore?.settleMs)}
+                                    </td>
+                                    <td>
+                                        {score.jitter.toFixed(4)}
+                                        {formatRatio(score.jitter, baseScore?.jitter)}
+                                    </td>
+                                    <td>
+                                        {score.conflictPct.toFixed(1)}
+                                        {formatRatio(score.conflictPct, baseScore?.conflictPct)}
+                                    </td>
+                                    <td>
+                                        {score.energy.toFixed(4)}
+                                        {formatRatio(score.energy, baseScore?.energy)}
+                                    </td>
+                                    <td>
+                                        {score.degradePct.toFixed(1)}
+                                        {formatRatio(score.degradePct, baseScore?.degradePct)}
+                                    </td>
+                                </tr>
+                            ))}
+                    </tbody>
+                </table>
+                <br />
+                <strong style={{ fontWeight: 700 }}>Performance</strong><br />
+                Avg Vel: {metrics.avgVel.toFixed(4)} <br />
                 <strong style={{ fontWeight: 700 }}>Shape Diagnostics</strong><br />
                 Spread (R_mean): {metrics.avgDist.toFixed(2)} px <br />
                 Irregularity (R_std): {metrics.stdDist.toFixed(2)} px <br />
@@ -200,4 +330,5 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
             </div>
         )}
     </>
-);
+    );
+};

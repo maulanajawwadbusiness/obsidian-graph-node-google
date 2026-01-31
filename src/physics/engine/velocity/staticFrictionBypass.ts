@@ -1,10 +1,9 @@
 import type { PhysicsEngine } from '../../engine';
 import type { PhysicsNode } from '../../types';
+import type { MotionPolicy } from '../motionPolicy';
 import { getPassStats, type DebugStats } from '../stats';
 import { logStaticFrictionBypass } from './debugVelocity';
-import type { MotionPolicy } from '../motionPolicy';
-import type { UnifiedMotionState } from '../unifiedMotionState';
-import { getDenseRamp, getEarlyExpansionRamp } from './energyGates';
+import { isDense } from './energyGates';
 import { computeRelativeVelocity } from './relativeVelocityUtils';
 
 /**
@@ -16,13 +15,11 @@ import { computeRelativeVelocity } from './relativeVelocityUtils';
 export const applyStaticFrictionBypass = (
     engine: PhysicsEngine,
     nodeList: PhysicsNode[],
-    motionState: UnifiedMotionState,
-    motionPolicy: MotionPolicy,
+    policy: MotionPolicy,
     stats: DebugStats
 ) => {
-    // Only during early expansion
-    const expansionRamp = getEarlyExpansionRamp(motionState.temperature);
-    if (expansionRamp <= 0) return;
+    const frictionStrength = policy.microSlip;
+    if (frictionStrength <= 0.01) return;
 
     // FIX 20: MICRO-NOISE MISGATING
     // Disable during interaction to prevent "fighting" the hand
@@ -31,10 +28,10 @@ export const applyStaticFrictionBypass = (
     const passStats = getPassStats(stats, 'StaticFrictionBypass');
     const affected = new Set<string>();
 
-    const densityRadius = motionPolicy.densityRadius;
-    const densityThreshold = motionPolicy.densityThreshold;
+    const densityRadius = 30;
+    const densityThreshold = 4;
     const relVelEpsilon = 0.05;  // FIX 20: Stricter activation (was 0.5)
-    const microSlip = motionPolicy.microSlip * 0.33;      // Normalized to min distance
+    const microSlip = 0.01 * frictionStrength;      // FIX 20: Reduced amplitude (was 0.02)
 
     // Pre-compute local density for all nodes
     const localDensity = new Map<string, number>();
@@ -61,11 +58,7 @@ export const applyStaticFrictionBypass = (
         // Both nodes must be in dense region
         const sourceDensity = localDensity.get(source.id) || 0;
         const targetDensity = localDensity.get(target.id) || 0;
-        const densityRamp = Math.max(
-            getDenseRamp(sourceDensity, densityThreshold),
-            getDenseRamp(targetDensity, densityThreshold)
-        );
-        if (densityRamp <= 0) continue;
+        if (!isDense(sourceDensity, densityThreshold) && !isDense(targetDensity, densityThreshold)) continue;
 
         // Compute relative velocity
         computeRelativeVelocity(source, target, relativeVelocity);
@@ -97,15 +90,13 @@ export const applyStaticFrictionBypass = (
         const beforeTgtVx = target.vx;
         const beforeTgtVy = target.vy;
 
-        const slipStrength = microSlip * expansionRamp * densityRamp;
-
         if (!source.isFixed) {
-            source.vx += perpX * slipStrength;
-            source.vy += perpY * slipStrength;
+            source.vx += perpX * microSlip;
+            source.vy += perpY * microSlip;
         }
         if (!target.isFixed) {
-            target.vx -= perpX * slipStrength;
-            target.vy -= perpY * slipStrength;
+            target.vx -= perpX * microSlip;
+            target.vy -= perpY * microSlip;
         }
 
         // Track stats

@@ -1,7 +1,7 @@
 import type { PhysicsEngine } from '../../engine';
 import type { PhysicsNode } from '../../types';
-import { getPassStats, type DebugStats } from '../stats';
 import type { MotionPolicy } from '../motionPolicy';
+import { getPassStats, type DebugStats } from '../stats';
 
 /**
  * DENSE-CORE INERTIA RELAXATION (Momentum Memory Eraser)
@@ -30,20 +30,19 @@ import type { MotionPolicy } from '../motionPolicy';
 export const applyDenseCoreInertiaRelaxation = (
     _engine: PhysicsEngine,
     nodeList: PhysicsNode[],
-    energy: number,
-    motionPolicy: MotionPolicy,
+    policy: MotionPolicy,
     stats: DebugStats
 ) => {
-    // Only during early expansion
-    if (energy <= 0.85) return;
+    const relaxGate = policy.earlyExpansion;
+    if (relaxGate <= 0.01) return;
 
     const passStats = getPassStats(stats, 'InertiaRelax');
     const affected = new Set<string>();
 
-    const densityRadius = motionPolicy.densityRadius;
-    const densityThreshold = motionPolicy.densityThreshold;
-    const velEps = motionPolicy.stuckSpeedEpsilon;      // Speed threshold for stuckness
-    const forceEps = motionPolicy.stuckForceEpsilon;    // Force threshold for stuckness
+    const densityRadius = 30;
+    const densityThreshold = 4;
+    const velEps = 0.5;      // Speed threshold for stuckness
+    const forceEps = 0.8;    // Force threshold for stuckness
     const relaxStrength = 0.12;  // How much to blend toward neighbor flow (0.05-0.15)
 
     // Pre-compute local density
@@ -99,7 +98,7 @@ export const applyDenseCoreInertiaRelaxation = (
         avgVy /= neighborCount;
 
         // Blend velocity toward neighborhood flow
-        const effectiveRelax = relaxStrength * stuckness;
+        const effectiveRelax = relaxStrength * stuckness * relaxGate;
 
         const beforeVx = node.vx;
         const beforeVy = node.vy;

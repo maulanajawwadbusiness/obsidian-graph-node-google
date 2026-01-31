@@ -1,10 +1,9 @@
 import type { PhysicsEngine } from '../../engine';
 import type { PhysicsNode } from '../../types';
+import type { MotionPolicy } from '../motionPolicy';
 import { getPassStats, type DebugStats } from '../stats';
 import { logVelocityDeLocking } from './debugVelocity';
-import type { MotionPolicy } from '../motionPolicy';
-import type { UnifiedMotionState } from '../unifiedMotionState';
-import { getDenseRamp, getEarlyExpansionRamp } from './energyGates';
+import { isDense } from './energyGates';
 import {
     computeAverageNeighborVelocity,
     projectVelocityComponents,
@@ -21,20 +20,18 @@ import {
 export const applyDenseCoreVelocityDeLocking = (
     _engine: PhysicsEngine,
     nodeList: PhysicsNode[],
-    motionState: UnifiedMotionState,
-    motionPolicy: MotionPolicy,
+    policy: MotionPolicy,
     stats: DebugStats
 ) => {
-    // Only during early expansion
-    const expansionRamp = getEarlyExpansionRamp(motionState.temperature);
-    if (expansionRamp <= 0) return;
+    const delockStrength = policy.microSlip;
+    if (delockStrength <= 0.01) return;
 
     const passStats = getPassStats(stats, 'VelocityDeLocking');
     const affected = new Set<string>();
 
-    const densityRadius = motionPolicy.densityRadius;
-    const densityThreshold = motionPolicy.densityThreshold;
-    const parallelReduction = 0.2;  // Reduce parallel by 20%
+    const densityRadius = 30;  // Same as other dense-core detection
+    const densityThreshold = 4;
+    const parallelReduction = 0.2 * delockStrength;  // Reduce parallel by 20%
 
     const avgVelocity: VelocityAccumulator = { vx: 0, vy: 0 };
     const projection: VelocityProjection = {
@@ -51,8 +48,7 @@ export const applyDenseCoreVelocityDeLocking = (
         const neighborCount = computeAverageNeighborVelocity(node, nodeList, densityRadius, avgVelocity);
 
         // Only apply to dense nodes
-        const densityRamp = getDenseRamp(neighborCount, densityThreshold);
-        if (densityRamp <= 0) continue;
+        if (!isDense(neighborCount, densityThreshold)) continue;
 
         const avgVx = avgVelocity.vx / neighborCount;
         const avgVy = avgVelocity.vy / neighborCount;
@@ -87,9 +83,8 @@ export const applyDenseCoreVelocityDeLocking = (
         const beforeVx = node.vx;
         const beforeVy = node.vy;
 
-        const reduction = parallelReduction * expansionRamp * densityRamp;
-        node.vx = projection.perpX + projection.parallelX * (1 - reduction);
-        node.vy = projection.perpY + projection.parallelY * (1 - reduction);
+        node.vx = projection.perpX + projection.parallelX * (1 - parallelReduction);
+        node.vy = projection.perpY + projection.parallelY * (1 - parallelReduction);
 
         const dvx = node.vx - beforeVx;
         const dvy = node.vy - beforeVy;

@@ -1,5 +1,6 @@
 import type { PhysicsEngine } from '../../engine';
 import type { PhysicsNode } from '../../types';
+import type { MotionPolicy } from '../motionPolicy';
 import { getPassStats, type DebugStats } from '../stats';
 
 /**
@@ -22,11 +23,11 @@ import { getPassStats, type DebugStats } from '../stats';
 export const applyLocalPhaseDiffusion = (
     _engine: PhysicsEngine,
     nodeList: PhysicsNode[],
-    energy: number,
+    policy: MotionPolicy,
     stats: DebugStats
 ) => {
-    // Only during early expansion
-    if (energy <= 0.85) return;
+    const phaseStrength = policy.earlyExpansion;
+    if (phaseStrength <= 0.01) return;
 
     const passStats = getPassStats(stats, 'PhaseDiffusion');
     const affected = new Set<string>();
@@ -71,7 +72,7 @@ export const applyLocalPhaseDiffusion = (
         const normalizedHash = (Math.abs(hash) % 1000) / 1000;  // 0-1
         const minAngle = 0.3 * Math.PI / 180;  // 0.3 degrees
         const maxAngle = 0.8 * Math.PI / 180;  // 0.8 degrees
-        const angle = minAngle + normalizedHash * (maxAngle - minAngle);
+        const angle = (minAngle + normalizedHash * (maxAngle - minAngle)) * phaseStrength;
 
         // Alternate sign based on different hash parity
         const angleSign = ((hash >> 1) % 2 === 0) ? 1 : -1;

@@ -1,5 +1,6 @@
 import type { PhysicsEngine } from '../engine';
 import type { PhysicsNode } from '../types';
+import type { MotionPolicy } from './motionPolicy';
 import { getPassStats, type DebugStats } from './stats';
 
 export const initializeCorrectionAccum = (
@@ -118,7 +119,7 @@ export const applySpacingConstraints = (
     sleepingNodes: PhysicsNode[],
     correctionAccum: Map<string, { dx: number; dy: number }>,
     nodeDegreeEarly: Map<string, number>,
-    energy: number,
+    policy: MotionPolicy,
     stats: DebugStats,
     spacingGate: number,
     dt: number,
@@ -183,31 +184,37 @@ export const applySpacingConstraints = (
         // EARLY-PHASE HUB PRIVILEGE + ESCAPE WINDOW
         const aEscape = engine.escapeWindow.has(a.id);
         const bEscape = engine.escapeWindow.has(b.id);
-        const aHubSkip = (energy > 0.85 && aDeg >= 3) || aEscape;
-        const bHubSkip = (energy > 0.85 && bDeg >= 3) || bEscape;
+        const aHubScale = aDeg >= 3 ? (1 - policy.hubConstraintRelief) : 1;
+        const bHubScale = bDeg >= 3 ? (1 - policy.hubConstraintRelief) : 1;
+        const aHubSkip = aEscape || aHubScale <= 0.001;
+        const bHubSkip = bEscape || bHubScale <= 0.001;
 
         if (!a.isFixed && !b.isFixed) {
             if (aAccum && aDeg > 1 && !aHubSkip) {
-                aAccum.dx -= nx * corrApplied * 0.5;
-                aAccum.dy -= ny * corrApplied * 0.5;
-                passStats.correction += Math.abs(corrApplied) * 0.5;
+                const corrScale = corrApplied * aHubScale;
+                aAccum.dx -= nx * corrScale * 0.5;
+                aAccum.dy -= ny * corrScale * 0.5;
+                passStats.correction += Math.abs(corrScale) * 0.5;
                 affected.add(a.id);
             }
             if (bAccum && bDeg > 1 && !bHubSkip) {
-                bAccum.dx += nx * corrApplied * 0.5;
-                bAccum.dy += ny * corrApplied * 0.5;
-                passStats.correction += Math.abs(corrApplied) * 0.5;
+                const corrScale = corrApplied * bHubScale;
+                bAccum.dx += nx * corrScale * 0.5;
+                bAccum.dy += ny * corrScale * 0.5;
+                passStats.correction += Math.abs(corrScale) * 0.5;
                 affected.add(b.id);
             }
         } else if (!a.isFixed && aAccum && aDeg > 1 && !aHubSkip) {
-            aAccum.dx -= nx * corrApplied;
-            aAccum.dy -= ny * corrApplied;
-            passStats.correction += Math.abs(corrApplied);
+            const corrScale = corrApplied * aHubScale;
+            aAccum.dx -= nx * corrScale;
+            aAccum.dy -= ny * corrScale;
+            passStats.correction += Math.abs(corrScale);
             affected.add(a.id);
         } else if (!b.isFixed && bAccum && bDeg > 1 && !bHubSkip) {
-            bAccum.dx += nx * corrApplied;
-            bAccum.dy += ny * corrApplied;
-            passStats.correction += Math.abs(corrApplied);
+            const corrScale = corrApplied * bHubScale;
+            bAccum.dx += nx * corrScale;
+            bAccum.dy += ny * corrScale;
+            passStats.correction += Math.abs(corrScale);
             affected.add(b.id);
         }
         return true; // Applied
@@ -294,6 +301,7 @@ export const applyTriangleAreaConstraints = (
     correctionAccum: Map<string, { dx: number; dy: number }>,
     nodeDegreeEarly: Map<string, number>,
     energy: number,
+    policy: MotionPolicy,
     stats: DebugStats,
     dt: number
 ) => {
@@ -398,11 +406,13 @@ export const applyTriangleAreaConstraints = (
             const nodeAccum = correctionAccum.get(node.id);
             const nodeDeg = nodeDegreeEarly.get(node.id) || 0;
             const nodeEscape = engine.escapeWindow.has(node.id);
-            const earlyHubSkip = (energy > 0.85 && nodeDeg >= 3) || nodeEscape;
+            const hubScale = nodeDeg >= 3 ? (1 - policy.hubConstraintRelief) : 1;
+            const earlyHubSkip = nodeEscape || hubScale <= 0.001;
             if (nodeAccum && nodeDeg > 1 && !earlyHubSkip) {
-                nodeAccum.dx += nx * correction;
-                nodeAccum.dy += ny * correction;
-                passStats.correction += Math.abs(correction);
+                const corrScale = correction * hubScale;
+                nodeAccum.dx += nx * corrScale;
+                nodeAccum.dy += ny * corrScale;
+                passStats.correction += Math.abs(corrScale);
                 affected.add(node.id);
             }
         }
@@ -417,7 +427,7 @@ export const applySafetyClamp = (
     sleepingNodes: PhysicsNode[],
     correctionAccum: Map<string, { dx: number; dy: number }>,
     nodeDegreeEarly: Map<string, number>,
-    energy: number,
+    policy: MotionPolicy,
     stats: DebugStats,
     dt: number,
     pairStride: number = 1,
@@ -466,31 +476,37 @@ export const applySafetyClamp = (
                 const bDeg = nodeDegreeEarly.get(b.id) || 0;
 
                 // EARLY-PHASE HUB PRIVILEGE: high-degree nodes skip clamp during early expansion
-                const aHubSkip = energy > 0.85 && aDeg >= 3;
-                const bHubSkip = energy > 0.85 && bDeg >= 3;
+                const aHubScale = aDeg >= 3 ? (1 - policy.hubConstraintRelief) : 1;
+                const bHubScale = bDeg >= 3 ? (1 - policy.hubConstraintRelief) : 1;
+                const aHubSkip = aHubScale <= 0.001;
+                const bHubSkip = bHubScale <= 0.001;
 
                 if (!a.isFixed && !b.isFixed) {
                     if (aAccum && aDeg > 1 && !aHubSkip) {
-                        aAccum.dx -= nx * emergencyCorrection * 0.5;
-                        aAccum.dy -= ny * emergencyCorrection * 0.5;
-                        passStats.correction += Math.abs(emergencyCorrection) * 0.5;
+                        const corrScale = emergencyCorrection * aHubScale;
+                        aAccum.dx -= nx * corrScale * 0.5;
+                        aAccum.dy -= ny * corrScale * 0.5;
+                        passStats.correction += Math.abs(corrScale) * 0.5;
                         affected.add(a.id);
                     }
                     if (bAccum && bDeg > 1 && !bHubSkip) {
-                        bAccum.dx += nx * emergencyCorrection * 0.5;
-                        bAccum.dy += ny * emergencyCorrection * 0.5;
-                        passStats.correction += Math.abs(emergencyCorrection) * 0.5;
+                        const corrScale = emergencyCorrection * bHubScale;
+                        bAccum.dx += nx * corrScale * 0.5;
+                        bAccum.dy += ny * corrScale * 0.5;
+                        passStats.correction += Math.abs(corrScale) * 0.5;
                         affected.add(b.id);
                     }
                 } else if (!a.isFixed && aAccum && aDeg > 1 && !aHubSkip) {
-                    aAccum.dx -= nx * emergencyCorrection;
-                    aAccum.dy -= ny * emergencyCorrection;
-                    passStats.correction += Math.abs(emergencyCorrection);
+                    const corrScale = emergencyCorrection * aHubScale;
+                    aAccum.dx -= nx * corrScale;
+                    aAccum.dy -= ny * corrScale;
+                    passStats.correction += Math.abs(corrScale);
                     affected.add(a.id);
                 } else if (!b.isFixed && bAccum && bDeg > 1 && !bHubSkip) {
-                    bAccum.dx += nx * emergencyCorrection;
-                    bAccum.dy += ny * emergencyCorrection;
-                    passStats.correction += Math.abs(emergencyCorrection);
+                    const corrScale = emergencyCorrection * bHubScale;
+                    bAccum.dx += nx * corrScale;
+                    bAccum.dy += ny * corrScale;
+                    passStats.correction += Math.abs(corrScale);
                     affected.add(b.id);
                 }
             }

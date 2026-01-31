@@ -1,12 +1,13 @@
 import type { PhysicsEngine } from '../../engine';
 import type { PhysicsNode } from '../../types';
+import type { MotionPolicy } from '../motionPolicy';
 import { getPassStats, type DebugStats } from '../stats';
 
 export const applyAngleResistanceVelocity = (
     engine: PhysicsEngine,
     nodeList: PhysicsNode[],
     nodeDegreeEarly: Map<string, number>,
-    energy: number,
+    policy: MotionPolicy,
     stats: DebugStats,
     dt: number
 ) => {
@@ -29,6 +30,8 @@ export const applyAngleResistanceVelocity = (
 
     // Base force strength
     const angleForceStrength = 25.0;
+    const expansionRelief = policy.angleResistanceRelief;
+    const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 
     // Build adjacency map: node -> list of neighbors
     const neighbors = new Map<string, string[]>();
@@ -72,42 +75,34 @@ export const applyAngleResistanceVelocity = (
             // Zone A: Free - no resistance
             if (theta >= ANGLE_FREE) continue;
 
-            // PHASE-AWARE: During expansion, disable most angle resistance
-            // Only allow emergency zones D/E to prevent collapse
-            const isExpansion = energy > 0.7;
-
             // Compute resistance based on zone (continuous curve)
             let resistance: number;
             let localDamping = 1.0;
 
             if (theta >= ANGLE_PRETENSION) {
                 // Zone B: Pre-tension (45-60°)
-                if (isExpansion) continue;  // DISABLED during expansion
                 const t = (ANGLE_FREE - theta) / (ANGLE_FREE - ANGLE_PRETENSION);
                 const ease = t * t;  // Quadratic ease-in
-                resistance = ease * RESIST_PRETENSION_MAX;
+                resistance = ease * RESIST_PRETENSION_MAX * (1 - expansionRelief);
             } else if (theta >= ANGLE_SOFT) {
                 // Zone C: Soft constraint (30-45°)
-                if (isExpansion) continue;  // DISABLED during expansion
                 const t = (ANGLE_PRETENSION - theta) / (ANGLE_PRETENSION - ANGLE_SOFT);
                 const ease = t * t * (3 - 2 * t);  // Smoothstep
-                resistance = RESIST_PRETENSION_MAX + ease * (RESIST_SOFT_MAX - RESIST_PRETENSION_MAX);
+                resistance = (RESIST_PRETENSION_MAX + ease * (RESIST_SOFT_MAX - RESIST_PRETENSION_MAX)) * (1 - expansionRelief);
             } else if (theta >= ANGLE_EMERGENCY) {
                 // Zone D: Emergency (20-30°)
                 const t = (ANGLE_SOFT - theta) / (ANGLE_SOFT - ANGLE_EMERGENCY);
                 const ease = t * t * t;  // Cubic ease-in
-                // During expansion: reduced resistance (emergency only)
-                const expansionScale = isExpansion ? 0.3 : 1.0;
+                const expansionScale = lerp(1.0, 0.3, expansionRelief);
                 resistance = (RESIST_SOFT_MAX + ease * (RESIST_EMERGENCY_MAX - RESIST_SOFT_MAX)) * expansionScale;
-                localDamping = isExpansion ? 1.0 : 0.92;  // No extra damping during expansion
+                localDamping = lerp(0.92, 1.0, expansionRelief);
             } else {
                 // Zone E: Forbidden (<20°)
                 const penetration = ANGLE_EMERGENCY - theta;
                 const t = Math.min(penetration / (10 * DEG_TO_RAD), 1);
-                // During expansion: prevent collapse only, don't open angles
-                const expansionScale = isExpansion ? 0.5 : 1.0;
+                const expansionScale = lerp(1.0, 0.5, expansionRelief);
                 resistance = (RESIST_EMERGENCY_MAX + t * (RESIST_FORBIDDEN - RESIST_EMERGENCY_MAX)) * expansionScale;
-                localDamping = isExpansion ? 0.95 : 0.85;  // Lighter damping during expansion
+                localDamping = lerp(0.85, 0.95, expansionRelief);
             }
 
             // Get neighbor nodes
@@ -127,7 +122,9 @@ export const applyAngleResistanceVelocity = (
 
                 // EARLY-PHASE HUB PRIVILEGE + ESCAPE WINDOW
                 const nbEscape = engine.escapeWindow.has(nb.id);
-                if ((energy > 0.85 && nbDeg >= 3) || nbEscape) return;
+                const hubRelief = nbDeg >= 3 ? policy.hubConstraintRelief : 0;
+                const hubScale = 1 - hubRelief;
+                if (nbEscape || hubScale <= 0.001) return;
 
                 // Tangent direction (perpendicular to radial)
                 const radialX = (nb.x - node.x) / edge.r;
@@ -138,8 +135,9 @@ export const applyAngleResistanceVelocity = (
                 const beforeVx = nb.vx;
                 const beforeVy = nb.vy;
 
-                nb.vx += tangentX * force;
-                nb.vy += tangentY * force;
+                const scaledForce = force * hubScale;
+                nb.vx += tangentX * scaledForce;
+                nb.vy += tangentY * scaledForce;
 
                 // Apply local damping in emergency/forbidden zones
                 if (localDamping < 1.0) {

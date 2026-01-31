@@ -37,6 +37,9 @@ The ticking loop (`src/physics/engine/engineTick.ts`) execution order:
 4.  **Constraints** (PBD via Accumulator) -> *Safety Clamp (Hard) + Spacing (Soft)*
 5.  **Correction Diffusion** -> *Smoothes jitter*
 
+### MotionPolicy (Energy → Ramps)
+Energy thresholds are now routed through a unified `MotionPolicy` ramp set (early-expansion, expansion, diffusion, hub relief). This avoids hard law flips and keeps constraint/velocity gating continuous.
+
 ## 5. Locality Protection (Interaction Bubble)
 User interaction must never feel degraded.
 *   **Mechanism 1: Local Boost**:
@@ -85,3 +88,4 @@ New telemetry in `[RenderPerf]` and `[PhysicsPasses]`:
 *   `[Hand]`: `localBoost=Y`.
 *   `[Impulse]`: Logged on trigger or rejection.
 *   `[RenderDrift]`: Logs global angle if micro-drift is active (should be 0).
+*   **Physics HUD (Debug Panel)**: In-app overlay shows degrade%, settle state, jitter, PBD correction sum, conflict%, and energy proxy.

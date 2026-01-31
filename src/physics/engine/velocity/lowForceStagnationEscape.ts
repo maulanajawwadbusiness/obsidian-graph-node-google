@@ -1,5 +1,6 @@
 import type { PhysicsEngine } from '../../engine';
 import type { PhysicsNode } from '../../types';
+import type { MotionPolicy } from '../motionPolicy';
 import { getPassStats, type DebugStats } from '../stats';
 
 /**
@@ -25,11 +26,11 @@ import { getPassStats, type DebugStats } from '../stats';
 export const applyLowForceStagnationEscape = (
     engine: PhysicsEngine,
     nodeList: PhysicsNode[],
-    energy: number,
+    policy: MotionPolicy,
     stats: DebugStats
 ) => {
-    // Only during early expansion
-    if (energy <= 0.85) return;
+    const driftStrength = policy.earlyExpansion;
+    if (driftStrength <= 0.01) return;
 
     const passStats = getPassStats(stats, 'StagnationEscape');
     const affected = new Set<string>();
@@ -37,7 +38,7 @@ export const applyLowForceStagnationEscape = (
     const densityRadius = 30;
     const densityThreshold = 4;
     const forceEpsilon = 0.5;  // Low-force threshold
-    const driftMagnitude = 0.02;  // Sub-pixel drift
+    const driftMagnitude = 0.02 * driftStrength;  // Sub-pixel drift
 
     // Pre-compute local density
     const localDensity = new Map<string, number>();

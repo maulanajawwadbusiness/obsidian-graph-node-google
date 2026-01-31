@@ -14,6 +14,7 @@ import {
     initializeCorrectionAccum,
 } from './constraints';
 import { applyCorrectionsWithDiffusion } from './corrections';
+import { createMotionPolicy } from './motionPolicy';
 import {
     applyAngleResistanceVelocity,
     applyAngularVelocityDecoherence,
@@ -28,15 +29,9 @@ import {
     applyStaticFrictionBypass,
 } from './velocityPass';
 import { logEnergyDebug } from './debug';
-import { updateFeelMetrics, type FeelMetricsState } from './feelMetrics';
 import { createDebugStats, type DebugStats } from './stats';
+import type { PhysicsHudHistory, PhysicsHudSnapshot } from './physicsHud';
 import { getNowMs } from './engineTime';
-import { capturePositionSnapshot, reconcileVelocityFromPositionDelta } from './positionVelocityReconcile';
-import { computeUnifiedMotionState, type UnifiedMotionState } from './unifiedMotionState';
-import { applySettleLadder, type SettleDebugStats } from './settleLadder';
-import { computeInteractionAuthorityPolicy } from './interactionAuthority';
-import { computeMotionPolicy, type MotionPolicy } from './motionPolicy';
-import { maybeRunScaleHarness } from './scaleHarness';
 
 export type PhysicsEngineTickContext = {
     nodes: Map<string, PhysicsNode>;
@@ -60,8 +55,6 @@ export type PhysicsEngineTickContext = {
     perfModeLogAt: number;
     spacingLogAt: number;
     passLogAt: number;
-    pbdReconLogAt: number;
-    settleLogAt: number;
     degradeLevel: number;
     degradeReason: string;
     degradeSeverity: 'NONE' | 'SOFT' | 'HARD';
@@ -70,9 +63,7 @@ export type PhysicsEngineTickContext = {
     handLogAt: number;
     dragLagSamples: number[];
     lastDraggedNodeId: string | null;
-    feelMetrics: FeelMetricsState;
     correctionAccumCache: Map<string, { dx: number; dy: number }>;
-    pbdReconcileCache: Float32Array;
     perfCounters: {
         nodeListBuilds: number;
         correctionNewEntries: number;
@@ -92,15 +83,10 @@ export type PhysicsEngineTickContext = {
         };
     };
     lastDebugStats: DebugStats | null;
-    unifiedMotionState: UnifiedMotionState | null;
-    motionPolicy: MotionPolicy | null;
-    settleState: 'moving' | 'cooling' | 'microkill' | 'sleep';
-    settleStateMs: number;
-    settleJitterAvg: number;
-    settlePositionCache: Float32Array;
-    localBoostStrength: number;
-    localBoostRadius: number;
-    scaleHarnessRan: boolean;
+    hudSnapshot: PhysicsHudSnapshot;
+    hudHistory: PhysicsHudHistory;
+    hudSettleState: PhysicsHudSnapshot['settleState'];
+    hudSettleStateAt: number;
     worldWidth: number;
     worldHeight: number;
     getNodeList: () => PhysicsNode[];
@@ -192,10 +178,6 @@ export const runPhysicsTick = (engine: PhysicsEngineTickContext, dt: number) => 
     const nodeList = engine.getNodeList();
     const budgetState = engine as PhysicsEngineTickContext & { _currentBudgetScale?: number };
 
-    if (engine.config.debugPerf) {
-        maybeRunScaleHarness(engine as any);
-    }
-
     // FIX #7: Fixed Dot Authority Check (Snapshot)
     const fixedSnapshots = new Map<string, { x: number; y: number }>();
     if (engine.config.debugPerf) {
@@ -220,6 +202,76 @@ export const runPhysicsTick = (engine: PhysicsEngineTickContext, dt: number) => 
         }
         : null;
     const tickStart = perfEnabled ? getNowMs() : 0;
+    const updateHudSnapshot = (
+        nowMs: number,
+        nodes: PhysicsNode[],
+        stats: DebugStats,
+        settleStateOverride?: PhysicsHudSnapshot['settleState']
+    ) => {
+        const nodeCount = nodes.length || 1;
+        let avgVelSq = 0;
+        for (const node of nodes) {
+            avgVelSq += node.vx * node.vx + node.vy * node.vy;
+        }
+        avgVelSq /= nodeCount;
+
+        const corrections = stats.passes.Corrections?.correction ?? 0;
+        const jitterSample = nodeCount > 0 ? corrections / nodeCount : 0;
+        const conflictFrame = stats.correctionConflictCount > 0;
+
+        const pruneWindow = <T extends { t: number }>(arr: T[], windowMs: number) => {
+            const cutoff = nowMs - windowMs;
+            while (arr.length > 0 && arr[0].t < cutoff) {
+                arr.shift();
+            }
+        };
+
+        engine.hudHistory.degradeFrames.push({ t: nowMs, degraded: engine.degradeLevel > 0 });
+        engine.hudHistory.conflictFrames.push({ t: nowMs, conflict: conflictFrame });
+        engine.hudHistory.jitterSamples.push({ t: nowMs, value: jitterSample });
+
+        pruneWindow(engine.hudHistory.degradeFrames, 5000);
+        pruneWindow(engine.hudHistory.conflictFrames, 5000);
+        pruneWindow(engine.hudHistory.jitterSamples, 1000);
+
+        const degradeFrames = engine.hudHistory.degradeFrames.length || 1;
+        const degradeHits = engine.hudHistory.degradeFrames.filter(sample => sample.degraded).length;
+        const conflictFrames = engine.hudHistory.conflictFrames.length || 1;
+        const conflictHits = engine.hudHistory.conflictFrames.filter(sample => sample.conflict).length;
+        const jitterSamples = engine.hudHistory.jitterSamples;
+        const jitterAvg = jitterSamples.length > 0
+            ? jitterSamples.reduce((sum, sample) => sum + sample.value, 0) / jitterSamples.length
+            : 0;
+
+        let settleState: PhysicsHudSnapshot['settleState'];
+        if (settleStateOverride) {
+            settleState = settleStateOverride;
+        } else if (avgVelSq > 0.25) {
+            settleState = 'moving';
+        } else if (avgVelSq > 0.04) {
+            settleState = 'cooling';
+        } else if (avgVelSq > 0.0004) {
+            settleState = 'microkill';
+        } else {
+            settleState = 'microkill';
+        }
+
+        if (settleState !== engine.hudSettleState) {
+            engine.hudSettleState = settleState;
+            engine.hudSettleStateAt = nowMs;
+        }
+
+        engine.hudSnapshot = {
+            degradeLevel: engine.degradeLevel,
+            degradePct5s: degradeHits > 0 ? (degradeHits / degradeFrames) * 100 : 0,
+            settleState,
+            lastSettleMs: Math.max(0, nowMs - engine.hudSettleStateAt),
+            jitterAvg,
+            pbdCorrectionSum: corrections,
+            conflictPct5s: conflictHits > 0 ? (conflictHits / conflictFrames) * 100 : 0,
+            energyProxy: avgVelSq,
+        };
+    };
 
     engine.awakeList.length = 0;
     engine.sleepingList.length = 0;
@@ -240,18 +292,12 @@ export const runPhysicsTick = (engine: PhysicsEngineTickContext, dt: number) => 
 
     updatePerfMode(engine, nodeList.length, engine.links.length);
     const degradeLevel = engine.degradeLevel;
-    const interactionPolicy = engine.motionPolicy
-        ? computeInteractionAuthorityPolicy(engine.motionPolicy, null)
-        : null;
     if (engine.draggedNodeId) {
-        engine.localBoostFrames = Math.max(engine.localBoostFrames, interactionPolicy?.localBoostFrames ?? 8);
+        engine.localBoostFrames = 8;
     } else if (engine.localBoostFrames > 0) {
         engine.localBoostFrames -= 1;
     }
     const localBoostActive = engine.localBoostFrames > 0;
-    if (!engine.draggedNodeId && engine.localBoostFrames === 0) {
-        engine.lastDraggedNodeId = null;
-    }
 
     // =====================================================================
     // FIX 44: SOLVER COMA (Idle Rest Mode)
@@ -260,6 +306,7 @@ export const runPhysicsTick = (engine: PhysicsEngineTickContext, dt: number) => 
     // =====================================================================
     const isInteracting = engine.draggedNodeId !== null || engine.localBoostFrames > 0;
     const isStartup = engine.lifecycle < 2.0; // Grace period for startup
+    const energyThreshold = 0.05;
 
     // We compute energy later, but we need it now? 
     // `computeEnergyEnvelope` returns "max allowed" not "current".
@@ -285,7 +332,7 @@ export const runPhysicsTick = (engine: PhysicsEngineTickContext, dt: number) => 
         engine.idleFrames = 0;
     }
 
-    const restModeActive = engine.perfMode === 'fatal' && engine.idleFrames > 60; // emergency-only
+    const restModeActive = engine.idleFrames > 60; // 1 second of silence
     if (restModeActive) {
         // HARD SKIP
         // Zero out everything to be sure
@@ -298,6 +345,7 @@ export const runPhysicsTick = (engine: PhysicsEngineTickContext, dt: number) => 
             }
             if (engine.config.debugPerf) console.log('[PhysicsRest] Entered Coma');
         }
+        updateHudSnapshot(getNowMs(), nodeList, debugStats, 'sleep');
         return; // EXIT TICK
     }
 
@@ -326,11 +374,11 @@ export const runPhysicsTick = (engine: PhysicsEngineTickContext, dt: number) => 
     // EXPONENTIAL COOLING: Energy decays asymptotically, never stops
     // =====================================================================
     const { energy, forceScale, effectiveDamping, maxVelocityEffective } = computeEnergyEnvelope(engine.lifecycle);
+    const motionPolicy = createMotionPolicy(energy);
 
     const degradePairScale = degradeLevel === 0 ? 1 : degradeLevel === 1 ? 0.7 : 0.4;
 
     // FIX #9: SMOOTH MODE TRANSITIONS
-    // Degrade touches cadence only (never stiffness/force laws).
     // Slew the budget scalar instead of snapping to prevent "law changes".
     const targetBudgetScale = (engine.perfMode === 'normal'
         ? 1
@@ -356,22 +404,6 @@ export const runPhysicsTick = (engine: PhysicsEngineTickContext, dt: number) => 
     }
 
     const pairBudgetScale = budgetState._currentBudgetScale;
-
-    const unifiedMotionState = computeUnifiedMotionState({
-        energy,
-        nodeCount: nodeList.length,
-        linkCount: engine.links.length,
-        sleepingCount: engine.sleepingList.length,
-        draggedNodeId: engine.draggedNodeId,
-        budgetScale: pairBudgetScale,
-        config: engine.config,
-    });
-    engine.unifiedMotionState = unifiedMotionState;
-    const motionPolicy = computeMotionPolicy(unifiedMotionState, engine.config, maxVelocityEffective);
-    engine.motionPolicy = motionPolicy;
-    const authorityPolicy = computeInteractionAuthorityPolicy(motionPolicy, null);
-    engine.localBoostStrength = authorityPolicy.localBoostStrength;
-    engine.localBoostRadius = authorityPolicy.localBoostRadius;
 
     const pairStrideBase = pairBudgetScale > 0
         ? computePairStride(
@@ -495,17 +527,6 @@ export const runPhysicsTick = (engine: PhysicsEngineTickContext, dt: number) => 
         }
         if (now - engine.degradeLogAt >= 1000) {
             engine.degradeLogAt = now;
-            const skippedPasses = [
-                !repulsionEnabled ? 'repel' : null,
-                !collisionEnabled ? 'coll' : null,
-                !springsEnabled ? 'spring' : null,
-                !spacingWillRun ? 'space' : null,
-                !microEnabled ? 'micro' : null,
-                !((engine.perfMode === 'normal' || engine.perfMode === 'stressed') && engine.frameIndex % triangleEvery === 0)
-                    ? 'tri'
-                    : null,
-                !(engine.frameIndex % safetyEvery === 0) ? 'safety' : null,
-            ].filter(Boolean);
             console.log(
                 `[Degrade] level=${degradeLevel} ` +
                 `reason=${engine.degradeReason} ` +
@@ -520,12 +541,6 @@ export const runPhysicsTick = (engine: PhysicsEngineTickContext, dt: number) => 
                 `k={repel:${repulsionEvery} coll:${collisionEvery} spring:${springsEvery} ` +
                 `space:${spacingEvery} tri:${triangleEvery} safety:${safetyEvery} micro:${microEvery}} ` +
                 `pairBudget={pairStride:${pairStrideBase} spacingStride:${spacingStride} smoothScale=${(budgetState._currentBudgetScale ?? 1.0).toFixed(2)}}`
-            );
-            console.log(
-                `[DegradeSummary] budgetScale=${(pairBudgetScale ?? 0).toFixed(2)} ` +
-                `level=${degradeLevel} ` +
-                `skippedPasses=${skippedPasses.length} ` +
-                `passList=${skippedPasses.join(',') || 'none'}`
             );
         }
     }
@@ -556,7 +571,7 @@ export const runPhysicsTick = (engine: PhysicsEngineTickContext, dt: number) => 
 
         applyDragVelocity(engine, nodeList, dt, debugStats);
         applyPreRollVelocity(engine, nodeList, preRollActive, debugStats);
-        integrateNodes(engine, nodeList, dt, energy, unifiedMotionState, motionPolicy, effectiveDamping, maxVelocityEffective, debugStats, preRollActive);
+        integrateNodes(engine, nodeList, dt, energy, motionPolicy, effectiveDamping, maxVelocityEffective, debugStats, preRollActive);
         engine.lastDebugStats = debugStats;
         if (perfEnabled && frameTiming) {
             frameTiming.totalMs = getNowMs() - tickStart;
@@ -613,7 +628,7 @@ export const runPhysicsTick = (engine: PhysicsEngineTickContext, dt: number) => 
     applyPreRollVelocity(engine as any, nodeList, preRollActive, debugStats);
 
     // 4. Integrate (always runs, never stops)
-    integrateNodes(engine as any, nodeList, dt, energy, unifiedMotionState, motionPolicy, effectiveDamping, maxVelocityEffective, debugStats, preRollActive);
+    integrateNodes(engine as any, nodeList, dt, energy, motionPolicy, effectiveDamping, maxVelocityEffective, debugStats, preRollActive);
 
     // =====================================================================
     // COMPUTE Dot DEGREES (needed early for degree-1 exclusion)
@@ -621,29 +636,27 @@ export const runPhysicsTick = (engine: PhysicsEngineTickContext, dt: number) => 
     // =====================================================================
     const nodeDegreeEarly = computeNodeDegrees(engine as any, nodeList);
 
-    applyExpansionResistance(engine as any, nodeList, nodeDegreeEarly, energy, debugStats, dt);
+    applyExpansionResistance(engine as any, nodeList, nodeDegreeEarly, motionPolicy, debugStats, dt);
 
-    const microEnabled = engine.frameIndex % microEvery === 0 &&
-        engine.settleState !== 'microkill' &&
-        engine.settleState !== 'sleep';
+    const microEnabled = engine.frameIndex % microEvery === 0;
     if (microEnabled) {
         // Dense-core velocity de-locking (micro-slip) - breaks rigid-body lock
-        applyDenseCoreVelocityDeLocking(engine as any, nodeList, unifiedMotionState, motionPolicy, debugStats);
+        applyDenseCoreVelocityDeLocking(engine as any, nodeList, motionPolicy, debugStats);
 
         // Static friction bypass - breaks zero-velocity rest state
-        applyStaticFrictionBypass(engine as any, nodeList, unifiedMotionState, motionPolicy, debugStats);
+        applyStaticFrictionBypass(engine as any, nodeList, motionPolicy, debugStats);
 
         // Angular velocity decoherence - breaks velocity orientation correlation
-        applyAngularVelocityDecoherence(engine as any, nodeList, energy, motionPolicy, debugStats);
+        applyAngularVelocityDecoherence(engine as any, nodeList, motionPolicy, debugStats);
 
         // Local phase diffusion - breaks oscillation synchronization (shape memory eraser)
-        applyLocalPhaseDiffusion(engine as any, nodeList, energy, debugStats);
+        applyLocalPhaseDiffusion(engine as any, nodeList, motionPolicy, debugStats);
 
         // Low-force stagnation escape - breaks rest-position preference (edge shear version)
-        applyEdgeShearStagnationEscape(engine as any, nodeList, energy, motionPolicy, debugStats);
+        applyEdgeShearStagnationEscape(engine as any, nodeList, motionPolicy, debugStats);
 
         // Dense-core inertia relaxation - erases momentum memory in jammed dots
-        applyDenseCoreInertiaRelaxation(engine as any, nodeList, energy, motionPolicy, debugStats);
+        applyDenseCoreInertiaRelaxation(engine as any, nodeList, motionPolicy, debugStats);
     }
 
     // =====================================================================
@@ -656,8 +669,6 @@ export const runPhysicsTick = (engine: PhysicsEngineTickContext, dt: number) => 
     if (allocCounter) {
         engine.perfCounters.correctionNewEntries += allocCounter.newEntries;
     }
-    engine.pbdReconcileCache = capturePositionSnapshot(nodeList, engine.pbdReconcileCache);
-    let pbdReconStats = { pbdDeltaSum: 0, vReconAppliedSum: 0 };
 
     if (!preRollActive) {
         const edgeRelaxEnabled = engine.frameIndex % edgeRelaxEvery === 0;
@@ -673,7 +684,7 @@ export const runPhysicsTick = (engine: PhysicsEngineTickContext, dt: number) => 
                     engine.sleepingList,
                     correctionAccum,
                     nodeDegreeEarly,
-                    energy,
+                    motionPolicy,
                     debugStats,
                     spacingGate,
                     dt,
@@ -690,7 +701,7 @@ export const runPhysicsTick = (engine: PhysicsEngineTickContext, dt: number) => 
                     engine.sleepingList,
                     correctionAccum,
                     nodeDegreeEarly,
-                    energy,
+                    motionPolicy,
                     debugStats,
                     spacingGate,
                     dt,
@@ -707,7 +718,7 @@ export const runPhysicsTick = (engine: PhysicsEngineTickContext, dt: number) => 
                 focusSleeping,
                 correctionAccum,
                 nodeDegreeEarly,
-                energy,
+                motionPolicy,
                 debugStats,
                 spacingGate,
                 dt,
@@ -718,9 +729,9 @@ export const runPhysicsTick = (engine: PhysicsEngineTickContext, dt: number) => 
         const triangleEnabled = (engine.perfMode === 'normal' || engine.perfMode === 'stressed') &&
             engine.frameIndex % triangleEvery === 0;
         if (triangleEnabled) {
-            applyTriangleAreaConstraints(engine as any, nodeList, correctionAccum, nodeDegreeEarly, energy, debugStats, dt);
+            applyTriangleAreaConstraints(engine as any, nodeList, correctionAccum, nodeDegreeEarly, energy, motionPolicy, debugStats, dt);
         }
-        applyAngleResistanceVelocity(engine as any, nodeList, nodeDegreeEarly, energy, debugStats, dt);
+        applyAngleResistanceVelocity(engine as any, nodeList, nodeDegreeEarly, motionPolicy, debugStats, dt);
         applyDistanceBiasVelocity(engine as any, nodeList, debugStats, dt);
         const safetyEnabled = engine.frameIndex % safetyEvery === 0;
         if (safetyEnabled) {
@@ -730,7 +741,7 @@ export const runPhysicsTick = (engine: PhysicsEngineTickContext, dt: number) => 
                 engine.sleepingList,
                 correctionAccum,
                 nodeDegreeEarly,
-                energy,
+                motionPolicy,
                 debugStats,
                 dt,
                 pairStrideBase,
@@ -743,7 +754,7 @@ export const runPhysicsTick = (engine: PhysicsEngineTickContext, dt: number) => 
                 focusSleeping,
                 correctionAccum,
                 nodeDegreeEarly,
-                energy,
+                motionPolicy,
                 debugStats,
                 dt,
                 1,
@@ -755,17 +766,11 @@ export const runPhysicsTick = (engine: PhysicsEngineTickContext, dt: number) => 
             engine as any,
             nodeList,
             correctionAccum,
-            energy,
+            motionPolicy,
             spacingGate,
             debugStats,
             dt,
             maxDiffusionNeighbors
-        );
-        pbdReconStats = reconcileVelocityFromPositionDelta(
-            nodeList,
-            engine.pbdReconcileCache,
-            dt,
-            engine.draggedNodeId
         );
     }
     if (perfEnabled && frameTiming) {
@@ -795,65 +800,6 @@ export const runPhysicsTick = (engine: PhysicsEngineTickContext, dt: number) => 
                     node.y = snap.y;
                 }
             }
-        }
-    }
-
-    if (perfEnabled) {
-        const now = getNowMs();
-        if (now - engine.pbdReconLogAt >= 1000) {
-            engine.pbdReconLogAt = now;
-            const passValues = Object.values(debugStats.passes);
-            let forceSum = 0;
-            let correctionSum = 0;
-            for (const pass of passValues) {
-                forceSum += pass.force;
-                correctionSum += pass.correction;
-            }
-            let opposing = 0;
-            let total = 0;
-            for (const node of nodeList) {
-                if (!node.lastCorrectionDir) continue;
-                const speed = Math.hypot(node.vx, node.vy);
-                if (speed < 0.01) continue;
-                const dot = node.vx * node.lastCorrectionDir.x + node.vy * node.lastCorrectionDir.y;
-                total += 1;
-                if (dot < 0) opposing += 1;
-            }
-            const corrOpposePct = total > 0 ? (opposing / total) * 100 : 0;
-            console.log(
-                `[PhysicsPerf] pbdDeltaSum=${pbdReconStats.pbdDeltaSum.toFixed(3)} ` +
-                `vReconAppliedSum=${pbdReconStats.vReconAppliedSum.toFixed(3)}`
-            );
-            console.log(
-                `[DegradeSummary] budgetScale=${(pairBudgetScale ?? 0).toFixed(2)} ` +
-                `level=${degradeLevel} ` +
-                `pbdCorrections=${pbdReconStats.pbdDeltaSum.toFixed(3)}`
-            );
-            console.log(
-                `[PhysicsConflict] corrOpposePct=${corrOpposePct.toFixed(1)} ` +
-                `corrToForce=${(forceSum > 0 ? correctionSum / forceSum : 0).toFixed(3)}`
-            );
-        }
-    }
-
-    const settleStats: SettleDebugStats = applySettleLadder(
-        engine as any,
-        nodeList,
-        unifiedMotionState,
-        motionPolicy,
-        dt,
-        maxVelocityEffective
-    );
-
-    if (perfEnabled) {
-        const now = getNowMs();
-        if (now - engine.settleLogAt >= 1000) {
-            engine.settleLogAt = now;
-            console.log(
-                `[Settle] state=${settleStats.settleState} ` +
-                `timeToSleepMs=${settleStats.timeToSleepMs.toFixed(0)} ` +
-                `jitterAvg=${settleStats.jitterAvg.toFixed(4)}`
-            );
         }
     }
 
@@ -887,40 +833,8 @@ export const runPhysicsTick = (engine: PhysicsEngineTickContext, dt: number) => 
     }
 
     logEnergyDebug(engine.lifecycle, energy, effectiveDamping, maxVelocityEffective);
-
-    if (perfEnabled) {
-        const feelRepulsionEnabled = !preRollActive && repulsionEnabled;
-        const feelCollisionEnabled = !preRollActive && collisionEnabled;
-        const feelSpringsEnabled = !preRollActive && springsEnabled;
-        const feelSpacingEnabled = !preRollActive && spacingWillRun;
-        const feelTriangleEnabled = !preRollActive &&
-            (engine.perfMode === 'normal' || engine.perfMode === 'stressed') &&
-            engine.frameIndex % triangleEvery === 0;
-        const feelSafetyEnabled = !preRollActive && engine.frameIndex % safetyEvery === 0;
-
-        updateFeelMetrics(
-            engine.feelMetrics,
-            {
-                config: engine.config,
-                lifecycle: engine.lifecycle,
-                links: engine.links,
-                draggedNodeId: engine.draggedNodeId,
-            },
-            nodeList,
-            debugStats,
-            {
-                degradeLevel,
-                repulsionEnabled: feelRepulsionEnabled,
-                collisionEnabled: feelCollisionEnabled,
-                springsEnabled: feelSpringsEnabled,
-                spacingEnabled: feelSpacingEnabled,
-                triangleEnabled: feelTriangleEnabled,
-                safetyEnabled: feelSafetyEnabled,
-                microEnabled: !preRollActive && microEnabled,
-            }
-        );
-    }
     engine.lastDebugStats = debugStats;
+    updateHudSnapshot(getNowMs(), nodeList, debugStats);
 
     if (perfEnabled && frameTiming) {
         const tickEnd = getNowMs();

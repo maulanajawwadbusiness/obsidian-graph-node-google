@@ -1,12 +1,13 @@
 import type { PhysicsEngine } from '../../engine';
 import type { PhysicsNode } from '../../types';
+import type { MotionPolicy } from '../motionPolicy';
 import { getPassStats, type DebugStats } from '../stats';
 
 export const applyHubVelocityScaling = (
     engine: PhysicsEngine,
     node: PhysicsNode,
     stats: DebugStats,
-    energy: number,
+    policy: MotionPolicy,
     nodeList: PhysicsNode[]
 ) => {
     let nodeDeg = 0;
@@ -16,10 +17,10 @@ export const applyHubVelocityScaling = (
     if (nodeDeg > 2) {
         // DENSE-CORE DAMPING BYPASS
         // During early expansion, skip damping for nodes in dense clusters
-        const earlyExpansion = energy > 0.85;
+        const denseBypass = policy.denseBypass;
         let isDense = false;
 
-        if (earlyExpansion) {
+        if (denseBypass > 0.01) {
             // Count neighbors within 0.8 * minNodeDistance
             const denseRadius = engine.config.minNodeDistance * 0.8;
             let nearNeighborCount = 0;
@@ -35,19 +36,16 @@ export const applyHubVelocityScaling = (
             isDense = nearNeighborCount >= 3;
         }
 
-        // Skip damping for dense nodes during early expansion
-        if (earlyExpansion && isDense) {
-            return; // 100% bypass
-        }
-
         const hubFactor = Math.min((nodeDeg - 2) / 4, 1);
         const hubVelocityScale = 0.7;  // How slow hubs respond
         const velScale = 1.0 - hubFactor * (1.0 - hubVelocityScale);
+        const bypassScale = isDense ? (1 - denseBypass) : 1;
+        const effectiveVelScale = 1 - (1 - velScale) * bypassScale;
 
         const beforeVx = node.vx;
         const beforeVy = node.vy;
-        node.vx *= velScale;
-        node.vy *= velScale;
+        node.vx *= effectiveVelScale;
+        node.vy *= effectiveVelScale;
 
         const dvx = node.vx - beforeVx;
         const dvy = node.vy - beforeVy;

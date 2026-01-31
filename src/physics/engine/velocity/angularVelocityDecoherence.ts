@@ -1,7 +1,7 @@
 import type { PhysicsEngine } from '../../engine';
 import type { PhysicsNode } from '../../types';
-import { getPassStats, type DebugStats } from '../stats';
 import type { MotionPolicy } from '../motionPolicy';
+import { getPassStats, type DebugStats } from '../stats';
 
 /**
  * ANGULAR VELOCITY DECOHERENCE (Micro-Vorticity Seeding)
@@ -21,19 +21,18 @@ import type { MotionPolicy } from '../motionPolicy';
 export const applyAngularVelocityDecoherence = (
     _engine: PhysicsEngine,
     nodeList: PhysicsNode[],
-    energy: number,
-    motionPolicy: MotionPolicy,
+    policy: MotionPolicy,
     stats: DebugStats
 ) => {
-    // Only during early expansion
-    if (energy <= 0.85) return;
+    const decohereStrength = policy.earlyExpansion;
+    if (decohereStrength <= 0.01) return;
 
     const passStats = getPassStats(stats, 'AngularDecoherence');
     const affected = new Set<string>();
 
-    const densityRadius = motionPolicy.densityRadius;
-    const densityThreshold = motionPolicy.densityThreshold;
-    const minSpeed = motionPolicy.speedEpsilon;  // Skip near-stationary dots
+    const densityRadius = 30;
+    const densityThreshold = 4;
+    const minSpeed = 0.1;  // Skip near-stationary nodes
 
     // Pre-compute local density
     const localDensity = new Map<string, number>();
@@ -67,9 +66,9 @@ export const applyAngularVelocityDecoherence = (
 
         // Map hash to angle: 0.5° to 1.5° (0.0087 to 0.0262 radians)
         const normalizedHash = (Math.abs(hash) % 1000) / 1000;  // 0-1
-        const minAngle = motionPolicy.decoherenceAngle.min;
-        const maxAngle = motionPolicy.decoherenceAngle.max;
-        const angle = minAngle + normalizedHash * (maxAngle - minAngle);
+        const minAngle = 0.5 * Math.PI / 180;  // 0.5 degrees
+        const maxAngle = 1.5 * Math.PI / 180;  // 1.5 degrees
+        const angle = (minAngle + normalizedHash * (maxAngle - minAngle)) * decohereStrength;
 
         // Alternate sign based on hash parity (half CW, half CCW)
         const angleSign = (hash % 2 === 0) ? 1 : -1;

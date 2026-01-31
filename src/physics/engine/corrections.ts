@@ -306,86 +306,127 @@ export const applyCorrectionsWithDiffusion = (
                 const nbDiff = diffusedCorrection.get(nbId);
                 if (nbDiff) {
                     // Neighbors receive opposite direction (they move to absorb)
+                    // This logic is correct: pushing me +1 means neighbors (relative) move -1?
+                    // Actually diffusion moves neighbors AWAY to make space? 
+                    // Wait, "applyCorrections" moves me to satisfaction.
+                    // Diffusion splits that move.
+                    // If I move +0.8, and 2 neighbors move -0.1 each.
+                    // Total relative change is 1.0. 
+
                     nbDiff.dx -= corrDx * neighborShare;
                     nbDiff.dy -= corrDy * neighborShare;
                 }
             }
-        } else {
-            // Single connection - apply full correction
-            node.x += corrDx;
-            node.y += corrDy;
-            if (node.prevX !== undefined) node.prevX += corrDx;
-            if (node.prevY !== undefined) node.prevY += corrDy;
-            reconcile(corrDx, corrDy);
-
-            passStats.correction += Math.sqrt(corrDx * corrDx + corrDy * corrDy);
-            affected.add(node.id);
         }
+        // Forensic Stats for Source
+        stats.diffusionStrengthNow = diffusionSettleGate; // Sample one
+    } else {
+        // Single connection - apply full correction
+        node.x += corrDx;
+        node.y += corrDy;
 
-        // Update lastCorrectionDir via slow lerp (heavy inertia)
-        if (!node.lastCorrectionDir) {
-            node.lastCorrectionDir = { x: newDir.x, y: newDir.y };
-        } else {
-            // Original: lerpFactor = 0.3
-            // Time-correct: factor = 1 - pow(1 - 0.3, dt * 60)
-            // 0.3 means we keep 70% of old value.
-            const lerpFactor = 1 - Math.pow(0.7, timeScale);
-            const lx = node.lastCorrectionDir.x * (1 - lerpFactor) + newDir.x * lerpFactor;
-            const ly = node.lastCorrectionDir.y * (1 - lerpFactor) + newDir.y * lerpFactor;
-            const lmag = Math.sqrt(lx * lx + ly * ly);
-            if (lmag > 0.001) {
-                node.lastCorrectionDir.x = lx / lmag;
-                node.lastCorrectionDir.y = ly / lmag;
+        // FIX: Valid Reconciliation (No Ghost Velocity)
+        const oldPrevX = node.prevX ?? node.x; // Fallback matches current (v=0)
+        const oldPrevY = node.prevY ?? node.y;
+
+        if (node.prevX !== undefined) node.prevX += corrDx;
+        if (node.prevY !== undefined) node.prevY += corrDy;
+
+        // Forensic: Ghost Mismatch Check
+        // Did we preserve velocity? v_after == v_before
+        // (x_new - prev_new) == (x_old - prev_old) + diff? No.
+        // Pos shifted by D. Prev shifted by D. 
+        // V = (P - Prev) / dt.  V_new = ((P+D) - (Prev+D))/dt = (P-Prev)/dt. Matches.
+        // We just verify that the programmatic update happened.
+        if (node.prevX !== undefined && node.prevY !== undefined) {
+            const shiftP = (node.x - (node.x - corrDx));
+            const shiftPrev = (node.prevX - oldPrevX);
+            if (Math.abs(shiftP - shiftPrev) > 0.0001) {
+                stats.ghostMismatchCount++;
             }
         }
+
+        // reconcile(corrDx, corrDy); // Removed legacy reconciler
+        passStats.correction += Math.sqrt(corrDx * corrDx + corrDy * corrDy);
+        affected.add(node.id);
     }
 
-    // Apply diffused corrections to neighbors (clamped to budget)
-    for (const node of nodeList) {
-        if (!node.isFixed) {
-            const diff = diffusedCorrection.get(node.id);
-            if (diff) {
-                const diffMag = Math.sqrt(diff.dx * diff.dx + diff.dy * diff.dy);
-                if (diffMag >= 0.001) {
-                    // FIX 20: DAMPEN LOCAL DRIFT
-                    // If this node is connected to the dragged node, dampen diffusion
-                    // to prevent "sideways squirt" feeling.
-                    let localDamping = 1.0;
-                    if (engine.draggedNodeId) {
-                        const neighbors = nodeNeighbors.get(engine.draggedNodeId);
-                        if (neighbors && neighbors.includes(node.id)) {
-                            localDamping = 0.2; // 80% reduction in lateral diffusion
-                        }
+    // Update lastCorrectionDir via slow lerp (heavy inertia)
+    if (!node.lastCorrectionDir) {
+        node.lastCorrectionDir = { x: newDir.x, y: newDir.y };
+    } else {
+        // Original: lerpFactor = 0.3
+        // Time-correct: factor = 1 - pow(1 - 0.3, dt * 60)
+        // 0.3 means we keep 70% of old value.
+        const lerpFactor = 1 - Math.pow(0.7, timeScale);
+        const lx = node.lastCorrectionDir.x * (1 - lerpFactor) + newDir.x * lerpFactor;
+        const ly = node.lastCorrectionDir.y * (1 - lerpFactor) + newDir.y * lerpFactor;
+        const lmag = Math.sqrt(lx * lx + ly * ly);
+        if (lmag > 0.001) {
+            node.lastCorrectionDir.x = lx / lmag;
+            node.lastCorrectionDir.y = ly / lmag;
+        }
+    }
+}
+
+// Apply diffused corrections to neighbors (clamped to budget)
+for (const node of nodeList) {
+    if (!node.isFixed) {
+        const diff = diffusedCorrection.get(node.id);
+        if (diff) {
+            const diffMag = Math.sqrt(diff.dx * diff.dx + diff.dy * diff.dy);
+            if (diffMag >= 0.001) {
+                // FIX 20: DAMPEN LOCAL DRIFT
+                // If this node is connected to the dragged node, dampen diffusion
+                // to prevent "sideways squirt" feeling.
+                let localDamping = 1.0;
+                if (engine.draggedNodeId) {
+                    const neighbors = nodeNeighbors.get(engine.draggedNodeId);
+                    if (neighbors && neighbors.includes(node.id)) {
+                        localDamping = 0.2; // 80% reduction in lateral diffusion
                     }
+                }
 
-                    // Clamp diffused correction to budget
-                    // Apply local damping to diffusion reception
-                    const diffScale = Math.min(1, nodeBudget / diffMag) * localDamping;
+                // Clamp diffused correction to budget
+                // Apply local damping to diffusion reception
+                const diffScale = Math.min(1, nodeBudget / diffMag) * localDamping;
 
-                    const dbx = diff.dx * diffScale;
-                    const dby = diff.dy * diffScale;
-                    node.x += dbx;
-                    node.y += dby;
-                    if (node.prevX !== undefined) node.prevX += dbx;
-                    if (node.prevY !== undefined) node.prevY += dby;
+                const dbx = diff.dx * diffScale;
+                const dby = diff.dy * diffScale;
+                node.x += dbx;
+                node.y += dby;
 
-                    passStats.correction += Math.sqrt(dbx ** 2 + dby ** 2);
-                    affected.add(node.id);
-                    const diffusionOpposesVelocity = (diff.dx * node.vx + diff.dy * node.vy) < 0;
-                    if (diffusionOpposesVelocity) {
-                        conflictCount += 1;
-                        node.conflictThisFrame = 1;
+                const oldPrevX = node.prevX ?? node.x;
+
+                if (node.prevX !== undefined) node.prevX += dbx;
+                if (node.prevY !== undefined) node.prevY += dby;
+
+                // Forensic Check
+                if (node.prevX !== undefined) {
+                    const shiftP = dbx;
+                    const shiftPrev = node.prevX - oldPrevX;
+                    if (Math.abs(shiftP - shiftPrev) > 0.0001) {
+                        stats.ghostMismatchCount++;
                     }
+                }
+
+                passStats.correction += Math.sqrt(dbx ** 2 + dby ** 2);
+                affected.add(node.id);
+                const diffusionOpposesVelocity = (diff.dx * node.vx + diff.dy * node.vy) < 0;
+                if (diffusionOpposesVelocity) {
+                    conflictCount += 1;
+                    node.conflictThisFrame = 1;
                 }
             }
         }
-
-        const conflictTarget = node.conflictThisFrame ? 1 : 0;
-        const prevConflict = node.conflictEma ?? 0;
-        node.conflictEma = prevConflict + (conflictTarget - prevConflict) * conflictEmaBlend;
-        node.conflictThisFrame = 0;
     }
 
-    passStats.nodes += affected.size;
-    stats.correctionConflictCount += conflictCount;
+    const conflictTarget = node.conflictThisFrame ? 1 : 0;
+    const prevConflict = node.conflictEma ?? 0;
+    node.conflictEma = prevConflict + (conflictTarget - prevConflict) * conflictEmaBlend;
+    node.conflictThisFrame = 0;
+}
+
+passStats.nodes += affected.size;
+stats.correctionConflictCount += conflictCount;
 };

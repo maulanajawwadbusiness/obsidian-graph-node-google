@@ -62,7 +62,13 @@ export type DebugStats = {
     // Settle Diagnostics
     outlierCount: number;
     calmPercent: number;
+    calmPercent: number;
     diffusionGate: number;
+
+    // Diffusion Forensics
+    diffusionStrengthNow: number;
+    diffusionDeltaP95: number;
+    ghostMismatchCount: number;
 };
 
 export const createDebugStats = (): DebugStats => ({
@@ -112,7 +118,12 @@ export const createDebugStats = (): DebugStats => ({
 
     outlierCount: 0,
     calmPercent: 0,
+    calmPercent: 0,
     diffusionGate: 0,
+
+    diffusionStrengthNow: 0,
+    diffusionDeltaP95: 0,
+    ghostMismatchCount: 0,
 });
 
 export const getPassStats = (stats: DebugStats, name: string): PassStats => {

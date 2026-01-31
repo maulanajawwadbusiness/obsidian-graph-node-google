@@ -177,5 +177,8 @@ export const updateHudSnapshot = (
         outlierCount: stats.outlierCount,
         calmPercent: stats.calmPercent,
         diffusionGate: stats.diffusionGate,
+
+        diffusionStrengthNow: stats.diffusionStrengthNow,
+        ghostMismatchCount: stats.ghostMismatchCount,
     };
 };

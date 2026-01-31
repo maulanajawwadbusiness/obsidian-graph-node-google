@@ -21,16 +21,21 @@ export type PhysicsHudSnapshot = {
     // Injector Forensics
     microSlipCount?: number;
     microSlipFiresPerSec?: number;
+    stuckScoreAvg?: number; // Re-adding if needed or removing from init
     driftCount: number;
+
     // Settle Forensics
     outlierCount: number;
     calmPercent: number;
     diffusionGate: number;
+    diffusionStrengthNow: number;
+    ghostMismatchCount: number;
+
     escapeFiresPerSec?: number;
     escapeLoopSuspectCount?: number;
     lastInjector?: string;
 
-    // Legacy / Unused (Clean up if possible)
+    // Legacy / Unused
     settleBlockers?: string[];
     stateFlipCount?: number;
 
@@ -42,9 +47,7 @@ export type PhysicsHudSnapshot = {
     breakdownForce?: number;
     breakdownPressure?: number;
     breakdownJitter?: number;
-    // Settle Blockers (Why are we awake?)
-    settleBlockers?: string[];
-    outlierCount?: number;
+
     // DT Forensics
     dtRawMs?: number;
     dtUseMs?: number;
@@ -109,6 +112,9 @@ export const createInitialPhysicsHudSnapshot = (): PhysicsHudSnapshot => ({
     stuckScoreAvg: 0,
     escapeFiresPerSec: 0,
     escapeLoopSuspectCount: 0,
+    diffusionStrengthNow: 0,
+    ghostMismatchCount: 0,
+
     outlierCount: 0,
     stateFlipCount: 0,
     driftCount: 0,

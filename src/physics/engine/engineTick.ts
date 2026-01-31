@@ -224,9 +224,17 @@ export const runPhysicsTick = (engine: PhysicsEngineTickContext, dtIn: number) =
     const allowEarlyExpansion = engine.config.initStrategy === 'legacy' && engine.config.debugAllowEarlyExpansion === true;
     const motionPolicy = createMotionPolicy(energy, engine.degradeLevel, avgVelSq, allowEarlyExpansion);
 
-    // FIX: Diffusion Decay at Rest
-    // If we are globally calm (despite outliers), force settleScalar to 1.0
-    // This ensures diffusion (which is gated by (1-settle)^2) drops to ZERO.
+    // FIX: Diffusion Decay at Rest (Smooth Gating)
+    // Blend settleScalar up based on calmPercent before the hard cutoff.
+    // This ensures diffusion (gated by (1-settle)^2) fades out as we approach 98% calm.
+    if (calmPercent > 0.5) {
+        // Map 0.5..0.98 -> 0.0..1.0
+        const t = Math.max(0, Math.min(1, (calmPercent - 0.5) / (0.98 - 0.5)));
+        const calmFactor = t * t * (3 - 2 * t); // Smoothstep
+        motionPolicy.settleScalar = Math.max(motionPolicy.settleScalar, calmFactor);
+    }
+
+    // Hard cutoff for Sleep safety
     if (calmPercent > 0.98) {
         motionPolicy.settleScalar = 1.0;
     }

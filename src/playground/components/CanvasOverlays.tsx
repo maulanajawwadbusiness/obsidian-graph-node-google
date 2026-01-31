@@ -7,6 +7,7 @@ import {
     SIDEBAR_TOGGLE_STYLE,
     THEME_TOGGLE_STYLE
 } from '../graphPlaygroundStyles';
+import { IS_DEV } from '../rendering/debugUtils';
 
 // Toggle to show/hide debug controls buttons (Debug, Theme, Controls)
 const SHOW_DEBUG_CONTROLS = true;
@@ -31,6 +32,12 @@ type CanvasOverlaysProps = {
     debugNoRenderMotion: boolean;
     onTogglePixelSnapping: () => void;
     onToggleNoRenderMotion: () => void;
+    showRestMarkers: boolean;
+    showConflictMarkers: boolean;
+    markerIntensity: number;
+    onToggleRestMarkers: () => void;
+    onToggleConflictMarkers: () => void;
+    onMarkerIntensityChange: (value: number) => void;
     onSpawnPreset: (count: number) => void;
     onRunSettleScenario: () => void;
     onRunDragScenario: () => void;
@@ -65,6 +72,12 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
     debugNoRenderMotion,
     onTogglePixelSnapping,
     onToggleNoRenderMotion,
+    showRestMarkers,
+    showConflictMarkers,
+    markerIntensity,
+    onToggleRestMarkers,
+    onToggleConflictMarkers,
+    onMarkerIntensityChange,
     onSpawnPreset,
     onRunSettleScenario,
     onRunDragScenario,
@@ -216,6 +229,41 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
                         />
                         Kill Render Motion
                     </label>
+                    {IS_DEV && (
+                        <>
+                            <strong style={{ fontWeight: 700, marginTop: '6px' }}>Feel Markers</strong>
+                            <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', cursor: 'pointer' }}>
+                                <input
+                                    type="checkbox"
+                                    checked={showRestMarkers}
+                                    onChange={onToggleRestMarkers}
+                                    style={{ cursor: 'pointer' }}
+                                />
+                                Show Rest Markers
+                            </label>
+                            <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', cursor: 'pointer' }}>
+                                <input
+                                    type="checkbox"
+                                    checked={showConflictMarkers}
+                                    onChange={onToggleConflictMarkers}
+                                    style={{ cursor: 'pointer' }}
+                                />
+                                Show Conflict Markers
+                            </label>
+                            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px' }}>
+                                Marker Intensity
+                                <input
+                                    type="range"
+                                    min={0.6}
+                                    max={2}
+                                    step={0.1}
+                                    value={markerIntensity}
+                                    onChange={(event) => onMarkerIntensityChange(Number(event.target.value))}
+                                />
+                                <span style={{ minWidth: '28px' }}>{markerIntensity.toFixed(1)}</span>
+                            </label>
+                        </>
+                    )}
                 </div>
                 <strong style={{ fontWeight: 700 }}>Physics HUD</strong><br />
                 Nodes: {metrics.nodes} | Links: {metrics.links}<br />

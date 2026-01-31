@@ -26,5 +26,16 @@ Use the preset buttons to spawn fixed-seed setups:
 - **Record** stores the current HUD snapshot into the scoreboard table.
 - Ratios are automatically shown versus the **N=5** baseline.
 
+## Feel Markers
+Enable in the Debug panel (dev-only toggles):
+- **Show Rest Markers**: Small cyan dot below each dot that is truly at rest. If a dot looks still but is jittering, the marker turns amber.
+- **Show Conflict Markers**: Thin pink halo around dots where PBD correction is fighting velocity (higher intensity = more conflict).
+- **Marker Intensity**: Multiplies marker visibility when testing in bright themes.
+
+### How to Use (N=5/20/60)
+1. Run **Settle Test** and wait for settle state = **sleep**.
+2. Turn on **Show Rest Markers** to verify cyan dots stay steady. Any amber signals micro-jitter.
+3. Run **Drag Test** and turn on **Show Conflict Markers**. Watch for hot halos around the dragged cluster and any unexpected hotspots far away.
+
 ## Notes
 - The panel captures pointer/wheel events, so testing stays isolated from the canvas unless you interact in the HUD.

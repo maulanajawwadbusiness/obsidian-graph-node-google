@@ -89,3 +89,4 @@ New telemetry in `[RenderPerf]` and `[PhysicsPasses]`:
 *   `[Impulse]`: Logged on trigger or rejection.
 *   `[RenderDrift]`: Logs global angle if micro-drift is active (should be 0).
 *   **Physics HUD (Debug Panel)**: In-app overlay shows degrade%, settle state, jitter, PBD correction sum, conflict%, and energy proxy.
+*   **Feel Markers (Debug Panel)**: Dev-only canvas markers show rest state (cyan/amber) and conflict halos per dot.

@@ -35,6 +35,9 @@ type UseGraphRenderingProps = {
     showDebugGrid: boolean;
     pixelSnapping: boolean;
     debugNoRenderMotion: boolean;
+    showRestMarkers: boolean;
+    showConflictMarkers: boolean;
+    markerIntensity: number;
 };
 
 export const useGraphRendering = ({
@@ -49,7 +52,10 @@ export const useGraphRendering = ({
     cameraLocked,
     showDebugGrid,
     pixelSnapping,
-    debugNoRenderMotion
+    debugNoRenderMotion,
+    showRestMarkers,
+    showConflictMarkers,
+    markerIntensity
 }: UseGraphRenderingProps) => {
     const cameraRef = useRef<CameraState>({
         panX: 0,
@@ -113,7 +119,20 @@ export const useGraphRendering = ({
         settingsRef.current.showDebugGrid = showDebugGrid;
         settingsRef.current.pixelSnapping = pixelSnapping;
         settingsRef.current.debugNoRenderMotion = debugNoRenderMotion;
-    }, [useVariedSize, skinMode, cameraLocked, showDebugGrid, pixelSnapping, debugNoRenderMotion]);
+        settingsRef.current.showRestMarkers = showRestMarkers;
+        settingsRef.current.showConflictMarkers = showConflictMarkers;
+        settingsRef.current.markerIntensity = markerIntensity;
+    }, [
+        useVariedSize,
+        skinMode,
+        cameraLocked,
+        showDebugGrid,
+        pixelSnapping,
+        debugNoRenderMotion,
+        showRestMarkers,
+        showConflictMarkers,
+        markerIntensity
+    ]);
 
     useEffect(() => {
         const canvas = canvasRef.current;

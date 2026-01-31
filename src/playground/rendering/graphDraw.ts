@@ -133,6 +133,12 @@ export const drawNodes = (
     const maxY = vHeight + margin;
 
     const nodeList = engine.getNodeList();
+    const showRestMarkers = isDebugEnabled(settingsRef.current.showRestMarkers);
+    const showConflictMarkers = isDebugEnabled(settingsRef.current.showConflictMarkers);
+    const markerIntensity = Math.max(0.6, settingsRef.current.markerIntensity || 1);
+    const restSpeedEpsilon = engine.config.velocitySleepThreshold ?? 0.01;
+    const restSpeedSq = restSpeedEpsilon * restSpeedEpsilon;
+    const jitterWarnSq = (restSpeedEpsilon * 2.5) * (restSpeedEpsilon * 2.5);
 
     const renderNode = (node: any) => {
         // FIX 51: World Space Culling (Only if not using scratch)
@@ -167,16 +173,16 @@ export const drawNodes = (
         ctx.globalAlpha = 1;
         ctx.globalCompositeOperation = 'source-over';
 
+        const isDisplayNode = node.id === hoverStateRef.current.hoverDisplayNodeId;
+        const nodeEnergy = isDisplayNode ? hoverStateRef.current.energy : 0;
+        if (isDisplayNode && theme.hoverDebugEnabled) {
+            hoverStateRef.current.debugNodeEnergy = nodeEnergy;
+        }
+        const nodeScale = theme.nodeStyle === 'ring' ? getNodeScale(nodeEnergy, theme) : 1;
+        const radiusPx = baseRenderRadius * nodeScale * zoom;
+
         if (theme.nodeStyle === 'ring') {
             const isHoveredNode = node.id === hoverStateRef.current.hoveredNodeId;
-            const isDisplayNode = node.id === hoverStateRef.current.hoverDisplayNodeId;
-            const nodeEnergy = isDisplayNode ? hoverStateRef.current.energy : 0;
-            if (isDisplayNode && theme.hoverDebugEnabled) {
-                hoverStateRef.current.debugNodeEnergy = nodeEnergy;
-            }
-
-            const nodeScale = getNodeScale(nodeEnergy, theme);
-            const radiusPx = baseRenderRadius * nodeScale * zoom;
 
             // Fix 52: Glow LOD. Skip if node is tiny (< 2px) and no energy.
             if (radiusPx > 2 || nodeEnergy > 0.01) {
@@ -240,7 +246,6 @@ export const drawNodes = (
 
         } else {
             // Normal mode
-            const radiusPx = baseRenderRadius * zoom;
             ctx.beginPath();
             ctx.arc(screen.x, screen.y, radiusPx, 0, Math.PI * 2);
             ctx.fillStyle = node.isFixed ? theme.nodeFixedColor : theme.nodeFillColor;
@@ -248,6 +253,44 @@ export const drawNodes = (
             ctx.strokeStyle = theme.nodeStrokeColor;
             ctx.lineWidth = strokeWidthPx;
             ctx.stroke();
+        }
+
+        if (showRestMarkers || showConflictMarkers) {
+            const markerOffset = Math.max(1.5, radiusPx * 0.35);
+            const markerBase = Math.max(0.8, radiusPx * 0.12) * markerIntensity;
+            const markerY = screen.y + radiusPx + markerOffset;
+
+            if (showRestMarkers) {
+                const restCandidate = engine.hudSettleState === 'sleep' || node.isSleeping === true || (node.sleepFrames ?? 0) > 0;
+                if (restCandidate) {
+                    const speedSq = node.vx * node.vx + node.vy * node.vy;
+                    const isFakeRest = speedSq > jitterWarnSq;
+                    const isTrueRest = speedSq <= restSpeedSq;
+                    if (isFakeRest || isTrueRest) {
+                        ctx.beginPath();
+                        ctx.arc(screen.x, markerY, markerBase, 0, Math.PI * 2);
+                        ctx.fillStyle = isFakeRest ? 'rgb(255, 170, 60)' : 'rgb(90, 210, 255)';
+                        ctx.globalAlpha = Math.min(1, (isFakeRest ? 0.9 : 0.7) * markerIntensity);
+                        ctx.fill();
+                        ctx.globalAlpha = 1;
+                    }
+                }
+            }
+
+            if (showConflictMarkers) {
+                const conflictEma = node.conflictEma ?? 0;
+                if (conflictEma > 0.02) {
+                    const conflictAlpha = Math.min(0.9, 0.2 + conflictEma * 0.8) * markerIntensity;
+                    const conflictRadius = radiusPx + Math.max(2, radiusPx * 0.22);
+                    ctx.beginPath();
+                    ctx.arc(screen.x, screen.y, conflictRadius, 0, Math.PI * 2);
+                    ctx.strokeStyle = 'rgb(255, 100, 160)';
+                    ctx.globalAlpha = Math.min(1, conflictAlpha);
+                    ctx.lineWidth = Math.max(1, ringWidthPx * 0.6) * markerIntensity;
+                    ctx.stroke();
+                    ctx.globalAlpha = 1;
+                }
+            }
         }
     };
 

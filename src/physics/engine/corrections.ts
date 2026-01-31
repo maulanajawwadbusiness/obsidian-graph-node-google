@@ -18,6 +18,7 @@ export const applyCorrectionsWithDiffusion = (
     // Degree-weighted resistance + neighbor diffusion to prevent pressure concentration
     // =====================================================================
     const timeScale = dt * 60.0;
+    const conflictEmaBlend = 1 - Math.pow(0.7, timeScale);
     let nodeBudget = engine.config.maxNodeCorrectionPerFrame * timeScale;
 
     // FIX 45: Kill Delayed Debt (Boost Budget during Interaction)
@@ -33,6 +34,7 @@ export const applyCorrectionsWithDiffusion = (
     let conflictCount = 0;
 
     for (const node of nodeList) {
+        node.conflictThisFrame = 0;
         nodeDegree.set(node.id, 0);
         nodeNeighbors.set(node.id, []);
     }
@@ -131,6 +133,7 @@ export const applyCorrectionsWithDiffusion = (
         const correctionOpposesVelocity = (corrDx * node.vx + corrDy * node.vy) < 0;
         if (correctionOpposesVelocity) {
             conflictCount += 1;
+            node.conflictThisFrame = 1;
         }
 
         // FIX 17: Store Residual
@@ -235,37 +238,43 @@ export const applyCorrectionsWithDiffusion = (
 
     // Apply diffused corrections to neighbors (clamped to budget)
     for (const node of nodeList) {
-        if (node.isFixed) continue;
+        if (!node.isFixed) {
+            const diff = diffusedCorrection.get(node.id);
+            if (diff) {
+                const diffMag = Math.sqrt(diff.dx * diff.dx + diff.dy * diff.dy);
+                if (diffMag >= 0.001) {
+                    // FIX 20: DAMPEN LOCAL DRIFT
+                    // If this node is connected to the dragged node, dampen diffusion
+                    // to prevent "sideways squirt" feeling.
+                    let localDamping = 1.0;
+                    if (engine.draggedNodeId) {
+                        const neighbors = nodeNeighbors.get(engine.draggedNodeId);
+                        if (neighbors && neighbors.includes(node.id)) {
+                            localDamping = 0.2; // 80% reduction in lateral diffusion
+                        }
+                    }
 
-        const diff = diffusedCorrection.get(node.id);
-        if (!diff) continue;
+                    // Clamp diffused correction to budget
+                    // Apply local damping to diffusion reception
+                    const diffScale = Math.min(1, nodeBudget / diffMag) * localDamping;
 
-        const diffMag = Math.sqrt(diff.dx * diff.dx + diff.dy * diff.dy);
-        if (diffMag < 0.001) continue;
-
-        // FIX 20: DAMPEN LOCAL DRIFT
-        // If this node is connected to the dragged node, dampen diffusion 
-        // to prevent "sideways squirt" feeling.
-        let localDamping = 1.0;
-        if (engine.draggedNodeId) {
-            const neighbors = nodeNeighbors.get(engine.draggedNodeId);
-            if (neighbors && neighbors.includes(node.id)) {
-                localDamping = 0.2; // 80% reduction in lateral diffusion
+                    node.x += diff.dx * diffScale;
+                    node.y += diff.dy * diffScale;
+                    passStats.correction += Math.sqrt((diff.dx * diffScale) ** 2 + (diff.dy * diffScale) ** 2);
+                    affected.add(node.id);
+                    const diffusionOpposesVelocity = (diff.dx * node.vx + diff.dy * node.vy) < 0;
+                    if (diffusionOpposesVelocity) {
+                        conflictCount += 1;
+                        node.conflictThisFrame = 1;
+                    }
+                }
             }
         }
 
-        // Clamp diffused correction to budget
-        // Apply local damping to diffusion reception
-        const diffScale = Math.min(1, nodeBudget / diffMag) * localDamping;
-
-        node.x += diff.dx * diffScale;
-        node.y += diff.dy * diffScale;
-        passStats.correction += Math.sqrt((diff.dx * diffScale) ** 2 + (diff.dy * diffScale) ** 2);
-        affected.add(node.id);
-        const diffusionOpposesVelocity = (diff.dx * node.vx + diff.dy * node.vy) < 0;
-        if (diffusionOpposesVelocity) {
-            conflictCount += 1;
-        }
+        const conflictTarget = node.conflictThisFrame ? 1 : 0;
+        const prevConflict = node.conflictEma ?? 0;
+        node.conflictEma = prevConflict + (conflictTarget - prevConflict) * conflictEmaBlend;
+        node.conflictThisFrame = 0;
     }
 
     passStats.nodes += affected.size;

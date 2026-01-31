@@ -55,6 +55,9 @@ export const addNodeToEngine = (engine: PhysicsEngineTopologyContext, node: Phys
     }
     engine.wakeNode(node.id);
     engine.invalidateWarmStart('TOPOLOGY_CHANGE');
+
+    // FIX D: Scale - Invalidate Cache
+    engine.triangleCache = null;
 };
 
 export const addLinkToEngine = (engine: PhysicsEngineTopologyContext, link: PhysicsLink) => {
@@ -96,7 +99,11 @@ export const addLinkToEngine = (engine: PhysicsEngineTopologyContext, link: Phys
 
     engine.wakeNode(link.source);
     engine.wakeNode(link.target);
+    engine.wakeNode(link.target);
     engine.invalidateWarmStart('TOPOLOGY_CHANGE');
+
+    // FIX D: Scale - Invalidate Cache
+    engine.triangleCache = null;
 };
 
 export const invalidateWarmStart = (engine: PhysicsEngineTopologyContext, reason: string) => {

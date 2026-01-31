@@ -1,7 +1,9 @@
 import type { PhysicsEngine } from '../../engine';
 import type { PhysicsNode } from '../../types';
 import type { MotionPolicy } from '../motionPolicy';
+import type { MotionPolicy } from '../motionPolicy';
 import { getPassStats, type DebugStats } from '../stats';
+import { getNowMs } from '../engineTime';
 
 /**
  * EDGE SHEAR STAGNATION ESCAPE (Null-Gradient Unlock)
@@ -47,18 +49,8 @@ export const applyEdgeShearStagnationEscape = (
     const forceEps = 0.8;     // Force magnitude threshold
     const baseSlip = 0.03 * shearStrength;    // Base shear magnitude (px/frame)
 
-    // Pre-compute local density
-    const localDensity = new Map<string, number>();
-    for (const node of nodeList) {
-        let count = 0;
-        for (const other of nodeList) {
-            if (other.id === node.id) continue;
-            const dx = other.x - node.x;
-            const dy = other.y - node.y;
-            if (Math.sqrt(dx * dx + dy * dy) < densityRadius) count++;
-        }
-        localDensity.set(node.id, count);
-    }
+    // FIX D: Scale - Use Shared Cache
+    const localDensity = engine.localDensityCache;
 
     // Track processed pairs to avoid double-processing
     const processedPairs = new Set<string>();
@@ -111,8 +103,8 @@ export const applyEdgeShearStagnationEscape = (
         // Gate 2: Both relative velocity components must be small (truly jammed)
         if (relVelAlongEdge >= velEps || relVelPerp >= velEps) continue;
 
-        // FIX: Cooldown Check
-        const nowMs = engine.lifecycle * 1000;
+        // FIX: Cooldown Check (Wall Clock)
+        const nowMs = getNowMs();
         if (nowMs - (source.lastMicroSlipMs || 0) < 1000) continue;
         if (nowMs - (target.lastMicroSlipMs || 0) < 1000) continue;
 

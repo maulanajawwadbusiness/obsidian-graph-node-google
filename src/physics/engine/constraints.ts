@@ -220,10 +220,25 @@ export const applySpacingConstraints = (
         // FIX Singularity: Gentle Overlap Resolver
         // If nodes are exactly on top of each other, use deterministic shuffle
         if (Math.abs(dx) < 0.0001 && Math.abs(dy) < 0.0001) {
-            const h = (a.id.length + b.id.length);
-            const angle = (h % 8) * (Math.PI / 4);
-            dx = Math.cos(angle) * 0.1;
-            dy = Math.sin(angle) * 0.1;
+            // Zero shim
+            if (dx === 0 && dy === 0) {
+                let h = 0x811c9dc5;
+                const str = a.id + b.id; // Corrected from source.id + target.id
+                for (let k = 0; k < str.length; k++) {
+                    h ^= str.charCodeAt(k);
+                    h = Math.imul(h, 0x01000193);
+                }
+                const rand = (h >>> 0) / 4294967296;
+                const angle = rand * Math.PI * 2;
+                dx = Math.cos(angle) * 0.01;
+                dy = Math.sin(angle) * 0.01;
+            } else {
+                // Fallback for near-zero but not exactly zero
+                const h = (a.id.length + b.id.length);
+                const angle = (h % 8) * (Math.PI / 4);
+                dx = Math.cos(angle) * 0.1;
+                dy = Math.sin(angle) * 0.1;
+            }
         }
 
         const d = Math.sqrt(dx * dx + dy * dy);
@@ -365,7 +380,9 @@ export const applySpacingConstraints = (
             const a = engine.nodes.get(idA);
             const b = engine.nodes.get(idB);
             if (!a || !b) {
-                resolved.add(key);
+                // FIX D: HotPairs Hygiene
+                // Prune dead keys immediately
+                hotPairs.delete(key);
                 continue;
             }
             // Check without stride
@@ -460,31 +477,36 @@ export const applyTriangleAreaConstraints = (
     const kArea = 0.03 * Math.max(0.1, energy);
     const areaStrength = (1 - Math.exp(-kArea * dt)) * (1.0 - policy.degradeScalar); // Scale by degrade
 
-    // Build adjacency set for triangle detection
-    const connectedPairs = new Set<string>();
-    for (const link of engine.links) {
-        const key = [link.source, link.target].sort().join(':');
-        connectedPairs.add(key);
-    }
-
     // Find all triangles (A-B-C where all pairs connected)
-    const triangles: [string, string, string][] = [];
-    const nodeIds = nodeList.map(n => n.id);
+    // FIX D: Cached Triangles (O(1) after first build)
+    let triangles: [string, string, string][] = engine.triangleCache || [];
 
-    for (let i = 0; i < nodeIds.length; i++) {
-        for (let j = i + 1; j < nodeIds.length; j++) {
-            const keyAB = [nodeIds[i], nodeIds[j]].sort().join(':');
-            if (!connectedPairs.has(keyAB)) continue;
+    if (!engine.triangleCache) {
+        triangles = [];
+        const nodeIds = nodeList.map(n => n.id);
+        const connectedPairs = new Set<string>();
+        for (const link of engine.links) {
+            const key = [link.source, link.target].sort().join(':');
+            connectedPairs.add(key);
+        }
 
-            for (let k = j + 1; k < nodeIds.length; k++) {
-                const keyAC = [nodeIds[i], nodeIds[k]].sort().join(':');
-                const keyBC = [nodeIds[j], nodeIds[k]].sort().join(':');
+        for (let i = 0; i < nodeIds.length; i++) {
+            for (let j = i + 1; j < nodeIds.length; j++) {
+                const keyAB = [nodeIds[i], nodeIds[j]].sort().join(':');
+                if (!connectedPairs.has(keyAB)) continue;
 
-                if (connectedPairs.has(keyAC) && connectedPairs.has(keyBC)) {
-                    triangles.push([nodeIds[i], nodeIds[j], nodeIds[k]]);
+                for (let k = j + 1; k < nodeIds.length; k++) {
+                    const keyAC = [nodeIds[i], nodeIds[k]].sort().join(':');
+                    const keyBC = [nodeIds[j], nodeIds[k]].sort().join(':');
+
+                    if (connectedPairs.has(keyAC) && connectedPairs.has(keyBC)) {
+                        triangles.push([nodeIds[i], nodeIds[j], nodeIds[k]]);
+                    }
                 }
             }
         }
+        engine.triangleCache = triangles;
+        if (engine.config.debugPerf) console.log(`[TriangleCache] Built ${triangles.length} triangles`);
     }
 
     const passStats = getPassStats(stats, 'TriangleAreaConstraints');

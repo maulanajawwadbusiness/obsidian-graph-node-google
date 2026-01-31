@@ -17,9 +17,22 @@ export const applyCorrectionsWithDiffusion = (
     // FINAL PASS: APPLY CLAMPED CORRECTIONS WITH DIFFUSION
     // Degree-weighted resistance + neighbor diffusion to prevent pressure concentration
     // =====================================================================
+    // =====================================================================
     const timeScale = dt * 60.0;
     const conflictEmaBlend = 1 - Math.pow(0.7, timeScale);
     let nodeBudget = engine.config.maxNodeCorrectionPerFrame * timeScale;
+
+    // FIX B: HUD Truth
+    // If diffusion is effectively off, ensure HUD says 0.
+    const settleConfidence = policy.settleScalar || 0;
+    const diffusionSettleGate = Math.pow(1 - settleConfidence, 2);
+    if (policy.diffusion <= 0.001 || diffusionSettleGate <= 0.001) {
+        stats.diffusionStrengthNow = 0;
+    } else {
+        // If active, update to show the Gate value (or Policy * Gate)
+        // engineTick sets it to Gate, but Policy * Gate is "True Strength".
+        stats.diffusionStrengthNow = policy.diffusion * diffusionSettleGate;
+    }
 
     // FIX 45: Kill Delayed Debt (Boost Budget during Interaction)
     // If user is interacting, we want to resolve constraints IMMEDIATELY.
@@ -114,10 +127,40 @@ export const applyCorrectionsWithDiffusion = (
         const t = Math.max(0, Math.min(1, (totalMag - magLow) / (magHigh - magLow)));
         const magWeight = t * t * (3 - 2 * t);
 
-        const diffusionEffective = engine.config.correctionDiffusionBase *
-            policy.diffusion *
-            diffusionSettleGate *
-            magWeight;
+        magWeight;
+
+        // FIX B: HUD Truth - Clear data if gated
+        if (policy.diffusion <= 0.001 || diffusionSettleGate <= 0.001) {
+            stats.diffusionStrengthNow = 0;
+            // Don't reset popScore, it tracks changes.
+        } else {
+            // We can't set "now" here easily because this loop runs for EVERY node.
+            // Setting "Now" per node overwrites it. 
+            // The HUD likely wants the "Gate" value, which is global-ish (settleGate).
+            // But engineTick.ts sets `debugStats.diffusionStrengthNow = diffusionSettleGate;` (L260).
+            // So corrections.ts might be fighting it?
+
+            // `corrections.ts` doesn't seem to set `diffusionStrengthNow` currently.
+            // Let's check the context again. 
+            // `engineTick.ts` sets it.
+            // So if I set it to 0 here, I might overwrite `engineTick`'s value?
+            // Wait, `engineTick` runs `applyCorrections` AFTER setting stats?
+            // Let's check `engineTick` order.
+            // 7. Correction Diffusion -> `applyCorrectionsWithDiffusion`.
+
+            // `engineTick.ts` L260 sets it.
+            // Then Lxxx calls `applyCorrectionsWithDiffusion`.
+            // So `engineTick` sets the *Global Gate*.
+            // `corrections.ts` applies it per node.
+
+            // The USer said: "in src/physics/engine/corrections.ts: when diffusion is skipped/gated off, explicitly set stats.diffusionStrengthNow = 0"
+            // So if `policy.diffusion` is 0 (from MotionPolicy), the global gate might be 1.0 but actual diffusion is 0.
+            // So `engineTick` might show "1.0" (gate) but reality is "0" (policy).
+
+            // So I should enforce it here. 
+            // Since this runs per node, setting it once (or repeatedly) is fine if consistent.
+            // But if policy.diffusion is 0, we can just set it once at start of function?
+        }
 
         // Scale diffusion strength by our confidence
         // gate > 0.0001

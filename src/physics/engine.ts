@@ -142,9 +142,41 @@ export class PhysicsEngine {
     // Adjacency Cache for O(1) wake lookups (Fix 12)
     public adjacencyMap = new Map<string, string[]>();
 
+    // FIX A: World Shift Callback (Camera Sync)
+    public onWorldShift?: (dx: number, dy: number) => void;
+
+    // FIX D: Scale Caches (O(1) access)
+    // Triangle cache: updated on topology change
+    public triangleCache: [string, string, string][] | null = null;
+    // Density cache: computed once per tick
+    public localDensityCache = new Map<string, number>();
+
     constructor(config: Partial<ForceConfig> = {}) {
         this.config = { ...DEFAULT_PHYSICS_CONFIG, ...config };
         this.preRollFrames = this.config.initStrategy === 'legacy' ? 5 : 0;
+    }
+
+    /**
+     * Deterministic Pseudo-Random Generator (Seeded by IDs)
+     * Replaces Math.random() for overlap resolution to ensure cross-browser determinism.
+     * Returns [0, 1)
+     */
+    public pseudoRandom(seedA: string, seedB: string = ''): number {
+        let h = 0x811c9dc5;
+        // Simple FNV-1a hash of the strings
+        const str = seedA + seedB;
+        for (let i = 0; i < str.length; i++) {
+            h ^= str.charCodeAt(i);
+            h = Math.imul(h, 0x01000193);
+        }
+        h >>>= 0;
+        // Mix with frame index to avoid static patterns, BUT must be careful.
+        // If we want "deterministic given state", frame index is risky if frames drop.
+        // Better: user wants "same scene yields same motion".
+        // Overlap resolution should likely be static for a given pair (to avoid vibration).
+        // Or if we need noise, use a counter that increments deterministically?
+        // Let's stick to PURE hash of IDs first (stable direction).
+        return (h % 1000000) / 1000000;
     }
 
     private resetStartupStats() {

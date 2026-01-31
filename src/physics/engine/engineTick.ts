@@ -225,6 +225,32 @@ export const runPhysicsTick = (engine: PhysicsEngineTickContext, dtIn: number) =
     const forceScale = rawForceScale * (1.0 - (policyResult.quarantineStrength * 0.5));
 
     const allowEarlyExpansion = engine.config.initStrategy === 'legacy' && engine.config.debugAllowEarlyExpansion === true;
+
+    // FIX D: Density Scale (Compute Once)
+    // Only needed for early expansion logic (stagnation escape, etc)
+    engine.localDensityCache.clear();
+    if (allowEarlyExpansion) {
+        const R = 30; // Standard density radius
+        // O(N^2) simply is safest for determinism given small N (<200).
+        // For larger N, this should use spatial hash, but "Single Law" implies consistency.
+        // We can optimize: use adjacency + 2 hops? No, density is spatial.
+        // Stick to naive O(N^2) but optimized loop.
+        const nodes = nodeList;
+        const len = nodes.length;
+        for (let i = 0; i < len; i++) {
+            const ni = nodes[i];
+            let count = 0;
+            for (let j = 0; j < len; j++) {
+                if (i === j) continue;
+                const nj = nodes[j];
+                const dx = nj.x - ni.x;
+                const dy = nj.y - ni.y;
+                if ((dx * dx + dy * dy) < (R * R)) count++;
+            }
+            engine.localDensityCache.set(ni.id, count);
+        }
+    }
+
     const motionPolicy = createMotionPolicy(energy, engine.degradeLevel, avgVelSq, allowEarlyExpansion);
 
     // FIX: Diffusion Decay at Rest (Smooth Gating)
@@ -318,14 +344,11 @@ export const runPhysicsTick = (engine: PhysicsEngineTickContext, dtIn: number) =
             debugStats.rebaseCount++;
             debugStats.maxAbsPos = 0; // Reset estimate until next frame
 
-            // TODO: Signal Camera to shift? 
-            // In a real app we'd need to emit an event `onWorldShift(cx, cy)`.
-            // For now, staying purely inside physics engine.
-            // This might cause a visual jump if renderer doesn't use the node's new coords relative to cam.
-            // But usually renderer just draws node.x/y. 
-            // If camera is centered on nodes, it follows. 
-            // If camera is absolute 0,0, they jump.
-            // Given "obsidian-good motion feel", we assume camera tracks content.
+            // FIX C: Camera Sync
+            // Notify renderer to shift view by (-cx, -cy) to keep visuals steady
+            if (engine.onWorldShift) {
+                engine.onWorldShift(-cx, -cy);
+            }
         }
     }
 

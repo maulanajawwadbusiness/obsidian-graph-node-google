@@ -168,9 +168,22 @@ export function applyRepulsion(
 
         // FIX Singularity: Deterministic Fallback (Seeded by IDs)
         if (Math.abs(dx) < 0.0001 && Math.abs(dy) < 0.0001) {
-            // Pseudo-random angle based on ID char codes
-            const seed = (nodeA.id.charCodeAt(0) || 0) + (nodeB.id.charCodeAt(0) || 0);
-            const angle = (seed % 17) * (Math.PI / 8.5);
+            // Pseudo-random angle based on ID hash
+            // We can't access engine instance here directly? 
+            // `applyRepulsion` function signature: (nodes, activeNodes, sleepingNodes, config, stats, energy, pairStride, pairOffset, neighborCache).
+            // It does NOT have `engine`.
+            // BUT: We can use a local deterministic hash function if engine not available.
+
+            // Local Hash V2 (Better Distribution)
+            let h = 0x811c9dc5;
+            const str = nodeA.id + nodeB.id;
+            for (let k = 0; k < str.length; k++) {
+                h ^= str.charCodeAt(k);
+                h = Math.imul(h, 0x01000193);
+            }
+            const rand = (h >>> 0) / 4294967296; // 0..1
+
+            const angle = rand * Math.PI * 2;
             const nudge = 0.1;
             dx = Math.cos(angle) * nudge;
             dy = Math.sin(angle) * nudge;
@@ -315,8 +328,16 @@ export function applyCollision(
                 nodeB.fy -= fy;
             }
         } else if (distSq === 0) {
-            // Exact overlap? Push apart randomly.
-            const angle = Math.random() * Math.PI * 2;
+            // Exact overlap? Push apart randomly (Deterministic).
+            let h = 0x811c9dc5;
+            const str = nodeA.id + nodeB.id;
+            for (let k = 0; k < str.length; k++) {
+                h ^= str.charCodeAt(k);
+                h = Math.imul(h, 0x01000193);
+            }
+            const rand = (h >>> 0) / 4294967296;
+
+            const angle = rand * Math.PI * 2;
             const force = collisionStrength * 0.1;
             if (!nodeA.isFixed) { nodeA.fx += Math.cos(angle) * force; nodeA.fy += Math.sin(angle) * force; }
             if (!nodeB.isFixed) { nodeB.fx -= Math.cos(angle) * force; nodeB.fy -= Math.sin(angle) * force; }
@@ -371,8 +392,21 @@ export function applySprings(
 
         // Avoid zero div
         if (dx === 0 && dy === 0) {
-            dx = (Math.random() - 0.5) * 0.1;
-            dy = (Math.random() - 0.5) * 0.1;
+            let h = 0x811c9dc5;
+            const str = link.source + link.target;
+            for (let k = 0; k < str.length; k++) {
+                h ^= str.charCodeAt(k);
+                h = Math.imul(h, 0x01000193);
+            }
+            const rand = (h >>> 0) / 4294967296;
+
+            dx = (rand - 0.5) * 0.1;
+            dy = (rand - 0.5) * 0.1; // Re-use rand? or hash again? 
+            // Simple: just use cos/sin approach or a 2nd hash.
+            // Let's use cos/sin for better distribution
+            const angle = rand * Math.PI * 2;
+            dx = Math.cos(angle) * 0.01;
+            dy = Math.sin(angle) * 0.01;
         }
 
         const d = Math.sqrt(dx * dx + dy * dy);

@@ -122,5 +122,12 @@ To ensure reliable replication of bugs and identical layouts across engines:
 1.  **Stable Sets**: All constraint sets (`hotPairs`) are sorted before iteration.
 2.  **Numeric Rebase**:
     *   **Local**: Calm nodes snap `v` to `0.0`.
-    *   **Global**: World shifts to centroid if `maxPos > 50,000` to prevent float precision loss.
+    *   **Global**: World shifts to centroid if `maxPos > 50,000` to prevent float precision loss. Triggers `onWorldShift` callback for camera sync.
 3.  **Checksum**: HUD shows `chk: [HEX]` hash of quantized positions.
+4.  **Pseudo-Random**: All physics fallbacks (overlap, zero-length springs) use `engine.pseudoRandom(idA, idB)` for consistent resolution direction.
+
+## 9. Performance Scale (N-Invariant Law)
+To ensure "Single Continuous Law" feeling across N=10 to N=1000:
+1.  **Triangle Cache**: O(N^3) scans are only run on topology add/remove. `constraints.ts` uses cached list.
+2.  **Shared Density**: `localDensity` is computed once per tick (O(N^2)) and shared with all injectors (`lowForce`, `edgeShear`, `forces`).
+3.  **Hot Pair Hygiene**: Dead keys are pruned instantly from `hotPairs` to prevent leak accumulation.

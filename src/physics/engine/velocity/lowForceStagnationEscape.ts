@@ -1,7 +1,9 @@
 import type { PhysicsEngine } from '../../engine';
 import type { PhysicsNode } from '../../types';
 import type { MotionPolicy } from '../motionPolicy';
+import type { MotionPolicy } from '../motionPolicy';
 import { getPassStats, type DebugStats } from '../stats';
+import { getNowMs } from '../engineTime';
 
 /**
  * LOW-FORCE STAGNATION ESCAPE (Null-Gradient Perturbation)
@@ -40,18 +42,9 @@ export const applyLowForceStagnationEscape = (
     const forceEpsilon = 0.5;  // Low-force threshold
     const driftMagnitude = 0.02 * driftStrength;  // Sub-pixel drift
 
-    // Pre-compute local density
-    const localDensity = new Map<string, number>();
-    for (const node of nodeList) {
-        let count = 0;
-        for (const other of nodeList) {
-            if (other.id === node.id) continue;
-            const dx = other.x - node.x;
-            const dy = other.y - node.y;
-            if (Math.sqrt(dx * dx + dy * dy) < densityRadius) count++;
-        }
-        localDensity.set(node.id, count);
-    }
+    // FIX D: Scale - Use Shared Cache
+    // const localDensity = new Map<string, number>();
+    const localDensity = engine.localDensityCache;
 
     // Build adjacency for topology-derived direction
     const neighbors = new Map<string, string[]>();
@@ -118,8 +111,8 @@ export const applyLowForceStagnationEscape = (
         const nx = dx / dist;
         const ny = dy / dist;
 
-        // FIX: Cooldown & Stuckness
-        const nowMs = engine.lifecycle * 1000;
+        // FIX: Cooldown & Stuckness (Wall Clock)
+        const nowMs = getNowMs();
         if ((node.stuckScore || 0) < 0.3) continue;
         if (nowMs - (node.lastMicroSlipMs || 0) < 1000) continue;
 

@@ -172,5 +172,10 @@ export const updateHudSnapshot = (
         stuckScoreAvg: nodeCount > 0 ? (stats.injectors.stuckScoreSum / nodeCount) : 0,
         lastInjector: stats.injectors.lastInjector,
         driftCount: stats.injectors.driftCount,
+
+        // Settle Forensics
+        outlierCount: stats.outlierCount,
+        calmPercent: stats.calmPercent,
+        diffusionGate: stats.diffusionGate,
     };
 };

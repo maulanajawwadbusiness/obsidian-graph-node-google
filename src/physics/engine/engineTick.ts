@@ -164,13 +164,34 @@ export const runPhysicsTick = (engine: PhysicsEngineTickContext, dtIn: number) =
     engine.frameIndex++;
 
     // 0. CONTINUOUS SENSORS
-    // Velocity Sensor
+    // 0. CONTINUOUS SENSORS
+    // Velocity Sensor & Outlier Detection
     let totalVelSq = 0;
+    let calmCount = 0;
+    const outlierSpeedSq = 0.05 * 0.05; // 0.05px/frame
+
     for (const node of nodeList) {
-        totalVelSq += node.vx * node.vx + node.vy * node.vy;
+        const vSq = node.vx * node.vx + node.vy * node.vy;
+        totalVelSq += vSq;
+
+        // Outlier Check: Speed < 0.05 OR Pressure (StuckScore) showing it's trying to stop
+        // Use a "Calm" predicate for global settle
+        const isCalm = vSq < outlierSpeedSq || (node.stuckScore || 0) > 0.5;
+        if (isCalm) calmCount++;
     }
     const nodeCount = nodeList.length || 1;
     const avgVelSq = totalVelSq / nodeCount;
+
+    // FORENSIC STATS
+    const outlierCount = nodeCount - calmCount;
+    const calmPercent = (calmCount / nodeCount);
+
+    if (debugStats) {
+        debugStats.outlierCount = outlierCount;
+        debugStats.calmPercent = calmPercent * 100;
+        // Diffusion Gate Visualization (Future proofing)
+        debugStats.diffusionGate = Math.pow(1 - (motionPolicy ? motionPolicy.settleScalar : 0), 2);
+    }
 
     // Load Sensor (Continuous Degrade)
     // Map node count to pressure roughly: 180 -> 0.0, 500 -> 1.0
@@ -202,25 +223,48 @@ export const runPhysicsTick = (engine: PhysicsEngineTickContext, dtIn: number) =
 
     const allowEarlyExpansion = engine.config.initStrategy === 'legacy' && engine.config.debugAllowEarlyExpansion === true;
     const motionPolicy = createMotionPolicy(energy, engine.degradeLevel, avgVelSq, allowEarlyExpansion);
+
+    // FIX: Diffusion Decay at Rest
+    // If we are globally calm (despite outliers), force settleScalar to 1.0
+    // This ensures diffusion (which is gated by (1-settle)^2) drops to ZERO.
+    if (calmPercent > 0.98) {
+        motionPolicy.settleScalar = 1.0;
+    }
+
     let spacingStride = 1;
 
     // =====================================================================
-    // 2. SETTLE (Continuous Rest)
+    // 2. SETTLE (Continuous Rest) with TOLERANCE
     // =====================================================================
-    if (motionPolicy.settleScalar > 0.99 && !localBoostActive) {
+    // Fix: Outlier Blocking.
+    // Replace rigid average check with Percent Tolerance.
+    // If 98% of nodes are calm, we allow settle.
+    // We also use settleScalar as a "Hint" but rely on calmPercent for the Truth.
+
+    const isGlobalCalm = calmPercent > 0.98; // 2% Outlier Tolerance
+    const isEffectivelyStopped = motionPolicy.settleScalar > 0.99 || isGlobalCalm;
+
+    if (isEffectivelyStopped && !localBoostActive) {
         engine.idleFrames++;
         if (engine.idleFrames > 10) {
             for (const node of nodeList) {
                 node.vx = 0; node.vy = 0;
                 node.fx = 0; node.fy = 0;
             }
+            // Populate stats for the snapshot just before returning
+            if (debugStats) {
+                debugStats.diffusionGate = 0; // Force 0 at rest
+            }
             updateHudSnapshot(engine, getNowMs(), dtRawMs, nodeList, debugStats, spacingStride, 'sleep');
             return;
         }
-    } else if (engine.lifecycle < 2.0 && motionPolicy.settleScalar < 0.99) {
-        // Fix: Startup Safety - Do not accumulate idle frames during first 2s if moving
+    } else if (engine.lifecycle < 2.0) {
+        // Fix: Startup Safety - Do not accumulate idle frames during first 2s
         engine.idleFrames = 0;
     } else {
+        // Only reset if we seem "active" enough.
+        // Hysteresis: If we have > 90% calm, maybe don't fully reset?
+        // For now, simple logic: if not stopped, reset.
         engine.idleFrames = 0;
     }
 

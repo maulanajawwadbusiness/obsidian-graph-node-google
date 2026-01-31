@@ -59,6 +59,10 @@ export type DebugStats = {
     lawPopScore: number;
     hubNodeCount: number;
 
+    // Settle Diagnostics
+    outlierCount: number;
+    calmPercent: number;
+    diffusionGate: number;
 };
 
 export const createDebugStats = (): DebugStats => ({
@@ -105,6 +109,10 @@ export const createDebugStats = (): DebugStats => ({
     degradeFlipCount: 0,
     lawPopScore: 0,
     hubNodeCount: 0,
+
+    outlierCount: 0,
+    calmPercent: 0,
+    diffusionGate: 0,
 });
 
 export const getPassStats = (stats: DebugStats, name: string): PassStats => {

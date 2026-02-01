@@ -51,23 +51,11 @@ const applyKinematicDrag = (engine: PhysicsEngineTickContext, dt: number) => {
                 clampedTargetY = initialY + targetDy * scale;
             }
 
-            // 1. Gradual Movement (Lerp) - Prevents Explosion
-            // Move toward clamped cursor at max speed per frame to avoid topology shock
-            const MAX_MOVE_PER_FRAME = 50; // px (50px/frame @ 60fps = 3000px/s, feels instant)
-            const dx = clampedTargetX - node.x;
-            const dy = clampedTargetY - node.y;
-            const dist = Math.sqrt(dx * dx + dy * dy);
-
-            if (dist > MAX_MOVE_PER_FRAME) {
-                // Move MAX_MOVE_PER_FRAME pixels toward target
-                const scale = MAX_MOVE_PER_FRAME / dist;
-                node.x += dx * scale;
-                node.y += dy * scale;
-            } else {
-                // Close enough, snap to target
-                node.x = clampedTargetX;
-                node.y = clampedTargetY;
-            }
+            // Mini Run 7 Part 1: INSTANT snap for crisp response (no mush)
+            // Previous: Gradual lerp caused lag/latency
+            // Now: Directly set to clamped target
+            node.x = clampedTargetX;
+            node.y = clampedTargetY;
 
             // 2. Kinematic Velocity (Implicit)
             // v = (x - x_old) / dt
@@ -77,15 +65,14 @@ const applyKinematicDrag = (engine: PhysicsEngineTickContext, dt: number) => {
             }
 
             // 3. History Reconciliation (Verlet Consistency)
-            // prevX must be set such that (x - prevX) reflects the drag step.
-            // If we want next frame's inferred velocity to match this frame's drag:
-            // prevX should be the position adjacent to x "in the past".
-            // So prevX = oldX.
+            // Mini Run 7 Part 1: Keep prevX = oldX for velocity continuity
+            // This means (x - prevX) represents the drag motion this frame
             node.prevX = oldX;
             node.prevY = oldY;
 
-            // 4. Force pin for Solver (redundant if grabNode sets isFixed, but safe)
-            node.isFixed = true;
+            // 4. DO NOT mutate isFixed (Mini Run 7 Part 2 cleanup)
+            // Solver checks draggedNodeId directly for invMass=0
+            // node.isFixed = true; // ❌ REMOVED - redundant and problematic
         }
     }
 };

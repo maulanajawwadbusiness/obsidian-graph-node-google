@@ -446,7 +446,12 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
                                             solved: {hud.xpbdSpringSolved || 0}<br />
                                             corrMax: {(hud.xpbdSpringCorrMaxPx || 0).toFixed(3)} px<br />
                                             errAvg: {(hud.xpbdSpringErrAvgPx || 0).toFixed(3)} px<br />
-                                            solve: {(hud.xpbdSpringSolveMs || 0).toFixed(2)} ms
+                                            rest: {(hud.xpbdSpringRestMinPx || 0).toFixed(0)}-{(hud.xpbdSpringRestMaxPx || 0).toFixed(0)} (μ={(hud.xpbdSpringRestAvgPx || 0).toFixed(0)})<br />
+                                            solve: {(hud.xpbdSpringSolveMs || 0).toFixed(2)} ms<br />
+                                            <span style={{ fontSize: '0.9em', color: '#888' }}>
+                                                drop: {hud.xpbdSpringSkipped}/{hud.xpbdSpringSingularity} | safe: {hud.xpbdSpringPrevAdjusted}<br />
+                                                inv: {hud.xpbdInvInvalid} | inf: {hud.xpbdInvNonFinite} | 0len: {hud.xpbdInvZero}
+                                            </span>
                                         </div>
                                     )}
                                     {hud && (

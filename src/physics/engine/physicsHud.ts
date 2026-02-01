@@ -89,7 +89,13 @@ export type PhysicsHudSnapshot = {
     xpbdSpringPrevAdjusted?: number;
     xpbdInvInvalid?: number;
     xpbdInvNonFinite?: number;
+    xpbdInvNonFinite?: number;
     xpbdInvZero?: number;
+
+    // Mini Run 5: Ghost Velocity Reconcile
+    xpbdGhostVelMax?: number;
+    xpbdGhostVelEvents?: number;
+    xpbdGhostSyncs?: number;
 
 
 

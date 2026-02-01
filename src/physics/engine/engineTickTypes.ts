@@ -102,9 +102,44 @@ export type PhysicsEngineTickContext = {
     xpbdFrameAccum: {
         ticks: number;
         dtSum: number;
-        springs: { count: number; iter: number; corrSum: number; errSum: number; solveMs: number; corrMax: number };
+        springs: {
+            count: number;
+            iter: number;
+            corrSum: number;
+            errSum: number;
+            solveMs: number;
+            corrMax: number;
+            skipped: number;
+            singularity: number;
+            skipped: number;
+            singularity: number;
+            prevAdjusted: number;
+            ghostVelMax: number;
+            ghostVelEvents: number;
+        };
         repel: { checked: number; solved: number; overlap: number; corrSum: number; sing: number };
         edgeConstraintsExecuted: number;
     };
     xpbdCanaryApplied?: boolean;
+
+    // XPBD Inventory
+    xpbdConstraints: XPBDConstraint[];
+    xpbdConstraintsDirty: boolean;
+    xpbdConstraintStats?: {
+        minRest: number;
+        maxRest: number;
+        avgRest: number;
+        invalidEndpointCount: number;
+        nonFiniteRestLenCount: number;
+        zeroLenEdgeCount: number;
+    };
 };
+
+export interface XPBDConstraint {
+    nodeA: string;
+    nodeB: string;
+    dist: number;      // Current Distance (cached for debug?) No, Rest Length.
+    restLen: number;   // Target Distance (Policy Driven)
+    compliance: number;
+    lambda: number;    // Multiplier Accumulator
+}

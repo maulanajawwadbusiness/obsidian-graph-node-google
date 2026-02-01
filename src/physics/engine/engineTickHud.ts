@@ -254,6 +254,9 @@ export const updateHudSnapshot = (
         xpbdSpringSkipped: engine.xpbdFrameAccum?.springs.skipped ?? 0,
         xpbdSpringSingularity: engine.xpbdFrameAccum?.springs.singularity ?? 0,
         xpbdSpringPrevAdjusted: engine.xpbdFrameAccum?.springs.prevAdjusted ?? 0,
+        xpbdGhostVelMax: engine.xpbdFrameAccum?.springs.ghostVelMax ?? 0,
+        xpbdGhostVelEvents: engine.xpbdFrameAccum?.springs.ghostVelEvents ?? 0,
+        xpbdGhostSyncs: engine.xpbdFrameAccum?.springs.prevAdjusted ?? 0,
 
         xpbdInvInvalid: engine.xpbdConstraintStats?.invalidEndpointCount ?? 0,
         xpbdInvNonFinite: engine.xpbdConstraintStats?.nonFiniteRestLenCount ?? 0,

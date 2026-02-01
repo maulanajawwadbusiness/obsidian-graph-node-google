@@ -33,5 +33,10 @@ Placing the constraint solver after the Prediction Phase (Integration) is critic
 2.  **Velocity is Derived**: `v = (x* - x) / dt`. This happens *after* constraints.
 3.  **Isolation**: By placing it in `runPhysicsTickXPBD`, we guarantee "Single Law" – no interference from Legacy force passes.
 
-## 5. Next Steps
+## 5. Future risks / sharpness notes
+*   **Counter Semantics**: Because the counter is just `edgeConstraintsExecuted++`, it will always read 1 per frame in XPBD mode; when the real constraint logic lands, the counter semantics will need revisiting (e.g., to count actual corrected edges or iterations) so the telemetry stays truthful.
+*   **Reset Logic**: `xpbdFrameAccum.edgeConstraintsExecuted` only resets via `PhysicsEngine.startRenderFrame()`, so if we ever run ticks without invoking the scheduler hook (e.g., in off-screen tests) the counter could leak between runs—make sure any future automation also calls `startRenderFrame` before ticking.
+*   **HUD Visiblity**: The HUD was rendering the “Edge Constraints” line even in Legacy mode (showing 0). This has been sharpened to hide the group unless `hud.mode === 'XPBD'` to avoid confusing observers when the XPBD path is disabled.
+
+## 6. Next Steps
 *   **Mini Run 2**: Implement the Edge Constraint (Distance Constraint) logic inside the stub.

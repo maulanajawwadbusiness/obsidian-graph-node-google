@@ -320,12 +320,12 @@ export const updateHudSnapshot = (
         dragInvMassMode: true, // Kinematic lock is effective infinite mass
         dragLagMax: engine.xpbdFrameAccum?.springs.dragLagMax ?? 0,
 
-        // Run 1: Propagation Proof Placeholders
-        propEdgesSolved: 0,
-        propTotalEdges: 0,
-        propNodesUpdated: 0,
-        propTotalNodes: 0,
-        propMaxAbsC: 0,
+        // Run 1: Propagation Proof Placeholders -> Run 2: Wired
+        propEdgesSolved: engine.xpbdFrameAccum?.springs.edgesProcessed ?? 0,
+        propTotalEdges: engine.xpbdFrameAccum?.springs.totalEdgesGraph ?? 0,
+        propNodesUpdated: spacingStride > 1 ? Math.ceil(nodeCount / spacingStride) : nodeCount,
+        propTotalNodes: nodeCount,
+        propMaxAbsC: engine.xpbdFrameAccum?.springs.maxAbsC ?? 0,
         propMovedNodes: 0,
         propMovedHop1: 0,
         propMovedHop2: 0,

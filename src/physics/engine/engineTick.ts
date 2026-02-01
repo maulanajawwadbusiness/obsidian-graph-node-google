@@ -35,6 +35,7 @@ import { runTickPreflight } from './engineTickPreflight';
 import { computeSpacingState } from './engineTickSpacing';
 import { updateHudSnapshot } from './engineTickHud';
 import { finalizePhysicsTick } from './engineTickFinalize';
+import { applyXpbdLinkSprings, applyXpbdMinDistance } from './xpbdConstraints';
 
 
 
@@ -425,13 +426,14 @@ export const runPhysicsTick = (engine: PhysicsEngineTickContext, dtIn: number) =
     // CONTINUOUS PASS EXECUTION
     const runPairwiseForces = true;
     const spacingWillRun = spacingEnabled;
-    const repulsionEnabled = !engine.config.debugDisableRepulsion;
+    const xpbdEnabled = engine.config.xpbdEnabled === true;
+    const repulsionEnabled = !xpbdEnabled && !engine.config.debugDisableRepulsion;
 
     // Scale stride heavily with degrade to avoid N^2
     // Stride 1 -> Check 100%. Stride 5 -> Check 20%.
 
-    const collisionEnabled = true; // Always run, but strided
-    const springsEnabled = true;
+    const collisionEnabled = !xpbdEnabled; // XPBD handles min-distance
+    const springsEnabled = !xpbdEnabled;
 
     // Unused
     const repulsionEvery = 1;
@@ -796,6 +798,23 @@ export const runPhysicsTick = (engine: PhysicsEngineTickContext, dtIn: number) =
                 dt,
                 maxDiffusionNeighbors
             );
+        }
+
+        if (xpbdEnabled && !constraintsDisabled) {
+            applyXpbdLinkSprings(engine as any, nodeList, dt, debugStats);
+            applyXpbdMinDistance(engine as any, nodeList, dt, debugStats, engine.xpbdSpatialHash);
+        }
+
+        if (engine.config.debugXpbdCanary) {
+            const canaryDx = 30;
+            const canaryDy = -20;
+            for (const node of nodeList) {
+                if (node.isFixed) continue;
+                node.x += canaryDx;
+                node.y += canaryDy;
+                if (node.prevX !== undefined) node.prevX += canaryDx;
+                if (node.prevY !== undefined) node.prevY += canaryDy;
+            }
         }
 
         // FORENSICS: Compare After

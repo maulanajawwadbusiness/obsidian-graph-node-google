@@ -384,6 +384,59 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
                                                         No V-Mods
                                                     </label>
                                                 </div>
+                                                <div style={{ marginTop: '6px' }}>
+                                                    <strong style={{ fontWeight: 700, fontSize: '11px', color: '#fbd' }}>XPBD (Run 1-2)</strong>
+                                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2px', marginTop: '2px' }}>
+                                                        <label
+                                                            style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '10px', cursor: 'pointer' }}
+                                                            onPointerDown={(e) => e.stopPropagation()}
+                                                        >
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={!!config.xpbdEnabled}
+                                                                onChange={(e) => onConfigChange('xpbdEnabled', e.target.checked)}
+                                                                onPointerDown={(e) => e.stopPropagation()}
+                                                            />
+                                                            XPBD Core
+                                                        </label>
+                                                        <label
+                                                            style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '10px', cursor: 'pointer' }}
+                                                            onPointerDown={(e) => e.stopPropagation()}
+                                                        >
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={!!config.debugXpbdCanary}
+                                                                onChange={(e) => onConfigChange('debugXpbdCanary', e.target.checked)}
+                                                                onPointerDown={(e) => e.stopPropagation()}
+                                                            />
+                                                            Canary Shift
+                                                        </label>
+                                                        <label
+                                                            style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '10px', cursor: 'pointer' }}
+                                                            onPointerDown={(e) => e.stopPropagation()}
+                                                        >
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={!!config.debugForceStiffSprings}
+                                                                onChange={(e) => onConfigChange('debugForceStiffSprings', e.target.checked)}
+                                                                onPointerDown={(e) => e.stopPropagation()}
+                                                            />
+                                                            Force Stiff
+                                                        </label>
+                                                        <label
+                                                            style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '10px', cursor: 'pointer' }}
+                                                            onPointerDown={(e) => e.stopPropagation()}
+                                                        >
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={!!config.debugForceRepulsion}
+                                                                onChange={(e) => onConfigChange('debugForceRepulsion', e.target.checked)}
+                                                                onPointerDown={(e) => e.stopPropagation()}
+                                                            />
+                                                            Force Repel
+                                                        </label>
+                                                    </div>
+                                                </div>
                                             </div>
                                         )}
                                     </div>
@@ -443,6 +496,15 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
                                             Min Dist: {(hud.minPairDist || 0).toFixed(1)}px<br />
                                             Overlaps: {hud.nearOverlapCount || 0}<br />
                                             Max Repel: {(hud.repulsionMaxMag || 0).toFixed(1)}
+                                        </div>
+                                    )}
+                                    {hud && (
+                                        <div style={{ marginTop: '4px', paddingTop: '4px', borderTop: '1px solid #444', color: '#ffd' }}>
+                                            <strong>XPBD Constraints</strong><br />
+                                            Springs: avg {hud.springCorrAvg?.toFixed(3) || 0} / max {hud.springCorrMax?.toFixed(3) || 0}<br />
+                                            Spring Links: {hud.springConstraintCount || 0}<br />
+                                            Repel: avg {hud.repelCorrAvg?.toFixed(3) || 0} / max {hud.repelCorrMax?.toFixed(3) || 0}<br />
+                                            Repel Pairs: {hud.repelPairCount || 0} | Overlaps: {hud.repelOverlapCount || 0}
                                         </div>
                                     )}
                                     {hud && (

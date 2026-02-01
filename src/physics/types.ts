@@ -103,6 +103,7 @@ export interface PhysicsLink {
   target: string; // Node ID
   length?: number; // Optional override for resting length
   strength?: number; // Optional override for stiffness
+  xpbdLambda?: number; // XPBD solver accumulator (per tick)
 
   // Organic Variation (Multipliers)
   lengthBias?: number; // e.g. 0.8 to 1.3
@@ -182,6 +183,15 @@ export interface ForceConfig {
   springDeadZone: number;  // Fraction of rest length where force is minimal (0.15 = ±15%)
 
   // ---------------------------------------------------------------------------
+  // XPBD Constraints (Run 1-2)
+  // ---------------------------------------------------------------------------
+  xpbdEnabled: boolean; // Enable XPBD link + min-distance constraints
+  xpbdSpringCompliance: number; // Compliance (higher = softer)
+  xpbdSpringIterations: number; // Solver iterations for springs
+  xpbdRepulsionCompliance: number; // Compliance for min-distance constraints
+  xpbdRepulsionIterations: number; // Solver iterations for repulsion
+
+  // ---------------------------------------------------------------------------
   // Soft Spacing (Personal Space)
   // ---------------------------------------------------------------------------
   minNodeDistance: number;        // Hard minimum distance between all nodes (px)
@@ -241,4 +251,7 @@ export interface ForceConfig {
   debugDisableConstraints?: boolean;
   debugDisableReconcile?: boolean;
   debugDisableAllVMods?: boolean;
+  debugXpbdCanary?: boolean; // Dev-only: apply visible position offset after XPBD
+  debugForceStiffSprings?: boolean; // Dev-only: override XPBD spring compliance/iterations
+  debugForceRepulsion?: boolean; // Dev-only: override XPBD repulsion compliance/iterations
 }

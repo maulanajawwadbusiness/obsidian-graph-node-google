@@ -9,6 +9,7 @@ import { TimePolicy } from './engine/dtPolicy';
 import { addLinkToEngine, addNodeToEngine, clearEngineState, invalidateWarmStart as invalidateWarmStartCaches, updateEngineConfig } from './engine/engineTopology';
 import { grabNode, lockInteraction, moveDrag, releaseNode, requestImpulse, unlockInteraction, updateBounds, wakeAll, wakeNeighbors, wakeNode } from './engine/engineInteraction';
 import { resetLifecycle } from './engine/engineLifecycle';
+import { XpbdSpatialHash } from './engine/xpbdSpatialHash';
 
 export class PhysicsEngine {
     public nodes: Map<string, PhysicsNode> = new Map();
@@ -89,6 +90,7 @@ export class PhysicsEngine {
 
     // Forensic Phase 2: Neighbor Hysteresis Cache
     public neighborCache = new Map<string, Set<string>>();
+    public xpbdSpatialHash = new XpbdSpatialHash(120);
 
     public perfCounters = {
         nodeListBuilds: 0,

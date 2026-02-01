@@ -32,6 +32,8 @@ const applyXPBDEdgeConstraintsStub = (engine: PhysicsEngineTickContext) => {
         const s = engine.xpbdFrameAccum.springs;
         s.count = engine.links.length; // Live count
         s.solveMs += duration;         // Accumulate time
+        s.errSum += 0;                 // Placeholder for error accumulation
+        s.corrSum += 0;                // Placeholder for correction accumulation
         // Use the sink to prevent compiler optimization (though unlikely in JS engine ticking)
         if (sink < 0) s.corrMax = -1;
         s.corrMax = Math.max(s.corrMax, 0); // No-op but placeholder for max tracking

@@ -425,8 +425,8 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
                                             Pop Score: {(hud.lawPopScore || 0).toFixed(4)}<br />
                                         </div>
                                     )}
-                                    {hud && hud.mode === 'XPBD' && (
-                                        <div style={{ marginTop: '4px', paddingTop: '4px', borderTop: '1px solid #444', color: '#adff2f' }}>
+                                    {hud && (
+                                        <div style={{ marginTop: '4px', paddingTop: '4px', borderTop: '1px solid #444', color: hud.mode === 'XPBD' ? '#adff2f' : '#888' }}>
                                             <strong>XPBD Proof-of-Life</strong><br />
                                             Springs: {hud.xpbdSpringCounts?.count || 0} / {hud.xpbdSpringCounts?.iter || 0}it<br />
                                             - Corr: {hud.xpbdSpringCorr?.avg.toFixed(3)} (Max: {hud.xpbdSpringCorr?.max.toFixed(2)})<br />

@@ -24,8 +24,9 @@ Instrumented `applyXPBDEdgeConstraintsStub` in `src/physics/engine/engineTickXPB
 - Updates `count` from `engine.links.length`.
 
 ### 4. HUD Rendering
-Added a new **"XPBD Springs"** section to the XPBD HUD block in `src/playground/components/CanvasOverlays.tsx`.
--   **Always Visible**: Shows in both XPBD and Legacy modes (grayed out when disabled).
+Updated "XPBD Proof-of-Life" and "XPBD Springs" sections in `src/playground/components/CanvasOverlays.tsx`.
+-   **Always Visible**: Both blocks show in XPBD and Legacy modes.
+-   **Grayed Out**: Text turns gray (`#888`) when not in XPBD mode, Bright Green (`#adff2f`) when active.
 -   **Metrics**:
     -   `enabled`: true/false
     -   `constraints`: Live link count

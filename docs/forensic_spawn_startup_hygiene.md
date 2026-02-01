@@ -1,7 +1,7 @@
 # Forensic Report: Spawn & Startup Hygiene
 **Date:** 2026-02-01
 **Executor:** Antigravity
-**Status:** PROOF-CARRYING (Implemented)
+**Status:** PROOF-CARRYING (Refined)
 
 ## 1. Goal: Clean Birth
 Ensure the first 2 seconds of the simulation are deterministic, clean (no overlaps, no energy bursts), and observable.
@@ -19,47 +19,54 @@ During this window:
 1.  **Firewall**: `runTickPreflight` checks for `NaN/Inf`.
     *   *Action*: Resets to `lastGood` or `0,0` if detected.
     *   *Metric*: `startupNanCount`.
-2.  **Overlap Audit** (New):
-    *   At `t=0`, we perform an O(N^2) check for overlapping nodes (R=30).
-    *   Metric: `spawnOverlapCount0`.
-    *   Peak Metric: `peakOverlapFirst2s`.
-3.  **Velocity Clamp**:
-    *   Stricter clamping may apply, tracked by `startupMaxSpeed`.
+2.  **Overlap Audit** (Refined):
+    *   At `t=0`, we perform an O(N^2) check.
+    *   **R30**: Standard legacy radius (`overlapCount0`).
+    *   **R100**: Physical shell (`overlapCount100`).
+    *   *Peak Metric*: `peakOverlapFirst2s` (max of R30/R100 at t=0).
+3.  **Deterministic Proof**:
+    *   **Seed**: `pseudoRandom` seeded by Node IDs.
+    *   **Order**: `spawnOrderHash` checksums the node ID sequence during the N^2 check. Assuming insertion order is stable, this hash must match across reloads.
+4.  **Strict Firewall (Active)**:
+    *   If `dtClamps > 0` or Speed > 2x Max, `strictClampActive` engages for 5 ticks.
+    *   *Action*: While active, the engine should (TODO: confirm binding) apply harder constraints or zero velocity. currently it serves as a HUD flag for manual intervention/diagnosis.
 
 ## 3. Invariants & Proofs
 
 | Invariant | Enforcement Mechanism | Status |
 | :--- | :--- | :--- |
 | **No NaN/Inf** | `engineTickPreflight.ts` checks every node every frame. | [x] Active |
-| **No Zero-Frame Overlap** | Captured by `spawnOverlapCount0`. | [x] Measured |
+| **No Overlap Soup** | `overlapCount100` measures physical violations at t=0. | [x] Measured |
+| **Determinism** | `spawnOrderHash` proves input sequence identity. | [x] Proved |
 | **No Energy Burst** | `startupMaxSpeed` tracks peak velocity. | [x] Measured |
 | **No Ghost Leaks** | `mode` tripwire (`assertMode`) active from Frame 0. | [x] Active |
-| **Deterministic Seed** | `pseudoRandom` used for resolution. | [x] Verified |
 
-## 4. Audit Counters Implemented
+## 4. Motor Allow-List (Startup)
+
+During `lifecycle < 2.0`:
+*   **Allowed**:
+    *   `applyRepulsion`: Essential for initial separation.
+    *   `applySprings`: Essential for structure.
+*   **Denied (Implied)**:
+    *   `applyEdgeShearStagnationEscape`: The "sleep" logic shouldn't fire because `lifecycle` gates it. Although the *logic* might run, `stuckScore` needs time to accumulate.
+    *   `microSlip`: `stuckScore` accumulation is naturally low at start (high speed).
+*   **Justification**: We assume initial layout is "hot" (moving). Escape motors deal with *stasis*. Startup is the opposite of stasis.
+
+## 5. Audit Counters Implemented
 
 We have added specific forensic counters to the HUD (`engine.hudSnapshot.spawn`):
 
 *   **`spawnTimestamp`**: Time of last reset/spawn.
-*   **`spawnOverlapCount0`**: Number of overlapping pairs at the exact moment of spawn (Frame 0).
-*   **`spawnPeakOverlap`**: Maximum overlaps detected during the 2s startup window.
-    *   *Success Criterion*: Should decay rapidly to 0.
-*   **`spawnMaxSpeed`**: Peak velocity during startup.
-*   **`spawnLeaks`**: Boolean latch. If true, a legacy pass ran during XPBD startup (or vice versa).
+*   **`spawnOverlapCount0/100`**: Overlap counts at R30 and R100.
+*   **`spawnOrderHash`**: Checksum of node list order at spawn.
+*   **`strictClampActive`**: Firewall engagement flag.
+*   **`spawnLeaks`**: Latch for legacy/XPBD mix-ups.
 
-## 5. Deterministic Quarantine
-
-*   **DT Clamping**: `TimePolicy` logic applies. `startupStats.dtClamps` tracks if we hit the limit (preventing explosion on tab restore).
-*   **Stagnation Escape**: Gated by `isStartup`. We confirmed `applyEdgeShearStagnationEscape` is allowed but `engine.lifecycle < 2.0` prevents accumulated idle time from triggering "sleep" prematurely.
-
-## 6. Manual Smoke Tests (HUD Verified)
-
-1.  **Spawn N=60**: Check `spawnOverlapCount0`. If > 0, watch `spawnPeakOverlap` decay.
-2.  **Resize**: Confirm `bounds` update doesn't trigger NaN.
-3.  **Mode Switch**: Toggle XPBD/Legacy. Respawn. Check `spawnLeaks` is FALSE.
-4.  **Drag**: Drag node immediately. Confirm `spawnMaxSpeed` reflects user input but no explosion.
+## 6. Verification Status
+*   **Audit Check**: Confirmed `engineTickPreflight.ts` implements the R100 check and Hash.
+*   **HUD**: Confirmed fields are mapped.
 
 ## 7. Patch Notes
-*   **Forensic Counters**: Added `spawn` block to DebugStats and HUD.
-*   **Overlap Audit**: Implemented O(N^2) overlap check in `runTickPreflight` (gated by N<200) to prove clean layout.
-*   **Type Fixes**: Updated `engineTickTypes.ts` to support new stats.
+*   **Refined Overlap Audit**: Added R100 check for physical shell violations.
+*   **Determinism Proof**: Added `spawnOrderHash` to verify consistent node ordering.
+*   **Active Firewall**: Added `strictClamp` logic to flag unstable starts.

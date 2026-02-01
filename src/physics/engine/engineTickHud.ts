@@ -140,10 +140,14 @@ export const updateHudSnapshot = (
         // Spawn Forensic (First 2s)
         spawnTimestamp: stats.spawn.timestamp,
         spawnOverlapCount0: stats.spawn.overlapCount0,
+        spawnOverlapCount100: stats.spawn.overlapCount100,
         spawnPeakOverlap: stats.spawn.peakOverlapFirst2s,
         spawnMaxSpeed: stats.spawn.maxSpeedFirst2s,
         spawnNaNCount: stats.spawn.nanCountFirst2s,
         spawnLeaks: stats.spawn.forbiddenPassLatched,
+        spawnOrderHash: stats.spawn.spawnOrderHash,
+        strictClampActive: stats.spawn.strictClampActive,
+        strictClampTicksLeft: stats.spawn.strictClampTicksLeft,
 
         dtSkewMaxMs: stats.dtSkew ? (stats.dtSkew.max - stats.dtSkew.min) * 1000 : 0,
         perDotUpdateCoveragePct: spacingStride > 1 ? (100 / spacingStride) : 100,

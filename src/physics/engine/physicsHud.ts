@@ -17,10 +17,14 @@ export type PhysicsHudSnapshot = {
     // Spawn Forensic (First 2s)
     spawnTimestamp?: number;
     spawnOverlapCount0?: number;
+    spawnOverlapCount100?: number;
     spawnPeakOverlap?: number;
     spawnMaxSpeed?: number;
     spawnNaNCount?: number;
     spawnLeaks?: boolean;
+    spawnOrderHash?: number;
+    strictClampActive?: boolean;
+    strictClampTicksLeft?: number;
     // PBD Disconnect Forensics
     maxPosDeltaConstraint?: number;
     maxVelDeltaConstraint?: number;

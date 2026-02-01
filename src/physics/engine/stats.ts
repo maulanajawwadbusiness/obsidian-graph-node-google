@@ -68,12 +68,16 @@ export type DebugStats = {
     // FORENSIC: Spawn/Startup Hygiene (First 2s)
     spawn: {
         timestamp: number;
-        overlapCount0: number; // At t=0
+        overlapCount0: number; // At t=0 (R=30)
+        overlapCount100: number; // At t=0 (R=100 or minDist)
         peakOverlapFirst2s: number;
         maxSpeedFirst2s: number;
         nanCountFirst2s: number;
         ticksSinceSpawn: number;
         forbiddenPassLatched: boolean; // Leaks in first 2s
+        spawnOrderHash: number;
+        strictClampActive: boolean;
+        strictClampTicksLeft: number;
     };
 
     // Settle Diagnostics
@@ -166,11 +170,15 @@ export const createDebugStats = (): DebugStats => ({
     spawn: {
         timestamp: 0,
         overlapCount0: 0,
+        overlapCount100: 0,
         peakOverlapFirst2s: 0,
         maxSpeedFirst2s: 0,
         nanCountFirst2s: 0,
         ticksSinceSpawn: 0,
         forbiddenPassLatched: false,
+        spawnOrderHash: 0,
+        strictClampActive: false,
+        strictClampTicksLeft: 0,
     },
 
     outlierCount: 0,

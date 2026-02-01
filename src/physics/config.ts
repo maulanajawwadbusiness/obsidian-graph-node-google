@@ -170,4 +170,5 @@ export const DEFAULT_PHYSICS_CONFIG: ForceConfig = {
     debugStall: false,
     enableMicroDrift: false, // Fix #16: Stable by default
     debugAllowEarlyExpansion: false,
+    useSpringMassPhysics: false,
 };

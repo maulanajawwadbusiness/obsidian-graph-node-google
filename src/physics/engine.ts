@@ -4,6 +4,7 @@ import { type DebugStats } from './engine/stats';
 import { createInitialPhysicsHudHistory, createInitialPhysicsHudSnapshot, type PhysicsHudHistory, type PhysicsHudSnapshot } from './engine/physicsHud';
 import { getNowMs } from './engine/engineTime';
 import { runPhysicsTick } from './engine/engineTick';
+import { SpringMassBackend } from './springMass/springMassBackend';
 import type { PhysicsEngineTickContext } from './engine/engineTickTypes';
 import { TimePolicy } from './engine/dtPolicy';
 import { addLinkToEngine, addNodeToEngine, clearEngineState, invalidateWarmStart as invalidateWarmStartCaches, updateEngineConfig } from './engine/engineTopology';
@@ -132,6 +133,7 @@ export class PhysicsEngine {
         },
     };
     public lastDraggedNodeId: string | null = null;
+    private springMassBackend = new SpringMassBackend();
 
     // Fix #11: Impulse Guard State
     public lastImpulseTime: number = 0;
@@ -381,6 +383,34 @@ export class PhysicsEngine {
      * @param dt Delta time in seconds (e.g. 0.016 for 60fps)
      */
     tick(dt: number) {
+        if (this.config.useSpringMassPhysics) {
+            this.springMassBackend.bindToWorld({
+                nodes: this.nodes,
+                links: this.links,
+                config: this.config,
+                getNodeList: () => this.getNodeList()
+            });
+            this.springMassBackend.setEnabled(true);
+            this.springMassBackend.setDraggedDot(this.draggedNodeId);
+            this.springMassBackend.setDragTarget(this.dragTarget);
+            this.springMassBackend.step(dt);
+
+            const hud = this.springMassBackend.getHudStats();
+            this.hudSnapshot.energyProxy = hud.energyProxy;
+            this.hudSnapshot.settleState = hud.settleState;
+            this.hudSnapshot.lastSettleMs = hud.lastSettleMs;
+            this.hudSnapshot.dragDotId = hud.dragDotId;
+            this.hudSnapshot.dragMode = hud.dragMode;
+            this.hudSnapshot.pointerWorldX = hud.pointerWorldX;
+            this.hudSnapshot.pointerWorldY = hud.pointerWorldY;
+            return;
+        }
+
+        this.springMassBackend.setEnabled(false);
+        this.hudSnapshot.dragDotId = null;
+        this.hudSnapshot.dragMode = 'lock';
+        this.hudSnapshot.pointerWorldX = null;
+        this.hudSnapshot.pointerWorldY = null;
         runPhysicsTick(this as PhysicsEngineTickContext, dt);
     }
 

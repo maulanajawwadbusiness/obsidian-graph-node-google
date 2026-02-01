@@ -112,6 +112,8 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
     // NEW: HUD Layout State
     const [isNarrow, setIsNarrow] = React.useState(typeof window !== 'undefined' ? window.innerWidth < 450 : false);
     const [restForensicCollapsed, setRestForensicCollapsed] = React.useState(true);
+    // Toggle to hide deep forensics for XPBD focus
+    const SHOW_DEEP_FORENSICS = false;
 
     React.useEffect(() => {
         const handleResize = () => setIsNarrow(window.innerWidth < 450);
@@ -415,6 +417,14 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
                                     PBD Corr: {hud ? hud.pbdCorrectionSum.toFixed(3) : '0.0'}<br />
                                     Conflict(5s): {hud ? hud.conflictPct5s.toFixed(1) : '0.0'}%<br />
                                     Engy(v²): {hud ? hud.energyProxy.toFixed(4) : '0.0'}<br />
+                                    {hud && SHOW_DEEP_FORENSICS && (
+                                        <div style={{ marginTop: '4px', paddingTop: '4px', borderTop: '1px solid #444', color: '#faa' }}>
+                                            <strong>Law Pop Diagnostics</strong><br />
+                                            Hub Flips: {hud.hubFlipCount || 0} (N={hud.hubNodeCount || 0})<br />
+                                            Degrade Flips: {hud.degradeFlipCount || 0}<br />
+                                            Pop Score: {(hud.lawPopScore || 0).toFixed(4)}<br />
+                                        </div>
+                                    )}
                                     {hud && (
                                         <div style={{ marginTop: '4px', paddingTop: '4px', borderTop: '1px solid #444', color: '#faa' }}>
                                             <strong>Startup Audit (2s)</strong><br />
@@ -495,265 +505,166 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
                                             Blockers: {(hud.settleBlockers || []).join(', ') || 'None'}<br />
                                         </div>
                                     )}
-                                    {hud && (
-                                        <div style={{ marginTop: '4px', paddingTop: '4px', borderTop: '1px solid #444', color: '#faa' }}>
-                                            <strong>Law Pop Diagnostics</strong><br />
-                                            Hub Flips: {hud.hubFlipCount || 0} (N={hud.hubNodeCount || 0})<br />
-                                            Degrade Flips: {hud.degradeFlipCount || 0}<br />
-                                            Pop Score: {(hud.lawPopScore || 0).toFixed(4)}<br />
-                                        </div>
-                                    )}
-                                    {hud && hud.mode === 'XPBD' && (
-                                        <div style={{ marginTop: '4px', paddingTop: '4px', borderTop: '1px solid #444', color: '#adff2f' }}>
-                                            <strong>XPBD Proof-of-Life</strong><br />
-                                            Springs: {hud.xpbdSpringCounts?.count || 0} / {hud.xpbdSpringCounts?.iter || 0}it<br />
-                                            - Corr: {hud.xpbdSpringCorr?.avg.toFixed(3)} (Max: {hud.xpbdSpringCorr?.max.toFixed(2)})<br />
-                                            - Err: {hud.xpbdSpringError?.avg.toFixed(3)} (Max: {hud.xpbdSpringError?.max.toFixed(2)})<br />
-                                            Repulsion: {hud.xpbdRepelCounts?.checked || 0}chk / {hud.xpbdRepelCounts?.solved || 0}solv<br />
-                                            - Overlap: {hud.xpbdRepelCounts?.overlap || 0}<br />
-                                            - Corr: {hud.xpbdRepelCorr?.avg.toFixed(3)} (Max: {hud.xpbdRepelCorr?.max.toFixed(2)})<br />
-                                            - Sing: {hud.xpbdRepelSingularities || 0}<br />
-                                            Edge Constraints: {hud.xpbdEdgeConstraintCount || 0}
-                                        </div>
-                                    )}
-                                </div>
 
-                                {/* REST MARKER FORENSIC (Collapsible) */}
-                                {metrics.renderDebug?.restMarkerStats && (
-                                    <div style={{ marginTop: '8px', padding: '4px', border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(0,0,0,0.2)' }}>
-                                        <div
-                                            style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
-                                            onClick={() => setRestForensicCollapsed(!restForensicCollapsed)}
-                                        >
-                                            <span style={{ fontSize: '10px', transform: restForensicCollapsed ? 'rotate(0deg)' : 'rotate(90deg)', transition: 'transform 0.1s' }}>▶</span>
-                                            <strong style={{ color: '#aaa' }} >Rest Marker Forensic</strong>
-                                        </div>
-                                        {!restForensicCollapsed && (
-                                            <div style={{ marginTop: '4px' }}>
-                                                Enabled: {metrics.renderDebug.restMarkerStats.enabled ? 'YES' : 'NO'}<br />
-                                                DrawPass: {metrics.renderDebug.restMarkerStats.drawPassCalled ? 'YES' : 'NO'} <br />
-                                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px', fontSize: '10px' }}>
-                                                    <div>A (HudSleep): {metrics.renderDebug.restMarkerStats.countA}</div>
-                                                    <div>B (IsSleep): {metrics.renderDebug.restMarkerStats.countB}</div>
-                                                    <div>C (Frames): {metrics.renderDebug.restMarkerStats.countC}</div>
-                                                    <div>D (Fallback): {metrics.renderDebug.restMarkerStats.countD}</div>
-                                                </div>
-                                                Candidates: {metrics.renderDebug.restMarkerStats.candidateCount}<br />
-                                                NaN Speeds: {metrics.renderDebug.restMarkerStats.nanSpeedCount}<br />
-                                                SpeedSq Ref: {(metrics.renderDebug.restMarkerStats.epsUsed ** 2).toFixed(6)} (Jit: {((metrics.renderDebug.restMarkerStats.epsUsed * 2.5) ** 2).toFixed(6)})<br />
-                                                SpeedSq Range: [{metrics.renderDebug.restMarkerStats.minSpeedSq === Infinity ? 'Inf' : metrics.renderDebug.restMarkerStats.minSpeedSq.toExponential(2)}, {metrics.renderDebug.restMarkerStats.maxSpeedSq.toExponential(2)}]<br />
-                                                SampleNode: {metrics.renderDebug.restMarkerStats.sampleNodeId || 'None'} <br />
-                                                - Vx/Vy: {metrics.renderDebug.restMarkerStats.sampleNodeVx?.toFixed(4)} / {metrics.renderDebug.restMarkerStats.sampleNodeVy?.toFixed(4)}<br />
-                                                - SpeedSq: {metrics.renderDebug.restMarkerStats.sampleNodeSpeedSq?.toExponential(4)}<br />
-                                                - Sleep: {metrics.renderDebug.restMarkerStats.sampleNodeIsSleeping ? 'Y' : 'N'} ({metrics.renderDebug.restMarkerStats.sampleNodeSleepFrames})
+
+                                    {hudScenarioLabel && (
+                                        <>
+                                            <br />
+                                            <strong>Scenario:</strong> {hudScenarioLabel}
+                                            {hudDragTargetId && (
+                                                <div>Drag Target: {hudDragTargetId}</div>
+                                            )}
+                                        </>
+                                    )}
+                                    {/* ACCEPTANCE TESTS */}
+                                    {SHOW_DEEP_FORENSICS && (
+                                        <div style={{ padding: '4px', border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(0,0,0,0.2)' }}>
+                                            <strong style={{ fontWeight: 700, color: '#aaf' }}>Acceptance Tests</strong>
+                                            <div style={{ display: 'grid', gap: '2px', fontSize: '10px', marginTop: '4px' }}>
+                                                {[
+                                                    { id: 't1', label: 'T1 [A/B] Drag (Gap < 50px, Corr > 2px)' },
+                                                    { id: 't2', label: 'T2 [A] Recoil (1-3 flips, < 3s)' },
+                                                    { id: 't3', label: 'T3 [B] Collide (Overlaps=0 in 1-1.5s)' },
+                                                    { id: 't4', label: 'T4 [B] Locality (No Teleport)' },
+                                                    { id: 't5', label: 'T5 [B] Rest (Jitter < 0.005, Sleep)' },
+                                                    { id: 't6', label: 'T6 [B] DT Quarantine (Clip++, NaN=0)' },
+                                                    { id: 't7', label: 'T7 [B] Scale (Law Invariant N=5/60/250)' },
+                                                ].map(test => (
+                                                    <label key={test.id} style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', color: '#ccc' }}>
+                                                        <input type="checkbox" style={{ cursor: 'pointer' }} />
+                                                        {test.label}
+                                                    </label>
+                                                ))}
                                             </div>
-                                        )}
-                                    </div>
-                                )}
-                            </div>
-
-                            {/* RIGHT COLUMN: FORENSICS TABLES (Ledgers) */}
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                {/* ENERGY LEDGER */}
-                                {metrics.renderDebug?.energyLedger && metrics.renderDebug.energyLedger.length > 0 && (
-                                    <div style={{ padding: '4px', border: '1px solid rgba(100,255,100,0.2)', background: 'rgba(0,20,0,0.3)' }}>
-                                        <strong style={{ color: '#8f8' }}>Energy Ledger (v²)</strong>
-                                        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', fontSize: '9px', gap: '2px', marginTop: '4px', lineHeight: '1.2' }}>
-                                            <div style={{ borderBottom: '1px solid #444' }}>Stage</div>
-                                            <div style={{ borderBottom: '1px solid #444', textAlign: 'right' }}>Energy</div>
-                                            <div style={{ borderBottom: '1px solid #444', textAlign: 'right' }}>Δ</div>
-                                            {metrics.renderDebug.energyLedger.map((row: any, i: number) => (
-                                                <React.Fragment key={i}>
-                                                    <div>{row.stage}</div>
-                                                    <div style={{ textAlign: 'right', fontFamily: 'monospace' }}>{row.energy.toExponential(2)}</div>
-                                                    <div style={{ textAlign: 'right', fontFamily: 'monospace', color: row.delta > 0 ? '#ff8' : '#8ff' }}>
-                                                        {row.delta > 0 ? '+' : ''}{row.delta.toExponential(1)}
-                                                    </div>
-                                                </React.Fragment>
-                                            ))}
                                         </div>
-                                    </div>
-                                )}
-
-                                {/* FIGHT LEDGER */}
-                                {metrics.renderDebug?.fightLedger && metrics.renderDebug.fightLedger.length > 0 && (
-                                    <div style={{ padding: '4px', border: '1px solid rgba(255,100,100,0.2)', background: 'rgba(20,0,0,0.3)' }}>
-                                        <strong style={{ color: '#f88' }}>Constraint Fight Ledger</strong>
-                                        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', fontSize: '9px', gap: '2px', marginTop: '4px', lineHeight: '1.2' }}>
-                                            <div style={{ borderBottom: '1px solid #444' }}>Stage</div>
-                                            <div style={{ borderBottom: '1px solid #444', textAlign: 'right' }}>Conflict%</div>
-                                            <div style={{ borderBottom: '1px solid #444', textAlign: 'right' }}>AvgCorr</div>
-                                            {metrics.renderDebug.fightLedger.map((row: any, i: number) => (
-                                                <React.Fragment key={i}>
-                                                    <div>{row.stage}</div>
-                                                    <div style={{ textAlign: 'right', fontFamily: 'monospace', color: row.conflictPct > 20 ? '#f88' : '#888' }}>
-                                                        {row.conflictPct.toFixed(1)}%
-                                                    </div>
-                                                    <div style={{ textAlign: 'right', fontFamily: 'monospace' }}>
-                                                        {row.avgCorr > 0 ? row.avgCorr.toFixed(3) : '-'}
-                                                    </div>
-                                                </React.Fragment>
-                                            ))}
-                                        </div>
-                                    </div>
-                                )}
-
-                                {/* ACCEPTANCE TESTS */}
-                                <div style={{ padding: '4px', border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(0,0,0,0.2)' }}>
-                                    <strong style={{ fontWeight: 700, color: '#aaf' }}>Acceptance Tests</strong>
-                                    <div style={{ display: 'grid', gap: '2px', fontSize: '10px', marginTop: '4px' }}>
-                                        {[
-                                            { id: 't1', label: 'T1 [A/B] Drag (Gap < 50px, Corr > 2px)' },
-                                            { id: 't2', label: 'T2 [A] Recoil (1-3 flips, < 3s)' },
-                                            { id: 't3', label: 'T3 [B] Collide (Overlaps=0 in 1-1.5s)' },
-                                            { id: 't4', label: 'T4 [B] Locality (No Teleport)' },
-                                            { id: 't5', label: 'T5 [B] Rest (Jitter < 0.005, Sleep)' },
-                                            { id: 't6', label: 'T6 [B] DT Quarantine (Clip++, NaN=0)' },
-                                            { id: 't7', label: 'T7 [B] Scale (Law Invariant N=5/60/250)' },
-                                        ].map(test => (
-                                            <label key={test.id} style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', color: '#ccc' }}>
-                                                <input type="checkbox" style={{ cursor: 'pointer' }} />
-                                                {test.label}
-                                            </label>
+                                    )}
+                                    <br />
+                                    <strong style={{ fontWeight: 700 }}>Harness</strong><br />
+                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', margin: '6px 0' }}>
+                                        {[5, 20, 60, 250, 500].map((count) => (
+                                            <button
+                                                key={count}
+                                                type="button"
+                                                style={{ ...DEBUG_CLOSE_STYLE, width: '48px' }}
+                                                onClick={() => onSpawnPreset(count)}
+                                            >
+                                                N={count}
+                                            </button>
                                         ))}
+                                        <button
+                                            type="button"
+                                            style={{ ...DEBUG_CLOSE_STYLE, width: '48px', color: '#8f8' }}
+                                            onClick={() => onSpawnPreset(metrics.nodes)}
+                                            title="Restart Same Seed"
+                                        >
+                                            Same
+                                        </button>
+                                        <button
+                                            type="button"
+                                            style={{ ...DEBUG_CLOSE_STYLE, width: '48px', color: '#f88' }}
+                                            onClick={() => onRunSettleScenario()}
+                                            title="Wait, this is Settle Test. New Seed requires logic."
+                                        >
+                                            New
+                                        </button>
                                     </div>
+                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '6px' }}>
+                                        <button
+                                            type="button"
+                                            style={{ ...DEBUG_CLOSE_STYLE, width: '86px' }}
+                                            onClick={onRunSettleScenario}
+                                        >
+                                            Settle Test
+                                        </button>
+                                        <button
+                                            type="button"
+                                            style={{ ...DEBUG_CLOSE_STYLE, width: '86px' }}
+                                            onClick={onRunDragScenario}
+                                        >
+                                            Drag Test
+                                        </button>
+                                        <button
+                                            type="button"
+                                            style={{ ...DEBUG_CLOSE_STYLE, width: '86px' }}
+                                            onClick={onRecordHudScore}
+                                        >
+                                            Record
+                                        </button>
+                                    </div>
+                                    <strong style={{ fontWeight: 700 }}>Scoreboard</strong><br />
+                                    <table style={{ width: '100%', fontSize: '11px', borderCollapse: 'collapse' }}>
+                                        <thead>
+                                            <tr>
+                                                <th style={{ textAlign: 'left' }}>N</th>
+                                                <th style={{ textAlign: 'left' }}>settleMs</th>
+                                                <th style={{ textAlign: 'left' }}>jitter</th>
+                                                <th style={{ textAlign: 'left' }}>conflict%</th>
+                                                <th style={{ textAlign: 'left' }}>energy</th>
+                                                <th style={{ textAlign: 'left' }}>degrade%</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {Object.keys(hudScores).length === 0 && (
+                                                <tr>
+                                                    <td colSpan={6} style={{ opacity: 0.7 }}>No records yet.</td>
+                                                </tr>
+                                            )}
+                                            {Object.entries(hudScores)
+                                                .sort(([a], [b]) => Number(a) - Number(b))
+                                                .map(([count, score]) => (
+                                                    <tr key={count}>
+                                                        <td>{count}</td>
+                                                        <td>
+                                                            {Math.round(score.settleMs)}
+                                                            {formatRatio(score.settleMs, baseScore?.settleMs)}
+                                                        </td>
+                                                        <td>
+                                                            {score.jitter.toFixed(4)}
+                                                            {formatRatio(score.jitter, baseScore?.jitter)}
+                                                        </td>
+                                                        <td>
+                                                            {score.conflictPct.toFixed(1)}
+                                                            {formatRatio(score.conflictPct, baseScore?.conflictPct)}
+                                                        </td>
+                                                        <td>
+                                                            {score.energy.toFixed(4)}
+                                                            {formatRatio(score.energy, baseScore?.energy)}
+                                                        </td>
+                                                        <td>
+                                                            {score.degradePct.toFixed(1)}
+                                                            {formatRatio(score.degradePct, baseScore?.degradePct)}
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                        </tbody>
+                                    </table>
+                                    <br />
+                                    <br />
+                                    <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', cursor: 'pointer', color: '#aaa', marginTop: '4px' }}>
+                                        <input
+                                            type="checkbox"
+                                            checked={showLegacyDiagnostics}
+                                            onChange={(e) => setShowLegacyDiagnostics(e.target.checked)}
+                                        />
+                                        Show Diagnostics
+                                    </label>
+
+                                    {showLegacyDiagnostics && (
+                                        <div style={{ paddingLeft: '8px', borderLeft: '1px solid #333', marginTop: '4px' }}>
+                                            <strong style={{ fontWeight: 700 }}>Performance</strong><br />
+                                            Avg Vel: {metrics.avgVel.toFixed(4)} <br />
+                                            <strong style={{ fontWeight: 700 }}>Shape Diagnostics</strong><br />
+                                            Spread (R_mean): {metrics.avgDist.toFixed(2)} px <br />
+                                            Irregularity (R_std): {metrics.stdDist.toFixed(2)} px <br />
+                                            CV (Std/Mean): {(metrics.avgDist > 0 ? (metrics.stdDist / metrics.avgDist) : 0).toFixed(3)} <br />
+                                            Aspect Ratio (W/H): {metrics.aspectRatio.toFixed(3)}
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         </div>
-
-                        {hudScenarioLabel && (
-                            <>
-                                <br />
-                                <strong>Scenario:</strong> {hudScenarioLabel}
-                                {hudDragTargetId && (
-                                    <div>Drag Target: {hudDragTargetId}</div>
-                                )}
-                            </>
-                        )}
-                        <br />
-                        <strong style={{ fontWeight: 700 }}>Harness</strong><br />
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', margin: '6px 0' }}>
-                            {[5, 20, 60, 250, 500].map((count) => (
-                                <button
-                                    key={count}
-                                    type="button"
-                                    style={{ ...DEBUG_CLOSE_STYLE, width: '48px' }}
-                                    onClick={() => onSpawnPreset(count)}
-                                >
-                                    N={count}
-                                </button>
-                            ))}
-                            <button
-                                type="button"
-                                style={{ ...DEBUG_CLOSE_STYLE, width: '48px', color: '#8f8' }}
-                                onClick={() => onSpawnPreset(metrics.nodes)}
-                                title="Restart Same Seed"
-                            >
-                                Same
-                            </button>
-                            <button
-                                type="button"
-                                style={{ ...DEBUG_CLOSE_STYLE, width: '48px', color: '#f88' }}
-                                onClick={() => onRunSettleScenario()}
-                                title="Wait, this is Settle Test. New Seed requires logic."
-                            >
-                                New
-                            </button>
-                        </div>
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '6px' }}>
-                            <button
-                                type="button"
-                                style={{ ...DEBUG_CLOSE_STYLE, width: '86px' }}
-                                onClick={onRunSettleScenario}
-                            >
-                                Settle Test
-                            </button>
-                            <button
-                                type="button"
-                                style={{ ...DEBUG_CLOSE_STYLE, width: '86px' }}
-                                onClick={onRunDragScenario}
-                            >
-                                Drag Test
-                            </button>
-                            <button
-                                type="button"
-                                style={{ ...DEBUG_CLOSE_STYLE, width: '86px' }}
-                                onClick={onRecordHudScore}
-                            >
-                                Record
-                            </button>
-                        </div>
-                        <strong style={{ fontWeight: 700 }}>Scoreboard</strong><br />
-                        <table style={{ width: '100%', fontSize: '11px', borderCollapse: 'collapse' }}>
-                            <thead>
-                                <tr>
-                                    <th style={{ textAlign: 'left' }}>N</th>
-                                    <th style={{ textAlign: 'left' }}>settleMs</th>
-                                    <th style={{ textAlign: 'left' }}>jitter</th>
-                                    <th style={{ textAlign: 'left' }}>conflict%</th>
-                                    <th style={{ textAlign: 'left' }}>energy</th>
-                                    <th style={{ textAlign: 'left' }}>degrade%</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {Object.keys(hudScores).length === 0 && (
-                                    <tr>
-                                        <td colSpan={6} style={{ opacity: 0.7 }}>No records yet.</td>
-                                    </tr>
-                                )}
-                                {Object.entries(hudScores)
-                                    .sort(([a], [b]) => Number(a) - Number(b))
-                                    .map(([count, score]) => (
-                                        <tr key={count}>
-                                            <td>{count}</td>
-                                            <td>
-                                                {Math.round(score.settleMs)}
-                                                {formatRatio(score.settleMs, baseScore?.settleMs)}
-                                            </td>
-                                            <td>
-                                                {score.jitter.toFixed(4)}
-                                                {formatRatio(score.jitter, baseScore?.jitter)}
-                                            </td>
-                                            <td>
-                                                {score.conflictPct.toFixed(1)}
-                                                {formatRatio(score.conflictPct, baseScore?.conflictPct)}
-                                            </td>
-                                            <td>
-                                                {score.energy.toFixed(4)}
-                                                {formatRatio(score.energy, baseScore?.energy)}
-                                            </td>
-                                            <td>
-                                                {score.degradePct.toFixed(1)}
-                                                {formatRatio(score.degradePct, baseScore?.degradePct)}
-                                            </td>
-                                        </tr>
-                                    ))}
-                            </tbody>
-                        </table>
-                        <br />
-                        <br />
-                        <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', cursor: 'pointer', color: '#aaa', marginTop: '4px' }}>
-                            <input
-                                type="checkbox"
-                                checked={showLegacyDiagnostics}
-                                onChange={(e) => setShowLegacyDiagnostics(e.target.checked)}
-                            />
-                            Show Diagnostics
-                        </label>
-
-                        {showLegacyDiagnostics && (
-                            <div style={{ paddingLeft: '8px', borderLeft: '1px solid #333', marginTop: '4px' }}>
-                                <strong style={{ fontWeight: 700 }}>Performance</strong><br />
-                                Avg Vel: {metrics.avgVel.toFixed(4)} <br />
-                                <strong style={{ fontWeight: 700 }}>Shape Diagnostics</strong><br />
-                                Spread (R_mean): {metrics.avgDist.toFixed(2)} px <br />
-                                Irregularity (R_std): {metrics.stdDist.toFixed(2)} px <br />
-                                CV (Std/Mean): {(metrics.avgDist > 0 ? (metrics.stdDist / metrics.avgDist) : 0).toFixed(3)} <br />
-                                Aspect Ratio (W/H): {metrics.aspectRatio.toFixed(3)}
-                            </div>
-                        )}
                     </div>
-                </div >
+                </div>
             )}
         </>
     );

@@ -33,6 +33,9 @@ export type PhysicsEngineTickContext = {
     handLogAt: number;
     dragLagSamples: number[];
     lastDraggedNodeId: string | null;
+    grabOffset: { x: number; y: number } | null;  // Mini Run 7: Initial grab position for MAX_DRAG_DISTANCE
+    lastReleasedNodeId: string | null;  // Mini Run 7: Track which node was just released
+    lastReleaseFrame: number;  // Mini Run 7: Frame index when node was released
     correctionAccumCache: Map<string, { dx: number; dy: number }>;
     // Fix: Startup Stats
     startupStats: {
@@ -109,15 +112,11 @@ export type PhysicsEngineTickContext = {
             errSum: number;
             solveMs: number;
             corrMax: number;
-            dragActive: boolean; // Run 7
-            dragKinematicApplied: boolean; // Run 7
-            dragPrevSynced: number; // Run 7
             skipped: number;
             singularity: number;
             prevAdjusted: number;
             ghostVelMax: number;
             ghostVelEvents: number;
-            alphaAvg: number; // Run 6
             releaseGhostEvents: number;
             dragLagMax: number;
             firstJumpPx: number;

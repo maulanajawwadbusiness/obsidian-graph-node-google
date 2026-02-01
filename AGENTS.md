@@ -34,7 +34,7 @@ The Canvas (Graph) is the substrate. Panels (Chat, Docs) and the Analysis Overla
 ## 3. Safe Workflow
 
 1.  **Scan**: Read `docs/repo_xray.md`.
-    *   **Physics Work**: Read `docs/physics_xray.md`.
+    *   **Physics Work**: **STOP.** Read `docs/PHYSICS_ATLAS.md` first. The Acceptance Tests (T1–T7) are your Truth Harness.
     *   **Render/DPR Work**: Read `docs/onboarding_dpr_rendering.md`. **Mandatory for avoiding visual regressions.**
     *   Do not guess.
 2.  **Dissect**: Identify load-bearing logic (runIds, refs, context priorities).

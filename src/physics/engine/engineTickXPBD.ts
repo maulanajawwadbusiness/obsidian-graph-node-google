@@ -92,10 +92,12 @@ const rebuildXPBDConstraints = (engine: PhysicsEngineTickContext) => {
     //   - Large alpha (soft) → deltaLambda ≈ -C/alpha (soft, small correction)
     // 
     // Calibration:
-    //   0.0001 → alpha≈0.39 → TOO STIFF → EXPLOSION on drag release
-    //   0.01   → alpha≈39   → Visible ~0.2px corrections, stable
-    //   0.1    → alpha≈390  → Very soft, barely visible
-    const compliance = engine.config.xpbdLinkCompliance ?? 0.01;
+    // Run 6+7: Compliance for LOCAL TUG feel
+    // Lower compliance = stiffer springs = faster neighbor response
+    //   0.1    → alpha≈390 → Too soft, no visible tug
+    //   0.01   → alpha≈39  → Sluggish tug (~3px/frame)
+    //   0.001  → alpha≈4   → CRISP local tug (~30px/frame, capped to 10)
+    const compliance = engine.config.xpbdLinkCompliance ?? 0.001;
 
     const newConstraints: any[] = [];
 
@@ -255,8 +257,9 @@ const solveXPBDEdgeConstraints = (engine: PhysicsEngineTickContext, dt: number) 
     const start = performance.now();
     const EPSILON = 1e-6;
 
-    // Run 6: Calibration & Safety
-    const MAX_CORR_PX = engine.config.xpbdMaxCorrPerConstraintPx ?? 100.0;
+    // Run 6+7: Calibration & Safety
+    // 10px cap balances local tug responsiveness vs explosion prevention
+    const MAX_CORR_PX = engine.config.xpbdMaxCorrPerConstraintPx ?? 10.0;
     const USE_CANARY = engine.config.debugXPBDCanary;
 
     let solvedCount = 0;
@@ -293,12 +296,11 @@ const solveXPBDEdgeConstraints = (engine: PhysicsEngineTickContext, dt: number) 
             continue;
         }
 
-        // FIX: Skip ANY constraint involving the dragged node FIRST
-        // This prevents huge error calculations that would show in HUD
-        if (nA.id === engine.draggedNodeId || nB.id === engine.draggedNodeId) {
-            skippedCount++;
-            continue;
-        }
+        // Mini Run 7 Part 5: ENABLE local tug on neighbors
+        // DO NOT skip constraints involving dragged node!
+        // The dragged node has invMass=0 (pinned), so it won't move,
+        // but neighbors WILL stretch toward it (local tug).
+        // Previous code skipped these constraints, preventing local tug entirely.
 
         // 1. Calculate Error (C)
         const dx = nA.x - nB.x;

@@ -149,32 +149,32 @@ export type PhysicsEngineTickContext = {
             totalEdgesGraph: number;
             edgesSelectedForSolve: number;
             edgesSelectedReason: string;
+            edgesSkippedByCoverage: number;
         };
+        repel: { checked: number; solved: number; overlap: number; corrSum: number; sing: number };
+        edgeConstraintsExecuted: number;
     };
-    repel: { checked: number; solved: number; overlap: number; corrSum: number; sing: number };
-    edgeConstraintsExecuted: number;
-};
-xpbdCanaryApplied ?: boolean;
+    xpbdCanaryApplied?: boolean;
 
-// XPBD Inventory
-xpbdConstraints: XPBDConstraint[];
-xpbdConstraintsDirty: boolean;
-xpbdConstraintStats ?: {
-    minRest: number;
-    maxRest: number;
-    avgRest: number;
-    invalidEndpointCount: number;
-    nonFiniteRestLenCount: number;
-    zeroLenEdgeCount: number;
-};
-xpbdFirstPairPrev ?: {
-    aId: string;
-    bId: string;
-    ax: number;
-    ay: number;
-    bx: number;
-    by: number;
-} | null;
+    // XPBD Inventory
+    xpbdConstraints: XPBDConstraint[];
+    xpbdConstraintsDirty: boolean;
+    xpbdConstraintStats?: {
+        minRest: number;
+        maxRest: number;
+        avgRest: number;
+        invalidEndpointCount: number;
+        nonFiniteRestLenCount: number;
+        zeroLenEdgeCount: number;
+    };
+    xpbdFirstPairPrev?: {
+        aId: string;
+        bId: string;
+        ax: number;
+        ay: number;
+        bx: number;
+        by: number;
+    } | null;
 };
 
 export interface XPBDConstraint {

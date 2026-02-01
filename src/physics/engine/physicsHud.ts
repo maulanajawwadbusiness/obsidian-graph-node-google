@@ -158,6 +158,7 @@ export type PhysicsHudSnapshot = {
     totalEdgesGraph?: number;
     edgesSelectedForSolve?: number;
     edgesSelectedReason?: string;
+    edgesSkippedByCoverage?: number;
 
     // Frame Accumulators
     ticksThisFrame?: number;

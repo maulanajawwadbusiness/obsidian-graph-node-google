@@ -347,6 +347,7 @@ export const updateHudSnapshot = (
         totalEdgesGraph: engine.xpbdFrameAccum?.springs.totalEdgesGraph ?? 0,
         edgesSelectedForSolve: engine.xpbdFrameAccum?.springs.edgesSelectedForSolve ?? 0,
         edgesSelectedReason: engine.xpbdFrameAccum?.springs.edgesSelectedReason ?? '-',
+        edgesSkippedByCoverage: engine.xpbdFrameAccum?.springs.edgesSkippedByCoverage ?? 0,
 
         // Frame Accumulators
         ticksThisFrame: engine.xpbdFrameAccum?.ticks || 0,

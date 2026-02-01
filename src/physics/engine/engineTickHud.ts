@@ -246,6 +246,21 @@ export const updateHudSnapshot = (
             : 0,
         xpbdSpringSolveMs: engine.xpbdFrameAccum?.springs.solveMs ?? 0,
 
+        xpbdSpringRestMinPx: engine.xpbdConstraintStats?.minRest ?? 0,
+        xpbdSpringRestMaxPx: engine.xpbdConstraintStats?.maxRest ?? 0,
+        xpbdSpringRestAvgPx: engine.xpbdConstraintStats?.avgRest ?? 0,
+
+        // Mini Run 4: Validation
+        xpbdSpringSkipped: engine.xpbdFrameAccum?.springs.skipped ?? 0,
+        xpbdSpringSingularity: engine.xpbdFrameAccum?.springs.singularity ?? 0,
+        xpbdSpringPrevAdjusted: engine.xpbdFrameAccum?.springs.prevAdjusted ?? 0,
+
+        xpbdInvInvalid: engine.xpbdConstraintStats?.invalidEndpointCount ?? 0,
+        xpbdInvNonFinite: engine.xpbdConstraintStats?.nonFiniteRestLenCount ?? 0,
+        xpbdInvZero: engine.xpbdConstraintStats?.zeroLenEdgeCount ?? 0,
+
+
+
         // Frame Accumulators
         ticksThisFrame: engine.xpbdFrameAccum?.ticks || 0,
         dtUseSecLastTick: dtMs / 1000,

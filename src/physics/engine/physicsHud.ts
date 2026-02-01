@@ -71,6 +71,28 @@ export type PhysicsHudSnapshot = {
     xpbdRepelSingularities?: number;
     xpbdEdgeConstraintCount?: number;
 
+    // XPBD Springs Proof-of-Life 0
+    xpbdSpringEnabled?: boolean;
+    xpbdSpringConstraints?: number;
+    xpbdSpringSolved?: number;
+    xpbdSpringCorrMaxPx?: number;
+    xpbdSpringErrAvgPx?: number;
+    xpbdSpringSolveMs?: number;
+
+    xpbdSpringRestMinPx?: number;
+    xpbdSpringRestMaxPx?: number;
+    xpbdSpringRestAvgPx?: number;
+
+    // Mini Run 4: Validation & Safety
+    xpbdSpringSkipped?: number;
+    xpbdSpringSingularity?: number;
+    xpbdSpringPrevAdjusted?: number;
+    xpbdInvInvalid?: number;
+    xpbdInvNonFinite?: number;
+    xpbdInvZero?: number;
+
+
+
     // Frame Accumulators
     ticksThisFrame?: number;
     dtUseSecLastTick?: number;
@@ -171,6 +193,14 @@ export const createInitialPhysicsHudSnapshot = (): PhysicsHudSnapshot => ({
     calmPercent: 0,
     diffusionGate: 0,
     settleBlockers: [],
+
+    // Init XPBD items
+    xpbdSpringEnabled: false,
+    xpbdSpringConstraints: 0,
+    xpbdSpringSolved: 0,
+    xpbdSpringCorrMaxPx: 0.0,
+    xpbdSpringErrAvgPx: 0.0,
+    xpbdSpringSolveMs: 0.0,
 });
 
 export const createInitialPhysicsHudHistory = (): PhysicsHudHistory => ({

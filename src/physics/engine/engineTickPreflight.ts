@@ -130,6 +130,29 @@ export const runTickPreflight = (
         if (maxSpeed > engine.startupStats.maxSpeed) {
             engine.startupStats.maxSpeed = maxSpeed;
         }
+
+        // FORENSIC: Overlap Check (N^2 but N is small at startup and it's temporary)
+        // Only run if node count < 200 to keep startup fast
+        if (nodeList.length < 200) {
+            let overlaps = 0;
+            const R = 30; // Standard radius
+            const RSq = R * R;
+            for (let i = 0; i < nodeList.length; i++) {
+                for (let j = i + 1; j < nodeList.length; j++) {
+                    const dx = nodeList[i].x - nodeList[j].x;
+                    const dy = nodeList[i].y - nodeList[j].y;
+                    if (dx * dx + dy * dy < RSq) {
+                        overlaps++;
+                    }
+                }
+            }
+            if (engine.lifecycle === 0) {
+                engine.startupStats.overlapCount0 = overlaps;
+            }
+            if (overlaps > engine.startupStats.peakOverlapFirst2s) {
+                engine.startupStats.peakOverlapFirst2s = overlaps;
+            }
+        }
     }
 
     return {

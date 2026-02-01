@@ -40,6 +40,8 @@ export type PhysicsEngineTickContext = {
         infCount: number;
         maxSpeed: number;
         dtClamps: number;
+        overlapCount0: number;
+        peakOverlapFirst2s: number;
     };
     perfCounters: {
         nodeListBuilds: number;

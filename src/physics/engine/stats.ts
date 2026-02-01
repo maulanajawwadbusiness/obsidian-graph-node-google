@@ -65,6 +65,17 @@ export type DebugStats = {
     lawPopScore: number;
     hubNodeCount: number;
 
+    // FORENSIC: Spawn/Startup Hygiene (First 2s)
+    spawn: {
+        timestamp: number;
+        overlapCount0: number; // At t=0
+        peakOverlapFirst2s: number;
+        maxSpeedFirst2s: number;
+        nanCountFirst2s: number;
+        ticksSinceSpawn: number;
+        forbiddenPassLatched: boolean; // Leaks in first 2s
+    };
+
     // Settle Diagnostics
     outlierCount: number;
     calmPercent: number;
@@ -152,6 +163,15 @@ export const createDebugStats = (): DebugStats => ({
     degradeFlipCount: 0,
     lawPopScore: 0,
     hubNodeCount: 0,
+    spawn: {
+        timestamp: 0,
+        overlapCount0: 0,
+        peakOverlapFirst2s: 0,
+        maxSpeedFirst2s: 0,
+        nanCountFirst2s: 0,
+        ticksSinceSpawn: 0,
+        forbiddenPassLatched: false,
+    },
 
     outlierCount: 0,
     calmPercent: 0,

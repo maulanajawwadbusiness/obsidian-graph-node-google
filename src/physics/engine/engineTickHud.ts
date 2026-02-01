@@ -137,6 +137,14 @@ export const updateHudSnapshot = (
         startupMaxSpeed: engine.startupStats.maxSpeed,
         startupDtClamps: engine.startupStats.dtClamps,
 
+        // Spawn Forensic (First 2s)
+        spawnTimestamp: stats.spawn.timestamp,
+        spawnOverlapCount0: stats.spawn.overlapCount0,
+        spawnPeakOverlap: stats.spawn.peakOverlapFirst2s,
+        spawnMaxSpeed: stats.spawn.maxSpeedFirst2s,
+        spawnNaNCount: stats.spawn.nanCountFirst2s,
+        spawnLeaks: stats.spawn.forbiddenPassLatched,
+
         dtSkewMaxMs: stats.dtSkew ? (stats.dtSkew.max - stats.dtSkew.min) * 1000 : 0,
         perDotUpdateCoveragePct: spacingStride > 1 ? (100 / spacingStride) : 100,
         coverageMode: spacingStride > 1 ? 'strided' : 'full',

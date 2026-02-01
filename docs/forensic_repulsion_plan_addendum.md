@@ -1,110 +1,123 @@
-# Forensic Addendum: Repulsion & Spatial Grid (Knife-Sharp)
+# Forensic Addendum: Repulsion & Spatial Grid (Knife-Sharp Binding Spec)
 **Date:** 2026-02-01
 **Executor:** Antigravity
 **Status:** BINDING SPEC
 
-## 1. Interaction Radii Truth (The "Gap" Anomaly)
-Current constants reveal a disjointed physics landscape:
+## 1. Single Law: The "Additive" Seam
+**Verdict:** **Option B (Active Everywhere)**.
+Repulsion Forces and XPBD Hard Contacts run concurrently. They are **Additive**.
 
-| Layer | Radius | Source | Effect | Status |
-| :--- | :--- | :--- | :--- | :--- |
-| **Collision Force** | ~`28 px` | `forces.ts` (rad+rad+pad) | Hard Push | **Active** (Emergency) |
-| **Repulsion Force** | `60 px` | `config.repulsionDistanceMax` | Soft Push | **Active** (Layout) |
-| **Hard Constraint** | `100 px` | `config.minNodeDistance` | Rigid Shell | **DORMANT** (Verified) |
-| **Spring Link** | `130 px` | `config.linkRestLength` | Target Dist | Active |
+**The Law:**
+1.  **PBD Hard Contact (Solid):** Active for $d < 100$ (Rigid Shell).
+    -   Projects nodes to surface ($d = 100$).
+    -   Effect: Infinite stiffness (or high alpha).
+2.  **Repulsion Force (Soft):** Active for $d < 120$ (Configurable Max).
+    -   Applies acceleration: $a = F/m$.
+    -   Effect: Gentle bias to separate nodes *before* hard contact, and aids separation *during* contact.
 
-**Critical Finding:** The engine currently has a "Dead Zone" between 60px and 100px.
--   Nodes are driven by Repulsion (60px).
--   They *should* be kept apart at 100px, but the Constraints are dormant.
--   **Result:** Nodes likely cluster at ~60px, violating the visual design intent of 100px.
--   **XPBD Fix:** The unified physics MUST extend effective repulsion/contact to **100px**.
+**Justification:**
+-   **Continuity:** Disabling repulsion inside the shell creates a localized discontinuity (Force drop-off) which can trap nodes in a "vibration well" at the boundary.
+-   **Stability:** Since Repulsion pushes *outward*, it acts as a "Helper Force" for the XPBD constraint (which also projects outward). They do not fight.
+-   **Seam:** The "Seam" is purely defined by range.
+    -   0-100px: XPBD + Repulsion.
+    -   100-120px: Repulsion Only.
+    -   120px+: Zero.
 
-**Derivation: Max Interaction Radius**
-To support the 100px Hard Shell + transition slop:
--   `Hard Shell`: 100px
--   `Skin/Pad`: 8px
--   `Max Interaction`: **110 px** (Safe upper bound).
+## 2. Interaction Radii (One Truth)
+**Formula:**
+$$R_{max} = \max(R_{contact} + Slop, R_{repulsion})$$
 
-## 2. Spatial Grid Correctness
-**Rule:** `cellSize` ≥ `maxInteractionRadius` to allow 3x3 queries (Center + 8 neighbors).
+**Derivation (Current Config):**
+-   `minNodeDistance` ($R_{shell}$) = 100 px.
+-   `contactSlop` = 12 px (buffer for early activation).
+-   `repulsionDistanceMax` = 60 px (Legacy - **MUST BE INCREASED**).
+    -   *Correction:* We bind this to `R_shell * 1.2` for effective presolving.
+    -   New `repulsionDistanceMax` = 120 px.
 
--   **Proposed Cell Size:** `130 px` (Matches `linkRestLength`).
--   **Query Radius:** 3x3 cells (1 cell radius).
--   **Verification:**
-    -   If node is at cell edge, it sees neighbors in adjacent cell (dist < 130).
-    -   Repulsion/Contact (110px) is fully contained within 3x3 of 130px cells.
-    -   **Verdict:** `cellSize = 130` with **3x3 Query** is sufficient. O(1) guaranteed.
+**The Constant:**
+$$R_{interaction} = \max(100 + 12, 120) = 120 \text{ px}$$
 
-**Pseudocode: `queryCells`**
-```typescript
-const QUERY_OFFSETS = [
-    -1, -1,  0, -1,  1, -1,
-    -1,  0,  0,  0,  1,  0,
-    -1,  1,  0,  1,  1,  1
-]; // 9 cells
+## 3. Spatial Grid Proof (General)
+**Rule:**
+$$N_{radius} = \lceil R_{interaction} / C_{cell} \rceil$$
+$$QueryDimensions = (2 \cdot N_{radius} + 1) \times (2 \cdot N_{radius} + 1)$$
 
-function getNeighbors(node, grid, cellSize) {
-    const cx = Math.floor(node.x / cellSize);
-    const cy = Math.floor(node.y / cellSize);
-    const candidates = [];
+**Application:**
+-   **Cell Size ($C_{cell}$):** `130 px` (Fixed, anchored to `linkRestLength`).
+-   **Interaction Radius ($R_{interaction}$):** `120 px`.
+-   **Calculation:**
+    $$N_{radius} = \lceil 120 / 130 \rceil = 1$$
+    $$Query = (2 \cdot 1 + 1)^2 = 3 \times 3 \text{ cells}$$
 
-    for (let i = 0; i < 18; i += 2) {
-        const nx = cx + QUERY_OFFSETS[i];
-        const ny = cy + QUERY_OFFSETS[i+1];
-        // Spatial Hash Key: "nx:ny"
-        // Int map is faster: key = (nx & 0xFFFF) | ((ny & 0xFFFF) << 16)
-        const cell = grid.get(nx, ny);
-        if (cell) candidates.push(...cell.nodes);
-    }
-    return candidates;
-}
-```
+**Safety Margin:**
+If dynamic forces push $R_{max}$ to 140px:
+$$N_{radius} = \lceil 140 / 130 \rceil = 2 \rightarrow 5 \times 5 \text{ cells}$$
+*Implementation Note:* The system must check `R_max` at startup. If $> 130$, switch to 5x5. For now, 3x3 is proven sufficient.
 
-## 3. Determinism & Jitter Hardening
-**Risk:** Cell Boundary Flicker. A node oscillating on a grid line changes its neighbor set every frame.
-**Solution:**
-1.  **Stable Ordering:** Grid cells store `List<NodeID>`, not `Set`. When querying, sort candidates by ID (or maintain insertion order if strictly additive).
-2.  **No Random:** `forces.ts` L170 already uses deterministic ID hashing for dx=0. **Retain this.**
-    -   `hash(idA + idB)` -> angle.
-3.  **Hysteresis (Optional):** Strict XPBD handles jitter well. If "Contact" is rigid, nodes won't vibrate across boundaries.
-4.  **Action:** Ensure `grid.add(node)` uses deterministic push (Array push is fine if iteration order of `nodeList` is stable).
+## 4. O(N²) Defense (Worst-Case Handling)
+**Scenario:** "Black Hole" - all 500 nodes dragged into 1 cell.
+**Naive 3x3:** $500 \times 499$ checks = 250,000 (Lag).
 
-## 4. Tick Placement & Write-Ownership
-**Insertion Point:** `engineTick.ts`, inside the `solveConstraints` block.
-**Window:**
--   **After:** `integrateNodes` (Prediction step).
--   **Before:** `finalizePhysicsTick` (Render sync).
--   **Conflict:** The current `applySpacingConstraints` writes to `correctionAccum`.
--   **Plan:** Replace `applySpacingConstraints` with `solveXPBDConstraints`.
-    -   It writes DIRECTLY to `node.x/y` (XPBD style), utilizing `node.prevX/Y` for velocity derivation.
-    -   **Write Proof:** `node.x` is mutable. No other system overwrites x/y in this phase. The `correctionAccum` approach (legacy) is abandoned for direct projection.
+**Defense Strategy (Budget-Aware):**
+1.  **Cap Candidates:** Max 50 neighbors per node query.
+    -   If cell has > 50 nodes, sample first 50 (Stable Order) or random subset?
+    -   **Decision:** First 50 (Stable). Prevents explosion, maintains Determinism.
+2.  **Degradation:** If frame time > Budget (12ms):
+    -   Reduce `collisionEvery` / `repulsionEvery` stride.
+    -   Current engine has `earlyExit` checks.
+    -   *XPBD Specific:* PBD solver cannot easily stride (instability). It MUST run.
+    -   **Binding:** Constraint Solver has priority. Hard Cap of 30 neighbors for Contact Solver in "Emergency Mode".
 
-## 5. Handoff Seam (Soft vs Hard)
-**Constraint:** We must not double-push (Repulsion Force + Hard Contact).
-**Architecture:**
-1.  **Interaction Zone:** `0 - 110 px`.
-2.  **Hard Contact (XPBD):** `0 - 100 px`.
-    -   Project to surface (100px).
-    -   Stiffness: High (Solid).
-3.  **Soft Repulsion (Force):** `60 - 120 px`.
-    -   *Wait, this overlaps.*
-    -   **Revised:**
-        -   **Inner (0-100px):** Pure XPBD Contact (Alpha~0). Force disabled or overpowered.
-        -   **Outer (100-130px):** Soft Repulsion Force (fading to 0 at 130).
-    -   **Prevention of Jitter:** If Node is at 99px, XPBD pushes out. If Repulsion creates inward velocity? Unlikely. Repulsion pushes out.
-    -   **Problem:** If Repulsion pushes out at 105px, and XPBD is dormant > 100px.
-    -   **Seam:** The continuity is Velocity. XPBD contact handles collision response. Repulsion handles "approach".
-    -   **Rule:** Repulsion Force only applied if `dist > 100`. Inside 100, XPBD takes full control. (Or Repulsion adds to energy, but XPBD resolves position).
+## 5. Determinism (No Sorting)
+Sorting O(N log N) per query is too slow. We achieve determinism by construction.
 
-**Constraint-Force Mixing:**
--   XPBD solves *positions*.
--   Forces add *acceleration* (velocity).
--   Correct approach: Apply Repulsion Force everywhere (0-130px). Let XPBD projection resolve the violation.
--   If repulsion is strong inside 100px, it aids XPBD.
--   **Risk:** "Pop" if repulsion is discontinuous.
--   **Binding:** Use Repulsion (smooth 1/r) everywhere. XPBD clamps the result.
+**Generation Rules:**
+1.  **Node Order:** Iterate `activeNodes` (Array). This order is stable (insertion/lifecycle based).
+2.  **Grid Pushing:**
+    -   Clear Grid.
+    -   Iterate `activeNodes`: `grid[cell].push(nodeID)`.
+    -   Grid buckets are now strictly ordered by `activeNodes` index.
+3.  **Pairing:**
+    -   For `nodeA` in `activeNodes`:
+    -   Query 3x3 cells.
+    -   Return `neighbors` (Array of arrays). Flatten/Iterate linearly.
+    -   **Filter:** `if (nodeB.id > nodeA.id)` (Canonical Pair).
+    -   *Result:* Deterministic pair set, consistent every frame.
 
-**Deliverable Spec:**
--   `cellSize`: 130px.
--   `interaction`: 110px.
--   `mode`: XPBD Hard Contact (0-100px) + Background Repulsion Force.
+**Singularity Fallback:**
+-   If `dist == 0`: Use `hash(idA, idB)` from `src/physics/forces.ts:170`.
+-   **Forbidden:** `Math.random()`.
+
+## 6. Tick Placement & Write-Ownership
+**File:** `src/physics/engine/engineTick.ts`
+
+**Sequence:**
+1.  `integrateNodes(...)` -> Velocity & Position Prediction ($x' = x + v \Delta t$).
+    -   *Writes:* `node.x`, `node.y`, `node.vx`, `node.vy`.
+2.  **INSERT XPBD HERE (Solvers)**
+    -   Replaces: `applySpacingConstraints`, `applySafetyClamp`, `applyEdgeRelaxation`.
+    -   *Reads:* `node.x` (Predicted).
+    -   *Writes:* `node.x` (Corrected).
+    -   *Writes:* `correctionAccum` (for stats only, or removed).
+3.  **Velocity Update (Symplectic Fix):**
+    -   $$v_{new} = (x_{corrected} - x_{old}) / \Delta t$$
+    -   *Must verify:* `integrateNodes` stores `x_old`? Currently it effectively "consumes" `x`.
+    -   *Requirement:* xpbd phase needs `prevX` (position before integration) or `x_pred` (position after integration).
+    -   *Binding:* We use `node.x` as $x'$. We need $x_{old}$. `node.prevX` in current engine is "Rendering Interpolation" (often).
+    -   *Fix:* Check `integrateNodes`. It does `node.prevX = node.x` (L183) strictly before `node.x += v*dt`.
+    -   So `node.prevX` is reliable $x_{old}$.
+    -   *Velocity Rebuild:* `node.vx = (node.x - node.prevX) / dt`.
+
+**Disabled Legacy Systems:**
+-   `applySpacingConstraints` (Dormant PBD) -> **REMOVE**.
+-   `applySafetyClamp` (Emergency PBD) -> **REMOVE** (Folded into XPBD Contact).
+-   `applyRepulsion` (Force) -> **KEEP** (tuned to 120px range).
+-   `applyCollision` (Force) -> **DISABLE** (XPBD Contact handles hard collisions).
+
+## Binding Checklist
+-   [ ] **Constants:** `R_interaction = 120px`. `cellSize = 130px`.
+-   [ ] **Grid:** 3x3 Query. Stable Buckets (Insertion Order).
+-   [ ] **Seam:** XPBD (0-100) + Repulsion (0-120). Additive.
+-   [ ] **Cap:** Max 50 neighbors checked per node.
+-   [ ] **Integration:** `node.vx = (node.x - node.prevX) / dt` post-solver.
+

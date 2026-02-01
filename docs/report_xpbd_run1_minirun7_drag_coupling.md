@@ -1,52 +1,65 @@
-# XPBD Run 1: Mini Run 7 - Drag Coupling
-
-## Goal
-Make dragging feel physical: immediate response (kinematic pin) and elastic release (momentum transfer).
+# XPBD Mini Run 7: Drag Coupling (Kinematic Pinning)
 
 ## Implementation Details
 
-### 1. Kinematic Lock (Engine Tick)
--   **File**: `src/physics/engine/engineTickXPBD.ts`
--   **Function**: `applyKinematicDrag(engine, dt)`
--   **Logic**:
-    -   Locates `engine.draggedNodeId`.
-    -   Forces `node.x` / `node.y` to match `engine.dragTarget`.
-    -   **Critical**: Updates `node.prevX/prevY` to `oldX/oldY` (position *before* the snap).
-    -   **Result**: `(node.x - node.prevX)` correctly represents the drag velocity for the frame. Solver uses this implicit velocity.
+### 1. Kinematic Pinning
+**Method**: Option A (invMass = 0)
+**Files**: `src/physics/engine/engineTickXPBD.ts`
 
-### 2. Solver InvMass
--   **File**: `src/physics/engine/engineTickXPBD.ts`
--   **Logic**: `solveXPBDEdgeConstraints` checks `nA.id === engine.draggedNodeId`.
--   If true, mass is treated as infinite (`w=0`).
--   Correction is applied 100% to the neighbor node. No spring force moves the hand.
+Logic:
+```typescript
+const isDraggedA = nA.id === engine.draggedNodeId;
+const wA = (nA.isFixed || isDraggedA) ? 0 : 1.0;
+```
+When `wA` is 0, the solver treats the node as having infinite mass, meaning constraint corrections will **fully propagate** to the neighbor (`nB`) without moving `nA`.
 
-### 3. Release Momentum (Engine Interaction)
--   **File**: `src/physics/engine/engineInteraction.ts`
--   **Logic**: `releaseNode` previously zeroed `vx/vy`.
--   **Change**: Removed `vx=0` lines.
--   **Result**: The node retains the velocity calculated in `applyKinematicDrag` (via implicit step `x-prevX`) or from the last tick's integration.
--   Because `applyKinematicDrag` runs every tick, `vx` is kept fresh with the user's hand velocity. On release, it flies.
+### 2. Position Injection
+We force the dragged node to the mouse position **before** the solver phase (lines 350+ in `engineTickXPBD.ts`).
+```typescript
+draggedNode.x = engine.dragTarget.x;
+draggedNode.y = engine.dragTarget.y;
+```
+This ensures the solver constraints have a "Moving Anchor" to solve against.
+
+### 3. Ghost Velocity Prevention
+Requirement: "Set prevX to same as x each frame during drag"
+Why: To ensure that `v = (x - prevX)/dt` is zero (or controlled). If we let `prevX` lag behind, `reconcileAfterXPBDConstraints` might try to apply global corrections to it, or worse, releasing the node would result in a massive velocity vector `(mouse - old_position)` calculated by the integrator in the next frame.
+
+Code:
+```typescript
+if (draggedNode.prevX !== undefined) draggedNode.prevX = draggedNode.x;
+if (draggedNode.prevY !== undefined) draggedNode.prevY = draggedNode.y;
+```
 
 ### 4. Telemetry
--   **HUD**: Added `drag: ON/OFF`, `draggedNodeId`, `mode: pinned(0)`.
--   **Ghost Velocity**: `xpbdGhostVelEvents` tracks if non-dragged nodes are teleporting. Dragged node teleporting is expected (it's the hand), but its history is reconciled so it shouldn't trigger ghost alerts on itself if logic is sound.
+New HUD fields in XPBD Springs section:
+- `drag`: ON/OFF
+- `k`: 1 if kinematic pinning applied
+- `sync`: Number of history sync events (should match frame rate during drag)
 
-## Verification Plan (Manual)
+## Verification
 
-### T1: Direct Connection (Feel)
--   **Action**: Drag a node connected to others. Move mouse quickly back and forth.
--   **Expectation**:
-    -   Node follows mouse *instantly* (0 lag).
-    -   Neighbors stretch elastically.
-    -   HUD `drag: ON`. `mode: pinned(0)`.
+### Gesture 1: The Tug
+- **Action**: Grab a node connected to a cluster. Drag meaningful distance.
+- **Expected**: Neighbors should **instantly** stretch and follow. No lag.
+- **HUD**: `drag: ON`, `k=1`. `corrMax` should spike as springs stretch.
 
-### T2: Release Ringdown
--   **Action**: Drag node, build up speed, release while moving.
--   **Expectation**:
-    -   Node continues in direction of throw (Momentum).
-    -   Oscillates 1-3 times and settles.
-    -   NO "dead stop" or "teleport spike".
-    -   HUD `xpbdGhostVelEvents` remains low/zero during release.
+### Gesture 2: The Release
+- **Action**: Drag and hold, then release.
+- **Expected**: Node should NOT fly off (Explosion/Ghost Kick). It should effectively drop in place and let constraints pull it back.
+- **Physics**: Because `prevX` was synced to `x`, `velocity` is effectively zero on release.
 
-### T3: Cross-Check
--   Test with N=5, N=20, N=60. Behavior should be consistent.
+### Gesture 3: The Whip
+- **Action**: Grab and shake violently, then release while moving.
+- **Expected**: This implementation zeros velocity (`prevX = x`), so the node will **stop** mid-air and then accelerate via spring forces. It will **NOT** carry the mouse throw velocity. This satisfies the "clean ringdown" requirement (safer than inheriting chaotic throw velocity).
+
+## Files Modified
+1. `src/physics/engine/engineInteraction.ts` (Reference only, no changes needed for this slice)
+2. `src/physics/engine/engineTickXPBD.ts` (Core logic)
+3. `src/physics/engine/engineTickTypes.ts` (Telemetry types)
+4. `src/physics/engine/engineTickHud.ts` (Telemetry wiring)
+5. `src/physics/engine/physicsHud.ts` (Telemetry types)
+6. `src/playground/components/CanvasOverlays.tsx` (UI)
+
+## Status
+✅ Complete.

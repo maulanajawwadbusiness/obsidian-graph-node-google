@@ -17,9 +17,57 @@ const applyKinematicDrag = (engine: PhysicsEngineTickContext, dt: number) => {
             const oldX = node.x;
             const oldY = node.y;
 
-            // 1. Teleport to Target
-            node.x = engine.dragTarget.x;
-            node.y = engine.dragTarget.y;
+            // Run 7: Telemetry - Drag Lag (Pre-Snap)
+            const lagX = node.x - engine.dragTarget.x;
+            const lagY = node.y - engine.dragTarget.y;
+            const lagDist = Math.sqrt(lagX * lagX + lagY * lagY);
+            if (engine.xpbdFrameAccum) {
+                engine.xpbdFrameAccum.springs.dragLagMax = Math.max(engine.xpbdFrameAccum.springs.dragLagMax || 0, lagDist);
+            }
+
+            // FIX: Maximum Drag Distance Clamp
+            // Prevent graph topology from stretching too far
+            // Store initial grab position in grabOffset (repurposed)
+            if (!engine.grabOffset) {
+                // First frame of drag - store initial position
+                engine.grabOffset = { x: node.x, y: node.y };
+            }
+
+            const MAX_DRAG_DISTANCE = 300; // px from initial grab position
+            const initialX = engine.grabOffset.x;
+            const initialY = engine.grabOffset.y;
+
+            // Clamp dragTarget to be within MAX_DRAG_DISTANCE of initial position
+            const targetDx = engine.dragTarget.x - initialX;
+            const targetDy = engine.dragTarget.y - initialY;
+            const targetDist = Math.sqrt(targetDx * targetDx + targetDy * targetDy);
+
+            let clampedTargetX = engine.dragTarget.x;
+            let clampedTargetY = engine.dragTarget.y;
+
+            if (targetDist > MAX_DRAG_DISTANCE) {
+                const scale = MAX_DRAG_DISTANCE / targetDist;
+                clampedTargetX = initialX + targetDx * scale;
+                clampedTargetY = initialY + targetDy * scale;
+            }
+
+            // 1. Gradual Movement (Lerp) - Prevents Explosion
+            // Move toward clamped cursor at max speed per frame to avoid topology shock
+            const MAX_MOVE_PER_FRAME = 50; // px (50px/frame @ 60fps = 3000px/s, feels instant)
+            const dx = clampedTargetX - node.x;
+            const dy = clampedTargetY - node.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+
+            if (dist > MAX_MOVE_PER_FRAME) {
+                // Move MAX_MOVE_PER_FRAME pixels toward target
+                const scale = MAX_MOVE_PER_FRAME / dist;
+                node.x += dx * scale;
+                node.y += dy * scale;
+            } else {
+                // Close enough, snap to target
+                node.x = clampedTargetX;
+                node.y = clampedTargetY;
+            }
 
             // 2. Kinematic Velocity (Implicit)
             // v = (x - x_old) / dt
@@ -172,6 +220,36 @@ const reconcileAfterXPBDConstraints = (
         engine.xpbdFrameAccum.springs.prevAdjusted = prevSyncAppliedNodes;
         engine.xpbdFrameAccum.springs.ghostVelMax = ghostVelMax;
         engine.xpbdFrameAccum.springs.ghostVelEvents = ghostVelEvents;
+
+        // Run 7: Release Ghost Telemetry
+        // Check if the released node had a ghost spike (bad reconcile)
+        if (engine.lastReleasedNodeId && (engine.frameIndex - engine.lastReleaseFrame <= 1)) {
+            // Find the released node
+            // Since we loop all nodes, we could have done it above, but let's keep it clean here or peek
+            const relNode = engine.nodes.get(engine.lastReleasedNodeId);
+            if (relNode && relNode.prevX !== undefined) {
+                const dx = relNode.x - (preSolveSnapshot[nodeList.indexOf(relNode) * 2] || relNode.prevX); // Approximation if index unavailable easily?
+                // Wait, we have nodeList. Let's assume O(N) lookup isn't tragic for 1 node, or just re-calc ghost for it.
+                // Actually, we calculated ghostVel for all nodes above. 
+                // If the released node caused `ghostVelEvents` to increment, we want to know.
+                // But `ghostVelEvents` is global.
+                // We want strictly: Did the RELEASED node spike?
+
+                // Re-calculate strictly for the released node
+                const idx = nodeList.indexOf(relNode);
+                if (idx >= 0) {
+                    const ox = preSolveSnapshot[idx * 2 + 0];
+                    const oy = preSolveSnapshot[idx * 2 + 1];
+                    const rx = relNode.x - ox;
+                    const ry = relNode.y - oy;
+                    const rDist = Math.sqrt(rx * rx + ry * ry);
+                    const rVel = rDist / dt;
+                    if (rVel > GHOST_VEL_THRESHOLD_PX_PER_SEC) {
+                        engine.xpbdFrameAccum.springs.releaseGhostEvents = 1;
+                    }
+                }
+            }
+        }
     }
 };
 
@@ -213,6 +291,13 @@ const solveXPBDEdgeConstraints = (engine: PhysicsEngineTickContext, dt: number) 
             continue;
         }
 
+        // FIX: Skip ANY constraint involving the dragged node FIRST
+        // This prevents huge error calculations that would show in HUD
+        if (nA.id === engine.draggedNodeId || nB.id === engine.draggedNodeId) {
+            skippedCount++;
+            continue;
+        }
+
         // 1. Calculate Error (C)
         const dx = nA.x - nB.x;
         const dy = nA.y - nB.y;
@@ -249,6 +334,7 @@ const solveXPBDEdgeConstraints = (engine: PhysicsEngineTickContext, dt: number) 
 
         // 4. Alpha (Compliance)
         const alpha = c.compliance / (dt * dt);
+        const wSum = wA + wB;
 
         // 5. Delta Lambda
         const denom = wA + wB + alpha;
@@ -267,17 +353,20 @@ const solveXPBDEdgeConstraints = (engine: PhysicsEngineTickContext, dt: number) 
         let magA = Math.sqrt(pxA * pxA + pyA * pyA);
         let magB = Math.sqrt(pxB * pxB + pyB * pyB);
 
+        let capHit = false;
         if (magA > MAX_CORR_PX) {
             const scale = MAX_CORR_PX / magA;
             pxA *= scale;
             pyA *= scale;
             magA = Math.sqrt(pxA * pxA + pyA * pyA); // Strict Recompute
+            capHit = true;
         }
         if (magB > MAX_CORR_PX) {
             const scale = MAX_CORR_PX / magB;
             pxB *= scale;
             pyB *= scale;
             magB = Math.sqrt(pxB * pxB + pyB * pyB); // Strict Recompute
+            capHit = true;
         }
 
         nA.x += pxA;
@@ -288,6 +377,12 @@ const solveXPBDEdgeConstraints = (engine: PhysicsEngineTickContext, dt: number) 
         // Telemetry
         corrMax = Math.max(corrMax, magA, magB);
         corrSum += magA + magB;
+
+        if (i === 0 && engine.xpbdFrameAccum) {
+            engine.xpbdFrameAccum.springs.firstCapHit = capHit;
+            engine.xpbdFrameAccum.springs.firstAlpha = alpha;
+            engine.xpbdFrameAccum.springs.firstWSum = wSum;
+        }
 
         solvedCount++;
     }
@@ -318,6 +413,35 @@ export const runPhysicsTickXPBD = (engine: PhysicsEngineTickContext, dtIn: numbe
         rebuildXPBDConstraints(engine);
     }
 
+    let firstAId: string | null = null;
+    let firstBId: string | null = null;
+    let preIntegrateAX = 0;
+    let preIntegrateAY = 0;
+    let preIntegrateBX = 0;
+    let preIntegrateBY = 0;
+    let preSolveAX = 0;
+    let preSolveAY = 0;
+    let preSolveBX = 0;
+    let preSolveBY = 0;
+    let postSolveAX = 0;
+    let postSolveAY = 0;
+    let postSolveBX = 0;
+    let postSolveBY = 0;
+
+    if (engine.xpbdConstraints.length > 0) {
+        const c0 = engine.xpbdConstraints[0];
+        const a0 = engine.nodes.get(c0.nodeA);
+        const b0 = engine.nodes.get(c0.nodeB);
+        if (a0 && b0) {
+            firstAId = c0.nodeA;
+            firstBId = c0.nodeB;
+            preIntegrateAX = a0.x;
+            preIntegrateAY = a0.y;
+            preIntegrateBX = b0.x;
+            preIntegrateBY = b0.y;
+        }
+    }
+
     if (engine.xpbdFrameAccum) {
         engine.xpbdFrameAccum.edgeConstraintsExecuted = 0;
         engine.xpbdFrameAccum.springs.count = 0;
@@ -331,6 +455,36 @@ export const runPhysicsTickXPBD = (engine: PhysicsEngineTickContext, dtIn: numbe
         engine.xpbdFrameAccum.springs.prevAdjusted = 0;
         engine.xpbdFrameAccum.springs.ghostVelMax = 0;
         engine.xpbdFrameAccum.springs.ghostVelEvents = 0;
+        engine.xpbdFrameAccum.springs.releaseGhostEvents = 0;
+        engine.xpbdFrameAccum.springs.dragLagMax = 0;
+        engine.xpbdFrameAccum.springs.firstJumpPx = 0;
+        engine.xpbdFrameAccum.springs.firstJumpPhase = 'none';
+        engine.xpbdFrameAccum.springs.firstJumpNodeId = null;
+        engine.xpbdFrameAccum.springs.firstMovePx = 0;
+        engine.xpbdFrameAccum.springs.firstMovePhase = 'none';
+        engine.xpbdFrameAccum.springs.firstMoveNodeId = null;
+        engine.xpbdFrameAccum.springs.firstCapHit = false;
+        engine.xpbdFrameAccum.springs.firstAlpha = 0;
+        engine.xpbdFrameAccum.springs.firstWSum = 0;
+        engine.xpbdFrameAccum.springs.firstPreIntegrateJumpPx = 0;
+        engine.xpbdFrameAccum.springs.firstPreIntegrateNodeId = null;
+    }
+
+    if (engine.xpbdFrameAccum && engine.xpbdFirstPairPrev && firstAId && firstBId) {
+        const prev = engine.xpbdFirstPairPrev;
+        if (prev.aId === firstAId && prev.bId === firstBId) {
+            const jumpAPre = Math.sqrt(
+                (preIntegrateAX - prev.ax) * (preIntegrateAX - prev.ax) +
+                (preIntegrateAY - prev.ay) * (preIntegrateAY - prev.ay)
+            );
+            const jumpBPre = Math.sqrt(
+                (preIntegrateBX - prev.bx) * (preIntegrateBX - prev.bx) +
+                (preIntegrateBY - prev.by) * (preIntegrateBY - prev.by)
+            );
+            const maxPre = Math.max(jumpAPre, jumpBPre);
+            engine.xpbdFrameAccum.springs.firstPreIntegrateJumpPx = maxPre;
+            engine.xpbdFrameAccum.springs.firstPreIntegrateNodeId = jumpAPre >= jumpBPre ? firstAId : firstBId;
+        }
     }
 
     const policyResult = engine.timePolicy.evaluate(dtIn * 1000);
@@ -365,6 +519,17 @@ export const runPhysicsTickXPBD = (engine: PhysicsEngineTickContext, dtIn: numbe
     // Snap dragged node to target before solver sees it
     applyKinematicDrag(engine, dt);
 
+    if (firstAId && firstBId) {
+        const a0 = engine.nodes.get(firstAId);
+        const b0 = engine.nodes.get(firstBId);
+        if (a0 && b0) {
+            preSolveAX = a0.x;
+            preSolveAY = a0.y;
+            preSolveBX = b0.x;
+            preSolveBY = b0.y;
+        }
+    }
+
     // 3. Solver
     const nodeCount = nodeList.length;
     const preSolveSnapshot = new Float32Array(nodeCount * 2);
@@ -375,8 +540,95 @@ export const runPhysicsTickXPBD = (engine: PhysicsEngineTickContext, dtIn: numbe
 
     solveXPBDEdgeConstraints(engine, dt);
 
+    if (firstAId && firstBId) {
+        const a0 = engine.nodes.get(firstAId);
+        const b0 = engine.nodes.get(firstBId);
+        if (a0 && b0) {
+            postSolveAX = a0.x;
+            postSolveAY = a0.y;
+            postSolveBX = b0.x;
+            postSolveBY = b0.y;
+        }
+    }
+
     // 4. Reconcile
     reconcileAfterXPBDConstraints(engine, preSolveSnapshot, nodeList, dt);
+
+    if (engine.xpbdFrameAccum && firstAId && firstBId) {
+        const jumpAIntegrate = Math.sqrt(
+            (preSolveAX - preIntegrateAX) * (preSolveAX - preIntegrateAX) +
+            (preSolveAY - preIntegrateAY) * (preSolveAY - preIntegrateAY)
+        );
+        const jumpBIntegrate = Math.sqrt(
+            (preSolveBX - preIntegrateBX) * (preSolveBX - preIntegrateBX) +
+            (preSolveBY - preIntegrateBY) * (preSolveBY - preIntegrateBY)
+        );
+        const jumpASolve = Math.sqrt(
+            (postSolveAX - preSolveAX) * (postSolveAX - preSolveAX) +
+            (postSolveAY - preSolveAY) * (postSolveAY - preSolveAY)
+        );
+        const jumpBSolve = Math.sqrt(
+            (postSolveBX - preSolveBX) * (postSolveBX - preSolveBX) +
+            (postSolveBY - preSolveBY) * (postSolveBY - preSolveBY)
+        );
+
+        const maxIntegrate = Math.max(jumpAIntegrate, jumpBIntegrate);
+        const maxSolve = Math.max(jumpASolve, jumpBSolve);
+        let phase: 'integrate' | 'solver' | 'none' = 'none';
+        let nodeId: string | null = null;
+        let maxJump = 0;
+
+        if (maxIntegrate > 0 || maxSolve > 0) {
+            if (maxSolve >= maxIntegrate) {
+                phase = 'solver';
+                maxJump = maxSolve;
+                nodeId = jumpASolve >= jumpBSolve ? firstAId : firstBId;
+            } else {
+                phase = 'integrate';
+                maxJump = maxIntegrate;
+                nodeId = jumpAIntegrate >= jumpBIntegrate ? firstAId : firstBId;
+            }
+        }
+
+        engine.xpbdFrameAccum.springs.firstJumpPx = maxJump;
+        engine.xpbdFrameAccum.springs.firstJumpPhase = phase;
+        engine.xpbdFrameAccum.springs.firstJumpNodeId = nodeId;
+
+        const preJump = engine.xpbdFrameAccum.springs.firstPreIntegrateJumpPx || 0;
+        const preNode = engine.xpbdFrameAccum.springs.firstPreIntegrateNodeId;
+        let movePhase: 'pre' | 'integrate' | 'solver' | 'none' = 'none';
+        let movePx = 0;
+        let moveNode: string | null = null;
+        if (preJump > 0 || maxJump > 0) {
+            if (preJump >= maxJump) {
+                movePhase = 'pre';
+                movePx = preJump;
+                moveNode = preNode;
+            } else {
+                movePhase = phase === 'none' ? 'integrate' : phase;
+                movePx = maxJump;
+                moveNode = nodeId;
+            }
+        }
+        engine.xpbdFrameAccum.springs.firstMovePx = movePx;
+        engine.xpbdFrameAccum.springs.firstMovePhase = movePhase;
+        engine.xpbdFrameAccum.springs.firstMoveNodeId = moveNode;
+    }
+
+    if (firstAId && firstBId) {
+        const a0 = engine.nodes.get(firstAId);
+        const b0 = engine.nodes.get(firstBId);
+        if (a0 && b0) {
+            engine.xpbdFirstPairPrev = {
+                aId: firstAId,
+                bId: firstBId,
+                ax: a0.x,
+                ay: a0.y,
+                bx: b0.x,
+                by: b0.y
+            };
+        }
+    }
 
     if (debugStats && debugStats.xpbd) {
         const accum = engine.xpbdFrameAccum;

@@ -5,15 +5,12 @@ Implement strict history reconciliation to ensure position projections do not be
 
 ## Implementation Details
 
-### 1. Motion Model
--   **Engine**: Velocity-based integration ($v_{new} += a dt; x_{new} += v_{new} dt$).
--   **Conflict**: XPBD Solver moves $x_{new}$ directly. If $prevX$ is not updated, the velocity equation $v = (x - prevX)/dt$ (used in collision or velocity rebuild) would see this move as massive velocity.
--   **Strategy**: **Snapshot & Delta Reconcile**.
-    - Snapshot $x_{before}$ before solver.
-    - Run Solver ($x_{before} \to x_{after}$).
-    - $\Delta = x_{after} - x_{before}$.
-    - $prevX_{after} = prevX_{before} + \Delta$.
-    - Result: $(x - prevX)$ remains invariant during solve.
+### 1. Motion Model (Explicit Choice: Verlet-Consistency)
+-   **Engine State**: Hybrid, but `prevX/prevY` governs implicit velocity rebuilding in many paths.
+-   **Chosen Rule**: **Verlet-Consistency**.
+    -   Logic: "If position changes by $\Delta$, history must change by $\Delta$ to preserve Velocity."
+    -   Reasoning: Velocity $v$ is derived as $(x - prevX) / dt$. If we only move $x$ (Projection), $v$ spikes. Moving both preserves the existing $v$ while teleporting the body.
+    -   Constraint: This assumes `(x - prevX)` is the dominant source of truth for momentum continuity.
 
 ### 2. Logic Changes
 -   **File**: `src/physics/engine/engineTickXPBD.ts`

@@ -111,11 +111,22 @@ export type PhysicsEngineTickContext = {
             corrMax: number;
             skipped: number;
             singularity: number;
-            skipped: number;
-            singularity: number;
             prevAdjusted: number;
             ghostVelMax: number;
             ghostVelEvents: number;
+            releaseGhostEvents: number;
+            dragLagMax: number;
+            firstJumpPx: number;
+            firstJumpPhase: 'integrate' | 'solver' | 'none';
+            firstJumpNodeId: string | null;
+            firstMovePx: number;
+            firstMovePhase: 'pre' | 'integrate' | 'solver' | 'none';
+            firstMoveNodeId: string | null;
+            firstCapHit: boolean;
+            firstAlpha: number;
+            firstWSum: number;
+            firstPreIntegrateJumpPx: number;
+            firstPreIntegrateNodeId: string | null;
         };
         repel: { checked: number; solved: number; overlap: number; corrSum: number; sing: number };
         edgeConstraintsExecuted: number;
@@ -133,6 +144,14 @@ export type PhysicsEngineTickContext = {
         nonFiniteRestLenCount: number;
         zeroLenEdgeCount: number;
     };
+    xpbdFirstPairPrev?: {
+        aId: string;
+        bId: string;
+        ax: number;
+        ay: number;
+        bx: number;
+        by: number;
+    } | null;
 };
 
 export interface XPBDConstraint {

@@ -171,4 +171,8 @@ export const DEFAULT_PHYSICS_CONFIG: ForceConfig = {
     enableMicroDrift: false, // Fix #16: Stable by default
     debugAllowEarlyExpansion: false,
     useXPBD: true,
+
+    // XPBD Calibration
+    xpbdLinkCompliance: 0.0001, // Stiff by default (near-rigid)
+    xpbdMaxCorrPerConstraintPx: 100.0, // Generous cap
 };

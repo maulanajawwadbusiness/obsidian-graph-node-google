@@ -16,6 +16,20 @@ export const updateHudSnapshot = (
     let avgVelSq = 0;
     let maxPrevGap = 0;
     let ghostVelSuspectCount = 0;
+    let firstConstraintDistPx = 0;
+    let firstConstraintRestPx = 0;
+    let firstConstraintErrPx = 0;
+    let firstConstraintAId: string | undefined;
+    let firstConstraintBId: string | undefined;
+    let firstConstraintAX = 0;
+    let firstConstraintAY = 0;
+    let firstConstraintBX = 0;
+    let firstConstraintBY = 0;
+    let firstConstraintPrevDistPx = 0;
+    let firstConstraintPrevAX = 0;
+    let firstConstraintPrevAY = 0;
+    let firstConstraintPrevBX = 0;
+    let firstConstraintPrevBY = 0;
 
     for (const node of nodes) {
         avgVelSq += node.vx * node.vx + node.vy * node.vy;
@@ -40,6 +54,37 @@ export const updateHudSnapshot = (
         }
     }
     avgVelSq /= nodeCount;
+
+    if (engine.xpbdConstraints && engine.xpbdConstraints.length > 0) {
+        const c = engine.xpbdConstraints[0];
+        const a = engine.nodes.get(c.nodeA);
+        const b = engine.nodes.get(c.nodeB);
+        if (a && b) {
+            const dx = a.x - b.x;
+            const dy = a.y - b.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            firstConstraintDistPx = dist;
+            firstConstraintRestPx = c.restLen;
+            firstConstraintErrPx = dist - c.restLen;
+            firstConstraintAId = c.nodeA;
+            firstConstraintBId = c.nodeB;
+            firstConstraintAX = a.x;
+            firstConstraintAY = a.y;
+            firstConstraintBX = b.x;
+            firstConstraintBY = b.y;
+
+            const prev = engine.xpbdFirstPairPrev;
+            if (prev && prev.aId === c.nodeA && prev.bId === c.nodeB) {
+                const pdx = prev.bx - prev.ax;
+                const pdy = prev.by - prev.ay;
+                firstConstraintPrevDistPx = Math.sqrt(pdx * pdx + pdy * pdy);
+                firstConstraintPrevAX = prev.ax;
+                firstConstraintPrevAY = prev.ay;
+                firstConstraintPrevBX = prev.bx;
+                firstConstraintPrevBY = prev.by;
+            }
+        }
+    }
 
     const corrections = stats.passes.Corrections?.correction ?? 0;
     const jitterSample = nodeCount > 0 ? corrections / nodeCount : 0;
@@ -256,6 +301,7 @@ export const updateHudSnapshot = (
         xpbdSpringPrevAdjusted: engine.xpbdFrameAccum?.springs.prevAdjusted ?? 0,
         xpbdGhostVelMax: engine.xpbdFrameAccum?.springs.ghostVelMax ?? 0,
         xpbdGhostVelEvents: engine.xpbdFrameAccum?.springs.ghostVelEvents ?? 0,
+        releaseGhostEvents: engine.xpbdFrameAccum?.springs.releaseGhostEvents ?? 0,
         xpbdGhostSyncs: engine.xpbdFrameAccum?.springs.prevAdjusted ?? 0,
 
         xpbdInvNonFinite: engine.xpbdConstraintStats?.nonFiniteRestLenCount ?? 0,
@@ -263,10 +309,35 @@ export const updateHudSnapshot = (
 
         // Mini Run 7: Drag Coupling
         dragActive: !!engine.draggedNodeId,
-        draggedNodeId: engine.draggedNodeId ?? undefined,
-        dragInvMassMode: engine.draggedNodeId ? 'pinned(0)' : undefined,
+        draggedNodeId: engine.draggedNodeId,
+        dragInvMassMode: true, // Kinematic lock is effective infinite mass
+        dragLagMax: engine.xpbdFrameAccum?.springs.dragLagMax ?? 0,
 
-
+        xpbdFirstConstraintDistPx: firstConstraintDistPx,
+        xpbdFirstConstraintRestPx: firstConstraintRestPx,
+        xpbdFirstConstraintErrPx: firstConstraintErrPx,
+        xpbdFirstConstraintAId: firstConstraintAId,
+        xpbdFirstConstraintBId: firstConstraintBId,
+        xpbdFirstConstraintAX: firstConstraintAX,
+        xpbdFirstConstraintAY: firstConstraintAY,
+        xpbdFirstConstraintBX: firstConstraintBX,
+        xpbdFirstConstraintBY: firstConstraintBY,
+        xpbdFirstConstraintPrevDistPx: firstConstraintPrevDistPx,
+        xpbdFirstConstraintPrevAX: firstConstraintPrevAX,
+        xpbdFirstConstraintPrevAY: firstConstraintPrevAY,
+        xpbdFirstConstraintPrevBX: firstConstraintPrevBX,
+        xpbdFirstConstraintPrevBY: firstConstraintPrevBY,
+        xpbdFirstJumpPx: engine.xpbdFrameAccum?.springs.firstJumpPx ?? 0,
+        xpbdFirstJumpPhase: engine.xpbdFrameAccum?.springs.firstJumpPhase ?? 'none',
+        xpbdFirstJumpNodeId: engine.xpbdFrameAccum?.springs.firstJumpNodeId ?? null,
+        xpbdFirstPreIntegrateJumpPx: engine.xpbdFrameAccum?.springs.firstPreIntegrateJumpPx ?? 0,
+        xpbdFirstPreIntegrateNodeId: engine.xpbdFrameAccum?.springs.firstPreIntegrateNodeId ?? null,
+        xpbdFirstMovePx: engine.xpbdFrameAccum?.springs.firstMovePx ?? 0,
+        xpbdFirstMovePhase: engine.xpbdFrameAccum?.springs.firstMovePhase ?? 'none',
+        xpbdFirstMoveNodeId: engine.xpbdFrameAccum?.springs.firstMoveNodeId ?? null,
+        xpbdFirstCapHit: engine.xpbdFrameAccum?.springs.firstCapHit ?? false,
+        xpbdFirstAlpha: engine.xpbdFrameAccum?.springs.firstAlpha ?? 0,
+        xpbdFirstWSum: engine.xpbdFrameAccum?.springs.firstWSum ?? 0,
 
         // Frame Accumulators
         ticksThisFrame: engine.xpbdFrameAccum?.ticks || 0,

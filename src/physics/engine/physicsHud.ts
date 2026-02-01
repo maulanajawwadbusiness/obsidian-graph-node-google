@@ -96,11 +96,40 @@ export type PhysicsHudSnapshot = {
     xpbdGhostVelMax?: number;
     xpbdGhostVelEvents?: number;
     xpbdGhostSyncs?: number;
+    releaseGhostEvents?: number;
 
     // Mini Run 7: Drag Coupling
     dragActive?: boolean;
-    draggedNodeId?: string;
-    dragInvMassMode?: 'pinned(0)' | 'free(1)';
+    draggedNodeId?: string | null;
+    dragInvMassMode?: boolean;
+    dragLagMax?: number;
+
+    // XPBD Debug: First Constraint Snapshot
+    xpbdFirstConstraintDistPx?: number;
+    xpbdFirstConstraintRestPx?: number;
+    xpbdFirstConstraintErrPx?: number;
+    xpbdFirstConstraintAId?: string;
+    xpbdFirstConstraintBId?: string;
+    xpbdFirstConstraintAX?: number;
+    xpbdFirstConstraintAY?: number;
+    xpbdFirstConstraintBX?: number;
+    xpbdFirstConstraintBY?: number;
+    xpbdFirstConstraintPrevDistPx?: number;
+    xpbdFirstConstraintPrevAX?: number;
+    xpbdFirstConstraintPrevAY?: number;
+    xpbdFirstConstraintPrevBX?: number;
+    xpbdFirstConstraintPrevBY?: number;
+    xpbdFirstJumpPx?: number;
+    xpbdFirstJumpPhase?: 'integrate' | 'solver' | 'none';
+    xpbdFirstJumpNodeId?: string | null;
+    xpbdFirstPreIntegrateJumpPx?: number;
+    xpbdFirstPreIntegrateNodeId?: string | null;
+    xpbdFirstMovePx?: number;
+    xpbdFirstMovePhase?: 'pre' | 'integrate' | 'solver' | 'none';
+    xpbdFirstMoveNodeId?: string | null;
+    xpbdFirstCapHit?: boolean;
+    xpbdFirstAlpha?: number;
+    xpbdFirstWSum?: number;
 
 
 

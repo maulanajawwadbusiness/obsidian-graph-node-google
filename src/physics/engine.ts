@@ -147,6 +147,9 @@ export class PhysicsEngine {
         },
     };
     public lastDraggedNodeId: string | null = null;
+    // Run 7: Release Ghost Telemetry
+    public lastReleasedNodeId: string | null = null;
+    public lastReleaseFrame: number = 0;
 
     // Fix #11: Impulse Guard State
     public lastImpulseTime: number = 0;
@@ -159,10 +162,38 @@ export class PhysicsEngine {
 
     // XPBD State
     public xpbdCanaryApplied: boolean = false;
+    public xpbdConstraints: import('./engine/engineTickTypes').XPBDConstraint[] = [];
+    public xpbdConstraintsDirty: boolean = true;
+    public xpbdFirstPairPrev: { aId: string; bId: string; ax: number; ay: number; bx: number; by: number } | null = null;
     public xpbdFrameAccum = {
         ticks: 0,
         dtSum: 0,
-        springs: { count: 0, iter: 0, corrSum: 0, errSum: 0 },
+        springs: {
+            count: 0,
+            iter: 0,
+            corrSum: 0,
+            errSum: 0,
+            solveMs: 0,
+            corrMax: 0,
+            skipped: 0,
+            singularity: 0,
+            prevAdjusted: 0,
+            ghostVelMax: 0,
+            ghostVelEvents: 0,
+            releaseGhostEvents: 0,
+            dragLagMax: 0,
+            firstJumpPx: 0,
+            firstJumpPhase: 'none',
+            firstJumpNodeId: null,
+            firstMovePx: 0,
+            firstMovePhase: 'none',
+            firstMoveNodeId: null,
+            firstCapHit: false,
+            firstAlpha: 0,
+            firstWSum: 0,
+            firstPreIntegrateJumpPx: 0,
+            firstPreIntegrateNodeId: null
+        },
         repel: { checked: 0, solved: 0, overlap: 0, corrSum: 0, sing: 0 },
         edgeConstraintsExecuted: 0
     };
@@ -174,7 +205,32 @@ export class PhysicsEngine {
         this.xpbdFrameAccum = {
             ticks: 0,
             dtSum: 0,
-            springs: { count: 0, iter: 0, corrSum: 0, errSum: 0 },
+            springs: {
+                count: 0,
+                iter: 0,
+                corrSum: 0,
+                errSum: 0,
+                solveMs: 0,
+                corrMax: 0,
+                skipped: 0,
+                singularity: 0,
+                prevAdjusted: 0,
+                ghostVelMax: 0,
+                ghostVelEvents: 0,
+                releaseGhostEvents: 0,
+                dragLagMax: 0,
+                firstJumpPx: 0,
+                firstJumpPhase: 'none',
+                firstJumpNodeId: null,
+                firstMovePx: 0,
+                firstMovePhase: 'none',
+                firstMoveNodeId: null,
+                firstCapHit: false,
+                firstAlpha: 0,
+                firstWSum: 0,
+                firstPreIntegrateJumpPx: 0,
+                firstPreIntegrateNodeId: null
+            },
             repel: { checked: 0, solved: 0, overlap: 0, corrSum: 0, sing: 0 },
             edgeConstraintsExecuted: 0
         };

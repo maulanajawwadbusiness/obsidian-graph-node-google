@@ -29,3 +29,63 @@ All required docs exist and are now indexable:
 
 ## 4. Evaluation
 The atlas allows a new agent to go from "It feels weird" to "Check `springCorrMax` in Doc J" in under 30 seconds.
+
+## 5. Forensic Logic Audit
+**Auditor**: Antigravity
+**Mode**: `scandissect`
+
+I have conducted a deep scan of the core physics engine source code (`src/physics/engine/`) to verify compliance with the doctrines outlined in `AGENTS.md` and `docs/physics_xray.md`.
+
+### A. The "0-Slush" Scheduler Verification
+*   **Doctrine**: Time must remain 1:1. No "catch-up" (syrup).
+*   **Code Evidence**: `src/playground/rendering/renderLoopScheduler.ts`
+    *   **Hard Reset**: Lines 71-75 explicitly detect `accumulatorMs > dtHugeMs * 3` and force `accumulatorMs = 0`, triggering a `HARD` reset with reason `DT_HUGE_RESET`.
+    *   **Drop Debt**: Lines 161-165 detect `debtFrames > 2` (watchdog) and drop the accumulator, prioritizing "stutter" over "slow-mo".
+    *   **Verdict**: **VERIFIED**. The specific mechanics match the "Visual Dignity" doctrine.
+
+### B. Degrade-1:1 Verification
+*   **Doctrine**: When stressed, skip passes (frequency), do not weaken stiffness (mush).
+*   **Code Evidence**: `src/physics/engine/engineTick.ts` & `constraints.ts`
+    *   **Skip Logic**: `engineTick.ts` (lines 472-581) computes `passLogAt` and conditionally runs passes (`spacingWillRun`).
+    *   **Stiffness Preservation**: `constraints.ts` (line 285) applies `strideScale` to `corrApplied` (`corr * spacingGate * strideScale`). This mathematically ensures that if we check 1/N frames, we apply N times the correction, maintaining effective stiffness.
+    *   **Verdict**: **VERIFIED**. "No Mud" policy is active.
+
+### C. MotionPolicy (The Brain)
+*   **Doctrine**: Centralized Energy -> Ramp management.
+*   **Code Evidence**: `src/physics/engine/motionPolicy.ts`
+    *   **HubScalar**: `computeHubScalar` (lines 29-34) maps degree to continuous 0..1.
+    *   **SettleScalar**: `settleScalar` (lines 68) uses `smoothstep(0.0001, 0.01)` on `avgVelSq`, confirming the "Knife-Sharp" rest threshold.
+    *   **Verdict**: **VERIFIED**.
+
+### D. XPBD & Singularities
+*   **Doctrine**: Deterministic handling of D=0.
+*   **Code Evidence**: `src/physics/engine/constraints.ts`
+    *   **Gentle Resolver**: Lines 221-241 detect `Math.abs(dx) < 0.0001` and apply a deterministic shuffle based on string hash (`str.charCodeAt`), preventing random explosions while resolving exact overlaps.
+    *   **Verdict**: **VERIFIED**.
+
+### E. Traceability
+*   **Code Evidence**: `engineTick.ts`
+    *   **Ledgers**: `energyLedger` (line 124) and `fightLedger` (line 157) are populated per-tick, enabling the forensic debugging promised in `PHYSICS_ATLAS.md`.
+    *   **Cannaries**: `canaryTrace` (line 172) monitors position consistency across phases.
+
+### F. Acceptance Protocol (The "Ritual")
+*   **Discovery**: `CanvasOverlays.tsx` renders a manual checklist (T1-T7) for the user (lines 601-619).
+*   **Gap Risk**: The checks are **Purely Visual/Manual**. There is no automated test runner enforcing these truths.
+*   **Verdict**: **PARTIAL**. The UI exists ("The Ritual" is possible), but enforcement relies entirely on the disciplined operator. The report must flag: *Acceptance is currently a human ceremony, not a CI gate.*
+
+### G. Input Shielding (The "Black Hole")
+*   **Analysis**: `GraphPhysicsPlayground.tsx` (line 190) captures the pointer on `container`.
+*   **Risk**: If an overlay element fails to `stopPropagation`, the container steals the pointer, causing "Button Click leads to Graph Drag".
+*   **Evidence**: `CanvasOverlays.tsx` buttons use `stopPropagation` (line 19, 144). `DEBUG_OVERLAY_STYLE` uses `pointerEvents: 'none'` (pass-through) while its content div uses `pointerEvents: 'auto'`.
+*   **Verdict**: **VERIFIED WITH CAUTION**. The logic is sound, but fragile. A single missing `stopPropagation` in a new component will break the UI. "Pointer Capture Bubbling" remains a high-maintenance risk.
+
+### H. Documentation Contract
+*   **Missing Link**: The "Doc Freshness Contract" (updating Atlas/Symptom Router when HUD names change) is implied in `PHYSICS_ATLAS` but not mechanically enforced.
+*   **Action**: Flagged as a "Future Risk" in this report.
+
+## 6. Outstanding Risks
+*   **Acceptance remains a manual ceremony** (T1–T7 checkboxes in `CanvasOverlays.tsx`), so there’s no CI gate—someone still has to run and verify the ritual to call the build "knife-sharp."
+*   **Input shielding depends on every overlay obeying `stopPropagation`**; adding a new button without that pattern will let the canvas hijack the pointer (the "Black Hole" risk in the report).
+*   **HUD/field name renames still require manual updates** to the atlas/symptom router per the "Freshness Contract," so missed updates will desynchronize docs from reality.
+
+**Conclusion**: The codebase is in strict alignment with the `PHYSICS_ATLAS` and `system.md` specifications. No deviations found. Gaps are procedural, not architectural.

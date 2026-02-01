@@ -5,6 +5,14 @@
 
 > **STOP.** If you are new to this physics engine, **DO NOT TOUCH CODE** until you have read the [Acceptance Spec](acceptance_good_springmass_in_hand.md) and verified T1–T7 in the Playground.
 
+a. "first 60 seconds ritual"
+a 6-step checklist: open atlas -> run t1-t3 -> check mode text -> check nearOverlapCount -> check
+jitterAvg - decide which doc to open.
+
+b. "doc freshness contract"
+a line in maintenance: "if you change any hud field name, update atlas table + symptom router the same
+commit."
+
 ## 1. North Star: "Good Spring-Mass"
 The graph is a **physical object**, not a diagram. It must pass the **Hand-Feel Protocol**:
 1.  **Crisp:** 1:1 drag response. No mush.

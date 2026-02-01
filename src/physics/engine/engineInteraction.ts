@@ -86,11 +86,15 @@ export const updateBounds = (engine: PhysicsEngineInteractionContext, width: num
 export const grabNode = (engine: PhysicsEngineInteractionContext, nodeId: string, position: { x: number; y: number }) => {
     if (engine.nodes.has(nodeId)) {
         engine.draggedNodeId = nodeId;
-        engine.dragTarget = { ...position };
         engine.lastDraggedNodeId = nodeId;
 
         const node = engine.nodes.get(nodeId);
         if (node) {
+            // FIX: Initialize dragTarget to NODE position, not cursor
+            // This prevents the initial huge jump that causes explosion
+            // The lerp in applyKinematicDrag will smoothly move toward cursor
+            engine.dragTarget = { x: node.x, y: node.y };
+
             node.isFixed = true;
 
             node.vx = 0;
@@ -125,6 +129,10 @@ export const moveDrag = (engine: PhysicsEngineInteractionContext, position: { x:
 
 export const releaseNode = (engine: PhysicsEngineInteractionContext) => {
     if (engine.draggedNodeId) {
+        // Run 7: Track release for telemetry
+        engine.lastReleasedNodeId = engine.draggedNodeId;
+        engine.lastReleaseFrame = (engine as any).frameIndex || 0; // Cast for safety if context missing frameIndex
+
         const node = engine.nodes.get(engine.draggedNodeId);
         if (node) {
             // Run 7: Momentum Preservation
@@ -146,6 +154,7 @@ export const releaseNode = (engine: PhysicsEngineInteractionContext) => {
     engine.draggedNodeId = null;
     engine.dragTarget = null;
     engine.lastDraggedNodeId = null;
+    engine.grabOffset = null; // Clear drag distance clamp
     engine.idleFrames = 0;
 };
 

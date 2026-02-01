@@ -139,8 +139,6 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
                     type="button"
                     style={DEBUG_TOGGLE_STYLE}
                     onMouseDown={stopPropagation}
-                    onMouseMove={stopPropagation}
-                    onMouseUp={stopPropagation}
                     onPointerDown={stopPropagation}
                     onClick={(e) => {
                         stopPropagation(e);
@@ -158,8 +156,6 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
                     type="button"
                     style={THEME_TOGGLE_STYLE}
                     onMouseDown={stopPropagation}
-                    onMouseMove={stopPropagation}
-                    onMouseUp={stopPropagation}
                     onPointerDown={stopPropagation}
                     onClick={(e) => {
                         stopPropagation(e);
@@ -177,8 +173,6 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
                     type="button"
                     style={SIDEBAR_TOGGLE_STYLE}
                     onMouseDown={stopPropagation}
-                    onMouseMove={stopPropagation}
-                    onMouseUp={stopPropagation}
                     onPointerDown={stopPropagation}
                     onClick={(e) => {
                         stopPropagation(e);
@@ -203,12 +197,8 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
                         pointerEvents: 'none' // FIX: Allow click-through on background
                     }}
                     onMouseDown={stopPropagation}
-                    onMouseMove={stopPropagation}
-                    onMouseUp={stopPropagation}
                     onWheel={stopPropagation}
                     onPointerDown={stopPropagation}
-                    onPointerMove={stopPropagation}
-                    onPointerUp={stopPropagation}
                 >
                     <div style={{ pointerEvents: 'auto' }}>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
@@ -446,13 +436,20 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
                                             solved: {hud.xpbdSpringSolved || 0}<br />
                                             corrMax: {(hud.xpbdSpringCorrMaxPx || 0).toFixed(3)} px<br />
                                             errAvg: {(hud.xpbdSpringErrAvgPx || 0).toFixed(3)} px<br />
+                                            first: {(hud.xpbdFirstConstraintDistPx || 0).toFixed(1)} / {(hud.xpbdFirstConstraintRestPx || 0).toFixed(1)} (C={(hud.xpbdFirstConstraintErrPx || 0).toFixed(1)})<br />
+                                            pair: {hud.xpbdFirstConstraintAId || '-'} ({(hud.xpbdFirstConstraintAX || 0).toFixed(1)},{(hud.xpbdFirstConstraintAY || 0).toFixed(1)}) ↔ {hud.xpbdFirstConstraintBId || '-'} ({(hud.xpbdFirstConstraintBX || 0).toFixed(1)},{(hud.xpbdFirstConstraintBY || 0).toFixed(1)})<br />
+                                            prev: {(hud.xpbdFirstConstraintPrevDistPx || 0).toFixed(1)} ({(hud.xpbdFirstConstraintPrevAX || 0).toFixed(1)},{(hud.xpbdFirstConstraintPrevAY || 0).toFixed(1)}) ↔ ({(hud.xpbdFirstConstraintPrevBX || 0).toFixed(1)},{(hud.xpbdFirstConstraintPrevBY || 0).toFixed(1)})<br />
+                                            jump: {(hud.xpbdFirstJumpPx || 0).toFixed(1)} px ({hud.xpbdFirstJumpPhase || 'none'} / {hud.xpbdFirstJumpNodeId || '-'})<br />
+                                            pre: {(hud.xpbdFirstPreIntegrateJumpPx || 0).toFixed(1)} px (pre / {hud.xpbdFirstPreIntegrateNodeId || '-'})<br />
+                                            move: {(hud.xpbdFirstMovePx || 0).toFixed(1)} px ({hud.xpbdFirstMovePhase || 'none'} / {hud.xpbdFirstMoveNodeId || '-'})<br />
+                                            cap: {hud.xpbdFirstCapHit ? 'Y' : 'N'} | α: {(hud.xpbdFirstAlpha || 0).toExponential(2)} | wSum: {(hud.xpbdFirstWSum || 0).toFixed(2)}<br />
                                             rest: {(hud.xpbdSpringRestMinPx || 0).toFixed(0)}-{(hud.xpbdSpringRestMaxPx || 0).toFixed(0)} (μ={(hud.xpbdSpringRestAvgPx || 0).toFixed(0)})<br />
                                             solve: {(hud.xpbdSpringSolveMs || 0).toFixed(2)} ms<br />
                                             <span style={{ fontSize: '0.9em', color: '#888' }}>
                                                 drop: {hud.xpbdSpringSkipped}/{hud.xpbdSpringSingularity} | sync: {hud.xpbdGhostSyncs}<br />
-                                                <span title="Peak inferred velocity from solver corrections (Projection / dt)">ghost:</span> {(hud.xpbdGhostVelMax || 0).toFixed(1)}px/s (evt: {hud.xpbdGhostVelEvents})<br />
+                                                <span title="Peak inferred velocity from solver corrections (Projection / dt)">ghost:</span> {(hud.xpbdGhostVelMax || 0).toFixed(1)}px/s (evt: {hud.xpbdGhostVelEvents} | rel: {hud.releaseGhostEvents})<br />
                                                 inv: {hud.xpbdInvInvalid} | inf: {hud.xpbdInvNonFinite} | 0len: {hud.xpbdInvZero}<br />
-                                                drag: {hud.dragActive ? 'ON' : 'OFF'} {hud.draggedNodeId ? `(${hud.draggedNodeId})` : ''} mode: {hud.dragInvMassMode || '-'}
+                                                drag: {hud.dragActive ? 'ON' : 'OFF'} {hud.draggedNodeId ? `(${hud.draggedNodeId})` : ''} lag: {(hud.dragLagMax || 0).toFixed(1)}px
                                             </span>
                                         </div>
                                     )}

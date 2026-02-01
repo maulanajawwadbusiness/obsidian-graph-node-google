@@ -193,13 +193,16 @@ const applyDragTargetSync = (
         engine.moveDrag({ x, y });
     }
 
-    if (engine.draggedNodeId && engine.dragTarget) {
-        const dragged = engine.nodes.get(engine.draggedNodeId);
-        if (dragged) {
-            dragged.x = engine.dragTarget.x;
-            dragged.y = engine.dragTarget.y;
-        }
-    }
+    // REMOVED: Hard teleport that was overriding kinematic lerp
+    // The physics engine (applyKinematicDrag) handles drag movement with gradual lerp
+    // This hard teleport was causing explosions by bypassing the smooth movement
+    // if (engine.draggedNodeId && engine.dragTarget) {
+    //     const dragged = engine.nodes.get(engine.draggedNodeId);
+    //     if (dragged) {
+    //         dragged.x = engine.dragTarget.x;
+    //         dragged.y = engine.dragTarget.y;
+    //     }
+    // }
 };
 
 const syncHoverPerfCounters = (

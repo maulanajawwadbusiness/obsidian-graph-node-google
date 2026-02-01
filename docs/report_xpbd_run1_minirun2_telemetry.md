@@ -30,8 +30,9 @@ Updated "XPBD Proof-of-Life" and "XPBD Springs" sections in `src/playground/comp
 -   **Metrics**:
     -   `enabled`: true/false
     -   `constraints`: Live link count
+    -   `solved`: Linked to `iter` accumulator (prepared for real solver count)
     -   `solve`: Execution time (includes dummy 100-iter loop for proof-of-life)
-    -   `errAvg`: `errSum / count` (Valid math prepared for future data)
+    -   `errAvg`: `errSum / count` (Valid math, currently 0.000)
 
 ## Verification
 

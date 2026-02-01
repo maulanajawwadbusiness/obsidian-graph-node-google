@@ -31,6 +31,7 @@ const applyXPBDEdgeConstraintsStub = (engine: PhysicsEngineTickContext) => {
         // No allocations, no loops.
         const s = engine.xpbdFrameAccum.springs;
         s.count = engine.links.length; // Live count
+        s.iter += 0;                   // Placeholder for solver iterations
         s.solveMs += duration;         // Accumulate time
         s.errSum += 0;                 // Placeholder for error accumulation
         s.corrSum += 0;                // Placeholder for correction accumulation

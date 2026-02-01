@@ -239,7 +239,7 @@ export const updateHudSnapshot = (
         // XPBD Springs Proof-of-Life 0
         xpbdSpringEnabled: !!engine.config.useXPBD,
         xpbdSpringConstraints: engine.xpbdFrameAccum?.springs.count ?? 0,
-        xpbdSpringSolved: 0, // Not implemented yet
+        xpbdSpringSolved: engine.xpbdFrameAccum?.springs.iter ?? 0,
         xpbdSpringCorrMaxPx: engine.xpbdFrameAccum?.springs.corrMax ?? 0,
         xpbdSpringErrAvgPx: (engine.xpbdFrameAccum?.springs.count || 0) > 0
             ? (engine.xpbdFrameAccum!.springs.errSum / engine.xpbdFrameAccum!.springs.count)

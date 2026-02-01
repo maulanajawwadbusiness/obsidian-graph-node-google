@@ -87,4 +87,12 @@ export type PhysicsEngineTickContext = {
     // FIX D: Scale & Determinism
     localDensityCache: Map<string, number>;
     onWorldShift?: (dx: number, dy: number) => void;
+
+    // XPBD Frame Accumulation
+    xpbdFrameAccum: {
+        ticks: number;
+        dtSum: number;
+        springs: { count: number; iter: number; corrSum: number; errSum: number };
+        repel: { checked: number; solved: number; overlap: number; corrSum: number; sing: number };
+    };
 };

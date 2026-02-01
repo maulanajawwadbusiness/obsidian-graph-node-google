@@ -215,5 +215,16 @@ export const updateHudSnapshot = (
             max: stats.xpbd.repelCorrMaxPx
         },
         xpbdRepelSingularities: stats.xpbd.repelSingularityFallbackCount,
+
+        // Frame Accumulators
+        ticksThisFrame: engine.xpbdFrameAccum?.ticks || 0,
+        dtUseSecLastTick: dtMs / 1000,
+        dtUseSecFrameAvg: (engine.xpbdFrameAccum?.ticks > 0)
+            ? (engine.xpbdFrameAccum.dtSum / engine.xpbdFrameAccum.ticks)
+            : (dtMs / 1000),
+
+        escapeFiresPerSec: stats.injectors.escapeFires,
+        escapeLoopSuspectCount: stats.injectors.escapeLoopSuspectCount,
+        lastInjector: stats.injectors.lastInjector,
     };
 };

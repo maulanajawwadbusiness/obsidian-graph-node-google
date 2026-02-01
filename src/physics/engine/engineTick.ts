@@ -156,6 +156,25 @@ export const runPhysicsTick = (engine: PhysicsEngineTickContext, dtIn: number) =
     };
     measurePosSum('PreTick');
 
+    // XPBD Canary: One-Shot Shift
+    if (dt > 0) { // Safety check
+        if (engine.config.debugXPBDCanary) {
+            if (!engine.xpbdCanaryApplied) {
+                // Apply Nudge
+                const target = nodeList[0]; // First node
+                if (target && !target.isFixed) {
+                    target.x += 30;
+                    // target.y -= 20; // Single axis enough for verification
+                    engine.xpbdCanaryApplied = true;
+                    if (debugStats) debugStats.canaryShiftApplied = true;
+                }
+            }
+        } else {
+            // Reset if toggle off
+            engine.xpbdCanaryApplied = false;
+        }
+    }
+
     engine.awakeList.length = 0;
     engine.sleepingList.length = 0;
     for (let i = 0; i < nodeList.length; i++) {
@@ -908,15 +927,23 @@ export const runPhysicsTick = (engine: PhysicsEngineTickContext, dtIn: number) =
         }
     }
 
-    // [XPBD Canary] Visual Write-Ownership Verification
-    // Shifts node 0 by +30px every 60 frames (1Hz) to prove this stage writes to render
-    if (engine.config.debugXPBDCanary) {
-        if (engine.frameIndex % 60 === 0 && nodeList.length > 0) {
-            nodeList[0].x += 30;
-            nodeList[0].y -= 20;
-            // If we have a velocity, wipe it so it doesn't fly back?
-            // No, let it integrate. The jump is a teleport.
-        }
+
+
+    // XPBD Frame Accumulation
+    if (debugStats && debugStats.xpbd) {
+        const accum = engine.xpbdFrameAccum;
+        accum.ticks++;
+        accum.dtSum += dt;
+        accum.springs.count = debugStats.xpbd.springConstraintsCount;
+        accum.springs.iter += debugStats.xpbd.springIterations;
+        accum.springs.corrSum += debugStats.xpbd.springCorrAvgPx;
+        accum.springs.errSum += debugStats.xpbd.springErrorAvgPx;
+
+        accum.repel.checked += debugStats.xpbd.repelPairsChecked;
+        accum.repel.solved += debugStats.xpbd.repelPairsSolved;
+        accum.repel.overlap += debugStats.xpbd.overlapCount;
+        accum.repel.corrSum += debugStats.xpbd.repelCorrAvgPx;
+        accum.repel.sing += debugStats.xpbd.repelSingularityFallbackCount;
     }
 
     finalizePhysicsTick({

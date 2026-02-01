@@ -97,6 +97,7 @@ export type DebugStats = {
         repelCorrMaxPx: number;
         repelSingularityFallbackCount: number;
     };
+    canaryShiftApplied?: boolean;
 };
 
 export const createDebugStats = (): DebugStats => ({

@@ -142,6 +142,27 @@ export class PhysicsEngine {
     // Adjacency Cache for O(1) wake lookups (Fix 12)
     public adjacencyMap = new Map<string, string[]>();
 
+    // XPBD State
+    public xpbdCanaryApplied: boolean = false;
+    public xpbdFrameAccum = {
+        ticks: 0,
+        dtSum: 0,
+        springs: { count: 0, iter: 0, corrSum: 0, errSum: 0 },
+        repel: { checked: 0, solved: 0, overlap: 0, corrSum: 0, sing: 0 }
+    };
+
+    /**
+     * Called by scheduler at start of render frame to reset accumulators.
+     */
+    public startRenderFrame() {
+        this.xpbdFrameAccum = {
+            ticks: 0,
+            dtSum: 0,
+            springs: { count: 0, iter: 0, corrSum: 0, errSum: 0 },
+            repel: { checked: 0, solved: 0, overlap: 0, corrSum: 0, sing: 0 }
+        };
+    }
+
     // FIX A: World Shift Callback (Camera Sync)
     public onWorldShift?: (dx: number, dy: number) => void;
 
@@ -179,12 +200,21 @@ export class PhysicsEngine {
         return (h % 1000000) / 1000000;
     }
 
-    private resetStartupStats() {
+    public resetStartupStats() {
         this.startupStats.nanCount = 0;
         this.startupStats.infCount = 0;
         this.startupStats.maxSpeed = 0;
         this.startupStats.dtClamps = 0;
     }
+
+    // Context Properties
+    public settleConfidence: number = 0;
+    public stateFlipTracking = {
+        count: 0,
+        lastFlipMs: 0,
+        windowStartMs: 0,
+        flipHistory: [] as number[]
+    };
 
     /**
      * Lock physics rules (degrade mode) to current state.

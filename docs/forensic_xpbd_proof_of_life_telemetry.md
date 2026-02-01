@@ -6,34 +6,38 @@
 ## 1. Goal
 Provide immediate, "no-console required" verification that the new XPBD systems (Springs & Repulsion) are running and effective. The user must be able to confirm "Life" at a glance via the HUD.
 
-## 2. Telemetry Implementation
-We added a dedicated **XPBD Proof-of-Life** section to the `CanvasOverlays` HUD.
+## 2. Telemetry Implementation (Knife-Grade Semantics)
 
-### A. Data Pipeline
-1.  **Source (`stats.ts`)**: Added `xpbd` sub-object to `DebugStats`.
-    -   Tracks raw counts (Counts, Iterations) and magnitudes (Correction Avg/Max, Error Avg/Max).
-    -   Reset every frame.
-2.  **Transport (`physicsHud.ts`)**: Added `xpbd*` fields to `PhysicsHudSnapshot`.
-    -   `xpbdSpringCounts`, `xpbdSpringCorr`, `xpbdSpringError`.
-    -   `xpbdRepelCounts` (Checked/Solved/Overlap), `xpbdRepelCorr`.
-3.  **Mapping (`engineTickHud.ts`)**: Wired stats to snapshot at the end of every tick.
+### A. Reset Semantics & Frame Sums
+*   **Stats (`DebugStats`)**: Born and die within a single **Physics Tick**.
+*   **HUD (`PhysicsHudSnapshot`)**: Persists for the **Render Frame**.
+*   **Accumulation**:
+    *   `PhysicsEngine` maintains `xpbdFrameAccum` (ticks, dtSum, count/iter sums).
+    *   `renderLoopScheduler` calls `engine.startRenderFrame()` to reset accumulators before the tick loop.
+    *   `engineTickHud` maps the accumulated totals to the snapshot.
+    *   **New Fields**: `ticksThisFrame`, `dtUseSecLastTick`, `dtUseSecFrameAvg`.
 
-### B. UI Presentation (`CanvasOverlays.tsx`)
-A new block appears in the Physics Stats column (text color `#adff2f` - Green/Yellow):
+### B. "Real" Force Repel
+Controlled by `debugForceRepulsion`.
+*   **Logic**:
+    *   If ON: `minNodeDistance` forced to **140px** (Mode A).
+    *   Strength boosted 2x to ensure gap compliance.
+    *   Implemented in `forces.ts` (Solver Layer), overriding config values before use.
+*   **Visible Effect**: Nodes explode to create massive 140px gaps. unmistakable.
 
-```text
-XPBD Proof-of-Life
-Springs: N / Iter
-- Corr: Avg (Max)
-- Err: Avg (Max)
-Repulsion: Checked / Solved
-- Overlap: N
-- Corr: Avg (Max)
-- Sing: N
-```
+### C. Safe Canary Shift
+Controlled by `debugXPBDCanary`.
+*   **Logic**: **One-Shot** Nudge.
+    *   Applies `x += 30` to Node 0 exactly **ONCE** when toggle activates.
+    *   Uses `engine.xpbdCanaryApplied` state latch.
+    *   Occurs at **Pre-Tick** separate from integration, proving ownership of valid position state.
+*   **Visible Effect**: Node 0 jumps 30px right instantly, then integrates normally. No continuous flying.
 
--   **Springs:** Confirms constraints are solving (Iter > 0) and moving nodes (Corr > 0).
--   **Repulsion:** Confirms overlaps are detected and resolved. "Sing" tracks singularity fallbacks (dist=0 handling).
+## 3. Data Pipeline Updated
+1.  **Source (`stats.ts`)**: Tracks raw per-tick counts.
+2.  **State (`engine.ts`)**: `xpbdFrameAccum` sums them across Catch-Up sub-ticks.
+3.  **Transport (`physicsHud.ts`)**: Carries `frameSum` fields.
+4.  **UI (`CanvasOverlays.tsx`)**: Displays "Frame Ticks: N" and "Avg DT: N".
 
 ## 3. Interactive Kill-Switches & Forcing
 Added to "Advanced Physics" -> "XPBD FORCING" panel:

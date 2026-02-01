@@ -114,6 +114,7 @@ export const runPhysicsScheduler = (
 
     if (!freezeThisFrame) {
         const physicsStart = performance.now();
+        engine.startRenderFrame(); // Reset XPBD Frame Accumulators
         while (schedulerState.accumulatorMs >= fixedStepMs && stepsThisFrame < maxSteps) {
             if (performance.now() - physicsStart >= effectiveBudget) {
                 break;

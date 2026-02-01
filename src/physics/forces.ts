@@ -23,6 +23,17 @@ export function applyRepulsion(
         repulsionMaxForce,
     } = config;
 
+    // XPBD Force Repel Override
+    let effectiveStrength = repulsionStrength;
+    let effectiveMinDist = repulsionMinDistance;
+    if (config.debugForceRepulsion) {
+        effectiveMinDist = Math.max(repulsionMinDistance, 140); // Mode A: Large Radius
+        effectiveStrength *= 2.0; // Boost strength slightly to ensure gap holds
+    }
+
+    const { repulsionStrength: _ignore1, repulsionMinDistance: _ignore2, ..._rest } = config; // Flatten for clarity overrides
+    // Use effective values below
+
     const maxDistSq = repulsionDistanceMax * repulsionDistanceMax;
 
     // DENSITY-DEPENDENT REPULSION (early expansion only)
@@ -230,8 +241,8 @@ export function applyRepulsion(
             }
 
             // Standard repulsion force: F = k / d
-            const effectiveD = Math.max(d, repulsionMinDistance);
-            const rawForce = (repulsionStrength / effectiveD) * repulsionScale * densityBoost * pairStride;
+            const effectiveD = Math.max(d, effectiveMinDist);
+            const rawForce = (effectiveStrength / effectiveD) * repulsionScale * densityBoost * pairStride;
 
             // Clamp
             let forceMagnitude = rawForce;

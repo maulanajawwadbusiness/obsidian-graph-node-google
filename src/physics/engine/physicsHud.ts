@@ -50,6 +50,11 @@ export type PhysicsHudSnapshot = {
     xpbdRepelCorr?: { avg: number; max: number };
     xpbdRepelSingularities?: number;
 
+    // Frame Accumulators
+    ticksThisFrame?: number;
+    dtUseSecLastTick?: number;
+    dtUseSecFrameAvg?: number;
+
     escapeFiresPerSec?: number;
     escapeLoopSuspectCount?: number;
     lastInjector?: string;

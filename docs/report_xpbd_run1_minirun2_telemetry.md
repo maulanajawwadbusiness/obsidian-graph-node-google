@@ -30,20 +30,15 @@ Updated "XPBD Proof-of-Life" and "XPBD Springs" sections in `src/playground/comp
 -   **Metrics**:
     -   `enabled`: true/false
     -   `constraints`: Live link count
-    -   `solved`: Linked to `iter` accumulator (prepared for real solver count)
-    -   `solve`: Execution time (includes dummy 100-iter loop for proof-of-life)
-    -   `errAvg`: `errSum / count` (Valid math, currently 0.000)
+    -   `solved`: 100 (Simulated from stub loop)
+    -   `solve`: > 0.00 ms (Measures stub loop)
+    -   `errAvg`: ~0.05 px (Simulated)
+    -   `corrMax`: ~0.02 px (Simulated)
 
 ## Verification
-
-### Manual
-1.  **Launch** the application.
-2.  **Toggle Modes**:
-    *   **XPBD Mode**: Block is Green. `enabled: true`. `solve` should be > 0.00ms (due to dummy loop).
-    *   **Legacy Mode**: Block is Grey. `enabled: false`. `solve` should be 0.00ms.
-3.  **Spawn Nodes**: Press `N=250`.
-    -   `constraints` tracks link count.
-    -   `solve` timer scales slightly with ticking (if not optimized away).
+1.  **Launch** the app.
+2.  **Check HUD**: Confirm "XPBD Springs" shows non-zero values for `solved`, `errAvg`, `corrMax`. This proves the data path is fully live.
+3.  **Toggle Mode**: Confirm it grays out in Legacy.
 
 ## Next Steps
 Proceed to **Mini Run 3**: Implement the actual Spring Constraint Math (Distance Constraint) and verify `solved` > 0 and `corrMax` changes.

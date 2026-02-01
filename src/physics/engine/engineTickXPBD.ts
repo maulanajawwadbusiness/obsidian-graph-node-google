@@ -10,7 +10,7 @@ import { applyDragVelocity } from './velocity/dragVelocity';
 
 // Mini Run 1: Stub for Edge Constraints
 const applyXPBDEdgeConstraintsStub = (engine: PhysicsEngineTickContext) => {
-    // Manual Timer: Start
+    // Manual Timer: Start (TODO: Wrap real solver work later)
     const start = performance.now();
 
     // No-op for physics.
@@ -31,13 +31,13 @@ const applyXPBDEdgeConstraintsStub = (engine: PhysicsEngineTickContext) => {
         // No allocations, no loops.
         const s = engine.xpbdFrameAccum.springs;
         s.count = engine.links.length; // Live count
-        s.iter += 0;                   // Placeholder for solver iterations
         s.solveMs += duration;         // Accumulate time
-        s.errSum += 0;                 // Placeholder for error accumulation
-        s.corrSum += 0;                // Placeholder for correction accumulation
-        // Use the sink to prevent compiler optimization (though unlikely in JS engine ticking)
-        if (sink < 0) s.corrMax = -1;
-        s.corrMax = Math.max(s.corrMax, 0); // No-op but placeholder for max tracking
+
+        // Simulate activity for Proof-of-Life (Remove when real math lands)
+        s.iter += 100;                 // Dummy loop count
+        s.errSum += 0.05 * 100;        // Fake error accumulation to prove HUD wiring
+        s.corrSum += 0.01 * 100;       // Fake correction accumulation
+        s.corrMax = Math.max(s.corrMax, 0.02); // Fake max
     }
 };
 

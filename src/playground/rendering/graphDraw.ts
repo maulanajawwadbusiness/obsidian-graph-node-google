@@ -274,6 +274,17 @@ export const drawNodes = (
             ctx.stroke();
         }
 
+        if (node.id === engine.draggedNodeId) {
+            ctx.save();
+            ctx.beginPath();
+            ctx.arc(screen.x, screen.y, radiusPx + Math.max(2, strokeWidthPx), 0, Math.PI * 2);
+            ctx.strokeStyle = '#ffd35a';
+            ctx.lineWidth = Math.max(2, strokeWidthPx);
+            ctx.globalAlpha = 0.9;
+            ctx.stroke();
+            ctx.restore();
+        }
+
         if (showRestMarkers || showConflictMarkers || forceShow) {
             const markerOffset = Math.max(1.5, radiusPx * 0.35);
             const markerBase = Math.max(0.8, radiusPx * 0.12) * markerIntensity;

@@ -410,6 +410,10 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
                                     N: {metrics.nodes} | L: {metrics.links}<br />
                                     FPS: {metrics.fps} <br />
                                     Physics: {config?.useSpringMassPhysics ? 'spring-mass' : 'hybrid'}<br />
+                                    Drag: {hud?.dragDotId ?? 'none'} ({hud?.dragMode ?? 'lock'})<br />
+                                    {hud?.pointerWorldX !== undefined && hud?.pointerWorldY !== undefined && (
+                                        <span>Ptr: {hud.pointerWorldX?.toFixed(1) ?? '—'}, {hud.pointerWorldY?.toFixed(1) ?? '—'}<br /></span>
+                                    )}
                                     Degrade: {hud ? hud.degradeLevel : 0} ({hud ? hud.degradePct5s.toFixed(1) : '0.0'}%)<br />
                                     Settle: {hud ? hud.settleState : 'moving'} ({hud ? Math.round(hud.lastSettleMs) : 0}ms)<br />
                                     Jitter(1s): {hud ? hud.jitterAvg.toFixed(4) : '0.0'}<br />

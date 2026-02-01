@@ -13,6 +13,10 @@ type SpringMassHudStats = {
     avgSpeed: number;
     settleState: 'moving' | 'cooling' | 'sleep';
     lastSettleMs: number;
+    dragDotId: string | null;
+    dragMode: 'lock';
+    pointerWorldX: number | null;
+    pointerWorldY: number | null;
 };
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
@@ -32,6 +36,9 @@ export class SpringMassBackend {
     private lastAvgSpeed = 0;
     private settleState: SpringMassHudStats['settleState'] = 'moving';
     private settleStateAtMs = getNowMs();
+    private draggedDotId: string | null = null;
+    private prevDraggedDotId: string | null = null;
+    private dragTarget: { x: number; y: number } | null = null;
 
     bindToWorld(world: SpringMassWorld) {
         if (this.world !== world) {
@@ -39,6 +46,14 @@ export class SpringMassBackend {
             this.restLengths.clear();
             this.accumulator = 0;
         }
+    }
+
+    setDraggedDot(id: string | null) {
+        this.draggedDotId = id;
+    }
+
+    setDragTarget(target: { x: number; y: number } | null) {
+        this.dragTarget = target;
     }
 
     setEnabled(flag: boolean) {
@@ -77,7 +92,11 @@ export class SpringMassBackend {
             energyProxy: this.lastEnergyProxy,
             avgSpeed: this.lastAvgSpeed,
             settleState: this.settleState,
-            lastSettleMs: Math.max(0, getNowMs() - this.settleStateAtMs)
+            lastSettleMs: Math.max(0, getNowMs() - this.settleStateAtMs),
+            dragDotId: this.draggedDotId,
+            dragMode: 'lock',
+            pointerWorldX: this.dragTarget?.x ?? null,
+            pointerWorldY: this.dragTarget?.y ?? null
         };
     }
 
@@ -93,6 +112,14 @@ export class SpringMassBackend {
         const maxSpringForce = 2400;
         const centerPull = config.gravityCenterStrength ?? 0.002;
         const settleSpeedSq = 0.0004; // ~0.02px/frame
+        const draggedNode = this.draggedDotId ? nodes.get(this.draggedDotId) : null;
+
+        if (draggedNode && this.dragTarget) {
+            draggedNode.x = this.dragTarget.x;
+            draggedNode.y = this.dragTarget.y;
+            draggedNode.vx = 0;
+            draggedNode.vy = 0;
+        }
 
         for (const node of nodeList) {
             node.fx = 0;
@@ -134,18 +161,21 @@ export class SpringMassBackend {
             const fx = forceMag * dirX;
             const fy = forceMag * dirY;
 
-            if (!source.isFixed) {
+            const sourceKinematic = source.isFixed || source.id === this.draggedDotId;
+            const targetKinematic = target.isFixed || target.id === this.draggedDotId;
+
+            if (!sourceKinematic) {
                 source.fx += fx;
                 source.fy += fy;
             }
-            if (!target.isFixed) {
+            if (!targetKinematic) {
                 target.fx -= fx;
                 target.fy -= fy;
             }
         }
 
         for (const node of nodeList) {
-            if (node.isFixed) {
+            if (node.isFixed || node.id === this.draggedDotId) {
                 node.vx = 0;
                 node.vy = 0;
                 continue;
@@ -156,7 +186,7 @@ export class SpringMassBackend {
 
         let energySum = 0;
         for (const node of nodeList) {
-            if (node.isFixed) continue;
+            if (node.isFixed || node.id === this.draggedDotId) continue;
 
             const invMass = node.mass > 0 ? 1 / node.mass : 1;
             const ax = node.fx * invMass;
@@ -186,6 +216,17 @@ export class SpringMassBackend {
 
             energySum += node.vx * node.vx + node.vy * node.vy;
         }
+
+        if (this.prevDraggedDotId && !this.draggedDotId) {
+            const released = nodes.get(this.prevDraggedDotId);
+            if (released) {
+                released.vx = 0;
+                released.vy = 0;
+                released.fx = 0;
+                released.fy = 0;
+            }
+        }
+        this.prevDraggedDotId = this.draggedDotId;
 
         this.lastEnergyProxy = energySum;
         const count = nodeList.length || 1;

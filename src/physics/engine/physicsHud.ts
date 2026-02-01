@@ -7,6 +7,10 @@ export type PhysicsHudSnapshot = {
     pbdCorrectionSum: number;
     conflictPct5s: number;
     energyProxy: number;
+    dragDotId?: string | null;
+    dragMode?: 'lock' | 'yank';
+    pointerWorldX?: number | null;
+    pointerWorldY?: number | null;
     // Startup Audit
     startupNanCount?: number;
     startupInfCount?: number;
@@ -113,6 +117,10 @@ export const createInitialPhysicsHudSnapshot = (): PhysicsHudSnapshot => ({
     pbdCorrectionSum: 0,
     conflictPct5s: 0,
     energyProxy: 0,
+    dragDotId: null,
+    dragMode: 'lock',
+    pointerWorldX: null,
+    pointerWorldY: null,
     microSlipFiresPerSec: 0,
     stuckScoreAvg: 0,
     escapeFiresPerSec: 0,

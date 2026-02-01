@@ -391,16 +391,26 @@ export class PhysicsEngine {
                 getNodeList: () => this.getNodeList()
             });
             this.springMassBackend.setEnabled(true);
+            this.springMassBackend.setDraggedDot(this.draggedNodeId);
+            this.springMassBackend.setDragTarget(this.dragTarget);
             this.springMassBackend.step(dt);
 
             const hud = this.springMassBackend.getHudStats();
             this.hudSnapshot.energyProxy = hud.energyProxy;
             this.hudSnapshot.settleState = hud.settleState;
             this.hudSnapshot.lastSettleMs = hud.lastSettleMs;
+            this.hudSnapshot.dragDotId = hud.dragDotId;
+            this.hudSnapshot.dragMode = hud.dragMode;
+            this.hudSnapshot.pointerWorldX = hud.pointerWorldX;
+            this.hudSnapshot.pointerWorldY = hud.pointerWorldY;
             return;
         }
 
         this.springMassBackend.setEnabled(false);
+        this.hudSnapshot.dragDotId = null;
+        this.hudSnapshot.dragMode = 'lock';
+        this.hudSnapshot.pointerWorldX = null;
+        this.hudSnapshot.pointerWorldY = null;
         runPhysicsTick(this as PhysicsEngineTickContext, dt);
     }
 

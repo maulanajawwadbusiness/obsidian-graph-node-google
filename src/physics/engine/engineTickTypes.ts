@@ -152,6 +152,7 @@ export type PhysicsEngineTickContext = {
             edgesSkippedByCoverage: number;
             edgesProcessed: number;
             edgesSelectedButUnprocessed: number;
+            earlyBreakCount: number;
         };
         repel: { checked: number; solved: number; overlap: number; corrSum: number; sing: number };
         edgeConstraintsExecuted: number;

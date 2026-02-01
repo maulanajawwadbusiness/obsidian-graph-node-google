@@ -252,6 +252,6 @@ export interface ForceConfig {
   xpbdLinkCompliance?: number; // Inverse stiffness (m/N). 0 = rigid.
   xpbdMaxCorrPerConstraintPx?: number; // Safety cap for single-frame correction
   xpbdEdgeSelection?: 'full' | 'incident'; // Strategy for selecting edges to solve
-  xpbdIterationsIdle?: number; // Sub-steps when at rest (Default: 1)
-  xpbdIterationsDrag?: number; // Sub-steps when dragging (Default: 1)
+  xpbdIterationsIdle?: number; // Sub-steps when at rest (Default: 2)
+  xpbdIterationsDrag?: number; // Sub-steps when dragging (Default: 6)
 }

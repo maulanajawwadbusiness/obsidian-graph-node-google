@@ -87,6 +87,7 @@ export type PhysicsHudSnapshot = {
     xpbdIterationsIdle?: number;
     xpbdIterationsDrag?: number;
     xpbdIterationsUsed?: number;
+    xpbdEarlyBreaks?: number;
 
     // Mini Run 6: Calibration Telemetry
     xpbdComplianceUsed?: number;  // Actual compliance value in use

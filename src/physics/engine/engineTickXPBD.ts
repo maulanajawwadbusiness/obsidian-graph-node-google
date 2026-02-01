@@ -293,167 +293,162 @@ const solveXPBDEdgeConstraints = (engine: PhysicsEngineTickContext, dt: number) 
     // "keep the old filtered path behind a dev flag (default OFF)"
     const selectionMode = engine.config.xpbdEdgeSelection || 'full';
 
-    // Solver Loop (Single Iteration)
-    for (let i = 0; i < constraints.length; i++) {
-        const c = constraints[i];
-        const nA = nodes.get(c.nodeA);
-        const nB = nodes.get(c.nodeB);
+    // Run 3: Lambda Reset (Warm Start disabled for now, per prompt "reset per-frame")
+    for (let k = 0; k < constraints.length; k++) {
+        constraints[k].lambda = 0.0;
+    }
 
-        if (!nA || !nB) {
-            skippedCount++;
-            continue;
-        }
+    let earlyBreak = false;
+    let prevIterCorrMax = Number.MAX_VALUE;
+    let stagnationStreak = 0;
 
-        // Run 2: Filter Logic (Dev Flag)
-        if (selectionMode === 'incident' && engine.draggedNodeId) {
-            // Only process edges connected to the dragged node
-            if (c.nodeA !== engine.draggedNodeId && c.nodeB !== engine.draggedNodeId) {
+    let usedIterations = 0;
+
+    // Solver Loop (Multi-Iteration)
+    for (let iter = 0; iter < iterCount; iter++) {
+        usedIterations++;
+
+        // Reset per-pass counters so final stats reflect the last pass (Coverage Validity)
+        solvedCount = 0;
+        skippedCount = 0;
+        singularityCount = 0;
+
+        let iterCorrMax = 0;
+
+        for (let i = 0; i < constraints.length; i++) {
+            const c = constraints[i];
+            const nA = nodes.get(c.nodeA);
+            const nB = nodes.get(c.nodeB);
+
+            if (!nA || !nB) {
                 skippedCount++;
                 continue;
             }
+
+            // Run 2: Filter Logic
+            if (selectionMode === 'incident' && engine.draggedNodeId) {
+                if (c.nodeA !== engine.draggedNodeId && c.nodeB !== engine.draggedNodeId) {
+                    skippedCount++;
+                    continue;
+                }
+            }
+
+            // 1. Calculate Error (C)
+            const dx = nA.x - nB.x;
+            const dy = nA.y - nB.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+
+            if (dist < EPSILON) {
+                singularityCount++;
+                continue;
+            }
+
+            // Canary Injection (Iteration 0 only)
+            let effectiveRestLen = c.restLen;
+            if (USE_CANARY && i === 0 && iter === 0) {
+                effectiveRestLen = Math.max(10, c.restLen - 50);
+            }
+
+            const C = dist - effectiveRestLen;
+
+            // Accumulate global error (maybe average later, but sum is fine to track convergence)
+            // Only add to error sum on final iteration? 
+            // Better to track "Cost" as total error reduction? 
+            // For now, let's sum it all to see total system stress.
+            errSum += Math.abs(C);
+
+            // 2. Gradients
+            const gradX = dx / dist;
+            const gradY = dy / dist;
+
+            // 3. Inverse Masses & Local Tug
+            const wA = (nA.isFixed || nA.id === engine.draggedNodeId) ? 0 : 1.0;
+            const wB = (nB.isFixed || nB.id === engine.draggedNodeId) ? 0 : 5.0;
+
+            if (iter === 0) { // Telemetry only once
+                if (wA === 0 && nA.id !== engine.draggedNodeId) pinnedCount++;
+                if (wB === 0 && nB.id !== engine.draggedNodeId) pinnedCount++;
+                if (nA.id === engine.draggedNodeId || nB.id === engine.draggedNodeId) dragConstraintCount++;
+            }
+
+            if (wA + wB === 0) {
+                skippedCount++;
+                continue;
+            }
+
+            // 4. Alpha (Compliance)
+            const alpha = c.compliance / (dt * dt);
+            const wSum = wA + wB;
+
+            // 5. Delta Lambda
+            const denom = wA + wB + alpha;
+            const deltaLambda = (-C - alpha * c.lambda) / denom;
+
+            c.lambda += deltaLambda;
+
+            // 6. Apply Correction
+            let pxA = +wA * deltaLambda * gradX;
+            let pyA = +wA * deltaLambda * gradY;
+            let pxB = -wB * deltaLambda * gradX;
+            let pyB = -wB * deltaLambda * gradY;
+
+            // Safety Cap (Run 6)
+            let magA = Math.sqrt(pxA * pxA + pyA * pyA);
+            let magB = Math.sqrt(pxB * pxB + pyB * pyB);
+
+            let capHit = false;
+            if (magA > MAX_CORR_PX) {
+                const scale = MAX_CORR_PX / magA;
+                pxA *= scale; pyA *= scale; magA *= scale; capHit = true;
+            }
+            if (magB > MAX_CORR_PX) {
+                const scale = MAX_CORR_PX / magB;
+                pxB *= scale; pyB *= scale; magB *= scale; capHit = true;
+            }
+
+            nA.x += pxA; nA.y += pyA;
+            nB.x += pxB; nB.y += pyB;
+
+            // Stats
+            iterCorrMax = Math.max(iterCorrMax, magA, magB);
+            corrMax = Math.max(corrMax, magA, magB); // Global max
+            corrSum += magA + magB;
+
+            solvedCount++;
+
+            // Run 7 Telemetry Sample (Iter 0 only)
+            if (i === 0 && iter === 0 && engine.xpbdFrameAccum) {
+                engine.xpbdFrameAccum.springs.firstCapHit = capHit;
+                engine.xpbdFrameAccum.springs.firstAlpha = alpha;
+                engine.xpbdFrameAccum.springs.firstWSum = wSum;
+                engine.xpbdFrameAccum.springs.firstEdgeDebug = {
+                    C, deltaLambda, corrDotA: (pxA * gradX + pyA * gradY), corrDotB: (pxB * gradX + pyB * gradY), gradX, gradY
+                };
+            }
         }
 
-        // Mini Run 7 Part 5: ENABLE local tug on neighbors
-        // DO NOT skip constraints involving dragged node!
-        // The dragged node has invMass=0 (pinned), so it won't move,
-        // but neighbors WILL stretch toward it (local tug).
-        // Previous code skipped these constraints, preventing local tug entirely.
-
-        // 1. Calculate Error (C)
-        const dx = nA.x - nB.x;
-        const dy = nA.y - nB.y;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-
-        if (dist < EPSILON) {
-            singularityCount++;
-            continue;
+        // Run 3: Stagnation Guard
+        // If the max correction in this pass is NOT significantly smaller than previous, or is tiny, we might break.
+        // Actually, just breaking on "No Visible Change" (Convergence).
+        // If max correction < 0.1px, we are effectively done.
+        const STAGNATION_THRESHOLD_PX = 0.05;
+        if (iterCorrMax < STAGNATION_THRESHOLD_PX) {
+            earlyBreak = true;
+            break;
         }
 
-        // Canary Injection: For constraint 0, subtract 50px from restLen effectively
-        // This makes `dist` look 50px too long (extension) or restLen too short.
-        let effectiveRestLen = c.restLen;
-        if (USE_CANARY && i === 0) {
-            effectiveRestLen = Math.max(10, c.restLen - 50); // Shrink rest length -> Pull together
-        }
+        // Divergence Check (Optional)?
+        // If iterCorrMax INCREASES significantly, we might have instability.
 
-        const C = dist - effectiveRestLen;
-
-        errSum += Math.abs(C);
-
-        // 2. Gradients
-        const gradX = dx / dist;
-        const gradY = dy / dist;
-
-        // 3. Inverse Masses
-        // TUG RUN PART 1: LOCAL TUG MECHANISM
-        // - Dragged node: invMass=0 (pinned, won't move)
-        // - Free neighbor: invMass=1 (can move)
-        // - Constraint between them: ACTIVE (not skipped)
-        // - Result: Neighbor stretches toward dragged node (LOCAL TUG)
-        const wA = (nA.isFixed || nA.id === engine.draggedNodeId) ? 0 : 1.0;
-        const wB = (nB.isFixed || nB.id === engine.draggedNodeId) ? 0 : 5.0;
-
-        // Mini Run 7 Part 4: Count pinned nodes (avoid double-counting dragged node)
-        if (wA === 0 && nA.id !== engine.draggedNodeId) pinnedCount++;
-        if (wB === 0 && nB.id !== engine.draggedNodeId) pinnedCount++;
-
-        // TUG RUN PART 2: Count constraints involving dragged node
-        if (nA.id === engine.draggedNodeId || nB.id === engine.draggedNodeId) {
-            dragConstraintCount++;
-        }
-
-        // Only skip if BOTH nodes are pinned (no degrees of freedom)
-        if (wA + wB === 0) {
-            skippedCount++;
-            continue;
-        }
-
-        // 4. Alpha (Compliance)
-        const alpha = c.compliance / (dt * dt);
-        const wSum = wA + wB;
-
-        // 5. Delta Lambda
-        const denom = wA + wB + alpha;
-        const deltaLambda = (-C - alpha * c.lambda) / denom;
-
-        c.lambda += deltaLambda;
-
-        c.lambda += deltaLambda;
-
-        // 6. Apply Correction
-        // Lane A Fix: Correct Signs
-        // C > 0 (Stretched) -> deltaLambda < 0 (Negative).
-        // gradX points B->A.
-        // We want A to move toward B (Left/Down, against grad).
-        // deltaLambda is negative, so (-deltaLambda) is positive magnitude.
-        // dx_A = +wA * deltaLambda * gradX.
-        // Check: +1 * (-1) * (+1) = -1 (Left). Correct.
-        // dx_B = -wB * deltaLambda * gradX.
-        // Check: -1 * (-1) * (+1) = +1 (Right). Correct.
-
-        let pxA = +wA * deltaLambda * gradX;
-        let pyA = +wA * deltaLambda * gradY;
-        let pxB = -wB * deltaLambda * gradX;
-        let pyB = -wB * deltaLambda * gradY;
-
-        // Safety Cap (Run 6)
-        // Check magnitude of correction vectors
-        let magA = Math.sqrt(pxA * pxA + pyA * pyA);
-        let magB = Math.sqrt(pxB * pxB + pyB * pyB);
-
-        let capHit = false;
-        if (magA > MAX_CORR_PX) {
-            const scale = MAX_CORR_PX / magA;
-            pxA *= scale;
-            pyA *= scale;
-            magA = Math.sqrt(pxA * pxA + pyA * pyA); // Strict Recompute
-            capHit = true;
-        }
-        if (magB > MAX_CORR_PX) {
-            const scale = MAX_CORR_PX / magB;
-            pxB *= scale;
-            pyB *= scale;
-            magB = Math.sqrt(pxB * pxB + pyB * pyB); // Strict Recompute
-            capHit = true;
-        }
-
-        nA.x += pxA;
-        nA.y += pyA;
-        nB.x += pxB;
-        nB.y += pyB;
-
-        // Telemetry
-        corrMax = Math.max(corrMax, magA, magB);
-        corrSum += magA + magB;
-
-        if (i === 0 && engine.xpbdFrameAccum) {
-            engine.xpbdFrameAccum.springs.firstCapHit = capHit;
-            engine.xpbdFrameAccum.springs.firstAlpha = alpha;
-            engine.xpbdFrameAccum.springs.firstWSum = wSum;
-
-            // Lane A: Debug Signs
-            engine.xpbdFrameAccum.springs.firstEdgeDebug = {
-                C: C,
-                deltaLambda: deltaLambda,
-                // Dot product of correction vs gradient.
-                // For A: Should be NEGATIVE (moving against gradient B->A)
-                corrDotA: (pxA * gradX + pyA * gradY),
-                // For B: Should be POSITIVE (moving with gradient B->A, which points away from A?)
-                // Wait, B moves toward A. Gradient points B->A. So B moves ALONG gradient. Positive.
-                corrDotB: (pxB * gradX + pyB * gradY),
-                gradX,
-                gradY
-            };
-        }
-
-        solvedCount++;
+        prevIterCorrMax = iterCorrMax;
     }
 
     if (engine.xpbdFrameAccum) {
         const s = engine.xpbdFrameAccum.springs;
         s.count += constraints.length;
         // Run 2: Iterations
-        s.iter += iterCount; // Accumulate used iterations
+        s.iter += usedIterations; // Accumulate used iterations
+        s.earlyBreakCount += earlyBreak ? 1 : 0;
         s.solveMs += (performance.now() - start);
         s.errSum += errSum;
         s.corrSum += corrSum;

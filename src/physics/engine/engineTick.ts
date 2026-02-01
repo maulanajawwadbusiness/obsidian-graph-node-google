@@ -38,7 +38,7 @@ import { finalizePhysicsTick } from './engineTickFinalize';
 
 
 
-export const runPhysicsTick = (engine: PhysicsEngineTickContext, dtIn: number) => {
+export const runPhysicsTickLegacy = (engine: PhysicsEngineTickContext, dtIn: number) => {
     // FIX: Startup Safety - Clamp DT for first 2 seconds to prevent insertion shock
     // If the browser hung during setup, dt could be 100ms+.
     // We clamp to 32ms (approx 30fps) during startup, then 64ms normal cap.
@@ -972,4 +972,14 @@ export const runPhysicsTick = (engine: PhysicsEngineTickContext, dtIn: number) =
     }
 
     engine.lastDebugStats = debugStats;
+};
+
+import { runPhysicsTickXPBD } from './engineTickXPBD';
+
+export const runPhysicsTick = (engine: PhysicsEngineTickContext, dtIn: number) => {
+    if (engine.config.useXPBD) {
+        runPhysicsTickXPBD(engine, dtIn);
+    } else {
+        runPhysicsTickLegacy(engine, dtIn);
+    }
 };

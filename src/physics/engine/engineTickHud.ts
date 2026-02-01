@@ -125,6 +125,7 @@ export const updateHudSnapshot = (
     engine.hudSnapshot = {
         degradeLevel: engine.degradeLevel,
         degradePct5s: degradeHits > 0 ? (degradeHits / degradeFrames) * 100 : 0,
+        mode: stats.mode,
         settleState,
         lastSettleMs: Math.max(0, nowMs - engine.hudSettleStateAt),
         jitterAvg,

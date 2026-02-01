@@ -28,6 +28,7 @@ export type ExpansionResistanceStats = {
 };
 
 export type DebugStats = {
+    mode: 'LEGACY' | 'XPBD';
     passes: Record<string, PassStats>;
     safety: SafetyStats;
     expansionResistance: ExpansionResistanceStats;
@@ -101,6 +102,7 @@ export type DebugStats = {
 };
 
 export const createDebugStats = (): DebugStats => ({
+    mode: 'LEGACY',
     passes: {},
     safety: {
         clampTriggers: 0,

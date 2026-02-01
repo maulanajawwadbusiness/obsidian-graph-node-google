@@ -95,4 +95,5 @@ export type PhysicsEngineTickContext = {
         springs: { count: number; iter: number; corrSum: number; errSum: number };
         repel: { checked: number; solved: number; overlap: number; corrSum: number; sing: number };
     };
+    xpbdCanaryApplied?: boolean;
 };

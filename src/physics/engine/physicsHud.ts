@@ -1,6 +1,7 @@
 export type PhysicsHudSnapshot = {
     degradeLevel: number;
     degradePct5s: number;
+    mode?: 'LEGACY' | 'XPBD';
     settleState: 'moving' | 'cooling' | 'microkill' | 'sleep';
     lastSettleMs: number;
     jitterAvg: number;

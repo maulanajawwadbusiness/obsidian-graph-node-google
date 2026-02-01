@@ -41,6 +41,7 @@ export const TextPreviewButton: React.FC<TextPreviewButtonProps> = ({ onToggle }
             onMouseDown={stopPropagation}
             onMouseMove={stopPropagation}
             onMouseUp={stopPropagation}
+            onPointerDown={stopPropagation}
             onClick={(e) => {
                 stopPropagation(e);
                 (onToggle ?? togglePreview)();

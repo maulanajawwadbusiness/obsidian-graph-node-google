@@ -42,11 +42,15 @@ export const FullChatToggle: React.FC = () => {
 
     if (isOpen) return null;
 
+    const stopPropagation = (e: React.SyntheticEvent) => e.stopPropagation();
+
     return (
         <button
             type="button"
             style={TOGGLE_STYLE}
             onClick={openFullChat}
+            onPointerDown={stopPropagation}
+            onMouseDown={stopPropagation}
             aria-label={t('tooltip.openChat')}
             title={t('tooltip.openChat')}
             onMouseEnter={() => setIsHovered(true)}

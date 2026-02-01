@@ -139,6 +139,7 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
                     onMouseDown={stopPropagation}
                     onMouseMove={stopPropagation}
                     onMouseUp={stopPropagation}
+                    onPointerDown={stopPropagation}
                     onClick={(e) => {
                         stopPropagation(e);
                         onShowDebug();
@@ -157,6 +158,7 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
                     onMouseDown={stopPropagation}
                     onMouseMove={stopPropagation}
                     onMouseUp={stopPropagation}
+                    onPointerDown={stopPropagation}
                     onClick={(e) => {
                         stopPropagation(e);
                         onToggleTheme();
@@ -175,6 +177,7 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
                     onMouseDown={stopPropagation}
                     onMouseMove={stopPropagation}
                     onMouseUp={stopPropagation}
+                    onPointerDown={stopPropagation}
                     onClick={(e) => {
                         stopPropagation(e);
                         onToggleSidebar();

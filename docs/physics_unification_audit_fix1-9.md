@@ -101,4 +101,29 @@ Built on the 0-slush doctrine documented in `docs/physics_xray.md` (degrade buck
 > **System fights:** The two currently fighting principals are constraints vs. diffusion (both touch the same correction vector in `constraints.ts:184-420` and `corrections.ts:270-430`) and repulsion vs. spacing (repulsion’s density boost nudges nodes directly back into the zone that spacing is trying to unclog). These fights are watched via `stats.correctionConflictCount`, `ghostMismatchCount`, and HUD metrics like `conflictPct5s` + `jitterAvg`.
 
 ## 4. Optional improvements
-- None beyond the telemetry + determinism fixes noted above.
+- None beyond the telemetry + determinism fixes noted above.
+## Implementation Plan
+
+1. **Phase 0 – Deep Scandissect**
+   - Read the full call sites for the top-10 risks (forces overlap fallbacks, diffusion gating, rebase/centroid shift, spacing/triangle passes, micro-slip escapes, HUD wiring) to map the surrounding logic and identify additional law pops.
+   - Trace each HUD field from writer to clear/reset to sampling so the 'data truth path' is explicit.
+   - Document any remaining hard-threshold jumps or hidden motors outside the audit's current list.
+
+2. **Phase 1 – Knife-Precise Fixes**
+   - **Determinism:** replace every Math.random overlap fallback in src/physics/forces.ts with seeded pseudoRandom output, add telemetry counters for fallback usage, and ensure the checksum/rebase fields stay stable.
+   - **Diffusion HUD:** in src/physics/engine/corrections.ts, reset stats.diffusionStrengthNow (and diffusionPopScore if needed) whenever diffusion is bypassed so the HUD immediately reads 0 once the gate closes.
+   - **Rebase/Camera:** when centroid rebase subtracts (cx,cy) in engineTick.ts, emit a tiny camera shift event or apply the delta to the renderer's transform to avoid visual jumps.
+   - **Scale/Perf:** replace the brute O(N^3) triangle scan with cached adjacency-based enumeration, prune stale hotPairs, share a cached localDensity map across micro-slip injectors (and low-force escape), and smooth the spacing gate stride/hysteresis plus repulsion density boost. Switch micro-slip cooldowns over to wall-clock time (getNowMs()).
+
+3. **Phase 2 – Verification**
+   - Run the scene at N=5/20/60 (plus higher counts if practical) and compare HUD stats to confirm motion law consistency.
+   - Validate the determinism checksum remains equal across runs and that fallback telemetry values stay zero.
+   - Confirm the HUD reflects true diffusion/collision states (diffusion zero when gated, conflict%/settle states accurate).
+   - Ensure triangle and density passes scale without exploding timing.
+
+4. **Deliverables**
+   - Keep diffs minimal, avoid new thresholds, and route any gating through motionPolicy.
+   - Add lightweight instrumentation only where needed for verification (overlap fallback counter, HUD truth).
+   - Create docs/<date>_physics_fix_top10_risks.md describing what changed, why, file paths, and how to verify using the HUD.
+   - Commit with a clear message (e.g., fix(physics): harden top 10 risks).
+

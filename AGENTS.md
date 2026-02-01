@@ -60,6 +60,12 @@ Terminology matters. In the graph, we render "Dots", not "Nodes" (though the dat
 *   **Default Stance**: Prioritize standard Web APIs over third-party libraries.
 *   **Heuristic**: "Can this be written robustly in <100 lines?" If yes, own the code.
 
+### POINTER CAPTURE BUBBLING (Visual UI)
+*   **Problem**: In `GraphPhysicsPlayground`, the parent container captures the pointer on `pointerdown` for drag handling.
+*   **Risk**: Any UI button (Overlay, Toggle) that sits on top MUST stop propagation of `onPointerDown`.
+*   **Symptom**: If you skip this, the button will "click" visually (hover works) but the parent will steal the logic click.
+*   **Rule**: Always add `onPointerDown={(e) => e.stopPropagation()}` to **ALL** interactive overlay elements. DO NOT FORGET IT.
+
 ## 5. Perf Doctrine (Physics)
 
 ### A. The Scheduler

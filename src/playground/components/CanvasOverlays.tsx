@@ -494,6 +494,7 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
                                         <div style={{ marginTop: '4px', paddingTop: '4px', borderTop: '1px solid #444', color: '#ff8' }}>
                                             <strong>XPBD Edge Coverage</strong><br />
                                             Ratio: {hud.edgesSelectedForSolve || 0} / {hud.totalEdgesGraph || 0}<br />
+                                            Proc: {hud.edgesProcessed || 0} (Leak: {hud.edgesSelectedButUnprocessed || 0})<br />
                                             Reason: {hud.edgesSelectedReason || '-'}<br />
                                         </div>
                                     )}

@@ -462,6 +462,8 @@ const solveXPBDEdgeConstraints = (engine: PhysicsEngineTickContext, dt: number) 
         s.edgesSelectedForSolve = constraints.length;
         s.edgesSelectedReason = selectionMode;
         s.edgesSkippedByCoverage = 0; // Run 3: Audit confirmed no secondary filters (yet)
+        s.edgesProcessed = solvedCount;
+        s.edgesSelectedButUnprocessed = constraints.length - skippedCount - singularityCount - solvedCount;
     }
 };
 

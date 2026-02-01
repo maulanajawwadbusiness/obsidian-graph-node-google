@@ -1,4 +1,4 @@
-# XPBD Run 1: Mini Run 4 - Distance Solver V1
+# XPBD Run 1: Mini Run 4 - Distance Solver V1 (Final Corrected)
 
 ## Goal
 Implement the minimal XPBD distance constraint solver (single iteration) with truthful telemetry, inventory validation, and ghost velocity containment.
@@ -28,7 +28,8 @@ Implement the minimal XPBD distance constraint solver (single iteration) with tr
     -   This prevents the velocity reconstruction step ($v = \frac{x - prevX}{dt}$) from seeing the position correction as a massive velocity spike.
     -   **HUD Metric**: `safe: [N]` (Count of nodes adjusted).
 
-### 4. Telemetry (Truthful)
+### 4. Telemetry (Truthful & Per-Frame)
+-   **Reset**: Accumulators are reset at the start of `runPhysicsTickXPBD` to ensure stats reflect only the current frame.
 -   **Solved**: Actual number of constraints processed in the loop (excluding invalid).
 -   **ErrAvg**: $\frac{\sum |dist - restLen|}{count}$.
 -   **CorrMax**: Maximum displacement applied to any node in the frame.
@@ -39,7 +40,7 @@ Implement the minimal XPBD distance constraint solver (single iteration) with tr
 ### Manual Verification
 1.  **Launch App**:
     -   **HUD**: "XPBD Springs" block visible.
-    -   **Inventory**: `inv: 0 | inf: 0 | 0len: 0`.
+    -   **Inventory**: `inv: 0 | inf: 0 | 0len: 0` (Zero errors).
 2.  **Interaction**:
     -   **Spawn**: Nodes should expand/contract to meet rest lengths.
     -   **Drag**:
@@ -49,12 +50,8 @@ Implement the minimal XPBD distance constraint solver (single iteration) with tr
         -   `safe`: Should increment (reflecting prev-adjustments).
 3.  **Behavior**:
     -   Movement should be "springy" but potentially soft (1 iter, compliance 0.1).
-    -   No explosions (thanks to prev-adjust).
+    -   No explosions even with drag.
 
-## Constants
--   `EPSILON`: 1e-6 (Singularity check)
--   `compliance`: 0.1 px/N (Soft)
--   `ADJUST_PREV_ON_SOLVE`: true
-
-## Next Steps
-Proceed to **Mini Run 5**: Full Reconcile & Multi-Iteration (Stiff Springs).
+## Correction Notes
+-   Fixed broken implementation (replaced stub with real code).
+-   Added explicit per-frame telemetry reset to prevent "infinite accumulation".

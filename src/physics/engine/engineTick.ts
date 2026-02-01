@@ -38,6 +38,23 @@ import { finalizePhysicsTick } from './engineTickFinalize';
 
 
 
+// FORENSICS: Mode Isolation Tripwire
+// Detects if a Legacy pass runs while XPBD mode is active
+const assertMode = (engine: PhysicsEngineTickContext, stats: DebugStats, passName: string) => {
+    if (engine.config.useXPBD) {
+        // LEAK DETECTED
+        stats.forbiddenPassCount++;
+        stats.forbiddenLeakLatched = true;
+        stats.forbiddenPassLast = passName;
+        // Latch on engine to survive frame reset (optional, but stats is per-tick)
+        // We really want it visible in HUD, so DebugStats is the transport.
+        // Also log once per second to avoid console spam
+        if (Math.random() < 0.01) {
+            console.error(`[XPBD-LEAK] Forbidden Legacy Pass '${passName}' executed in XPBD Mode!`);
+        }
+    }
+};
+
 export const runPhysicsTickLegacy = (engine: PhysicsEngineTickContext, dtIn: number) => {
     // FIX: Startup Safety - Clamp DT for first 2 seconds to prevent insertion shock
     // If the browser hung during setup, dt could be 100ms+.
@@ -591,7 +608,7 @@ export const runPhysicsTickLegacy = (engine: PhysicsEngineTickContext, dtIn: num
 
         applyDragVelocity(engine as any, nodeList, dt, debugStats);
         applyPreRollVelocity(engine as any, nodeList, preRollActive, debugStats);
-        integrateNodes(engine as any, nodeList, dt, energy, motionPolicy, effectiveDamping, maxVelocityEffective, debugStats, preRollActive);
+        integrateNodes(engine as any, nodeList, dt, energy, motionPolicy, effectiveDamping, maxVelocityEffective, debugStats, preRollActive, false);
         engine.lastDebugStats = debugStats;
         if (perfEnabled && frameTiming) {
             frameTiming.totalMs = getNowMs() - tickStart;
@@ -619,6 +636,7 @@ export const runPhysicsTickLegacy = (engine: PhysicsEngineTickContext, dtIn: num
     }
 
     // 2. Apply Core Forces (scaled by energy)
+    assertMode(engine, debugStats, 'applyForcePass');
     applyForcePass(
         engine as any,
         nodeList,
@@ -657,7 +675,7 @@ export const runPhysicsTickLegacy = (engine: PhysicsEngineTickContext, dtIn: num
     measurePosSum('PostVMods');
 
     // 4. Integrate (always runs, never stops)
-    integrateNodes(engine as any, nodeList, dt, energy, motionPolicy, effectiveDamping, maxVelocityEffective, debugStats, preRollActive);
+    integrateNodes(engine as any, nodeList, dt, energy, motionPolicy, effectiveDamping, maxVelocityEffective, debugStats, preRollActive, false);
     currentEnergy = measureEnergy('PostInteg', currentEnergy);
     measureFight('PostInteg');
     measurePosSum('PostInteg');
@@ -678,22 +696,28 @@ export const runPhysicsTickLegacy = (engine: PhysicsEngineTickContext, dtIn: num
     if (microEnabled && !engine.config.debugDisableAllVMods && !quarantineActive) {
         if (!engine.config.debugDisableMicroSlip) {
             // Dense-core velocity de-locking (micro-slip) - breaks rigid-body lock
+            assertMode(engine, debugStats, 'applyDenseCoreVelocityDeLocking');
             applyDenseCoreVelocityDeLocking(engine as any, nodeList, motionPolicy, debugStats);
         }
 
         // Static friction bypass - breaks zero-velocity rest state
+        assertMode(engine, debugStats, 'applyStaticFrictionBypass');
         applyStaticFrictionBypass(engine as any, nodeList, motionPolicy, debugStats);
 
         // Angular velocity decoherence - breaks velocity orientation correlation
+        assertMode(engine, debugStats, 'applyAngularVelocityDecoherence');
         applyAngularVelocityDecoherence(engine as any, nodeList, motionPolicy, debugStats);
 
         // Local phase diffusion - breaks oscillation synchronization (shape memory eraser)
+        assertMode(engine, debugStats, 'applyLocalPhaseDiffusion');
         applyLocalPhaseDiffusion(engine as any, nodeList, motionPolicy, debugStats);
 
         // Low-force stagnation escape - breaks rest-position preference (edge shear version)
+        assertMode(engine, debugStats, 'applyEdgeShearStagnationEscape');
         applyEdgeShearStagnationEscape(engine as any, nodeList, motionPolicy, debugStats);
 
         // Dense-core inertia relaxation - erases momentum memory in jammed dots
+        assertMode(engine, debugStats, 'applyDenseCoreInertiaRelaxation');
         applyDenseCoreInertiaRelaxation(engine as any, nodeList, motionPolicy, debugStats);
 
         currentEnergy = measureEnergy('PostMicro', currentEnergy);
@@ -718,11 +742,13 @@ export const runPhysicsTickLegacy = (engine: PhysicsEngineTickContext, dtIn: num
         if (!constraintsDisabled) {
             const edgeRelaxEnabled = engine.frameIndex % edgeRelaxEvery === 0;
             if (edgeRelaxEnabled) {
+                assertMode(engine, debugStats, 'applyEdgeRelaxation');
                 applyEdgeRelaxation(engine as any, correctionAccum, nodeDegreeEarly, debugStats, dt);
             }
             if (spacingWillRun) {
                 if (perfEnabled && frameTiming) {
                     const spacingStart = getNowMs();
+                    assertMode(engine, debugStats, 'applySpacingConstraints');
                     applySpacingConstraints(
                         engine as any,
                         engine.awakeList,
@@ -837,6 +863,7 @@ export const runPhysicsTickLegacy = (engine: PhysicsEngineTickContext, dtIn: num
         }
 
         if (!engine.config.debugDisableDiffusion && !reconcileDisabled) {
+            assertMode(engine, debugStats, 'applyCorrectionsWithDiffusion');
             applyCorrectionsWithDiffusion(
                 engine as any,
                 nodeList,

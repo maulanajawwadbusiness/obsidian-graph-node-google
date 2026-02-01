@@ -20,7 +20,8 @@ export const integrateNodes = (
     effectiveDamping: number,
     maxVelocityEffective: number,
     stats: DebugStats,
-    preRollActive: boolean
+    preRollActive: boolean,
+    useXPBD: boolean = false
 ): IntegrationResult => {
     let clampHitCount = 0;
 
@@ -163,14 +164,17 @@ export const integrateNodes = (
         // Update Velocity (with temporal decoherence)
         applyBaseIntegration(node, ax, ay, nodeDt);
 
-        if (!preRollActive) {
+
+        // XPBD DISABLE: Carrier Flow is a heuristic V-Mod
+        if (!preRollActive && !useXPBD) {
             applyCarrierFlowAndPersistence(engine, nodeList, node, policy, stats);
         }
 
         // Apply unified damping (increases as energy falls) - use nodeDt
         applyDamping(node, preRollActive, effectiveDamping, nodeDt);
 
-        if (!preRollActive) {
+        // XPBD DISABLE: Hub Scaling is a heuristic V-Mod
+        if (!preRollActive && !useXPBD) {
             applyHubVelocityScaling(engine, node, stats, policy, nodeList);
         }
 

@@ -40,8 +40,8 @@ Every subsystem has a forensic trace. Use this map to find the "Why".
 | **B** | **Inventory** | Where are all forces/motors? | [forensic_sharp_inventory.md](forensic_sharp_inventory.md) | `debugDisableAllVMods` |
 | **C** | **Magnitudes** | What are the real runtime units? | [forensic_native_ledger.md](forensic_native_ledger.md) | `repulsionMaxMag`, `springCorrMax` |
 | **D** | **Repulsion** | Why doesn't it explode? | [forensic_repulsion_placement_and_scaling.md](forensic_repulsion_placement_and_scaling.md) | `nearOverlapCount`, `repulsionClamped` |
-| **E** | **XPBD/DT** | Is dt usage correct? | [forensic_dt_and_xpbd_compliance_alignment.md](forensic_dt_and_xpbd_compliance_alignment.md) | `dtSkewMaxMs` |
-| **F** | **Telemetry** | Is XPBD actually running? | [forensic_xpbd_proof_of_life_telemetry.md](forensic_xpbd_proof_of_life_telemetry.md) | `xpbdSpringCounts` |
+| **E** | **XPBD Architecture** | How does the solver work? | [handoff_xpbd_implementation_2026_02_01.md](handoff_xpbd_implementation_2026_02_01.md) | `propEdgesSolved`, `maxAbsC` |
+| **F** | **Drag Gating** | Why is it so fast? | [report_drag_gating_run6.md](report_drag_gating_run6.md) | `dragActive`, `coverage` |
 | **G** | **Ghost Vel** | Why do nodes teleport? | [forensic_ghost_velocity_reconcile_compat.md](forensic_ghost_velocity_reconcile_compat.md) | `maxPrevGap`, `ghostVelSuspectCount` |
 | **H** | **Isolation** | Is Legacy interfering? | [forensic_mode_isolation_hybrid_vs_xpbd.md](forensic_mode_isolation_hybrid_vs_xpbd.md) | `mode` text (HUD top) |
 | **I** | **Startup** | Why does spawn explore? | [forensic_spawn_startup_hygiene.md](forensic_spawn_startup_hygiene.md) | `startupNanCount`, `minPairDist` |

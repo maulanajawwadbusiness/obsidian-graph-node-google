@@ -35,14 +35,17 @@ When frame budget (`maxPhysicsBudgetMs`) is exceeded, we do NOT lower spring sti
     *   **Far-Field Spacing**: Heavily throttled in Level 2.
     *   **Deep Diffusion**: Neighbor count cap reduces (3 -> 1 -> 0).
 
-## 4. The Hybrid Solver Pipeline
+## 4. The XPBD Solver Pipeline (2026-02-01)
 The ticking loop (`src/physics/engine/engineTick.ts`) execution order:
 1.  **Ticket Preflight**: Firewall checks (NaN/Inf) and Hub/StuckScore analysis.
 2.  **MotionPolicy**: Computes global temperature and degrade scalars.
 3.  **Force Pass** (Soft: Repulsion, Springs) -> *includes Deterministic Singularity Handling*
-4.  **Velocity Pass** (Damping, Drag, Inertia, Local Boost Logic)
-5.  **Integration** (Euler) -> *Updates x = x + v*
-6.  **Constraints** (PBD via Accumulator) -> *Safety Clamp + Gentle Overlap Resolver ($d < 0.1$)*
+4.  **Integration** (Euler) -> *Updates x = x + v*
+5.  **XPBD Constraints** (`engineTickXPBD.ts`):
+    - **Solver**: Iterative Edge Distance Constraints.
+    - **Loop**: Default Idle=2, Drag=6 (Hard Cap 12).
+    - **Compliance**: $\alpha = C / dt^2$ (Soft constraints).
+6.  **Reconcile**: Updates velocity based on position corrections ($v = \Delta x / dt$).
 7.  **Correction Diffusion** -> *Smoothes jitter*
 
 ### MotionPolicy (Energy → Ramps)
@@ -98,6 +101,17 @@ User interaction must never feel degraded.
 ### C. 2026-02-01 Hardening (Determinism & Rest)
 *   **Micro-Slip Heartbeat**: Replaced simple velocity check with `StuckScore` (Pressure + Low Speed) and 1.0s cooldown to prevent active vibration (Fix #44).
 *   **Determinism**: All `Math.random` replaced with seeded `pseudoRandom`. Simulation is now bit-exact reproducible on Reset.
+
+## 7. XPBD Transition (2026-02-01)
+- **Architecture**: Moved from "Force-Directed" to "Extended Position Based Dynamics".
+- **Benefits**:
+    - **Stiffness**: Infinite stiffness possible without explosion.
+    - **God Mode**: Dragging is kinematic (infinite mass), providing 1:1 control.
+    - **Stability**: Unconditional stability at large time steps.
+- **Key Files**:
+    - `engineTickXPBD.ts`: Core constraint solver.
+    - `engineTickTypes.ts`: XPBD accumulator structures.
+    - `engineTick.ts`: Pipeline integration.
 *   **Rest Truth**: Sleep requires global calm (95% nodes < speed threshold) for >10 frames (`idleFrames`).
 *   **Constraint-Aware Escape**: Stagnation escape currents check `dot(Force, Constraint)` to avoid fighting PBD.
 ## 7. Observability

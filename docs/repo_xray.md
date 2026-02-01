@@ -77,7 +77,7 @@ Excluding: `node_modules`, `dist`, `build`, `.git`
     *   **Driven By**: Scheduler (`useGraphRendering.ts`).
     *   **Frequency**: 60hz (fixed step).
     *   **Degrade-1:1**: Reduces pass frequency but enforces **Hot Pair Fairness** (Fix #22) to prevent far-field crawl.
-    *   **Operations**: `ForcePass` -> `Integration` -> `Constraints` -> `Correction`.
+    *   **Operations**: `ForcePass` -> `Integration` -> `XPBD Constraints` -> `Reconcile` -> `Correction`.
 
 *   **Scheduler ("Holy Grail" Logic)**:
     *   **Driven By**: `requestAnimationFrame`.
@@ -105,6 +105,8 @@ Excluding: `node_modules`, `dist`, `build`, `.git`
 *   `src/physics/engine.ts`:
     *   **Pass Scheduler**: Global degrade logic.
     *   **Warm Start**: Invalidation logic for state changes.
+*   `src/physics/engine/engineTickXPBD.ts`:
+    *   **XPBD Solver**: Iterative Edge Distance Constraints & Compliance (Run 1-6).
 *   `src/playground/rendering/camera.ts`:
     *   **Unified Transform**: Source of truth for World<->Screen mapping.
 *   `src/physics/config.ts`:

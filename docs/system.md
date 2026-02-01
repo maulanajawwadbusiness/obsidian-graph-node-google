@@ -40,13 +40,13 @@ The application layers, ordered by z-index (lowest to highest):
 ## 3. Physics Architecture And Contract
 The graph is driven by a **Hybrid Solver** (`src/physics/`) prioritizing "Visual Dignity" over pure simulation accuracy.
 
-### A. The Hybrid Solver
-1.  **Forces (Soft)**: Repulsion, Springs, Center Gravity. Drive organic layout.
-2.  **PBD Constraints (Hard)**: Position-Based Dynamics for Non-Penetration (`applySafetyClamp`) and Spacing.
-3.  **Diffusion**: Inertia relaxation and phase diffusion to kill "boiling" energy in dense clusters.
-4.  **Drift**: Buoyancy and slight center pull to keep unconnected nodes visible.
-5.  **Initialization**: "Spread" strategy seeds nodes in a micro-cloud (2px min separation).
-6.  **Singularity & Overlap**: Deterministic ID-based resolution for exact overlaps ($d \approx 0$) and "Gentle Resolver" for deep overlaps ($d < 0.1$).
+### A. The XPBD Solver (Unified)
+1.  **Forces (Soft)**: Repulsion, Center Gravity. Drive organic layout.
+2.  **XPBD Constraints (Hard)**: Edge Distance solver with Compliance ($\alpha$). Replaces legacy Springs.
+3.  **Integration**: Euler integration step ($x' = x + v \Delta t$).
+4.  **Reconcile**: Velocity updated from positional corrections ($v = \Delta x / \Delta t$).
+5.  **Initialization**: "Spread" strategy seeds nodes to prevent singularities.
+6.  **Singularity**: Deterministic overlap resolution ($d \approx 0$).
 
 ### B. Performance Doctrine (The Sacred 60)
 **"Interaction > Simulation"**
@@ -61,7 +61,7 @@ The graph is driven by a **Hybrid Solver** (`src/physics/`) prioritizing "Visual
 #### 2. Degrade-1:1 Policy ("No Mud")
 When stressed (`degradeLevel > 0`), we reduce workload by **skipping entire passes**, NOT by weakening forces.
 *   **Concept**: `MotionPolicy` (New) centralized response curves (Degrade vs Temperature).
-*   **Bucket A (Sacred)**: Integration, Dragged Node Physics (Local Boost), Canvas Release. *Never degraded.*
+*   **Bucket A (Sacred)**: Integration, XPBD Solver (Drag), Canvas Release. *Never degraded.*
 *   **Bucket B (Structural)**: Springs, Repulsion. *Frequency reduced (1:2, 1:3) but stiffness normalized to dt.*
 *   **Bucket C (Luxury)**: Far-field Spacing, Deep Diffusion. *Aggressively throttled.*
 *   **Fix #22 (Fairness)**: "Hot Pairs" (pairs under pressure) are prioritized 1:1 even in degraded mode to prevent far-field crawl.

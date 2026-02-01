@@ -124,12 +124,10 @@ export type DebugStats = {
         repelSingularityFallbackCount: number;
     };
     canaryShiftApplied?: boolean;
-    dragThrottledWarn?: boolean;
 };
 
 export const createDebugStats = (): DebugStats => ({
     mode: 'LEGACY',
-    dragThrottledWarn: false,
     forbiddenPassCount: 0,
     forbiddenLeakLatched: false,
     passes: {},

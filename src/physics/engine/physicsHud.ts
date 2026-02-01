@@ -90,14 +90,6 @@ export type PhysicsHudSnapshot = {
     xpbdEarlyBreaks?: number;
     xpbdMaxAbsC?: number;
 
-    // Run 1: Drag Gating Telemetry
-    isDragging?: boolean;
-    dragActive?: boolean; // Firewall flag
-    coverageRatio?: number;
-    nodesAwake?: number;
-    nodesSleeping?: number;
-    dragThrottledWarn?: boolean;
-
     // Mini Run 6: Calibration Telemetry
     xpbdComplianceUsed?: number;  // Actual compliance value in use
     xpbdAlphaAvg?: number;  // Average alpha (compliance/dt²) for verification
@@ -176,6 +168,17 @@ export type PhysicsHudSnapshot = {
     edgesSkippedByCoverage?: number;
     edgesProcessed?: number;
     edgesSelectedButUnprocessed?: number;
+
+    // Run 1: Propagation Proof Placeholders
+    propEdgesSolved?: number;
+    propTotalEdges?: number;
+    propNodesUpdated?: number;
+    propTotalNodes?: number;
+    propMaxAbsC?: number;
+    propMovedNodes?: number;
+    propMovedHop1?: number;
+    propMovedHop2?: number;
+    propMovedHop3Plus?: number;
 
     // Frame Accumulators
     ticksThisFrame?: number;

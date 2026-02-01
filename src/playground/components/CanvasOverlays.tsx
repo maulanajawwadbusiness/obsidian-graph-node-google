@@ -423,15 +423,6 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
                                         </div>
                                     )}
                                     {hud && (
-                                        <div style={{ marginTop: '4px', paddingTop: '4px', borderTop: '1px solid #444', color: hud.isDragging ? '#ffff00' : '#888' }}>
-                                            <strong>Drag Gating {hud.dragActive ? '(FIREWALL)' : ''}</strong><br />
-                                            Drag: {hud.isDragging ? 'YES' : 'NO'}<br />
-                                            Awake: {hud.nodesAwake} / {metrics.nodes} (Sleep: {hud.nodesSleeping})<br />
-                                            Coverage: {((hud.coverageRatio ?? 1) * 100).toFixed(0)}%<br />
-                                            {hud.dragThrottledWarn && <span style={{ color: '#ff0000', fontWeight: 'bold' }}>⚠️ DRAG THROTTLED ({((hud.coverageRatio ?? 0) * 100).toFixed(0)}%)</span>}
-                                        </div>
-                                    )}
-                                    {hud && (
                                         <div style={{ marginTop: '4px', paddingTop: '4px', borderTop: '1px solid #444', color: hud.mode === 'XPBD' ? '#adff2f' : '#888' }}>
                                             <strong>XPBD Proof-of-Life</strong><br />
                                             Springs: {hud.xpbdSpringCounts?.count || 0} / {hud.xpbdSpringCounts?.iter || 0}it<br />
@@ -506,6 +497,14 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
                                             Ratio: {hud.edgesSelectedForSolve || 0} / {hud.totalEdgesGraph || 0}<br />
                                             Proc: {hud.edgesProcessed || 0} (Leak: {hud.edgesSelectedButUnprocessed || 0})<br />
                                             Reason: {hud.edgesSelectedReason || '-'}<br />
+                                        </div>
+                                    )}
+                                    {hud && (
+                                        <div style={{ marginTop: '4px', paddingTop: '4px', borderTop: '1px solid #444', color: '#dcf' }}>
+                                            <strong>Propagation Proof</strong><br />
+                                            Edges: {hud.propEdgesSolved || '-'}/{hud.propTotalEdges || '-'} | Nodes: {hud.propNodesUpdated || '-'}/{hud.propTotalNodes || '-'}<br />
+                                            MaxC: {(hud.propMaxAbsC || 0).toFixed(2)}px<br />
+                                            Moved: {hud.propMovedNodes || '-'} (H1:{hud.propMovedHop1 || '-'} H2:{hud.propMovedHop2 || '-'} H3+:{hud.propMovedHop3Plus || '-'})<br />
                                         </div>
                                     )}
                                     {hud && (

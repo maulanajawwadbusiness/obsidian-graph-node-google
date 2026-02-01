@@ -192,21 +192,13 @@ export const runPhysicsTickLegacy = (engine: PhysicsEngineTickContext, dtIn: num
         }
     }
 
-    // Run 2: Drag Firewall
-    engine.dragActive = engine.draggedNodeId !== null;
-
     engine.awakeList.length = 0;
     engine.sleepingList.length = 0;
     for (let i = 0; i < nodeList.length; i++) {
         const node = nodeList[i];
         node.listIndex = i;
-
-        // Run 2: Force Awake if Dragging (Bypass Dynamic Sleep)
-        // Fixed nodes still sleep to avoid O(N²) static repulsion
-        const isFixed = node.isFixed && node.id !== engine.draggedNodeId;
-        const reflectsSleep = node.isSleeping === true && !engine.dragActive;
-
-        if (isFixed || reflectsSleep) {
+        const isSleeping = (node.isFixed || node.isSleeping === true) && node.id !== engine.draggedNodeId;
+        if (isSleeping) {
             engine.sleepingList.push(node);
         } else {
             engine.awakeList.push(node);
@@ -306,9 +298,7 @@ export const runPhysicsTickLegacy = (engine: PhysicsEngineTickContext, dtIn: num
         }
     }
 
-    // Run 3: Drag Firewall (Disable throttling/degrade)
-    const effectiveDegrade = engine.dragActive ? 0.0 : engine.degradeLevel;
-    const motionPolicy = createMotionPolicy(energy, effectiveDegrade, avgVelSq, allowEarlyExpansion);
+    const motionPolicy = createMotionPolicy(energy, engine.degradeLevel, avgVelSq, allowEarlyExpansion);
 
     // FIX: Diffusion Decay at Rest (Smooth Gating)
     // Blend settleScalar up based on calmPercent before the hard cutoff.
@@ -478,17 +468,6 @@ export const runPhysicsTickLegacy = (engine: PhysicsEngineTickContext, dtIn: num
 
     const cascadeActive = false;
     const cascadePhase = 0;
-
-    // Run 5: Guardrail (Throttle Warning)
-    engine.dragThrottledTime = engine.dragThrottledTime ?? 0;
-    if (engine.dragActive && spacingStride > 1.1) {
-        engine.dragThrottledTime += dt;
-        if (debugStats && engine.dragThrottledTime > 0.2) {
-            debugStats.dragThrottledWarn = true;
-        }
-    } else {
-        engine.dragThrottledTime = 0;
-    }
 
     // CONTINUOUS PASS EXECUTION
     const runPairwiseForces = true;

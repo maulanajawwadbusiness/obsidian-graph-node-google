@@ -302,14 +302,6 @@ export const updateHudSnapshot = (
         xpbdEarlyBreaks: engine.xpbdFrameAccum?.springs.earlyBreakCount ?? 0,
         xpbdMaxAbsC: engine.xpbdFrameAccum?.springs.maxAbsC ?? 0,
 
-        // Run 1: Drag Gating
-        isDragging: engine.draggedNodeId !== null,
-        dragActive: (engine as any).dragActive ?? false, // Placeholder until Run 2
-        coverageRatio: engine.config.useXPBD ? 1.0 : (1.0 / spacingStride),
-        nodesAwake: engine.awakeList?.length ?? 0,
-        nodesSleeping: engine.sleepingList?.length ?? 0,
-        dragThrottledWarn: stats.dragThrottledWarn,
-
         // Mini Run 4: Validation
         xpbdSpringSkipped: engine.xpbdFrameAccum?.springs.skipped ?? 0,
         xpbdSpringSingularity: engine.xpbdFrameAccum?.springs.singularity ?? 0,
@@ -327,6 +319,17 @@ export const updateHudSnapshot = (
         draggedNodeId: engine.draggedNodeId,
         dragInvMassMode: true, // Kinematic lock is effective infinite mass
         dragLagMax: engine.xpbdFrameAccum?.springs.dragLagMax ?? 0,
+
+        // Run 1: Propagation Proof Placeholders
+        propEdgesSolved: 0,
+        propTotalEdges: 0,
+        propNodesUpdated: 0,
+        propTotalNodes: 0,
+        propMaxAbsC: 0,
+        propMovedNodes: 0,
+        propMovedHop1: 0,
+        propMovedHop2: 0,
+        propMovedHop3Plus: 0,
 
         xpbdFirstConstraintDistPx: firstConstraintDistPx,
         xpbdFirstConstraintRestPx: firstConstraintRestPx,

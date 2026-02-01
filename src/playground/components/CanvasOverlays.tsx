@@ -423,6 +423,14 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
                                         </div>
                                     )}
                                     {hud && (
+                                        <div style={{ marginTop: '4px', paddingTop: '4px', borderTop: '1px solid #444', color: hud.isDragging ? '#ffff00' : '#888' }}>
+                                            <strong>Drag Gating {hud.dragActive ? '(FIREWALL)' : ''}</strong><br />
+                                            Drag: {hud.isDragging ? 'YES' : 'NO'}<br />
+                                            Awake: {hud.nodesAwake} / {metrics.nodes} (Sleep: {hud.nodesSleeping})<br />
+                                            Coverage: {((hud.coverageRatio ?? 1) * 100).toFixed(0)}%<br />
+                                        </div>
+                                    )}
+                                    {hud && (
                                         <div style={{ marginTop: '4px', paddingTop: '4px', borderTop: '1px solid #444', color: hud.mode === 'XPBD' ? '#adff2f' : '#888' }}>
                                             <strong>XPBD Proof-of-Life</strong><br />
                                             Springs: {hud.xpbdSpringCounts?.count || 0} / {hud.xpbdSpringCounts?.iter || 0}it<br />

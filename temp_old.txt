@@ -1,4 +1,4 @@
-import type { PhysicsEngineTickContext } from './engineTickTypes';
+﻿import type { PhysicsEngineTickContext } from './engineTickTypes';
 import { runTickPreflight } from './engineTickPreflight';
 import { createDebugStats } from './stats';
 import { getNowMs } from './engineTime';
@@ -65,7 +65,7 @@ const applyKinematicDrag = (engine: PhysicsEngineTickContext, dt: number) => {
 
             // 4. DO NOT mutate isFixed (Mini Run 7 Part 2 cleanup)
             // Solver checks draggedNodeId directly for invMass=0
-            // node.isFixed = true; // ❌ REMOVED - redundant and problematic
+            // node.isFixed = true; // Γ¥î REMOVED - redundant and problematic
         }
     }
 };
@@ -80,14 +80,14 @@ const rebuildXPBDConstraints = (engine: PhysicsEngineTickContext) => {
     // Run 6: Compliance from Config
     // CRITICAL: Smaller compliance = STIFFER = larger corrections = EXPLOSION
     // Larger compliance = SOFTER = smaller corrections = STABLE
-    // Formula: alpha = compliance / dt²
-    //   - Small alpha (stiff) → deltaLambda ≈ -C/wSum (rigid, large correction)
-    //   - Large alpha (soft) → deltaLambda ≈ -C/alpha (soft, small correction)
+    // Formula: alpha = compliance / dt┬▓
+    //   - Small alpha (stiff) ΓåÆ deltaLambda Γëê -C/wSum (rigid, large correction)
+    //   - Large alpha (soft) ΓåÆ deltaLambda Γëê -C/alpha (soft, small correction)
     // 
     // Calibration:
-    //   0.0001 → alpha≈0.39 → TOO STIFF → EXPLOSION on drag release
-    //   0.01   → alpha≈39   → Visible ~0.2px corrections, stable
-    //   0.1    → alpha≈390  → Very soft, barely visible
+    //   0.0001 ΓåÆ alphaΓëê0.39 ΓåÆ TOO STIFF ΓåÆ EXPLOSION on drag release
+    //   0.01   ΓåÆ alphaΓëê39   ΓåÆ Visible ~0.2px corrections, stable
+    //   0.1    ΓåÆ alphaΓëê390  ΓåÆ Very soft, barely visible
     const compliance = engine.config.xpbdLinkCompliance ?? 0.001;
 
     const newConstraints: any[] = [];
@@ -260,6 +260,7 @@ const solveXPBDEdgeConstraints = (engine: PhysicsEngineTickContext, dt: number) 
     let corrSum = 0;
 
     // Calibration Canary (Run 6)
+    // If enabled, artificially shorten the first constraint to force visual error.
     if (USE_CANARY && engine.xpbdConstraints.length > 0) {
         // Validation check only
     }
@@ -267,44 +268,52 @@ const solveXPBDEdgeConstraints = (engine: PhysicsEngineTickContext, dt: number) 
     const constraints = engine.xpbdConstraints;
     const nodes = engine.nodes;
 
-    // Mini Run 7 Part 4: Track pinned nodes
+    // Mini Run 7 Part 4: Track pinned nodes (invMass=0)
     let pinnedCount = 0;
     const draggedNodePinned = engine.draggedNodeId !== null;
-    // Don't count here, count in loop
+    if (draggedNodePinned) pinnedCount++;  // Dragged node is always pinned
 
+    // TUG RUN PART 2: Track constraints involving dragged node (local tug activity)
     let dragConstraintCount = 0;
 
-    // Run 2: Iterations
-    const iterIdle = engine.config.xpbdIterationsIdle || 2;
-    const iterDrag = engine.config.xpbdIterationsDrag || 6;
+    // Run 2: Iteration Budget (Default 1/1)
+    // Select count based on drag state
+    const iterIdle = engine.config.xpbdIterationsIdle || 1;
+    const iterDrag = engine.config.xpbdIterationsDrag || 1;
     const iterCount = draggedNodePinned ? iterDrag : iterIdle;
 
+    // We update stats, but the loop below is still single-pass for Run 2 (or we can start looping?)
+    // Prompt says "still default 1/1" for behavior. 
+    // Run 3 says "implement the actual repeat loop".
+    // So for Run 2, we just calculate iterCount and report it, but don't loop yet?
+    // "choose iterationCount each frame ... wire to HUD"
+    // I'll wire up the logic but keep the loop structure for Run 3.
+
+    // Run 2: Edge Selection Policy ('full' by default)
+    // "keep the old filtered path behind a dev flag (default OFF)"
     const selectionMode = engine.config.xpbdEdgeSelection || 'full';
 
-    // Run 4: Safety Hard Cap
-    const MAX_ITERATIONS_HARD_CAP = 12;
-    const safeIterCount = Math.min(iterCount, MAX_ITERATIONS_HARD_CAP);
-
-    // Run 3: Lambda Reset
+    // Run 3: Lambda Reset (Warm Start disabled for now, per prompt "reset per-frame")
     for (let k = 0; k < constraints.length; k++) {
         constraints[k].lambda = 0.0;
     }
 
     let earlyBreak = false;
     let prevIterCorrMax = Number.MAX_VALUE;
+    let stagnationStreak = 0;
+
     let usedIterations = 0;
 
     // Solver Loop (Multi-Iteration)
-    for (let iter = 0; iter < safeIterCount; iter++) {
+    for (let iter = 0; iter < iterCount; iter++) {
         usedIterations++;
 
-        // Reset per-pass counters
+        // Reset per-pass counters so final stats reflect the last pass (Coverage Validity)
         solvedCount = 0;
         skippedCount = 0;
         singularityCount = 0;
 
         let iterCorrMax = 0;
-        let iterAbsCMax = 0; // Run 4: Track Max Error
 
         for (let i = 0; i < constraints.length; i++) {
             const c = constraints[i];
@@ -324,6 +333,7 @@ const solveXPBDEdgeConstraints = (engine: PhysicsEngineTickContext, dt: number) 
                 }
             }
 
+            // 1. Calculate Error (C)
             const dx = nA.x - nB.x;
             const dy = nA.y - nB.y;
             const dist = Math.sqrt(dx * dx + dy * dy);
@@ -333,24 +343,29 @@ const solveXPBDEdgeConstraints = (engine: PhysicsEngineTickContext, dt: number) 
                 continue;
             }
 
+            // Canary Injection (Iteration 0 only)
             let effectiveRestLen = c.restLen;
             if (USE_CANARY && i === 0 && iter === 0) {
                 effectiveRestLen = Math.max(10, c.restLen - 50);
             }
 
             const C = dist - effectiveRestLen;
-            const absC = Math.abs(C);
 
-            errSum += absC;
-            iterAbsCMax = Math.max(iterAbsCMax, absC);
+            // Accumulate global error (maybe average later, but sum is fine to track convergence)
+            // Only add to error sum on final iteration? 
+            // Better to track "Cost" as total error reduction? 
+            // For now, let's sum it all to see total system stress.
+            errSum += Math.abs(C);
 
+            // 2. Gradients
             const gradX = dx / dist;
             const gradY = dy / dist;
 
+            // 3. Inverse Masses & Local Tug
             const wA = (nA.isFixed || nA.id === engine.draggedNodeId) ? 0 : 1.0;
             const wB = (nB.isFixed || nB.id === engine.draggedNodeId) ? 0 : 5.0;
 
-            if (iter === 0) {
+            if (iter === 0) { // Telemetry only once
                 if (wA === 0 && nA.id !== engine.draggedNodeId) pinnedCount++;
                 if (wB === 0 && nB.id !== engine.draggedNodeId) pinnedCount++;
                 if (nA.id === engine.draggedNodeId || nB.id === engine.draggedNodeId) dragConstraintCount++;
@@ -361,17 +376,23 @@ const solveXPBDEdgeConstraints = (engine: PhysicsEngineTickContext, dt: number) 
                 continue;
             }
 
+            // 4. Alpha (Compliance)
             const alpha = c.compliance / (dt * dt);
+            const wSum = wA + wB;
+
+            // 5. Delta Lambda
             const denom = wA + wB + alpha;
             const deltaLambda = (-C - alpha * c.lambda) / denom;
 
             c.lambda += deltaLambda;
 
+            // 6. Apply Correction
             let pxA = +wA * deltaLambda * gradX;
             let pyA = +wA * deltaLambda * gradY;
             let pxB = -wB * deltaLambda * gradX;
             let pyB = -wB * deltaLambda * gradY;
 
+            // Safety Cap (Run 6)
             let magA = Math.sqrt(pxA * pxA + pyA * pyA);
             let magB = Math.sqrt(pxB * pxB + pyB * pyB);
 
@@ -388,16 +409,18 @@ const solveXPBDEdgeConstraints = (engine: PhysicsEngineTickContext, dt: number) 
             nA.x += pxA; nA.y += pyA;
             nB.x += pxB; nB.y += pyB;
 
+            // Stats
             iterCorrMax = Math.max(iterCorrMax, magA, magB);
-            corrMax = Math.max(corrMax, magA, magB);
+            corrMax = Math.max(corrMax, magA, magB); // Global max
             corrSum += magA + magB;
 
             solvedCount++;
 
+            // Run 7 Telemetry Sample (Iter 0 only)
             if (i === 0 && iter === 0 && engine.xpbdFrameAccum) {
                 engine.xpbdFrameAccum.springs.firstCapHit = capHit;
                 engine.xpbdFrameAccum.springs.firstAlpha = alpha;
-                engine.xpbdFrameAccum.springs.firstWSum = wA + wB;
+                engine.xpbdFrameAccum.springs.firstWSum = wSum;
                 engine.xpbdFrameAccum.springs.firstEdgeDebug = {
                     C, deltaLambda, corrDotA: (pxA * gradX + pyA * gradY), corrDotB: (pxB * gradX + pyB * gradY), gradX, gradY
                 };
@@ -405,14 +428,17 @@ const solveXPBDEdgeConstraints = (engine: PhysicsEngineTickContext, dt: number) 
         }
 
         // Run 3: Stagnation Guard
+        // If the max correction in this pass is NOT significantly smaller than previous, or is tiny, we might break.
+        // Actually, just breaking on "No Visible Change" (Convergence).
+        // If max correction < 0.1px, we are effectively done.
         const STAGNATION_THRESHOLD_PX = 0.05;
         if (iterCorrMax < STAGNATION_THRESHOLD_PX) {
             earlyBreak = true;
-            if (engine.xpbdFrameAccum) engine.xpbdFrameAccum.springs.maxAbsC = iterAbsCMax;
             break;
         }
 
-        if (engine.xpbdFrameAccum) engine.xpbdFrameAccum.springs.maxAbsC = iterAbsCMax;
+        // Divergence Check (Optional)?
+        // If iterCorrMax INCREASES significantly, we might have instability.
 
         prevIterCorrMax = iterCorrMax;
     }
@@ -439,7 +465,7 @@ const solveXPBDEdgeConstraints = (engine: PhysicsEngineTickContext, dt: number) 
         s.totalEdgesGraph = engine.links.length;
         s.edgesSelectedForSolve = constraints.length;
         s.edgesSelectedReason = selectionMode;
-        s.edgesSkippedByCoverage = 0;
+        s.edgesSkippedByCoverage = 0; // Run 3: Audit confirmed no secondary filters (yet)
         s.edgesProcessed = solvedCount;
         s.edgesSelectedButUnprocessed = constraints.length - skippedCount - singularityCount - solvedCount;
 

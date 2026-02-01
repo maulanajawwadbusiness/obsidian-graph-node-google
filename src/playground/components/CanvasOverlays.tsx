@@ -360,28 +360,110 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
                                                 <strong style={{ fontWeight: 700, fontSize: '11px', color: '#ff8888' }}>ISOLATION (KILL SWITCHES)</strong>
                                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2px' }}>
                                                     <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '10px', cursor: 'pointer' }}>
-                                                        <input type="checkbox" checked={!!config.debugDisableDiffusion} onChange={(e) => onConfigChange('debugDisableDiffusion', e.target.checked)} />
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={!!config.debugDisableDiffusion}
+                                                            onChange={(e) => onConfigChange('debugDisableDiffusion', e.target.checked)}
+                                                            onPointerDown={stopPropagation}
+                                                        />
                                                         No Diffuse
                                                     </label>
                                                     <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '10px', cursor: 'pointer' }}>
-                                                        <input type="checkbox" checked={!!config.debugDisableMicroSlip} onChange={(e) => onConfigChange('debugDisableMicroSlip', e.target.checked)} />
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={!!config.debugDisableMicroSlip}
+                                                            onChange={(e) => onConfigChange('debugDisableMicroSlip', e.target.checked)}
+                                                            onPointerDown={stopPropagation}
+                                                        />
                                                         No M-Slip
                                                     </label>
                                                     <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '10px', cursor: 'pointer' }}>
-                                                        <input type="checkbox" checked={!!config.debugDisableRepulsion} onChange={(e) => onConfigChange('debugDisableRepulsion', e.target.checked)} />
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={!!config.debugDisableRepulsion}
+                                                            onChange={(e) => onConfigChange('debugDisableRepulsion', e.target.checked)}
+                                                            onPointerDown={stopPropagation}
+                                                        />
                                                         No Repuls
                                                     </label>
                                                     <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '10px', cursor: 'pointer' }}>
-                                                        <input type="checkbox" checked={!!config.debugDisableConstraints} onChange={(e) => onConfigChange('debugDisableConstraints', e.target.checked)} />
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={!!config.debugDisableConstraints}
+                                                            onChange={(e) => onConfigChange('debugDisableConstraints', e.target.checked)}
+                                                            onPointerDown={stopPropagation}
+                                                        />
                                                         No Constr
                                                     </label>
                                                     <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '10px', cursor: 'pointer' }}>
-                                                        <input type="checkbox" checked={!!config.debugDisableReconcile} onChange={(e) => onConfigChange('debugDisableReconcile', e.target.checked)} />
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={!!config.debugDisableReconcile}
+                                                            onChange={(e) => onConfigChange('debugDisableReconcile', e.target.checked)}
+                                                            onPointerDown={stopPropagation}
+                                                        />
                                                         No Reconc
                                                     </label>
                                                     <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '10px', cursor: 'pointer' }}>
-                                                        <input type="checkbox" checked={!!config.debugDisableAllVMods} onChange={(e) => onConfigChange('debugDisableAllVMods', e.target.checked)} />
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={!!config.debugDisableAllVMods}
+                                                            onChange={(e) => onConfigChange('debugDisableAllVMods', e.target.checked)}
+                                                            onPointerDown={stopPropagation}
+                                                        />
                                                         No V-Mods
+                                                    </label>
+                                                </div>
+                                            </div>
+                                        )}
+                                        {showAdvanced && (
+                                            <div style={{ marginTop: '6px', padding: '4px', background: 'rgba(60,120,255,0.1)', border: '1px solid rgba(60,120,255,0.3)' }}>
+                                                <strong style={{ fontWeight: 700, fontSize: '11px', color: '#9cc7ff' }}>XPBD (RUN 1-2)</strong>
+                                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2px' }}>
+                                                    <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '10px', cursor: 'pointer' }}>
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={!!config.debugXpbdSprings}
+                                                            onChange={(e) => onConfigChange('debugXpbdSprings', e.target.checked)}
+                                                            onPointerDown={stopPropagation}
+                                                        />
+                                                        XPBD Springs
+                                                    </label>
+                                                    <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '10px', cursor: 'pointer' }}>
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={!!config.debugForceStiffSprings}
+                                                            onChange={(e) => onConfigChange('debugForceStiffSprings', e.target.checked)}
+                                                            onPointerDown={stopPropagation}
+                                                        />
+                                                        Force Stiff
+                                                    </label>
+                                                    <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '10px', cursor: 'pointer' }}>
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={!!config.debugXpbdRepulsion}
+                                                            onChange={(e) => onConfigChange('debugXpbdRepulsion', e.target.checked)}
+                                                            onPointerDown={stopPropagation}
+                                                        />
+                                                        XPBD Repel
+                                                    </label>
+                                                    <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '10px', cursor: 'pointer' }}>
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={!!config.debugForceRepulsion}
+                                                            onChange={(e) => onConfigChange('debugForceRepulsion', e.target.checked)}
+                                                            onPointerDown={stopPropagation}
+                                                        />
+                                                        Force Repel
+                                                    </label>
+                                                    <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '10px', cursor: 'pointer' }}>
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={!!config.debugXpbdCanary}
+                                                            onChange={(e) => onConfigChange('debugXpbdCanary', e.target.checked)}
+                                                            onPointerDown={stopPropagation}
+                                                        />
+                                                        Canary Shift
                                                     </label>
                                                 </div>
                                             </div>
@@ -452,6 +534,15 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
                                             Clamp: {config ? config.repulsionMaxForce : '?'} world<br />
                                             Zoom: {window.devicePixelRatio.toFixed(2)}x (DPR)<br />
                                             Reorder Rates: {hud.neighborReorderRate || 0}<br />
+                                        </div>
+                                    )}
+                                    {hud && (
+                                        <div style={{ marginTop: '4px', paddingTop: '4px', borderTop: '1px solid #444', color: '#9cc7ff' }}>
+                                            <strong>XPBD Run 1-2</strong><br />
+                                            Spring Corr: {(hud.springCorrectionAvg || 0).toFixed(3)} avg / {(hud.springCorrectionMax || 0).toFixed(3)} max<br />
+                                            Spring Links: {hud.springConstraintCount || 0}<br />
+                                            Repel Corr: {(hud.repelCorrectionAvg || 0).toFixed(3)} avg / {(hud.repelCorrectionMax || 0).toFixed(3)} max<br />
+                                            Repel Pairs: {hud.repelPairs || 0} (Overlap: {hud.repelOverlapCount || 0})
                                         </div>
                                     )}
                                     {hud && (

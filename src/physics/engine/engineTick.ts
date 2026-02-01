@@ -14,6 +14,7 @@ import {
     initializeCorrectionAccum,
 } from './constraints';
 import { applyCorrectionsWithDiffusion } from './corrections';
+import { applyXpbdConstraints } from './xpbd';
 import { createMotionPolicy } from './motionPolicy';
 import {
     applyAngleResistanceVelocity,
@@ -425,13 +426,15 @@ export const runPhysicsTick = (engine: PhysicsEngineTickContext, dtIn: number) =
     // CONTINUOUS PASS EXECUTION
     const runPairwiseForces = true;
     const spacingWillRun = spacingEnabled;
-    const repulsionEnabled = !engine.config.debugDisableRepulsion;
+    const xpbdSpringsEnabled = engine.config.debugXpbdSprings === true;
+    const xpbdRepulsionEnabled = engine.config.debugXpbdRepulsion === true;
+    const repulsionEnabled = !engine.config.debugDisableRepulsion && !xpbdRepulsionEnabled;
 
     // Scale stride heavily with degrade to avoid N^2
     // Stride 1 -> Check 100%. Stride 5 -> Check 20%.
 
-    const collisionEnabled = true; // Always run, but strided
-    const springsEnabled = true;
+    const collisionEnabled = !xpbdRepulsionEnabled; // XPBD repulsion replaces collision shell
+    const springsEnabled = !xpbdSpringsEnabled;
 
     // Unused
     const repulsionEvery = 1;
@@ -796,6 +799,33 @@ export const runPhysicsTick = (engine: PhysicsEngineTickContext, dtIn: number) =
                 dt,
                 maxDiffusionNeighbors
             );
+        }
+
+        if (!preRollActive && (xpbdSpringsEnabled || xpbdRepulsionEnabled)) {
+            applyXpbdConstraints(
+                engine as any,
+                nodeList,
+                dt,
+                debugStats,
+                {
+                    enableSprings: xpbdSpringsEnabled,
+                    enableRepulsion: xpbdRepulsionEnabled,
+                    forceStiffSprings: engine.config.debugForceStiffSprings === true,
+                    forceRepulsion: engine.config.debugForceRepulsion === true,
+                }
+            );
+        }
+
+        if (engine.config.debugXpbdCanary) {
+            if (!engine.xpbdCanaryApplied) {
+                for (const node of nodeList) {
+                    node.x += 30;
+                    node.y -= 20;
+                }
+                engine.xpbdCanaryApplied = true;
+            }
+        } else if (engine.xpbdCanaryApplied) {
+            engine.xpbdCanaryApplied = false;
         }
 
         // FORENSICS: Compare After

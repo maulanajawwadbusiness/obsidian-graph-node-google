@@ -1,4 +1,5 @@
 import type { PhysicsLink, PhysicsNode, ForceConfig } from '../types';
+import type { XpbdSpatialGrid } from './xpbd';
 import { createInitialPhysicsHudHistory, createInitialPhysicsHudSnapshot, type PhysicsHudHistory, type PhysicsHudSnapshot } from './physicsHud';
 import { getNowMs } from './engineTime';
 
@@ -16,6 +17,8 @@ export type PhysicsEngineTopologyContext = {
     adjacencyMap: Map<string, string[]>;
     spacingHotPairs: Set<string>;
     neighborCache: Map<string, Set<string>>;
+    xpbdSpatialGrid: XpbdSpatialGrid | null;
+    xpbdCanaryApplied: boolean;
     lifecycle: number;
     hasFiredImpulse: boolean;
     // FIX D: Scale
@@ -142,6 +145,10 @@ export const clearEngineState = (engine: PhysicsEngineTopologyContext) => {
     engine.spacingGateActive = false;
     engine.globalAngle = 0;
     engine.globalAngularVel = 0;
+    engine.xpbdCanaryApplied = false;
+    if (engine.xpbdSpatialGrid) {
+        engine.xpbdSpatialGrid.clear();
+    }
     engine.hudSnapshot = createInitialPhysicsHudSnapshot();
     engine.hudHistory = createInitialPhysicsHudHistory();
     engine.hudSettleState = 'moving';

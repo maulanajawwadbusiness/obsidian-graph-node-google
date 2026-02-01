@@ -6,13 +6,14 @@
 ## 1. The Canonical Constants (Runtime Truth)
 Any new XPBD constraint **MUST** use these base values to avoid explosion/implosion.
 
-| Constant | Value | Source | Notes |
-| :--- | :--- | :--- | :--- |
-| **Link Rest Length** | `130 px` | `config.ts`, Runtime | Initial `dist` for springs. |
-| **Min Node Distance** | `100 px` | `config.ts`, Runtime | Hard-shell diameter. |
-| **Collision Padding** | `8 px` | `config.ts` | Extra buffer. |
-| **Repulsion Strength** | `500` | `config.ts` | Soft force scale. |
-| **Max Velocity** | `80 px/frame` | `config.ts` | Hard cap (~4800 px/s). |
+| Constant | Value | Source File | Line | Notes |
+| :--- | :--- | :--- | :--- | :--- |
+| **Link Rest Length** | `130 px` | `src/physics/config.ts` | 117 | Base unit. |
+| **Min Node Dist** | `100 px` | `src/physics/config.ts` | 125 | Hard shell diameter. |
+| **Collision Pad** | `8 px` | `src/physics/config.ts` | 92 | "Skin" thickness. |
+| **Repulsion Strength** | `500` | `src/physics/config.ts` | 9 | Soft force scale. |
+| **Max Velocity** | `80 px/frame` | `src/physics/config.ts` | 54 | Hard cap (~4800 px/s). |
+| **Gravity Radius**| `30 px` | `src/physics/config.ts` | 42 | **Source of previous "30px" error.** |
 
 **Modifiers:**
 - `targetSpacing` (alias for `linkRestLength`): `130 px`.

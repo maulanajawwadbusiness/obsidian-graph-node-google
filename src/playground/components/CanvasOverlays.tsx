@@ -425,6 +425,19 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
                                             Pop Score: {(hud.lawPopScore || 0).toFixed(4)}<br />
                                         </div>
                                     )}
+                                    {hud && hud.mode === 'XPBD' && (
+                                        <div style={{ marginTop: '4px', paddingTop: '4px', borderTop: '1px solid #444', color: '#adff2f' }}>
+                                            <strong>XPBD Proof-of-Life</strong><br />
+                                            Springs: {hud.xpbdSpringCounts?.count || 0} / {hud.xpbdSpringCounts?.iter || 0}it<br />
+                                            - Corr: {hud.xpbdSpringCorr?.avg.toFixed(3)} (Max: {hud.xpbdSpringCorr?.max.toFixed(2)})<br />
+                                            - Err: {hud.xpbdSpringError?.avg.toFixed(3)} (Max: {hud.xpbdSpringError?.max.toFixed(2)})<br />
+                                            Repulsion: {hud.xpbdRepelCounts?.checked || 0}chk / {hud.xpbdRepelCounts?.solved || 0}solv<br />
+                                            - Overlap: {hud.xpbdRepelCounts?.overlap || 0}<br />
+                                            - Corr: {hud.xpbdRepelCorr?.avg.toFixed(3)} (Max: {hud.xpbdRepelCorr?.max.toFixed(2)})<br />
+                                            - Sing: {hud.xpbdRepelSingularities || 0}<br />
+                                            Edge Constraints: {hud.xpbdEdgeConstraintCount || 0}
+                                        </div>
+                                    )}
                                     {hud && (
                                         <div style={{ marginTop: '4px', paddingTop: '4px', borderTop: '1px solid #444', color: '#faa' }}>
                                             <strong>Startup Audit (2s)</strong><br />

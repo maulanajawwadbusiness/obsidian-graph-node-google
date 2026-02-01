@@ -92,12 +92,10 @@ const rebuildXPBDConstraints = (engine: PhysicsEngineTickContext) => {
     //   - Large alpha (soft) → deltaLambda ≈ -C/alpha (soft, small correction)
     // 
     // Calibration:
-    // Run 6+7: Compliance for LOCAL TUG feel
-    // Lower compliance = stiffer springs = faster neighbor response
-    //   0.1    → alpha≈390 → Too soft, no visible tug
-    //   0.01   → alpha≈39  → Sluggish tug (~3px/frame)
-    //   0.001  → alpha≈4   → CRISP local tug (~30px/frame, capped to 10)
-    const compliance = engine.config.xpbdLinkCompliance ?? 0.001;
+    //   0.0001 → alpha≈0.39 → TOO STIFF → EXPLOSION on drag release
+    //   0.01   → alpha≈39   → Visible ~0.2px corrections, stable
+    //   0.1    → alpha≈390  → Very soft, barely visible
+    const compliance = engine.config.xpbdLinkCompliance ?? 0.01;
 
     const newConstraints: any[] = [];
 
@@ -257,9 +255,8 @@ const solveXPBDEdgeConstraints = (engine: PhysicsEngineTickContext, dt: number) 
     const start = performance.now();
     const EPSILON = 1e-6;
 
-    // Run 6+7: Calibration & Safety
-    // 10px cap balances local tug responsiveness vs explosion prevention
-    const MAX_CORR_PX = engine.config.xpbdMaxCorrPerConstraintPx ?? 10.0;
+    // Run 6: Calibration & Safety
+    const MAX_CORR_PX = engine.config.xpbdMaxCorrPerConstraintPx ?? 100.0;
     const USE_CANARY = engine.config.debugXPBDCanary;
 
     let solvedCount = 0;
@@ -328,6 +325,11 @@ const solveXPBDEdgeConstraints = (engine: PhysicsEngineTickContext, dt: number) 
         const gradY = dy / dist;
 
         // 3. Inverse Masses
+        // TUG RUN PART 1: LOCAL TUG MECHANISM
+        // - Dragged node: invMass=0 (pinned, won't move)
+        // - Free neighbor: invMass=1 (can move)
+        // - Constraint between them: ACTIVE (not skipped)
+        // - Result: Neighbor stretches toward dragged node (LOCAL TUG)
         const wA = (nA.isFixed || nA.id === engine.draggedNodeId) ? 0 : 1.0;
         const wB = (nB.isFixed || nB.id === engine.draggedNodeId) ? 0 : 1.0;
 
@@ -335,6 +337,7 @@ const solveXPBDEdgeConstraints = (engine: PhysicsEngineTickContext, dt: number) 
         if (wA === 0 && nA.id !== engine.draggedNodeId) pinnedCount++;
         if (wB === 0 && nB.id !== engine.draggedNodeId) pinnedCount++;
 
+        // Only skip if BOTH nodes are pinned (no degrees of freedom)
         if (wA + wB === 0) {
             skippedCount++;
             continue;

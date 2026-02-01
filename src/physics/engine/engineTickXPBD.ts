@@ -33,23 +33,16 @@ const applyKinematicDrag = (engine: PhysicsEngineTickContext, dt: number) => {
                 engine.grabOffset = { x: node.x, y: node.y };
             }
 
-            const MAX_DRAG_DISTANCE = 300; // px from initial grab position
-            const initialX = engine.grabOffset.x;
-            const initialY = engine.grabOffset.y;
+            // FIX: Removed MAX_DRAG_DISTANCE Clamp (Run 7.6)
+            // Previous: clamped to 300px from initial grab.
+            // Now: Unrestricted drag. Cursor wins.
 
-            // Clamp dragTarget to be within MAX_DRAG_DISTANCE of initial position
-            const targetDx = engine.dragTarget.x - initialX;
-            const targetDy = engine.dragTarget.y - initialY;
-            const targetDist = Math.sqrt(targetDx * targetDx + targetDy * targetDy);
+            // Logic removed:
+            // const MAX_DRAG_DISTANCE = 300;
+            // if (targetDist > MAX_DRAG_DISTANCE) { ... }
 
             let clampedTargetX = engine.dragTarget.x;
             let clampedTargetY = engine.dragTarget.y;
-
-            if (targetDist > MAX_DRAG_DISTANCE) {
-                const scale = MAX_DRAG_DISTANCE / targetDist;
-                clampedTargetX = initialX + targetDx * scale;
-                clampedTargetY = initialY + targetDy * scale;
-            }
 
             // Mini Run 7 Part 1: INSTANT snap for crisp response (no mush)
             // Previous: Gradual lerp caused lag/latency
@@ -225,7 +218,6 @@ const reconcileAfterXPBDConstraints = (
             // Since we loop all nodes, we could have done it above, but let's keep it clean here or peek
             const relNode = engine.nodes.get(engine.lastReleasedNodeId);
             if (relNode && relNode.prevX !== undefined) {
-                const dx = relNode.x - (preSolveSnapshot[nodeList.indexOf(relNode) * 2] || relNode.prevX); // Approximation if index unavailable easily?
                 // Wait, we have nodeList. Let's assume O(N) lookup isn't tragic for 1 node, or just re-calc ghost for it.
                 // Actually, we calculated ghostVel for all nodes above. 
                 // If the released node caused `ghostVelEvents` to increment, we want to know.
@@ -334,7 +326,7 @@ const solveXPBDEdgeConstraints = (engine: PhysicsEngineTickContext, dt: number) 
         // - Constraint between them: ACTIVE (not skipped)
         // - Result: Neighbor stretches toward dragged node (LOCAL TUG)
         const wA = (nA.isFixed || nA.id === engine.draggedNodeId) ? 0 : 1.0;
-        const wB = (nB.isFixed || nB.id === engine.draggedNodeId) ? 0 : 1.0;
+        const wB = (nB.isFixed || nB.id === engine.draggedNodeId) ? 0 : 5.0;
 
         // Mini Run 7 Part 4: Count pinned nodes (avoid double-counting dragged node)
         if (wA === 0 && nA.id !== engine.draggedNodeId) pinnedCount++;
@@ -361,14 +353,23 @@ const solveXPBDEdgeConstraints = (engine: PhysicsEngineTickContext, dt: number) 
 
         c.lambda += deltaLambda;
 
+        c.lambda += deltaLambda;
+
         // 6. Apply Correction
-        // TUG RUN PART 3: CRITICAL FIX - Both nodes move in SAME direction along gradient
-        // Previous bug: +wB caused neighbor to move AWAY from dragged node (reversed tug)
-        // Correct: Both use -w to move together (reduce constraint error)
-        let pxA = -wA * deltaLambda * gradX;
-        let pyA = -wA * deltaLambda * gradY;
-        let pxB = -wB * deltaLambda * gradX;  // FIXED: was +wB (caused reversed tug)
-        let pyB = -wB * deltaLambda * gradY;  // FIXED: was +wB (caused reversed tug)
+        // Lane A Fix: Correct Signs
+        // C > 0 (Stretched) -> deltaLambda < 0 (Negative).
+        // gradX points B->A.
+        // We want A to move toward B (Left/Down, against grad).
+        // deltaLambda is negative, so (-deltaLambda) is positive magnitude.
+        // dx_A = +wA * deltaLambda * gradX.
+        // Check: +1 * (-1) * (+1) = -1 (Left). Correct.
+        // dx_B = -wB * deltaLambda * gradX.
+        // Check: -1 * (-1) * (+1) = +1 (Right). Correct.
+
+        let pxA = +wA * deltaLambda * gradX;
+        let pyA = +wA * deltaLambda * gradY;
+        let pxB = -wB * deltaLambda * gradX;
+        let pyB = -wB * deltaLambda * gradY;
 
         // Safety Cap (Run 6)
         // Check magnitude of correction vectors
@@ -404,6 +405,20 @@ const solveXPBDEdgeConstraints = (engine: PhysicsEngineTickContext, dt: number) 
             engine.xpbdFrameAccum.springs.firstCapHit = capHit;
             engine.xpbdFrameAccum.springs.firstAlpha = alpha;
             engine.xpbdFrameAccum.springs.firstWSum = wSum;
+
+            // Lane A: Debug Signs
+            engine.xpbdFrameAccum.springs.firstEdgeDebug = {
+                C: C,
+                deltaLambda: deltaLambda,
+                // Dot product of correction vs gradient.
+                // For A: Should be NEGATIVE (moving against gradient B->A)
+                corrDotA: (pxA * gradX + pyA * gradY),
+                // For B: Should be POSITIVE (moving with gradient B->A, which points away from A?)
+                // Wait, B moves toward A. Gradient points B->A. So B moves ALONG gradient. Positive.
+                corrDotB: (pxB * gradX + pyB * gradY),
+                gradX,
+                gradY
+            };
         }
 
         solvedCount++;
@@ -428,6 +443,11 @@ const solveXPBDEdgeConstraints = (engine: PhysicsEngineTickContext, dt: number) 
         s.pinnedCount = pinnedCount;
         s.draggedNodePinned = draggedNodePinned;
         s.dragConstraintCount = dragConstraintCount;  // TUG RUN PART 2
+
+        // Run 1: Edge Coverage Telemetry
+        s.totalEdgesGraph = engine.links.length;
+        s.edgesSelectedForSolve = constraints.length;
+        s.edgesSelectedReason = 'full'; // Logic appears to be full iteration of links
     }
 };
 

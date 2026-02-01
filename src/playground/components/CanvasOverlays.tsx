@@ -456,6 +456,40 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
                                         </div>
                                     )}
                                     {hud && (
+                                        <div style={{ marginTop: '4px', paddingTop: '4px', borderTop: '1px solid #444', color: '#0ff' }}>
+                                            <strong>XPBD Fix 7.5: 3-Lane Clean</strong><br />
+                                            <span style={{ color: '#fff' }}>Lane A: Sign/Grad</span><br />
+                                            {hud.xpbdFirstEdgeDebug ? (
+                                                <span style={{ fontSize: '0.9em', color: '#ccc' }}>
+                                                    C: {hud.xpbdFirstEdgeDebug.C.toFixed(2)} | dL: {hud.xpbdFirstEdgeDebug.deltaLambda.toFixed(4)}<br />
+                                                    DotA: {hud.xpbdFirstEdgeDebug.corrDotA.toFixed(2)} (Need &lt;0)<br />
+                                                    DotB: {hud.xpbdFirstEdgeDebug.corrDotB.toFixed(2)} (Need &gt;0)<br />
+                                                </span>
+                                            ) : (
+                                                <span style={{ fontSize: '0.9em', color: '#666' }}>No active edges</span>
+                                            )}
+                                            <span style={{ color: '#fff' }}>Lane B: Pinning</span><br />
+                                            <span style={{ fontSize: '0.9em', color: '#ccc' }}>
+                                                Drag: {hud.dragActive ? 'ON' : 'off'} (ID: {hud.draggedNodeId || '-'})<br />
+                                                InvM=0: {hud.xpbdSpringCounts ? 'YES' : 'NO'}<br />
+                                                Leash: {hud.dragLeashEnabled ? 'ON' : 'OFF'} (Limit: {hud.dragLeashRadius}px)<br />
+                                            </span>
+                                            <span style={{ color: '#fff' }}>Lane C: Ghost Vel</span><br />
+                                            <span style={{ fontSize: '0.9em', color: '#ccc' }}>
+                                                Syncs: {hud.xpbdGhostSyncs || 0}<br />
+                                                MaxVel: {(hud.xpbdGhostVelMax || 0).toFixed(1)} (Evt: {hud.xpbdGhostVelEvents})<br />
+                                                RelGhost: {hud.releaseGhostEvents || 0}<br />
+                                            </span>
+                                        </div>
+                                    )}
+                                    {hud && (
+                                        <div style={{ marginTop: '4px', paddingTop: '4px', borderTop: '1px solid #444', color: '#ff8' }}>
+                                            <strong>XPBD Edge Coverage</strong><br />
+                                            Ratio: {hud.edgesSelectedForSolve || 0} / {hud.totalEdgesGraph || 0}<br />
+                                            Reason: {hud.edgesSelectedReason || '-'}<br />
+                                        </div>
+                                    )}
+                                    {hud && (
                                         <div style={{ marginTop: '4px', paddingTop: '4px', borderTop: '1px solid #444', color: '#faa' }}>
                                             <strong>Startup Audit (2s)</strong><br />
                                             NaN: {hud.startupNanCount || 0} | Inf: {hud.startupInfCount || 0}<br />

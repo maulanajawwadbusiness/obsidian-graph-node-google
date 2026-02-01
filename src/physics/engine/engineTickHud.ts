@@ -338,6 +338,15 @@ export const updateHudSnapshot = (
         xpbdFirstCapHit: engine.xpbdFrameAccum?.springs.firstCapHit ?? false,
         xpbdFirstAlpha: engine.xpbdFrameAccum?.springs.firstAlpha ?? 0,
         xpbdFirstWSum: engine.xpbdFrameAccum?.springs.firstWSum ?? 0,
+        xpbdFirstEdgeDebug: engine.xpbdFrameAccum?.springs.firstEdgeDebug ?? undefined,
+
+        dragLeashEnabled: false, // Run 7.6: Audit confirmed false
+        dragLeashRadius: 0,
+
+        // Run 1: Edge Coverage
+        totalEdgesGraph: engine.xpbdFrameAccum?.springs.totalEdgesGraph ?? 0,
+        edgesSelectedForSolve: engine.xpbdFrameAccum?.springs.edgesSelectedForSolve ?? 0,
+        edgesSelectedReason: engine.xpbdFrameAccum?.springs.edgesSelectedReason ?? '-',
 
         // Frame Accumulators
         ticksThisFrame: engine.xpbdFrameAccum?.ticks || 0,

@@ -134,31 +134,47 @@ export type PhysicsEngineTickContext = {
             firstWSum: number;
             firstPreIntegrateJumpPx: number;
             firstPreIntegrateNodeId: string | null;
-        };
-        repel: { checked: number; solved: number; overlap: number; corrSum: number; sing: number };
-        edgeConstraintsExecuted: number;
-    };
-    xpbdCanaryApplied?: boolean;
 
-    // XPBD Inventory
-    xpbdConstraints: XPBDConstraint[];
-    xpbdConstraintsDirty: boolean;
-    xpbdConstraintStats?: {
-        minRest: number;
-        maxRest: number;
-        avgRest: number;
-        invalidEndpointCount: number;
-        nonFiniteRestLenCount: number;
-        zeroLenEdgeCount: number;
+            // Lane A: Sign Verification
+            firstEdgeDebug: {
+                C: number;
+                deltaLambda: number;
+                corrDotA: number;
+                corrDotB: number;
+                gradX: number;
+                gradY: number;
+            } | null;
+
+            // Run 1: Edge Coverage Telemetry
+            totalEdgesGraph: number;
+            edgesSelectedForSolve: number;
+            edgesSelectedReason: string;
+        };
     };
-    xpbdFirstPairPrev?: {
-        aId: string;
-        bId: string;
-        ax: number;
-        ay: number;
-        bx: number;
-        by: number;
-    } | null;
+    repel: { checked: number; solved: number; overlap: number; corrSum: number; sing: number };
+    edgeConstraintsExecuted: number;
+};
+xpbdCanaryApplied ?: boolean;
+
+// XPBD Inventory
+xpbdConstraints: XPBDConstraint[];
+xpbdConstraintsDirty: boolean;
+xpbdConstraintStats ?: {
+    minRest: number;
+    maxRest: number;
+    avgRest: number;
+    invalidEndpointCount: number;
+    nonFiniteRestLenCount: number;
+    zeroLenEdgeCount: number;
+};
+xpbdFirstPairPrev ?: {
+    aId: string;
+    bId: string;
+    ax: number;
+    ay: number;
+    bx: number;
+    by: number;
+} | null;
 };
 
 export interface XPBDConstraint {

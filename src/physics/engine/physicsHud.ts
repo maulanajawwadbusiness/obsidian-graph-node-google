@@ -137,9 +137,27 @@ export type PhysicsHudSnapshot = {
     xpbdFirstMoveNodeId?: string | null;
     xpbdFirstCapHit?: boolean;
     xpbdFirstAlpha?: number;
+    xpbdFirstAlpha?: number;
     xpbdFirstWSum?: number;
 
+    // Lane A: Sign & Gradient Debug
+    xpbdFirstEdgeDebug?: {
+        C: number;
+        deltaLambda: number;
+        corrDotA: number;
+        corrDotB: number;
+        gradX: number;
+        gradY: number;
+    };
 
+    // Run 7.6: Leash Telemetry
+    dragLeashEnabled?: boolean;
+    dragLeashRadius?: number;
+
+    // Run 1: Edge Coverage Telemetry
+    totalEdgesGraph?: number;
+    edgesSelectedForSolve?: number;
+    edgesSelectedReason?: string;
 
     // Frame Accumulators
     ticksThisFrame?: number;

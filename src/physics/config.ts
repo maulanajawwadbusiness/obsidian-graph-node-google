@@ -172,12 +172,10 @@ export const DEFAULT_PHYSICS_CONFIG: ForceConfig = {
     debugAllowEarlyExpansion: false,
     useXPBD: true,
 
-    // XPBD Calibration (Mini Run 6 + 7)
-    // Compliance controls spring stiffness for LOCAL TUG feel:
-    //   0.1   → alpha~390 → too soft, ~0.4px correction, no visible tug
-    //   0.01  → alpha~39  → soft, ~3px correction, sluggish tug
-    //   0.001 → alpha~4   → stiff, ~30px correction, CRISP local tug ✓
-    // Using 0.001 for responsive spring-mass feel. Safety cap prevents explosion.
-    xpbdLinkCompliance: 0.001,  // Stiff for local tug
-    xpbdMaxCorrPerConstraintPx: 10.0,  // Safety cap per correction (prevents explosion)
+    // XPBD Calibration (Mini Run 6)
+    // CRITICAL FIX: 0.0001 was TOO STIFF (caused explosion on drag release)
+    // Smaller compliance = stiffer = larger corrections = unstable
+    // 0.01 provides visible corrections (~0.2px) without explosion
+    xpbdLinkCompliance: 0.01,  // Stable, visible corrections
+    // xpbdMaxCorrPerConstraintPx: undefined,  // No cap by default (trust the solver)
 };

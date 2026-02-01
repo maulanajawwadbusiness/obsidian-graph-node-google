@@ -343,6 +343,21 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
                                     </>
                                 )}
 
+                                {IS_DEV && config && onConfigChange && (
+                                    <div style={{ marginTop: '6px' }}>
+                                        <strong style={{ fontWeight: 700, fontSize: '11px', color: '#9ad' }}>Spring-Mass (Run 1)</strong>
+                                        <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', cursor: 'pointer' }}>
+                                            <input
+                                                type="checkbox"
+                                                checked={!!config.useSpringMassPhysics}
+                                                onPointerDown={stopPropagation}
+                                                onChange={(e) => onConfigChange('useSpringMassPhysics', e.target.checked)}
+                                            />
+                                            Use spring-mass backend
+                                        </label>
+                                    </div>
+                                )}
+
                                 {/* ADVANCED TOGGLES */}
                                 {IS_DEV && config && onConfigChange && (
                                     <div style={{ marginTop: '6px' }}>
@@ -394,6 +409,7 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
                                     <strong style={{ fontWeight: 700 }}>Physics Stats</strong><br />
                                     N: {metrics.nodes} | L: {metrics.links}<br />
                                     FPS: {metrics.fps} <br />
+                                    Physics: {config?.useSpringMassPhysics ? 'spring-mass' : 'hybrid'}<br />
                                     Degrade: {hud ? hud.degradeLevel : 0} ({hud ? hud.degradePct5s.toFixed(1) : '0.0'}%)<br />
                                     Settle: {hud ? hud.settleState : 'moving'} ({hud ? Math.round(hud.lastSettleMs) : 0}ms)<br />
                                     Jitter(1s): {hud ? hud.jitterAvg.toFixed(4) : '0.0'}<br />

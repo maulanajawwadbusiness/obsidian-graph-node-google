@@ -241,4 +241,5 @@ export interface ForceConfig {
   debugDisableConstraints?: boolean;
   debugDisableReconcile?: boolean;
   debugDisableAllVMods?: boolean;
+  useSpringMassPhysics?: boolean;
 }

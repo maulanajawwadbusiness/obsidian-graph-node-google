@@ -222,6 +222,12 @@ export type PhysicsHudSnapshot = {
     repulsionMaxMag?: number;
     repulsionClampedCount?: number;
 
+    // Repulsion Execution Telemetry (Truth Scan)
+    repulsionCalledThisFrame?: boolean;
+    repulsionPairsChecked?: number;
+    repulsionPairsApplied?: number;
+    repulsionForceMagMax?: number;
+
     // Forensic: Stability
     neighborReorderRate?: number;
     hubFlipCount?: number;

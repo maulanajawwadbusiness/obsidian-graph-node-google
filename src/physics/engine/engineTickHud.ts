@@ -225,6 +225,12 @@ export const updateHudSnapshot = (
         repulsionMaxMag: stats.safety.repulsionMaxMag,
         repulsionClampedCount: stats.safety.repulsionClampedCount,
 
+        // Repulsion Execution Telemetry (Truth Scan)
+        repulsionCalledThisFrame: stats.safety.repulsionCalledThisFrame ?? false,
+        repulsionPairsChecked: stats.safety.repulsionPairsChecked ?? 0,
+        repulsionPairsApplied: stats.safety.repulsionPairsApplied ?? 0,
+        repulsionForceMagMax: stats.safety.repulsionForceMagMax ?? 0,
+
         neighborReorderRate: stats.neighborReorderRate,
         hubFlipCount: stats.hubFlipCount,
         degradeFlipCount: stats.degradeFlipCount,

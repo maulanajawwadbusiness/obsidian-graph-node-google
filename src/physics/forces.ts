@@ -23,6 +23,11 @@ export function applyRepulsion(
         repulsionMaxForce,
     } = config;
 
+    // TRUTH SCAN: Repulsion Execution Telemetry
+    let pairsChecked = 0;
+    let pairsApplied = 0;
+    let forceMagMax = 0;
+
     // XPBD Force Repel Override
     let effectiveStrength = repulsionStrength;
     let effectiveMinDist = repulsionMinDistance;
@@ -172,6 +177,7 @@ export function applyRepulsion(
     const softR = (config.minNodeDistance || 30) * 0.25;
 
     const applyPair = (nodeA: PhysicsNode, nodeB: PhysicsNode) => {
+        pairsChecked++;
         if (shouldSkipPair(nodeA, nodeB)) return;
 
         let dx = nodeA.x - nodeB.x;
@@ -257,6 +263,9 @@ export function applyRepulsion(
             const fx = (dx / d) * forceMagnitude;
             const fy = (dy / d) * forceMagnitude;
 
+            // TRUTH SCAN: Track max force magnitude
+            if (forceMagnitude > forceMagMax) forceMagMax = forceMagnitude;
+
             if (!nodeA.isFixed) {
                 nodeA.fx += fx;
                 nodeA.fy += fy;
@@ -265,6 +274,8 @@ export function applyRepulsion(
                 nodeB.fx -= fx;
                 nodeB.fy -= fy;
             }
+
+            pairsApplied++;
         }
     };
 
@@ -282,6 +293,14 @@ export function applyRepulsion(
     if (earlyExpansion && debugCenterCount > 0) {
         const avgDensity = debugAvgCenterDensity / debugCenterCount;
         console.log(`[Repulsion] avgCenterDensity: ${avgDensity.toFixed(1)}, maxDensityBoost: ${debugMaxDensityBoost.toFixed(2)}`);
+    }
+
+    // TRUTH SCAN: Report execution telemetry
+    if (stats && stats.safety) {
+        stats.safety.repulsionCalledThisFrame = true;
+        stats.safety.repulsionPairsChecked = pairsChecked;
+        stats.safety.repulsionPairsApplied = pairsApplied;
+        stats.safety.repulsionForceMagMax = forceMagMax;
     }
 }
 

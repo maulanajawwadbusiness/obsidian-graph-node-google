@@ -18,6 +18,11 @@ export type SafetyStats = {
     nearOverlapCount: number;
     repulsionMaxMag: number;
     repulsionClampedCount: number;
+    // Repulsion Execution Telemetry (Truth Scan)
+    repulsionCalledThisFrame?: boolean;
+    repulsionPairsChecked?: number;
+    repulsionPairsApplied?: number;
+    repulsionForceMagMax?: number;
 };
 
 export type ExpansionResistanceStats = {

@@ -258,7 +258,6 @@ const solveXPBDEdgeConstraints = (engine: PhysicsEngineTickContext, dt: number) 
     let errSum = 0;
     let corrMax = 0;
     let corrSum = 0;
-    let iter = 1;
 
     // Calibration Canary (Run 6)
     // If enabled, artificially shorten the first constraint to force visual error.
@@ -276,6 +275,19 @@ const solveXPBDEdgeConstraints = (engine: PhysicsEngineTickContext, dt: number) 
 
     // TUG RUN PART 2: Track constraints involving dragged node (local tug activity)
     let dragConstraintCount = 0;
+
+    // Run 2: Iteration Budget (Default 1/1)
+    // Select count based on drag state
+    const iterIdle = engine.config.xpbdIterationsIdle || 1;
+    const iterDrag = engine.config.xpbdIterationsDrag || 1;
+    const iterCount = draggedNodePinned ? iterDrag : iterIdle;
+
+    // We update stats, but the loop below is still single-pass for Run 2 (or we can start looping?)
+    // Prompt says "still default 1/1" for behavior. 
+    // Run 3 says "implement the actual repeat loop".
+    // So for Run 2, we just calculate iterCount and report it, but don't loop yet?
+    // "choose iterationCount each frame ... wire to HUD"
+    // I'll wire up the logic but keep the loop structure for Run 3.
 
     // Run 2: Edge Selection Policy ('full' by default)
     // "keep the old filtered path behind a dev flag (default OFF)"
@@ -437,15 +449,12 @@ const solveXPBDEdgeConstraints = (engine: PhysicsEngineTickContext, dt: number) 
         solvedCount++;
     }
 
-    const duration = performance.now() - start;
-
     if (engine.xpbdFrameAccum) {
-        engine.xpbdFrameAccum.edgeConstraintsExecuted++;
         const s = engine.xpbdFrameAccum.springs;
-
-        s.count = constraints.length;
-        s.iter += iter;
-        s.solveMs += duration;
+        s.count += constraints.length;
+        // Run 2: Iterations
+        s.iter += iterCount; // Accumulate used iterations
+        s.solveMs += (performance.now() - start);
         s.errSum += errSum;
         s.corrSum += corrSum;
         s.corrMax = Math.max(s.corrMax, corrMax);

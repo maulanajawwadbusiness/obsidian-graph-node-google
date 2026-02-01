@@ -306,7 +306,9 @@ export const runPhysicsTickLegacy = (engine: PhysicsEngineTickContext, dtIn: num
         }
     }
 
-    const motionPolicy = createMotionPolicy(energy, engine.degradeLevel, avgVelSq, allowEarlyExpansion);
+    // Run 3: Drag Firewall (Disable throttling/degrade)
+    const effectiveDegrade = engine.dragActive ? 0.0 : engine.degradeLevel;
+    const motionPolicy = createMotionPolicy(energy, effectiveDegrade, avgVelSq, allowEarlyExpansion);
 
     // FIX: Diffusion Decay at Rest (Smooth Gating)
     // Blend settleScalar up based on calmPercent before the hard cutoff.

@@ -109,11 +109,15 @@ export type PhysicsEngineTickContext = {
             errSum: number;
             solveMs: number;
             corrMax: number;
+            dragActive: boolean; // Run 7
+            dragKinematicApplied: boolean; // Run 7
+            dragPrevSynced: number; // Run 7
             skipped: number;
             singularity: number;
             prevAdjusted: number;
             ghostVelMax: number;
             ghostVelEvents: number;
+            alphaAvg: number; // Run 6
             releaseGhostEvents: number;
             dragLagMax: number;
             firstJumpPx: number;

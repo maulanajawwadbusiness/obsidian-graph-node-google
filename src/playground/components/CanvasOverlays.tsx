@@ -111,7 +111,6 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
 
     // NEW: HUD Layout State
     const [isNarrow, setIsNarrow] = React.useState(typeof window !== 'undefined' ? window.innerWidth < 450 : false);
-    const [restForensicCollapsed, setRestForensicCollapsed] = React.useState(true);
     // Toggle to hide deep forensics for XPBD focus
     const SHOW_DEEP_FORENSICS = false;
 
@@ -447,9 +446,12 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
                                             solve: {(hud.xpbdSpringSolveMs || 0).toFixed(2)} ms<br />
                                             <span style={{ fontSize: '0.9em', color: '#888' }}>
                                                 drop: {hud.xpbdSpringSkipped}/{hud.xpbdSpringSingularity} | sync: {hud.xpbdGhostSyncs}<br />
-                                                <span title="Peak inferred velocity from solver corrections (Projection / dt)">ghost:</span> {(hud.xpbdGhostVelMax || 0).toFixed(1)}px/s (evt: {hud.xpbdGhostVelEvents} | rel: {hud.releaseGhostEvents})<br />
+                                                <span title="Peak inferred velocity from solver corrections (Projection / dt)">ghost:</span> {(hud.xpbdGhostVelMax || 0).toFixed(1)}px/s (evt: {hud.xpbdGhostVelEvents})<br />
                                                 inv: {hud.xpbdInvInvalid} | inf: {hud.xpbdInvNonFinite} | 0len: {hud.xpbdInvZero}<br />
-                                                drag: {hud.dragActive ? 'ON' : 'OFF'} {hud.draggedNodeId ? `(${hud.draggedNodeId})` : ''} lag: {(hud.dragLagMax || 0).toFixed(1)}px
+                                                <span title="Compliance value in use (lower = stiffer)">C:</span> {(hud.xpbdComplianceUsed || 0).toFixed(6)} | <span title="Average alpha = compliance/dt² (higher = stronger correction)">α:</span> {(hud.xpbdAlphaAvg || 0).toFixed(2)}<br />
+                                                <span style={{ color: hud.xpbdDragActive ? '#00eeee' : '#666' }}>
+                                                    drag: {hud.xpbdDragActive ? 'ON' : 'off'} (k={hud.xpbdDragKinematic ? '1' : '0'}, sync={hud.xpbdDragSyncs})
+                                                </span>
                                             </span>
                                         </div>
                                     )}

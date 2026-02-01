@@ -13,7 +13,7 @@ export const applyBaseIntegration = (
 export const clampVelocity = (
     node: PhysicsNode,
     velocityCap: number,
-    dt?: number // Added for history reconciliation
+    _dt?: number // Added for history reconciliation
 ): boolean => {
     const vSq = node.vx * node.vx + node.vy * node.vy;
     if (vSq > velocityCap * velocityCap) {

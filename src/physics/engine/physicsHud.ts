@@ -83,12 +83,20 @@ export type PhysicsHudSnapshot = {
     xpbdSpringRestMaxPx?: number;
     xpbdSpringRestAvgPx?: number;
 
+    // Mini Run 6: Calibration Telemetry
+    xpbdComplianceUsed?: number;  // Actual compliance value in use
+    xpbdAlphaAvg?: number;  // Average alpha (compliance/dt²) for verification
+
+    // Mini Run 7: Drag Coupling
+    xpbdDragActive?: boolean;
+    xpbdDragKinematic?: boolean;
+    xpbdDragSyncs?: number;
+
     // Mini Run 4: Validation & Safety
     xpbdSpringSkipped?: number;
     xpbdSpringSingularity?: number;
     xpbdSpringPrevAdjusted?: number;
     xpbdInvInvalid?: number;
-    xpbdInvNonFinite?: number;
     xpbdInvNonFinite?: number;
     xpbdInvZero?: number;
 

@@ -35,7 +35,7 @@ Placing the constraint solver after the Prediction Phase (Integration) is critic
 
 ## 5. Next Steps
 ## 6. Sharpening Improvements & Risks
-*   **XPBD HUD Visibility**: The "XPBD Proof-of-Life" block is now explicitly restored and visible whenever `hud.mode === 'XPBD'`. It is *not* hidden by the `SHOW_DEEP_FORENSICS` flag.
+*   **XPBD HUD Visibility**: The "XPBD Proof-of-Life" block is now **always visible** (removed mode check) to facilitate UI debugging and monitoring, even in Legacy mode (where counters will strictly read 0).
 *   **Legacy Cleanup**: "Acceptance Tests", "Law Pop Diagnostics", and "Rest Marker Forensic" are hidden behind the `SHOW_DEEP_FORENSICS = false` constant.
 *   **Counter Semantics**: `edgeConstraintsExecuted` currently counts *stages executed* (1 per frame), not individual edge corrections. This must be updated when real constraint logic lands.
 *   **Accumulator Safety**: `xpbdFrameAccum` relies on `startRenderFrame()` for reset. Code using the engine (e.g., test runners) must enforce this lifecycle call to prevent statistic leakage across frames.

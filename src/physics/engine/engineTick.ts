@@ -145,6 +145,17 @@ export const runPhysicsTick = (engine: PhysicsEngineTickContext, dtIn: number) =
     };
     measureFight('PreTick');
 
+    // FORENSICS: Write Ownership Canary
+    const measurePosSum = (stageName: string) => {
+        if (!debugStats) return;
+        let sum = 0;
+        for (const node of nodeList) {
+            sum += node.x + node.y;
+        }
+        debugStats.canaryTrace.push({ stage: stageName, hash: sum });
+    };
+    measurePosSum('PreTick');
+
     engine.awakeList.length = 0;
     engine.sleepingList.length = 0;
     for (let i = 0; i < nodeList.length; i++) {
@@ -471,6 +482,23 @@ export const runPhysicsTick = (engine: PhysicsEngineTickContext, dtIn: number) =
                 `phase=${cascadeActive ? cascadePhase : -1}`
             );
 
+            // [Forensic Canary]
+            // Detect if positions changed when they shouldn't have
+            if (debugStats.canaryTrace.length > 0) {
+                const trace = debugStats.canaryTrace;
+                // Check stability between PreTick -> PostForces -> PostVMods (Should be stable? Forces/Velocity don't move nodes)
+                // Integration moves nodes.
+                // PostInteg -> PostConstraints (Should be stable? Constraints don't move nodes, buffer only)
+                // PostCorrect -> Final (Correct moves nodes)
+                const stableInteg = Math.abs(trace.find(t => t.stage === 'PostInteg')!.hash - trace.find(t => t.stage === 'PostMicro')!.hash) < 0.001; // Micro might move? No, Micro uses Force/Velocity mods usually? 
+                // Wait, microSlip uses applyDenseCoreVelocityDeLocking -> VELOCITY mod.
+                // But applyLocalPhaseDiffusion? 
+
+                console.log(
+                    `[Canary] Write Trace: ${trace.map(t => `${t.stage.substring(4)}:${t.hash.toFixed(1)}`).join(' -> ')}`
+                );
+            }
+
             // [PhysicsFeel] Instrumentation
             // Show effective per-second values to verify time-consistency
             // damping(0.9) @ 60hz => 0.9^60 per sec
@@ -597,6 +625,7 @@ export const runPhysicsTick = (engine: PhysicsEngineTickContext, dtIn: number) =
         pairOffset + 7
     );
     measureFight('PostForces');
+    measurePosSum('PostForces');
 
     currentEnergy = measureEnergy('PostForces', currentEnergy);
 
@@ -606,11 +635,13 @@ export const runPhysicsTick = (engine: PhysicsEngineTickContext, dtIn: number) =
     }
     currentEnergy = measureEnergy('PostVMods', currentEnergy); // Includes drag/preroll
     measureFight('PostVMods');
+    measurePosSum('PostVMods');
 
     // 4. Integrate (always runs, never stops)
     integrateNodes(engine as any, nodeList, dt, energy, motionPolicy, effectiveDamping, maxVelocityEffective, debugStats, preRollActive);
     currentEnergy = measureEnergy('PostInteg', currentEnergy);
     measureFight('PostInteg');
+    measurePosSum('PostInteg');
 
     // =====================================================================
     // COMPUTE Dot DEGREES (needed early for degree-1 exclusion)
@@ -648,6 +679,7 @@ export const runPhysicsTick = (engine: PhysicsEngineTickContext, dtIn: number) =
 
         currentEnergy = measureEnergy('PostMicro', currentEnergy);
         measureFight('PostMicro');
+        measurePosSum('PostMicro');
     }
 
     // =====================================================================
@@ -831,6 +863,7 @@ export const runPhysicsTick = (engine: PhysicsEngineTickContext, dtIn: number) =
         }
 
         currentEnergy = measureEnergy('PostCorrect', currentEnergy);
+        measurePosSum('PostCorrect');
 
         // Populate HUD
         engine.hudSnapshot.maxPosDeltaConstraint = maxPosDeltaConstraint;

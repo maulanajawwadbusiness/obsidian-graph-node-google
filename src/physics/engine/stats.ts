@@ -38,6 +38,7 @@ export type DebugStats = {
     // New: Micro-Jitter Forensics
     energyLedger: { stage: string; energy: number; delta: number }[];
     fightLedger: { stage: string; conflictPct: number; avgCorr: number }[];
+    canaryTrace: { stage: string; hash: number }[]; // Canary for Write Ownership
     injectors: {
         microSlipCount: number;
         microSlipDv: number;
@@ -62,12 +63,10 @@ export type DebugStats = {
     // Settle Diagnostics
     outlierCount: number;
     calmPercent: number;
-    calmPercent: number;
     diffusionGate: number;
 
     // Diffusion Forensics
-    diffusionStrengthNow: number;
-    diffusionDeltaP95: number;
+    // Diffusion Forensics
     diffusionStrengthNow: number;
     diffusionDeltaP95: number;
     ghostMismatchCount: number;
@@ -108,6 +107,7 @@ export const createDebugStats = (): DebugStats => ({
     degenerateTriangleCount: 0,
     energyLedger: [],
     fightLedger: [],
+    canaryTrace: [],
     injectors: {
         microSlipCount: 0,
         microSlipDv: 0,
@@ -128,7 +128,6 @@ export const createDebugStats = (): DebugStats => ({
     hubNodeCount: 0,
 
     outlierCount: 0,
-    calmPercent: 0,
     calmPercent: 0,
     diffusionGate: 0,
 

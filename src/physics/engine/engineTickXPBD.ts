@@ -8,6 +8,61 @@ import { integrateNodes } from './integration';
 import { createMotionPolicy } from './motionPolicy';
 import { applyDragVelocity } from './velocity/dragVelocity';
 
+// Mini Run 3: XPBD Inventory & Policy
+const rebuildXPBDConstraints = (engine: PhysicsEngineTickContext) => {
+    // Policy: clamp(currentDistanceAtSpawn, minRest, maxRest)
+    // This ensures "Spawn is Neutral" for initial stability.
+    const MIN_REST = 10;
+    const MAX_REST = 1000;
+
+    const newConstraints: any[] = [];
+
+    for (const link of engine.links) {
+        const nodeA = engine.nodes.get(link.source);
+        const nodeB = engine.nodes.get(link.target);
+        if (!nodeA || !nodeB) continue;
+
+        const dx = nodeA.x - nodeB.x;
+        const dy = nodeA.y - nodeB.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+
+        const restLen = Math.max(MIN_REST, Math.min(MAX_REST, dist));
+
+        newConstraints.push({
+            nodeA: link.source,
+            nodeB: link.target,
+            dist: dist,
+            restLen: restLen,
+            compliance: 0.0, // Infinite stiffness for now (alpha = 0)
+            lambda: 0.0
+        });
+    }
+
+    // Compute Stats
+    let minRest = 999999;
+    let maxRest = 0;
+    let sumRest = 0;
+    const count = newConstraints.length;
+
+    if (count > 0) {
+        for (const c of newConstraints) {
+            if (c.restLen < minRest) minRest = c.restLen;
+            if (c.restLen > maxRest) maxRest = c.restLen;
+            sumRest += c.restLen;
+        }
+        engine.xpbdConstraintStats = {
+            minRest,
+            maxRest,
+            avgRest: sumRest / count
+        };
+    } else {
+        engine.xpbdConstraintStats = { minRest: 0, maxRest: 0, avgRest: 0 };
+    }
+
+    engine.xpbdConstraints = newConstraints;
+    engine.xpbdConstraintsDirty = false;
+};
+
 // Mini Run 1: Stub for Edge Constraints
 const applyXPBDEdgeConstraintsStub = (engine: PhysicsEngineTickContext) => {
     // Manual Timer: Start (TODO: Wrap real solver work later)
@@ -15,11 +70,6 @@ const applyXPBDEdgeConstraintsStub = (engine: PhysicsEngineTickContext) => {
 
     // No-op for physics.
     // Telemetry proof of life.
-    // Force some trivial work to ensure observable duration > 0
-    let sink = 0;
-    for (let i = 0; i < 100; i++) {
-        sink += Math.sqrt(i);
-    }
 
     // Manual Timer: End
     const duration = performance.now() - start;
@@ -27,17 +77,14 @@ const applyXPBDEdgeConstraintsStub = (engine: PhysicsEngineTickContext) => {
     if (engine.xpbdFrameAccum) {
         engine.xpbdFrameAccum.edgeConstraintsExecuted++;
 
-        // Proof-of-Life Telemetry 0
-        // No allocations, no loops.
+        // Proof-of-Life Telemetry 0 - REAL INVENTORY
         const s = engine.xpbdFrameAccum.springs;
-        s.count = engine.links.length; // Live count
+        s.count = engine.xpbdConstraints.length; // Live count from INVENTORY
+        s.iter += 0;                   // Placeholder for solver iterations (reset)
         s.solveMs += duration;         // Accumulate time
-
-        // Simulate activity for Proof-of-Life (Remove when real math lands)
-        s.iter += 100;                 // Dummy loop count
-        s.errSum += 0.05 * 100;        // Fake error accumulation to prove HUD wiring
-        s.corrSum += 0.01 * 100;       // Fake correction accumulation
-        s.corrMax = Math.max(s.corrMax, 0.02); // Fake max
+        s.errSum += 0;                 // Placeholder for error accumulation
+        s.corrSum += 0;                // Placeholder for correction accumulation
+        // s.corrMax = Math.max(s.corrMax, 0); // No-op
     }
 };
 
@@ -56,6 +103,10 @@ export const runPhysicsTickXPBD = (engine: PhysicsEngineTickContext, dtIn: numbe
     const nodeList = engine.getNodeList();
     const preflight = runTickPreflight(engine, nodeList);
 
+    // Inventory Maintenance
+    if (engine.xpbdConstraintsDirty) {
+        rebuildXPBDConstraints(engine);
+    }
 
     // XPBD prefers Fixed DT, but we respect the policy
     const policyResult = engine.timePolicy.evaluate(dtIn * 1000);

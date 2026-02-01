@@ -98,7 +98,17 @@ const rebuildXPBDConstraints = (engine: PhysicsEngineTickContext) => {
     const MAX_REST = 1000;
 
     // Run 6: Compliance from Config
-    const compliance = engine.config.xpbdLinkCompliance ?? 0.0001;
+    // CRITICAL: Smaller compliance = STIFFER = larger corrections = EXPLOSION
+    // Larger compliance = SOFTER = smaller corrections = STABLE
+    // Formula: alpha = compliance / dt²
+    //   - Small alpha (stiff) → deltaLambda ≈ -C/wSum (rigid, large correction)
+    //   - Large alpha (soft) → deltaLambda ≈ -C/alpha (soft, small correction)
+    // 
+    // Calibration:
+    //   0.0001 → alpha≈0.39 → TOO STIFF → EXPLOSION on drag release
+    //   0.01   → alpha≈39   → Visible ~0.2px corrections, stable
+    //   0.1    → alpha≈390  → Very soft, barely visible
+    const compliance = engine.config.xpbdLinkCompliance ?? 0.01;
 
     const newConstraints: any[] = [];
 

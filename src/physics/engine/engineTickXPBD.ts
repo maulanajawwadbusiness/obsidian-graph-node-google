@@ -277,6 +277,11 @@ const solveXPBDEdgeConstraints = (engine: PhysicsEngineTickContext, dt: number) 
     const constraints = engine.xpbdConstraints;
     const nodes = engine.nodes;
 
+    // Mini Run 7 Part 4: Track pinned nodes (invMass=0)
+    let pinnedCount = 0;
+    const draggedNodePinned = engine.draggedNodeId !== null;
+    if (draggedNodePinned) pinnedCount++;  // Dragged node is always pinned
+
     // Solver Loop (Single Iteration)
     for (let i = 0; i < constraints.length; i++) {
         const c = constraints[i];
@@ -323,6 +328,10 @@ const solveXPBDEdgeConstraints = (engine: PhysicsEngineTickContext, dt: number) 
         // 3. Inverse Masses
         const wA = (nA.isFixed || nA.id === engine.draggedNodeId) ? 0 : 1.0;
         const wB = (nB.isFixed || nB.id === engine.draggedNodeId) ? 0 : 1.0;
+
+        // Mini Run 7 Part 4: Count pinned nodes (avoid double-counting dragged node)
+        if (wA === 0 && nA.id !== engine.draggedNodeId) pinnedCount++;
+        if (wB === 0 && nB.id !== engine.draggedNodeId) pinnedCount++;
 
         if (wA + wB === 0) {
             skippedCount++;
@@ -398,6 +407,10 @@ const solveXPBDEdgeConstraints = (engine: PhysicsEngineTickContext, dt: number) 
         s.corrMax = Math.max(s.corrMax, corrMax);
         s.skipped += skippedCount;
         s.singularity += singularityCount;
+
+        // Mini Run 7 Part 4: Drag coupling telemetry
+        s.pinnedCount = pinnedCount;
+        s.draggedNodePinned = draggedNodePinned;
     }
 };
 
@@ -454,6 +467,8 @@ export const runPhysicsTickXPBD = (engine: PhysicsEngineTickContext, dtIn: numbe
         engine.xpbdFrameAccum.springs.ghostVelEvents = 0;
         engine.xpbdFrameAccum.springs.releaseGhostEvents = 0;
         engine.xpbdFrameAccum.springs.dragLagMax = 0;
+        engine.xpbdFrameAccum.springs.pinnedCount = 0;  // Mini Run 7
+        engine.xpbdFrameAccum.springs.draggedNodePinned = false;  // Mini Run 7
         engine.xpbdFrameAccum.springs.firstJumpPx = 0;
         engine.xpbdFrameAccum.springs.firstJumpPhase = 'none';
         engine.xpbdFrameAccum.springs.firstJumpNodeId = null;

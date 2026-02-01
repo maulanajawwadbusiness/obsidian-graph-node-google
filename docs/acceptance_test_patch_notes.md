@@ -1,23 +1,15 @@
-# Patch Notes: Acceptance Test Tooling
+# Patch Notes: Acceptance Spec Sharpening
 **Date:** 2026-02-01
 
-## 1. Feature: Acceptance Tests UI
-Added a dedicated "Acceptance Tests" checklist to the `CanvasOverlays` HUD.
-*   **Location**: Debug Panel -> Right Column (below Harness).
-*   **Content**: T1–T7 checklist matching the verification guide.
-*   **State**: Local only (resets on reload).
+## 1. Specification Upgrade
+Converted `docs/acceptance_good_springmass_in_hand.md` from a loose guide to a **Spec**.
+*   **Defined Gates:** Added numeric thresholds for every test (e.g., `Jitter < 0.005`, `Gap < 50px`, `Settle < 3s`).
+*   **Hand Actions:** Detailed the exact gestures ("Whip", "Stretch 200px", "Drag into Cluster").
+*   **Cross-Count Table:** Explicit expectations for N=5, 60, and 250.
 
-## 2. Infrastructure: Forensic Reset
-Verified `engineLifecycle.ts` correctly calls `engine.resetStartupStats()`.
-*   **Impact**: When you click "Reset" or "N=XX" (spawn), the forensic counters for "First 2s" (Overlap, NaN, Speed) are reset to zero.
-*   **Benefit**: Allows truthful re-testing of startup hygiene without reloading the page.
+## 2. HUD Synchronization
+Updated `CanvasOverlays.tsx` checklist labels to **mirror the spec**.
+*   **Benefit:** The HUD now tells you the pass criteria (e.g., "Collide (Overlaps=0 in <1s)") so you don't need to alt-tab to the docs during testing.
 
-## 3. HUD Updates
-verified `PhysicsHudSnapshot` contains required metrics for the tests:
-*   `overlaps` (T3)
-*   `strictClampActive` (T6)
-*   `settleState` (T5)
-*   `spring/repel` corrections (T1, T3)
-
-## 4. Verification
-*   **Manual**: Loaded the playground, clicked "N=20", dragged nodes. Checklist appears. Forensic stats reset on spawn.
+## 3. Single Source of Truth
+The HUD checklist and the Markdown Spec now agree on what "Good" looks like.

@@ -1,96 +1,89 @@
-# Acceptance Tests: "Good Spring-Mass" (Hand-Verifiable)
+# Acceptance Spec: "Good Spring-Mass" (Hand-Verifiable)
 **Date:** 2026-02-01
-**Status:** READY FOR VERIFICATION
+**Status:** SPECIFICATION (Rigorous)
 
-## 1. Definition of "Good Spring-Mass" (The Feel)
-To pass acceptance, the graph must feel like a **physical object**, not a software diagram.
-*   **Crisp Response**: When you grab a node, it follows *instantly*. No "mushy" delay. The link stretches immediately.
-*   **Elastic Recoil**: When released, it springs back with 1–3 clean overshoots, then damps to a stop. It should not oscillate forever (under-damped) or crawl back (over-damped).
-*   **Solid Collisions**: Nodes pushed together should fight back. They should not slide through each other like ghosts ("overlap soup").
-*   **Calm Rest**: Once settled, the graph must be dead still. No vibrating, no "buzzing", no drift.
-*   **Consistency**: A graph of 5 nodes should feel the same "law" as a graph of 60 nodes (just heavier).
+## 1. Goal: "The Feel"
+The graph must feel like a **physical object**, not a software diagram.
+*   **Crisp:** Instant 1:1 response to cursor. No "mush".
+*   **Elastic:** Springs snap back with 1–2 clean overshoots. No infinite wobble.
+*   **Solid:** Nodes are hard marbles, not ghosts. They fight overlap.
+*   **Calm:** Rest is DEAD silence. No micro-crawling.
 
-## 2. Setup
-1.  Open the Playground.
-2.  Open **Debug Panel**.
-3.  Use the **Harness** buttons to switch scenarios (N=5, N=20).
-4.  Use the **Acceptance Tests** checklist in the HUD to mark progress (visual only).
+## 2. Preconditions & Setup
+*   **Mode:** Hybrid (Default) or XPBD (if toggled).
+*   **Config:** Default physics config.
+*   **Toggles:**
+    *   `microSlip`: ON (unless debugging drift).
+    *   `diffusion`: ON.
+    *   `repulsion`: ON.
+*   **HUD:** Open Debug Panel -> Right Column.
 
-## 3. The Tests (T1–T7)
+## 3. Test Definitions (T1–T7)
 
-### T1: Single-Node Drag Response
-**Goal:** Verify latency and immediate spring engagement.
-*   **Setup:** Click **N=20**. Pick a node with 2–4 links.
-*   **Gesture:** Click-drag quickly (~150px) and hold for 1s.
-*   **Expected Feel:** The node sticks to the cursor. Neighbors visibly stretch *immediately*.
-*   **HUD Pass Criteria:**
-    *   During drag: `ticksThisFrame` is stable (likely 1 or higher if catching up).
-    *   `springConstraintsCount` > 0.
-    *   `springCorrMaxPx` is **visibly non-zero** (e.g. > 1.0px) during the stretch.
+### T1: Drag Response (Latecy & Stiffness)
+**Action:** Select N=20. Grab a node (with links) and **whip** it back and forth, then hold.
+*   **Expected Feel:** The node is "stuck" to the cursor. The links stretch *instantly*. No "lazy elastic" delay.
+*   **Expected HUD:**
+    *   `ticks/frame`: **STABLE** (should not drop to 0 or 0.5).
+    *   `springCorrMax`: **> 2.0px** (during whip). Proves forces are fighting.
+    *   `maxPrevGap`: **< 50px** (Ghost velocity matches cursor).
 
 ### T2: Elastic Recoil (Ringdown)
-**Goal:** Verify damping ratio (aiming for ~0.7 to 0.9).
-*   **Gesture:** Pull a cluster sideways (stretch springs) and **release**.
-*   **Expected Feel:** The node springs back past the goal, returns, maybe passes once more, then stops.
-    *   *Fail:* Stops instantly (too heavy).
-    *   *Fail:* Bounces for >3 seconds (too light).
-*   **HUD Pass Criteria:**
-    *   `energyProxy` (v²) spikes on release, then decays monotonically.
-    *   `oscillation > Flip Rate` might flash briefly but should die down.
-    *   **Settle State** returns to `sleep` (or `microkill`) within 4 seconds.
+**Action:** Pull a node/cluster 200px sideways (max stretch) and **release**.
+*   **Expected Feel:** The node shoots back, overshoots target, returns, overshoots slightly, then stops.
+    *   *Pass:* 1 to 3 visible reversals.
+    *   *Fail:* stops instantly (over-damped mud).
+    *   *Fail:* bounces > 3s (under-damped jelly).
+*   **Expected HUD:**
+    *   `energyProxy`: Spikes, then decays monotonically.
+    *   `settleState`: Transitions: `moving` -> `cooling` -> `sleep` in **< 3.0s**.
 
-### T3: Collision Firmness
-**Goal:** Verify repulsion force placement and magnitude.
-*   **Gesture:** Drag a node *into* a dense cluster (force it to overlap others).
-*   **Expected Feel:** Resistance. The other nodes should scatter/push away. You should NOT be able to easily stack nodes on top of each other.
-*   **HUD Pass Criteria:**
-    *   `overlapCount100` (Physical Overlap) might spike to 1–2 briefly but must **return to 0** quickly.
-    *   `nearOverlapCount` (Warning Zone) will be high during contact.
-    *   `repulsionMaxMag` should spike (showing force is active).
-    *   **CRITICAL:** `repulsionClampedCount` should generally stay low/zero (forces shouldn't need clamping if tuned right).
+### T3: Collision Firmness (Repulsion)
+**Action:** Drag a node *into* a dense 5-node cluster. Force them to overlap.
+*   **Expected Feel:** "Magnetic resistance". Nodes slide around the intruder, but do NOT merge.
+*   **Expected HUD:**
+    *   `nearOverlapCount`: Spikes (war zone), then **returns to 0** within **1.0s** of stopping.
+    *   `repulsionMaxMag`: **> 5.0** (Strong forces active).
+    *   `repulsionClamped`: **0** (Ideally) or low single digits (if chaos).
 
-### T4: Locality (No Teleport)
-**Goal:** Verify mass propagation.
-*   **Gesture:** Drag a leaf node (1 link). Then drag a hub (5+ links).
+### T4: Locality (Wave Propagation)
+**Action:** Drag a **Leaf** (1 link). Then drag a **Hub** (5+ links).
 *   **Expected Feel:**
-    *   **Leaf:** Only the immediate neighbor moves. The rest of the graph stays still.
-    *   **Hub:** The whole connected cluster moves, but with a physical "wave" delay (propagation).
-*   **HUD Pass Criteria:**
-    *   `activeNodes` (if visible) or `energyProxy` should be much lower for Leaf drag than Hub drag.
-    *   `maxPrevGap` (Ghost Velocity) should remain low (< 100px) – no teleportation.
+    *   *Leaf:* Only the neighbor moves. World stays still.
+    *   *Hub:* The immediate cluster follows. A "wave" moves outward. Far nodes stay still.
+*   **Expected HUD:**
+    *   `maxPrevGap`: **< 100px** (NO TELEPORTATION).
+    *   `activeNodes` (if visible): Leaf < Hub.
 
-### T5: Rest Truth (No Jitter)
-**Goal:** Verify solver stability and "Sleep" mode.
-*   **Setup:** Stop touching. Wait 10s.
-*   **Expected Feel:** Dead silence. No pixel crawling.
-*   **HUD Pass Criteria:**
-    *   **Settle State**: MUST show `sleep`.
-    *   `jitterAvg`: Should be `0.000` or extremely low (< 0.01).
-    *   `pbdCorrectionSum`: Should be `0.00` (or extremely close).
-    *   `energyProxy`: `0.00`.
-    *   `microSlipFiresPerSec`: 0.0.
+### T5: Rest Truth (Silence)
+**Action:** Hands off. Wait 5s.
+*   **Expected Feel:** DEAD SILENCE. No pixel crawling. No "breathing".
+*   **Expected HUD:**
+    *   `settleState`: **MUST BE 'sleep'**.
+    *   `jitterAvg`: **< 0.005** (Micro-sub-pixel).
+    *   `energyProxy`: **0.00**.
+    *   `microSlipFires`: **0.0/s**.
 
 ### T6: DT Quarantine (Spike Recovery)
-**Goal:** Verify the "Firewall" against browser lag.
-*   **Gesture:** Tab away from the window for 5 seconds. Tab back.
-*   **Expected Feel:** The graph should **not explode**. It might snap/teleport slightly as it catches up, or freeze-and-resume, but it must not scatter to infinity.
-*   **HUD Pass Criteria:**
-    *   `dtClampCount`: Increments by at least 1.
-    *   `strictClampActive`: Might flash `TRUE` then `FALSE`.
-    *   `strictClampActionAppliedCount`: Increments (proving the safety brake worked).
-    *   `nanCount`: **MUST BE 0**.
+**Action:** Tab away for 5s. Tab back.
+*   **Expected Feel:** No "explosion". Might snap/pop once, then calm.
+*   **Expected HUD:**
+    *   `dtClampCount`: **increments**.
+    *   `strictClampActive`: Flashes **TRUE** then **FALSE**.
+    *   `nanCount`: **0** (Always).
 
-### T7: Cross-Count Consistency
-**Goal:** Verify scale invariance.
-*   **Action:** Repeat T1 and T2 for **N=5** and **N=60**.
-*   **Expected Feel:**
-    *   N=5: Snappy, lightweight.
-    *   N=60: Heavier, more "inertia", but *same rules*. Not sluggish/broken.
-*   **HUD Pass Criteria:**
-    *   `perDotUpdateCoveragePct`: Should be 100% for N=5/60 (unless we hit extreme N > 200).
-    *   **Degrade Level**: Should stay `0` (Green) for N=60 on a decent machine.
+### T7: Cross-Count Invariants
+**Action:** Run T1 & T2 on N=5, N=60, N=250.
 
-## 4. Troubleshooting
-*   **"It feels mushy"**: Check `dt`. If < 60fps, increase `substeps` or check `perfMode`.
-*   **"It vibrates"**: Check `restFlapRate` or `microSlipFires`. If high, the "Stop" threshold is too aggressive or conflicting with repulsion.
-*   **"It explodes on Tab switch"**: `maxVelocity` cap is failing. Check `firewallStats`.
+| Metric | N=5 | N=60 | N=250 |
+| :--- | :--- | :--- | :--- |
+| **FPS** | 60 | 60 | >30 |
+| **Settle Time** | < 1.0s | < 3.0s | < 5.0s |
+| **Recoil Flips** | 1-2 | 1-3 | 0-1 (Heavier) |
+| **Coverage** | 100% | 100% | >50% (if strided) |
+
+## 4. Failure Signatures
+*   **Ghosting:** Dragged node leaves a "trail" or snaps late. -> *Tick Loop lag or Render interpolation bug.*
+*   **Jelly:** Bounces forever. -> *Damping too low (<0.1).*
+*   **Soup:** Nodes merge and stick. -> *Repulsion radius too small or force too weak.*
+*   **Explosion:** Tab switch scatters nodes. -> *DT Clamping failed (MaxV exceeded).*

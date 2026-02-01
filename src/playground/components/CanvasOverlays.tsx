@@ -602,13 +602,13 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
                                     <strong style={{ fontWeight: 700, color: '#aaf' }}>Acceptance Tests</strong>
                                     <div style={{ display: 'grid', gap: '2px', fontSize: '10px', marginTop: '4px' }}>
                                         {[
-                                            { id: 't1', label: 'T1: Drag Response (Crisp)' },
-                                            { id: 't2', label: 'T2: Elastic Recoil (Ringdown)' },
-                                            { id: 't3', label: 'T3: Collision Firmness' },
+                                            { id: 't1', label: 'T1: Drag (Gap < 50px, Corr > 2px)' },
+                                            { id: 't2', label: 'T2: Recoil (1-3 flips, < 3s)' },
+                                            { id: 't3', label: 'T3: Collide (Overlaps=0 in <1s)' },
                                             { id: 't4', label: 'T4: Locality (No Teleport)' },
-                                            { id: 't5', label: 'T5: Rest Truth (No Jitter)' },
-                                            { id: 't6', label: 'T6: DT Quarantine (Spike)' },
-                                            { id: 't7', label: 'T7: Cross-Count (5/20/60)' },
+                                            { id: 't5', label: 'T5: Rest (Jitter < 0.005, Sleep)' },
+                                            { id: 't6', label: 'T6: DT Quarantine (Clip++, NaN=0)' },
+                                            { id: 't7', label: 'T7: Scale (N=5/60/250 Invariant)' },
                                         ].map(test => (
                                             <label key={test.id} style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', color: '#ccc' }}>
                                                 <input type="checkbox" style={{ cursor: 'pointer' }} />

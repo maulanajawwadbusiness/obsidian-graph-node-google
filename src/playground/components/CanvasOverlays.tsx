@@ -389,6 +389,14 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
                                                         <input type="checkbox" checked={!!config.debugXPBDCanary} onChange={(e) => onConfigChange('debugXPBDCanary', e.target.checked)} />
                                                         Calibrate Canary
                                                     </label>
+                                                    <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '10px', cursor: 'pointer' }}>
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={config.xpbdEdgeSelection === 'incident'}
+                                                            onChange={(e) => onConfigChange('xpbdEdgeSelection', e.target.checked ? 'incident' : 'full')}
+                                                        />
+                                                        Incident Only
+                                                    </label>
                                                 </div>
                                             </div>
                                         )}
@@ -728,7 +736,7 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
                             </div>
                         </div>
                     </div>
-                </div>
+                </div >
             )}
         </>
     );

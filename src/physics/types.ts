@@ -251,4 +251,5 @@ export interface ForceConfig {
   // XPBD Calibration
   xpbdLinkCompliance?: number; // Inverse stiffness (m/N). 0 = rigid.
   xpbdMaxCorrPerConstraintPx?: number; // Safety cap for single-frame correction
+  xpbdEdgeSelection?: 'full' | 'incident'; // Strategy for selecting edges to solve
 }

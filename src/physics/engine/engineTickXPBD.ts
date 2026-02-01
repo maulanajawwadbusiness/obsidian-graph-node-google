@@ -277,6 +277,10 @@ const solveXPBDEdgeConstraints = (engine: PhysicsEngineTickContext, dt: number) 
     // TUG RUN PART 2: Track constraints involving dragged node (local tug activity)
     let dragConstraintCount = 0;
 
+    // Run 2: Edge Selection Policy ('full' by default)
+    // "keep the old filtered path behind a dev flag (default OFF)"
+    const selectionMode = engine.config.xpbdEdgeSelection || 'full';
+
     // Solver Loop (Single Iteration)
     for (let i = 0; i < constraints.length; i++) {
         const c = constraints[i];
@@ -286,6 +290,15 @@ const solveXPBDEdgeConstraints = (engine: PhysicsEngineTickContext, dt: number) 
         if (!nA || !nB) {
             skippedCount++;
             continue;
+        }
+
+        // Run 2: Filter Logic (Dev Flag)
+        if (selectionMode === 'incident' && engine.draggedNodeId) {
+            // Only process edges connected to the dragged node
+            if (c.nodeA !== engine.draggedNodeId && c.nodeB !== engine.draggedNodeId) {
+                skippedCount++;
+                continue;
+            }
         }
 
         // Mini Run 7 Part 5: ENABLE local tug on neighbors
@@ -447,7 +460,7 @@ const solveXPBDEdgeConstraints = (engine: PhysicsEngineTickContext, dt: number) 
         // Run 1: Edge Coverage Telemetry
         s.totalEdgesGraph = engine.links.length;
         s.edgesSelectedForSolve = constraints.length;
-        s.edgesSelectedReason = 'full'; // Logic appears to be full iteration of links
+        s.edgesSelectedReason = selectionMode;
     }
 };
 

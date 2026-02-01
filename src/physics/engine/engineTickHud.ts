@@ -152,8 +152,8 @@ export const updateHudSnapshot = (
         strictClampActive: stats.spawn.strictClampActive,
         strictClampTicksLeft: stats.spawn.strictClampTicksLeft,
         strictClampActionCount: stats.spawn.strictClampActionAppliedCount,
-        microSlipDenied: stats.microSlipDeniedByStartup,
-        escapeDenied: stats.escapeDeniedByStartup,
+        microSlipDenied: stats.spawn.microSlipDeniedByStartup,
+        escapeDenied: stats.spawn.escapeDeniedByStartup,
 
         dtSkewMaxMs: stats.dtSkew ? (stats.dtSkew.max - stats.dtSkew.min) * 1000 : 0,
         perDotUpdateCoveragePct: spacingStride > 1 ? (100 / spacingStride) : 100,
@@ -234,6 +234,7 @@ export const updateHudSnapshot = (
             max: stats.xpbd.repelCorrMaxPx
         },
         xpbdRepelSingularities: stats.xpbd.repelSingularityFallbackCount,
+        xpbdEdgeConstraintCount: engine.xpbdFrameAccum?.edgeConstraintsExecuted ?? 0,
 
         // Frame Accumulators
         ticksThisFrame: engine.xpbdFrameAccum?.ticks || 0,
@@ -244,6 +245,6 @@ export const updateHudSnapshot = (
 
         escapeFiresPerSec: stats.injectors.escapeFires,
         escapeLoopSuspectCount: stats.injectors.escapeLoopSuspectCount,
-        lastInjector: stats.injectors.lastInjector,
+
     };
 };

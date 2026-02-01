@@ -512,7 +512,8 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
                                             Repulsion: {hud.xpbdRepelCounts?.checked || 0}chk / {hud.xpbdRepelCounts?.solved || 0}solv<br />
                                             - Overlap: {hud.xpbdRepelCounts?.overlap || 0}<br />
                                             - Corr: {hud.xpbdRepelCorr?.avg.toFixed(3)} (Max: {hud.xpbdRepelCorr?.max.toFixed(2)})<br />
-                                            - Sing: {hud.xpbdRepelSingularities || 0}
+                                            - Sing: {hud.xpbdRepelSingularities || 0}<br />
+                                            Edge Constraints: {hud.xpbdEdgeConstraintCount || 0}
                                         </div>
                                     )}
                                 </div>

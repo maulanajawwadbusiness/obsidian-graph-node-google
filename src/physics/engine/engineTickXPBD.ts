@@ -8,6 +8,15 @@ import { integrateNodes } from './integration';
 import { createMotionPolicy } from './motionPolicy';
 import { applyDragVelocity } from './velocity/dragVelocity';
 
+// Mini Run 1: Stub for Edge Constraints
+const applyXPBDEdgeConstraintsStub = (engine: PhysicsEngineTickContext) => {
+    // No-op for physics.
+    // Telemetry proof of life only.
+    if (engine.xpbdFrameAccum) {
+        engine.xpbdFrameAccum.edgeConstraintsExecuted++;
+    }
+};
+
 /**
  * XPBD Core Pipeline (Knife-Sharp Isolation)
  * 
@@ -22,7 +31,7 @@ export const runPhysicsTickXPBD = (engine: PhysicsEngineTickContext, dtIn: numbe
     // 1. Setup & Preflight
     const nodeList = engine.getNodeList();
     const preflight = runTickPreflight(engine, nodeList);
-    const isStartup = preflight.isStartup;
+
 
     // XPBD prefers Fixed DT, but we respect the policy
     const policyResult = engine.timePolicy.evaluate(dtIn * 1000);
@@ -62,7 +71,8 @@ export const runPhysicsTickXPBD = (engine: PhysicsEngineTickContext, dtIn: numbe
         true // useXPBD
     );
 
-    // 3. Solver (TODO)
+    // 3. Solver
+    applyXPBDEdgeConstraintsStub(engine);
     // solveXPBDConstraints(engine, dt);
 
     // 4. Velocity Rebuild (TODO: Implement in next task)

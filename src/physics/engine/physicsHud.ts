@@ -69,6 +69,7 @@ export type PhysicsHudSnapshot = {
     xpbdRepelCounts?: { checked: number; solved: number; overlap: number };
     xpbdRepelCorr?: { avg: number; max: number };
     xpbdRepelSingularities?: number;
+    xpbdEdgeConstraintCount?: number;
 
     // Frame Accumulators
     ticksThisFrame?: number;

@@ -100,7 +100,22 @@ export class PhysicsEngine {
         nanCount: 0,
         infCount: 0,
         maxSpeed: 0,
-        dtClamps: 0
+        dtClamps: 0,
+        overlapCount0: 0, // Init
+        overlapCount100: 0, // Init
+        peakOverlapFirst2s: 0,
+        peakOverlapFirst2s30: 0,
+        peakOverlapFirst2s100: 0,
+        spawnSetHash: 0,
+        strictClampActionAppliedCount: 0,
+        microSlipDeniedByStartup: 0,
+        escapeDeniedByStartup: 0,
+        orderHashChanged: false,
+        strictClampActive: false,
+        strictClampTicksLeft: 0,
+        ticksSinceSpawn: 0,
+        forbiddenPassLatched: false,
+        spawnOrderHash: 0,
     };
     public firewallStats = {
         nanResets: 0,
@@ -148,7 +163,8 @@ export class PhysicsEngine {
         ticks: 0,
         dtSum: 0,
         springs: { count: 0, iter: 0, corrSum: 0, errSum: 0 },
-        repel: { checked: 0, solved: 0, overlap: 0, corrSum: 0, sing: 0 }
+        repel: { checked: 0, solved: 0, overlap: 0, corrSum: 0, sing: 0 },
+        edgeConstraintsExecuted: 0
     };
 
     /**
@@ -159,7 +175,8 @@ export class PhysicsEngine {
             ticks: 0,
             dtSum: 0,
             springs: { count: 0, iter: 0, corrSum: 0, errSum: 0 },
-            repel: { checked: 0, solved: 0, overlap: 0, corrSum: 0, sing: 0 }
+            repel: { checked: 0, solved: 0, overlap: 0, corrSum: 0, sing: 0 },
+            edgeConstraintsExecuted: 0
         };
     }
 
@@ -205,6 +222,8 @@ export class PhysicsEngine {
         this.startupStats.infCount = 0;
         this.startupStats.maxSpeed = 0;
         this.startupStats.dtClamps = 0;
+        this.startupStats.overlapCount0 = 0;
+        this.startupStats.peakOverlapFirst2s = 0;
     }
 
     // Context Properties

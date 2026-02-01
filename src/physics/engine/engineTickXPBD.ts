@@ -95,7 +95,7 @@ const rebuildXPBDConstraints = (engine: PhysicsEngineTickContext) => {
     //   0.0001 → alpha≈0.39 → TOO STIFF → EXPLOSION on drag release
     //   0.01   → alpha≈39   → Visible ~0.2px corrections, stable
     //   0.1    → alpha≈390  → Very soft, barely visible
-    const compliance = engine.config.xpbdLinkCompliance ?? 0.01;
+    const compliance = engine.config.xpbdLinkCompliance ?? 0.001;
 
     const newConstraints: any[] = [];
 
@@ -362,10 +362,13 @@ const solveXPBDEdgeConstraints = (engine: PhysicsEngineTickContext, dt: number) 
         c.lambda += deltaLambda;
 
         // 6. Apply Correction
+        // TUG RUN PART 3: CRITICAL FIX - Both nodes move in SAME direction along gradient
+        // Previous bug: +wB caused neighbor to move AWAY from dragged node (reversed tug)
+        // Correct: Both use -w to move together (reduce constraint error)
         let pxA = -wA * deltaLambda * gradX;
         let pyA = -wA * deltaLambda * gradY;
-        let pxB = +wB * deltaLambda * gradX;
-        let pyB = +wB * deltaLambda * gradY;
+        let pxB = -wB * deltaLambda * gradX;  // FIXED: was +wB (caused reversed tug)
+        let pyB = -wB * deltaLambda * gradY;  // FIXED: was +wB (caused reversed tug)
 
         // Safety Cap (Run 6)
         // Check magnitude of correction vectors

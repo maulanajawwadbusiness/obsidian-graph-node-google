@@ -908,6 +908,17 @@ export const runPhysicsTick = (engine: PhysicsEngineTickContext, dtIn: number) =
         }
     }
 
+    // [XPBD Canary] Visual Write-Ownership Verification
+    // Shifts node 0 by +30px every 60 frames (1Hz) to prove this stage writes to render
+    if (engine.config.debugXPBDCanary) {
+        if (engine.frameIndex % 60 === 0 && nodeList.length > 0) {
+            nodeList[0].x += 30;
+            nodeList[0].y -= 20;
+            // If we have a velocity, wipe it so it doesn't fly back?
+            // No, let it integrate. The jump is a teleport.
+        }
+    }
+
     finalizePhysicsTick({
         engine,
         nodeList,

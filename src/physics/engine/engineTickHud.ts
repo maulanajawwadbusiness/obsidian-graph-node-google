@@ -185,5 +185,11 @@ export const updateHudSnapshot = (
         determinismChecksum: stats.determinismChecksum,
         rebaseCount: stats.rebaseCount,
         maxAbsPos: stats.maxAbsPos,
+
+        // XPBD Forensics
+        xpbdCanaryActive: engine.config.debugXPBDCanary,
+        constraintCorrectionAvg: nodeCount > 0 ? corrections / nodeCount : 0,
+        constraintCorrectionMax: stats.passes.SpacingConstraints?.correctionMax || 0,
+        repulsionEvents: stats.safety.repulsionClampedCount, // Proxy for now, or add real count in forces
     };
 };

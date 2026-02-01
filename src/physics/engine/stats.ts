@@ -2,6 +2,7 @@ export type PassStats = {
     force: number;
     velocity: number;
     correction: number;
+    correctionMax?: number; // New: Peak correction magnitude
     nodes: number;
 };
 

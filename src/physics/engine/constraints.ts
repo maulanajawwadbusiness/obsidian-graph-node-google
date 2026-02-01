@@ -323,6 +323,9 @@ export const applySpacingConstraints = (
                 if (a.prevX !== undefined) a.prevX += adx;
                 if (a.prevY !== undefined) a.prevY += ady;
                 passStats.correction += Math.abs(corrScale) * 0.5;
+                if (passStats.correctionMax === undefined || Math.abs(corrScale) > passStats.correctionMax) {
+                    passStats.correctionMax = Math.abs(corrScale);
+                }
                 affected.add(a.id);
             }
             if (bAccum && bDeg > 1 && !bHubSkip) {

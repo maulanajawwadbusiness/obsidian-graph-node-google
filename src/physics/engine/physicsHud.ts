@@ -36,6 +36,12 @@ export type PhysicsHudSnapshot = {
     rebaseCount: number;
     maxAbsPos: number;
 
+    // XPBD Forensics
+    xpbdCanaryActive?: boolean;
+    constraintCorrectionAvg?: number; // Average correction per node
+    constraintCorrectionMax?: number; // Peak correction this frame
+    repulsionEvents?: number;         // Number of repulsion triggers
+
     escapeFiresPerSec?: number;
     escapeLoopSuspectCount?: number;
     lastInjector?: string;

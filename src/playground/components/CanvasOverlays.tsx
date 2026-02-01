@@ -602,13 +602,13 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
                                     <strong style={{ fontWeight: 700, color: '#aaf' }}>Acceptance Tests</strong>
                                     <div style={{ display: 'grid', gap: '2px', fontSize: '10px', marginTop: '4px' }}>
                                         {[
-                                            { id: 't1', label: 'T1: Drag (Gap < 50px, Corr > 2px)' },
-                                            { id: 't2', label: 'T2: Recoil (1-3 flips, < 3s)' },
-                                            { id: 't3', label: 'T3: Collide (Overlaps=0 in <1s)' },
-                                            { id: 't4', label: 'T4: Locality (No Teleport)' },
-                                            { id: 't5', label: 'T5: Rest (Jitter < 0.005, Sleep)' },
-                                            { id: 't6', label: 'T6: DT Quarantine (Clip++, NaN=0)' },
-                                            { id: 't7', label: 'T7: Scale (N=5/60/250 Invariant)' },
+                                            { id: 't1', label: 'T1 [A/B] Drag (Gap < 50px, Corr > 2px)' },
+                                            { id: 't2', label: 'T2 [A] Recoil (1-3 flips, < 3s)' },
+                                            { id: 't3', label: 'T3 [B] Collide (Overlaps=0 in 1-1.5s)' },
+                                            { id: 't4', label: 'T4 [B] Locality (No Teleport)' },
+                                            { id: 't5', label: 'T5 [B] Rest (Jitter < 0.005, Sleep)' },
+                                            { id: 't6', label: 'T6 [B] DT Quarantine (Clip++, NaN=0)' },
+                                            { id: 't7', label: 'T7 [B] Scale (Law Invariant N=5/60/250)' },
                                         ].map(test => (
                                             <label key={test.id} style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', color: '#ccc' }}>
                                                 <input type="checkbox" style={{ cursor: 'pointer' }} />

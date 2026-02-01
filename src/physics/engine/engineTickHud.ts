@@ -308,6 +308,7 @@ export const updateHudSnapshot = (
         coverageRatio: engine.config.useXPBD ? 1.0 : (1.0 / spacingStride),
         nodesAwake: engine.awakeList?.length ?? 0,
         nodesSleeping: engine.sleepingList?.length ?? 0,
+        dragThrottledWarn: stats.dragThrottledWarn,
 
         // Mini Run 4: Validation
         xpbdSpringSkipped: engine.xpbdFrameAccum?.springs.skipped ?? 0,

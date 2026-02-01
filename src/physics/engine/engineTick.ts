@@ -479,6 +479,17 @@ export const runPhysicsTickLegacy = (engine: PhysicsEngineTickContext, dtIn: num
     const cascadeActive = false;
     const cascadePhase = 0;
 
+    // Run 5: Guardrail (Throttle Warning)
+    engine.dragThrottledTime = engine.dragThrottledTime ?? 0;
+    if (engine.dragActive && spacingStride > 1.1) {
+        engine.dragThrottledTime += dt;
+        if (debugStats && engine.dragThrottledTime > 0.2) {
+            debugStats.dragThrottledWarn = true;
+        }
+    } else {
+        engine.dragThrottledTime = 0;
+    }
+
     // CONTINUOUS PASS EXECUTION
     const runPairwiseForces = true;
     const spacingWillRun = spacingEnabled;

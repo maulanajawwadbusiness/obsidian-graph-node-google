@@ -428,6 +428,7 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
                                             Drag: {hud.isDragging ? 'YES' : 'NO'}<br />
                                             Awake: {hud.nodesAwake} / {metrics.nodes} (Sleep: {hud.nodesSleeping})<br />
                                             Coverage: {((hud.coverageRatio ?? 1) * 100).toFixed(0)}%<br />
+                                            {hud.dragThrottledWarn && <span style={{ color: '#ff0000', fontWeight: 'bold' }}>⚠️ DRAG THROTTLED ({((hud.coverageRatio ?? 0) * 100).toFixed(0)}%)</span>}
                                         </div>
                                     )}
                                     {hud && (

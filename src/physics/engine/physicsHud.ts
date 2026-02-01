@@ -96,6 +96,7 @@ export type PhysicsHudSnapshot = {
     coverageRatio?: number;
     nodesAwake?: number;
     nodesSleeping?: number;
+    dragThrottledWarn?: boolean;
 
     // Mini Run 6: Calibration Telemetry
     xpbdComplianceUsed?: number;  // Actual compliance value in use

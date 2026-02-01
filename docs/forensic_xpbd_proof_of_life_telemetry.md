@@ -1,68 +1,72 @@
 # Forensic Report: XPBD Proof-of-Life Telemetry
 **Date:** 2026-02-01
 **Executor:** Antigravity
-**Status:** IMPLEMENTED
+**Status:** VERIFIED & CONSISTENT
 
 ## 1. Goal
-Provide immediate, "no-console required" verification that the new XPBD systems (Springs & Repulsion) are running and effective. The user must be able to confirm "Life" at a glance via the HUD.
+Provide immediate, **"no-console required"** verification that the new systems (Springs & Repulsion) are running. The user must be able to confirm "Life" via the HUD and visible physical effects.
 
-## 2. Telemetry Implementation (Knife-Grade Semantics)
+## 2. Telemetry Implementation (The One Truth)
 
-### A. Reset Semantics & Frame Sums
-*   **Stats (`DebugStats`)**: Born and die within a single **Physics Tick**.
-*   **HUD (`PhysicsHudSnapshot`)**: Persists for the **Render Frame**.
-*   **Accumulation**:
-    *   `PhysicsEngine` maintains `xpbdFrameAccum` (ticks, dtSum, count/iter sums).
-    *   `renderLoopScheduler` calls `engine.startRenderFrame()` to reset accumulators before the tick loop.
-    *   `engineTickHud` maps the accumulated totals to the snapshot.
-    *   **New Fields**: `ticksThisFrame`, `dtUseSecLastTick`, `dtUseSecFrameAvg`.
-
-### B. "Real" Force Repel
-Controlled by `debugForceRepulsion`.
+### A. Safe Canary Shift (`debugXPBDCanary`)
+A **One-Shot Nudge** to prove write-ownership without destroying the simulation.
 *   **Logic**:
-    *   If ON: `minNodeDistance` forced to **140px** (Mode A).
-    *   Strength boosted 2x to ensure gap compliance.
-    *   Implemented in `forces.ts` (Solver Layer), overriding config values before use.
-*   **Visible Effect**: Nodes explode to create massive 140px gaps. unmistakable.
+    *   `if (!engine.xpbdCanaryApplied)`: Applies `node[0].x += 30` **exactly once**.
+    *   Latches `true` until toggle is disabled.
+    *   Occurs at **Pre-Tick**, verifying that `engineTick` writes are not overwritten by render interpolation.
+*   **Visible Effect**: Node 0 teleports 30px right instantly, then behaves normally. No continuous "flying".
+*   **Location**: `src/physics/engine/engineTick.ts`, lines ~160.
 
-### C. Safe Canary Shift
-Controlled by `debugXPBDCanary`.
-*   **Logic**: **One-Shot** Nudge.
-    *   Applies `x += 30` to Node 0 exactly **ONCE** when toggle activates.
-    *   Uses `engine.xpbdCanaryApplied` state latch.
-    *   Occurs at **Pre-Tick** separate from integration, proving ownership of valid position state.
-*   **Visible Effect**: Node 0 jumps 30px right instantly, then integrates normally. No continuous flying.
+### B. "Real" Force Repel (`debugForceRepulsion`)
+A dramatic override to prove the Repulsion function is running.
+*   **Logic**:
+    *   Overrides `config.minNodeDistance` to **140px** (Mode A).
+    *   Boosts `repulsionStrength` by **2x**.
+*   **Visible Effect**: Nodes exploded apart to create massive gaps. Unmistakable.
+*   **Location**: `src/physics/forces.ts`, lines ~26.
 
-## 3. Data Pipeline Updated
-1.  **Source (`stats.ts`)**: Tracks raw per-tick counts.
-2.  **State (`engine.ts`)**: `xpbdFrameAccum` sums them across Catch-Up sub-ticks.
-3.  **Transport (`physicsHud.ts`)**: Carries `frameSum` fields.
-4.  **UI (`CanvasOverlays.tsx`)**: Displays "Frame Ticks: N" and "Avg DT: N".
+### C. Reset Semantics & Frame Sums
+*   **Stats (`DebugStats`)**: Reset every **Physics Tick**.
+*   **HUD (`PhysicsHudSnapshot`)**: Accumulated for the **Render Frame**.
+*   **Mechanism**:
+    *   `engine.xpbdFrameAccum` sums sub-ticks (Catch-Up).
+    *   `ticksThisFrame`: Shows how many physics ticks happened this render frame (0, 1, or more).
+    *   `dtUseSecFrameAvg`: Averaged `dt` across sub-ticks.
 
-## 3. Interactive Kill-Switches & Forcing
-Added to "Advanced Physics" -> "XPBD FORCING" panel:
+## 3. Reality Checklist (What Runs TODAY)
 
-1.  **Stiff Links** (`debugForceStiffSprings`):
-    -   *Logic:* Sets compliance $\alpha = 0$ for all links.
-    -   *Visible Effect:* Links become rigid rods. Jitter may increase if solver iteration count is low.
-2.  **Force Repel** (`debugForceRepulsion`):
-    -   *Logic:* Boosts `repulsionStrength` or `minNodeDistance` (Implementation pending in `forces.ts` - currently just config flag wired).
-    -   *Visible Effect:* Nodes explode apart or refuse to touch.
-3.  **Canary Shift** (`debugXPBDCanary`):
-    -   *Logic:* Shifts `node[0].x += 30` every frame.
-    -   *Visible Effect:* Node 0 flies off to infinity (or teleports), proving the XPBD write phase is running and not overwritten by render interpolation.
+Since the *Legacy Solver* is still active and the *XPBD Solver* is not yet integrated, here is the exact status of each indicator:
 
-## 4. Verification Steps
-1.  **Load App**: Open Debug Panel.
-2.  **Check HUD**: Look for "XPBD Proof-of-Life". Initially 0s (as XPBD system not active yet).
-3.  **Enable XPBD (Future Task)**: Once `solveXPBDConstraints` is called in `engineTick.ts`, these numbers will light up.
-4.  **Toggle Canary**: Check "Canary Shift". If Node 0 disappears/teleports, the `engineTick` write-phase is valid.
+| Feature | Active? | Expected HUD Value | Visible Physical Effect? |
+| :--- | :--- | :--- | :--- |
+| **Canary Shift** | **YES** | `xpbdCanaryActive: true` | **YES** (Jump) |
+| **Force Repel** | **YES** | `repulsionEvents: >0` (from Legacy Safety) | **YES** (Explosion) |
+| **Stiff Links** | NO | `xpbdSpringCounts: 0` | None (Pending Solver) |
+| **HUD: Ticks/Frame** | **YES** | `ticksThisFrame: 1-3` | N/A |
+| **HUD: XPBD Stats** | NO | `xpbdSpring*: 0`, `xpbdRepel*: 0` | None (Pending Solver) |
+
+**Note:** `repulsionEvents` in HUD currently maps to `stats.safety.repulsionClampedCount`, which IS populated by the current `applyRepulsion`. So you *will* see activity there.
+
+## 4. Verification Steps (10 Seconds)
+
+1.  **Toggle Canary**:
+    *   Action: Enable `debugXPBDCanary`.
+    *   Check: Node 0 jumps ONCE.
+    *   HUD: `Canary: ON`.
+
+2.  **Toggle Repel**:
+    *   Action: Enable `debugForceRepulsion`.
+    *   Check: Nodes fly apart (140px gaps).
+    *   HUD: `Repulsion Events` number climbs rapidly.
+
+3.  **Check Heartbeat**:
+    *   HUD: `Ticks/Frame` should be flickering `1` (or `2-3` if lagging).
+    *   HUD: `Avg DT` approx `0.016` (60Hz).
 
 ## 5. Artifacts
--   `src/physics/engine/stats.ts`: Added telemetry structure.
--   `src/physics/engine/physicsHud.ts`: Added snapshot fields.
--   `src/physics/engine/engineTickHud.ts`: Mapped logic.
--   `src/playground/components/CanvasOverlays.tsx`: UI rendering.
--   `src/physics/types.ts`: Added config flags.
+*   `docs/forensic_xpbd_proof_of_life_patch_notes.md`: Detailed changelog of edits.
+*   `src/physics/engine/engineTick.ts`: Canary & Accumulators.
+*   `src/physics/forces.ts`: Repulsion Override.
+*   `src/physics/engine/physicsHud.ts`: Snapshot Definitions.
 
-**Status:** Ready for XPBD Solver Integration.
+**Conclusion:** Telemetry is fully instrumented. Repulsion and Canary are live. XPBD specific counters will light up the moment `solveXPBDConstraints` is wired in.

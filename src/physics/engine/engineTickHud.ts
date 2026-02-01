@@ -258,9 +258,13 @@ export const updateHudSnapshot = (
         xpbdGhostVelEvents: engine.xpbdFrameAccum?.springs.ghostVelEvents ?? 0,
         xpbdGhostSyncs: engine.xpbdFrameAccum?.springs.prevAdjusted ?? 0,
 
-        xpbdInvInvalid: engine.xpbdConstraintStats?.invalidEndpointCount ?? 0,
         xpbdInvNonFinite: engine.xpbdConstraintStats?.nonFiniteRestLenCount ?? 0,
         xpbdInvZero: engine.xpbdConstraintStats?.zeroLenEdgeCount ?? 0,
+
+        // Mini Run 7: Drag Coupling
+        dragActive: !!engine.draggedNodeId,
+        draggedNodeId: engine.draggedNodeId ?? undefined,
+        dragInvMassMode: engine.draggedNodeId ? 'pinned(0)' : undefined,
 
 
 

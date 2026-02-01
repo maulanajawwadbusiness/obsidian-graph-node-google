@@ -8,6 +8,40 @@ import { integrateNodes } from './integration';
 import { createMotionPolicy } from './motionPolicy';
 import { applyDragVelocity } from './velocity/dragVelocity';
 
+// Mini Run 7: Kinematic Drag Lock
+const applyKinematicDrag = (engine: PhysicsEngineTickContext, dt: number) => {
+    // If we have a dragged node and a target, Force Position (Pin)
+    if (engine.draggedNodeId && engine.dragTarget) {
+        const node = engine.nodes.get(engine.draggedNodeId);
+        if (node) {
+            const oldX = node.x;
+            const oldY = node.y;
+
+            // 1. Teleport to Target
+            node.x = engine.dragTarget.x;
+            node.y = engine.dragTarget.y;
+
+            // 2. Kinematic Velocity (Implicit)
+            // v = (x - x_old) / dt
+            if (dt > 1e-6) {
+                node.vx = (node.x - oldX) / dt;
+                node.vy = (node.y - oldY) / dt;
+            }
+
+            // 3. History Reconciliation (Verlet Consistency)
+            // prevX must be set such that (x - prevX) reflects the drag step.
+            // If we want next frame's inferred velocity to match this frame's drag:
+            // prevX should be the position adjacent to x "in the past".
+            // So prevX = oldX.
+            node.prevX = oldX;
+            node.prevY = oldY;
+
+            // 4. Force pin for Solver (redundant if grabNode sets isFixed, but safe)
+            node.isFixed = true;
+        }
+    }
+};
+
 // Mini Run 3: XPBD Inventory & Policy
 const rebuildXPBDConstraints = (engine: PhysicsEngineTickContext) => {
     // Policy: clamp(currentDistanceAtSpawn, minRest, maxRest)
@@ -162,10 +196,7 @@ const solveXPBDEdgeConstraints = (engine: PhysicsEngineTickContext, dt: number) 
     // Calibration Canary (Run 6)
     // If enabled, artificially shorten the first constraint to force visual error.
     if (USE_CANARY && engine.xpbdConstraints.length > 0) {
-        const c = engine.xpbdConstraints[0];
-        // Hack: temporarily modify dist/restLen perspective to force error
-        // Actually, just changing restLen on the fly is safer/simpler for a canary check
-        // We'll set effectiveRestLen inside the loop if it's the target.
+        // Validation check only
     }
 
     const constraints = engine.xpbdConstraints;
@@ -233,18 +264,20 @@ const solveXPBDEdgeConstraints = (engine: PhysicsEngineTickContext, dt: number) 
 
         // Safety Cap (Run 6)
         // Check magnitude of correction vectors
-        const magA = Math.sqrt(pxA * pxA + pyA * pyA);
-        const magB = Math.sqrt(pxB * pxB + pyB * pyB);
+        let magA = Math.sqrt(pxA * pxA + pyA * pyA);
+        let magB = Math.sqrt(pxB * pxB + pyB * pyB);
 
         if (magA > MAX_CORR_PX) {
             const scale = MAX_CORR_PX / magA;
             pxA *= scale;
             pyA *= scale;
+            magA = Math.sqrt(pxA * pxA + pyA * pyA); // Strict Recompute
         }
         if (magB > MAX_CORR_PX) {
             const scale = MAX_CORR_PX / magB;
             pxB *= scale;
             pyB *= scale;
+            magB = Math.sqrt(pxB * pxB + pyB * pyB); // Strict Recompute
         }
 
         nA.x += pxA;
@@ -327,6 +360,10 @@ export const runPhysicsTickXPBD = (engine: PhysicsEngineTickContext, dtIn: numbe
         false,
         true
     );
+
+    // 2b. Kinematic Drag Lock (Run 7)
+    // Snap dragged node to target before solver sees it
+    applyKinematicDrag(engine, dt);
 
     // 3. Solver
     const nodeCount = nodeList.length;

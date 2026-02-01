@@ -127,8 +127,10 @@ export const releaseNode = (engine: PhysicsEngineInteractionContext) => {
     if (engine.draggedNodeId) {
         const node = engine.nodes.get(engine.draggedNodeId);
         if (node) {
-            node.vx = 0;
-            node.vy = 0;
+            // Run 7: Momentum Preservation
+            // Do NOT zero velocity here. Let the solver/integrator inherit the "throw".
+            // node.vx = 0;
+            // node.vy = 0;
             node.fx = 0;
             node.fy = 0;
             node.prevFx = 0;

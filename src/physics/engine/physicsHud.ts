@@ -97,6 +97,11 @@ export type PhysicsHudSnapshot = {
     xpbdGhostVelEvents?: number;
     xpbdGhostSyncs?: number;
 
+    // Mini Run 7: Drag Coupling
+    dragActive?: boolean;
+    draggedNodeId?: string;
+    dragInvMassMode?: 'pinned(0)' | 'free(1)';
+
 
 
     // Frame Accumulators

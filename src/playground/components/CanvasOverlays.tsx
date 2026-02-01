@@ -398,7 +398,7 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
                                                     </label>
                                                     <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '10px', cursor: 'pointer' }}>
                                                         <input type="checkbox" checked={!!config.debugXPBDCanary} onChange={(e) => onConfigChange('debugXPBDCanary', e.target.checked)} />
-                                                        Canary Shift
+                                                        Calibrate Canary
                                                     </label>
                                                 </div>
                                             </div>
@@ -449,8 +449,10 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
                                             rest: {(hud.xpbdSpringRestMinPx || 0).toFixed(0)}-{(hud.xpbdSpringRestMaxPx || 0).toFixed(0)} (μ={(hud.xpbdSpringRestAvgPx || 0).toFixed(0)})<br />
                                             solve: {(hud.xpbdSpringSolveMs || 0).toFixed(2)} ms<br />
                                             <span style={{ fontSize: '0.9em', color: '#888' }}>
-                                                drop: {hud.xpbdSpringSkipped}/{hud.xpbdSpringSingularity} | safe: {hud.xpbdSpringPrevAdjusted}<br />
-                                                inv: {hud.xpbdInvInvalid} | inf: {hud.xpbdInvNonFinite} | 0len: {hud.xpbdInvZero}
+                                                drop: {hud.xpbdSpringSkipped}/{hud.xpbdSpringSingularity} | sync: {hud.xpbdGhostSyncs}<br />
+                                                <span title="Peak inferred velocity from solver corrections (Projection / dt)">ghost:</span> {(hud.xpbdGhostVelMax || 0).toFixed(1)}px/s (evt: {hud.xpbdGhostVelEvents})<br />
+                                                inv: {hud.xpbdInvInvalid} | inf: {hud.xpbdInvNonFinite} | 0len: {hud.xpbdInvZero}<br />
+                                                drag: {hud.dragActive ? 'ON' : 'OFF'} {hud.draggedNodeId ? `(${hud.draggedNodeId})` : ''} mode: {hud.dragInvMassMode || '-'}
                                             </span>
                                         </div>
                                     )}

@@ -464,6 +464,16 @@ const solveXPBDEdgeConstraints = (engine: PhysicsEngineTickContext, dt: number) 
         s.edgesSkippedByCoverage = 0; // Run 3: Audit confirmed no secondary filters (yet)
         s.edgesProcessed = solvedCount;
         s.edgesSelectedButUnprocessed = constraints.length - skippedCount - singularityCount - solvedCount;
+
+        // Run 5: Safety Guard
+        if (s.edgesSelectedReason === 'full' && s.totalEdgesGraph > 10) {
+            const ratio = s.edgesProcessed / s.totalEdgesGraph;
+            if (ratio < 0.9) {
+                if (Math.random() < 0.01) { // Throttle
+                    console.warn(`[XPBD-COVERAGE-LOW] Processed ${s.edgesProcessed}/${s.totalEdgesGraph} (${(ratio * 100).toFixed(1)}%) - Check Pinning/Singularities`);
+                }
+            }
+        }
     }
 };
 

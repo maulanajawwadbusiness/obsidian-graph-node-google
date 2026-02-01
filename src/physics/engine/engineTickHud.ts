@@ -236,6 +236,16 @@ export const updateHudSnapshot = (
         xpbdRepelSingularities: stats.xpbd.repelSingularityFallbackCount,
         xpbdEdgeConstraintCount: engine.xpbdFrameAccum?.edgeConstraintsExecuted ?? 0,
 
+        // XPBD Springs Proof-of-Life 0
+        xpbdSpringEnabled: !!engine.config.useXPBD,
+        xpbdSpringConstraints: engine.xpbdFrameAccum?.springs.count ?? 0,
+        xpbdSpringSolved: 0, // Not implemented yet
+        xpbdSpringCorrMaxPx: engine.xpbdFrameAccum?.springs.corrMax ?? 0,
+        xpbdSpringErrAvgPx: (engine.xpbdFrameAccum?.springs.count || 0) > 0
+            ? (engine.xpbdFrameAccum!.springs.errSum / engine.xpbdFrameAccum!.springs.count)
+            : 0,
+        xpbdSpringSolveMs: engine.xpbdFrameAccum?.springs.solveMs ?? 0,
+
         // Frame Accumulators
         ticksThisFrame: engine.xpbdFrameAccum?.ticks || 0,
         dtUseSecLastTick: dtMs / 1000,

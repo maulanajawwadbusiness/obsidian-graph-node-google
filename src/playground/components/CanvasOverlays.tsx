@@ -425,7 +425,7 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
                                             Pop Score: {(hud.lawPopScore || 0).toFixed(4)}<br />
                                         </div>
                                     )}
-                                    {hud && (
+                                    {hud && hud.mode === 'XPBD' && (
                                         <div style={{ marginTop: '4px', paddingTop: '4px', borderTop: '1px solid #444', color: '#adff2f' }}>
                                             <strong>XPBD Proof-of-Life</strong><br />
                                             Springs: {hud.xpbdSpringCounts?.count || 0} / {hud.xpbdSpringCounts?.iter || 0}it<br />
@@ -436,6 +436,17 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
                                             - Corr: {hud.xpbdRepelCorr?.avg.toFixed(3)} (Max: {hud.xpbdRepelCorr?.max.toFixed(2)})<br />
                                             - Sing: {hud.xpbdRepelSingularities || 0}<br />
                                             Edge Constraints: {hud.xpbdEdgeConstraintCount || 0}
+                                        </div>
+                                    )}
+                                    {hud && (
+                                        <div style={{ marginTop: '4px', paddingTop: '4px', borderTop: '1px solid #444', color: hud.xpbdSpringEnabled ? '#adff2f' : '#888' }}>
+                                            <strong>XPBD Springs</strong><br />
+                                            enabled: {hud.xpbdSpringEnabled ? 'true' : 'false'}<br />
+                                            constraints: {hud.xpbdSpringConstraints || 0}<br />
+                                            solved: {hud.xpbdSpringSolved || 0}<br />
+                                            corrMax: {(hud.xpbdSpringCorrMaxPx || 0).toFixed(3)} px<br />
+                                            errAvg: {(hud.xpbdSpringErrAvgPx || 0).toFixed(3)} px<br />
+                                            solve: {(hud.xpbdSpringSolveMs || 0).toFixed(2)} ms
                                         </div>
                                     )}
                                     {hud && (

@@ -102,7 +102,7 @@ export type PhysicsEngineTickContext = {
     xpbdFrameAccum: {
         ticks: number;
         dtSum: number;
-        springs: { count: number; iter: number; corrSum: number; errSum: number };
+        springs: { count: number; iter: number; corrSum: number; errSum: number; solveMs: number; corrMax: number };
         repel: { checked: number; solved: number; overlap: number; corrSum: number; sing: number };
         edgeConstraintsExecuted: number;
     };

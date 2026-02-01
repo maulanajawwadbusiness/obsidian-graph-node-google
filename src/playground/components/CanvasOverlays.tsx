@@ -597,7 +597,26 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
                                     </div>
                                 )}
 
-                                {/* Placeholder for future forensic tables */}
+                                {/* ACCEPTANCE TESTS */}
+                                <div style={{ padding: '4px', border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(0,0,0,0.2)' }}>
+                                    <strong style={{ fontWeight: 700, color: '#aaf' }}>Acceptance Tests</strong>
+                                    <div style={{ display: 'grid', gap: '2px', fontSize: '10px', marginTop: '4px' }}>
+                                        {[
+                                            { id: 't1', label: 'T1: Drag Response (Crisp)' },
+                                            { id: 't2', label: 'T2: Elastic Recoil (Ringdown)' },
+                                            { id: 't3', label: 'T3: Collision Firmness' },
+                                            { id: 't4', label: 'T4: Locality (No Teleport)' },
+                                            { id: 't5', label: 'T5: Rest Truth (No Jitter)' },
+                                            { id: 't6', label: 'T6: DT Quarantine (Spike)' },
+                                            { id: 't7', label: 'T7: Cross-Count (5/20/60)' },
+                                        ].map(test => (
+                                            <label key={test.id} style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', color: '#ccc' }}>
+                                                <input type="checkbox" style={{ cursor: 'pointer' }} />
+                                                {test.label}
+                                            </label>
+                                        ))}
+                                    </div>
+                                </div>
                             </div>
                         </div>
 

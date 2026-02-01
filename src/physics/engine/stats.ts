@@ -80,6 +80,15 @@ export type DebugStats = {
     determinismChecksum: string;
     rebaseCount: number;
     maxAbsPos: number;
+
+    // XPBD Forensics
+    xpbdSpringCorrSum: number;
+    xpbdSpringCorrMax: number;
+    xpbdSpringConstraintCount: number;
+    xpbdRepelCorrSum: number;
+    xpbdRepelCorrMax: number;
+    xpbdRepelPairs: number;
+    xpbdOverlapCount: number;
 };
 
 export const createDebugStats = (): DebugStats => ({
@@ -142,6 +151,13 @@ export const createDebugStats = (): DebugStats => ({
     determinismChecksum: '0000',
     rebaseCount: 0,
     maxAbsPos: 0,
+    xpbdSpringCorrSum: 0,
+    xpbdSpringCorrMax: 0,
+    xpbdSpringConstraintCount: 0,
+    xpbdRepelCorrSum: 0,
+    xpbdRepelCorrMax: 0,
+    xpbdRepelPairs: 0,
+    xpbdOverlapCount: 0,
 });
 
 export const getPassStats = (stats: DebugStats, name: string): PassStats => {

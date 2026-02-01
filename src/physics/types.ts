@@ -234,6 +234,15 @@ export interface ForceConfig {
   debugStall?: boolean; // Simulate heavy load
   enableMicroDrift?: boolean; // Enable "water" micro-drift (default: false)
   debugAllowEarlyExpansion?: boolean; // Dev-only: allow early-expansion ramps (default: false)
+  debugXpbdSprings?: boolean;
+  debugXpbdRepulsion?: boolean;
+  debugXpbdCanary?: boolean;
+  debugForceStiffSprings?: boolean;
+  debugForceRepulsion?: boolean;
+  xpbdSpringCompliance: number;
+  xpbdSpringIterations: number;
+  xpbdRepulsionCompliance: number;
+  xpbdRepulsionIterations: number;
   // Forensics Kill Switches
   debugDisableDiffusion?: boolean;
   debugDisableMicroSlip?: boolean;

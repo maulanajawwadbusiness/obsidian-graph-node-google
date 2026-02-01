@@ -96,6 +96,15 @@ export type PhysicsHudSnapshot = {
     // Oscillation
     corrSignFlipRate?: number; // % of active nodes flipping sign
     restFlapRate?: number; // Flaps per second
+
+    // XPBD Forensics
+    springCorrectionAvg?: number;
+    springCorrectionMax?: number;
+    springConstraintCount?: number;
+    repelCorrectionAvg?: number;
+    repelCorrectionMax?: number;
+    repelPairs?: number;
+    repelOverlapCount?: number;
 };
 
 export type PhysicsHudHistory = {
@@ -131,6 +140,14 @@ export const createInitialPhysicsHudSnapshot = (): PhysicsHudSnapshot => ({
     calmPercent: 0,
     diffusionGate: 0,
     settleBlockers: [],
+
+    springCorrectionAvg: 0,
+    springCorrectionMax: 0,
+    springConstraintCount: 0,
+    repelCorrectionAvg: 0,
+    repelCorrectionMax: 0,
+    repelPairs: 0,
+    repelOverlapCount: 0,
 });
 
 export const createInitialPhysicsHudHistory = (): PhysicsHudHistory => ({

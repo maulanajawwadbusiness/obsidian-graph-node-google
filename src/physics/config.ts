@@ -166,8 +166,17 @@ export const DEFAULT_PHYSICS_CONFIG: ForceConfig = {
     perfModeEEmergency: 2000,
     perfModeEFatal: 3000,
     perfModeDownshiftRatio: 0.9,
+    xpbdSpringCompliance: 0.0005,
+    xpbdSpringIterations: 2,
+    xpbdRepulsionCompliance: 0.0005,
+    xpbdRepulsionIterations: 2,
     debugPerf: false,
     debugStall: false,
     enableMicroDrift: false, // Fix #16: Stable by default
     debugAllowEarlyExpansion: false,
+    debugXpbdSprings: false,
+    debugXpbdRepulsion: false,
+    debugXpbdCanary: false,
+    debugForceStiffSprings: false,
+    debugForceRepulsion: false,
 };

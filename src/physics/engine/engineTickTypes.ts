@@ -31,6 +31,9 @@ export type PhysicsEngineTickContext = {
     degradeBudgetMs: number;
     degradeLogAt: number;
     handLogAt: number;
+
+    // Interaction
+    dragActive: boolean; // Run 2: Gating Firewall
     dragLagSamples: number[];
     lastDraggedNodeId: string | null;
     grabOffset: { x: number; y: number } | null;  // Mini Run 7: Initial grab position for MAX_DRAG_DISTANCE

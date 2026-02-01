@@ -58,7 +58,8 @@ export const runPhysicsTickXPBD = (engine: PhysicsEngineTickContext, dtIn: numbe
         engine.config.damping,
         engine.config.maxVelocity,
         debugStats,
-        false
+        false,
+        true // useXPBD
     );
 
     // 3. Solver (TODO)

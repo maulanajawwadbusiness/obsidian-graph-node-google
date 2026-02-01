@@ -1,107 +1,127 @@
-# Forensic Catch-Up: DT & XPBD Compliance Alignment (Knife-Sharp)
+# Forensic Catch-Up: DT & XPBD Compliance Alignment (Knife-Grade)
 **Date:** 2026-02-01
 **Executor:** Antigravity
 **Status:** PROVEN & BINDING
 
-## 1. DT Provenance Proof
-We verify the Time Delta flow from input to consumption to guarantee units (Seconds).
+## 1. DT Provenance Proof (End-to-End)
+We certify that `dt` is strictly **Seconds**, delivered via a **Fixed-Step Accumulator** loop.
 
-**A. Source (Input -> Policy)**
--   **File:** `src/physics/engine/engineTick.ts`
--   **Line 41:** `export const runPhysicsTick = (engine..., dtIn: number) => {`
-    -   `dtIn` is the raw input from the scheduler (typically seconds).
--   **Line 50:** `const policyResult = engine.timePolicy.evaluate(dtIn * 1000);`
-    -   **PROOF:** Input is multiplied by 1000. `dtIn` is **Seconds**. `dtPolicy` takes **Milliseconds**.
+### A. The Scheduler (Origin)
+**File:** `src/playground/rendering/renderLoopScheduler.ts`
+The scheduler manages the `accumulatorMs` bucket.
 
-**B. Policy (Clamp -> Output)**
--   **File:** `src/physics/engine/dtPolicy.ts`
--   **Line 57:** `if (dtUseMs > maxDtMs) { dtUseMs = maxDtMs; }`
-    -   Clamps ms value (e.g., 50ms).
--   **Line 74:** `dtUseSec: dtUseMs / 1000.0,`
-    -   **PROOF:** Returns explicit `dtUseSec` in **Seconds**.
+1.  **Input Delta:**
+    ```typescript
+    // Line 48
+    let rawDeltaMs = now - schedulerState.lastTime;
+    ```
+2.  **Accumulation:**
+    ```typescript
+    // Line 64
+    schedulerState.accumulatorMs += frameDeltaMs;
+    ```
+3.  **The Accumulator Loop (Fixed Step):**
+    ```typescript
+    // Line 117: Loop conditions
+    while (schedulerState.accumulatorMs >= fixedStepMs && stepsThisFrame < maxSteps) {
+        
+        // Line 129: THE CALLSITE
+        // fixedStepMs is typically 16.666ms (1000/60).
+        // Division by 1000 guarantees SECONDS.
+        engine.tick(fixedStepMs / 1000); 
 
-**C. Consumption (The Single Truth)**
--   **File:** `src/physics/engine/engineTick.ts`
--   **Line 51:** `const dt = policyResult.dtUseSec;`
--   **Line 52:** `const dtRawMs = dtIn * 1000;` (Used for forensics only).
--   **Usage Proofs:**
-    -   **Line 609 (Forces):** `applyForcePass(..., dt, ...)` -> Uses Seconds.
-    -   **Line 633 (Stats):** `applyDragVelocity(..., dt, ...)` -> Uses Seconds.
-    -   **Line 641 (Integration):** `integrateNodes(..., dt, ...)` -> Uses Seconds.
+        // Line 131: Debit accumulator
+        schedulerState.accumulatorMs -= fixedStepMs;
+    }
+    ```
 
-**D. Substepping**
--   **Current State:** The engine currently runs a **Single Step** structure (`engineTick.ts`).
--   **Trace:** `engineTick.ts` calls `integrateNodes` exactly **ONCE** per tick trace (Line 641).
--   **Verdict:** No substepping buffer currently active in the tick loop.
--   **XPBD Plan:** XPBD solver will run **Once** per tick (matching legacy budget). If `maxStepsPerFrame` > 1 is needed later, the outermost loop in `engineTick.ts` must change.
+**Verdict:** The physics engine receives a constant `dt` (e.g. `0.016666`), possibly multiple times per render frame (Catch-Up), or zero times (if budget exceeded).
 
-## 2. XPBD Math (The Single Convention)
-We bind the XPBD solver to **Convention A** (Compliance/dt²).
+### B. The Engine (Consumption)
+**File:** `src/physics/engine/engineTick.ts`
+1.  **Entry:**
+    ```typescript
+    // Line 41
+    export const runPhysicsTick = (engine: PhysicsEngineTickContext, dtIn: number) => {
+    // dtIn is exactly (fixedStepMs / 1000) from the scheduler.
+    ```
+2.  **Policy Check (Redundant but Safe):**
+    ```typescript
+    // Line 50
+    const policyResult = engine.timePolicy.evaluate(dtIn * 1000);
+    // Line 51
+    const dt = policyResult.dtUseSec; 
+    // Since dtIn is fixed (16ms), the policy simply passes it through 
+    // unless it violates safety clamps (maxFrameDeltaMs).
+    ```
 
-**Variables:**
--   `C` : Constraint Error ($|x_1 - x_2| - restLen$).
--   `alpha` : Compliance parameter (Inverse Stiffness).
--   `lambda` : Lagrange multiplier (accumulated constraint force/impulse).
--   `dt` : Time step (Seconds, typically 0.016).
+## 2. Reconciling "Single-Step" Wording
+*   **Engine Perspective:** `engineTick.ts` runs a **Single Integration** step per call. It does *not* loop internally (no `numSubsteps` loop).
+*   **System Perspective:** The `renderLoopScheduler` performs **Multiple Steps** (Catch-Up) if the render thread lags.
+*   **Implication for XPBD:**
+    *   XPBD constraints run **Once Per Tick**.
+    *   If the scheduler runs 3 ticks to catch up, XPBD runs 3 times.
+    *   **Ghost Velocity Risk:** Highly reduced because `engineTick` finishes a full position/velocity update cycle *before* the next tick starts.
 
-**Canonical Equations (Binding):**
+## 3. Legacy K -> XPBD Compliance (Concrete Math)
+We discard the vague "alpha = 1/k" claim. We define compliance $\alpha$ using the canonical XPBD update equation for a distance constraint.
+
+**Equations:**
+1.  $\alpha_{tilde} = \alpha / dt^2$
+2.  $\Delta \lambda = \frac{-C - \alpha_{tilde} \lambda}{w_{sum} + \alpha_{tilde}}$
+3.  $\Delta x = w_i \cdot \Delta \lambda$
+
+**Constants:**
+*   `dt`: 0.01666s (60Hz) -> $dt^2 \approx 0.000277$
+*   `mass`: 1.0 (Fiber/Default) -> $w = 1.0$
+*   `w_sum`: $1+1=2$
+*   `Error (C)`: 10px (Gap)
+*   `Warm Start`: $\lambda = 0$ (Cold)
+
+**Mapping Table:**
+
+| Desired Feel | Compliance ($\alpha$) | $\alpha_{tilde}$ | Correction Formula | Total Gap Closed (10px) | Remaining Error |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Rigid (Contact)** | **0.00000** | 0 | $-10 / 2$ = -5 | $5+5 = 10.0$px | **0.0px (Snap)** |
+| **Stiff (Rope)** | **0.00001** | 0.036 | $-10 / 2.036$ = -4.91 | $4.91+4.91 = 9.82$px | **0.18px** |
+| **Firm (Rubber)** | **0.00100** | 3.61 | $-10 / 5.61$ = -1.78 | $1.78+1.78 = 3.56$px | **6.44px** |
+| **Soft (Elastic)** | **0.00500** | 18.05 | $-10 / 20.05$ = -0.49 | $0.49+0.49 = 0.98$px | **9.02px** |
+| **Legacy K=0.2** | ~0.0005 | ~1.8 | - | - | Matches "Firm" |
+
+**Recommendation:**
+*   **Contact/Repulsion:** Use $\alpha = 0.0$ (Hard).
+*   **Links:** Start with $\alpha = 0.00001$ for "Knife-Sharp" lines.
+
+## 4. XPBD Integration Contract
+The exact execution order required to guarantee `vx/vy` consistency and ghost velocity avoidance.
+
 ```typescript
-// 1. Compliance Scaling (XPBD)
-// alpha is compliance (m/N).
-// We scale it by dt^2 to relate to position.
-const alphaTilde = compliance / (dt * dt);
+// XPBD Integration Contract
+// --------------------------------------------------------
 
-// 2. Denominator (Sum of Inverse Masses + Alpha)
-const wSum = nodeA.invMass + nodeB.invMass;
-const denom = wSum + alphaTilde;
+// 1. Prediction Phase (Owns X/Y temp)
+//    x_pred = x + v * dt;
+//    No force application here (forces applied to v BEFORE this).
 
-// 3. Delta Lambda (Correction Magnitude)
-// C = currentDistance - restLength
-// deltaLambda = (-C - alphaTilde * lambda) / denom;
-const deltaLambda = (-C - alphaTilde * prevLambda) / denom;
+// 2. Neighbor Search (Broadphase)
+//    Update spatial hash using x_pred.
 
-// 4. Update Lambda
-const newLambda = prevLambda + deltaLambda;
-// Store newLambda for next frame (Warm Starting) if enabled.
+// 3. XPBD Solver Loop (Owns X/Y/Lambda)
+//    for (i = 0; i < iterations; i++) {
+//        solveConstraints(x_pred, dt); // Modifies x_pred directly
+//    }
 
-// 5. Apply Position Correction
-const impulse = deltaLambda; // Magnitude of correction
-const corrX = (dx / dist) * impulse;
-const corrY = (dy / dist) * impulse;
+// 4. Velocity Rebuild (Owns VX/VY)
+//    v_new = (x_pred - x_prev) / dt;
+//    // Essential: This overwrites any "force-accumulated" velocity 
+//    // with the "constraint-compliant" velocity.
 
-nodeA.x += corrX * nodeA.invMass;
-nodeA.y += corrY * nodeA.invMass;
-nodeB.x -= corrX * nodeB.invMass;
-nodeB.y -= corrY * nodeB.invMass;
+// 5. Finalize (Commit)
+//    x = x_pred;
+//    // x, y, vx, vy are now consistent for the next tick.
 ```
 
-**Why Convention A?**
-It separates the material property (`compliance`, fixed) from the timestep (`dt`). If `dt` shrinks, `alphaTilde` grows larger (stiffer), making the constraint solution converge faster per second, which is physically correct.
-
-## 3. Map: Legacy K -> XPBD Compliance
-**Legacy Truth:**
--   **File:** `src/physics/forces.ts` L366, L452.
--   **Formula:** `forceMagnitude = effectiveK * displacement`.
--   **Units:** `effectiveK` (0.2) is a simple Hooke's Law spring constant. $F = kx$.
--   **Values:** `springStiffness` = 0.2. `displacement` approx 0-50px. Force approx 0-10 units.
-
-**XPBD Compliance Check:**
--   XPBD `alpha` = $1 / k$.
--   Legacy $k=0.2$ implies $alpha = 5.0$.
--   **BUT:** XPBD handles infinite stiffness ($alpha=0$) gracefully.
--   **Goal:** We want **Hard Shells** (Contact) and **Taught Springs** (Link).
-
-**Proposed Compliance Table:**
-| Component | Legacy K | Target Behavior | XPBD Compliance ($\alpha$) | Correction @ 10px Err (16ms) |
-| :--- | :--- | :--- | :--- | :--- |
-| **Hard Contact** | N/A | **Rigid (Solid)** | **0.00000** (Zero) | **10.0 px** (Full Snap) |
-| **Link (Stiff)** | 0.2 | **Taught (Rope)** | **0.00001** (Near Zero) | ~9.9 px (Tight) |
-| **Link (Soft)** | 0.05 | **Elastic** | **0.00500** | ~0.5 px (Visible Sag) |
-| **Repulsion** | N/A | **Force Field** | N/A (Accel) | N/A |
-
-**Initial Tuning:**
--   **Hard Constraints (Contact):** `alpha = 0`.
--   **Links:** `alpha = 0.0001` (Start very stiff to prove stability, then soften if needed).
-
-**Why Stiff?**
-The user request emphasizes "Knife-Sharp" and "Hard Constraints". A compliance of 0.0 guarantees the solver attempts full geometric resolution every tick.
+**Ownership:**
+*   **Predict -> Solve:** Owns temporary `x`, `y` (candidates).
+*   **Rebuild:** Reclaims `vx`, `vy` from the positional change.
+*   **Finalize:** Commits `x`, `y` to the `PhysicsNode`.

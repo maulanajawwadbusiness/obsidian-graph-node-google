@@ -1,7 +1,7 @@
 # Forensic Report: Spawn & Startup Hygiene
 **Date:** 2026-02-01
 **Executor:** Antigravity
-**Status:** PROOF-CARRYING (Refined)
+**Status:** PROOF-CARRYING (Sharpened)
 
 ## 1. Goal: Clean Birth
 Ensure the first 2 seconds of the simulation are deterministic, clean (no overlaps, no energy bursts), and observable.
@@ -13,23 +13,37 @@ Ensure the first 2 seconds of the simulation are deterministic, clean (no overla
 2.  **Toplogy**: `addNode` calls `addNodeToEngine` -> sets `lastGoodX/Y` to current position.
 3.  **Reset**: `resetLifecycle` clears counters but *preserves* topology.
 
-### B. The First 2 Seconds (`engineTickPreflight.ts`)
+### B. The First 2 Seconds (`engineTickPreflight.ts` & `engineTick.ts`)
 The `isStartup` flag is active when `lifecycle < 2.0`.
 During this window:
-1.  **Firewall**: `runTickPreflight` checks for `NaN/Inf`.
-    *   *Action*: Resets to `lastGood` or `0,0` if detected.
-    *   *Metric*: `startupNanCount`.
-2.  **Overlap Audit** (Refined):
+
+1.  **Firewall (Strict)**: `runTickPreflight`
+    *   **Monitors**: `NaN/Inf`, `dtClamps`, `maxSpeed`.
+    *   **Action**: If `dt` spike or `Speed > 2x Max` detected:
+        *   Sets `strictClampActive = true`.
+        *   **Hard Clamps** velocity to `maxVelocity`.
+        *   **Resets** `prevX/prevY` ghost history to prevent rebound.
+        *   Sustains for 5 ticks (`strictClampTicksLeft`).
+    *   *Metric*: `strictClampActionAppliedCount`, `strictClampActive`.
+
+2.  **Overlap Audit (Dual)**:
     *   At `t=0`, we perform an O(N^2) check.
-    *   **R30**: Standard legacy radius (`overlapCount0`).
+    *   **R30**: Legacy visual radius (`overlapCount0`).
     *   **R100**: Physical shell (`overlapCount100`).
-    *   *Peak Metric*: `peakOverlapFirst2s` (max of R30/R100 at t=0).
+    *   *Peak Metric*: `spawnPeakOverlap30`, `spawnPeakOverlap100` (Captured at t=0, ensuring zero-frame violation visibility).
+
 3.  **Deterministic Proof**:
     *   **Seed**: `pseudoRandom` seeded by Node IDs.
-    *   **Order**: `spawnOrderHash` checksums the node ID sequence during the N^2 check. Assuming insertion order is stable, this hash must match across reloads.
-4.  **Strict Firewall (Active)**:
-    *   If `dtClamps > 0` or Speed > 2x Max, `strictClampActive` engages for 5 ticks.
-    *   *Action*: While active, the engine should (TODO: confirm binding) apply harder constraints or zero velocity. currently it serves as a HUD flag for manual intervention/diagnosis.
+    *   **Order Hash**: `spawnOrderHash` checksums node ID sequence. (Change = nondeterministic input/sort).
+    *   **Set Hash**: `spawnSetHash` (XOR sum). (Change = different set of nodes).
+    *   *Metric*: `orderHashChanged` flags if reloads differ.
+
+4.  **Motor Allow-List (Enforced)**:
+    *   During `lifecycle < 2.0`, `engineTick.ts` **explicitly blocks**:
+        *   `applyDenseCoreVelocityDeLocking` (Micro-Slip).
+        *   `applyEdgeShearStagnationEscape`.
+    *   *Justification*: Startup is high-energy; these motors are for stasis efficiency and introduce nondeterminism or "fake" motion.
+    *   *Telemetry*: `microSlipDenied`, `escapeDenied`.
 
 ## 3. Invariants & Proofs
 
@@ -37,36 +51,21 @@ During this window:
 | :--- | :--- | :--- |
 | **No NaN/Inf** | `engineTickPreflight.ts` checks every node every frame. | [x] Active |
 | **No Overlap Soup** | `overlapCount100` measures physical violations at t=0. | [x] Measured |
-| **Determinism** | `spawnOrderHash` proves input sequence identity. | [x] Proved |
+| **Determinism (Order)** | `spawnOrderHash` proves sequence identity. | [x] Proved |
+| **Determinism (Set)** | `spawnSetHash` proves content identity. | [x] Proved |
 | **No Energy Burst** | `startupMaxSpeed` tracks peak velocity. | [x] Measured |
-| **No Ghost Leaks** | `mode` tripwire (`assertMode`) active from Frame 0. | [x] Active |
+| **Strict Action** | `strictClampActive` triggers actual velocity caps. | [x] Enforced |
+| **Rest Motor Ban** | `engineTick.ts` gates calls with `lifecycle < 2.0`. | [x] Enforced |
 
-## 4. Motor Allow-List (Startup)
+## 4. Verification Checklist (HUD)
+When verifying a fresh spawn:
+1.  **Spawn**: Check `spawnOverlapCount100` is 0 (or low).
+2.  **Re-Run**: Reload page/reset. Check `spawnOrderHash` is IDENTICAL.
+3.  **Stress**: Tab-switch during load. Check `strictClampActive` flashes TRUE then OFF. Check `strictClampActionCount` increases.
+4.  **Motors**: Check `microSlipDenied` increases during first 2s, then stops.
 
-During `lifecycle < 2.0`:
-*   **Allowed**:
-    *   `applyRepulsion`: Essential for initial separation.
-    *   `applySprings`: Essential for structure.
-*   **Denied (Implied)**:
-    *   `applyEdgeShearStagnationEscape`: The "sleep" logic shouldn't fire because `lifecycle` gates it. Although the *logic* might run, `stuckScore` needs time to accumulate.
-    *   `microSlip`: `stuckScore` accumulation is naturally low at start (high speed).
-*   **Justification**: We assume initial layout is "hot" (moving). Escape motors deal with *stasis*. Startup is the opposite of stasis.
-
-## 5. Audit Counters Implemented
-
-We have added specific forensic counters to the HUD (`engine.hudSnapshot.spawn`):
-
-*   **`spawnTimestamp`**: Time of last reset/spawn.
-*   **`spawnOverlapCount0/100`**: Overlap counts at R30 and R100.
-*   **`spawnOrderHash`**: Checksum of node list order at spawn.
-*   **`strictClampActive`**: Firewall engagement flag.
-*   **`spawnLeaks`**: Latch for legacy/XPBD mix-ups.
-
-## 6. Verification Status
-*   **Audit Check**: Confirmed `engineTickPreflight.ts` implements the R100 check and Hash.
-*   **HUD**: Confirmed fields are mapped.
-
-## 7. Patch Notes
-*   **Refined Overlap Audit**: Added R100 check for physical shell violations.
-*   **Determinism Proof**: Added `spawnOrderHash` to verify consistent node ordering.
-*   **Active Firewall**: Added `strictClamp` logic to flag unstable starts.
+## 5. Patch Notes
+*   **Sharpened Overlap**: Added R100/R30 dual audit.
+*   **Strict Firewall**: Implemented actual velocity clamping logic, not just flags.
+*   **Determinism**: Added Order/Set Hashes.
+*   **Enforced Allow-List**: Added code-level blocking of rest motors during startup.

@@ -78,6 +78,13 @@ export type DebugStats = {
         spawnOrderHash: number;
         strictClampActive: boolean;
         strictClampTicksLeft: number;
+        strictClampActionAppliedCount: number; // New
+        peakOverlapFirst2s30: number; // New
+        peakOverlapFirst2s100: number; // New
+        spawnSetHash: number; // New
+        orderHashChanged: boolean; // New
+        microSlipDeniedByStartup: number; // New
+        escapeDeniedByStartup: number; // New
     };
 
     // Settle Diagnostics
@@ -179,6 +186,13 @@ export const createDebugStats = (): DebugStats => ({
         spawnOrderHash: 0,
         strictClampActive: false,
         strictClampTicksLeft: 0,
+        strictClampActionAppliedCount: 0,
+        peakOverlapFirst2s30: 0,
+        peakOverlapFirst2s100: 0,
+        spawnSetHash: 0,
+        orderHashChanged: false,
+        microSlipDeniedByStartup: 0,
+        escapeDeniedByStartup: 0,
     },
 
     outlierCount: 0,

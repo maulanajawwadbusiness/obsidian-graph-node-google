@@ -694,10 +694,18 @@ export const runPhysicsTickLegacy = (engine: PhysicsEngineTickContext, dtIn: num
     const quarantineActive = policyResult.quarantineStrength > 0.5;
 
     if (microEnabled && !engine.config.debugDisableAllVMods && !quarantineActive) {
+        // FORENSIC: Enforced Allow-List for Startup Motors
+        // During first 2.0s, we deny "stagnation escape" and "microslip"
+        const denyStartupMotors = engine.lifecycle < 2.0;
+
         if (!engine.config.debugDisableMicroSlip) {
             // Dense-core velocity de-locking (micro-slip) - breaks rigid-body lock
-            assertMode(engine, debugStats, 'applyDenseCoreVelocityDeLocking');
-            applyDenseCoreVelocityDeLocking(engine as any, nodeList, motionPolicy, debugStats);
+            if (!denyStartupMotors) {
+                assertMode(engine, debugStats, 'applyDenseCoreVelocityDeLocking');
+                applyDenseCoreVelocityDeLocking(engine as any, nodeList, motionPolicy, debugStats);
+            } else {
+                if (debugStats) debugStats.microSlipDeniedByStartup = (debugStats.microSlipDeniedByStartup || 0) + 1;
+            }
         }
 
         // Static friction bypass - breaks zero-velocity rest state
@@ -713,8 +721,12 @@ export const runPhysicsTickLegacy = (engine: PhysicsEngineTickContext, dtIn: num
         applyLocalPhaseDiffusion(engine as any, nodeList, motionPolicy, debugStats);
 
         // Low-force stagnation escape - breaks rest-position preference (edge shear version)
-        assertMode(engine, debugStats, 'applyEdgeShearStagnationEscape');
-        applyEdgeShearStagnationEscape(engine as any, nodeList, motionPolicy, debugStats);
+        if (!denyStartupMotors) {
+            assertMode(engine, debugStats, 'applyEdgeShearStagnationEscape');
+            applyEdgeShearStagnationEscape(engine as any, nodeList, motionPolicy, debugStats);
+        } else {
+            if (debugStats) debugStats.escapeDeniedByStartup = (debugStats.escapeDeniedByStartup || 0) + 1;
+        }
 
         // Dense-core inertia relaxation - erases momentum memory in jammed dots
         assertMode(engine, debugStats, 'applyDenseCoreInertiaRelaxation');

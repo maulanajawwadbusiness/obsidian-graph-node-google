@@ -23,8 +23,15 @@ export type PhysicsHudSnapshot = {
     spawnNaNCount?: number;
     spawnLeaks?: boolean;
     spawnOrderHash?: number;
+    spawnSetHash?: number;
+    orderHashChanged?: boolean;
     strictClampActive?: boolean;
     strictClampTicksLeft?: number;
+    strictClampActionCount?: number;
+    spawnPeakOverlap30?: number;
+    spawnPeakOverlap100?: number;
+    microSlipDenied?: number;
+    escapeDenied?: number;
     // PBD Disconnect Forensics
     maxPosDeltaConstraint?: number;
     maxVelDeltaConstraint?: number;

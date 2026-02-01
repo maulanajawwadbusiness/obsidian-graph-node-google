@@ -83,6 +83,11 @@ export type PhysicsHudSnapshot = {
     xpbdSpringRestMaxPx?: number;
     xpbdSpringRestAvgPx?: number;
 
+    // XPBD Iteration Budget (Run 1)
+    xpbdIterationsIdle?: number;
+    xpbdIterationsDrag?: number;
+    xpbdIterationsUsed?: number;
+
     // Mini Run 6: Calibration Telemetry
     xpbdComplianceUsed?: number;  // Actual compliance value in use
     xpbdAlphaAvg?: number;  // Average alpha (compliance/dt²) for verification

@@ -295,6 +295,11 @@ export const updateHudSnapshot = (
         xpbdSpringRestMaxPx: engine.xpbdConstraintStats?.maxRest ?? 0,
         xpbdSpringRestAvgPx: engine.xpbdConstraintStats?.avgRest ?? 0,
 
+        // Run 1: Iteration Budget (Placeholder)
+        xpbdIterationsIdle: 1,
+        xpbdIterationsDrag: 1,
+        xpbdIterationsUsed: 1,
+
         // Mini Run 4: Validation
         xpbdSpringSkipped: engine.xpbdFrameAccum?.springs.skipped ?? 0,
         xpbdSpringSingularity: engine.xpbdFrameAccum?.springs.singularity ?? 0,

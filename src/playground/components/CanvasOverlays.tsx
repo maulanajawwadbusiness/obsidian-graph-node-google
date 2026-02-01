@@ -451,6 +451,7 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
                                             move: {(hud.xpbdFirstMovePx || 0).toFixed(1)} px ({hud.xpbdFirstMovePhase || 'none'} / {hud.xpbdFirstMoveNodeId || '-'})<br />
                                             cap: {hud.xpbdFirstCapHit ? 'Y' : 'N'} | α: {(hud.xpbdFirstAlpha || 0).toExponential(2)} | wSum: {(hud.xpbdFirstWSum || 0).toFixed(2)}<br />
                                             rest: {(hud.xpbdSpringRestMinPx || 0).toFixed(0)}-{(hud.xpbdSpringRestMaxPx || 0).toFixed(0)} (μ={(hud.xpbdSpringRestAvgPx || 0).toFixed(0)})<br />
+                                            iter: {hud.xpbdIterationsUsed || 1} (cfg: {hud.xpbdIterationsIdle || 1}/{hud.xpbdIterationsDrag || 1})<br />
                                             solve: {(hud.xpbdSpringSolveMs || 0).toFixed(2)} ms<br />
                                             <span style={{ fontSize: '0.9em', color: '#888' }}>
                                                 drop: {hud.xpbdSpringSkipped}/{hud.xpbdSpringSingularity} | sync: {hud.xpbdGhostSyncs}<br />

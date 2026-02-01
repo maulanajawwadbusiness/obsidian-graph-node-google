@@ -282,6 +282,9 @@ const solveXPBDEdgeConstraints = (engine: PhysicsEngineTickContext, dt: number) 
     const draggedNodePinned = engine.draggedNodeId !== null;
     if (draggedNodePinned) pinnedCount++;  // Dragged node is always pinned
 
+    // TUG RUN PART 2: Track constraints involving dragged node (local tug activity)
+    let dragConstraintCount = 0;
+
     // Solver Loop (Single Iteration)
     for (let i = 0; i < constraints.length; i++) {
         const c = constraints[i];
@@ -336,6 +339,11 @@ const solveXPBDEdgeConstraints = (engine: PhysicsEngineTickContext, dt: number) 
         // Mini Run 7 Part 4: Count pinned nodes (avoid double-counting dragged node)
         if (wA === 0 && nA.id !== engine.draggedNodeId) pinnedCount++;
         if (wB === 0 && nB.id !== engine.draggedNodeId) pinnedCount++;
+
+        // TUG RUN PART 2: Count constraints involving dragged node
+        if (nA.id === engine.draggedNodeId || nB.id === engine.draggedNodeId) {
+            dragConstraintCount++;
+        }
 
         // Only skip if BOTH nodes are pinned (no degrees of freedom)
         if (wA + wB === 0) {
@@ -416,6 +424,7 @@ const solveXPBDEdgeConstraints = (engine: PhysicsEngineTickContext, dt: number) 
         // Mini Run 7 Part 4: Drag coupling telemetry
         s.pinnedCount = pinnedCount;
         s.draggedNodePinned = draggedNodePinned;
+        s.dragConstraintCount = dragConstraintCount;  // TUG RUN PART 2
     }
 };
 
@@ -474,6 +483,7 @@ export const runPhysicsTickXPBD = (engine: PhysicsEngineTickContext, dtIn: numbe
         engine.xpbdFrameAccum.springs.dragLagMax = 0;
         engine.xpbdFrameAccum.springs.pinnedCount = 0;  // Mini Run 7
         engine.xpbdFrameAccum.springs.draggedNodePinned = false;  // Mini Run 7
+        engine.xpbdFrameAccum.springs.dragConstraintCount = 0;  // TUG RUN
         engine.xpbdFrameAccum.springs.firstJumpPx = 0;
         engine.xpbdFrameAccum.springs.firstJumpPhase = 'none';
         engine.xpbdFrameAccum.springs.firstJumpNodeId = null;

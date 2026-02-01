@@ -122,6 +122,7 @@ export type PhysicsEngineTickContext = {
             // Mini Run 7: Drag Coupling Telemetry
             pinnedCount: number;  // Number of nodes with invMass=0 this frame
             draggedNodePinned: boolean;  // Is the dragged node currently pinned?
+            dragConstraintCount: number;  // TUG RUN: Constraints involving dragged node (local tug)
             firstJumpPx: number;
             firstJumpPhase: 'integrate' | 'solver' | 'none';
             firstJumpNodeId: string | null;

@@ -247,4 +247,8 @@ export interface ForceConfig {
   debugForceStiffSprings?: boolean; // Set compliance=0
   debugForceRepulsion?: boolean;    // Boost repulsion/contact radius
   debugXPBDCanary?: boolean;
+
+  // XPBD Calibration
+  xpbdLinkCompliance?: number; // Inverse stiffness (m/N). 0 = rigid.
+  xpbdMaxCorrPerConstraintPx?: number; // Safety cap for single-frame correction
 }

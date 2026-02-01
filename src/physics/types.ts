@@ -241,4 +241,9 @@ export interface ForceConfig {
   debugDisableConstraints?: boolean;
   debugDisableReconcile?: boolean;
   debugDisableAllVMods?: boolean;
+
+  // XPBD Proof-of-Life Toggles
+  debugForceStiffSprings?: boolean; // Set compliance=0
+  debugForceRepulsion?: boolean;    // Boost repulsion/contact radius
+  debugXPBDCanary?: boolean;
 }

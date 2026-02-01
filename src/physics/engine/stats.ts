@@ -80,6 +80,23 @@ export type DebugStats = {
     determinismChecksum: string;
     rebaseCount: number;
     maxAbsPos: number;
+
+    // XPBD Forensics
+    xpbd: {
+        springConstraintsCount: number;
+        springCorrAvgPx: number;
+        springCorrMaxPx: number;
+        springErrorAvgPx: number;
+        springErrorMaxPx: number;
+        springIterations: number;
+
+        repelPairsChecked: number;
+        repelPairsSolved: number;
+        overlapCount: number;
+        repelCorrAvgPx: number;
+        repelCorrMaxPx: number;
+        repelSingularityFallbackCount: number;
+    };
 };
 
 export const createDebugStats = (): DebugStats => ({
@@ -142,6 +159,21 @@ export const createDebugStats = (): DebugStats => ({
     determinismChecksum: '0000',
     rebaseCount: 0,
     maxAbsPos: 0,
+
+    xpbd: {
+        springConstraintsCount: 0,
+        springCorrAvgPx: 0,
+        springCorrMaxPx: 0,
+        springErrorAvgPx: 0,
+        springErrorMaxPx: 0,
+        springIterations: 0,
+        repelPairsChecked: 0,
+        repelPairsSolved: 0,
+        overlapCount: 0,
+        repelCorrAvgPx: 0,
+        repelCorrMaxPx: 0,
+        repelSingularityFallbackCount: 0,
+    },
 });
 
 export const getPassStats = (stats: DebugStats, name: string): PassStats => {

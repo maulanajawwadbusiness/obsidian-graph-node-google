@@ -191,5 +191,29 @@ export const updateHudSnapshot = (
         constraintCorrectionAvg: nodeCount > 0 ? corrections / nodeCount : 0,
         constraintCorrectionMax: stats.passes.SpacingConstraints?.correctionMax || 0,
         repulsionEvents: stats.safety.repulsionClampedCount, // Proxy for now, or add real count in forces
+
+        // XPBD Proof-of-Life
+        xpbdSpringCounts: {
+            count: stats.xpbd.springConstraintsCount,
+            iter: stats.xpbd.springIterations
+        },
+        xpbdSpringCorr: {
+            avg: stats.xpbd.springCorrAvgPx,
+            max: stats.xpbd.springCorrMaxPx
+        },
+        xpbdSpringError: {
+            avg: stats.xpbd.springErrorAvgPx,
+            max: stats.xpbd.springErrorMaxPx
+        },
+        xpbdRepelCounts: {
+            checked: stats.xpbd.repelPairsChecked,
+            solved: stats.xpbd.repelPairsSolved,
+            overlap: stats.xpbd.overlapCount
+        },
+        xpbdRepelCorr: {
+            avg: stats.xpbd.repelCorrAvgPx,
+            max: stats.xpbd.repelCorrMaxPx
+        },
+        xpbdRepelSingularities: stats.xpbd.repelSingularityFallbackCount,
     };
 };

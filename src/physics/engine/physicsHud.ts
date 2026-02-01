@@ -42,6 +42,14 @@ export type PhysicsHudSnapshot = {
     constraintCorrectionMax?: number; // Peak correction this frame
     repulsionEvents?: number;         // Number of repulsion triggers
 
+    // XPBD Proof-of-Life
+    xpbdSpringCounts?: { count: number; iter: number };
+    xpbdSpringCorr?: { avg: number; max: number };
+    xpbdSpringError?: { avg: number; max: number };
+    xpbdRepelCounts?: { checked: number; solved: number; overlap: number };
+    xpbdRepelCorr?: { avg: number; max: number };
+    xpbdRepelSingularities?: number;
+
     escapeFiresPerSec?: number;
     escapeLoopSuspectCount?: number;
     lastInjector?: string;

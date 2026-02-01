@@ -384,6 +384,21 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
                                                         No V-Mods
                                                     </label>
                                                 </div>
+                                                <strong style={{ fontWeight: 700, fontSize: '11px', color: '#88ff88', marginTop: '6px', display: 'block' }}>XPBD FORCING</strong>
+                                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2px' }}>
+                                                    <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '10px', cursor: 'pointer' }}>
+                                                        <input type="checkbox" checked={!!config.debugForceStiffSprings} onChange={(e) => onConfigChange('debugForceStiffSprings', e.target.checked)} />
+                                                        Stiff Links
+                                                    </label>
+                                                    <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '10px', cursor: 'pointer' }}>
+                                                        <input type="checkbox" checked={!!config.debugForceRepulsion} onChange={(e) => onConfigChange('debugForceRepulsion', e.target.checked)} />
+                                                        Force Repel
+                                                    </label>
+                                                    <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '10px', cursor: 'pointer' }}>
+                                                        <input type="checkbox" checked={!!config.debugXPBDCanary} onChange={(e) => onConfigChange('debugXPBDCanary', e.target.checked)} />
+                                                        Canary Shift
+                                                    </label>
+                                                </div>
                                             </div>
                                         )}
                                     </div>
@@ -486,6 +501,18 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
                                             Hub Flips: {hud.hubFlipCount || 0} (N={hud.hubNodeCount || 0})<br />
                                             Degrade Flips: {hud.degradeFlipCount || 0}<br />
                                             Pop Score: {(hud.lawPopScore || 0).toFixed(4)}<br />
+                                        </div>
+                                    )}
+                                    {hud && (
+                                        <div style={{ marginTop: '4px', paddingTop: '4px', borderTop: '1px solid #444', color: '#adff2f' }}>
+                                            <strong>XPBD Proof-of-Life</strong><br />
+                                            Springs: {hud.xpbdSpringCounts?.count || 0} / {hud.xpbdSpringCounts?.iter || 0}it<br />
+                                            - Corr: {hud.xpbdSpringCorr?.avg.toFixed(3)} (Max: {hud.xpbdSpringCorr?.max.toFixed(2)})<br />
+                                            - Err: {hud.xpbdSpringError?.avg.toFixed(3)} (Max: {hud.xpbdSpringError?.max.toFixed(2)})<br />
+                                            Repulsion: {hud.xpbdRepelCounts?.checked || 0}chk / {hud.xpbdRepelCounts?.solved || 0}solv<br />
+                                            - Overlap: {hud.xpbdRepelCounts?.overlap || 0}<br />
+                                            - Corr: {hud.xpbdRepelCorr?.avg.toFixed(3)} (Max: {hud.xpbdRepelCorr?.max.toFixed(2)})<br />
+                                            - Sing: {hud.xpbdRepelSingularities || 0}
                                         </div>
                                     )}
                                 </div>

@@ -1,7 +1,8 @@
 # PHYSICS ATLAS: The Knife-Sharp Entry Point
 **Status:** ALIVE
 **Maintainer:** Physics Core Team
-**Truth Source:** `docs/acceptance_good_springmass_in_hand.md`
+**Truth Source (Goal):** `docs/acceptance_good_springmass_in_hand.md`
+**Truth Source (Code):** `docs/handoff_xpbd_implementation_2026_02_01.md`
 
 > **STOP.** If you are new to this physics engine, **DO NOT TOUCH CODE** until you have read the [Acceptance Spec](acceptance_good_springmass_in_hand.md) and verified T1–T7 in the Playground.
 
@@ -56,9 +57,9 @@ Every subsystem has a forensic trace. Use this map to find the "Why".
 | :--- | :--- | :--- | :--- |
 | **"Node teleports when I let go"** | Ghost Velocity mismatch (prevX vs x) | **[G] Ghost Vel** | `maxPrevGap` > 100px |
 | **"Graph vibrates at rest"** | Solver fighting or Damping failure | **[C] Magnitudes** | `jitterAvg` > 0.05 |
-| **"Explosion on Tab Switch"** | DT Firewall breached | **[E] XPBD/DT** | `dtClampCount` (must inc) |
+| **"Explosion on Tab Switch"** | DT Firewall breached | **[E] XPBD Architecture** | `dtClampCount` (must inc) |
 | **"Nodes merge like soup"** | Repulsion too weak / Radius mismatch | **[D] Repulsion** | `nearOverlapCount` stays high |
-| **"Motion is mushy/slow"** | Drag Latency or Over-damping | **[J] Acceptance (T1)** | `springCorrMax` < 1.0 (dead) |
+| **"Motion is mushy/slow"** | Drag Latency or Over-damping | **[J] Acceptance (T1)** | `maxAbsC` < 1.0 (dead) |
 | **"Spawn flings nodes away"** | Startup hygiene (Overlap strictness) | **[I] Startup** | `startupMaxSpeed` > 2000 |
 
 ---
@@ -68,7 +69,7 @@ These are the **Hard Invariants**. Breaking them breaks the engine.
 
 1.  **Deterministic Quarantine**: The startup phase (< 2.0s) MUST be deterministic to allow identical hydration. Randomness is seeded/hashed.
 2.  **DT Firewall**: If `dt > 200ms`, the engine MUST clamp or slice. Never integrate a 1s delta.
-3.  **Visual Truth**: `node.x/y` is ONLY written by the integrator or the user (drag). Render loop must NOT mutate physics state.
+3.  **Visual Truth**: `node.x/y` is ONLY written by the integrator, the XPBD Constraint Solver, or the user (drag). Render loop must NOT mutate physics state.
 4.  **Unit Invariance**: Physics runs in **World Space**. Zoom level (Canvas transform) must NOT affect force magnitudes.
 
 ## 5. Maintenance

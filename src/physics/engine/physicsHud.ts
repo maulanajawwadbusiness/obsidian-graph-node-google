@@ -175,6 +175,7 @@ export type PhysicsHudSnapshot = {
     propNodesUpdated?: number;
     propTotalNodes?: number;
     propMaxAbsC?: number;
+    propMaxAbsCFirst?: number; // Run 3: Convergence
     propMovedNodes?: number;
     propMovedHop1?: number;
     propMovedHop2?: number;

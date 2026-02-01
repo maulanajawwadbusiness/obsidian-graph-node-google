@@ -326,6 +326,7 @@ export const updateHudSnapshot = (
         propNodesUpdated: spacingStride > 1 ? Math.ceil(nodeCount / spacingStride) : nodeCount,
         propTotalNodes: nodeCount,
         propMaxAbsC: engine.xpbdFrameAccum?.springs.maxAbsC ?? 0,
+        propMaxAbsCFirst: engine.xpbdFrameAccum?.springs.maxAbsCFirst ?? 0,
         propMovedNodes: 0,
         propMovedHop1: 0,
         propMovedHop2: 0,

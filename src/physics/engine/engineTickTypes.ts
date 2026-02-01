@@ -154,6 +154,7 @@ export type PhysicsEngineTickContext = {
             edgesSelectedButUnprocessed: number;
             earlyBreakCount: number;
             maxAbsC: number;
+            maxAbsCFirst: number; // Run 3: Convergence
         };
         repel: { checked: number; solved: number; overlap: number; corrSum: number; sing: number };
         edgeConstraintsExecuted: number;

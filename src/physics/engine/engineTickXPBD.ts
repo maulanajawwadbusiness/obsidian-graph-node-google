@@ -408,10 +408,12 @@ const solveXPBDEdgeConstraints = (engine: PhysicsEngineTickContext, dt: number) 
         const STAGNATION_THRESHOLD_PX = 0.05;
         if (iterCorrMax < STAGNATION_THRESHOLD_PX) {
             earlyBreak = true;
-            if (engine.xpbdFrameAccum) engine.xpbdFrameAccum.springs.maxAbsC = iterAbsCMax;
+            if (iter === 0 && engine.xpbdFrameAccum) engine.xpbdFrameAccum.springs.maxAbsCFirst = iterAbsCMax;
+        if (engine.xpbdFrameAccum) engine.xpbdFrameAccum.springs.maxAbsC = iterAbsCMax;
             break;
         }
 
+        if (iter === 0 && engine.xpbdFrameAccum) engine.xpbdFrameAccum.springs.maxAbsCFirst = iterAbsCMax;
         if (engine.xpbdFrameAccum) engine.xpbdFrameAccum.springs.maxAbsC = iterAbsCMax;
 
         prevIterCorrMax = iterCorrMax;
@@ -522,6 +524,9 @@ export const runPhysicsTickXPBD = (engine: PhysicsEngineTickContext, dtIn: numbe
         engine.xpbdFrameAccum.springs.firstWSum = 0;
         engine.xpbdFrameAccum.springs.firstPreIntegrateJumpPx = 0;
         engine.xpbdFrameAccum.springs.firstPreIntegrateNodeId = null;
+        engine.xpbdFrameAccum.springs.earlyBreakCount = 0;
+        engine.xpbdFrameAccum.springs.maxAbsC = 0;
+        engine.xpbdFrameAccum.springs.maxAbsCFirst = 0;
     }
 
     if (engine.xpbdFrameAccum && engine.xpbdFirstPairPrev && firstAId && firstBId) {
@@ -707,3 +712,4 @@ export const runPhysicsTickXPBD = (engine: PhysicsEngineTickContext, dtIn: numbe
 
     updateHudSnapshot(engine, getNowMs(), dtRawMs, nodeList, debugStats, 1, 'moving');
 };
+

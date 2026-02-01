@@ -504,7 +504,8 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
                                             <strong>Propagation Proof</strong><br />
                                             Edges: {hud.propEdgesSolved || '-'}/{hud.propTotalEdges || '-'} | Nodes: {hud.propNodesUpdated || '-'}/{hud.propTotalNodes || '-'}
                                             {((hud.propEdgesSolved || 0) >= (hud.propTotalEdges || 1) * 0.98 && (hud.propNodesUpdated || 0) >= (hud.propTotalNodes || 1) * 0.98) ? <span style={{ color: '#0f0', backgroundColor: '#030', padding: '0 2px', marginLeft: '4px', fontSize: '0.8em' }}>COVERAGE OK</span> : ''}<br />
-                                            MaxC: {(hud.propMaxAbsC || 0).toFixed(2)}px<br />
+                                            MaxC: {(hud.propMaxAbsC || 0).toFixed(2)}px
+                                            {((hud.propMaxAbsC || 0) < (hud.propMaxAbsCFirst || 0) * 0.95 && (hud.xpbdIterationsUsed || 1) > 1) ? <span style={{ color: '#0ff', backgroundColor: '#044', padding: '0 2px', marginLeft: '4px', fontSize: '0.8em' }}>CONVERGING</span> : ''}<br />
                                             Moved: {hud.propMovedNodes || '-'} (H1:{hud.propMovedHop1 || '-'} H2:{hud.propMovedHop2 || '-'} H3+:{hud.propMovedHop3Plus || '-'})<br />
                                         </div>
                                     )}

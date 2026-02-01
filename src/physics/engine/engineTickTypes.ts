@@ -119,6 +119,9 @@ export type PhysicsEngineTickContext = {
             ghostVelEvents: number;
             releaseGhostEvents: number;
             dragLagMax: number;
+            // Mini Run 7: Drag Coupling Telemetry
+            pinnedCount: number;  // Number of nodes with invMass=0 this frame
+            draggedNodePinned: boolean;  // Is the dragged node currently pinned?
             firstJumpPx: number;
             firstJumpPhase: 'integrate' | 'solver' | 'none';
             firstJumpNodeId: string | null;

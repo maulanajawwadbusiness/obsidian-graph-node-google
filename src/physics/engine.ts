@@ -182,6 +182,8 @@ export class PhysicsEngine {
             ghostVelEvents: 0,
             releaseGhostEvents: 0,
             dragLagMax: 0,
+            pinnedCount: 0,  // Mini Run 7
+            draggedNodePinned: false,  // Mini Run 7
             firstJumpPx: 0,
             firstJumpPhase: 'none',
             firstJumpNodeId: null,
@@ -219,6 +221,8 @@ export class PhysicsEngine {
                 ghostVelEvents: 0,
                 releaseGhostEvents: 0,
                 dragLagMax: 0,
+                pinnedCount: 0,  // Mini Run 7
+                draggedNodePinned: false,  // Mini Run 7
                 firstJumpPx: 0,
                 firstJumpPhase: 'none',
                 firstJumpNodeId: null,

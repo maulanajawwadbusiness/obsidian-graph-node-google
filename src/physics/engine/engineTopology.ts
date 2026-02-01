@@ -40,6 +40,10 @@ export type PhysicsEngineTopologyContext = {
     wakeAll: () => void;
     invalidateWarmStart: (reason: string) => void;
     resetStartupStats: () => void;
+
+    // XPBD Inventory
+    xpbdConstraints: import('./engineTickTypes').XPBDConstraint[];
+    xpbdConstraintsDirty: boolean;
 };
 
 export const addNodeToEngine = (engine: PhysicsEngineTopologyContext, node: PhysicsNode) => {
@@ -106,6 +110,7 @@ export const addLinkToEngine = (engine: PhysicsEngineTopologyContext, link: Phys
 
     // FIX D: Scale - Invalidate Cache
     engine.triangleCache = null;
+    engine.xpbdConstraintsDirty = true;
 };
 
 export const invalidateWarmStart = (engine: PhysicsEngineTopologyContext, reason: string) => {
@@ -131,6 +136,8 @@ export const clearEngineState = (engine: PhysicsEngineTopologyContext) => {
     engine.sleepingList.length = 0;
     engine.nodeListDirty = true;
     engine.correctionAccumCache.clear();
+    engine.xpbdConstraints = [];
+    engine.xpbdConstraintsDirty = true;
     engine.topologyLinkKeys.clear();
     engine.nodeLinkCounts.clear();
     engine.adjacencyMap.clear();

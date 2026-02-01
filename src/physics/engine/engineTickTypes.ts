@@ -2,6 +2,7 @@ import type { PhysicsLink, PhysicsNode, ForceConfig } from '../types';
 import type { DebugStats } from './stats';
 import type { PhysicsHudHistory, PhysicsHudSnapshot } from './physicsHud';
 import type { TimePolicy } from './dtPolicy';
+import type { XpbdSpatialHash } from './xpbdSpatialHash';
 
 export type PhysicsEngineTickContext = {
     nodes: Map<string, PhysicsNode>;
@@ -87,4 +88,5 @@ export type PhysicsEngineTickContext = {
     // FIX D: Scale & Determinism
     localDensityCache: Map<string, number>;
     onWorldShift?: (dx: number, dy: number) => void;
+    xpbdSpatialHash: XpbdSpatialHash;
 };

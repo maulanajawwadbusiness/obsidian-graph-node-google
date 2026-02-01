@@ -30,6 +30,15 @@ export type DebugStats = {
     passes: Record<string, PassStats>;
     safety: SafetyStats;
     expansionResistance: ExpansionResistanceStats;
+    xpbd: {
+        springCorrectionSum: number;
+        springCorrectionMax: number;
+        springConstraintCount: number;
+        repelCorrectionSum: number;
+        repelCorrectionMax: number;
+        repelPairCount: number;
+        repelOverlapCount: number;
+    };
     dtSkew?: { min: number; max: number };
     correctionConflictCount: number;
     corrSignFlipCount: number; // New: Oscillation Metric
@@ -101,6 +110,15 @@ export const createDebugStats = (): DebugStats => ({
         skippedHubCount: 0,
         avgHubSpeedBefore: 0,
         avgHubSpeedAfter: 0,
+    },
+    xpbd: {
+        springCorrectionSum: 0,
+        springCorrectionMax: 0,
+        springConstraintCount: 0,
+        repelCorrectionSum: 0,
+        repelCorrectionMax: 0,
+        repelPairCount: 0,
+        repelOverlapCount: 0,
     },
     correctionConflictCount: 0,
     corrSignFlipCount: 0,

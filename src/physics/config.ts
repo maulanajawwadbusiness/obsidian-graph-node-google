@@ -119,6 +119,15 @@ export const DEFAULT_PHYSICS_CONFIG: ForceConfig = {
     springDeadZone: 0.15,  // ±15% of rest length
 
     // ---------------------------------------------------------------------------
+    // ANCHOR: XPBD Constraints (Run 1-2)
+    // ---------------------------------------------------------------------------
+    xpbdEnabled: true,
+    xpbdSpringCompliance: 0.00005,
+    xpbdSpringIterations: 2,
+    xpbdRepulsionCompliance: 0.00002,
+    xpbdRepulsionIterations: 1,
+
+    // ---------------------------------------------------------------------------
     // ANCHOR: Soft Spacing (Personal Space)
     // ---------------------------------------------------------------------------
     // Soft minimum distance between all nodes (personal space, not collision)
@@ -170,4 +179,7 @@ export const DEFAULT_PHYSICS_CONFIG: ForceConfig = {
     debugStall: false,
     enableMicroDrift: false, // Fix #16: Stable by default
     debugAllowEarlyExpansion: false,
+    debugXpbdCanary: false,
+    debugForceStiffSprings: false,
+    debugForceRepulsion: false,
 };

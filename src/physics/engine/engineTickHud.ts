@@ -44,6 +44,10 @@ export const updateHudSnapshot = (
     const corrections = stats.passes.Corrections?.correction ?? 0;
     const jitterSample = nodeCount > 0 ? corrections / nodeCount : 0;
     const conflictFrame = stats.correctionConflictCount > 0;
+    const springCount = stats.xpbd.springConstraintCount || 0;
+    const repelCount = stats.xpbd.repelPairCount || 0;
+    const springAvg = springCount > 0 ? stats.xpbd.springCorrectionSum / springCount : 0;
+    const repelAvg = repelCount > 0 ? stats.xpbd.repelCorrectionSum / repelCount : 0;
 
     stats.safety.correctionBudgetHits = 0;
     stats.safety.corrClippedTotal = 0;
@@ -160,6 +164,13 @@ export const updateHudSnapshot = (
         nearOverlapCount: stats.safety.nearOverlapCount,
         repulsionMaxMag: stats.safety.repulsionMaxMag,
         repulsionClampedCount: stats.safety.repulsionClampedCount,
+        springCorrAvg: springAvg,
+        springCorrMax: stats.xpbd.springCorrectionMax,
+        springConstraintCount: springCount,
+        repelCorrAvg: repelAvg,
+        repelCorrMax: stats.xpbd.repelCorrectionMax,
+        repelPairCount: repelCount,
+        repelOverlapCount: stats.xpbd.repelOverlapCount,
 
         neighborReorderRate: stats.neighborReorderRate,
         hubFlipCount: stats.hubFlipCount,

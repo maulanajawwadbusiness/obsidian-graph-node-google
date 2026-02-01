@@ -71,6 +71,13 @@ export type PhysicsHudSnapshot = {
     nearOverlapCount?: number;
     repulsionMaxMag?: number;
     repulsionClampedCount?: number;
+    springCorrAvg?: number;
+    springCorrMax?: number;
+    springConstraintCount?: number;
+    repelCorrAvg?: number;
+    repelCorrMax?: number;
+    repelPairCount?: number;
+    repelOverlapCount?: number;
 
     // Forensic: Stability
     neighborReorderRate?: number;
@@ -131,6 +138,13 @@ export const createInitialPhysicsHudSnapshot = (): PhysicsHudSnapshot => ({
     calmPercent: 0,
     diffusionGate: 0,
     settleBlockers: [],
+    springCorrAvg: 0,
+    springCorrMax: 0,
+    springConstraintCount: 0,
+    repelCorrAvg: 0,
+    repelCorrMax: 0,
+    repelPairCount: 0,
+    repelOverlapCount: 0,
 });
 
 export const createInitialPhysicsHudHistory = (): PhysicsHudHistory => ({

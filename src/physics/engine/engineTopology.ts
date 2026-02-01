@@ -44,6 +44,7 @@ export type PhysicsEngineTopologyContext = {
     // XPBD Inventory
     xpbdConstraints: import('./engineTickTypes').XPBDConstraint[];
     xpbdConstraintsDirty: boolean;
+    xpbdConstraintStats?: { minRest: number; maxRest: number; avgRest: number };
 };
 
 export const addNodeToEngine = (engine: PhysicsEngineTopologyContext, node: PhysicsNode) => {
@@ -138,6 +139,7 @@ export const clearEngineState = (engine: PhysicsEngineTopologyContext) => {
     engine.correctionAccumCache.clear();
     engine.xpbdConstraints = [];
     engine.xpbdConstraintsDirty = true;
+    engine.xpbdConstraintStats = undefined;
     engine.topologyLinkKeys.clear();
     engine.nodeLinkCounts.clear();
     engine.adjacencyMap.clear();

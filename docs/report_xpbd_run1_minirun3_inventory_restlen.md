@@ -13,6 +13,7 @@ Implement the **Edge Constraint Inventory** and a deterministic **Rest-Length Po
 ### 2. Topology Tracing
 -   Updated `addLinkToEngine` and `clearEngineState` in `engineTopology.ts` to set `xpbdConstraintsDirty = true`.
 -   **Fix**: Correctly updated `PhysicsEngineTopologyContext` type definition to include XPBD fields.
+-   **Fix**: `clearEngineState` now explicitly resets `xpbdConstraintStats` to prevent stale HUD data on reset.
 -   This ensures the inventory is rebuilt *only* when the graph connectivity changes (verified via `xpbdConstraintsDirty` check in tick).
 
 ### 3. Inventory Rebuild & Policy

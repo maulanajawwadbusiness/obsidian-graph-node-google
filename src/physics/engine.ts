@@ -15,6 +15,9 @@ export class PhysicsEngine {
     public links: PhysicsLink[] = [];
     public config: ForceConfig;
 
+    // Run 2: Stable Engine UID
+    public uid: string = Math.random().toString(36).slice(2, 8);
+
     // DT Policy (Time Hardening)
     public timePolicy = new TimePolicy();
 
@@ -27,9 +30,6 @@ export class PhysicsEngine {
     public worldHeight: number = 2000;
 
     // Interaction State
-    // Forensic: Engine Identity
-    public readonly uid = Math.random().toString(36).slice(2, 7);
-
     public draggedNodeId: string | null = null;
     public dragTarget: { x: number, y: number } | null = null;
     public grabOffset: { x: number, y: number } | null = null; // Fix 18: Grab Offset (Prevents Jump)

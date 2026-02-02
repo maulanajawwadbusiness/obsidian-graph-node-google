@@ -331,19 +331,15 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
     };
 
     const handleXpbdDampingPreset = (preset: 'SNAPPY' | 'BALANCED' | 'SMOOTH') => {
-        const engine = engineRef.current;
-        console.log(`[Trace] Preset Click: ${preset}`, {
-            engineUid: engine ? engine.uid : 'NULL',
-            targetValue: ({ SNAPPY: 0.12, BALANCED: 0.20, SMOOTH: 0.32 })[preset],
-            timestamp: performance.now()
-        });
-
         const presetValues = {
             SNAPPY: 0.12,
             BALANCED: 0.20,
             SMOOTH: 0.32
         };
-        handleConfigChange('xpbdDamping', presetValues[preset]);
+        const value = presetValues[preset];
+        const engineUid = (engineRef.current as any).uid || 'unknown';
+        console.log(`[PresetClick] ${preset} -> ${value} (Engine UID: ${engineUid})`);
+        handleConfigChange('xpbdDamping', value);
     };
 
     // Capture Safety: Release drag on window blur (Alt-Tab)

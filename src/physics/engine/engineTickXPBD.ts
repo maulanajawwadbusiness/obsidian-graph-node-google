@@ -714,12 +714,14 @@ export const runPhysicsTickXPBD = (engine: PhysicsEngineTickContext, dtIn: numbe
         const sourceChanged = source !== lastTelemetrySource;
         const effectiveChanged = effectiveDamping !== lastTelemetryEffective;
         const timeSinceLast = now - lastTelemetryTime;
-        const shouldLog = (sourceChanged || effectiveChanged) && timeSinceLast > 500;
+        // FORENSIC: Force log every 60 frames if dev, regardless of change
+        const isPeriodic = engine.frameIndex % 60 === 0;
+        const shouldLog = (sourceChanged || effectiveChanged || isPeriodic) && timeSinceLast > 100; // Reduced throttle for forensics
 
         if (shouldLog) {
             const frameFactor = Math.exp(-effectiveDamping * 5.0 * dt);
 
-            console.log('[DEV] XPBD damping telemetry:', {
+            console.log(`[Forensic Frame ${engine.frameIndex}] XPBD Tick Running. Telemetry:`, {
                 source,
                 raw: rawDamping,
                 effective: effectiveDamping,

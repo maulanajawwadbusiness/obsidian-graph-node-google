@@ -6,13 +6,12 @@ export const DEFAULT_PHYSICS_CONFIG: ForceConfig = {
     // ---------------------------------------------------------------------------
     // Repulsion is now "Physical Volume" only.
     // It prevents overlap but doesn't shape the cloud.
-    repulsionStrength: 500, // RUN 1: Baseline measurement with sane value
-
-
-    // Very short range. Only affects immediate neighbors.
-    repulsionDistanceMax: 60,
-    repulsionMinDistance: 6,
-    repulsionMaxForce: 120000,
+    // Step 3 RUN 5: Sane defaults (work with fixed kernel + XPBD_REPULSION_SCALE=100)
+    // With proper kernel shape + overlap priority, these values produce decisive separation
+    repulsionStrength: 1000,        // Moderate strength (boosted 100x internally)
+    repulsionDistanceMax: 80,       // Extended range for better spacing
+    repulsionMinDistance: 6,        // Hard core threshold (tight packing)
+    repulsionMaxForce: 500000,      // Safety clamp (allows strong pushes)
 
     // ---------------------------------------------------------------------------
     // ANCHOR: Friend-Distance

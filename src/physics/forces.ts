@@ -252,6 +252,14 @@ export function applyRepulsion(
             // Safe dist
             const d = Math.sqrt(d2);
 
+            // Step 3 RUN 5: Track hard core pairs and min distance
+            if (isOverlap && stats && stats.repulsionTruth) {
+                stats.repulsionTruth.hardCorePairs = (stats.repulsionTruth.hardCorePairs || 0) + 1;
+            }
+            if (stats && stats.repulsionTruth) {
+                stats.repulsionTruth.minDistSeen = Math.min(stats.repulsionTruth.minDistSeen || Infinity, d);
+            }
+
             // Forensics
             if (stats) {
                 if (d < stats.safety.minPairDist) stats.safety.minPairDist = d;
@@ -386,6 +394,11 @@ export function applyRepulsion(
         stats.repulsionTruth.pairsApplied = pairsApplied;
         stats.repulsionTruth.maxForceMag = maxForceMag;
         stats.repulsionTruth.forcePairsCount = forcePairsCount;
+
+        // Step 3 RUN 5: Proof-of-life counters
+        stats.repulsionTruth.hardCorePairs = 0;  // Will be incremented in applyPair
+        stats.repulsionTruth.minDistSeen = Infinity;  // Will be updated in applyPair
+
         stats.safety.repulsionForceMagMax = maxForceMag;
 
         // XPBD Telemetry (Fix 1/3: Wire Source)

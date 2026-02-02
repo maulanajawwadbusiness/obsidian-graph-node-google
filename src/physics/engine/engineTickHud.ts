@@ -102,12 +102,8 @@ export const updateHudSnapshot = (
     stats.safety.repulsionMaxMag = 0;
     stats.safety.repulsionClampedCount = 0;
 
-    // XPBD Repulsion Telemetry (Run 3 - Mini Run 2)
-    stats.safety.xpbdRepulsionEnabled = false;
-    stats.safety.xpbdRepulsionCalledThisFrame = false;
-    stats.safety.xpbdRepulsionPairsChecked = 0;
-    stats.safety.xpbdRepulsionMaxForce = 0;
-    stats.safety.xpbdRepulsionNodesAffected = 0;
+    // XPBD Repulsion Telemetry (Reset moved to createDebugStats / preflight)
+    // Removed lines 106-110 to prevents clearing data before snapshot
 
     stats.neighborReorderRate = stats.neighborReorderRate || 0;
     stats.hubFlipCount = stats.hubFlipCount || 0;

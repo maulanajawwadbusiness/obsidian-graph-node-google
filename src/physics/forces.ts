@@ -43,8 +43,17 @@ export function applyRepulsion(
     let maxForceMag = 0;
     let forcePairsCount = 0;
 
-    // XPBD Force Repel Override
-    let effectiveStrength = repulsionStrength;
+    // RUN 2: XPBD Force Scale Correction
+    // XPBD position-based solver operates at different force scale than legacy velocity solver.
+    // Spring constraints produce position corrections ~0.1-1.0px/iteration.
+    // Repulsion with strength=500 produces F~17 at d=30px, which after integration
+    // becomes dv~0.0003 px/s, which is invisible against damping and springs.
+    //
+    // Solution: Boost repulsion force for XPBD mode to match constraint solver scale.
+    // This multiplier brings F=500/d into competitive range with spring forces.
+    const XPBD_REPULSION_SCALE = 100; // Empirically tuned for strength=500-5000 range
+
+    let effectiveStrength = repulsionStrength * XPBD_REPULSION_SCALE;
     let effectiveMinDist = repulsionMinDistance;
     if (config.debugForceRepulsion) {
         effectiveMinDist = Math.max(repulsionMinDistance, 140); // Mode A: Large Radius

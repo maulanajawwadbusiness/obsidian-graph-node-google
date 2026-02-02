@@ -654,13 +654,17 @@ export const runPhysicsTickXPBD = (engine: PhysicsEngineTickContext, dtIn: numbe
         debugStats.repulsionProof.stride = pairStride;
     }
 
+    // STEP 2/5: XPBD-specific damping override
+    // When xpbdDamping is undefined, effectiveDamping === damping (zero behavior change)
+    const effectiveDamping = engine.config.xpbdDamping ?? engine.config.damping;
+
     integrateNodes(
         engine as any,
         nodeList,
         dt,
         1.0,
         motionPolicy,
-        engine.config.damping,
+        effectiveDamping,  // Use XPBD-specific damping if provided
         engine.config.maxVelocity,
         debugStats,
         false,

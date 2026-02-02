@@ -339,21 +339,21 @@ export function applyRepulsion(
         stats.repulsionTruth.pairsApplied = pairsApplied;
         stats.repulsionTruth.maxForceMag = maxForceMag;
         stats.repulsionTruth.forcePairsCount = forcePairsCount;
-        stats.safety.repulsionForceMagMax = forceMagMax;
+        stats.safety.repulsionForceMagMax = maxForceMag;
 
         // XPBD Telemetry (Fix 1/3: Wire Source)
         // HUD reads these for "XPBD Repulsion" section
         stats.safety.xpbdRepulsionCalledThisFrame = true;
-        stats.safety.xpbdRepulsionPairsChecked = pairsChecked;
+        stats.safety.xpbdRepulsionPairsChecked = pairsConsidered;
         stats.safety.xpbdRepulsionNodesAffected = pairsApplied * 2; // Approx
-        stats.safety.xpbdRepulsionMaxForce = forceMagMax;
+        stats.safety.xpbdRepulsionMaxForce = maxForceMag;
     }
 
     // Run 4: Repulsion Proof Telemetry (Unique Bucket)
     if (stats && stats.repulsionProof) {
-        stats.repulsionProof.pairsChecked = pairsChecked;
+        stats.repulsionProof.pairsChecked = pairsConsidered;
         stats.repulsionProof.pairsApplied = pairsApplied;
-        stats.repulsionProof.maxForce = forceMagMax;
+        stats.repulsionProof.maxForce = maxForceMag;
     }
 }
 

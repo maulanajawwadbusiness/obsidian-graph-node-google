@@ -584,6 +584,70 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
                 {SHOW_BRAND_LABEL && <BrandLabel />}
                 <PopupPortal engineRef={engineRef} />
                 <RotationCompass engineRef={engineRef} />
+
+                {/* STEP 5/5 RUN 2: Minimal preset controls for hand calibration */}
+                <div style={{
+                    position: 'absolute',
+                    top: '10px',
+                    left: '10px',
+                    background: 'rgba(0, 0, 0, 0.7)',
+                    color: '#fff',
+                    padding: '8px',
+                    borderRadius: '4px',
+                    fontSize: '11px',
+                    fontFamily: 'monospace',
+                    pointerEvents: 'auto',
+                    zIndex: 1000
+                }}>
+                    <div style={{ marginBottom: '4px', fontWeight: 'bold' }}>
+                        XPBD Damping: {(config.xpbdDamping ?? 0.20).toFixed(2)} {config.xpbdDamping !== undefined ? '(CONFIG)' : '(DEFAULT)'}
+                    </div>
+                    <div style={{ display: 'flex', gap: '4px' }}>
+                        <button
+                            onClick={() => engineRef.current?.applyXpbdDampingPreset('SNAPPY')}
+                            style={{
+                                padding: '4px 8px',
+                                fontSize: '10px',
+                                cursor: 'pointer',
+                                background: config.xpbdDamping === 0.12 ? '#4a9eff' : '#333',
+                                color: '#fff',
+                                border: 'none',
+                                borderRadius: '2px'
+                            }}
+                        >
+                            Snappy
+                        </button>
+                        <button
+                            onClick={() => engineRef.current?.applyXpbdDampingPreset('BALANCED')}
+                            style={{
+                                padding: '4px 8px',
+                                fontSize: '10px',
+                                cursor: 'pointer',
+                                background: config.xpbdDamping === 0.20 ? '#4a9eff' : '#333',
+                                color: '#fff',
+                                border: 'none',
+                                borderRadius: '2px'
+                            }}
+                        >
+                            Balanced
+                        </button>
+                        <button
+                            onClick={() => engineRef.current?.applyXpbdDampingPreset('SMOOTH')}
+                            style={{
+                                padding: '4px 8px',
+                                fontSize: '10px',
+                                cursor: 'pointer',
+                                background: config.xpbdDamping === 0.32 ? '#4a9eff' : '#333',
+                                color: '#fff',
+                                border: 'none',
+                                borderRadius: '2px'
+                            }}
+                        >
+                            Smooth
+                        </button>
+                    </div>
+                </div>
+
                 <FullChatToggle />
             </div>
 

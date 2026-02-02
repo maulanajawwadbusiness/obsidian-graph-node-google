@@ -1,37 +1,19 @@
-# RUN 1 REPORT: Trace click path + Engine UID
+# REPORT: XPBD Damping Debug Run 1
 
 **Date**: 2026-02-02  
-**Status**: ✅ COMPLETE
+**Status**: Step 1/5 Complete (Tracing)
 
----
+## What I Changed
+1.  **Engine Identity**: Added `public readonly uid` to `PhysicsEngine` (random string on init).
+2.  **UI Instrumentation**: Modified `handleXpbdDampingPreset` in `GraphPhysicsPlayground.tsx` to log:
+    *   Preset Name
+    *   Engine UID (from `engineRef.current`)
+    *   Target Value
 
-## Findings
+## How to Verify
+1.  Open Developer Console.
+2.  Click a preset button (e.g., "Snappy").
+3.  Expect Log: `[Trace] Preset Click: SNAPPY { engineUid: "abc12", targetValue: 0.12, ... }`.
 
-1. **Broken Handler**: The UI code was calling `handleXpbdDampingPreset`, but the function **did not exist** in the component body. This was the primary reason for "0 change" - the clicks were likely throwing ReferenceErrors (silently caught or just failing).
-2. **Missing Plumbing**: Even if it worked, likely it wasn't logging proof of engine identity.
-
-## Changes
-
-1. **Engine**: Added `public readonly uid` to `src/physics/engine.ts`.
-   - Generated once at construction: `Math.random().toString(36).slice(2, 9)`.
-   - Logged in `applyXpbdDampingPreset`.
-
-2. **UI**: Added `handleXpbdDampingPreset` to `GraphPhysicsPlayground.tsx`.
-   - Logs: `[Forensic] UI Click: {preset}. Target Engine UID: {uid}`.
-   - Calls: `engineRef.current.applyXpbdDampingPreset(preset)`.
-
-## Verification Steps (For User/Next Run)
-
-1. Open console.
-2. Click "Snappy".
-3. Expect Log:
-   ```
-   [Forensic] UI Click: SNAPPY. Target Engine UID: ab123cd
-   [Forensic] applyXpbdDampingPreset called with: SNAPPY on Engine UID: ab123cd
-   [Forensic] Setting xpbdDamping to: 0.12
-   ```
-4. Verify UIDs match.
-
-## Next Run
-
-Run 2 will instrument the **physics tick** to prove that the ticking engine matches `ab123cd`.
+## Next Steps
+Run 2: Verify `engineUid` matches the one printed by the running tick loop.

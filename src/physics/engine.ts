@@ -27,12 +27,12 @@ export class PhysicsEngine {
     public worldHeight: number = 2000;
 
     // Interaction State
+    // Forensic: Engine Identity
+    public readonly uid = Math.random().toString(36).slice(2, 7);
+
     public draggedNodeId: string | null = null;
     public dragTarget: { x: number, y: number } | null = null;
     public grabOffset: { x: number, y: number } | null = null; // Fix 18: Grab Offset (Prevents Jump)
-
-    // PLUMBING DIAGNOSIS: Engine Instance UID (Run 1)
-    public readonly uid = Math.random().toString(36).slice(2, 9);
 
     // Fix: Determinism Lock (Laws don't change during interaction)
     public interactionLock: boolean = false;
@@ -366,7 +366,7 @@ export class PhysicsEngine {
      */
     applyXpbdDampingPreset(preset: import('./engine/engineTickXPBD').XpbdDampingPreset) {
         // FORENSIC LOG: UI -> Engine boundary
-        console.log(`[Forensic] applyXpbdDampingPreset called with: ${preset} on Engine UID: ${this.uid}`);
+        console.log(`[Forensic] applyXpbdDampingPreset called with: ${preset}`);
         const presetValues = {
             SNAPPY: 0.12,
             BALANCED: 0.20,

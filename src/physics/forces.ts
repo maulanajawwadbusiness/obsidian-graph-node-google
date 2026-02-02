@@ -281,11 +281,44 @@ export function applyRepulsion(
                 }
             }
 
-            // Standard repulsion force: F = k / d
-            const effectiveD = Math.max(d, effectiveMinDist);
-            const rawForce = (effectiveStrength / effectiveD) * repulsionScale * densityBoost * pairStride;
+            // RUN 2 (Step 3): Proper Repulsion Kernel
+            // ========================================
+            // Hard Core (d < minDist): Strong push with safe clamp
+            // Soft Band (minDist..distMax): Smooth falloff to 0 at boundary
+            //
+            // Kernel shape: F(d) = strength * kernel(d) * modifiers
+            // where kernel(d) ensures:
+            //   - No singularity at d=0 (safe denominator)
+            //   - Smooth fade to 0 at d=distanceMax (no hard edge pop)
+            //   - Strong in hard core (decisive separation)
 
-            // Clamp
+            let kernelValue: number;
+
+            if (d < effectiveMinDist) {
+                // HARD CORE: Strong inverse law with safe floor
+                // F = strength / max(d, eps) to avoid singularity
+                const eps = 0.1; // Safety floor (world units)
+                const safeD = Math.max(d, eps);
+                kernelValue = 1.0 / safeD;
+            } else {
+                // SOFT BAND: Smooth falloff from minDist to distanceMax
+                // Use cubic hermite for C1 continuity (smooth derivative)
+                const range = repulsionDistanceMax - effectiveMinDist;
+                const t = (d - effectiveMinDist) / range; // 0 at minDist, 1 at distMax
+                const tClamped = Math.max(0, Math.min(1, t));
+
+                // Hermite blend: smooth(t) = 3t² - 2t³
+                const smooth = tClamped * tClamped * (3 - 2 * tClamped);
+
+                // Fade from 1/minDist at boundary to 0 at distMax
+                const minKernel = 1.0 / effectiveMinDist;
+                kernelValue = minKernel * (1 - smooth);
+            }
+
+            // Apply kernel with modifiers
+            const rawForce = effectiveStrength * kernelValue * repulsionScale * densityBoost * pairStride;
+
+            // Clamp for numerical safety
             let forceMagnitude = rawForce;
             if (repulsionMaxForce > 0 && rawForce > repulsionMaxForce) {
                 forceMagnitude = repulsionMaxForce;

@@ -683,15 +683,31 @@ export const runPhysicsTickXPBD = (engine: PhysicsEngineTickContext, dtIn: numbe
     // 0 = no damping (floaty), 2 = very heavy damping (k=10, half-life=0.07s)
     const effectiveDamping = Math.max(0, Math.min(2, rawDamping));
 
-    // Dev-only: Proof-of-use for xpbdDamping selection
+    // STEP 4/5 RUN 1: Enhanced telemetry for damping policy proof
     if (typeof window !== 'undefined' && (window as any).__DEV__ && engine.frameIndex % 60 === 0) {
-        const xpbdDampingPresent = engine.config.xpbdDamping !== undefined;
-        console.log('[DEV] XPBD damping selection:', {
-            xpbdDampingPresent,
-            effectiveDamping,
+        const configValue = engine.config.xpbdDamping;
+        const clamped = rawDamping !== effectiveDamping;
+
+        let source: 'DEFAULT' | 'CONFIG' | 'CLAMPED';
+        if (configValue === undefined) {
+            source = 'DEFAULT';
+        } else if (clamped) {
+            source = 'CLAMPED';
+        } else {
+            source = 'CONFIG';
+        }
+
+        const frameFactor = Math.exp(-effectiveDamping * 5.0 * dt);
+
+        console.log('[DEV] XPBD damping telemetry:', {
+            source,
+            raw: rawDamping,
+            effective: effectiveDamping,
+            clamped,
+            dt,
+            frameFactor: frameFactor.toFixed(4),
             xpbdDefault: DEFAULT_XPBD_DAMPING,
-            legacyDamping: engine.config.damping,
-            source: xpbdDampingPresent ? 'config.xpbdDamping' : 'DEFAULT_XPBD_DAMPING'
+            legacyDamping: engine.config.damping
         });
     }
 

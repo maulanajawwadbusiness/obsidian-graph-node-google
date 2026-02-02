@@ -26,6 +26,12 @@ export const drawLinks = (
     resetRenderState(ctx);
     guardStrictRenderSettings(ctx);
 
+    // EDGE SMOOTHING: Enable high-quality antialiasing
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+
     ctx.globalAlpha = 1;
     ctx.globalCompositeOperation = 'source-over';
     ctx.setLineDash([]);
@@ -203,64 +209,83 @@ export const drawNodes = (
         const radiusPx = baseRenderRadius * nodeScale * zoom;
 
         if (theme.nodeStyle === 'ring') {
-            // Fix 52: Glow LOD. Skip if node is tiny (< 2px) and no energy.
-            if (radiusPx > 2 || nodeEnergy > 0.01) {
-                if (theme.useTwoLayerGlow) {
-                    // Two-layer glow logic (simplified for inline)
-                    const renderDebug = renderDebugRef?.current;
-                    const sampleIdle = !!renderDebug && nodeEnergy === 0 && renderDebug.idleGlowPassIndex < 0;
-                    if (sampleIdle) {
-                        renderDebug.idleGlowPassIndex = 1;
-                        renderDebug.idleGlowStateBefore = captureCanvasState(ctx);
-                    }
-                    // We skip the complex debug sampling "active" branches for brevity in this optimized loop
-                    // unless strictly needed. But let's try to keep it correct:
+            // Configurable draw order system
+            // Extract rendering functions for each layer
+            const renderGlow = () => {
+                // Fix 52: Glow LOD. Skip if node is tiny (< 2px) and no energy.
+                if (radiusPx > 2 || nodeEnergy > 0.01) {
+                    if (theme.useTwoLayerGlow) {
+                        // Two-layer glow logic (simplified for inline)
+                        const renderDebug = renderDebugRef?.current;
+                        const sampleIdle = !!renderDebug && nodeEnergy === 0 && renderDebug.idleGlowPassIndex < 0;
+                        if (sampleIdle) {
+                            renderDebug.idleGlowPassIndex = 1;
+                            renderDebug.idleGlowStateBefore = captureCanvasState(ctx);
+                        }
 
-                    drawTwoLayerGlow(
-                        ctx,
-                        screen.x,
-                        screen.y,
-                        radiusPx,
-                        nodeEnergy,
-                        node.isFixed ? theme.nodeFixedColor : lerpColor(theme.primaryBlueDefault, theme.primaryBlueHover, nodeEnergy),
-                        theme
-                    );
+                        drawTwoLayerGlow(
+                            ctx,
+                            screen.x,
+                            screen.y,
+                            radiusPx,
+                            nodeEnergy,
+                            node.isFixed ? theme.nodeFixedColor : lerpColor(theme.primaryBlueDefault, theme.primaryBlueHover, nodeEnergy),
+                            theme
+                        );
 
-                    if (sampleIdle && renderDebug) {
-                        renderDebug.idleGlowStateAfter = captureCanvasState(ctx);
+                        if (sampleIdle && renderDebug) {
+                            renderDebug.idleGlowStateAfter = captureCanvasState(ctx);
+                        }
+                    } else if (theme.glowEnabled) {
+                        ctx.save();
+                        ctx.beginPath();
+                        ctx.arc(screen.x, screen.y, radiusPx + theme.glowRadius, 0, Math.PI * 2);
+                        ctx.fillStyle = theme.glowColor;
+                        ctx.filter = `blur(${theme.glowRadius}px)`;
+                        ctx.fill();
+                        ctx.restore();
                     }
-                } else if (theme.glowEnabled) {
-                    ctx.save();
-                    ctx.beginPath();
-                    ctx.arc(screen.x, screen.y, radiusPx + theme.glowRadius, 0, Math.PI * 2);
-                    ctx.fillStyle = theme.glowColor;
-                    ctx.filter = `blur(${theme.glowRadius}px)`;
-                    ctx.fill();
-                    ctx.restore();
                 }
-            }
+            };
 
-            // Occlusion
-            const occlusionRadiusPx = getOcclusionRadius(radiusPx, theme);
-            ctx.beginPath();
-            ctx.arc(screen.x, screen.y, occlusionRadiusPx, 0, Math.PI * 2);
-            ctx.fillStyle = theme.occlusionColor;
-            ctx.fill();
-
-            // Ring
-            if (theme.useGradientRing) {
-                const activeRingWidth = ringWidthPx * (1 + theme.hoverRingWidthBoost * nodeEnergy);
-                drawGradientRing(ctx, screen.x, screen.y, radiusPx, activeRingWidth,
-                    node.isFixed ? theme.nodeFixedColor : lerpColor(theme.primaryBlueDefault, theme.primaryBlueHover, nodeEnergy),
-                    theme.deepPurple, theme.ringGradientSegments, theme.gradientRotationDegrees);
-                ctx.globalAlpha = 1;
-                ctx.globalCompositeOperation = 'source-over';
-            } else {
+            const renderOcclusion = () => {
+                const occlusionRadiusPx = getOcclusionRadius(radiusPx, theme);
                 ctx.beginPath();
-                ctx.arc(screen.x, screen.y, radiusPx, 0, Math.PI * 2);
-                ctx.strokeStyle = node.isFixed ? theme.nodeFixedColor : theme.ringColor;
-                ctx.lineWidth = ringWidthPx;
-                ctx.stroke();
+                ctx.arc(screen.x, screen.y, occlusionRadiusPx, 0, Math.PI * 2);
+                ctx.fillStyle = theme.occlusionColor;
+                ctx.fill();
+            };
+
+            const renderRing = () => {
+                if (theme.useGradientRing) {
+                    const activeRingWidth = ringWidthPx * (1 + theme.hoverRingWidthBoost * nodeEnergy);
+                    drawGradientRing(ctx, screen.x, screen.y, radiusPx, activeRingWidth,
+                        node.isFixed ? theme.nodeFixedColor : lerpColor(theme.primaryBlueDefault, theme.primaryBlueHover, nodeEnergy),
+                        theme.deepPurple, theme.ringGradientSegments, theme.gradientRotationDegrees);
+                    ctx.globalAlpha = 1;
+                    ctx.globalCompositeOperation = 'source-over';
+                } else {
+                    ctx.beginPath();
+                    ctx.arc(screen.x, screen.y, radiusPx, 0, Math.PI * 2);
+                    ctx.strokeStyle = node.isFixed ? theme.nodeFixedColor : theme.ringColor;
+                    ctx.lineWidth = ringWidthPx;
+                    ctx.stroke();
+                }
+            };
+
+            // Render in configured order
+            const renderFunctions: Record<string, () => void> = {
+                'glow': renderGlow,
+                'occlusion': renderOcclusion,
+                'ring': renderRing
+            };
+
+            // Execute rendering in the order specified by theme.nodeDrawOrder
+            for (const layer of theme.nodeDrawOrder) {
+                const renderFunc = renderFunctions[layer];
+                if (renderFunc) {
+                    renderFunc();
+                }
             }
 
         } else {

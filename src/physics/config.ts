@@ -1,6 +1,20 @@
 import { ForceConfig } from './types';
 
+// ---------------------------------------------------------------------------
+// ANCHOR: Master Scale
+// ---------------------------------------------------------------------------
+// Scale factor for all edge lengths. 1.0 = Current Reduced Size (300px/104px)
+const EDGE_LEN_SCALE = 0.9;
+
 export const DEFAULT_PHYSICS_CONFIG: ForceConfig = {
+    // ---------------------------------------------------------------------------
+    // ANCHOR: Master Scale
+    // ---------------------------------------------------------------------------
+    // Scale factor for all edge lengths. 1.0 = Current Reduced Size (300px/104px)
+    // To restore original size, set to 1.25 (375/130).
+    // To reduce further, set < 1.0.
+    // edgeLenScale: 1.0, // MOVED TO GLOBAL CONSTANT BELOW TO AVOID TYPE ERROR
+
     // ---------------------------------------------------------------------------
     // ANCHOR: Idle Spacing & Clusters
     // ---------------------------------------------------------------------------
@@ -8,7 +22,7 @@ export const DEFAULT_PHYSICS_CONFIG: ForceConfig = {
     // It prevents overlap but doesn't shape the cloud.
     // Step 3 RUN 5: Sane defaults (work with fixed kernel + XPBD_REPULSION_SCALE=100)
     // With proper kernel shape + overlap priority, these values produce decisive separation
-    repulsionStrength: 1000,        // Moderate strength (boosted 100x internally)
+    repulsionStrength: 3000,        // Moderate strength (boosted 100x internally)
     repulsionDistanceMax: 80,       // Extended range for better spacing
     repulsionMinDistance: 6,        // Hard core threshold (tight packing)
     repulsionMaxForce: 500000,      // Safety clamp (allows strong pushes)
@@ -25,7 +39,7 @@ export const DEFAULT_PHYSICS_CONFIG: ForceConfig = {
 
     // Decoupled Spacing Controls (Phase 1)
     // These values preserve exact springLength=500 behavior
-    targetSpacing: 375,        // Actual spring rest length (Phase 4: 25% reduction from 500)
+    targetSpacing: 300 * EDGE_LEN_SCALE,        // Base: 300 (Reduced). Scaled by EDGE_LEN_SCALE.
     initScale: 0.1,           // Current ratio (springLength * 0.1 for initial positions)
     snapImpulseScale: 0.4,    // Current ratio (springLength * 0.4 for impulse, clamped 120-600)
     initStrategy: 'spread',   // Default to spread seeding (no explosion start)
@@ -114,7 +128,7 @@ export const DEFAULT_PHYSICS_CONFIG: ForceConfig = {
     // ANCHOR: Harmonic Net (Uniform Link Lengths)
     // ---------------------------------------------------------------------------
     // Uniform rest length for all springs (creates harmonic net, not stressed web)
-    linkRestLength: 130,  // 35% of 375px for tighter spacing
+    linkRestLength: 104 * EDGE_LEN_SCALE,  // Base: 104 (Reduced). Scaled by EDGE_LEN_SCALE.
     // Dead zone for soft springs (no force within this band)
     springDeadZone: 0.15,  // ±15% of rest length
 

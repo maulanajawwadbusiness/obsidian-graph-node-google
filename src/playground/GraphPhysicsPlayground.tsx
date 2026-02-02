@@ -40,9 +40,10 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
 
     // State for React UI
     const [config, setConfig] = useState<ForceConfig>(DEFAULT_PHYSICS_CONFIG);
+
     const [useVariedSize, setUseVariedSize] = useState(false); // Toggle State
     const [sidebarOpen, setSidebarOpen] = useState(false); // Hidden by default
-    const [debugOpen, setDebugOpen] = useState(true); // Open by default
+    const [debugOpen, setDebugOpen] = useState(false); // Hidden by default
     const [lastDroppedFile, setLastDroppedFile] = useState<File | null>(null);
     const [metrics, setMetrics] = useState<PlaygroundMetrics>({
         nodes: 0,
@@ -56,10 +57,25 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
         aspectRatio: 0,
         lifecycleMs: 0
     });
-    const [spawnCount, setSpawnCount] = useState(15);
+    const [spawnCount, setSpawnCount] = useState(5);
     const [seed, setSeed] = useState(Date.now()); // Seed for deterministic generation
+
+    // FIX: Adaptive Scale (Temp)
+    // Reduce edge length for small graphs (<8 nodes)
+    const effectiveConfig = { ...config };
+    if (spawnCount < 8) { // Check spawn count as proxy for node count
+        // Refined: 6-7 nodes get 0.15 reduction, <6 get 0.3 reduction
+        const reduction = spawnCount >= 6 ? 0.15 : 0.3;
+
+        // We modify the derived values since edgeLenScale is a constant, not a config prop we write to
+        const adaptiveScale = 0.9 - reduction; // Base 0.9 from config default
+        effectiveConfig.targetSpacing = 300 * adaptiveScale;
+        effectiveConfig.linkRestLength = 104 * adaptiveScale;
+    }
+
     const [skinMode, setSkinMode] = useState<SkinMode>('elegant'); // Skin toggle (default: elegant)
     const [cameraLocked, setCameraLocked] = useState(false);
+    const [showPresetHUD, setShowPresetHUD] = useState(false); // Toggle for preset HUD - set to true to show
     const [showDebugGrid, setShowDebugGrid] = useState(false);
     const [pixelSnapping, setPixelSnapping] = useState(false);
     const [debugNoRenderMotion, setDebugNoRenderMotion] = useState(false);
@@ -92,7 +108,7 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
         handleDragEnd
     } = useGraphRendering({
         canvasRef,
-        config,
+        config: effectiveConfig, // Use adaptive config
         engineRef,
         seed,
         setMetrics,
@@ -108,6 +124,13 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
         markerIntensity,
         forceShowRestMarkers
     });
+
+    // 2. Sync Engine Config when effective config changes
+    useEffect(() => {
+        if (engineRef.current) {
+            engineRef.current.updateConfig(effectiveConfig);
+        }
+    }, [effectiveConfig.targetSpacing, effectiveConfig.linkRestLength]); // React to adaptive changes
 
     useEffect(() => {
         hoverStateRef.current.hoverDisplayNodeId = hudDragTargetId;
@@ -607,72 +630,74 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
                 <RotationCompass engineRef={engineRef} />
 
                 {/* STEP 5/5 RUN 2: Minimal preset controls for hand calibration */}
-                <div style={{
-                    position: 'absolute',
-                    top: '10px',
-                    left: '10px',
-                    background: 'rgba(0, 0, 0, 0.7)',
-                    color: '#fff',
-                    padding: '8px',
-                    borderRadius: '4px',
-                    fontSize: '11px',
-                    fontFamily: 'monospace',
-                    pointerEvents: 'auto',
-                    zIndex: 1000
-                }}
-                    onPointerDown={(e) => e.stopPropagation()}
-                >
-                    <div style={{ marginBottom: '4px', fontWeight: 'bold' }}>
-                        XPBD Damping: {(config.xpbdDamping ?? 0.20).toFixed(2)} {config.xpbdDamping !== undefined ? '(CONFIG)' : '(DEFAULT)'}
+                {showPresetHUD && (
+                    <div style={{
+                        position: 'absolute',
+                        top: '10px',
+                        left: '10px',
+                        background: 'rgba(0, 0, 0, 0.7)',
+                        color: '#fff',
+                        padding: '8px',
+                        borderRadius: '4px',
+                        fontSize: '11px',
+                        fontFamily: 'monospace',
+                        pointerEvents: 'auto',
+                        zIndex: 1000
+                    }}
+                        onPointerDown={(e) => e.stopPropagation()}
+                    >
+                        <div style={{ marginBottom: '4px', fontWeight: 'bold' }}>
+                            XPBD Damping: {(config.xpbdDamping ?? 0.20).toFixed(2)} {config.xpbdDamping !== undefined ? '(CONFIG)' : '(DEFAULT)'}
+                        </div>
+                        <div style={{ display: 'flex', gap: '4px' }}>
+                            <button
+                                onClick={() => handleXpbdDampingPreset('SNAPPY')}
+                                onPointerDown={(e) => e.stopPropagation()}
+                                style={{
+                                    padding: '4px 8px',
+                                    fontSize: '10px',
+                                    cursor: 'pointer',
+                                    background: config.xpbdDamping === 0.12 ? '#4a9eff' : '#333',
+                                    color: '#fff',
+                                    border: 'none',
+                                    borderRadius: '2px'
+                                }}
+                            >
+                                Snappy
+                            </button>
+                            <button
+                                onClick={() => handleXpbdDampingPreset('BALANCED')}
+                                onPointerDown={(e) => e.stopPropagation()}
+                                style={{
+                                    padding: '4px 8px',
+                                    fontSize: '10px',
+                                    cursor: 'pointer',
+                                    background: config.xpbdDamping === 0.20 ? '#4a9eff' : '#333',
+                                    color: '#fff',
+                                    border: 'none',
+                                    borderRadius: '2px'
+                                }}
+                            >
+                                Balanced
+                            </button>
+                            <button
+                                onClick={() => handleXpbdDampingPreset('SMOOTH')}
+                                onPointerDown={(e) => e.stopPropagation()}
+                                style={{
+                                    padding: '4px 8px',
+                                    fontSize: '10px',
+                                    cursor: 'pointer',
+                                    background: config.xpbdDamping === 0.28 ? '#4a9eff' : '#333',
+                                    color: '#fff',
+                                    border: 'none',
+                                    borderRadius: '2px'
+                                }}
+                            >
+                                Smooth
+                            </button>
+                        </div>
                     </div>
-                    <div style={{ display: 'flex', gap: '4px' }}>
-                        <button
-                            onClick={() => handleXpbdDampingPreset('SNAPPY')}
-                            onPointerDown={(e) => e.stopPropagation()}
-                            style={{
-                                padding: '4px 8px',
-                                fontSize: '10px',
-                                cursor: 'pointer',
-                                background: config.xpbdDamping === 0.12 ? '#4a9eff' : '#333',
-                                color: '#fff',
-                                border: 'none',
-                                borderRadius: '2px'
-                            }}
-                        >
-                            Snappy
-                        </button>
-                        <button
-                            onClick={() => handleXpbdDampingPreset('BALANCED')}
-                            onPointerDown={(e) => e.stopPropagation()}
-                            style={{
-                                padding: '4px 8px',
-                                fontSize: '10px',
-                                cursor: 'pointer',
-                                background: config.xpbdDamping === 0.20 ? '#4a9eff' : '#333',
-                                color: '#fff',
-                                border: 'none',
-                                borderRadius: '2px'
-                            }}
-                        >
-                            Balanced
-                        </button>
-                        <button
-                            onClick={() => handleXpbdDampingPreset('SMOOTH')}
-                            onPointerDown={(e) => e.stopPropagation()}
-                            style={{
-                                padding: '4px 8px',
-                                fontSize: '10px',
-                                cursor: 'pointer',
-                                background: config.xpbdDamping === 0.32 ? '#4a9eff' : '#333',
-                                color: '#fff',
-                                border: 'none',
-                                borderRadius: '2px'
-                            }}
-                        >
-                            Smooth
-                        </button>
-                    </div>
-                </div>
+                )}
 
                 <FullChatToggle />
             </div>

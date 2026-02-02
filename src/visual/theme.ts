@@ -23,6 +23,12 @@ export interface ThemeConfig {
     nodeRadiusMultiplier: number;  // Derived from nodeScale
     nodeStyle: 'filled' | 'ring';
 
+    // Node draw order configuration
+    // Controls the rendering sequence for ring-style nodes
+    // Options: 'glow', 'occlusion', 'ring'
+    // Default: ['glow', 'occlusion', 'ring']
+    nodeDrawOrder: ('glow' | 'occlusion' | 'ring')[];
+
     // Ring-specific (elegant mode)
     ringWidth: number;  // Derived from nodeScale
     ringColor: string;
@@ -144,6 +150,9 @@ export const NORMAL_THEME: ThemeConfig = {
     nodeRadiusMultiplier: 1.0,  // = nodeScale * 1.0
     nodeStyle: 'filled',
 
+    // Draw order (not used in normal mode, but required by interface)
+    nodeDrawOrder: ['glow', 'occlusion', 'ring'],
+
     // Ring (not used in normal)
     ringWidth: 1,  // = nodeScale * 1.0
     ringColor: '#ffffff',
@@ -241,10 +250,10 @@ export const NORMAL_THEME: ThemeConfig = {
 // -----------------------------------------------------------------------------
 
 // TUNING KNOB: Change this to scale nodes and rings proportionally
-const ELEGANT_NODE_SCALE = 1.2;
+const ELEGANT_NODE_SCALE = 1.2; // MARK: Master Scale for Node Size & Stroke
 
 // Base ratios (don't change these, change ELEGANT_NODE_SCALE instead)
-const ELEGANT_BASE_RING_WIDTH_RATIO = 2.08;  // ring width relative to scale
+const ELEGANT_BASE_RING_WIDTH_RATIO = 2.08;  // ring width relative to scale. MARK: Stroke Thickness parameter.
 
 export const ELEGANT_THEME: ThemeConfig = {
     // Background: deep navy-indigo-purple void
@@ -254,7 +263,7 @@ export const ELEGANT_THEME: ThemeConfig = {
     useVignette: true,
     vignetteCenterColor: '#0f0f1a',
     vignetteEdgeColor: '#050508',
-    vignetteStrength: 0.7,
+    vignetteStrength: 0.7, // MARK: Vignette Settings
 
     // Node scale (master control) - this is the TUNING KNOB
     nodeScale: ELEGANT_NODE_SCALE,
@@ -262,6 +271,13 @@ export const ELEGANT_THEME: ThemeConfig = {
     // Nodes: hollow rings, scaled by nodeScale
     nodeRadiusMultiplier: ELEGANT_NODE_SCALE * 1.0,
     nodeStyle: 'ring',
+
+    // Draw order: TUNING KNOB - change order to experiment
+    // Options: 'glow', 'occlusion', 'ring'
+    // Default: ['glow', 'occlusion', 'ring'] - glow behind, ring on top
+    // Try: ['occlusion', 'glow', 'ring'] - glow between occlusion and ring
+    // Try: ['occlusion', 'ring', 'glow'] - glow on top (unusual)
+    nodeDrawOrder: ['occlusion', 'ring', 'glow'],
 
     // Ring: strong electric blue (fallback if gradient disabled)
     ringWidth: ELEGANT_NODE_SCALE * ELEGANT_BASE_RING_WIDTH_RATIO,
@@ -312,7 +328,7 @@ export const ELEGANT_THEME: ThemeConfig = {
     glowIdleFadeExponent: 4.0,       // Fade idle lift quickly as energy rises
 
     // Links: indigo-tinted, submissive but not dead
-    linkColor: 'rgba(61, 72, 87, 0.95)',
+    linkColor: 'rgba(61, 72, 87, 0.6)',
     linkWidth: 0.6,
 
     // Hover interaction (basic)

@@ -312,7 +312,7 @@ export const ELEGANT_THEME: ThemeConfig = {
     glowIdleFadeExponent: 4.0,       // Fade idle lift quickly as energy rises
 
     // Links: indigo-tinted, submissive but not dead
-    linkColor: 'rgba(61, 72, 87, 0.6)',
+    linkColor: 'rgba(61, 72, 87, 0.95)',
     linkWidth: 0.6,
 
     // Hover interaction (basic)

@@ -521,6 +521,22 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
     // Get theme for container styling
     const activeTheme = getTheme(skinMode);
 
+    // STEP 5/5 RUN 1: UI Handler with Forensic Logging
+    const handleXpbdDampingPreset = (preset: any) => {
+        // FORENSIC LOG: UI Click detected
+        if (!engineRef.current) {
+            console.error('[Forensic] CLICK FAIL: engineRef.current is null!');
+            return;
+        }
+        console.log(`[Forensic] UI Click: ${preset}. Target Engine UID: ${engineRef.current.uid}`);
+        engineRef.current.applyXpbdDampingPreset(preset);
+
+        // Force re-render to update UI readout (since config is state-independent in this path)
+        // In a real app we'd sync back to state, but for forensics this is enough.
+        // We can just rely on the readout updating if we trigger a re-render.
+        // For now, let's just log.
+    };
+
     const toggleViewer = () => {
         clearHover('viewer toggle', -1, 'unknown');
         documentContext.togglePreview();
@@ -608,7 +624,7 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
                     pointerEvents: 'auto',
                     zIndex: 1000
                 }}
-                onPointerDown={(e) => e.stopPropagation()}
+                    onPointerDown={(e) => e.stopPropagation()}
                 >
                     <div style={{ marginBottom: '4px', fontWeight: 'bold' }}>
                         XPBD Damping: {(config.xpbdDamping ?? 0.20).toFixed(2)} {config.xpbdDamping !== undefined ? '(CONFIG)' : '(DEFAULT)'}

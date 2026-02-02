@@ -228,6 +228,13 @@ export type PhysicsHudSnapshot = {
     repulsionPairsApplied?: number;
     repulsionForceMagMax?: number;
 
+    // XPBD Repulsion Telemetry (Run 3 - Mini Run 2)
+    xpbdRepulsionEnabled?: boolean;
+    xpbdRepulsionCalledThisFrame?: boolean;
+    xpbdRepulsionPairsChecked?: number;
+    xpbdRepulsionMaxForce?: number;
+    xpbdRepulsionNodesAffected?: number;
+
     // Forensic: Stability
     neighborReorderRate?: number;
     hubFlipCount?: number;

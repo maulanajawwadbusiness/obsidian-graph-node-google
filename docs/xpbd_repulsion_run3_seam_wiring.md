@@ -81,3 +81,79 @@ src/fullchat/FullChatbar.tsx:768:17 - error TS2322
 - Verify counters show (false state)
 
 ---
+
+## Mini Run 2/5: Proof-of-Life Telemetry
+
+**Date**: 2026-02-02  
+**Goal**: Add telemetry plumbing before wiring actual repulsion logic.
+
+### Changes Made
+
+#### 1. Stats Type Updates
+**File**: `src/physics/engine/stats.ts:26-31`
+
+Added XPBD-specific repulsion counters to `SafetyStats`:
+```typescript
+// XPBD Repulsion Telemetry (Run 3 - Mini Run 2)
+xpbdRepulsionEnabled?: boolean;
+xpbdRepulsionCalledThisFrame?: boolean;
+xpbdRepulsionPairsChecked?: number;
+xpbdRepulsionMaxForce?: number;
+xpbdRepulsionNodesAffected?: number;
+```
+
+#### 2. HUD Type Updates
+**File**: `src/physics/engine/physicsHud.ts:231-237`
+
+Added same fields to `PhysicsHudSnapshot` for display.
+
+#### 3. HUD Wiring
+**File**: `src/physics/engine/engineTickHud.ts`
+
+**Counter Initialization** (Line 105-111):
+```typescript
+stats.safety.xpbdRepulsionEnabled = false;
+stats.safety.xpbdRepulsionCalledThisFrame = false;
+stats.safety.xpbdRepulsionPairsChecked = 0;
+stats.safety.xpbdRepulsionMaxForce = 0;
+stats.safety.xpbdRepulsionNodesAffected = 0;
+```
+
+**HUD Mapping** (Line 234-240):
+```typescript
+xpbdRepulsionEnabled: stats.safety.xpbdRepulsionEnabled ?? false,
+xpbdRepulsionCalledThisFrame: stats.safety.xpbdRepulsionCalledThisFrame ?? false,
+xpbdRepulsionPairsChecked: stats.safety.xpbdRepulsionPairsChecked ?? 0,
+xpbdRepulsionMaxForce: stats.safety.xpbdRepulsionMaxForce ?? 0,
+xpbdRepulsionNodesAffected: stats.safety.xpbdRepulsionNodesAffected ?? 0,
+```
+
+### Verification Checklist
+
+- [x] **Stats fields added**: 5 new fields in `SafetyStats`
+- [x] **HUD fields added**: 5 new fields in `PhysicsHudSnapshot`
+- [x] **Counter initialization**: Reset to false/0 each frame
+- [x] **HUD mapping**: Wired to snapshot with fallback values
+- [ ] **Visual verification**: Counters show in HUD (false state)
+
+### Expected Behavior
+
+With `xpbdRepulsionEnabled = false` (default):
+- `xpbdRepulsionEnabled`: false
+- `xpbdRepulsionCalledThisFrame`: false
+- `xpbdRepulsionPairsChecked`: 0
+- `xpbdRepulsionMaxForce`: 0
+- `xpbdRepulsionNodesAffected`: 0
+
+### Risks Identified
+
+1. **None** - Pure telemetry plumbing, no runtime logic changes.
+
+### Next Steps (Mini Run 3)
+
+- Import `applyRepulsion` into `engineTickXPBD.ts`
+- Implement force pass at reserved seam
+- Update telemetry counters when repulsion runs
+- Verify on-screen effect
+
+---

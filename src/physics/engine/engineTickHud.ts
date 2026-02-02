@@ -102,6 +102,13 @@ export const updateHudSnapshot = (
     stats.safety.repulsionMaxMag = 0;
     stats.safety.repulsionClampedCount = 0;
 
+    // XPBD Repulsion Telemetry (Run 3 - Mini Run 2)
+    stats.safety.xpbdRepulsionEnabled = false;
+    stats.safety.xpbdRepulsionCalledThisFrame = false;
+    stats.safety.xpbdRepulsionPairsChecked = 0;
+    stats.safety.xpbdRepulsionMaxForce = 0;
+    stats.safety.xpbdRepulsionNodesAffected = 0;
+
     stats.neighborReorderRate = stats.neighborReorderRate || 0;
     stats.hubFlipCount = stats.hubFlipCount || 0;
     stats.degradeFlipCount = stats.degradeFlipCount || 0;
@@ -230,6 +237,13 @@ export const updateHudSnapshot = (
         repulsionPairsChecked: stats.safety.repulsionPairsChecked ?? 0,
         repulsionPairsApplied: stats.safety.repulsionPairsApplied ?? 0,
         repulsionForceMagMax: stats.safety.repulsionForceMagMax ?? 0,
+
+        // XPBD Repulsion Telemetry (Run 3 - Mini Run 2)
+        xpbdRepulsionEnabled: stats.safety.xpbdRepulsionEnabled ?? false,
+        xpbdRepulsionCalledThisFrame: stats.safety.xpbdRepulsionCalledThisFrame ?? false,
+        xpbdRepulsionPairsChecked: stats.safety.xpbdRepulsionPairsChecked ?? 0,
+        xpbdRepulsionMaxForce: stats.safety.xpbdRepulsionMaxForce ?? 0,
+        xpbdRepulsionNodesAffected: stats.safety.xpbdRepulsionNodesAffected ?? 0,
 
         neighborReorderRate: stats.neighborReorderRate,
         hubFlipCount: stats.hubFlipCount,

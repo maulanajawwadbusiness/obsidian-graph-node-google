@@ -369,8 +369,8 @@ export class PhysicsEngine {
      */
     applyXpbdDampingPreset(preset: import('./engine/engineTickXPBD').XpbdDampingPreset) {
         this.presetApplyCount++;
-        // FORENSIC LOG: UI -> Engine boundary (Minimal Guard)
-        console.log(`[XPBD-Debug] Preset ${preset} applied. Count: ${this.presetApplyCount} (UID: ${this.uid})`);
+        // PROBE: UI Write Site
+        console.log(`[XPBD-Probe] UI: Apply Preset ${preset} (Count: ${this.presetApplyCount}, UID: ${this.uid})`);
 
         const presetValues = {
             SNAPPY: 0.12,

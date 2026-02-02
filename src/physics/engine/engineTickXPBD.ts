@@ -696,7 +696,11 @@ export const runPhysicsTickXPBD = (engine: PhysicsEngineTickContext, dtIn: numbe
     // 0 = no damping (floaty), 2 = very heavy damping (k=10, half-life=0.07s)
     const effectiveDamping = Math.max(0, Math.min(2, rawDamping));
 
-    // STEP 4/5 RUN 2: Rate-limited telemetry (change detection + time throttle)
+    // PROBE: Tick Read Site
+    if (engine.frameIndex % 60 === 0 || engine.config.xpbdDamping !== lastTelemetryEffective) {
+        console.log(`[XPBD-Probe] Tick: Read xpbdDamping=${engine.config.xpbdDamping} (Effective=${effectiveDamping}) Frame=${engine.frameIndex} UID=${(engine as any).uid}`);
+    }
+
     if (typeof window !== 'undefined' && (window as any).__DEV__) {
         const configValue = engine.config.xpbdDamping;
         const clamped = rawDamping !== effectiveDamping;

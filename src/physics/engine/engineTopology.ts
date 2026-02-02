@@ -159,9 +159,9 @@ export const clearEngineState = (engine: PhysicsEngineTopologyContext) => {
 };
 
 export const updateEngineConfig = (engine: PhysicsEngineTopologyContext, newConfig: Partial<ForceConfig>) => {
-    // FORENSIC LOG: Engine -> Config Merge
+    // PROBE: Config Write Site
     if ('xpbdDamping' in newConfig) {
-        console.log(`[Forensic] updateEngineConfig merging xpbdDamping: ${newConfig.xpbdDamping}, previous: ${engine.config.xpbdDamping}`);
+        console.log(`[XPBD-Probe] Config Merge: Writing xpbdDamping=${newConfig.xpbdDamping} (Prev=${engine.config.xpbdDamping})`);
     }
     // Merge new config into existing
     engine.config = { ...engine.config, ...newConfig };

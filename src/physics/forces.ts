@@ -203,19 +203,14 @@ export function applyRepulsion(
     const applyPair = (nodeA: PhysicsNode, nodeB: PhysicsNode) => {
         // RUN 2: Track all pairs considered
         pairsConsidered++;
-        if (shouldSkipPair(nodeA, nodeB)) return;
 
+        // RUN 3 (Step 3): Calculate distance FIRST (before stride gating)
+        // This allows overlap priority: never skip close pairs
         let dx = nodeA.x - nodeB.x;
         let dy = nodeA.y - nodeB.y;
 
         // FIX Singularity: Deterministic Fallback (Seeded by IDs)
         if (Math.abs(dx) < 0.0001 && Math.abs(dy) < 0.0001) {
-            // Pseudo-random angle based on ID hash
-            // We can't access engine instance here directly? 
-            // `applyRepulsion` function signature: (nodes, activeNodes, sleepingNodes, config, stats, energy, pairStride, pairOffset, neighborCache).
-            // It does NOT have `engine`.
-            // BUT: We can use a local deterministic hash function if engine not available.
-
             // Local Hash V2 (Better Distribution)
             let h = 0x811c9dc5;
             const str = nodeA.id + nodeB.id;
@@ -232,6 +227,16 @@ export function applyRepulsion(
         }
 
         const d2 = dx * dx + dy * dy;
+        const d = Math.sqrt(d2);
+
+        // RUN 3: OVERLAP PRIORITY - Never skip if in hard core
+        // Critical fix: stride gating must not skip close pairs
+        const isOverlap = d < repulsionMinDistance;
+
+        if (!isOverlap && shouldSkipPair(nodeA, nodeB)) {
+            // Only skip if NOT in overlap zone
+            return;
+        }
 
         if (d2 < maxDistSq) {
             // RUN 2: Pair is in range

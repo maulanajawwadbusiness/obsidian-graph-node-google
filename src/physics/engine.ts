@@ -18,6 +18,10 @@ export class PhysicsEngine {
     // Run 2: Stable Engine UID
     public uid: string = Math.random().toString(36).slice(2, 8);
 
+    // Run 1 (Config-Read): Config Identity for Tracing
+    public configVersion: number = 0;
+    public configId: string = Math.random().toString(36).slice(2, 8);
+
     // DT Policy (Time Hardening)
     public timePolicy = new TimePolicy();
 

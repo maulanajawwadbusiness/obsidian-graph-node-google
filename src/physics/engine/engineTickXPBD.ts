@@ -699,6 +699,12 @@ export const runPhysicsTickXPBD = (engine: PhysicsEngineTickContext, dtIn: numbe
     // GUARD: Rapid Fluctuation Warning (Revert Detection)
     if (typeof window !== 'undefined' && (window as any).__DEV__) {
         const now = getNowMs();
+
+        // Run 1: Trace Config Read
+        if (engine.frameIndex % 60 === 0) {
+            console.log(`[Config-Probe] Tick Read: Version=${(engine as any).configVersion} ID=${(engine as any).configId} xpbdDamping=${engine.config.xpbdDamping}`);
+        }
+
         if (engine.config.xpbdDamping !== lastTelemetryEffective) {
             if (now - lastTelemetryTime < 500 && lastTelemetryTime > 0) {
                 console.warn(`[XPBD-Guard] Rapid damping change detected (potentially fighting defaults?) ${lastTelemetryEffective} -> ${engine.config.xpbdDamping} in ${now - lastTelemetryTime}ms`);

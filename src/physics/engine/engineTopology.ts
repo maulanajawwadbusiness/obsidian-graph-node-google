@@ -162,6 +162,12 @@ export const updateEngineConfig = (engine: PhysicsEngineTopologyContext, newConf
     // Merge new config into existing
     engine.config = { ...engine.config, ...newConfig };
 
+    // Run 1: Trace Config Identity
+    if ('configVersion' in engine) {
+        (engine as any).configVersion++;
+        console.log(`[Config-Probe] Write: Version=${(engine as any).configVersion} ID=${(engine as any).configId} xpbdDamping=${engine.config.xpbdDamping}`);
+    }
+
     // Dev-only assertion: verify xpbdDamping survives merge if provided
     if (typeof window !== 'undefined' && (window as any).__DEV__) {
         if ('xpbdDamping' in newConfig) {

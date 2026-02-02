@@ -552,9 +552,12 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
                                             <span style={{ color: hud.repulsionProofEnabled ? '#0f0' : '#666' }}>
                                                 Enabled: {hud.repulsionProofEnabled ? 'YES' : 'NO'} | Entered: {hud.repulsionProofEnteredFrame}
                                             </span><br />
-                                            Called: {hud.repulsionProofCalledThisFrame ? 'YES' : 'NO'}<br />
-                                            Pairs: {hud.repulsionProofPairsChecked} chk / {hud.repulsionProofPairsApplied} app<br />
-                                            MaxForce: {hud.repulsionProofMaxForce}<br />
+                                            Called: {hud.repulsionProofCalledThisFrame ? 'YES' : 'NO'}
+                                            <span style={{ color: '#888', fontSize: '9px' }}> (Last: {hud.repulsionCalledLastFrame ? 'YES' : 'NO'})</span><br />
+                                            Pairs: {hud.repulsionProofPairsChecked} chk / {hud.repulsionProofPairsApplied} app
+                                            <span style={{ color: '#888', fontSize: '9px' }}> (Last: {hud.repulsionPairsCheckedLastFrame}/{hud.repulsionPairsAppliedLastFrame})</span><br />
+                                            MaxForce: {hud.repulsionProofMaxForce}
+                                            <span style={{ color: '#888', fontSize: '9px' }}> (Last: {hud.repulsionMaxForceMagLastFrame})</span><br />
                                             Active: {hud.repulsionAwakeCount} / Sleep: {hud.repulsionSleepingCount}<br />
                                             Stride: {hud.repulsionPairStride}
                                         </div>

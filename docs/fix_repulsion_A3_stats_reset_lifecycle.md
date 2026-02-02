@@ -1,33 +1,50 @@
 # Fix Repulsion A3: Stats Reset Lifecycle
 
-**Date**: 2026-02-02
-**Goal**: Ensure telemetry persists across frames so 0-value flickers don't hide the truth.
+**Date**: 2026-02-02  
+**Goal**: Ensure repulsion counters persist long enough to be observed and don't flicker to zero immediately after being set.
+
+## Problem
+Repulsion stats were being reset at frame-start, but if repulsion ran intermittently (e.g., only when nodes are close), the HUD would show zeros most of the time, making it impossible to verify execution.
 
 ## Changes
 
-### 1. `PhysicsHudSnapshot` (src/physics/engine/physicsHud.ts)
-Added `lastFrame` fields:
-- `repulsionProofCalledLastFrame`
-- `repulsionProofPairsCheckedLastFrame`
-- `repulsionProofMaxForceLastFrame`
+### 1. `src/physics/engine/physicsHud.ts`
+Added lastFrame snapshot fields:
+```typescript
+// Mini Run 3 (A3): LastFrame Snapshots (prevent flickering)
+repulsionCalledLastFrame?: boolean;
+repulsionPairsCheckedLastFrame?: number;
+repulsionPairsAppliedLastFrame?: number;
+repulsionMaxForceMagLastFrame?: number;
+```
 
-### 2. `engineTickHud.ts`
-Populated these fields by reading from `engine.lastDebugStats`. 
-- `engine.lastDebugStats` is preserved at the end of every tick (in `engineTick.ts`), so it reliably holds the *completed* state of the previous frame, regardless of how early the current frame is in its lifecycle.
+### 2. `src/physics/engine/engineTickHud.ts`
+Captured previous frame values before reset:
+```typescript
+// Mini Run 3 (A3): LastFrame Snapshots
+// Capture previous frame values before reset (from engine.hudSnapshot)
+repulsionCalledLastFrame: engine.hudSnapshot?.repulsionProofCalledThisFrame ?? false,
+repulsionPairsCheckedLastFrame: engine.hudSnapshot?.repulsionProofPairsChecked ?? 0,
+repulsionPairsAppliedLastFrame: engine.hudSnapshot?.repulsionProofPairsApplied ?? 0,
+repulsionMaxForceMagLastFrame: engine.hudSnapshot?.repulsionProofMaxForce ?? 0,
+```
 
-### 3. `CanvasOverlays.tsx`
-Updated the "Repulsion Proof" section.
-- **Called**: Shows `(Prev: Y/N)`
-- **Pairs**: Shows `Current (Prev)`
-- **MaxForce**: Shows `Current (Prev)`
+### 3. `src/playground/components/CanvasOverlays.tsx`
+Updated HUD display to show both current and last frame values:
+```tsx
+Called: {hud.repulsionProofCalledThisFrame ? 'YES' : 'NO'} 
+<span style={{ color: '#888', fontSize: '9px' }}> (Last: {hud.repulsionCalledLastFrame ? 'YES' : 'NO'})</span>
+```
 
-## Verification
-- **Intermittent Execution**: If repulsion runs every other frame, you won't just see `YES` flickering to `NO`. You will see `YES (Prev: NO)` and `NO (Prev: YES)`, confirming the cadence.
-- **Persistence**: Even if you pause the renderer (if logic allowed), the last frame stats remain visible.
+## Verification Checklist
+- ✅ If repulsion runs intermittently, lastFrame shows it clearly
+- ✅ Numbers do not flicker to 0 immediately after being set
+- ✅ HUD shows both current frame and last frame values in gray
 
-## Deliverables Summary
-- **A1**: Toggle Real (Config + HUD)
-- **A2**: Tick Mode (HUD display + Config Wiring)
-- **A3**: Lifecycle (LastFrame snapshots)
+## Summary
+All three mini runs complete:
+- **A1**: `xpbdRepulsionEnabled` now defaults to true and has HUD toggle
+- **A2**: `Mode: XPBD` displays prominently in green in HUD
+- **A3**: LastFrame snapshots prevent telemetry from being hidden
 
-Fixed the "bucket A" failures: Repulsion execution is now visible, controllable, and persistent.
+Repulsion execution is now fully verifiable via HUD.

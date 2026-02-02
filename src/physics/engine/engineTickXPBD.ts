@@ -29,6 +29,10 @@ import { applyRepulsion } from '../forces';  // Mini Run 3: Force-based repulsio
 // =============================================================================
 export const DEFAULT_XPBD_DAMPING = 0.20;
 
+// STEP 4/5 RUN 2: Telemetry state for change detection and rate limiting
+let lastTelemetrySource: 'DEFAULT' | 'CONFIG' | 'CLAMPED' | null = null;
+let lastTelemetryEffective: number | null = null;
+let lastTelemetryTime = 0;
 
 // Mini Run 7: Kinematic Drag Lock
 const applyKinematicDrag = (engine: PhysicsEngineTickContext, dt: number) => {
@@ -683,8 +687,8 @@ export const runPhysicsTickXPBD = (engine: PhysicsEngineTickContext, dtIn: numbe
     // 0 = no damping (floaty), 2 = very heavy damping (k=10, half-life=0.07s)
     const effectiveDamping = Math.max(0, Math.min(2, rawDamping));
 
-    // STEP 4/5 RUN 1: Enhanced telemetry for damping policy proof
-    if (typeof window !== 'undefined' && (window as any).__DEV__ && engine.frameIndex % 60 === 0) {
+    // STEP 4/5 RUN 2: Rate-limited telemetry (change detection + time throttle)
+    if (typeof window !== 'undefined' && (window as any).__DEV__) {
         const configValue = engine.config.xpbdDamping;
         const clamped = rawDamping !== effectiveDamping;
 
@@ -697,18 +701,30 @@ export const runPhysicsTickXPBD = (engine: PhysicsEngineTickContext, dtIn: numbe
             source = 'CONFIG';
         }
 
-        const frameFactor = Math.exp(-effectiveDamping * 5.0 * dt);
+        const now = getNowMs();
+        const sourceChanged = source !== lastTelemetrySource;
+        const effectiveChanged = effectiveDamping !== lastTelemetryEffective;
+        const timeSinceLast = now - lastTelemetryTime;
+        const shouldLog = (sourceChanged || effectiveChanged) && timeSinceLast > 500;
 
-        console.log('[DEV] XPBD damping telemetry:', {
-            source,
-            raw: rawDamping,
-            effective: effectiveDamping,
-            clamped,
-            dt,
-            frameFactor: frameFactor.toFixed(4),
-            xpbdDefault: DEFAULT_XPBD_DAMPING,
-            legacyDamping: engine.config.damping
-        });
+        if (shouldLog) {
+            const frameFactor = Math.exp(-effectiveDamping * 5.0 * dt);
+
+            console.log('[DEV] XPBD damping telemetry:', {
+                source,
+                raw: rawDamping,
+                effective: effectiveDamping,
+                clamped,
+                dt,
+                frameFactor: frameFactor.toFixed(4),
+                xpbdDefault: DEFAULT_XPBD_DAMPING,
+                legacyDamping: engine.config.damping
+            });
+
+            lastTelemetrySource = source;
+            lastTelemetryEffective = effectiveDamping;
+            lastTelemetryTime = now;
+        }
     }
 
     integrateNodes(

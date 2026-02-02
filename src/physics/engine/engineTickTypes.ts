@@ -78,6 +78,7 @@ export type PhysicsEngineTickContext = {
     hudHistory: PhysicsHudHistory;
     hudSettleState: PhysicsHudSnapshot['settleState'];
     hudSettleStateAt: number;
+    xpbdRepulsionLoggedOnce?: boolean;  // Mini Run 1 (A1): One-time startup log flag
     worldWidth: number;
     worldHeight: number;
     getNodeList: () => PhysicsNode[];

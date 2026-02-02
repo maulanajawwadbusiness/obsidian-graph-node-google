@@ -179,6 +179,6 @@ export const DEFAULT_PHYSICS_CONFIG: ForceConfig = {
     xpbdLinkCompliance: 0.01,  // Stable, visible corrections
     // xpbdMaxCorrPerConstraintPx: undefined,  // No cap by default (trust the solver)
 
-    // ANCHOR: XPBD Repulsion
-    xpbdRepulsionEnabled: true,
+    // XPBD Repulsion (Mini Run 1: A1 - Make Toggle Real)
+    xpbdRepulsionEnabled: true,  // Enable force-based repulsion in XPBD mode (default ON for dev)
 };

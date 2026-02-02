@@ -377,21 +377,13 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
                                                 </div>
                                                 <strong style={{ fontWeight: 700, fontSize: '11px', color: '#88ff88', marginTop: '6px', display: 'block' }}>XPBD FORCING</strong>
                                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2px' }}>
-                                                    <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '10px', cursor: 'pointer', color: '#adff2f' }}>
-                                                        <input type="checkbox" checked={!!config.useXPBD} onChange={(e) => onConfigChange('useXPBD', e.target.checked)} />
-                                                        Use XPBD Engine
-                                                    </label>
                                                     <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '10px', cursor: 'pointer' }}>
                                                         <input type="checkbox" checked={!!config.debugForceStiffSprings} onChange={(e) => onConfigChange('debugForceStiffSprings', e.target.checked)} />
                                                         Stiff Links
                                                     </label>
                                                     <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '10px', cursor: 'pointer' }}>
-                                                        <input type="checkbox" checked={!!config.xpbdRepulsionEnabled} onChange={(e) => onConfigChange('xpbdRepulsionEnabled', e.target.checked)} />
-                                                        XPBD Repel
-                                                    </label>
-                                                    <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '10px', cursor: 'pointer' }}>
                                                         <input type="checkbox" checked={!!config.debugForceRepulsion} onChange={(e) => onConfigChange('debugForceRepulsion', e.target.checked)} />
-                                                        Force Repel (Legacy)
+                                                        Force Repel
                                                     </label>
                                                     <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '10px', cursor: 'pointer' }}>
                                                         <input type="checkbox" checked={!!config.debugXPBDCanary} onChange={(e) => onConfigChange('debugXPBDCanary', e.target.checked)} />
@@ -405,6 +397,10 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
                                                         />
                                                         Incident Only
                                                     </label>
+                                                    <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '10px', cursor: 'pointer' }}>
+                                                        <input type="checkbox" checked={!!config.xpbdRepulsionEnabled} onChange={(e) => onConfigChange('xpbdRepulsionEnabled', e.target.checked)} />
+                                                        XPBD Repulsion
+                                                    </label>
                                                 </div>
                                             </div>
                                         )}
@@ -414,7 +410,6 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
                                 {/* PHYSICS HUD STATS */}
                                 <div style={{ marginTop: '8px', lineHeight: '1.2' }}>
                                     <strong style={{ fontWeight: 700 }}>Physics Stats</strong><br />
-                                    Mode: <strong style={{ color: hud?.mode === 'XPBD' ? '#adff2f' : '#888' }}>{hud?.mode || 'LEGACY'}</strong><br />
                                     N: {metrics.nodes} | L: {metrics.links}<br />
                                     FPS: {metrics.fps} <br />
                                     Degrade: {hud ? hud.degradeLevel : 0} ({hud ? hud.degradePct5s.toFixed(1) : '0.0'}%)<br />
@@ -550,13 +545,13 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
                                     )}
                                     {hud && (
                                         <div style={{ marginTop: '4px', paddingTop: '4px', borderTop: '1px solid #444', color: '#ffcc00' }}>
-                                            <strong style={{ fontWeight: 700 }}>Repulsion Proof (Run 1+)</strong><br />
+                                            <strong>Repulsion Proof (Run 1)</strong><br />
                                             <span style={{ color: hud.repulsionProofEnabled ? '#0f0' : '#666' }}>
                                                 Enabled: {hud.repulsionProofEnabled ? 'YES' : 'NO'} | Entered: {hud.repulsionProofEnteredFrame}
                                             </span><br />
-                                            Called: {hud.repulsionProofCalledThisFrame ? 'YES' : 'NO'} <span style={{ color: '#888' }}>(Prev: {hud.repulsionProofCalledLastFrame ? 'Y' : 'N'})</span><br />
-                                            Pairs: {hud.repulsionProofPairsChecked} <span style={{ color: '#888' }}>({hud.repulsionProofPairsCheckedLastFrame})</span> chk / {hud.repulsionProofPairsApplied} app<br />
-                                            MaxForce: {hud.repulsionProofMaxForce} <span style={{ color: '#888' }}>({hud.repulsionProofMaxForceLastFrame})</span><br />
+                                            Called: {hud.repulsionProofCalledThisFrame ? 'YES' : 'NO'}<br />
+                                            Pairs: {hud.repulsionProofPairsChecked} chk / {hud.repulsionProofPairsApplied} app<br />
+                                            MaxForce: {hud.repulsionProofMaxForce}<br />
                                             Active: {hud.repulsionAwakeCount} / Sleep: {hud.repulsionSleepingCount}<br />
                                             Stride: {hud.repulsionPairStride}
                                         </div>

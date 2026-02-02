@@ -574,6 +574,12 @@ export const runPhysicsTickXPBD = (engine: PhysicsEngineTickContext, dtIn: numbe
     // Wire order: applyRepulsion → integrateNodes → solveXPBDEdgeConstraints
     // =========================================================================
     if (engine.config.xpbdRepulsionEnabled) {
+        // Mini Run 1 (A1): Log repulsion status once at startup
+        if (!engine.xpbdRepulsionLoggedOnce) {
+            console.log('[XPBD Repulsion] Enabled: true (default ON for dev)');
+            engine.xpbdRepulsionLoggedOnce = true;
+        }
+
         // 1. Clear forces (explicit, local - not relying on legacy forcePass)
         for (const node of nodeList) {
             node.fx = 0;
@@ -590,121 +596,6 @@ export const runPhysicsTickXPBD = (engine: PhysicsEngineTickContext, dtIn: numbe
                 sleepingNodes.push(node);
             } else {
                 activeNodes.push(node);
-            }
-        }
-
-        // B1 FIX: Repulsion Safety Floor (Prevent "All Asleep" Collapse)
-        // If everything is sleeping, global repulsion disables, which means
-        // a new node inserted (or a late wake) might overlap invisibly.
-        // We force at least 2 pilots to remain active to sample the field.
-        if (activeNodes.length === 0 && nodeList.length >= 2) {
-            // Wake the first 2 nodes deterministically (by array order)
-            // They become the "sentries"
-            const sentryA = nodeList[0];
-            const sentryB = nodeList[1];
-            sentryA.isSleeping = false;
-            sentryB.isSleeping = false;
-
-            // Move from sleeping to active lists
-            // (Simpler to just clear and rebuild or shift, but let's be cheap)
-            // Actually, we just pushed them to sleepingNodes. 
-            // We should ideally fix the list.
-            activeNodes.push(sentryA);
-            activeNodes.push(sentryB);
-
-            // Remove from sleeping (filter out by ID)
-            const sentryIds = new Set([sentryA.id, sentryB.id]);
-            // In-place remove is annoying, let's just re-filter sleepingNodes?
-            // Or simpler: just continue. ApplyRepulsion iterates active/sleep separately.
-            // If they are in BOTH, they get applied twice? 
-            // applyRepulsion iterates:
-            // for A in active:
-            //   for B in active (j > i)
-            //   for B in sleeping
-            // If sentry is in BOTH active and sleeping:
-            // A=sentry (active loop). B=sentry (sleeping loop).
-            // It will repel itself? No, loop usually checks i==j or id.
-            // But if A is in active list AND sleeping list:
-            // Phase 1: A vs Active(others) -> OK
-            // Phase 2: A vs Sleeping(others) -> OK
-            // Phase 3: A vs Sleeping(itself in sleeping list) -> Self repel?
-            // applyRepulsion check: `if (i === j) continue` (active-active).
-            // But active-sleeping loop does not check index match?
-            // "shouldSkipPair" checks mix.
-            // d2 check: dx=0, dy=0.
-            // line 187 forces.ts: Singularity check (d2 < 0.0001).
-            // It handles self-overlap gracefully (random kick).
-            // BUT we don't want self-repulsion.
-
-            // Allow sloppy list duality? 
-            // Better: Re-run split.
-            activeNodes.length = 0;
-            sleepingNodes.length = 0;
-            for (const node of nodeList) {
-                if (node.isSleeping) {
-                    sleepingNodes.push(node);
-                } else {
-                    activeNodes.push(node);
-                }
-            }
-        }
-
-        // B2 FIX: Drag Wakes a Bubble
-        // B1 ensured we never have 0 active nodes globally.
-        // B2 ensures that when we interact (drag), we wake the local neighborhood
-        // so the user feels immediate repulsive feedback, not "ghostly" overlap.
-        if (engine.draggedNodeId) {
-            const dragId = engine.draggedNodeId;
-            const dragNode = engine.nodes.get(dragId);
-
-            if (dragNode) {
-                // 1. Wake the dragged node
-                if (dragNode.isSleeping) {
-                    dragNode.isSleeping = false;
-                    // Add to active if it was sleeping? 
-                    // Again, list sync is messy. 
-                    // Simpler: Just rely on next frame's split?
-                    // NO, we want immediate feedback THIS frame.
-                    // But we already split the lists.
-
-                    // Force re-add to activeNodes if valid?
-                    // Let's just do it cleanly:
-                    // If we wake it, we push it to activeNodes.
-                    // If it was already in sleeping, we ignore the duplicate presence
-                    // because active loop prevails or "shouldSkip" logic handles it?
-                    // Actually, let's just push.
-                    activeNodes.push(dragNode);
-                }
-
-                // 2. Wake neighbors (Bubble)
-                // Use graph topology (1-hop)
-                const neighbors = engine.nodeNeighbors.get(dragId);
-                if (neighbors) {
-                    for (const neighborId of neighbors) {
-                        const neighbor = engine.nodes.get(neighborId);
-                        if (neighbor && neighbor.isSleeping) {
-                            neighbor.isSleeping = false;
-                            activeNodes.push(neighbor);
-                        }
-                    }
-                }
-
-                // 3. Wake spatial radius (optional, but good for non-connected repulsion)
-                // Doing O(N) check here is expensive? 
-                // Only if Drag is active. N=500 -> 500 checks. Cheap.
-                // Wake anything within repulsionDistanceMax of the drag target.
-                const wakeRadius = engine.config.repulsionDistanceMax * 1.5;
-                const wakeRadiusSq = wakeRadius * wakeRadius;
-                for (const node of nodeList) {
-                    if (node.isSleeping && node.id !== dragId) {
-                        const dx = node.x - dragNode.x;
-                        const dy = node.y - dragNode.y;
-                        if (dx * dx + dy * dy < wakeRadiusSq) {
-                            node.isSleeping = false;
-                            activeNodes.push(node);
-                        }
-                    }
-                }
             }
         }
 

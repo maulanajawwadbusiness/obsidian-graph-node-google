@@ -10,6 +10,26 @@ import { createMotionPolicy } from './motionPolicy';
 import { applyDragVelocity } from './velocity/dragVelocity';
 import { applyRepulsion } from '../forces';  // Mini Run 3: Force-based repulsion
 
+// =============================================================================
+// STEP 3/5: XPBD-SPECIFIC DAMPING DEFAULT
+// =============================================================================
+// XPBD mode uses its own damping default, separate from legacy config.damping.
+//
+// Damping formula: v *= exp(-effectiveDamping * 5.0 * dt)
+// Half-life formula: t_half = ln(2) / (effectiveDamping * 5.0)
+//
+// Target half-life: ~0.6-1.0 seconds (responsive but not too loose)
+//
+// Calculation for half-life = 0.7s:
+//   0.7 = 0.693 / (effectiveDamping * 5.0)
+//   effectiveDamping * 5.0 = 0.693 / 0.7 = 0.99
+//   effectiveDamping = 0.99 / 5.0 = 0.198 ≈ 0.20
+//
+// Chosen value: 0.20 (half-life ≈ 0.69s)
+// =============================================================================
+export const DEFAULT_XPBD_DAMPING = 0.20;
+
+
 // Mini Run 7: Kinematic Drag Lock
 const applyKinematicDrag = (engine: PhysicsEngineTickContext, dt: number) => {
     // If we have a dragged node and a target, Force Position (Pin)

@@ -125,11 +125,30 @@ export const finalizePhysicsTick = ({
             }
 
             if (engine.hudSettleState === 'sleep') {
-                for (const node of nodeList) {
+                // B3 FIX: Soften Sleep Gating
+                // Instead of putting EVERYONE to sleep, we keep a "pulse" alive
+                // if XPBD repulsion is enabled, so that new interactions are caught.
+
+                let awakeQuota = 0;
+                if (engine.config.xpbdRepulsionEnabled && nodeList.length >= 2) {
+                    awakeQuota = 2; // Keep 2 sentries awake (matches B1)
+                }
+
+                for (let i = 0; i < nodeList.length; i++) {
+                    const node = nodeList[i];
                     if (!node.isFixed && node.id !== engine.draggedNodeId) {
-                        node.vx = 0;
-                        node.vy = 0;
-                        node.isSleeping = true;
+                        if (i < awakeQuota) {
+                            // Keep the first few awake as sentries
+                            node.isSleeping = false;
+                            node.vx = node.vx * 0.9; // Dampen significantly but keep "alive"
+                            node.vy = node.vy * 0.9;
+                        } else {
+                            node.vx = 0;
+                            node.vy = 0;
+                            node.isSleeping = true;
+                        }
+                    } else if (node.id === engine.draggedNodeId) {
+                        node.isSleeping = false;
                     }
                 }
             } else {

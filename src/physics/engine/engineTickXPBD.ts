@@ -409,7 +409,7 @@ const solveXPBDEdgeConstraints = (engine: PhysicsEngineTickContext, dt: number) 
         if (iterCorrMax < STAGNATION_THRESHOLD_PX) {
             earlyBreak = true;
             if (iter === 0 && engine.xpbdFrameAccum) engine.xpbdFrameAccum.springs.maxAbsCFirst = iterAbsCMax;
-        if (engine.xpbdFrameAccum) engine.xpbdFrameAccum.springs.maxAbsC = iterAbsCMax;
+            if (engine.xpbdFrameAccum) engine.xpbdFrameAccum.springs.maxAbsC = iterAbsCMax;
             break;
         }
 
@@ -559,6 +559,20 @@ export const runPhysicsTickXPBD = (engine: PhysicsEngineTickContext, dtIn: numbe
 
     if (!engine.config.debugDisableAllVMods) {
         applyDragVelocity(engine as any, nodeList, dt, debugStats);
+    }
+
+    // =========================================================================
+    // XPBD FORCE PASS SEAM (RESERVED)
+    // =========================================================================
+    // This is the ONLY correct location to apply forces in XPBD mode.
+    // Forces MUST be written before integrateNodes reads node.fx/fy.
+    // Integration converts forces → velocity → position.
+    // XPBD solver (later) corrects positions to satisfy constraints.
+    //
+    // Wire order: applyRepulsion → integrateNodes → solveXPBDEdgeConstraints
+    // =========================================================================
+    if (engine.config.xpbdRepulsionEnabled) {
+        // TODO: Mini Run 3 - Wire applyRepulsion here
     }
 
     integrateNodes(

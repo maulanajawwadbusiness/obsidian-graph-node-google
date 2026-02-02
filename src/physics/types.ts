@@ -254,4 +254,7 @@ export interface ForceConfig {
   xpbdEdgeSelection?: 'full' | 'incident'; // Strategy for selecting edges to solve
   xpbdIterationsIdle?: number; // Sub-steps when at rest (Default: 2)
   xpbdIterationsDrag?: number; // Sub-steps when dragging (Default: 6)
+
+  // XPBD Repulsion Integration (Run 3)
+  xpbdRepulsionEnabled?: boolean; // Enable force-based repulsion in XPBD mode (Default: false)
 }

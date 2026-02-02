@@ -637,7 +637,10 @@ export const runPhysicsTickXPBD = (engine: PhysicsEngineTickContext, dtIn: numbe
         // 5. Update telemetry
         debugStats.safety.xpbdRepulsionEnabled = true;
         debugStats.safety.xpbdRepulsionCalledThisFrame = true;
-        // Note: pairsChecked/maxForce/nodesAffected are updated by applyRepulsion
+        // Run 3: Repulsion Proof Canary (Source of Truth)
+        debugStats.repulsionProof.enteredFrame = engine.frameIndex;
+        debugStats.repulsionProof.calledThisFrame = true;
+        debugStats.repulsionProof.enabled = true;
     }
 
     integrateNodes(

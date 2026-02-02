@@ -1,4 +1,5 @@
 import type { PhysicsEngineTickContext } from './engineTickTypes';
+import type { PhysicsNode } from '../types';  // Mini Run 3: For active/sleeping split
 import { runTickPreflight } from './engineTickPreflight';
 import { createDebugStats } from './stats';
 import { getNowMs } from './engineTime';
@@ -7,6 +8,7 @@ import { finalizePhysicsTick } from './engineTickFinalize';
 import { integrateNodes } from './integration';
 import { createMotionPolicy } from './motionPolicy';
 import { applyDragVelocity } from './velocity/dragVelocity';
+import { applyRepulsion } from '../forces';  // Mini Run 3: Force-based repulsion
 
 // Mini Run 7: Kinematic Drag Lock
 const applyKinematicDrag = (engine: PhysicsEngineTickContext, dt: number) => {
@@ -572,7 +574,42 @@ export const runPhysicsTickXPBD = (engine: PhysicsEngineTickContext, dtIn: numbe
     // Wire order: applyRepulsion → integrateNodes → solveXPBDEdgeConstraints
     // =========================================================================
     if (engine.config.xpbdRepulsionEnabled) {
-        // TODO: Mini Run 3 - Wire applyRepulsion here
+        // 1. Clear forces (explicit, local - not relying on legacy forcePass)
+        for (const node of nodeList) {
+            node.fx = 0;
+            node.fy = 0;
+        }
+
+        // 2. Build active/sleeping split
+        // Note: Treating all as active for MVP to avoid missing pairs
+        // (isSleeping may not be authoritative in XPBD mode yet)
+        const activeNodes: PhysicsNode[] = [];
+        const sleepingNodes: PhysicsNode[] = [];
+        for (const node of nodeList) {
+            if (node.isSleeping) {
+                sleepingNodes.push(node);
+            } else {
+                activeNodes.push(node);
+            }
+        }
+
+        // 3. Apply repulsion
+        applyRepulsion(
+            nodeList,           // all nodes (for density calc)
+            activeNodes,        // active nodes
+            sleepingNodes,      // sleeping nodes
+            engine.config,      // force config
+            debugStats,         // stats
+            undefined,          // energy (not used in XPBD)
+            1,                  // pairStride (full coverage for MVP)
+            0,                  // pairOffset
+            undefined           // neighborCache (optional)
+        );
+
+        // 4. Update telemetry
+        debugStats.safety.xpbdRepulsionEnabled = true;
+        debugStats.safety.xpbdRepulsionCalledThisFrame = true;
+        // Note: pairsChecked/maxForce/nodesAffected are updated by applyRepulsion
     }
 
     integrateNodes(

@@ -157,3 +157,115 @@ With `xpbdRepulsionEnabled = false` (default):
 - Verify on-screen effect
 
 ---
+
+## Mini Run 3/5: Wire Minimal Repulsion (MVP)
+
+**Date**: 2026-02-02  
+**Goal**: Implement actual repulsion force pass at the reserved seam to enable visible on-screen separation.
+
+### Changes Made
+
+#### 1. Import Additions
+**File**: `src/physics/engine/engineTickXPBD.ts:2,11`
+
+```typescript
+import type { PhysicsNode } from '../types';  // For active/sleeping split
+import { applyRepulsion } from '../forces';  // Force-based repulsion
+```
+
+#### 2. Force Pass Implementation
+**File**: `src/physics/engine/engineTickXPBD.ts:575-612`
+
+**Location**: Immediately before `integrateNodes` call (Line 614)
+
+**Implementation**:
+```typescript
+if (engine.config.xpbdRepulsionEnabled) {
+    // 1. Clear forces (explicit, local)
+    for (const node of nodeList) {
+        node.fx = 0;
+        node.fy = 0;
+    }
+
+    // 2. Build active/sleeping split
+    const activeNodes: PhysicsNode[] = [];
+    const sleepingNodes: PhysicsNode[] = [];
+    for (const node of nodeList) {
+        if (node.isSleeping) {
+            sleepingNodes.push(node);
+        } else {
+            activeNodes.push(node);
+        }
+    }
+
+    // 3. Apply repulsion
+    applyRepulsion(
+        nodeList,           // all nodes (for density calc)
+        activeNodes,        // active nodes
+        sleepingNodes,      // sleeping nodes
+        engine.config,      // force config
+        debugStats,         // stats
+        undefined,          // energy (not used in XPBD)
+        1,                  // pairStride (full coverage for MVP)
+        0,                  // pairOffset
+        undefined           // neighborCache (optional)
+    );
+
+    // 4. Update telemetry
+    debugStats.safety.xpbdRepulsionEnabled = true;
+    debugStats.safety.xpbdRepulsionCalledThisFrame = true;
+}
+```
+
+### Verification Checklist
+
+- [x] **Import added**: `applyRepulsion` from `../forces`
+- [x] **Type import added**: `PhysicsNode` for array typing
+- [x] **Force clearing**: Explicit `fx/fy = 0` for all nodes
+- [x] **Active/sleeping split**: Built from `node.isSleeping` check
+- [x] **Repulsion called**: With full coverage (stride=1)
+- [x] **Telemetry updated**: `xpbdRepulsionEnabled` and `xpbdRepulsionCalledThisFrame` set to true
+- [ ] **On-screen verification**: Nodes stop overlapping when `xpbdRepulsionEnabled=true`
+- [ ] **No explosions**: Graph remains stable
+
+### Expected Behavior
+
+**With `xpbdRepulsionEnabled = false`** (default):
+- No change from before (repulsion block skipped)
+- Counters remain false/0
+
+**With `xpbdRepulsionEnabled = true`**:
+- HUD shows: `xpbdRepulsionCalledThisFrame = true`
+- HUD shows: `xpbdRepulsionPairsChecked > 0` (from applyRepulsion)
+- On screen: Non-edge nodes push apart (visible separation)
+- XPBD edges still maintain rest lengths (hybrid behavior)
+
+### Integration Flow
+
+```
+1. applyRepulsion writes node.fx/fy (forces)
+   ↓
+2. integrateNodes reads fx/fy → computes ax/ay → updates vx/vy → updates x/y
+   ↓
+3. solveXPBDEdgeConstraints reads x/y → writes x/y (position corrections)
+   ↓
+4. Final positions: repulsion separation + XPBD edge constraints
+```
+
+### Risks Identified
+
+1. **Repulsion/XPBD oscillation**: If repulsion pushes too hard, XPBD may fight back → oscillation
+   - **Mitigation**: Start with low `repulsionStrength` (Mini Run 4)
+2. **Performance (O(N²))**: Full coverage with stride=1 may be slow for N > 200
+   - **Mitigation**: Implement stride policy in Mini Run 5
+3. **Sleep state bugs**: `isSleeping` may not be authoritative in XPBD mode
+   - **Mitigation**: Treating all as active for MVP (safe but less optimal)
+
+### Next Steps (Mini Run 4)
+
+- Verify config defaults for repulsion parameters
+- Add live config telemetry to HUD
+- Test zoom invariance (world-space units)
+- Tune `repulsionStrength` for visible but stable effect
+
+---

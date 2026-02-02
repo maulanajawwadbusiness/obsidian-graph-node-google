@@ -677,7 +677,11 @@ export const runPhysicsTickXPBD = (engine: PhysicsEngineTickContext, dtIn: numbe
     // STEP 3/5: XPBD-specific damping (separate from legacy)
     // When xpbdDamping is undefined, use XPBD default (NOT legacy config.damping)
     // User override: if xpbdDamping is set, it wins
-    const effectiveDamping = engine.config.xpbdDamping ?? DEFAULT_XPBD_DAMPING;
+    const rawDamping = engine.config.xpbdDamping ?? DEFAULT_XPBD_DAMPING;
+
+    // RUN 4: Safety clamp to sane range [0, 2]
+    // 0 = no damping (floaty), 2 = very heavy damping (k=10, half-life=0.07s)
+    const effectiveDamping = Math.max(0, Math.min(2, rawDamping));
 
     // Dev-only: Proof-of-use for xpbdDamping selection
     if (typeof window !== 'undefined' && (window as any).__DEV__ && engine.frameIndex % 60 === 0) {

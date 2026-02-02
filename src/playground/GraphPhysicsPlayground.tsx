@@ -329,9 +329,12 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
     // Config Updates
     // ---------------------------------------------------------------------------
     const handleConfigChange = (key: keyof ForceConfig, value: number | boolean) => {
-        const newConfig = { ...config, [key]: value };
-        setConfig(newConfig);
-        engineRef.current?.updateConfig(newConfig);
+        // Run 4: Fix stale closure by using updater
+        setConfig(prev => {
+            const newConfig = { ...prev, [key]: value };
+            engineRef.current?.updateConfig(newConfig);
+            return newConfig;
+        });
     };
 
     const handleXpbdDampingPreset = (preset: 'SNAPPY' | 'BALANCED' | 'SMOOTH') => {

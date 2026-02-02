@@ -729,8 +729,7 @@ export const runPhysicsTickXPBD = (engine: PhysicsEngineTickContext, dtIn: numbe
                 dt,
                 frameFactor: frameFactor.toFixed(4),
                 xpbdDefault: DEFAULT_XPBD_DAMPING,
-                legacyDamping: engine.config.damping,
-                engineUid: (engine as any).uid // Run 2: Tick Identity
+                legacyDamping: engine.config.damping
             });
 
             lastTelemetrySource = source;

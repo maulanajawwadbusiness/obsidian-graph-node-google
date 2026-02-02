@@ -344,8 +344,6 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
             SMOOTH: 0.32
         };
         const value = presetValues[preset];
-        const engineUid = (engineRef.current as any).uid || 'unknown';
-        console.log(`[PresetClick] ${preset} -> ${value} (Engine UID: ${engineUid})`);
         handleConfigChange('xpbdDamping', value);
     };
 

@@ -361,19 +361,23 @@ export class PhysicsEngine {
         updateEngineConfig(this, newConfig);
     }
 
+    // Run 5: Internal counters for verification
+    public presetApplyCount: number = 0;
+
     /**
      * STEP 5/5 RUN 1: Apply XPBD damping preset for hand calibration
      */
     applyXpbdDampingPreset(preset: import('./engine/engineTickXPBD').XpbdDampingPreset) {
-        // FORENSIC LOG: UI -> Engine boundary
-        console.log(`[Forensic] applyXpbdDampingPreset called with: ${preset}`);
+        this.presetApplyCount++;
+        // FORENSIC LOG: UI -> Engine boundary (Minimal Guard)
+        console.log(`[XPBD-Debug] Preset ${preset} applied. Count: ${this.presetApplyCount} (UID: ${this.uid})`);
+
         const presetValues = {
             SNAPPY: 0.12,
             BALANCED: 0.20,
             SMOOTH: 0.32
         };
         const value = presetValues[preset];
-        console.log(`[Forensic] Setting xpbdDamping to: ${value}`);
         this.updateConfig({ xpbdDamping: value });
     }
 

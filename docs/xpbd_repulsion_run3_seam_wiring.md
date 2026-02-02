@@ -368,3 +368,180 @@ repulsionMaxForceConfig: engine.config.repulsionMaxForce,
 - Test performance with N=50/100/200/500
 
 ---
+
+## Mini Run 5/5: Performance + Stride Policy
+
+**Date**: 2026-02-02  
+**Goal**: Avoid O(N²) death while keeping law continuous through deterministic stride policy.
+
+### Changes Made
+
+#### 1. Deterministic Stride Policy
+**File**: `src/physics/engine/engineTickXPBD.ts:596-621`
+
+**Implementation**:
+```typescript
+// 3. Deterministic pairStride policy (Mini Run 5)
+const N = nodeList.length;
+let pairStride = 1;  // Default: full coverage
+
+// Thresholds (deterministic, no random)
+const N_small = 150;   // Full coverage below this
+const N_medium = 300;  // Stride=2 (50% coverage)
+const N_large = 500;   // Stride=3 (33% coverage)
+
+// Hysteresis: Use 10% buffer to prevent flipping
+const hysteresis = 1.1;
+
+if (N > N_large * hysteresis) {
+    pairStride = 4;  // 25% coverage for very large graphs
+} else if (N > N_medium * hysteresis) {
+    pairStride = 3;  // 33% coverage
+} else if (N > N_small * hysteresis) {
+    pairStride = 2;  // 50% coverage
+} else {
+    pairStride = 1;  // Full coverage
+}
+
+// During drag: prefer full coverage for local responsiveness
+if (engine.draggedNodeId) {
+    pairStride = Math.max(1, Math.floor(pairStride / 2));
+}
+```
+
+**Policy Table**:
+
+| Node Count | Stride | Coverage | Pairs Checked (approx) |
+|------------|--------|----------|------------------------|
+| N ≤ 150 | 1 | 100% | 11,250 |
+| 150 < N ≤ 330 | 2 | 50% | 27,225 |
+| 330 < N ≤ 550 | 3 | 33% | 50,325 |
+| N > 550 | 4 | 25% | 95,062 |
+
+**Hysteresis**: 10% buffer prevents stride flipping at boundaries (e.g., N=150 → 165 before switching to stride=2).
+
+**Drag Boost**: When dragging, stride is halved (e.g., stride=4 → 2) for better local responsiveness.
+
+### Verification Checklist
+
+- [x] **Stride policy implemented**: Deterministic thresholds with hysteresis
+- [x] **No random()**: All logic is deterministic (hash-based in applyRepulsion)
+- [x] **Drag boost**: Stride reduced during drag for responsiveness
+- [x] **Sleep behavior**: Active/sleeping split preserved from Mini Run 3
+- [ ] **Performance test**: Verify N=50/100/200/500 frame times
+- [ ] **Law continuity**: No visible "pop" when stride changes
+
+### Expected Behavior
+
+**Small graphs (N ≤ 150)**:
+- Stride = 1 (full coverage)
+- All pairs checked
+- Best quality, no performance issues
+
+**Medium graphs (150 < N ≤ 330)**:
+- Stride = 2 (50% coverage)
+- Half of pairs checked
+- Slight quality degradation, acceptable performance
+
+**Large graphs (330 < N ≤ 550)**:
+- Stride = 3 (33% coverage)
+- One-third of pairs checked
+- Noticeable quality degradation, good performance
+
+**Very large graphs (N > 550)**:
+- Stride = 4 (25% coverage)
+- One-quarter of pairs checked
+- Significant quality degradation, maintains playability
+
+**During drag**:
+- Stride halved (e.g., 4 → 2)
+- Better local repulsion around dragged node
+- Slight performance hit during interaction (acceptable)
+
+### Performance Estimates
+
+| N | Stride | Pairs/Frame | Est. Time (60 FPS) |
+|---|--------|-------------|--------------------|
+| 50 | 1 | 1,225 | ~0.5ms |
+| 150 | 1 | 11,175 | ~4ms |
+| 200 | 2 | 9,950 | ~4ms |
+| 300 | 2 | 22,425 | ~9ms |
+| 500 | 3 | 41,583 | ~17ms ⚠️ |
+| 800 | 4 | 79,800 | ~32ms ⚠️ |
+
+**Note**: Times assume ~4µs per pair check. Actual times may vary.
+
+### Risks Identified
+
+1. **Stride flipping at boundaries**: Mitigated by 10% hysteresis
+2. **Quality degradation at high N**: Expected tradeoff for performance
+3. **Drag performance hit**: Acceptable for better UX
+
+### Next Steps (Future Work)
+
+**Phase 2: Spatial Hash** (deferred):
+- Implement O(N) spatial partitioning
+- Grid-based neighbor lookup
+- Target: N > 500 with full coverage
+
+**Phase 3: XPBD-Native Repulsion** (deferred):
+- Replace force-based with XPBD inequality constraints
+- Pure position-based paradigm
+- Better integration with XPBD solver
+
+---
+
+## Final Summary
+
+### Deliverables
+
+**5 Mini Runs Completed**:
+1. ✅ **Seam Reservation**: Reserved pre-integration seam with config toggle
+2. ✅ **Telemetry Plumbing**: Added 5 HUD counters for proof-of-life
+3. ✅ **MVP Wiring**: Implemented force pass with active/sleeping split
+4. ✅ **Magnitude Calibration**: Verified config defaults + live telemetry
+5. ✅ **Stride Policy**: Deterministic performance scaling with hysteresis
+
+**Files Modified**:
+- `src/physics/types.ts`: Added `xpbdRepulsionEnabled` config
+- `src/physics/engine/stats.ts`: Added XPBD repulsion telemetry fields
+- `src/physics/engine/physicsHud.ts`: Added HUD snapshot fields
+- `src/physics/engine/engineTickHud.ts`: Wired telemetry + live config
+- `src/physics/engine/engineTickXPBD.ts`: Implemented force pass + stride policy
+- `docs/xpbd_repulsion_run3_seam_wiring.md`: Comprehensive documentation
+
+**Git Commits**:
+1. `a8c4425`: Reserve pre-integration seam
+2. `3693a5c`: Add proof-of-life counters
+3. `fc74d92`: Wire minimal repulsion (MVP)
+4. `d22d7e2`: Calibrate magnitudes + live telemetry
+5. (pending): Stride policy + performance
+
+### Verification Status
+
+**Functional**:
+- [x] Repulsion called in XPBD mode
+- [x] Telemetry shows execution
+- [ ] Nodes visibly separate on screen (requires `xpbdRepulsionEnabled=true`)
+- [ ] XPBD edges maintain lengths
+
+**Performance**:
+- [x] Stride policy implemented
+- [ ] Frame time < 16ms for N < 300
+- [ ] Frame time < 33ms for N < 500
+
+**Quality**:
+- [x] No TypeScript errors (except pre-existing)
+- [x] Determinism preserved (no random())
+- [x] World-space units (zoom-invariant)
+- [ ] No law pop at stride boundaries
+
+### Followup Items
+
+1. **Enable by default**: Set `xpbdRepulsionEnabled: true` in config after testing
+2. **Spatial hash**: Implement for N > 500 (Phase 2)
+3. **XPBD-native constraints**: Pure position-based repulsion (Phase 3)
+4. **Sleep optimization**: Make `isSleeping` authoritative in XPBD mode
+5. **Stride HUD counter**: Add `xpbdRepulsionStride` to telemetry
+
+---

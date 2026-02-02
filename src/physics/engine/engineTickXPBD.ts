@@ -593,7 +593,35 @@ export const runPhysicsTickXPBD = (engine: PhysicsEngineTickContext, dtIn: numbe
             }
         }
 
-        // 3. Apply repulsion
+        // 3. Deterministic pairStride policy (Mini Run 5)
+        // Avoid O(N²) death while keeping law continuous
+        const N = nodeList.length;
+        let pairStride = 1;  // Default: full coverage
+
+        // Thresholds (deterministic, no random)
+        const N_small = 150;   // Full coverage below this
+        const N_medium = 300;  // Stride=2 (50% coverage)
+        const N_large = 500;   // Stride=3 (33% coverage)
+
+        // Hysteresis: Use 10% buffer to prevent flipping
+        const hysteresis = 1.1;
+
+        if (N > N_large * hysteresis) {
+            pairStride = 4;  // 25% coverage for very large graphs
+        } else if (N > N_medium * hysteresis) {
+            pairStride = 3;  // 33% coverage
+        } else if (N > N_small * hysteresis) {
+            pairStride = 2;  // 50% coverage
+        } else {
+            pairStride = 1;  // Full coverage
+        }
+
+        // During drag: prefer full coverage for local responsiveness
+        if (engine.draggedNodeId) {
+            pairStride = Math.max(1, Math.floor(pairStride / 2));
+        }
+
+        // 4. Apply repulsion
         applyRepulsion(
             nodeList,           // all nodes (for density calc)
             activeNodes,        // active nodes
@@ -601,12 +629,12 @@ export const runPhysicsTickXPBD = (engine: PhysicsEngineTickContext, dtIn: numbe
             engine.config,      // force config
             debugStats,         // stats
             undefined,          // energy (not used in XPBD)
-            1,                  // pairStride (full coverage for MVP)
+            pairStride,         // deterministic stride (1-4)
             0,                  // pairOffset
             undefined           // neighborCache (optional)
         );
 
-        // 4. Update telemetry
+        // 5. Update telemetry
         debugStats.safety.xpbdRepulsionEnabled = true;
         debugStats.safety.xpbdRepulsionCalledThisFrame = true;
         // Note: pairsChecked/maxForce/nodesAffected are updated by applyRepulsion

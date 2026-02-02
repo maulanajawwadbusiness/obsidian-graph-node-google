@@ -593,6 +593,62 @@ export const runPhysicsTickXPBD = (engine: PhysicsEngineTickContext, dtIn: numbe
             }
         }
 
+        // B1 FIX: Repulsion Safety Floor (Prevent "All Asleep" Collapse)
+        // If everything is sleeping, global repulsion disables, which means
+        // a new node inserted (or a late wake) might overlap invisibly.
+        // We force at least 2 pilots to remain active to sample the field.
+        if (activeNodes.length === 0 && nodeList.length >= 2) {
+            // Wake the first 2 nodes deterministically (by array order)
+            // They become the "sentries"
+            const sentryA = nodeList[0];
+            const sentryB = nodeList[1];
+            sentryA.isSleeping = false;
+            sentryB.isSleeping = false;
+
+            // Move from sleeping to active lists
+            // (Simpler to just clear and rebuild or shift, but let's be cheap)
+            // Actually, we just pushed them to sleepingNodes. 
+            // We should ideally fix the list.
+            activeNodes.push(sentryA);
+            activeNodes.push(sentryB);
+
+            // Remove from sleeping (filter out by ID)
+            const sentryIds = new Set([sentryA.id, sentryB.id]);
+            // In-place remove is annoying, let's just re-filter sleepingNodes?
+            // Or simpler: just continue. ApplyRepulsion iterates active/sleep separately.
+            // If they are in BOTH, they get applied twice? 
+            // applyRepulsion iterates:
+            // for A in active:
+            //   for B in active (j > i)
+            //   for B in sleeping
+            // If sentry is in BOTH active and sleeping:
+            // A=sentry (active loop). B=sentry (sleeping loop).
+            // It will repel itself? No, loop usually checks i==j or id.
+            // But if A is in active list AND sleeping list:
+            // Phase 1: A vs Active(others) -> OK
+            // Phase 2: A vs Sleeping(others) -> OK
+            // Phase 3: A vs Sleeping(itself in sleeping list) -> Self repel?
+            // applyRepulsion check: `if (i === j) continue` (active-active).
+            // But active-sleeping loop does not check index match?
+            // "shouldSkipPair" checks mix.
+            // d2 check: dx=0, dy=0.
+            // line 187 forces.ts: Singularity check (d2 < 0.0001).
+            // It handles self-overlap gracefully (random kick).
+            // BUT we don't want self-repulsion.
+
+            // Allow sloppy list duality? 
+            // Better: Re-run split.
+            activeNodes.length = 0;
+            sleepingNodes.length = 0;
+            for (const node of nodeList) {
+                if (node.isSleeping) {
+                    sleepingNodes.push(node);
+                } else {
+                    activeNodes.push(node);
+                }
+            }
+        }
+
         // 3. Deterministic pairStride policy (Mini Run 5)
         // Avoid O(N²) death while keeping law continuous
         const N = nodeList.length;

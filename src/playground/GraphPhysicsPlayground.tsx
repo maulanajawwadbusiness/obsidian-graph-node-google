@@ -28,7 +28,11 @@ import { FullChatProvider, FullChatbar, FullChatToggle, useFullChat } from '../f
 // -----------------------------------------------------------------------------
 const GraphPhysicsPlaygroundInternal: React.FC = () => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
-    const engineRef = useRef<PhysicsEngine>(new PhysicsEngine());
+    // Run 3: Lazy Init engine to prevent double-construction on render
+    const engineRef = useRef<PhysicsEngine>(null!); // forcing non-null assertion as we init immediately
+    if (!engineRef.current) {
+        engineRef.current = new PhysicsEngine();
+    }
     const documentContext = useDocument();
     const popupContext = usePopup();
     const fullChatContext = useFullChat();

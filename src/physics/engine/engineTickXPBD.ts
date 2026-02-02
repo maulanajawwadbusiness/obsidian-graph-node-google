@@ -655,8 +655,19 @@ export const runPhysicsTickXPBD = (engine: PhysicsEngineTickContext, dtIn: numbe
     }
 
     // STEP 2/5: XPBD-specific damping override
-    // When xpbdDamping is undefined, effectiveDamping === damping (zero behavior change)
+    // Invariant: when xpbdDamping is undefined, effectiveDamping === damping (zero behavior change)
     const effectiveDamping = engine.config.xpbdDamping ?? engine.config.damping;
+
+    // Dev-only: Proof-of-use for xpbdDamping override
+    if (typeof window !== 'undefined' && (window as any).__DEV__ && engine.frameIndex % 60 === 0) {
+        const xpbdDampingPresent = engine.config.xpbdDamping !== undefined;
+        console.log('[DEV] XPBD damping selection:', {
+            xpbdDampingPresent,
+            effectiveDamping,
+            legacyDamping: engine.config.damping,
+            invariantHolds: !xpbdDampingPresent ? effectiveDamping === engine.config.damping : true
+        });
+    }
 
     integrateNodes(
         engine as any,

@@ -649,6 +649,65 @@ export const runPhysicsTickXPBD = (engine: PhysicsEngineTickContext, dtIn: numbe
             }
         }
 
+        // B2 FIX: Drag Wakes a Bubble
+        // B1 ensured we never have 0 active nodes globally.
+        // B2 ensures that when we interact (drag), we wake the local neighborhood
+        // so the user feels immediate repulsive feedback, not "ghostly" overlap.
+        if (engine.draggedNodeId) {
+            const dragId = engine.draggedNodeId;
+            const dragNode = engine.nodes.get(dragId);
+
+            if (dragNode) {
+                // 1. Wake the dragged node
+                if (dragNode.isSleeping) {
+                    dragNode.isSleeping = false;
+                    // Add to active if it was sleeping? 
+                    // Again, list sync is messy. 
+                    // Simpler: Just rely on next frame's split?
+                    // NO, we want immediate feedback THIS frame.
+                    // But we already split the lists.
+
+                    // Force re-add to activeNodes if valid?
+                    // Let's just do it cleanly:
+                    // If we wake it, we push it to activeNodes.
+                    // If it was already in sleeping, we ignore the duplicate presence
+                    // because active loop prevails or "shouldSkip" logic handles it?
+                    // Actually, let's just push.
+                    activeNodes.push(dragNode);
+                }
+
+                // 2. Wake neighbors (Bubble)
+                // Use graph topology (1-hop)
+                const neighbors = engine.nodeNeighbors.get(dragId);
+                if (neighbors) {
+                    for (const neighborId of neighbors) {
+                        const neighbor = engine.nodes.get(neighborId);
+                        if (neighbor && neighbor.isSleeping) {
+                            neighbor.isSleeping = false;
+                            activeNodes.push(neighbor);
+                        }
+                    }
+                }
+
+                // 3. Wake spatial radius (optional, but good for non-connected repulsion)
+                // Doing O(N) check here is expensive? 
+                // Only if Drag is active. N=500 -> 500 checks. Cheap.
+                // Wake anything within repulsionDistanceMax of the drag target.
+                const wakeRadius = engine.config.repulsionDistanceMax * 1.5;
+                const wakeRadiusSq = wakeRadius * wakeRadius;
+                for (const node of nodeList) {
+                    if (node.isSleeping && node.id !== dragId) {
+                        const dx = node.x - dragNode.x;
+                        const dy = node.y - dragNode.y;
+                        if (dx * dx + dy * dy < wakeRadiusSq) {
+                            node.isSleeping = false;
+                            activeNodes.push(node);
+                        }
+                    }
+                }
+            }
+        }
+
         // 3. Deterministic pairStride policy (Mini Run 5)
         // Avoid O(N²) death while keeping law continuous
         const N = nodeList.length;

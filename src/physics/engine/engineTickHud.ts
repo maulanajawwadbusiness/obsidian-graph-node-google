@@ -245,6 +245,12 @@ export const updateHudSnapshot = (
         xpbdRepulsionMaxForce: stats.safety.xpbdRepulsionMaxForce ?? 0,
         xpbdRepulsionNodesAffected: stats.safety.xpbdRepulsionNodesAffected ?? 0,
 
+        // Repulsion Config Live Telemetry (Run 3 - Mini Run 4)
+        repulsionStrengthConfig: engine.config.repulsionStrength,
+        repulsionDistanceMaxConfig: engine.config.repulsionDistanceMax,
+        repulsionMinDistanceConfig: engine.config.repulsionMinDistance,
+        repulsionMaxForceConfig: engine.config.repulsionMaxForce,
+
         neighborReorderRate: stats.neighborReorderRate,
         hubFlipCount: stats.hubFlipCount,
         degradeFlipCount: stats.degradeFlipCount,

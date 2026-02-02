@@ -235,6 +235,12 @@ export type PhysicsHudSnapshot = {
     xpbdRepulsionMaxForce?: number;
     xpbdRepulsionNodesAffected?: number;
 
+    // Repulsion Config Live Telemetry (Run 3 - Mini Run 4)
+    repulsionStrengthConfig?: number;
+    repulsionDistanceMaxConfig?: number;
+    repulsionMinDistanceConfig?: number;
+    repulsionMaxForceConfig?: number;
+
     // Forensic: Stability
     neighborReorderRate?: number;
     hubFlipCount?: number;

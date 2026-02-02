@@ -269,3 +269,102 @@ if (engine.config.xpbdRepulsionEnabled) {
 - Tune `repulsionStrength` for visible but stable effect
 
 ---
+
+## Mini Run 4/5: Magnitude Calibration
+
+**Date**: 2026-02-02  
+**Goal**: Establish native magnitude sanity checks and add live config telemetry for tuning.
+
+### Changes Made
+
+#### 1. Config Defaults Verified
+**File**: `src/physics/config.ts:9-14`
+
+**Repulsion Parameters** (world-space pixels):
+```typescript
+repulsionStrength: 500,        // Force magnitude
+repulsionDistanceMax: 60,      // Max interaction distance
+repulsionMinDistance: 6,       // Singularity guard
+repulsionMaxForce: 1200,       // Force cap per pair
+```
+
+**Assessment**:
+- ✅ All parameters present in `DEFAULT_PHYSICS_CONFIG`
+- ✅ Units are world-space pixels (zoom-invariant by design)
+- ✅ Values are reasonable for typical node spacing (~100-375px)
+
+**Comparison to XPBD Edge Lengths**:
+- `linkRestLength: 130px` (harmonic net)
+- `targetSpacing: 375px` (spring rest length)
+- `minNodeDistance: 100px` (soft spacing)
+- Repulsion `distanceMax: 60px` → Short-range, local effect only
+
+#### 2. Live Config Telemetry Added
+**File**: `src/physics/engine/physicsHud.ts:238-243`
+
+Added 4 new HUD fields:
+```typescript
+repulsionStrengthConfig?: number;
+repulsionDistanceMaxConfig?: number;
+repulsionMinDistanceConfig?: number;
+repulsionMaxForceConfig?: number;
+```
+
+**File**: `src/physics/engine/engineTickHud.ts:248-253`
+
+Wired to HUD snapshot:
+```typescript
+repulsionStrengthConfig: engine.config.repulsionStrength,
+repulsionDistanceMaxConfig: engine.config.repulsionDistanceMax,
+repulsionMinDistanceConfig: engine.config.repulsionMinDistance,
+repulsionMaxForceConfig: engine.config.repulsionMaxForce,
+```
+
+### Verification Checklist
+
+- [x] **Config defaults exist**: All 4 repulsion parameters present
+- [x] **Units verified**: World-space pixels (zoom-invariant)
+- [x] **Live telemetry added**: 4 config fields in HUD
+- [x] **HUD wired**: Config values mapped to snapshot
+- [ ] **Zoom invariance test**: Verify repulsion strength doesn't change with zoom
+- [ ] **Magnitude tuning**: Adjust `repulsionStrength` if needed
+
+### Expected Behavior
+
+**HUD Display** (with `xpbdRepulsionEnabled=true`):
+- `repulsionStrengthConfig: 500`
+- `repulsionDistanceMaxConfig: 60`
+- `repulsionMinDistanceConfig: 6`
+- `repulsionMaxForceConfig: 1200`
+
+**Zoom Invariance**:
+- Zooming in/out should NOT change repulsion behavior
+- Physics operates in world-space, rendering scales independently
+- Test: Zoom to 50%, 100%, 200% → nodes maintain same separation
+
+### Magnitude Tuning Notes
+
+**Current Strength (500)**:
+- Moderate force for short-range repulsion
+- Should prevent overlap without dominating XPBD edges
+- If too weak: Nodes overlap despite repulsion
+- If too strong: Oscillation with XPBD constraints
+
+**Tuning Strategy**:
+1. Start with default (500)
+2. If nodes still overlap: Increase to 800-1000
+3. If oscillation occurs: Decrease to 300-400
+4. Monitor HUD: `xpbdRepulsionMaxForce` should be < `repulsionMaxForceConfig`
+
+### Risks Identified
+
+1. **None** - Pure telemetry and verification, no behavior changes yet.
+
+### Next Steps (Mini Run 5)
+
+- Implement deterministic pairStride policy
+- Add hysteresis/cooldown for stride changes
+- Verify sleep behavior (active/sleeping interactions)
+- Test performance with N=50/100/200/500
+
+---

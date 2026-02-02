@@ -38,6 +38,19 @@ export type ExpansionResistanceStats = {
     avgHubSpeedAfter: number;
 };
 
+// Run 2: XPBD Repulsion Proof Stats (Source of Consistency)
+export type RepulsionProofStats = {
+    enteredFrame: number;
+    calledThisFrame: boolean;
+    pairsChecked: number;
+    pairsApplied: number;
+    maxForce: number;
+    awakeCount: number;
+    sleepingCount: number;
+    stride: number;
+    enabled: boolean;
+};
+
 export type DebugStats = {
     mode: 'LEGACY' | 'XPBD';
     forbiddenPassCount: number;
@@ -45,6 +58,7 @@ export type DebugStats = {
     forbiddenPassLast?: string;
     passes: Record<string, PassStats>;
     safety: SafetyStats;
+    repulsionProof: RepulsionProofStats; // New bucket
     expansionResistance: ExpansionResistanceStats;
     dtSkew?: { min: number; max: number };
     correctionConflictCount: number;
@@ -153,6 +167,17 @@ export const createDebugStats = (): DebugStats => ({
         nearOverlapCount: 0,
         repulsionMaxMag: 0,
         repulsionClampedCount: 0,
+    },
+    repulsionProof: {
+        enteredFrame: -1,
+        calledThisFrame: false,
+        pairsChecked: 0,
+        pairsApplied: 0,
+        maxForce: 0,
+        awakeCount: 0,
+        sleepingCount: 0,
+        stride: 0,
+        enabled: false,
     },
     expansionResistance: {
         trappedHubCount: 0,

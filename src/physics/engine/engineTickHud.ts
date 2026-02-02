@@ -251,16 +251,16 @@ export const updateHudSnapshot = (
         repulsionMinDistanceConfig: engine.config.repulsionMinDistance,
         repulsionMaxForceConfig: engine.config.repulsionMaxForce,
 
-        // Run 1: Repulsion Proof Placeholders (Display Only)
-        repulsionProofEnteredFrame: -1,
-        repulsionProofCalledThisFrame: false,
-        repulsionProofPairsChecked: -1,
-        repulsionProofPairsApplied: -1,
-        repulsionProofMaxForce: -1,
-        repulsionAwakeCount: -1,
-        repulsionSleepingCount: -1,
-        repulsionPairStride: -1,
-        repulsionProofEnabled: false,
+        // Run 1: Repulsion Proof Placeholders (Display Only) -> Run 2: Wired to Stats
+        repulsionProofEnteredFrame: stats.repulsionProof.enteredFrame,
+        repulsionProofCalledThisFrame: stats.repulsionProof.calledThisFrame,
+        repulsionProofPairsChecked: stats.repulsionProof.pairsChecked,
+        repulsionProofPairsApplied: stats.repulsionProof.pairsApplied,
+        repulsionProofMaxForce: stats.repulsionProof.maxForce,
+        repulsionAwakeCount: stats.repulsionProof.awakeCount,
+        repulsionSleepingCount: stats.repulsionProof.sleepingCount,
+        repulsionPairStride: stats.repulsionProof.stride,
+        repulsionProofEnabled: stats.repulsionProof.enabled,
 
         neighborReorderRate: stats.neighborReorderRate,
         hubFlipCount: stats.hubFlipCount,

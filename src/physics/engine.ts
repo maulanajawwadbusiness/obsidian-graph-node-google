@@ -359,6 +359,14 @@ export class PhysicsEngine {
     }
 
     /**
+     * STEP 5/5 RUN 1: Apply XPBD damping preset for hand calibration
+     */
+    applyXpbdDampingPreset(preset: import('./engine/engineTickXPBD').XpbdDampingPreset) {
+        const { XPBD_DAMPING_PRESETS } = require('./engine/engineTickXPBD');
+        this.updateConfig({ xpbdDamping: XPBD_DAMPING_PRESETS[preset] });
+    }
+
+    /**
      * Update overload-driven degrade state from the scheduler.
      */
     setDegradeState(

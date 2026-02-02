@@ -34,6 +34,15 @@ let lastTelemetrySource: 'DEFAULT' | 'CONFIG' | 'CLAMPED' | null = null;
 let lastTelemetryEffective: number | null = null;
 let lastTelemetryTime = 0;
 
+// STEP 5/5 RUN 1: Hand-calibration presets for A/B testing
+export const XPBD_DAMPING_PRESETS = {
+    SNAPPY: 0.12,    // Half-life ~1.16s (responsive, quick settle)
+    BALANCED: 0.20,  // Half-life ~0.69s (current default)
+    SMOOTH: 0.32,    // Half-life ~0.43s (tighter, less overshoot)
+} as const;
+
+export type XpbdDampingPreset = keyof typeof XPBD_DAMPING_PRESETS;
+
 // Mini Run 7: Kinematic Drag Lock
 const applyKinematicDrag = (engine: PhysicsEngineTickContext, dt: number) => {
     // If we have a dragged node and a target, Force Position (Pin)

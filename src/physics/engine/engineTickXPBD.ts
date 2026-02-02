@@ -641,6 +641,11 @@ export const runPhysicsTickXPBD = (engine: PhysicsEngineTickContext, dtIn: numbe
         debugStats.repulsionProof.enteredFrame = engine.frameIndex;
         debugStats.repulsionProof.calledThisFrame = true;
         debugStats.repulsionProof.enabled = true;
+
+        // Run 5: Context Counters
+        debugStats.repulsionProof.awakeCount = activeNodes.length;
+        debugStats.repulsionProof.sleepingCount = sleepingNodes.length;
+        debugStats.repulsionProof.stride = pairStride;
     }
 
     integrateNodes(

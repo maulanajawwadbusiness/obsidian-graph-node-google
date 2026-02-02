@@ -134,6 +134,7 @@ export interface ForceConfig {
 
   // Damping / Friction
   damping: number; // Velocity decay 0.0 (no friction) to 1.0 (frozen)
+  xpbdDamping?: number; // Optional: XPBD-specific damping (overrides damping when in XPBD mode)
 
   // Constraints
   maxVelocity: number; // Cap speed to prevent explosions
@@ -256,5 +257,5 @@ export interface ForceConfig {
   xpbdIterationsDrag?: number; // Sub-steps when dragging (Default: 6)
 
   // XPBD Repulsion Integration (Run 3)
-  xpbdRepulsionEnabled?: boolean; // Enable force-based repulsion in XPBD mode (Default: true)
+  xpbdRepulsionEnabled?: boolean; // Enable force-based repulsion in XPBD mode (Default: false)
 }

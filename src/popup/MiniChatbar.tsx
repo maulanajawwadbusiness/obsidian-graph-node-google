@@ -24,7 +24,7 @@ interface MiniChatbarProps {
 
 type ChatbarSize = { width: number; height: number };
 
-const stopPropagation = (e: React.MouseEvent) => e.stopPropagation();
+const stopPropagation = (e: React.SyntheticEvent) => e.stopPropagation();
 
 const CHATBAR_STYLE: React.CSSProperties = {
     position: 'fixed',
@@ -389,6 +389,9 @@ export const MiniChatbar: React.FC<MiniChatbarProps> = ({ messages, onSend, onCl
             onMouseDown={stopPropagation}
             onMouseMove={stopPropagation}
             onMouseUp={stopPropagation}
+            onPointerDown={stopPropagation}
+            onPointerMove={stopPropagation}
+            onPointerUp={stopPropagation}
             onClick={stopPropagation}
             onWheel={stopPropagation}
         >
@@ -404,6 +407,7 @@ export const MiniChatbar: React.FC<MiniChatbarProps> = ({ messages, onSend, onCl
                         padding: '4px 8px',
                     }}
                     onClick={onClose}
+                    onPointerDown={stopPropagation}
                     title={t('tooltip.close')}
                 >
                     ×
@@ -469,6 +473,7 @@ export const MiniChatbar: React.FC<MiniChatbarProps> = ({ messages, onSend, onCl
                     }}
                     onMouseEnter={(e) => e.currentTarget.style.opacity = '0.8'}
                     onMouseLeave={(e) => e.currentTarget.style.opacity = '0.5'}
+                    onPointerDown={stopPropagation}
                 >
                     <img
                         src={handoffIcon}

@@ -48,6 +48,7 @@ export const SendButton: React.FC<SendButtonProps> = ({ onClick, disabled = fals
         <button
             style={BUTTON_STYLE}
             onClick={onClick}
+            onPointerDown={(e) => e.stopPropagation()}
             disabled={disabled}
             title="Send message"
             aria-label="Send"

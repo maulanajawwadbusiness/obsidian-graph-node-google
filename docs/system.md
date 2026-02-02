@@ -126,6 +126,12 @@ Post-Fixes #01–#22, the system guarantees:
     *   **Unified Rounding**: Popups match Canvas snapping (Float on move, Int on rest).
 *   **Layout Safety**: `ResizeObserver` caches rects to prevent layout thrash.
 *   **DPR Stability**: Rapid monitor swaps are stabilized via hysteresis (4-frame debounce).
+*   **Overlay Input Safety (Non-Negotiable)**:
+    *   The Canvas captures `pointerdown` for drag; overlays must explicitly stop propagation.
+    *   **Overlay Wrapper**: `pointerEvents: 'auto'` + `onPointerDown={(e) => e.stopPropagation()}`.
+    *   **Interactive Children**: Buttons, inputs, and toggles each must stop `pointerdown` as well.
+    *   **Backdrop Click-Outside**: Use a full-screen backdrop with `pointerEvents: 'auto'`, `onPointerDown` stop, and `onClick` close.
+    *   **Verification**: Always manually verify click, close, and input focus before shipping new overlays.
 
 ## 5. AI Architecture
 Arnvoid uses a unified AI layer (`src/ai/`) that abstracts provider details behind a strict interface.

@@ -330,6 +330,15 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
         engineRef.current?.updateConfig(newConfig);
     };
 
+    const handleXpbdDampingPreset = (preset: 'SNAPPY' | 'BALANCED' | 'SMOOTH') => {
+        const presetValues = {
+            SNAPPY: 0.12,
+            BALANCED: 0.20,
+            SMOOTH: 0.32
+        };
+        handleConfigChange('xpbdDamping', presetValues[preset]);
+    };
+
     // Capture Safety: Release drag on window blur (Alt-Tab)
     useEffect(() => {
         const handleBlur = () => {
@@ -598,13 +607,16 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
                     fontFamily: 'monospace',
                     pointerEvents: 'auto',
                     zIndex: 1000
-                }}>
+                }}
+                onPointerDown={(e) => e.stopPropagation()}
+                >
                     <div style={{ marginBottom: '4px', fontWeight: 'bold' }}>
                         XPBD Damping: {(config.xpbdDamping ?? 0.20).toFixed(2)} {config.xpbdDamping !== undefined ? '(CONFIG)' : '(DEFAULT)'}
                     </div>
                     <div style={{ display: 'flex', gap: '4px' }}>
                         <button
-                            onClick={() => engineRef.current?.applyXpbdDampingPreset('SNAPPY')}
+                            onClick={() => handleXpbdDampingPreset('SNAPPY')}
+                            onPointerDown={(e) => e.stopPropagation()}
                             style={{
                                 padding: '4px 8px',
                                 fontSize: '10px',
@@ -618,7 +630,8 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
                             Snappy
                         </button>
                         <button
-                            onClick={() => engineRef.current?.applyXpbdDampingPreset('BALANCED')}
+                            onClick={() => handleXpbdDampingPreset('BALANCED')}
+                            onPointerDown={(e) => e.stopPropagation()}
                             style={{
                                 padding: '4px 8px',
                                 fontSize: '10px',
@@ -632,7 +645,8 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
                             Balanced
                         </button>
                         <button
-                            onClick={() => engineRef.current?.applyXpbdDampingPreset('SMOOTH')}
+                            onClick={() => handleXpbdDampingPreset('SMOOTH')}
+                            onPointerDown={(e) => e.stopPropagation()}
                             style={{
                                 padding: '4px 8px',
                                 fontSize: '10px',

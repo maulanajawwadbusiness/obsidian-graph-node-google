@@ -3,7 +3,7 @@ import { usePopup } from './PopupStore';
 import { ChatInput } from './ChatInput';
 import { t } from '../i18n/t';
 
-const stopPropagation = (e: React.MouseEvent) => e.stopPropagation();
+const stopPropagation = (e: React.SyntheticEvent) => e.stopPropagation();
 
 const GAP_FROM_NODE = 20;
 
@@ -389,6 +389,7 @@ export const NodePopup: React.FC<NodePopupProps> = ({ trackNode, engineRef }) =>
                 style={BACKDROP_STYLE}
                 onClick={closePopup}
                 onMouseDown={stopPropagation}
+                onPointerDown={stopPropagation}
             />
             <div
                 id="arnvoid-node-popup"
@@ -397,6 +398,9 @@ export const NodePopup: React.FC<NodePopupProps> = ({ trackNode, engineRef }) =>
                 onMouseDown={stopPropagation}
                 onMouseMove={stopPropagation}
                 onMouseUp={stopPropagation}
+                onPointerDown={stopPropagation}
+                onPointerMove={stopPropagation}
+                onPointerUp={stopPropagation}
                 onClick={stopPropagation}
                 onWheel={stopPropagation}
             >
@@ -405,6 +409,7 @@ export const NodePopup: React.FC<NodePopupProps> = ({ trackNode, engineRef }) =>
                     <button
                         style={CLOSE_BUTTON_STYLE}
                         onClick={closePopup}
+                        onPointerDown={stopPropagation}
                         onMouseEnter={(e) => (e.currentTarget.style.color = 'rgba(255, 255, 255, 0.9)')}
                         onMouseLeave={(e) => (e.currentTarget.style.color = 'rgba(180, 190, 210, 0.7)')}
                         title={t('tooltip.close')}

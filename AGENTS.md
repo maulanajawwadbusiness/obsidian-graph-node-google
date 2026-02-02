@@ -66,6 +66,15 @@ Terminology matters. In the graph, we render "Dots", not "Nodes" (though the dat
 *   **Symptom**: If you skip this, the button will "click" visually (hover works) but the parent will steal the logic click.
 *   **Rule**: Always add `onPointerDown={(e) => e.stopPropagation()}` to **ALL** interactive overlay elements. DO NOT FORGET IT.
 
+### POINTER SAFETY (NON-NEGOTIABLE)
+*   **Never break pointer detection or click**. Assume the canvas will steal pointerdown unless you explicitly shield overlays.
+*   **2x Thought Rule**: Before shipping any overlay/window/UI control, re-check pointer flow and verify click + close + drag.
+*   **Safe Overlay Pattern**:
+    1.  **Container**: `pointerEvents: 'auto'` on the overlay wrapper.
+    2.  **Shield**: Add `onPointerDown={(e) => e.stopPropagation()}` on the wrapper **and** on every interactive child (buttons, inputs, toggles).
+    3.  **Backdrop**: For click-outside-to-close, use a full-screen backdrop with `pointerEvents: 'auto'`, `onPointerDown` stop, and `onClick` close.
+    4.  **Panels Own Input**: When an overlay/panel is open, it must fully own pointer + wheel events inside its bounds.
+
 ## 5. Perf Doctrine (Physics)
 
 ### A. The Scheduler

@@ -297,11 +297,18 @@ export function applyRepulsion(
 
     // TRUTH SCAN: Report execution telemetry
     if (stats && stats.safety) {
-        // Legacy
+        // Legacy Telemetry
         stats.safety.repulsionCalledThisFrame = true;
         stats.safety.repulsionPairsChecked = pairsChecked;
         stats.safety.repulsionPairsApplied = pairsApplied;
         stats.safety.repulsionForceMagMax = forceMagMax;
+
+        // XPBD Telemetry (Fix 1/3: Wire Source)
+        // HUD reads these for "XPBD Repulsion" section
+        stats.safety.xpbdRepulsionCalledThisFrame = true;
+        stats.safety.xpbdRepulsionPairsChecked = pairsChecked;
+        stats.safety.xpbdRepulsionNodesAffected = pairsApplied * 2; // Approx
+        stats.safety.xpbdRepulsionMaxForce = forceMagMax;
     }
 
     // Run 4: Repulsion Proof Telemetry (Unique Bucket)
@@ -310,10 +317,6 @@ export function applyRepulsion(
         stats.repulsionProof.pairsApplied = pairsApplied;
         stats.repulsionProof.maxForce = forceMagMax;
     }
-    stats.safety.repulsionPairsChecked = pairsChecked;
-    stats.safety.repulsionPairsApplied = pairsApplied;
-    stats.safety.repulsionForceMagMax = forceMagMax;
-}
 }
 
 export function applyCollision(

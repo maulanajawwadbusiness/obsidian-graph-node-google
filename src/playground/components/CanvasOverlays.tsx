@@ -550,13 +550,13 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
                                     )}
                                     {hud && (
                                         <div style={{ marginTop: '4px', paddingTop: '4px', borderTop: '1px solid #444', color: '#ffcc00' }}>
-                                            <strong>Repulsion Proof (Run 1)</strong><br />
+                                            <strong style={{ fontWeight: 700 }}>Repulsion Proof (Run 1+)</strong><br />
                                             <span style={{ color: hud.repulsionProofEnabled ? '#0f0' : '#666' }}>
                                                 Enabled: {hud.repulsionProofEnabled ? 'YES' : 'NO'} | Entered: {hud.repulsionProofEnteredFrame}
                                             </span><br />
-                                            Called: {hud.repulsionProofCalledThisFrame ? 'YES' : 'NO'}<br />
-                                            Pairs: {hud.repulsionProofPairsChecked} chk / {hud.repulsionProofPairsApplied} app<br />
-                                            MaxForce: {hud.repulsionProofMaxForce}<br />
+                                            Called: {hud.repulsionProofCalledThisFrame ? 'YES' : 'NO'} <span style={{ color: '#888' }}>(Prev: {hud.repulsionProofCalledLastFrame ? 'Y' : 'N'})</span><br />
+                                            Pairs: {hud.repulsionProofPairsChecked} <span style={{ color: '#888' }}>({hud.repulsionProofPairsCheckedLastFrame})</span> chk / {hud.repulsionProofPairsApplied} app<br />
+                                            MaxForce: {hud.repulsionProofMaxForce} <span style={{ color: '#888' }}>({hud.repulsionProofMaxForceLastFrame})</span><br />
                                             Active: {hud.repulsionAwakeCount} / Sleep: {hud.repulsionSleepingCount}<br />
                                             Stride: {hud.repulsionPairStride}
                                         </div>

@@ -258,6 +258,11 @@ export const updateHudSnapshot = (
         repulsionPairStride: stats.repulsionProof.stride,
         repulsionProofEnabled: stats.repulsionProof.enabled,
 
+        // Run 3 A3: Last Frame Snapshots
+        repulsionProofCalledLastFrame: engine.lastDebugStats?.repulsionProof.calledThisFrame ?? false,
+        repulsionProofPairsCheckedLastFrame: engine.lastDebugStats?.repulsionProof.pairsChecked ?? 0,
+        repulsionProofMaxForceLastFrame: engine.lastDebugStats?.repulsionProof.maxForce ?? 0,
+
         neighborReorderRate: stats.neighborReorderRate,
         hubFlipCount: stats.hubFlipCount,
         degradeFlipCount: stats.degradeFlipCount,

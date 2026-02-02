@@ -156,6 +156,10 @@ export type PhysicsHudSnapshot = {
     repulsionSleepingCount?: number;
     repulsionPairStride?: number;
     repulsionProofEnabled?: boolean;
+    // Run 3 A3: Last Frame Snapshots
+    repulsionProofCalledLastFrame?: boolean;
+    repulsionProofPairsCheckedLastFrame?: number;
+    repulsionProofMaxForceLastFrame?: number;
 
     // Lane A: Sign & Gradient Debug
     xpbdFirstEdgeDebug?: {

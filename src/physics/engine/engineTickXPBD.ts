@@ -696,9 +696,14 @@ export const runPhysicsTickXPBD = (engine: PhysicsEngineTickContext, dtIn: numbe
     // 0 = no damping (floaty), 2 = very heavy damping (k=10, half-life=0.07s)
     const effectiveDamping = Math.max(0, Math.min(2, rawDamping));
 
-    // PROBE: Tick Read Site
-    if (engine.frameIndex % 60 === 0 || engine.config.xpbdDamping !== lastTelemetryEffective) {
-        console.log(`[XPBD-Probe] Tick: Read xpbdDamping=${engine.config.xpbdDamping} (Effective=${effectiveDamping}) Frame=${engine.frameIndex} UID=${(engine as any).uid}`);
+    // GUARD: Rapid Fluctuation Warning (Revert Detection)
+    if (typeof window !== 'undefined' && (window as any).__DEV__) {
+        const now = getNowMs();
+        if (engine.config.xpbdDamping !== lastTelemetryEffective) {
+            if (now - lastTelemetryTime < 500 && lastTelemetryTime > 0) {
+                console.warn(`[XPBD-Guard] Rapid damping change detected (potentially fighting defaults?) ${lastTelemetryEffective} -> ${engine.config.xpbdDamping} in ${now - lastTelemetryTime}ms`);
+            }
+        }
     }
 
     if (typeof window !== 'undefined' && (window as any).__DEV__) {

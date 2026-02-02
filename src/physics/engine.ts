@@ -369,8 +369,6 @@ export class PhysicsEngine {
      */
     applyXpbdDampingPreset(preset: import('./engine/engineTickXPBD').XpbdDampingPreset) {
         this.presetApplyCount++;
-        // PROBE: UI Write Site
-        console.log(`[XPBD-Probe] UI: Apply Preset ${preset} (Count: ${this.presetApplyCount}, UID: ${this.uid})`);
 
         const presetValues = {
             SNAPPY: 0.12,

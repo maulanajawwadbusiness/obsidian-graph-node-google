@@ -25,6 +25,12 @@ export const integrateNodes = (
 ): IntegrationResult => {
     let clampHitCount = 0;
 
+    // RUN 3: Magnitude chain tracking
+    let maxDV = 0;        // max velocity change this tick
+    let maxDX = 0;        // max position change this tick
+    let dvCount = 0;      // nodes with velocity change
+    let dxCount = 0;      // nodes with position change
+
     // Calculate live centroid (needed for global spin and anisotropic damping)
     let centroidX = 0, centroidY = 0;
     for (const node of nodeList) {
@@ -173,6 +179,11 @@ export const integrateNodes = (
         // Apply unified damping (increases as energy falls) - use nodeDt
         applyDamping(node, preRollActive, effectiveDamping, nodeDt);
 
+        // RUN 3: Track max|dv| after all velocity modifications
+        const dvMag = Math.sqrt((node.vx - beforeVx) ** 2 + (node.vy - beforeVy) ** 2);
+        if (dvMag > maxDV) maxDV = dvMag;
+        if (dvMag > 0) dvCount++;
+
         // XPBD DISABLE: Hub Scaling is a heuristic V-Mod
         if (!preRollActive && !useXPBD) {
             applyHubVelocityScaling(engine, node, stats, policy, nodeList);
@@ -185,8 +196,15 @@ export const integrateNodes = (
         }
 
         // Update Position - use nodeDt for temporal decoherence
+        const oldX = node.x;
+        const oldY = node.y;
         node.x += node.vx * nodeDt;
         node.y += node.vy * nodeDt;
+
+        // RUN 3: Track max|dx| after position update
+        const dxMag = Math.sqrt((node.x - oldX) ** 2 + (node.y - oldY) ** 2);
+        if (dxMag > maxDX) maxDX = dxMag;
+        if (dxMag > 0) dxCount++;
 
         // Sleep Check (Smart Force-Aware)
         // FIX #7: Only sleep if velocity is low AND acting force is low.
@@ -240,6 +258,17 @@ export const integrateNodes = (
     }
 
     passStats.nodes += affected.size;
+
+    // RUN 3: Store magnitude chain stats
+    if (!stats.repulsionTruth) {
+        stats.repulsionTruth = {};
+    }
+    stats.repulsionTruth.maxDV = maxDV;
+    stats.repulsionTruth.maxDX = maxDX;
+    stats.repulsionTruth.dvCount = dvCount;
+    stats.repulsionTruth.dxCount = dxCount;
+    stats.repulsionTruth.effectiveDamping = effectiveDamping;
+    stats.repulsionTruth.maxVelocityEffective = maxVelocityEffective;
 
     return {
         centroidX,

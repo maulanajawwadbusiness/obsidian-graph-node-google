@@ -671,7 +671,8 @@ export const runPhysicsTickXPBD = (engine: PhysicsEngineTickContext, dtIn: numbe
             undefined,          // energy (not used in XPBD)
             pairStride,         // deterministic stride (1-4)
             0,                  // pairOffset
-            undefined           // neighborCache (optional)
+            undefined,          // neighborCache (optional)
+            engine.links        // RUN 2: links for non-edge detection
         );
 
         // 5. Update telemetry
@@ -766,6 +767,24 @@ export const runPhysicsTickXPBD = (engine: PhysicsEngineTickContext, dtIn: numbe
         false,
         true
     );
+
+    // RUN 3: Magnitude Chain Proof (dev-gated, throttled)
+    if (typeof window !== 'undefined' && (window as any).__DEV__) {
+        const rt = (debugStats as any).repulsionTruth;
+        if (rt && engine.frameIndex % 120 === 0) {
+            console.log(`[Magnitude Chain Frame ${engine.frameIndex}]`, {
+                '1_maxF': rt.maxForceMag?.toFixed(2) || '0',
+                '1_forcePairs': rt.forcePairsCount || 0,
+                '2_damping': rt.effectiveDamping?.toFixed(3) || '?',
+                '2_maxVCap': rt.maxVelocityEffective?.toFixed(1) || '?',
+                '3_maxDV': rt.maxDV?.toFixed(4) || '0',
+                '3_dvNodes': rt.dvCount || 0,
+                '4_maxDX': rt.maxDX?.toFixed(4) || '0',
+                '4_dxNodes': rt.dxCount || 0
+            });
+        }
+    }
+
 
     // 2b. Kinematic Drag Lock (Run 7)
     // Snap dragged node to target before solver sees it

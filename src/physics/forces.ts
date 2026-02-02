@@ -14,7 +14,8 @@ export function applyRepulsion(
     energy?: number,
     pairStride: number = 1,
     pairOffset: number = 0,
-    neighborCache?: Map<string, Set<string>>
+    neighborCache?: Map<string, Set<string>>,
+    links?: PhysicsLink[] // RUN 2: For non-edge detection
 ) {
     const {
         repulsionStrength,
@@ -23,10 +24,24 @@ export function applyRepulsion(
         repulsionMaxForce,
     } = config;
 
-    // TRUTH SCAN: Repulsion Execution Telemetry
-    let pairsChecked = 0;
+    // RUN 2: Build adjacency lookup ONCE (O(N) links -> O(1) per-pair check)
+    const adjacency = new Set<string>();
+    if (links) {
+        for (const link of links) {
+            const key1 = `${link.source}:${link.target}`;
+            const key2 = `${link.target}:${link.source}`;
+            adjacency.add(key1);
+            adjacency.add(key2);
+        }
+    }
+
+    // RUN 2: Knife-sharp counters
+    let pairsConsidered = 0;
+    let pairsInRange = 0;
+    let pairsNonEdgeInRange = 0;
     let pairsApplied = 0;
-    let forceMagMax = 0;
+    let maxForceMag = 0;
+    let forcePairsCount = 0;
 
     // XPBD Force Repel Override
     let effectiveStrength = repulsionStrength;
@@ -177,7 +192,8 @@ export function applyRepulsion(
     const softR = (config.minNodeDistance || 30) * 0.25;
 
     const applyPair = (nodeA: PhysicsNode, nodeB: PhysicsNode) => {
-        pairsChecked++;
+        // RUN 2: Track all pairs considered
+        pairsConsidered++;
         if (shouldSkipPair(nodeA, nodeB)) return;
 
         let dx = nodeA.x - nodeB.x;
@@ -209,6 +225,16 @@ export function applyRepulsion(
         const d2 = dx * dx + dy * dy;
 
         if (d2 < maxDistSq) {
+            // RUN 2: Pair is in range
+            pairsInRange++;
+
+            // RUN 2: Check if this is a non-edge pair (O(1) lookup)
+            const edgeKey = `${nodeA.id}:${nodeB.id}`;
+            const isEdge = adjacency.has(edgeKey);
+            if (!isEdge) {
+                pairsNonEdgeInRange++;
+            }
+
             // Safe dist
             const d = Math.sqrt(d2);
 
@@ -263,8 +289,9 @@ export function applyRepulsion(
             const fx = (dx / d) * forceMagnitude;
             const fy = (dy / d) * forceMagnitude;
 
-            // TRUTH SCAN: Track max force magnitude
-            if (forceMagnitude > forceMagMax) forceMagMax = forceMagnitude;
+            // RUN 2: Track max force magnitude and count
+            if (forceMagnitude > maxForceMag) maxForceMag = forceMagnitude;
+            forcePairsCount++;
 
             if (!nodeA.isFixed) {
                 nodeA.fx += fx;
@@ -295,12 +322,23 @@ export function applyRepulsion(
         console.log(`[Repulsion] avgCenterDensity: ${avgDensity.toFixed(1)}, maxDensityBoost: ${debugMaxDensityBoost.toFixed(2)}`);
     }
 
-    // TRUTH SCAN: Report execution telemetry
+    // RUN 2: Report knife-sharp counters
     if (stats && stats.safety) {
         // Legacy Telemetry
         stats.safety.repulsionCalledThisFrame = true;
-        stats.safety.repulsionPairsChecked = pairsChecked;
+        stats.safety.repulsionPairsChecked = pairsConsidered; // Renamed
         stats.safety.repulsionPairsApplied = pairsApplied;
+
+        // RUN 2: New truth counters
+        if (!stats.repulsionTruth) {
+            stats.repulsionTruth = {};
+        }
+        stats.repulsionTruth.pairsConsidered = pairsConsidered;
+        stats.repulsionTruth.pairsInRange = pairsInRange;
+        stats.repulsionTruth.pairsNonEdgeInRange = pairsNonEdgeInRange;
+        stats.repulsionTruth.pairsApplied = pairsApplied;
+        stats.repulsionTruth.maxForceMag = maxForceMag;
+        stats.repulsionTruth.forcePairsCount = forcePairsCount;
         stats.safety.repulsionForceMagMax = forceMagMax;
 
         // XPBD Telemetry (Fix 1/3: Wire Source)

@@ -25,9 +25,10 @@ import { applyRepulsion } from '../forces';  // Mini Run 3: Force-based repulsio
 //   effectiveDamping * 5.0 = 0.693 / 0.7 = 0.99
 //   effectiveDamping = 0.99 / 5.0 = 0.198 ≈ 0.20
 //
-// Chosen value: 0.20 (half-life ≈ 0.69s)
+// Chosen value: 0.20//   effectiveDamping = 0.198 ≈ 0.20
+//
 // =============================================================================
-export const DEFAULT_XPBD_DAMPING = 0.20;
+export const DEFAULT_XPBD_DAMPING = 0.20; // BALANCED preset (half-life ~0.69s)
 
 // STEP 4/5 RUN 2: Telemetry state for change detection and rate limiting
 let lastTelemetrySource: 'DEFAULT' | 'CONFIG' | 'CLAMPED' | null = null;
@@ -37,7 +38,7 @@ let lastTelemetryTime = 0;
 // STEP 5/5 RUN 1: Hand-calibration presets for A/B testing
 export const XPBD_DAMPING_PRESETS = {
     SNAPPY: 0.12,    // Half-life ~1.16s (responsive, quick settle)
-    BALANCED: 0.20,  // Half-life ~0.69s (current default)
+    BALANCED: 0.20,  // Half-life ~0.69s (current default) ← DEFAULT_XPBD_DAMPING
     SMOOTH: 0.32,    // Half-life ~0.43s (tighter, less overshoot)
 } as const;
 

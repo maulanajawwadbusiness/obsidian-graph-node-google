@@ -297,11 +297,23 @@ export function applyRepulsion(
 
     // TRUTH SCAN: Report execution telemetry
     if (stats && stats.safety) {
+        // Legacy
         stats.safety.repulsionCalledThisFrame = true;
         stats.safety.repulsionPairsChecked = pairsChecked;
         stats.safety.repulsionPairsApplied = pairsApplied;
         stats.safety.repulsionForceMagMax = forceMagMax;
     }
+
+    // Run 4: Repulsion Proof Telemetry (Unique Bucket)
+    if (stats && stats.repulsionProof) {
+        stats.repulsionProof.pairsChecked = pairsChecked;
+        stats.repulsionProof.pairsApplied = pairsApplied;
+        stats.repulsionProof.maxForce = forceMagMax;
+    }
+    stats.safety.repulsionPairsChecked = pairsChecked;
+    stats.safety.repulsionPairsApplied = pairsApplied;
+    stats.safety.repulsionForceMagMax = forceMagMax;
+}
 }
 
 export function applyCollision(

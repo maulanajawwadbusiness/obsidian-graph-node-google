@@ -256,5 +256,5 @@ export interface ForceConfig {
   xpbdIterationsDrag?: number; // Sub-steps when dragging (Default: 6)
 
   // XPBD Repulsion Integration (Run 3)
-  xpbdRepulsionEnabled?: boolean; // Enable force-based repulsion in XPBD mode (Default: false)
+  xpbdRepulsionEnabled?: boolean; // Enable force-based repulsion in XPBD mode (Default: true)
 }

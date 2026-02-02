@@ -176,6 +176,8 @@ export const DEFAULT_PHYSICS_CONFIG: ForceConfig = {
     // CRITICAL FIX: 0.0001 was TOO STIFF (caused explosion on drag release)
     // Smaller compliance = stiffer = larger corrections = unstable
     // 0.01 provides visible corrections (~0.2px) without explosion
-    xpbdLinkCompliance: 0.01,  // Stable, visible corrections
     // xpbdMaxCorrPerConstraintPx: undefined,  // No cap by default (trust the solver)
+
+    // ANCHOR: XPBD Repulsion
+    xpbdRepulsionEnabled: true,
 };

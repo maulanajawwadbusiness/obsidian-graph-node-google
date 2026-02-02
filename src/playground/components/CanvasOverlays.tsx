@@ -377,6 +377,10 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
                                                 </div>
                                                 <strong style={{ fontWeight: 700, fontSize: '11px', color: '#88ff88', marginTop: '6px', display: 'block' }}>XPBD FORCING</strong>
                                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2px' }}>
+                                                    <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '10px', cursor: 'pointer', color: '#adff2f' }}>
+                                                        <input type="checkbox" checked={!!config.useXPBD} onChange={(e) => onConfigChange('useXPBD', e.target.checked)} />
+                                                        Use XPBD Engine
+                                                    </label>
                                                     <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '10px', cursor: 'pointer' }}>
                                                         <input type="checkbox" checked={!!config.debugForceStiffSprings} onChange={(e) => onConfigChange('debugForceStiffSprings', e.target.checked)} />
                                                         Stiff Links
@@ -410,6 +414,7 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
                                 {/* PHYSICS HUD STATS */}
                                 <div style={{ marginTop: '8px', lineHeight: '1.2' }}>
                                     <strong style={{ fontWeight: 700 }}>Physics Stats</strong><br />
+                                    Mode: <strong style={{ color: hud?.mode === 'XPBD' ? '#adff2f' : '#888' }}>{hud?.mode || 'LEGACY'}</strong><br />
                                     N: {metrics.nodes} | L: {metrics.links}<br />
                                     FPS: {metrics.fps} <br />
                                     Degrade: {hud ? hud.degradeLevel : 0} ({hud ? hud.degradePct5s.toFixed(1) : '0.0'}%)<br />

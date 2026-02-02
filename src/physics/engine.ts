@@ -254,6 +254,16 @@ export class PhysicsEngine {
     constructor(config: Partial<ForceConfig> = {}) {
         this.config = { ...DEFAULT_PHYSICS_CONFIG, ...config };
         this.preRollFrames = this.config.initStrategy === 'legacy' ? 5 : 0;
+
+        // Dev-only: Proof-of-plumbing for xpbdDamping (STEP 1/5)
+        if (typeof window !== 'undefined' && (window as any).__DEV__) {
+            const hasXpbdDamping = 'xpbdDamping' in this.config && this.config.xpbdDamping !== undefined;
+            console.log('[DEV] xpbdDamping plumbing:', {
+                present: hasXpbdDamping,
+                value: this.config.xpbdDamping,
+                note: 'STEP 1/5 - field exists but unused'
+            });
+        }
     }
 
     /**

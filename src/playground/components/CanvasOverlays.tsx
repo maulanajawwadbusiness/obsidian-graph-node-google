@@ -412,6 +412,9 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
                                     <strong style={{ fontWeight: 700 }}>Physics Stats</strong><br />
                                     N: {metrics.nodes} | L: {metrics.links}<br />
                                     FPS: {metrics.fps} <br />
+                                    <span style={{ color: hud?.mode === 'XPBD' ? '#0f0' : '#fa0', fontWeight: 'bold' }}>
+                                        Mode: {hud?.mode || 'UNKNOWN'}
+                                    </span><br />
                                     Degrade: {hud ? hud.degradeLevel : 0} ({hud ? hud.degradePct5s.toFixed(1) : '0.0'}%)<br />
                                     Settle: {hud ? hud.settleState : 'moving'} ({hud ? Math.round(hud.lastSettleMs) : 0}ms)<br />
                                     Jitter(1s): {hud ? hud.jitterAvg.toFixed(4) : '0.0'}<br />

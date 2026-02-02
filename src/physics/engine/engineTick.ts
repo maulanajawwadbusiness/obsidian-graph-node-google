@@ -1016,6 +1016,13 @@ export const runPhysicsTickLegacy = (engine: PhysicsEngineTickContext, dtIn: num
 import { runPhysicsTickXPBD } from './engineTickXPBD';
 
 export const runPhysicsTick = (engine: PhysicsEngineTickContext, dtIn: number) => {
+    // Mini Run 2 (A2): Log mode selection once at startup
+    if (!engine.tickModeLoggedOnce) {
+        const mode = engine.config.useXPBD ? 'XPBD' : 'LEGACY';
+        console.log(`[Physics Tick] Mode selected: ${mode}`);
+        engine.tickModeLoggedOnce = true;
+    }
+
     if (engine.config.useXPBD) {
         runPhysicsTickXPBD(engine, dtIn);
     } else {

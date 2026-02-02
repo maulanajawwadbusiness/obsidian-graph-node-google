@@ -4,6 +4,7 @@ import type { PhysicsHudHistory, PhysicsHudSnapshot } from './physicsHud';
 import type { TimePolicy } from './dtPolicy';
 
 export type PhysicsEngineTickContext = {
+    uid?: string; // Forensic identity
     nodes: Map<string, PhysicsNode>;
     links: PhysicsLink[];
     config: ForceConfig;

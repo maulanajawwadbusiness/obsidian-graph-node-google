@@ -159,7 +159,21 @@ export const clearEngineState = (engine: PhysicsEngineTopologyContext) => {
 };
 
 export const updateEngineConfig = (engine: PhysicsEngineTopologyContext, newConfig: Partial<ForceConfig>) => {
+    // Merge new config into existing
     engine.config = { ...engine.config, ...newConfig };
+
+    // Dev-only assertion: verify xpbdDamping survives merge if provided
+    if (typeof window !== 'undefined' && (window as any).__DEV__) {
+        if ('xpbdDamping' in newConfig) {
+            console.assert(
+                engine.config.xpbdDamping === newConfig.xpbdDamping,
+                '[DEV] xpbdDamping lost during config merge',
+                { provided: newConfig.xpbdDamping, result: engine.config.xpbdDamping }
+            );
+        }
+    }
+
+    // Wake all nodes when config changes (forces may have changed)
     engine.wakeAll();
     engine.invalidateWarmStart('CONFIG_CHANGE');
 };

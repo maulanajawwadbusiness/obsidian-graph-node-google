@@ -540,6 +540,19 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
                                         </div>
                                     )}
                                     {hud && (
+                                        <div style={{ marginTop: '4px', paddingTop: '4px', borderTop: '1px solid #444', color: '#ffcc00' }}>
+                                            <strong>Repulsion Proof (Run 1)</strong><br />
+                                            <span style={{ color: hud.repulsionProofEnabled ? '#0f0' : '#666' }}>
+                                                Enabled: {hud.repulsionProofEnabled ? 'YES' : 'NO'} | Entered: {hud.repulsionProofEnteredFrame}
+                                            </span><br />
+                                            Called: {hud.repulsionProofCalledThisFrame ? 'YES' : 'NO'}<br />
+                                            Pairs: {hud.repulsionProofPairsChecked} chk / {hud.repulsionProofPairsApplied} app<br />
+                                            MaxForce: {hud.repulsionProofMaxForce}<br />
+                                            Active: {hud.repulsionAwakeCount} / Sleep: {hud.repulsionSleepingCount}<br />
+                                            Stride: {hud.repulsionPairStride}
+                                        </div>
+                                    )}
+                                    {hud && (
                                         <div style={{ marginTop: '4px', paddingTop: '4px', borderTop: '1px solid #444', color: (hud.corrSignFlipRate || 0) > 10 ? '#f88' : '#8f8' }}>
                                             <strong>Oscillation</strong><br />
                                             Flip Rate: {(hud.corrSignFlipRate || 0).toFixed(1)}%<br />

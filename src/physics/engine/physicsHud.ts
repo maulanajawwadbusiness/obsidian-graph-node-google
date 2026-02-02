@@ -144,8 +144,18 @@ export type PhysicsHudSnapshot = {
     xpbdFirstMoveNodeId?: string | null;
     xpbdFirstCapHit?: boolean;
     xpbdFirstAlpha?: number;
-    xpbdFirstAlpha?: number;
     xpbdFirstWSum?: number;
+
+    // Run 1: Repulsion Proof Placeholders
+    repulsionProofEnteredFrame?: number;
+    repulsionProofCalledThisFrame?: boolean;
+    repulsionProofPairsChecked?: number;
+    repulsionProofPairsApplied?: number;
+    repulsionProofMaxForce?: number;
+    repulsionAwakeCount?: number;
+    repulsionSleepingCount?: number;
+    repulsionPairStride?: number;
+    repulsionProofEnabled?: boolean;
 
     // Lane A: Sign & Gradient Debug
     xpbdFirstEdgeDebug?: {

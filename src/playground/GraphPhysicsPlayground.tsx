@@ -338,13 +338,17 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
     };
 
     const handleXpbdDampingPreset = (preset: 'SNAPPY' | 'BALANCED' | 'SMOOTH') => {
+        // 1. Dispatch to Engine (Source of Truth for Logic & Probes)
+        engineRef.current?.applyXpbdDampingPreset(preset);
+
+        // 2. Sync Local React State (Visuals only, no re-dispatch)
         const presetValues = {
             SNAPPY: 0.12,
             BALANCED: 0.20,
             SMOOTH: 0.32
         };
         const value = presetValues[preset];
-        handleConfigChange('xpbdDamping', value);
+        setConfig(prev => ({ ...prev, xpbdDamping: value }));
     };
 
     // Capture Safety: Release drag on window blur (Alt-Tab)

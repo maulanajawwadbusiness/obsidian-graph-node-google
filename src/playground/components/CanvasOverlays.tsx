@@ -382,8 +382,12 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
                                                         Stiff Links
                                                     </label>
                                                     <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '10px', cursor: 'pointer' }}>
+                                                        <input type="checkbox" checked={!!config.xpbdRepulsionEnabled} onChange={(e) => onConfigChange('xpbdRepulsionEnabled', e.target.checked)} />
+                                                        XPBD Repel
+                                                    </label>
+                                                    <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '10px', cursor: 'pointer' }}>
                                                         <input type="checkbox" checked={!!config.debugForceRepulsion} onChange={(e) => onConfigChange('debugForceRepulsion', e.target.checked)} />
-                                                        Force Repel
+                                                        Force Repel (Legacy)
                                                     </label>
                                                     <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '10px', cursor: 'pointer' }}>
                                                         <input type="checkbox" checked={!!config.debugXPBDCanary} onChange={(e) => onConfigChange('debugXPBDCanary', e.target.checked)} />

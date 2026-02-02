@@ -362,8 +362,12 @@ export class PhysicsEngine {
      * STEP 5/5 RUN 1: Apply XPBD damping preset for hand calibration
      */
     applyXpbdDampingPreset(preset: import('./engine/engineTickXPBD').XpbdDampingPreset) {
-        const { XPBD_DAMPING_PRESETS } = require('./engine/engineTickXPBD');
-        this.updateConfig({ xpbdDamping: XPBD_DAMPING_PRESETS[preset] });
+        const presetValues = {
+            SNAPPY: 0.12,
+            BALANCED: 0.20,
+            SMOOTH: 0.32
+        };
+        this.updateConfig({ xpbdDamping: presetValues[preset] });
     }
 
     /**

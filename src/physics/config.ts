@@ -6,10 +6,10 @@ export const DEFAULT_PHYSICS_CONFIG: ForceConfig = {
     // ---------------------------------------------------------------------------
     // Repulsion is now "Physical Volume" only.
     // It prevents overlap but doesn't shape the cloud.
-    repulsionStrength: 500 * 100 * 100 * 10000000000000000000000000000000000000000000000, // Reduced from 4000. Just a hard shell.
+    repulsionStrength: 500, // Reduced from 4000. Just a hard shell.
 
     // Very short range. Only affects immediate neighbors.
-    repulsionDistanceMax: 150,
+    repulsionDistanceMax: 60,
     repulsionMinDistance: 6,
     repulsionMaxForce: 120000,
 

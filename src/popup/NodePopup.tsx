@@ -7,6 +7,18 @@ const stopPropagation = (e: React.MouseEvent) => e.stopPropagation();
 
 const GAP_FROM_NODE = 20;
 
+// BACKDROP - Handles click-outside-to-close without document-level listener
+const BACKDROP_STYLE: React.CSSProperties = {
+    position: 'fixed',
+    top: 0,
+    left: 0,
+    width: '100%',
+    height: '100%',
+    zIndex: 1000,  // Below popup (1001) but above UI buttons (10-11)
+    pointerEvents: 'auto',
+    background: 'transparent',  // Invisible but clickable
+};
+
 // MEMBRANE ANIMATION - Initial (hidden) state
 const POPUP_STYLE: React.CSSProperties = {
     position: 'absolute',
@@ -156,20 +168,8 @@ export const NodePopup: React.FC<NodePopupProps> = ({ trackNode, engineRef }) =>
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, [closePopup]);
 
-    useEffect(() => {
-        const handleClickOutside = (e: MouseEvent) => {
-            if (popupRef.current && !popupRef.current.contains(e.target as Node)) {
-                closePopup();
-            }
-        };
-        const timer = setTimeout(() => {
-            document.addEventListener('mousedown', handleClickOutside);
-        }, 100);
-        return () => {
-            clearTimeout(timer);
-            document.removeEventListener('mousedown', handleClickOutside);
-        };
-    }, [closePopup]);
+    // FIX: Removed document-level mousedown listener
+    // Click-outside is now handled by backdrop element (see render)
 
     // Report popup rect for chatbar positioning
     useEffect(() => {
@@ -383,41 +383,49 @@ export const NodePopup: React.FC<NodePopupProps> = ({ trackNode, engineRef }) =>
     };
 
     return (
-        <div
-            id="arnvoid-node-popup"
-            ref={popupRef}
-            style={finalStyle}
-            onMouseDown={stopPropagation}
-            onMouseMove={stopPropagation}
-            onMouseUp={stopPropagation}
-            onClick={stopPropagation}
-            onWheel={stopPropagation}
-        >
-            <div style={{ ...HEADER_STYLE, ...contentTransition }}>
-                <span style={{ fontSize: '14px', opacity: 0.7 }}>{t('nodePopup.header')}</span>
-                <button
-                    style={CLOSE_BUTTON_STYLE}
-                    onClick={closePopup}
-                    onMouseEnter={(e) => (e.currentTarget.style.color = 'rgba(255, 255, 255, 0.9)')}
-                    onMouseLeave={(e) => (e.currentTarget.style.color = 'rgba(180, 190, 210, 0.7)')}
-                    title={t('tooltip.close')}
-                >
-                    ×
-                </button>
-            </div>
+        <>
+            {/* Backdrop - handles click-outside without document listener */}
+            <div
+                style={BACKDROP_STYLE}
+                onClick={closePopup}
+                onMouseDown={stopPropagation}
+            />
+            <div
+                id="arnvoid-node-popup"
+                ref={popupRef}
+                style={finalStyle}
+                onMouseDown={stopPropagation}
+                onMouseMove={stopPropagation}
+                onMouseUp={stopPropagation}
+                onClick={stopPropagation}
+                onWheel={stopPropagation}
+            >
+                <div style={{ ...HEADER_STYLE, ...contentTransition }}>
+                    <span style={{ fontSize: '14px', opacity: 0.7 }}>{t('nodePopup.header')}</span>
+                    <button
+                        style={CLOSE_BUTTON_STYLE}
+                        onClick={closePopup}
+                        onMouseEnter={(e) => (e.currentTarget.style.color = 'rgba(255, 255, 255, 0.9)')}
+                        onMouseLeave={(e) => (e.currentTarget.style.color = 'rgba(180, 190, 210, 0.7)')}
+                        title={t('tooltip.close')}
+                    >
+                        ×
+                    </button>
+                </div>
 
-            <div style={{ ...CONTENT_STYLE, ...contentTransition }}>
-                <div style={LABEL_STYLE}>{displayTitle}</div>
-                <p>{displayBody}</p>
-            </div>
+                <div style={{ ...CONTENT_STYLE, ...contentTransition }}>
+                    <div style={LABEL_STYLE}>{displayTitle}</div>
+                    <p>{displayBody}</p>
+                </div>
 
-            <div style={
-                contentVisible
-                    ? { transition: 'opacity 300ms ease-out 150ms' }
-                    : { opacity: 0, transition: 'opacity 300ms ease-out 150ms' }
-            }>
-                <ChatInput onSend={sendMessage} placeholder={t('nodePopup.inputPlaceholder')} />
+                <div style={
+                    contentVisible
+                        ? { transition: 'opacity 300ms ease-out 150ms' }
+                        : { opacity: 0, transition: 'opacity 300ms ease-out 150ms' }
+                }>
+                    <ChatInput onSend={sendMessage} placeholder={t('nodePopup.inputPlaceholder')} />
+                </div>
             </div>
-        </div>
+        </>
     );
 };

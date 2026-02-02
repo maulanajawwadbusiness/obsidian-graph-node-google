@@ -41,6 +41,7 @@ The ticking loop (`src/physics/engine/engineTick.ts`) execution order:
 2.  **MotionPolicy**: Computes global temperature and degrade scalars.
 3.  **Force Pass** (Soft: Repulsion, Springs) -> *includes Deterministic Singularity Handling*
 4.  **Integration** (Euler) -> *Updates x = x + v*
+    - **Damping (XPBD-Specific)**: Applied via `applyDamping()` using `effectiveDamping = config.xpbdDamping ?? DEFAULT_XPBD_DAMPING (0.20)`. Formula: `v *= exp(-effectiveDamping * 5.0 * dt)`. Half-life: ~0.69s (vs legacy 0.15s). Safety clamped to [0, 2].
 5.  **XPBD Constraints** (`engineTickXPBD.ts`):
     - **Solver**: Iterative Edge Distance Constraints.
     - **Loop**: Default Idle=2, Drag=6 (Hard Cap 12).

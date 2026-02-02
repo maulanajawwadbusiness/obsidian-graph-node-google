@@ -47,6 +47,8 @@ The graph is driven by a **Hybrid Solver** (`src/physics/`) prioritizing "Visual
 4.  **Reconcile**: Velocity updated from positional corrections ($v = \Delta x / \Delta t$).
 5.  **Initialization**: "Spread" strategy seeds nodes to prevent singularities.
 6.  **Singularity**: Deterministic overlap resolution ($d \approx 0$).
+7.  **Damping (XPBD-Specific)**: XPBD mode uses its own damping policy (`DEFAULT_XPBD_DAMPING = 0.20`, half-life ~0.69s) separate from legacy damping (0.90, half-life ~0.15s). User can override via `config.xpbdDamping` or preset buttons (Snappy/Balanced/Smooth).
+
 
 ### B. Performance Doctrine (The Sacred 60)
 **"Interaction > Simulation"**

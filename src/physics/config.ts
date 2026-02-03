@@ -32,7 +32,7 @@ export const DEFAULT_PHYSICS_CONFIG: ForceConfig = {
     // ---------------------------------------------------------------------------
     // Springs are the PRIMARY layout driver now.
     // High stiffness = the structure snaps into place.
-    springStiffness: 0.5, // Moderate stiffness for "unfolding".
+    springStiffness: 1, // Moderate stiffness for "unfolding".
 
     // Define the "relaxed" length of edges.
     springLength: 500, // DEPRECATED - kept for UI compatibility, use targetSpacing
@@ -49,11 +49,11 @@ export const DEFAULT_PHYSICS_CONFIG: ForceConfig = {
     // ---------------------------------------------------------------------------
     // A very weak gravity toward the origin to keep outliers from drifting too far.
     // Usually around 0.01 or so.
-    gravityCenterStrength: 0.01,
+    gravityCenterStrength: 0.01 * 3,
 
     // Base radius at which the center gravity is "max". Usually the expected cluster size.
     // Beyond this radius, the Force tapers off.
-    gravityBaseRadius: 30,
+    gravityBaseRadius: 30 * 3,
 
     // ---------------------------------------------------------------------------
     // ANCHOR: Damping (Air Friction)

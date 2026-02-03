@@ -331,7 +331,7 @@ export const ELEGANT_THEME: ThemeConfig = {
 
     // Two-layer glow: inner blue + outer purple
     useTwoLayerGlow: true,
-    glowInnerColor: 'rgba(99, 171, 255, 0.22)',   // blue, closer
+    glowInnerColor: 'rgba(59, 150, 255, 0.22)',   // blue, closer
     glowInnerRadius: 8,
     glowInnerAlpha: 0.22,
     glowOuterColor: 'rgba(100, 60, 160, 0.12)',   // purple, wider
@@ -398,8 +398,8 @@ export const ELEGANT_THEME: ThemeConfig = {
     // Text labels (Obsidian-style)
     labelEnabled: true,
     labelFontSize: 11,
-    labelFontFamily: 'system-ui, -apple-system, sans-serif',
-    labelColor: '#ffffff',
+    labelFontFamily: 'Quicksand, system-ui, -apple-system, sans-serif',
+    labelColor: '#d1f4ff',
     labelOffsetBasePx: 8,
     labelOffsetHoverPx: 4,
     labelAlphaBase: 0.6,

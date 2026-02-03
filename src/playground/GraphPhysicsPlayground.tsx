@@ -57,7 +57,7 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
         aspectRatio: 0,
         lifecycleMs: 0
     });
-    const [spawnCount, setSpawnCount] = useState(5);
+    const [spawnCount, setSpawnCount] = useState(15);
     const [seed, setSeed] = useState(Date.now()); // Seed for deterministic generation
 
     // FIX: Adaptive Scale (Temp)

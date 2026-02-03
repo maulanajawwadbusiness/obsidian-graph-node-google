@@ -115,10 +115,14 @@ export const drawLinks = (
         // Use dimEnergy for smooth fade-in of highlight color
         // FIX: Run 5 Deduplication (ensure no double-draw vs Pass 1)
         // Note: neighborEdgeKeys checks prevent overlap with Pass 1, but we add strict dedupe for cleanliness.
+        const highlightAlpha = Math.min(
+            theme.edgeHighlightAlphaCap,
+            dimEnergy * theme.edgeHighlightAlphaCap
+        );
         drawEdgeBatch(
             theme.neighborEdgeColor,
             'butt',  // Crisp for knife-sharp feel
-            dimEnergy,  // Fade in with dimEnergy (0 -> 1 over 200ms)
+            highlightAlpha,  // Fade in with dimEnergy (0 -> cap)
             (key) => neighborEdgeKeys.has(key)
         );
     } else {
@@ -252,6 +256,8 @@ export const drawNodes = (
             node.id === engine.draggedNodeId;
         const isNeighborNode = hoverStateRef.current.neighborNodeIds.has(node.id);
         const dimEnergy = hoverStateRef.current.dimEnergy;
+        const highlightActive = theme.neighborHighlightEnabled && dimEnergy > 0.01;
+        const isXThing = highlightActive && !isHoveredNode && !isNeighborNode;
 
         // Calculate opacity: protected nodes stay at full opacity, others dim
         let nodeOpacity = 1;
@@ -279,7 +285,9 @@ export const drawNodes = (
                         }
 
                         // Apply opacity (including glow reduction for dimmed nodes)
-                        const glowOpacity = nodeOpacity;
+                        const glowOpacity = nodeOpacity < 1
+                            ? nodeOpacity * theme.xThingGlowDimMul
+                            : nodeOpacity;
                         ctx.save();
                         ctx.globalAlpha = glowOpacity;
 
@@ -330,9 +338,13 @@ export const drawNodes = (
                         ringColor = boostBrightness(ringColor, theme.hoveredBrightnessBoost);
                     }
 
+                    const flatRing = isXThing && theme.xThingFlatRingEnabled;
+                    const ringEndColor = flatRing ? theme.xThingFlatRingColor : theme.deepPurple;
+                    const ringStartColor = flatRing ? theme.xThingFlatRingColor : ringColor;
+
                     drawGradientRing(ctx, screen.x, screen.y, radiusPx, activeRingWidth,
-                        ringColor,
-                        theme.deepPurple, theme.ringGradientSegments, theme.gradientRotationDegrees);
+                        ringStartColor,
+                        ringEndColor, theme.ringGradientSegments, theme.gradientRotationDegrees);
                     // Don't reset globalAlpha here - preserve nodeOpacity for dimming
                     ctx.globalCompositeOperation = 'source-over';
                 } else {

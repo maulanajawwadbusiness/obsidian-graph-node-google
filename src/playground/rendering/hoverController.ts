@@ -20,6 +20,8 @@ type HoverControllerDeps = {
     cameraRef: MutableRefObject<CameraState>;
 };
 
+const ALLOW_HOVER_DURING_DRAG = true;
+
 export const createHoverController = ({
     engineRef,
     settingsRef,
@@ -484,8 +486,8 @@ export const createHoverController = ({
         let nextPendingSinceMs = hoverStateRef.current.pendingSwitchSinceMs;
 
         // FIX 46: Locked Mode (Drag Force)
-        // If locked (drag in progress), bypass search.
-        if (lockedNodeId) {
+        // If locked (drag in progress), bypass search unless hover is allowed during drag.
+        if (lockedNodeId && !ALLOW_HOVER_DURING_DRAG) {
             if (currentHoveredId !== lockedNodeId) {
                 // Force switch
                 shouldSwitch = true;
@@ -744,17 +746,16 @@ export const createHoverController = ({
             }
         }
 
-        // Sync neighbor cache (for both hover and drag)
-        const activeNodeId = lockedNodeId || newHoveredId;
-        if (activeNodeId) {
+        // Sync neighbor cache (drag-only). Hover no longer updates neighbor sets.
+        if (lockedNodeId) {
             const neighbors = hoverStateRef.current.neighborNodeIds;
-            fillNeighborNodeIds(activeNodeId, neighbors);
+            fillNeighborNodeIds(lockedNodeId, neighbors);
 
             // Build edge keys for quick lookup during rendering
             const edgeKeys = hoverStateRef.current.neighborEdgeKeys;
             edgeKeys.clear();
             for (const nbId of neighbors) {
-                const key = activeNodeId < nbId ? `${activeNodeId}:${nbId}` : `${nbId}:${activeNodeId}`;
+                const key = lockedNodeId < nbId ? `${lockedNodeId}:${nbId}` : `${nbId}:${lockedNodeId}`;
                 edgeKeys.add(key);
             }
         } else {

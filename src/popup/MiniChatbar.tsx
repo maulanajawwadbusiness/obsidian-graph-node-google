@@ -385,6 +385,7 @@ export const MiniChatbar: React.FC<MiniChatbarProps> = ({ messages, onSend, onCl
     return (
         <div
             ref={chatbarRef}
+            data-font="ui"
             style={finalStyle}
             onMouseDown={stopPropagation}
             onMouseMove={stopPropagation}

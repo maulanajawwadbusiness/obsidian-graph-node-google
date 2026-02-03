@@ -15,8 +15,6 @@ export const CONTAINER_STYLE: React.CSSProperties = {
     width: '100vw',
     height: '100vh',
     overflow: 'hidden',
-    // Use the app font defined in src/index.css (@font-face 'Quicksand')
-    fontFamily: "'Quicksand', Inter, system-ui, Avenir, Helvetica, Arial, sans-serif",
     background: '#111',
     color: '#eee',
 };

@@ -25,7 +25,7 @@
 
 .arnvoid-text {
   white-space: pre-wrap;
-  font-family: var(--font-mono, "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace);
+  font-family: inherit;
 }
 
 .arnvoid-empty {

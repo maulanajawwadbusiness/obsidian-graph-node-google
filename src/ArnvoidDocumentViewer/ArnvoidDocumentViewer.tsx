@@ -303,7 +303,7 @@ export const ArnvoidDocumentViewer = forwardRef<
   }, [source, clearHighlight]);
 
   return (
-    <div className={`arnvoid-viewer ${className ?? ""}`} style={style}>
+    <div className={`arnvoid-viewer ${className ?? ""}`} style={style} data-font="ui">
       <div className="arnvoid-viewer-body" ref={containerRef}>
         {format === "pdf" ? (
           <PdfViewer source={pdfSource} scrollContainerRef={scrollContainerRef} />

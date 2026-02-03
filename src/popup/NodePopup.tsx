@@ -394,6 +394,7 @@ export const NodePopup: React.FC<NodePopupProps> = ({ trackNode, engineRef }) =>
             <div
                 id="arnvoid-node-popup"
                 ref={popupRef}
+                data-font="ui"
                 style={finalStyle}
                 onMouseDown={stopPropagation}
                 onMouseMove={stopPropagation}

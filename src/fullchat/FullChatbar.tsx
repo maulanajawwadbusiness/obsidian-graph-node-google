@@ -718,6 +718,7 @@ export const FullChatbar: React.FC<FullChatbarProps> = ({ engineRef }) => {
 
     return (
         <div
+            data-font="ui"
             style={{ ...PANEL_STYLE, touchAction: 'pan-x pan-y' }}
             onPointerDownCapture={stop}
             onPointerMoveCapture={stop}
@@ -728,7 +729,9 @@ export const FullChatbar: React.FC<FullChatbarProps> = ({ engineRef }) => {
         >
             {/* Header */}
             <div style={HEADER_STYLE}>
-                <div style={TITLE_STYLE}>{t('fullChat.emptyStateTitle')}</div>
+                <div style={TITLE_STYLE} data-font="title">
+                    {t('fullChat.emptyStateTitle')}
+                </div>
                 <button
                     type="button"
                     style={CLOSE_BUTTON_STYLE}

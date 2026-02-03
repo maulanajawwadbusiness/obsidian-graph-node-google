@@ -103,8 +103,8 @@ export interface ThemeConfig {
     neighborHighlightEnabled: boolean;  // Master toggle for neighbor detection visual effects
     neighborEdgeColor: string;          // Color for highlighted neighbor edges
     neighborDimOpacity: number;         // Opacity for non-neighbor elements when dimmed (0.2 = 20%)
-    neighborTransitionMs: number;       // Fade duration for dim/highlight transitions (200ms)
-    hoveredBrightnessBoost: number;     // Brightness multiplier for hovered/dragged node (1.1 = 10% boost)
+    neighborTransitionMs: number;       // Fade duration for dim/highlight transitions (100ms)
+    hoveredBrightnessBoost: number;     // Brightness multiplier for hovered/dragged dot (1.3 = 30% boost)
     hoverRingWidthBoost: number;       // Max ring width boost at full energy (0.1 = 10%)
     hoverGlowBoost: number;            // Max glow alpha boost at full energy (0.15)
 
@@ -369,8 +369,8 @@ export const ELEGANT_THEME: ThemeConfig = {
     neighborHighlightEnabled: true,
     neighborEdgeColor: '#63abff',    // Bright blue stroke color
     neighborDimOpacity: 0.2,         // 20% opacity for non-neighbors
-    neighborTransitionMs: 100,       // Smooth 200ms fade
-    hoveredBrightnessBoost: 1.3,     // 10% brightness boost for hovered/dragged node
+    neighborTransitionMs: 100,       // Smooth 100ms fade
+    hoveredBrightnessBoost: 1.3,     // 30% brightness boost for hovered/dragged dot
 
     hoverRingWidthBoost: 0.1,       // 10% max ring width boost
     hoverGlowBoost: 0.15,           // Max glow alpha boost

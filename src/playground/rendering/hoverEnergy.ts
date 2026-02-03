@@ -5,6 +5,7 @@ import type { HoverState } from './renderingTypes';
 
 const MAX_HOVER_DT_MS = 40;
 const HOVER_DECAY_EPSILON = 0.01;
+const DIM_DECAY_EPSILON = 0.01;
 
 export const updateHoverEnergy = (
     hoverStateRef: MutableRefObject<HoverState>,
@@ -63,4 +64,7 @@ export const updateHoverEnergy = (
         hoverStateRef.current.dimEnergy = hoverStateRef.current.targetDimEnergy;
     }
     hoverStateRef.current.dimEnergy = clamp(hoverStateRef.current.dimEnergy, 0, 1);
+    if (hoverStateRef.current.targetDimEnergy === 0 && hoverStateRef.current.dimEnergy <= DIM_DECAY_EPSILON) {
+        hoverStateRef.current.dimEnergy = 0;
+    }
 };

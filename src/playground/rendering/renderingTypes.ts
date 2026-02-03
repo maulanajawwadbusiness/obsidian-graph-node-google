@@ -100,6 +100,7 @@ export type HoverState = {
     // Neighbor Highlight System
     neighborNodeIds: Set<string>;   // Cached neighbor IDs for current hover/drag
     neighborEdgeKeys: Set<string>;  // Cached edge keys (e.g., "a:b") for current hover/drag
+    edgeDrawScratch: Set<string>;   // Scratch set for de-duping edge draws per pass
     dimEnergy: number;              // 0 = normal, 1 = fully dimmed
     targetDimEnergy: number;        // Target state (0 or 1)
 };
@@ -267,6 +268,7 @@ export const createInitialHoverState = (): HoverState => ({
     // Neighbor Highlight System
     neighborNodeIds: new Set(),
     neighborEdgeKeys: new Set(),
+    edgeDrawScratch: new Set(),
     dimEnergy: 0,
     targetDimEnergy: 0
 });

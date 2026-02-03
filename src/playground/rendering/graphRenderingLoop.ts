@@ -358,6 +358,14 @@ export const startGraphRenderLoop = (deps: GraphRenderLoopDeps) => {
             hoverStateRef.current.targetEnergy = 0;
         }
 
+        if (
+            hoverStateRef.current.hoveredNodeId === null &&
+            hoverStateRef.current.dimEnergy <= 0.01
+        ) {
+            hoverStateRef.current.neighborNodeIds.clear();
+            hoverStateRef.current.neighborEdgeKeys.clear();
+        }
+
         ctx.clearRect(0, 0, width, height);
 
         // --- RENDER PASS 1: BACKGROUND & VIGNETTE ---

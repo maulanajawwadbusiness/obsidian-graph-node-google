@@ -42,6 +42,8 @@ export const drawLinks = (
         globalAlpha: number,
         filter: (key: string) => boolean
     ) => {
+        const edgeDrawScratch = hoverStateRef.current.edgeDrawScratch;
+        edgeDrawScratch.clear();
         ctx.strokeStyle = strokeStyle;
         ctx.lineCap = lineCap;
         ctx.globalAlpha = globalAlpha;
@@ -60,6 +62,8 @@ export const drawLinks = (
 
                 // Skip if doesn't match filter
                 if (!filter(edgeKey)) return;
+                if (edgeDrawScratch.has(edgeKey)) return;
+                edgeDrawScratch.add(edgeKey);
 
                 // World space culling
                 const lMinX = Math.min(s.x, t.x);
@@ -351,11 +355,18 @@ export const drawNodes = (
 
         } else {
             // Normal mode
+            ctx.globalAlpha = nodeOpacity;
             ctx.beginPath();
             ctx.arc(screen.x, screen.y, radiusPx, 0, Math.PI * 2);
-            ctx.fillStyle = node.isFixed ? theme.nodeFixedColor : theme.nodeFillColor;
+            let fillColor = node.isFixed ? theme.nodeFixedColor : theme.nodeFillColor;
+            let strokeColor = theme.nodeStrokeColor;
+            if (isHoveredNode && theme.neighborHighlightEnabled && !node.isFixed) {
+                fillColor = boostBrightness(fillColor, theme.hoveredBrightnessBoost);
+                strokeColor = boostBrightness(strokeColor, theme.hoveredBrightnessBoost);
+            }
+            ctx.fillStyle = fillColor;
             ctx.fill();
-            ctx.strokeStyle = theme.nodeStrokeColor;
+            ctx.strokeStyle = strokeColor;
             ctx.lineWidth = strokeWidthPx;
             ctx.stroke();
         }

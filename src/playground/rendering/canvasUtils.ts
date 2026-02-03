@@ -25,6 +25,7 @@ export function drawGradientRing(
     rotationDegrees: number
 ) {
     ctx.save();
+    const baseAlpha = ctx.globalAlpha;
 
     const segmentAngle = (Math.PI * 2) / segments;
     const rotationOffset = (rotationDegrees * Math.PI) / 180;
@@ -37,7 +38,7 @@ export function drawGradientRing(
         const startAngle = i * segmentAngle + rotationOffset - 0.02;
         const endAngle = (i + 1) * segmentAngle + rotationOffset + 0.02;
         ctx.arc(x, y, radius, startAngle, endAngle);
-        ctx.globalAlpha = 1;
+        ctx.globalAlpha = baseAlpha;
         ctx.globalCompositeOperation = 'source-over';
         ctx.setLineDash([]);
         ctx.shadowBlur = 0;

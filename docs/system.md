@@ -176,3 +176,23 @@ Enable `debugPerf: true` in `config.ts` to see:
 *   **Force Logic**: `src/physics/engine/forcePass.ts` & `src/physics/engine/constraints.ts`.
 *   **Velocity/Motion**: `src/physics/engine/velocityPass.ts` & `src/physics/engine/motionPolicy.ts`.
 *   **Engine State**: `src/physics/engine.ts`.
+
+## 9. Hover Highlight Render Law
+The hover highlight system is a two-pass edge render plus per-dot opacity control. This is the canonical law
+for dot hover visuals (match pixels, no ghosting).
+
+### A. Classification Sets
+*   **Hovered Dot**: `hoverState.hoveredNodeId` (plus `engine.draggedNodeId`).
+*   **Neighbor Dots**: `hoverState.neighborNodeIds` (adjacency map snapshot).
+*   **Neighbor Edges**: `hoverState.neighborEdgeKeys` (edge keys derived from hovered dot).
+
+### B. Energy & Timing
+*   **`dimEnergy`** transitions via `neighborTransitionMs` (target 100ms).
+*   **`dimEnergy`** stays > 0 during fade-out and only clears neighbor sets once it hits ~0.
+*   **Non-neighbor opacity** targets `neighborDimOpacity` (0.2 = 20%).
+
+### C. Pass Ordering (Edges → Dots)
+1.  **Edges Pass 1**: draw all non-neighbor edges at `dimOpacity`.
+2.  **Edges Pass 2**: draw neighbor edges in `neighborEdgeColor` using `dimEnergy` as alpha.
+3.  **Dots Pass**: apply `nodeOpacity` per dot (neighbors + hovered remain full opacity).
+4.  **Hovered Brighten**: hovered dot gets a brightness boost (~30%) independent of dimming.

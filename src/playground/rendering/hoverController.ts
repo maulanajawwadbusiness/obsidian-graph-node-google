@@ -38,11 +38,14 @@ export const createHoverController = ({
     /**
      * Get neighbor node IDs for a given node from the physics engine's adjacency map
      */
-    const getNeighborNodeIds = (nodeId: string): Set<string> => {
+    const fillNeighborNodeIds = (nodeId: string, targetSet: Set<string>) => {
         const engine = engineRef.current;
-        if (!engine || !nodeId) return new Set();
+        targetSet.clear();
+        if (!engine || !nodeId) return;
         const neighbors = engine.adjacencyMap.get(nodeId) || [];
-        return new Set(neighbors);
+        for (const neighbor of neighbors) {
+            targetSet.add(neighbor);
+        }
     };
 
 
@@ -744,19 +747,19 @@ export const createHoverController = ({
         // Sync neighbor cache (for both hover and drag)
         const activeNodeId = lockedNodeId || newHoveredId;
         if (activeNodeId) {
-            const neighbors = getNeighborNodeIds(activeNodeId);
-            hoverStateRef.current.neighborNodeIds = neighbors;
+            const neighbors = hoverStateRef.current.neighborNodeIds;
+            fillNeighborNodeIds(activeNodeId, neighbors);
 
             // Build edge keys for quick lookup during rendering
-            const edgeKeys = new Set<string>();
+            const edgeKeys = hoverStateRef.current.neighborEdgeKeys;
+            edgeKeys.clear();
             for (const nbId of neighbors) {
                 const key = activeNodeId < nbId ? `${activeNodeId}:${nbId}` : `${nbId}:${activeNodeId}`;
                 edgeKeys.add(key);
             }
-            hoverStateRef.current.neighborEdgeKeys = edgeKeys;
         } else {
-            hoverStateRef.current.neighborNodeIds = new Set();
-            hoverStateRef.current.neighborEdgeKeys = new Set();
+            // Keep neighbor sets sticky during hover exit fade-out.
+            // Cleared when dimEnergy reaches ~0 in the render loop.
         }
 
         const camera = cameraRef.current;

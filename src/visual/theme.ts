@@ -300,7 +300,7 @@ export const ELEGANT_THEME: ThemeConfig = {
     // Default: ['glow', 'occlusion', 'ring'] - glow behind, ring on top
     // Try: ['occlusion', 'glow', 'ring'] - glow between occlusion and ring
     // Try: ['occlusion', 'ring', 'glow'] - glow on top (unusual)
-    nodeDrawOrder: ['occlusion', 'ring', 'glow'],
+    nodeDrawOrder: ['glow', 'occlusion', 'ring'],
 
     // Ring: strong electric blue (fallback if gradient disabled)
     ringWidth: ELEGANT_NODE_SCALE * ELEGANT_BASE_RING_WIDTH_RATIO,

@@ -5,6 +5,8 @@
  */
 
 import type { Topology, DirectedLink, SpringEdge, NodeId } from './topologyTypes';
+import { computeRestLengths } from './restLengthPolicy';
+import type { ForceConfig } from '../physics/types';
 
 /**
  * Derive undirected spring edges from directed links.
@@ -14,10 +16,13 @@ import type { Topology, DirectedLink, SpringEdge, NodeId } from './topologyTypes
  * - De-duplicate: A→B and B→A become one spring (min,max canonical key)
  * - Spring edge stores reference to source DirectedLink IDs for traceability
  * 
+ * RUN 9: Now applies rest length policy to each spring edge.
+ * 
  * @param topology The knowledge graph
+ * @param config Physics configuration (for rest length policy)
  * @returns Array of undirected spring edges for physics
  */
-export function deriveSpringEdges(topology: Topology): SpringEdge[] {
+export function deriveSpringEdges(topology: Topology, config?: ForceConfig): SpringEdge[] {
     const edgeMap = new Map<string, SpringEdge>();
 
     for (const link of topology.links) {
@@ -49,13 +54,22 @@ export function deriveSpringEdges(topology: Topology): SpringEdge[] {
 
     const edges = Array.from(edgeMap.values());
 
+    // RUN 9: Apply rest length policy
+    if (config) {
+        const restLengths = computeRestLengths(edges, topology, null, config);
+        for (const edge of edges) {
+            const key = `${edge.a}:${edge.b}`;
+            edge.restLen = restLengths.get(key);
+        }
+    }
+
     // Console proof
     const totalDirectedLinks = topology.links.length;
     const dedupeRate = totalDirectedLinks > 0
         ? ((1 - edges.length / totalDirectedLinks) * 100).toFixed(1)
         : '0.0';
 
-    console.log(`[Run5] deriveSpringEdges: ${totalDirectedLinks} directed links → ${edges.length} spring edges (dedupe: ${dedupeRate}%)`);
+    console.log(`[Run9] deriveSpringEdges: ${totalDirectedLinks} directed links → ${edges.length} spring edges (dedupe: ${dedupeRate}%)`);
 
     return edges;
 }

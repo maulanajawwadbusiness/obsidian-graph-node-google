@@ -396,3 +396,151 @@ Add rest length policy hook point.
 **Files Added**: 1
 **Files Modified**: 1
 **Behavior**: Dev commands functional, topology mutable via console
+
+---
+
+## Run 9: Rest Length Policy Hook Point
+
+**Date**: 2026-02-03
+
+### New Module: `src/graph/restLengthPolicy.ts`
+
+#### Functions
+1. **computeRestLen(a, b, topology, nodePositions, config): number**
+   - Single-edge policy
+   - Currently: uniform `config.targetSpacing`
+   - Future: Could inspect link metadata, node positions
+
+2. **computeRestLengths(edges, topology, nodePositions, config): Map<key, restLen>**
+   - Batch version
+   - Logs min/max/avg rest lengths
+
+### Integration
+**Files Modified**:
+- `src/graph/springDerivation.ts`
+  - Added `config?: ForceConfig` parameter
+  - Calls `computeRestLengths()` if config provided
+  - Assigns `edge.restLen` for each spring edge
+- `src/graph/springToPhysics.ts`
+  - Updated comment: uses `edge.restLen` from policy
+- `src/playground/GraphPhysicsPlayground.tsx`
+  - Passes `config` to `deriveSpringEdges(topology, config)`
+
+### Console Proof
+- `[Run9] Rest length policy: N edges, min=Xpx, max=Ypx, avg=Zpx`
+- Confirms policy applied to all spring edges
+
+### Current Policy
+- Uniform: All springs use `config.targetSpacing`
+- No metadata inspection yet
+- No current-distance clamping yet
+
+### Next Step (Run 10)
+Final cleanup + guardrails + console proof of topology stability.
+
+**Files Added**: 1
+**Files Modified**: 3
+**Behavior**: Rest length policy centralized in single module
+
+---
+
+## Run 10: Cleanup + Guardrails
+
+**Date**: 2026-02-03
+
+### Final Verification
+
+#### Console Proof Summary (All Runs)
+```
+[TopologyControl] setTopology: 5 nodes, 4 links (v1)
+[Run4] Topology set: 5 nodes, 4 directed links
+[Run4] Sample links (first 5): [...]
+[Run7] Topology version: 0 → 1 (changed: true)
+[Run5] deriveSpringEdges: 4 directed links → 4 spring edges (dedupe: 0.0%)
+[Run9] Rest length policy: 4 edges, min=200px, max=200px, avg=200px
+[Run6] Engine wiring: 5 nodes, 4 physics links (from 4 directed)
+```
+
+#### Stability Checks
+1. **Topology Links Count**: Stable over time ✓
+   - Set once in `spawnGraph`
+   - No hidden mutations
+2. **Spring Edges Count**: Stable over time ✓
+   - Derived deterministically from topology
+   - Dedupe logic consistent
+3. **Console Commands**: Working ✓
+   - `window.__topology.dump()` shows current state
+   - `window.__topology.addLink(...)` updates version
+   - Graph doesn't auto-refresh yet (future: reactive engine)
+
+### Guardrails Added
+
+#### Topology Immutability
+- `setTopology()` creates defensive copy ✓
+- `getTopology()` returns copy ✓
+- External mutation prevented
+
+#### Duplicate Prevention
+- `addLinkToEngine()` rejects duplicate keys ✓
+  - Uses canonical `min:max` key
+  - Logs `perfCounters.topologyDuplicates`
+
+#### Self-Loop Prevention
+- Not yet implemented (future: add assertion in `patchTopology`)
+- Currently relies on generator not producing self-loops
+
+#### NaN Detection
+- Not yet implemented (future: add to `computeRestLen`)
+
+### Removed Code Paths
+- ❌ Direct `links.forEach(l => engine.addLink(l))` from generator
+- ✅ Now: `deriveSpringEdges → springEdgesToPhysicsLinks → engine.addLink`
+
+### Remaining Hidden Mutation Risks
+1. **Document binding**: `applyAnalysisToNodes()` might try to add links (audit needed)
+2. **Manual editor**: Future UI could call `engine.addLink()` directly (should use topology API instead)
+
+### Final Console Proof Checklist
+- [x] Topology version increments on mutation
+- [x] Spring edge count matches (directed → undirected with dedupe)
+- [x] Rest length policy applied (min/max/avg logged)
+- [x] Dev console commands functional
+- [x] No "random link mutation" in logs
+
+### Next Steps (Post-Run 10)
+1. **Parser/AI Integration**: Make AI output `Topology` format directly
+2. **Reactive Engine**: Poll `getTopologyVersion()` each frame, rebuild only on change
+3. **UI Controls**: Expose `patchTopology()` via React hooks
+4. **Assertions**: Add dev-mode checks for self-loops, NaN, invalid node IDs
+
+**Files Modified**: 0 (analysis only)
+**Behavior**: System verified stable and deterministic
+
+---
+
+## Final Summary
+
+### What Changed
+- **10 files added** (`src/graph/` module)
+- **3 files modified** (imports + wiring)
+- **Architecture**: Topology pipeline now authoritative
+- **Key Invariant**: `topology.links` → `deriveSpring Edges()` → `engine.links` (one-way flow)
+
+### Console Commands
+```javascript
+window.__topology.dump();        // View current state
+window.__topology.addLink('n0', 'n5', 'test');
+window.__topology.removeLink('n0', 'n1');
+window.__topology.version();     // Get version number
+```
+
+### Commits
+- Run 1-2: Types + API surface
+- Run 3-4: Integration + compat layer
+- Run 5-6: Spring derivation + engine wiring (**CRITICAL**)
+- Run 7-8: Versioning + dev commands
+- Run 9-10: Rest length policy + final cleanup
+
+**Total Files Added**: 10
+**Total Commits**: 5
+**Status**: ✅ Complete

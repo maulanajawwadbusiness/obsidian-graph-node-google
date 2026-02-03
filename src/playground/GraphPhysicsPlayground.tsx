@@ -451,7 +451,8 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
         console.log(`[Run4] Sample links (first 5):`, topology.links.slice(0, 5));
 
         // RUN 5: Test spring edge derivation
-        const springEdges = deriveSpringEdges(topology);
+        // RUN 9: Now passing config for rest length policy
+        const springEdges = deriveSpringEdges(topology, config);
         console.log(`[Run5] Spring edges derived: ${springEdges.length}`);
         console.log(`[Run5] Sample spring edges (first 3):`, springEdges.slice(0, 3));
 

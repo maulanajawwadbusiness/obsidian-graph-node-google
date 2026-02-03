@@ -9,12 +9,13 @@ import type { PhysicsLink } from '../physics/types';
 
 /**
  * Convert SpringEdge to PhysicsLink for engine consumption.
+ * RUN 9: Now uses restLen from SpringEdge if provided.
  */
 export function springEdgeToPhysicsLink(edge: SpringEdge): PhysicsLink {
     return {
         source: edge.a,
         target: edge.b,
-        length: edge.restLen,
+        length: edge.restLen, // Use policy-computed rest length
         strength: edge.strength,
         // Preserve metadata for traceability
         lengthBias: 1.0,

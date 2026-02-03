@@ -22,6 +22,9 @@ import { PopupProvider, usePopup } from '../popup/PopupStore';
 import { PopupPortal } from '../popup/PopupPortal';
 import { RotationCompass } from './components/RotationCompass';
 import { FullChatProvider, FullChatbar, FullChatToggle, useFullChat } from '../fullchat';
+// RUN 4: Topology API imports
+import { setTopology } from '../graph/topologyControl';
+import { legacyToTopology } from '../graph/topologyAdapter';
 
 // -----------------------------------------------------------------------------
 // Main Component (Internal)
@@ -427,6 +430,16 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
             config.initStrategy,
             config.minNodeDistance
         );
+
+        // RUN 4: Convert to Topology and use API
+        const topology = legacyToTopology(nodes, links);
+        setTopology(topology);
+
+        // Console proof
+        console.log(`[Run4] Topology set: ${topology.nodes.length} nodes, ${topology.links.length} directed links`);
+        console.log(`[Run4] Sample links (first 5):`, topology.links.slice(0, 5));
+
+        // Still add to engine for now (Run 6 will change this)
         nodes.forEach(n => engine.addNode(n));
         links.forEach(l => engine.addLink(l));
         engine.resetLifecycle();

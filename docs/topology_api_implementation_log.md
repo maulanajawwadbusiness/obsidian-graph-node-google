@@ -113,3 +113,95 @@ Create `topologyControl.ts` API surface: `setTopology()`, `getTopology()`, etc.
 
 **Files Added**: 1
 **Behavior Changes**: None
+
+---
+
+## Run 3: Create Topology API Surface
+
+**Date**: 2026-02-03
+
+### New Module: `src/graph/topologyControl.ts`
+
+#### API Functions
+1. **setTopology(topology: Topology): void**
+   - Replaces entire topology
+   - Creates defensive copy
+   - Increments version counter
+   - Console logs node/link count
+
+2. **getTopology(): Topology**
+   - Returns copy (prevents external mutation)
+
+3. **getTopologyVersion(): number**
+   - Returns current version (increments on any mutation)
+
+4. **clearTopology(): void**
+   - Removes all nodes and links
+   - Increments version
+
+5. **patchTopology(patch: TopologyPatch): void**
+   - Incremental updates: addNodes, removeNodes, addLinks, removeLinks, setLinks
+   - More efficient than setTopology for small changes
+   - Console logs before/after counts
+
+#### Internal State
+- `currentTopology: Topology` - Private module state
+- `topologyVersion: number` - Mutation counter
+
+### Verification
+- **Build**: Passed
+- **Immutability**: Enforced via defensive copies
+- **Behavior Changes**: None (no wiring yet)
+
+### Next Step (Run 4)
+Wrap existing generator to output Topology and call setTopology().
+
+**Files Added**: 1
+**Behavior Changes**: None
+
+---
+
+## Run 4: Plug Generator into Topology API
+
+**Date**: 2026-02-03
+
+### New Adapter: `src/graph/topologyAdapter.ts`
+
+#### Functions
+1. **nodeToSpec(node: PhysicsNode): NodeSpec**
+   - Extracts topology-relevant fields (id, label, role metadata)
+
+2. **linkToDirected(link: PhysicsLink): DirectedLink**
+   - Converts undirected PhysicsLink to DirectedLink
+   - Marks as `kind: 'structural'`
+   - Preserves lengthBias/stiffnessBias in metadata
+
+3. **legacyToTopology(nodes, links): Topology**
+   - Batch converter for generator output
+
+### Integration Point
+**File**: `src/playground/GraphPhysicsPlayground.tsx`
+**Function**: `spawnGraph()` (Lines 420-443)
+
+#### Changes
+- Added topology API imports
+- After `generateRandomGraph()`, calls `legacyToTopology(nodes, links)`
+- Calls `setTopology(topology)`
+- Console logs:
+  - Node/link counts
+  - First 5 sample links
+- Still adds to engine (compatibility layer, will be replaced in Run 6)
+
+### Verification
+- **Dev Server**: Running on localhost:5176
+- **Console Proof**: 
+  - `[TopologyControl] setTopology: N nodes, M links (vX)`
+  - `[Run4] Topology set: ...`
+  - `[Run4] Sample links (first 5): [...]`
+
+### Next Step (Run 5)
+Implement `deriveSpringEdges(topology)` to convert DirectedLinks to SpringEdges.
+
+**Files Added**: 1
+**Files Modified**: 1
+**Behavior**: Topology API now called, but engine still directly mutated (dual path)

@@ -35,6 +35,7 @@ const HEADER_STYLE: React.CSSProperties = {
 
 const TITLE_STYLE: React.CSSProperties = {
     fontSize: '13px',
+    fontWeight: 'var(--font-title-weight, 700)',
     letterSpacing: '0.2px',
     opacity: 0.85,
 };

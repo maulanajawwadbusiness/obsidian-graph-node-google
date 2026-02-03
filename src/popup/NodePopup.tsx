@@ -30,7 +30,6 @@ const POPUP_STYLE: React.CSSProperties = {
     borderRadius: '8px',
     padding: '20px',
     color: 'rgba(180, 190, 210, 0.9)',
-    fontFamily: 'system-ui, -apple-system, sans-serif',
     backdropFilter: 'blur(0px)',
     boxShadow: '0 8px 32px rgba(0, 0, 0, 0)',
     pointerEvents: 'auto',
@@ -420,7 +419,7 @@ export const NodePopup: React.FC<NodePopupProps> = ({ trackNode, engineRef }) =>
                 </div>
 
                 <div style={{ ...CONTENT_STYLE, ...contentTransition }}>
-                    <div style={LABEL_STYLE}>{displayTitle}</div>
+                    <div style={LABEL_STYLE} data-font="title">{displayTitle}</div>
                     <p>{displayBody}</p>
                 </div>
 

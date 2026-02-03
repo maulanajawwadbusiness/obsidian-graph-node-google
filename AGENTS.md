@@ -102,3 +102,8 @@ Terminology matters. In the graph, we render "Dots", not "Nodes" (though the dat
 *   **Wake-on-Drag**: Interaction wakes the local cluster to allow settling.
 *   **Sleep**: Nodes settle to `isSleeping=true` to save CPU. They wake only on interaction or high energy.
 *   **Hand Authority**: User input overrides all physics constraints.
+
+## 8. Font Doctrine (Case #8514)
+*   **Default**: `Quicksand` (via `--font-ui` and `data-font="ui"`).
+*   **Titles (Exception)**: `Segoe UI` (Windows) -> `Public Sans` (Fallback) -> System. Defined via `--font-title` and `data-font="title"` + `fontWeight: 700`.
+*   **No Conflicts**: Do not hardcode font stacks in component styles; inherit from data attributes.

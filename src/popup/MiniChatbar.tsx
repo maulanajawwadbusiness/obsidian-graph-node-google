@@ -35,7 +35,6 @@ const CHATBAR_STYLE: React.CSSProperties = {
     borderRadius: '8px',
     padding: '16px',
     color: 'rgba(180, 190, 210, 0.9)',
-    fontFamily: 'system-ui, -apple-system, sans-serif',
     backdropFilter: 'blur(12px)',
     boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)',
     pointerEvents: 'auto',

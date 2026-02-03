@@ -307,3 +307,92 @@ Add versioning + change protocol (rebuild cache only when topology version chang
 **Files Added**: 1
 **Files Modified**: 1
 **Behavior**: **BREAKING CHANGE** - Engine now fed exclusively by topology pipeline
+
+---
+
+## Run 7: Versioning + Change Protocol
+
+**Date**: 2026-02-03
+
+### Versioning Logic
+**File**: `src/graph/topologyControl.ts`
+
+#### Enhanced `patchTopology()`
+- Added diff summary logging
+- Logs: nodesAdded, nodesRemoved, linksAdded, linksRemoved, linksReplaced
+- Example: `[TopologyControl] patchTopology: nodes 5→7, links 4→6 (v3) { nodesAdded: 2, linksAdded: 2, ... }`
+
+### Version Tracking
+**File**: `GraphPhysicsPlayground.tsx` - `spawnGraph()`
+
+#### Added
+```typescript
+const beforeVersion = getTopologyVersion();
+setTopology(topology);
+const afterVersion = getTopologyVersion();
+console.log(`[Run7] Topology version: ${beforeVersion} → ${afterVersion} (changed: ${beforeVersion !== afterVersion})`);
+```
+
+### Console Proof
+- Version increments on every `setTopology()` or `patchTopology()` call
+- Change detection confirms mutation occurred
+
+### Future Optimization (Not Implemented Yet)
+- Engine could cache last-seen topology version
+- Rebuild spring edges ONLY when version changes
+- Currently rebuilds every spawnGraph call (acceptable for now)
+
+### Next Step (Run 8)
+Add dev console commands: `window.__topology.addLink()`, etc.
+
+**Files Modified**: 2
+**Behavior**: Version tracking in place, change logging enhanced
+
+---
+
+## Run  8: Dev Console Commands
+
+**Date**: 2026-02-03
+
+### New Module: `src/graph/devTopologyHelpers.ts`
+
+#### Exposed API: `window.__topology`
+1. **addLink(from, to, kind?)** - Add single directed link
+2. **removeLink(from, to)** - Remove directed link
+3. **setLinks(links)** - Replace all links
+4. **dump()** - Print topology to console
+5. **version()** - Get current version number
+6. **clear()** - Remove all topology
+
+### Integration
+**File**: `GraphPhysicsPlayground.tsx`
+- Added import: `import '../graph/devTopologyHelpers';`
+- Side-effect import exposes `window.__topology` on load
+
+### Console Proof
+```javascript
+// In browser console:
+window.__topology.dump();
+window.__topology.addLink('n0', 'n10', 'manual');
+window.__topology.version(); // Should increment
+```
+
+### Verification (Manual)
+1. Open browser console
+2. Run: `window.__topology.dump()`
+3. Note link count
+4. Run: `window.__topology.addLink('n0', 'n1', 'test')`
+5. Observe topology version increment log
+6. (Future): Graph should update when engine wired to poll topology changes
+
+### Limitation
+- Commands update topology state
+- Engine doesn't auto-refresh yet (would need polling or reactive wiring)
+- Manual verification for now
+
+### Next Step (Run 9)
+Add rest length policy hook point.
+
+**Files Added**: 1
+**Files Modified**: 1
+**Behavior**: Dev commands functional, topology mutable via console

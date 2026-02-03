@@ -123,7 +123,17 @@ export function patchTopology(patch: TopologyPatch): void {
         links: currentTopology.links.length
     };
 
+    // RUN 7: Diff summary
+    const diff = {
+        nodesAdded: (patch.addNodes?.length || 0),
+        nodesRemoved: (patch.removeNodes?.length || 0),
+        linksAdded: (patch.addLinks?.length || 0),
+        linksRemoved: (patch.removeLinks?.length || 0),
+        linksReplaced: patch.setLinks ? true : false
+    };
+
     console.log(
-        `[TopologyControl] patchTopology: nodes ${before.nodes}→${after.nodes}, links ${before.links}→${after.links} (v${topologyVersion})`
+        `[TopologyControl] patchTopology: nodes ${before.nodes}→${after.nodes}, links ${before.links}→${after.links} (v${topologyVersion})`,
+        diff
     );
 }

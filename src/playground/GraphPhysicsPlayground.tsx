@@ -23,12 +23,14 @@ import { PopupPortal } from '../popup/PopupPortal';
 import { RotationCompass } from './components/RotationCompass';
 import { FullChatProvider, FullChatbar, FullChatToggle, useFullChat } from '../fullchat';
 // RUN 4: Topology API imports
-import { setTopology } from '../graph/topologyControl';
+import { setTopology, getTopologyVersion } from '../graph/topologyControl';
 import { legacyToTopology } from '../graph/topologyAdapter';
 // RUN 5: Spring derivation import
 import { deriveSpringEdges } from '../graph/springDerivation';
 // RUN 6: Spring-to-physics converter import
 import { springEdgesToPhysicsLinks } from '../graph/springToPhysics';
+// RUN 8: Dev console helpers (exposes window.__topology)
+import '../graph/devTopologyHelpers';
 
 // -----------------------------------------------------------------------------
 // Main Component (Internal)
@@ -437,7 +439,12 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
 
         // RUN 4: Convert to Topology and use API
         const topology = legacyToTopology(nodes, links);
+        const beforeVersion = getTopologyVersion();
         setTopology(topology);
+        const afterVersion = getTopologyVersion();
+
+        // RUN 7: Version change detection
+        console.log(`[Run7] Topology version: ${beforeVersion} → ${afterVersion} (changed: ${beforeVersion !== afterVersion})`);
 
         // Console proof
         console.log(`[Run4] Topology set: ${topology.nodes.length} nodes, ${topology.links.length} directed links`);

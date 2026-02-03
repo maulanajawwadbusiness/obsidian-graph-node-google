@@ -101,6 +101,7 @@ export function drawTwoLayerGlow(
     primaryBlue: string,
     theme: ThemeConfig
 ): { innerAlpha: number; innerBlur: number; outerAlpha: number; outerBlur: number } {
+    const baseAlpha = ctx.globalAlpha;
     // Apply gamma curve to energy for response shaping
     const e = Math.pow(Math.max(0, Math.min(1, nodeEnergy)), theme.glowEnergyGamma);
 
@@ -165,7 +166,7 @@ export function drawTwoLayerGlow(
         );
 
         ctx.fillStyle = outerGrad;
-        ctx.globalAlpha = outerAlpha;
+        ctx.globalAlpha = baseAlpha * outerAlpha;
         ctx.beginPath();
         ctx.arc(0, 0, outerR, 0, Math.PI * 2);
         ctx.fill();
@@ -178,7 +179,7 @@ export function drawTwoLayerGlow(
         );
 
         ctx.fillStyle = innerGrad;
-        ctx.globalAlpha = innerAlpha;
+        ctx.globalAlpha = baseAlpha * innerAlpha;
         ctx.beginPath();
         ctx.arc(0, 0, innerR, 0, Math.PI * 2);
         ctx.fill();
@@ -186,9 +187,8 @@ export function drawTwoLayerGlow(
     } finally {
         // Clean up translation
         ctx.translate(-x, -y);
-        // Reset Alpha (Caller expects 1?) - ACTUALLY caller (drawNodes) resets it potentially.
-        // But for safety within "Render Guard" philosophy, we should return to "Good Base".
-        ctx.globalAlpha = 1;
+        // Reset alpha to the entry state to preserve caller-configured opacity.
+        ctx.globalAlpha = baseAlpha;
     }
 
     return { innerAlpha, innerBlur, outerAlpha, outerBlur };

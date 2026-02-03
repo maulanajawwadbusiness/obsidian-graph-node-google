@@ -10,7 +10,8 @@ const DIM_DECAY_EPSILON = 0.01;
 export const updateHoverEnergy = (
     hoverStateRef: MutableRefObject<HoverState>,
     theme: ThemeConfig,
-    dtMs: number
+    dtMs: number,
+    highlightActive: boolean
 ) => {
     const rawDtMs = Math.max(0, dtMs);
     const clampedDtMs = Math.min(rawDtMs, MAX_HOVER_DT_MS);
@@ -48,8 +49,8 @@ export const updateHoverEnergy = (
     hoverStateRef.current.energyUpdateCount += 1;
 
     // Dim Mode Energy (for neighbor highlight system)
-    // Target: 1 if hovering/dragging, 0 otherwise
-    const shouldDim = hoverStateRef.current.hoveredNodeId !== null;
+    // Target: 1 if highlightActive (dragging), 0 otherwise
+    const shouldDim = highlightActive;
     hoverStateRef.current.targetDimEnergy = shouldDim ? 1 : 0;
 
     // Smooth transition using same exponential approach

@@ -351,7 +351,7 @@ export const startGraphRenderLoop = (deps: GraphRenderLoopDeps) => {
             hoverStateRef.current.spikeLogged = true;
         }
 
-        updateHoverEnergy(hoverStateRef, theme, schedulerResult.dtMs);
+        updateHoverEnergy(hoverStateRef, theme, schedulerResult.dtMs, !!engine.draggedNodeId);
 
         if (settingsRef.current.debugNoRenderMotion) {
             hoverStateRef.current.energy = 0;
@@ -359,8 +359,9 @@ export const startGraphRenderLoop = (deps: GraphRenderLoopDeps) => {
         }
 
         if (
-            hoverStateRef.current.hoveredNodeId === null &&
-            hoverStateRef.current.dimEnergy <= 0.01
+            hoverStateRef.current.dimEnergy <= 0.01 &&
+            hoverStateRef.current.targetDimEnergy === 0 &&
+            !engine.draggedNodeId
         ) {
             hoverStateRef.current.neighborNodeIds.clear();
             hoverStateRef.current.neighborEdgeKeys.clear();

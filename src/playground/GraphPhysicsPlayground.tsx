@@ -25,6 +25,8 @@ import { FullChatProvider, FullChatbar, FullChatToggle, useFullChat } from '../f
 // RUN 4: Topology API imports
 import { setTopology } from '../graph/topologyControl';
 import { legacyToTopology } from '../graph/topologyAdapter';
+// RUN 5: Spring derivation import
+import { deriveSpringEdges } from '../graph/springDerivation';
 
 // -----------------------------------------------------------------------------
 // Main Component (Internal)
@@ -438,6 +440,11 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
         // Console proof
         console.log(`[Run4] Topology set: ${topology.nodes.length} nodes, ${topology.links.length} directed links`);
         console.log(`[Run4] Sample links (first 5):`, topology.links.slice(0, 5));
+
+        // RUN 5: Test spring edge derivation
+        const springEdges = deriveSpringEdges(topology);
+        console.log(`[Run5] Spring edges derived: ${springEdges.length}`);
+        console.log(`[Run5] Sample spring edges (first 3):`, springEdges.slice(0, 3));
 
         // Still add to engine for now (Run 6 will change this)
         nodes.forEach(n => engine.addNode(n));

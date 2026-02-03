@@ -205,3 +205,50 @@ Implement `deriveSpringEdges(topology)` to convert DirectedLinks to SpringEdges.
 **Files Added**: 1
 **Files Modified**: 1
 **Behavior**: Topology API now called, but engine still directly mutated (dual path)
+
+---
+
+## Run 5: Derive Spring Edges from Directed Links
+
+**Date**: 2026-02-03
+
+### New Module: `src/graph/springDerivation.ts`
+
+#### Function: `deriveSpringEdges(topology: Topology): SpringEdge[]`
+
+##### Logic
+1. Iterates all DirectedLinks in topology
+2. Creates canonical key: `min(from, to):max(from, to)`
+3. De-duplicates: A→B and B→A create one spring edge
+4. Stores source link IDs in `meta.sourceLinks` for traceability
+5. Returns array of undirected SpringEdge objects
+
+##### Console Proof
+- Total directed links → spring edges count
+- Deduplication rate (%)
+- Sample spring edges (first 3)
+
+### Integration
+**File**: `GraphPhysicsPlayground.tsx`
+- Added import for `deriveSpringEdges`
+- Calls after `setTopology()`
+- Logs derived spring count and samples
+
+### Verification
+- **Build**: Passed
+- **Console Logs**:
+  - `[Run5] deriveSpringEdges: N directed links → M spring edges (dedupe: X%)`
+  - `[Run5] Spring edges derived: M`
+  - `[Run5] Sample spring edges (first 3): [...]`
+
+### Expected Dedupe Rate
+- Random generator creates mostly tree-like structures (Spine→Rib→Fiber)
+- Occasional double-links (20% chance for Ribs)
+- Expected: ~5-10% deduplication
+
+### Next Step (Run 6)
+Wire engine to consume ONLY derived spring edges (remove direct link injection).
+
+**Files Added**: 1
+**Files Modified**: 1
+**Behavior**: Spring derivation tested, but engine still uses old path

@@ -265,10 +265,10 @@ export const NORMAL_THEME: ThemeConfig = {
 // -----------------------------------------------------------------------------
 
 // TUNING KNOB: Change this to scale nodes and rings proportionally
-const ELEGANT_NODE_SCALE = 1.2; // MARK: Master Scale for Node Size & Stroke
+const ELEGANT_NODE_SCALE = 1.45; // MARK: Master Scale for Node Size & Stroke
 
 // Base ratios (don't change these, change ELEGANT_NODE_SCALE instead)
-const ELEGANT_BASE_RING_WIDTH_RATIO = 2.28;  // ring width relative to scale. MARK: Stroke Thickness parameter.
+const ELEGANT_BASE_RING_WIDTH_RATIO = 1.8;  // ring width relative to scale. MARK: Stroke Thickness parameter.
 
 export const ELEGANT_THEME: ThemeConfig = {
     // Background: deep navy-indigo-purple void

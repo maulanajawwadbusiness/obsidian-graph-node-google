@@ -32,7 +32,7 @@ export const DEFAULT_PHYSICS_CONFIG: ForceConfig = {
     // ---------------------------------------------------------------------------
     // Springs are the PRIMARY layout driver now.
     // High stiffness = the structure snaps into place.
-    springStiffness: 0.2, // Moderate stiffness for "unfolding".
+    springStiffness: 0.5, // Moderate stiffness for "unfolding".
 
     // Define the "relaxed" length of edges.
     springLength: 500, // DEPRECATED - kept for UI compatibility, use targetSpacing

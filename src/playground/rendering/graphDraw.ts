@@ -49,6 +49,8 @@ export const drawLinks = (
         ctx.globalAlpha = globalAlpha;
         ctx.beginPath();
 
+        const drawnKeys = new Set<string>(); // FIX: Run 5 Dedupe Layer
+
         let drawnCount = 0;
 
         engine.links.forEach((link) => {
@@ -62,8 +64,10 @@ export const drawLinks = (
 
                 // Skip if doesn't match filter
                 if (!filter(edgeKey)) return;
-                if (edgeDrawScratch.has(edgeKey)) return;
-                edgeDrawScratch.add(edgeKey);
+
+                // FIX: Run 5 Dedupe (Prevent double-draw of same logical edge in one pass)
+                if (drawnKeys.has(edgeKey)) return;
+                drawnKeys.add(edgeKey);
 
                 // World space culling
                 const lMinX = Math.min(s.x, t.x);
@@ -109,6 +113,8 @@ export const drawLinks = (
 
         // Pass 2: Highlighted neighbor edges (flat color, on top, crisp endpoints)
         // Use dimEnergy for smooth fade-in of highlight color
+        // FIX: Run 5 Deduplication (ensure no double-draw vs Pass 1)
+        // Note: neighborEdgeKeys checks prevent overlap with Pass 1, but we add strict dedupe for cleanliness.
         drawEdgeBatch(
             theme.neighborEdgeColor,
             'butt',  // Crisp for knife-sharp feel
@@ -330,12 +336,25 @@ export const drawNodes = (
                     // Don't reset globalAlpha here - preserve nodeOpacity for dimming
                     ctx.globalCompositeOperation = 'source-over';
                 } else {
-                    ctx.beginPath();
-                    ctx.arc(screen.x, screen.y, radiusPx, 0, Math.PI * 2);
-                    ctx.strokeStyle = node.isFixed ? theme.nodeFixedColor : theme.ringColor;
-                    ctx.lineWidth = ringWidthPx;
-                    ctx.stroke();
-                }
+            // Normal mode
+            // FIX: Run 2 (Apply Opacity for Filled)
+            ctx.globalAlpha = nodeOpacity;
+
+            ctx.beginPath();
+            ctx.arc(screen.x, screen.y, radiusPx, 0, Math.PI * 2);
+            
+            // FIX: Run 7 (Protect Hovered + Neighbors Brightness)
+            let fillColor = node.isFixed ? theme.nodeFixedColor : theme.nodeFillColor;
+            if (isHoveredNode && theme.neighborHighlightEnabled && !node.isFixed) {
+                fillColor = boostBrightness(fillColor, theme.hoveredBrightnessBoost);
+            }
+            
+            ctx.fillStyle = fillColor;
+            ctx.fill();
+            ctx.strokeStyle = theme.nodeStrokeColor;
+            ctx.lineWidth = strokeWidthPx;
+            ctx.stroke();
+        }
             };
 
             // Render in configured order

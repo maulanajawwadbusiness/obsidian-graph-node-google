@@ -35,6 +35,15 @@ export const createHoverController = ({
         return getNodeRadius(baseRadius, theme);
     };
 
+    /**
+     * Get neighbor node IDs for a given node from the physics engine's adjacency map
+     */
+    const getNeighborNodeIds = (nodeId: string): Set<string> => {
+        const engine = engineRef.current;
+        if (!engine || !nodeId) return new Set();
+        const neighbors = engine.adjacencyMap.get(nodeId) || [];
+        return new Set(neighbors);
+    };
 
 
     const evaluateNode = (
@@ -730,6 +739,24 @@ export const createHoverController = ({
                     hoverStateRef.current.lastLoggedId = newHoveredId;
                 }
             }
+        }
+
+        // Sync neighbor cache (for both hover and drag)
+        const activeNodeId = lockedNodeId || newHoveredId;
+        if (activeNodeId) {
+            const neighbors = getNeighborNodeIds(activeNodeId);
+            hoverStateRef.current.neighborNodeIds = neighbors;
+
+            // Build edge keys for quick lookup during rendering
+            const edgeKeys = new Set<string>();
+            for (const nbId of neighbors) {
+                const key = activeNodeId < nbId ? `${activeNodeId}:${nbId}` : `${nbId}:${activeNodeId}`;
+                edgeKeys.add(key);
+            }
+            hoverStateRef.current.neighborEdgeKeys = edgeKeys;
+        } else {
+            hoverStateRef.current.neighborNodeIds = new Set();
+            hoverStateRef.current.neighborEdgeKeys = new Set();
         }
 
         const camera = cameraRef.current;

@@ -96,6 +96,12 @@ export type HoverState = {
     slushFrameCount?: number;
     lastSlushLog?: number;
     lastDropLog?: number;
+
+    // Neighbor Highlight System
+    neighborNodeIds: Set<string>;   // Cached neighbor IDs for current hover/drag
+    neighborEdgeKeys: Set<string>;  // Cached edge keys (e.g., "a:b") for current hover/drag
+    dimEnergy: number;              // 0 = normal, 1 = fully dimmed
+    targetDimEnergy: number;        // Target state (0 or 1)
 };
 
 export type CanvasStateDebug = {
@@ -256,7 +262,13 @@ export const createInitialHoverState = (): HoverState => ({
     debugNodeRadius: 0,
     debugOuterRadius: 0,
     debugOcclusionRadius: 0,
-    debugShrinkPct: 0
+    debugShrinkPct: 0,
+
+    // Neighbor Highlight System
+    neighborNodeIds: new Set(),
+    neighborEdgeKeys: new Set(),
+    dimEnergy: 0,
+    targetDimEnergy: 0
 });
 
 export const createInitialRenderDebug = (): RenderDebugInfo => ({

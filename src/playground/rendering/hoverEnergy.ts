@@ -45,4 +45,22 @@ export const updateHoverEnergy = (
         hoverStateRef.current.hoverDisplayNodeId = null;
     }
     hoverStateRef.current.energyUpdateCount += 1;
+
+    // Dim Mode Energy (for neighbor highlight system)
+    // Target: 1 if hovering/dragging, 0 otherwise
+    const shouldDim = hoverStateRef.current.hoveredNodeId !== null;
+    hoverStateRef.current.targetDimEnergy = shouldDim ? 1 : 0;
+
+    // Smooth transition using same exponential approach
+    const dimTauMs = theme.neighborTransitionMs || 200;
+    const dimAlpha = 1 - Math.exp(-clampedDtMs / dimTauMs);
+
+    hoverStateRef.current.dimEnergy = hoverStateRef.current.dimEnergy +
+        (hoverStateRef.current.targetDimEnergy - hoverStateRef.current.dimEnergy) * dimAlpha;
+
+    // Clamp to valid range
+    if (!Number.isFinite(hoverStateRef.current.dimEnergy)) {
+        hoverStateRef.current.dimEnergy = hoverStateRef.current.targetDimEnergy;
+    }
+    hoverStateRef.current.dimEnergy = clamp(hoverStateRef.current.dimEnergy, 0, 1);
 };

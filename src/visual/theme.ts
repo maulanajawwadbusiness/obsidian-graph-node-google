@@ -98,6 +98,13 @@ export interface ThemeConfig {
     hoverEnergyTauMs: number;          // Time smoothing constant in ms (120)
     hoverStickyExitMultiplier: number; // Hysteresis for exit (1.05)
     hoverSwitchMarginPx: number;       // Anti ping-pong margin for node switching (8)
+
+    // Neighbor Highlight System
+    neighborHighlightEnabled: boolean;  // Master toggle for neighbor detection visual effects
+    neighborEdgeColor: string;          // Color for highlighted neighbor edges
+    neighborDimOpacity: number;         // Opacity for non-neighbor elements when dimmed (0.2 = 20%)
+    neighborTransitionMs: number;       // Fade duration for dim/highlight transitions (200ms)
+    hoveredBrightnessBoost: number;     // Brightness multiplier for hovered/dragged node (1.1 = 10% boost)
     hoverRingWidthBoost: number;       // Max ring width boost at full energy (0.1 = 10%)
     hoverGlowBoost: number;            // Max glow alpha boost at full energy (0.15)
 
@@ -222,6 +229,14 @@ export const NORMAL_THEME: ThemeConfig = {
     hoverEnergyTauMs: 120,
     hoverStickyExitMultiplier: 1.0,
     hoverSwitchMarginPx: 0,
+
+    // Neighbor Highlight System (disabled in normal mode)
+    neighborHighlightEnabled: false,
+    neighborEdgeColor: '#63abff',
+    neighborDimOpacity: 0.2,
+    neighborTransitionMs: 100,
+    hoveredBrightnessBoost: 1.0,  // No boost in normal mode
+
     hoverRingWidthBoost: 0,
     hoverGlowBoost: 0,
 
@@ -253,7 +268,7 @@ export const NORMAL_THEME: ThemeConfig = {
 const ELEGANT_NODE_SCALE = 1.2; // MARK: Master Scale for Node Size & Stroke
 
 // Base ratios (don't change these, change ELEGANT_NODE_SCALE instead)
-const ELEGANT_BASE_RING_WIDTH_RATIO = 2.08;  // ring width relative to scale. MARK: Stroke Thickness parameter.
+const ELEGANT_BASE_RING_WIDTH_RATIO = 2.28;  // ring width relative to scale. MARK: Stroke Thickness parameter.
 
 export const ELEGANT_THEME: ThemeConfig = {
     // Background: deep navy-indigo-purple void
@@ -269,7 +284,7 @@ export const ELEGANT_THEME: ThemeConfig = {
     nodeScale: ELEGANT_NODE_SCALE,
 
     // Nodes: hollow rings, scaled by nodeScale
-    nodeRadiusMultiplier: ELEGANT_NODE_SCALE * 1.0,
+    nodeRadiusMultiplier: ELEGANT_NODE_SCALE * 0.8,
     nodeStyle: 'ring',
 
     // Draw order: TUNING KNOB - change order to experiment
@@ -328,8 +343,8 @@ export const ELEGANT_THEME: ThemeConfig = {
     glowIdleFadeExponent: 4.0,       // Fade idle lift quickly as energy rises
 
     // Links: indigo-tinted, submissive but not dead
-    linkColor: 'rgba(61, 72, 87, 0.6)',
-    linkWidth: 0.6,
+    linkColor: 'rgba(61, 72, 87, 0.55)',
+    linkWidth: 1.2,  // Increased from 0.6 for crisp rendering (sub-pixel causes aliasing)
 
     // Hover interaction (basic)
     primaryBlueDefault: '#63abff',  // Dark blue (no hover)
@@ -349,6 +364,14 @@ export const ELEGANT_THEME: ThemeConfig = {
     hoverEnergyTauMs: 120,          // Smoothing time constant (Apple feel)
     hoverStickyExitMultiplier: 1.05,// Hysteresis for exit
     hoverSwitchMarginPx: 8,         // Anti ping-pong margin
+
+    // Neighbor Highlight System (enabled in elegant mode)
+    neighborHighlightEnabled: true,
+    neighborEdgeColor: '#63abff',    // Bright blue stroke color
+    neighborDimOpacity: 0.2,         // 20% opacity for non-neighbors
+    neighborTransitionMs: 100,       // Smooth 200ms fade
+    hoveredBrightnessBoost: 1.3,     // 10% brightness boost for hovered/dragged node
+
     hoverRingWidthBoost: 0.1,       // 10% max ring width boost
     hoverGlowBoost: 0.15,           // Max glow alpha boost
 
@@ -451,6 +474,24 @@ export function hexToRgb(hex: string): { r: number; g: number; b: number } {
     }
 
     return { r: 0, g: 0, b: 0 };
+}
+
+
+
+/**
+ * Boost brightness of a color by multiplying RGB values
+ * @param hexColor Hex color string (e.g. '#63abff')
+ * @param factor Brightness multiplier (e.g. 1.1 for 10% boost)
+ * @returns New hex color string with boosted brightness
+ */
+export function boostBrightness(hexColor: string, factor: number): string {
+    const rgb = hexToRgb(hexColor);
+    const boosted = {
+        r: clampChannel(Math.round(rgb.r * factor)),
+        g: clampChannel(Math.round(rgb.g * factor)),
+        b: clampChannel(Math.round(rgb.b * factor))
+    };
+    return `#${boosted.r.toString(16).padStart(2, '0')}${boosted.g.toString(16).padStart(2, '0')}${boosted.b.toString(16).padStart(2, '0')}`;
 }
 
 /**

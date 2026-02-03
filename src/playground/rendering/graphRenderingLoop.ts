@@ -471,7 +471,7 @@ export const startGraphRenderLoop = (deps: GraphRenderLoopDeps) => {
         }
 
         // --- RENDER PASS 2: EDGES (BATCHED) ---
-        drawLinks(ctx, engine, theme, worldToScreen, visibleBounds);
+        drawLinks(ctx, engine, theme, hoverStateRef, worldToScreen, visibleBounds);
 
         // --- RENDER PASS 3: NODES (ITERATED) ---
         drawNodes(

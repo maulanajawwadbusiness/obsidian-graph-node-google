@@ -1,5 +1,5 @@
 import type { PhysicsEngine } from '../../physics/engine';
-import { getNodeRadius, getNodeScale, getOcclusionRadius, lerpColor } from '../../visual/theme';
+import { getNodeRadius, getNodeScale, getOcclusionRadius, lerpColor, boostBrightness } from '../../visual/theme';
 import type { ThemeConfig } from '../../visual/theme';
 import { drawGradientRing, drawTwoLayerGlow, withCtx } from './canvasUtils';
 import { snapToGrid, quantizeForStroke } from './renderingMath';
@@ -19,6 +19,7 @@ export const drawLinks = (
     ctx: CanvasRenderingContext2D,
     engine: PhysicsEngine,
     theme: ThemeConfig,
+    hoverStateRef: MutableRefObject<HoverState>,  // NEW: for neighbor detection
     worldToScreen: (x: number, y: number) => { x: number; y: number },
     visibleBounds: { minX: number; maxX: number; minY: number; maxY: number }
 ) => {
@@ -26,39 +27,41 @@ export const drawLinks = (
     resetRenderState(ctx);
     guardStrictRenderSettings(ctx);
 
-    // EDGE SMOOTHING: Enable high-quality antialiasing
-    ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = 'high';
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-
-    ctx.globalAlpha = 1;
     ctx.globalCompositeOperation = 'source-over';
     ctx.setLineDash([]);
-    ctx.strokeStyle = theme.linkColor;
-
-    // Fix 49: Zoom-Stable Line Thickness
     ctx.lineWidth = theme.linkWidth;
 
-    // Viewport Culling Bounds (Screen Space)
-    // Add margin for stroke width and general safety
-    // (Unused vars removed)
+    const dimEnergy = hoverStateRef.current.dimEnergy;
+    const neighborEdgeKeys = hoverStateRef.current.neighborEdgeKeys;
+    const hasActiveHighlight = dimEnergy > 0.01 && theme.neighborHighlightEnabled;
 
-    // BATCHING: Single Path
-    ctx.beginPath();
+    // Helper function to draw a batch of edges matching a predicate
+    const drawEdgeBatch = (
+        strokeStyle: string,
+        lineCap: 'round' | 'butt',
+        globalAlpha: number,
+        filter: (key: string) => boolean
+    ) => {
+        ctx.strokeStyle = strokeStyle;
+        ctx.lineCap = lineCap;
+        ctx.globalAlpha = globalAlpha;
+        ctx.beginPath();
 
-    // Debug Stats
-    let drawnCount = 0;
-    let culledCount = 0;
+        let drawnCount = 0;
 
-    try {
         engine.links.forEach((link) => {
             const s = engine.nodes.get(link.source);
             const t = engine.nodes.get(link.target);
             if (s && t) {
-                // FIX 51: World Space Culling (Faster than Projecting)
-                // Check if link bounding box overlaps visible bounds
-                // Simple AABB check: (s.x, t.x range) vs (minX, maxX)
+                // Build edge key for filtering
+                const edgeKey = link.source < link.target
+                    ? `${link.source}:${link.target}`
+                    : `${link.target}:${link.source}`;
+
+                // Skip if doesn't match filter
+                if (!filter(edgeKey)) return;
+
+                // World space culling
                 const lMinX = Math.min(s.x, t.x);
                 const lMaxX = Math.max(s.x, t.x);
                 const lMinY = Math.min(s.y, t.y);
@@ -70,11 +73,10 @@ export const drawLinks = (
                     lMaxY < visibleBounds.minY ||
                     lMinY > visibleBounds.maxY
                 ) {
-                    culledCount++;
                     return;
                 }
 
-                // Fix 42: Manual Projection (Snapped)
+                // Manual projection
                 const screenS = worldToScreen(s.x, s.y);
                 const screenT = worldToScreen(t.x, t.y);
 
@@ -84,17 +86,44 @@ export const drawLinks = (
             }
         });
 
-        // Single Stroke for all batched edges
         if (drawnCount > 0) {
             ctx.stroke();
         }
+    };
 
-        // (Debug logging removed)
+    if (hasActiveHighlight) {
+        // Two-pass rendering for neighbor highlight
 
-    } finally {
-        ctx.restore();
+        // Pass 1: Dimmed non-neighbor edges
+        const dimOpacity = 1 - dimEnergy * (1 - theme.neighborDimOpacity);
+        drawEdgeBatch(
+            theme.linkColor,
+            'round',
+            dimOpacity,
+            (key) => !neighborEdgeKeys.has(key)
+        );
+
+        // Pass 2: Highlighted neighbor edges (flat color, on top, crisp endpoints)
+        // Use dimEnergy for smooth fade-in of highlight color
+        drawEdgeBatch(
+            theme.neighborEdgeColor,
+            'butt',  // Crisp for knife-sharp feel
+            dimEnergy,  // Fade in with dimEnergy (0 -> 1 over 200ms)
+            (key) => neighborEdgeKeys.has(key)
+        );
+    } else {
+        // Normal rendering (no highlight)
+        drawEdgeBatch(
+            theme.linkColor,
+            'round',
+            1,
+            () => true
+        );
     }
+
+    ctx.restore();
 };
+
 
 export const drawNodes = (
     ctx: CanvasRenderingContext2D,
@@ -208,6 +237,22 @@ export const drawNodes = (
         const nodeScale = theme.nodeStyle === 'ring' ? getNodeScale(nodeEnergy, theme) : 1;
         const radiusPx = baseRenderRadius * nodeScale * zoom;
 
+        // Neighbor Highlight System: Determine if this node should be affected
+        const isHoveredNode = node.id === hoverStateRef.current.hoveredNodeId ||
+            node.id === engine.draggedNodeId;
+        const isNeighborNode = hoverStateRef.current.neighborNodeIds.has(node.id);
+        const dimEnergy = hoverStateRef.current.dimEnergy;
+
+        // Calculate opacity: protected nodes stay at full opacity, others dim
+        let nodeOpacity = 1;
+        if (dimEnergy > 0.01 && theme.neighborHighlightEnabled) {
+            if (isHoveredNode || isNeighborNode) {
+                nodeOpacity = 1;  // Protected from dim
+            } else {
+                nodeOpacity = 1 - dimEnergy * (1 - theme.neighborDimOpacity);
+            }
+        }
+
         if (theme.nodeStyle === 'ring') {
             // Configurable draw order system
             // Extract rendering functions for each layer
@@ -223,6 +268,11 @@ export const drawNodes = (
                             renderDebug.idleGlowStateBefore = captureCanvasState(ctx);
                         }
 
+                        // Apply opacity (including glow reduction for dimmed nodes)
+                        const glowOpacity = nodeOpacity;
+                        ctx.save();
+                        ctx.globalAlpha = glowOpacity;
+
                         drawTwoLayerGlow(
                             ctx,
                             screen.x,
@@ -232,6 +282,8 @@ export const drawNodes = (
                             node.isFixed ? theme.nodeFixedColor : lerpColor(theme.primaryBlueDefault, theme.primaryBlueHover, nodeEnergy),
                             theme
                         );
+
+                        ctx.restore();
 
                         if (sampleIdle && renderDebug) {
                             renderDebug.idleGlowStateAfter = captureCanvasState(ctx);
@@ -249,6 +301,7 @@ export const drawNodes = (
             };
 
             const renderOcclusion = () => {
+                ctx.globalAlpha = nodeOpacity;
                 const occlusionRadiusPx = getOcclusionRadius(radiusPx, theme);
                 ctx.beginPath();
                 ctx.arc(screen.x, screen.y, occlusionRadiusPx, 0, Math.PI * 2);
@@ -257,12 +310,20 @@ export const drawNodes = (
             };
 
             const renderRing = () => {
+                ctx.globalAlpha = nodeOpacity;
                 if (theme.useGradientRing) {
                     const activeRingWidth = ringWidthPx * (1 + theme.hoverRingWidthBoost * nodeEnergy);
+
+                    // Determine ring color with brightness boost for hovered node
+                    let ringColor = node.isFixed ? theme.nodeFixedColor : lerpColor(theme.primaryBlueDefault, theme.primaryBlueHover, nodeEnergy);
+                    if (isHoveredNode && theme.neighborHighlightEnabled && !node.isFixed) {
+                        ringColor = boostBrightness(ringColor, theme.hoveredBrightnessBoost);
+                    }
+
                     drawGradientRing(ctx, screen.x, screen.y, radiusPx, activeRingWidth,
-                        node.isFixed ? theme.nodeFixedColor : lerpColor(theme.primaryBlueDefault, theme.primaryBlueHover, nodeEnergy),
+                        ringColor,
                         theme.deepPurple, theme.ringGradientSegments, theme.gradientRotationDegrees);
-                    ctx.globalAlpha = 1;
+                    // Don't reset globalAlpha here - preserve nodeOpacity for dimming
                     ctx.globalCompositeOperation = 'source-over';
                 } else {
                     ctx.beginPath();

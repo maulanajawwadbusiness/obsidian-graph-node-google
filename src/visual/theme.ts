@@ -103,6 +103,7 @@ export interface ThemeConfig {
     neighborHighlightEnabled: boolean;  // Master toggle for neighbor detection visual effects
     neighborEdgeColor: string;          // Color for highlighted neighbor edges
     neighborDimOpacity: number;         // Opacity for non-neighbor elements when dimmed (0.2 = 20%)
+    xThingNodeDimOpacity: number;       // Specific dim opacity for X-Thing nodes (0.1 = 90% transparent)
     neighborTransitionMs: number;       // Fade duration for dim/highlight transitions (100ms)
     hoveredBrightnessBoost: number;     // Brightness multiplier for hovered/dragged dot (1.3 = 30% boost)
     xThingGlowDimMul: number;           // Glow dim multiplier for x-things during highlight (suggest 0.2-1.0)
@@ -238,6 +239,7 @@ export const NORMAL_THEME: ThemeConfig = {
     neighborHighlightEnabled: false,
     neighborEdgeColor: '#63abff',
     neighborDimOpacity: 0.2,
+    xThingNodeDimOpacity: 0.2, // Match neighborDim for normal
     neighborTransitionMs: 100,
     hoveredBrightnessBoost: 1.0,  // No boost in normal mode
     xThingGlowDimMul: 1.0,
@@ -377,8 +379,9 @@ export const ELEGANT_THEME: ThemeConfig = {
     neighborHighlightEnabled: true,
     neighborEdgeColor: '#63abff',    // Bright blue stroke color
     neighborDimOpacity: 0.2,         // 20% opacity for non-neighbors
+    xThingNodeDimOpacity: 0.1,       // 50% more dim than edges (0.1 vs 0.2)
     neighborTransitionMs: 100,       // Smooth 100ms fade
-    hoveredBrightnessBoost: 1.3,     // 30% brightness boost for hovered/dragged dot
+    hoveredBrightnessBoost: 1.7,     // 70% brightness boost for hovered/dragged dot
     xThingGlowDimMul: 1.0,
     edgeHighlightAlphaCap: 0.8,
     xThingFlatRingEnabled: true,
@@ -396,7 +399,7 @@ export const ELEGANT_THEME: ThemeConfig = {
     labelEnabled: true,
     labelFontSize: 11,
     labelFontFamily: 'system-ui, -apple-system, sans-serif',
-    labelColor: 'rgba(180, 190, 210, 0.85)',
+    labelColor: '#ffffff',
     labelOffsetBasePx: 8,
     labelOffsetHoverPx: 4,
     labelAlphaBase: 0.6,

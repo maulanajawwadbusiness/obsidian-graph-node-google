@@ -265,7 +265,7 @@ export const drawNodes = (
             if (isHoveredNode || isNeighborNode) {
                 nodeOpacity = 1;  // Protected from dim
             } else {
-                nodeOpacity = 1 - dimEnergy * (1 - theme.neighborDimOpacity);
+                nodeOpacity = 1 - dimEnergy * (1 - theme.xThingNodeDimOpacity);
             }
         }
 
@@ -348,25 +348,25 @@ export const drawNodes = (
                     // Don't reset globalAlpha here - preserve nodeOpacity for dimming
                     ctx.globalCompositeOperation = 'source-over';
                 } else {
-            // Normal mode
-            // FIX: Run 2 (Apply Opacity for Filled)
-            ctx.globalAlpha = nodeOpacity;
+                    // Normal mode
+                    // FIX: Run 2 (Apply Opacity for Filled)
+                    ctx.globalAlpha = nodeOpacity;
 
-            ctx.beginPath();
-            ctx.arc(screen.x, screen.y, radiusPx, 0, Math.PI * 2);
-            
-            // FIX: Run 7 (Protect Hovered + Neighbors Brightness)
-            let fillColor = node.isFixed ? theme.nodeFixedColor : theme.nodeFillColor;
-            if (isHoveredNode && theme.neighborHighlightEnabled && !node.isFixed) {
-                fillColor = boostBrightness(fillColor, theme.hoveredBrightnessBoost);
-            }
-            
-            ctx.fillStyle = fillColor;
-            ctx.fill();
-            ctx.strokeStyle = theme.nodeStrokeColor;
-            ctx.lineWidth = strokeWidthPx;
-            ctx.stroke();
-        }
+                    ctx.beginPath();
+                    ctx.arc(screen.x, screen.y, radiusPx, 0, Math.PI * 2);
+
+                    // FIX: Run 7 (Protect Hovered + Neighbors Brightness)
+                    let fillColor = node.isFixed ? theme.nodeFixedColor : theme.nodeFillColor;
+                    if (isHoveredNode && theme.neighborHighlightEnabled && !node.isFixed) {
+                        fillColor = boostBrightness(fillColor, theme.hoveredBrightnessBoost);
+                    }
+
+                    ctx.fillStyle = fillColor;
+                    ctx.fill();
+                    ctx.strokeStyle = theme.nodeStrokeColor;
+                    ctx.lineWidth = strokeWidthPx;
+                    ctx.stroke();
+                }
             };
 
             // Render in configured order

@@ -252,3 +252,58 @@ Wire engine to consume ONLY derived spring edges (remove direct link injection).
 **Files Added**: 1
 **Files Modified**: 1
 **Behavior**: Spring derivation tested, but engine still uses old path
+
+---
+
+## Run 6: Wire Engine to Consume ONLY Derived Spring Edges
+
+***CRITICAL MILESTONE: Topology Pipeline Now Authoritative***
+
+**Date**: 2026-02-03
+
+### New Module: `src/graph/springToPhysics.ts`
+
+#### Functions
+1. **springEdgeToPhysicsLink(edge: SpringEdge): PhysicsLink**
+   - Converts single SpringEdge to PhysicsLink
+   - Maps `edge.a/b` to `source/target`
+   - Preserves `restLen` and `strength`
+
+2. **springEdgesToPhysicsLinks(edges: SpringEdge[]): PhysicsLink[]**
+   - Batch converter
+
+### Engine Wiring Change
+**File**: `GraphPhysicsPlayground.tsx` - `spawnGraph()`
+
+#### OLD Path (Removed)
+```typescript
+links.forEach(l => engine.addLink(l)); // Direct from generator
+```
+
+#### NEW Path
+```typescript
+const springEdges = deriveSpringEdges(topology);
+const physicsLinks = springEdgesToPhysicsLinks(springEdges);
+physicsLinks.forEach(l => engine.addLink(l)); // From topology pipeline
+```
+
+### Impact
+- **Single Source of Truth**: `topology.links` (DirectedLink[]) is now the ONLY source
+- **No Hidden Writes**: Engine can no longer receive links from arbitrary sources
+- **Auditability**: All topology changes flow through `topologyControl.ts`
+
+### Console Proof
+- `[Run6] Engine wiring: N nodes, M physics links (from X directed)`
+- Confirms: `M <= X` (deduplication working)
+
+### Verification
+- **Build**: Passed
+- **Behavior**: Graph still renders correctly (same topology, different path)
+- **Next Risk**: Ensure no other code paths call `engine.addLink()` directly
+
+### Next Step (Run 7)
+Add versioning + change protocol (rebuild cache only when topology version changes).
+
+**Files Added**: 1
+**Files Modified**: 1
+**Behavior**: **BREAKING CHANGE** - Engine now fed exclusively by topology pipeline

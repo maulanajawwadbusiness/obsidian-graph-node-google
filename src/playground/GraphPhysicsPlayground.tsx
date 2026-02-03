@@ -27,6 +27,8 @@ import { setTopology } from '../graph/topologyControl';
 import { legacyToTopology } from '../graph/topologyAdapter';
 // RUN 5: Spring derivation import
 import { deriveSpringEdges } from '../graph/springDerivation';
+// RUN 6: Spring-to-physics converter import
+import { springEdgesToPhysicsLinks } from '../graph/springToPhysics';
 
 // -----------------------------------------------------------------------------
 // Main Component (Internal)
@@ -446,9 +448,12 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
         console.log(`[Run5] Spring edges derived: ${springEdges.length}`);
         console.log(`[Run5] Sample spring edges (first 3):`, springEdges.slice(0, 3));
 
-        // Still add to engine for now (Run 6 will change this)
+        // RUN 6: Wire engine to ONLY use derived spring edges
+        const physicsLinks = springEdgesToPhysicsLinks(springEdges);
+        console.log(`[Run6] Engine wiring: ${nodes.length} nodes, ${physicsLinks.length} physics links (from ${topology.links.length} directed)`);
+
         nodes.forEach(n => engine.addNode(n));
-        links.forEach(l => engine.addLink(l));
+        physicsLinks.forEach(l => engine.addLink(l)); // Now using derived links, not raw generator output
         engine.resetLifecycle();
     };
 

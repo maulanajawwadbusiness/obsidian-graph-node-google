@@ -89,3 +89,24 @@ Create a single source of truth in a dedicated stylesheet (e.g. `src/styles/font
 **Target files**: `docs/report_2026_02_03_font_unification_runbook.md`.
 - Add final architecture summary and revert guidance for each run.
 
+
+## Final Architecture Summary (Run 10)
+- **Single source of truth**: `src/styles/fonts.css` owns `@font-face`, `--font-ui`, `--font-title`, and panel toggles.
+- **Global default**: `html, body` use `--font-ui`; form controls inherit.
+- **Panel toggles**: Major panels and overlays set `data-font="ui"` at their roots.
+- **Title exceptions**: Only the “Reasoning” and “Document Viewer” header labels use `data-font="title"`.
+- **Canvas labels**: Dot label rendering uses the Quicksand UI stack via `labelFontFamily`.
+
+## Revert Checkpoints (Runs 1–10)
+Use `git revert <sha>` for a surgical rollback.
+
+- Run 1: `git revert fb96b2e`
+- Run 2: `git revert 5c8dfb3`
+- Run 3: `git revert 3f4b73b`
+- Run 4: `git revert fe80484`
+- Run 5: `git revert 8fb22c5`
+- Run 6: `git revert fb40cd6`
+- Run 7: `git revert 27dd389`
+- Run 8: `git revert 6f5ad3d`
+- Run 9: `git revert aa30b77`
+- Run 10: `git revert <this_commit_sha>`

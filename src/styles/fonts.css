@@ -1,0 +1,33 @@
+/* Font system single source of truth. Do not set font-family elsewhere. */
+@font-face {
+  font-family: 'Quicksand';
+  src: url('../assets/Quicksand-Light.ttf') format('truetype');
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  --font-ui: 'Quicksand', Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+  --font-title: 'Calibri', 'Carlito', 'Segoe UI', Arial, sans-serif;
+}
+
+html,
+body {
+  font-family: var(--font-ui);
+}
+
+input,
+button,
+textarea,
+select {
+  font-family: inherit;
+}
+
+[data-font='ui'] {
+  font-family: var(--font-ui);
+}
+
+[data-font='title'] {
+  font-family: var(--font-title);
+}

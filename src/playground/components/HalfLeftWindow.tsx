@@ -18,7 +18,6 @@ const PANEL_STYLE: React.CSSProperties = {
     zIndex: 400,
     display: 'flex',
     flexDirection: 'column',
-    fontFamily: 'system-ui, -apple-system, sans-serif',
     color: 'rgba(180, 190, 210, 0.9)',
     position: 'relative',
     pointerEvents: 'auto',
@@ -105,6 +104,7 @@ export const HalfLeftWindow: React.FC<HalfLeftWindowProps> = ({ open, onClose, r
 
     return (
         <div
+            data-font="ui"
             style={{ ...PANEL_STYLE, touchAction: 'pan-x pan-y' }}
             onPointerDownCapture={stop}
             onPointerMoveCapture={stop}
@@ -119,7 +119,9 @@ export const HalfLeftWindow: React.FC<HalfLeftWindowProps> = ({ open, onClose, r
             onDropCapture={blockDrop}
         >
             <div style={HEADER_STYLE}>
-                <div style={TITLE_STYLE}>{t('docViewer.title')}</div>
+                <div style={TITLE_STYLE} data-font="title">
+                    {t('docViewer.title')}
+                </div>
                 <button type="button" style={CLOSE_BUTTON_STYLE} onClick={onClose} aria-label={t('tooltip.closeViewer')} title={t('tooltip.closeViewer')}>
                     ×
                 </button>

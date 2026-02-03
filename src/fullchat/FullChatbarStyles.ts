@@ -28,7 +28,6 @@ export const PANEL_STYLE: React.CSSProperties = {
     zIndex: 500,
     display: 'flex',
     flexDirection: 'column',
-    fontFamily: 'system-ui, -apple-system, sans-serif',
     color: VOID.textSoft,
     position: 'relative',
     pointerEvents: 'auto',

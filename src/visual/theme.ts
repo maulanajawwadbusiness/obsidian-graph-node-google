@@ -398,7 +398,7 @@ export const ELEGANT_THEME: ThemeConfig = {
     // Text labels (Obsidian-style)
     labelEnabled: true,
     labelFontSize: 11,
-    labelFontFamily: 'Quicksand, system-ui, -apple-system, sans-serif',
+    labelFontFamily: "'Quicksand', Inter, system-ui, Avenir, Helvetica, Arial, sans-serif",
     labelColor: '#d1f4ff',
     labelOffsetBasePx: 8,
     labelOffsetHoverPx: 4,

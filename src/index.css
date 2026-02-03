@@ -1,13 +1,4 @@
-@font-face {
-  font-family: 'Quicksand';
-  src: url('/Quicksand-Light.ttf') format('truetype');
-  font-weight: 300;
-  font-style: normal;
-  font-display: swap;
-}
-
 :root {
-  font-family: 'Quicksand', Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
   line-height: 1.5;
   font-weight: 300;
 

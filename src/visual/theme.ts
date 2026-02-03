@@ -105,6 +105,10 @@ export interface ThemeConfig {
     neighborDimOpacity: number;         // Opacity for non-neighbor elements when dimmed (0.2 = 20%)
     neighborTransitionMs: number;       // Fade duration for dim/highlight transitions (100ms)
     hoveredBrightnessBoost: number;     // Brightness multiplier for hovered/dragged dot (1.3 = 30% boost)
+    xThingGlowDimMul: number;           // Multiplier for x-thing glow dimming during highlight
+    edgeHighlightAlphaCap: number;      // Max alpha for neighbor edge highlight (0-1)
+    xThingFlatRingEnabled: boolean;     // Force flat ring color for x-things during highlight
+    xThingFlatRingColor: string;        // Flat ring color for x-things (e.g. #63abff)
     hoverRingWidthBoost: number;       // Max ring width boost at full energy (0.1 = 10%)
     hoverGlowBoost: number;            // Max glow alpha boost at full energy (0.15)
 
@@ -236,6 +240,10 @@ export const NORMAL_THEME: ThemeConfig = {
     neighborDimOpacity: 0.2,
     neighborTransitionMs: 100,
     hoveredBrightnessBoost: 1.0,  // No boost in normal mode
+    xThingGlowDimMul: 1.0,
+    edgeHighlightAlphaCap: 1.0,
+    xThingFlatRingEnabled: false,
+    xThingFlatRingColor: '#63abff',
 
     hoverRingWidthBoost: 0,
     hoverGlowBoost: 0,
@@ -371,6 +379,10 @@ export const ELEGANT_THEME: ThemeConfig = {
     neighborDimOpacity: 0.2,         // 20% opacity for non-neighbors
     neighborTransitionMs: 100,       // Smooth 100ms fade
     hoveredBrightnessBoost: 1.3,     // 30% brightness boost for hovered/dragged dot
+    xThingGlowDimMul: 1.0,
+    edgeHighlightAlphaCap: 1.0,
+    xThingFlatRingEnabled: false,
+    xThingFlatRingColor: '#63abff',
 
     hoverRingWidthBoost: 0.1,       // 10% max ring width boost
     hoverGlowBoost: 0.15,           // Max glow alpha boost

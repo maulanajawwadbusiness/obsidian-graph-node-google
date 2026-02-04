@@ -19,6 +19,7 @@ The Canvas (Graph) is the substrate. Panels (Chat, Docs) and the Analysis Overla
 ### C. Minimal Diffs & Side Reports
 *   **Touch only what is necessary**. Prefer modular hooks over monolithic components.
 *   **Mission Protocol**: Every major work block (e.g., performance fixes, refactors) MUST be accompanied by a side report in `docs/` and a corresponding git commit.
+*   **Future TODOs**: Refer to `docs/FUTURE_TODO.md` when asked for upcoming work and acknowledge the gaps listed there before starting new features.
 
 ## 2. Project Map
 

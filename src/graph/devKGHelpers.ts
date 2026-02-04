@@ -117,6 +117,16 @@ export const devKGHelpers = {
             console.log(`  - {${spring.a}, ${spring.b}} (unordered pair)`);
         }
         console.log(`✓ Expected XPBD constraints: ${topology.springs?.length || 0} (matches springs, NOT ${topology.links.length} links)`);
+        // DEV: If engine is exposed, log actual XPBD constraint count after a couple frames.
+        if (typeof window !== 'undefined' && (window as any).__engine) {
+            const engine = (window as any).__engine;
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    const xpbdCount = engine?.xpbdFrameAccum?.springs?.count ?? 0;
+                    console.log(`✓ XPBD constraint count (actual): ${xpbdCount}`);
+                });
+            });
+        }
         console.log('==============================================');
         console.log('');
 
@@ -136,7 +146,8 @@ export const devKGHelpers = {
 // Only expose to window.__kg in development mode AND browser environment
 if (import.meta.env.DEV && typeof window !== 'undefined') {
     (window as any).__kg = devKGHelpers;
-    console.log('[DevKG] Console helpers loaded (DEV MODE). Try: window.__kg.proof() or window.__kg.loadExample()');
+    (window as any).__kg_proof = devKGHelpers.proof;
+    console.log('[DevKG] Console helpers loaded (DEV MODE). Try: window.__kg.proof() or window.__kg_proof()');
 } else if (typeof window !== 'undefined') {
     console.log('[DevKG] Helpers disabled in production build.');
 }

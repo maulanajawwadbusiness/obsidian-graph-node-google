@@ -21,6 +21,17 @@ let currentTopology: Topology = {
 
 let topologyVersion = 0;
 
+function ensureSprings(reason: string, config?: ForceConfig): void {
+    if (currentTopology.links.length === 0) return;
+    if (currentTopology.springs && currentTopology.springs.length > 0) return;
+
+    currentTopology.springs = deriveSpringEdges(currentTopology, config || DEFAULT_PHYSICS_CONFIG);
+
+    if (import.meta.env.DEV) {
+        console.warn(`[TopologyControl] Springs were missing (${reason}); derived ${currentTopology.springs.length} from ${currentTopology.links.length} links`);
+    }
+}
+
 /**
  * Set the entire topology (replaces current state).
  * Creates a defensive copy to prevent external mutation.
@@ -74,6 +85,7 @@ export function setTopology(topology: Topology, config?: ForceConfig): void {
  * Get the current topology (returns a copy to prevent mutation).
  */
 export function getTopology(): Topology {
+    ensureSprings('getTopology');
     return {
         nodes: [...currentTopology.nodes],
         links: [...currentTopology.links],

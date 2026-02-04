@@ -48,6 +48,10 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
     if (!engineRef.current) {
         engineRef.current = new PhysicsEngine();
     }
+    // DEV: Expose engine for console proof helpers (xpbd constraint counts).
+    if (import.meta.env.DEV && typeof window !== 'undefined') {
+        (window as any).__engine = engineRef.current;
+    }
     const documentContext = useDocument();
     const popupContext = usePopup();
     const fullChatContext = useFullChat();

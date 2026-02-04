@@ -162,6 +162,7 @@ function devAssertTopologyInvariants(
     const freshSprings = deriveSpringEdges(
         { nodes: topology.nodes, links: topology.links },
         config || DEFAULT_PHYSICS_CONFIG,
+        undefined, // policy (use default)
         { silent: true }
     );
     const currentCount = topology.springs?.length || 0;
@@ -301,7 +302,38 @@ export function getTopologyVersion(): number {
 export function reportTopologyMutationRejection(
     source: MutationSource,
     validationErrors: string[],
-    docId?: string
+    docId?: string,
+    meta?: MutationMeta
+): void {
+    const resolvedDocId = meta?.docId || docId;
+    const providerName = meta?.providerName;
+    const inputHash = meta?.inputHash;
+    const versionBefore = topologyVersion;
+    const countsBefore = {
+        nodes: currentTopology.nodes.length,
+        directedLinks: currentTopology.links.length,
+        springs: currentTopology.springs?.length || 0
+    };
+    emitMutationEventSafe({
+        status: 'rejected' as const,
+        source,
+        docId: resolvedDocId,
+        providerName,
+        inputHash,
+        versionBefore,
+        versionAfter: versionBefore,
+        countsBefore,
+        countsAfter: countsBefore,
+        validationErrors,
+        mutationId: 0,
+        timestamp: 0
+    });
+}
+
+export function reportTopologyMutationNoop(
+    source: MutationSource,
+    meta?: MutationMeta,
+    message: string = 'noop'
 ): void {
     const versionBefore = topologyVersion;
     const countsBefore = {
@@ -312,12 +344,15 @@ export function reportTopologyMutationRejection(
     emitMutationEventSafe({
         status: 'rejected' as const,
         source,
-        docId,
+        reason: 'noop' as const,
+        docId: meta?.docId,
+        providerName: meta?.providerName,
+        inputHash: meta?.inputHash,
         versionBefore,
         versionAfter: versionBefore,
         countsBefore,
         countsAfter: countsBefore,
-        validationErrors,
+        validationErrors: [message],
         mutationId: 0,
         timestamp: 0
     });

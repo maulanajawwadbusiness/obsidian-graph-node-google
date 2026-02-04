@@ -2,12 +2,15 @@
  * Spring Edge Derivation
  *
  * Converts directed knowledge links to undirected physics spring edges.
+ * STEP 8 - RUN 3: Added physics mapping policy support.
  */
 
 import type { Topology, SpringEdge } from './topologyTypes';
 import { computeRestLengths } from './restLengthPolicy';
 import type { ForceConfig } from '../physics/types';
 import { DEFAULT_PHYSICS_CONFIG } from '../physics/config';
+import type { PhysicsMappingPolicy } from './physicsMappingPolicy';
+import { DefaultPhysicsMappingPolicy } from './physicsMappingPolicy';
 
 /**
  * Derive undirected spring edges from directed links.
@@ -18,22 +21,46 @@ import { DEFAULT_PHYSICS_CONFIG } from '../physics/config';
  * - Spring edge stores reference to source DirectedLink IDs for traceability
  *
  * RUN 9: Now applies rest length policy to each spring edge.
+ * STEP 8 - RUN 3: Added physics mapping policy (optional, defaults to baseline behavior).
  *
  * @param topology The knowledge graph
  * @param config Physics configuration (for rest length policy)
+ * @param policy Physics mapping policy (optional, defaults to DefaultPhysicsMappingPolicy)
  * @returns Array of undirected spring edges for physics
  */
 export function deriveSpringEdges(
     topology: Topology,
     config?: ForceConfig,
+    policy?: PhysicsMappingPolicy,
     opts?: { silent?: boolean }
 ): SpringEdge[] {
     const edgeMap = new Map<string, SpringEdge>();
     const nodeIdSet = new Set(topology.nodes.map(n => n.id));
     const totalDirectedLinks = topology.links.length;
     const appliedConfig = config || DEFAULT_PHYSICS_CONFIG;
+    const appliedPolicy = policy || DefaultPhysicsMappingPolicy;
+
+    // STEP 8 - RUN 3: Apply policy to collect metadata
+    if (!opts?.silent && import.meta.env.DEV) {
+        console.groupCollapsed(`[PhysicsMappingPolicy] Using policy: ${appliedPolicy.name} v${appliedPolicy.version}`);
+    }
 
     for (const link of topology.links) {
+        // STEP 8 - RUN 3: Get policy params for this link
+        const policyParams = appliedPolicy.mapLinkParams(link, {
+            targetSpacing: appliedConfig.targetSpacing,
+            xpbdLinkCompliance: appliedConfig.xpbdLinkCompliance,
+            damping: appliedConfig.damping
+        });
+
+        // Skip if policy says no spring
+        if (policyParams === undefined) {
+            if (import.meta.env.DEV && !opts?.silent) {
+                console.log(`[SpringDerivation] Skipped link (policy): ${link.from} -> ${link.to} [${link.kind || 'relates'}]`);
+            }
+            continue;
+        }
+
         // Skip self-loops
         if (link.from === link.to) {
             if (import.meta.env.DEV && !opts?.silent) {
@@ -70,9 +97,14 @@ export function deriveSpringEdges(
             const spring: SpringEdge = {
                 a,
                 b,
-                restLen: 0,
+                restLen: 0, // Will be set by rest length policy
                 stiffness: link.weight ?? 1.0,
-                contributors: link.id ? [link.id] : []
+                contributors: link.id ? [link.id] : [],
+                // STEP 8 - RUN 3: Store policy metadata (no behavior change yet)
+                meta: {
+                    policyParams,
+                    edgeType: link.kind || 'relates'
+                }
             };
             edgeMap.set(key, spring);
         }
@@ -135,6 +167,7 @@ export function deriveSpringEdges(
 
     if (!opts?.silent && import.meta.env.DEV) {
         console.log(`[Run9] deriveSpringEdges: ${totalDirectedLinks} directed links -> ${validEdges.length} spring edges (dedupe: ${dedupeRate}%)`);
+        console.groupEnd();
     }
 
     return validEdges;

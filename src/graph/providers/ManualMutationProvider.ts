@@ -8,10 +8,9 @@
  * This provider exists for API consistency with other providers.
  */
 
-import type { DirectedLink } from '../topologyTypes';
+import type { DirectedLink, Topology } from '../topologyTypes';
 import type { TopologyProvider, TopologySnapshot } from './providerTypes';
 import { hashObject } from './hashUtils';
-import { addKnowledgeLink, removeKnowledgeLink, getTopology } from '../topologyControl';
 
 /**
  * Manual mutation specification
@@ -35,32 +34,20 @@ export const ManualMutationProvider: TopologyProvider<ManualMutationInput> = {
     name: 'manualMutation',
 
     buildSnapshot(input: ManualMutationInput): TopologySnapshot {
-        // Execute mutation (linkId result is tracked for debugging)
-        let _linkId = '';
+        void input;
+        throw new Error('ManualMutationProvider does not support snapshots; use buildPatch');
+    },
+
+    buildPatch(prev: Topology, input: ManualMutationInput) {
+        void prev;
         switch (input.type) {
             case 'addLink':
-                if (input.link) {
-                    _linkId = addKnowledgeLink(input.link);
-                }
-                break;
+                return input.link ? { addLinks: [input.link] } : {};
             case 'removeLink':
-                if (input.linkId) {
-                    removeKnowledgeLink(input.linkId);
-                }
-                break;
+                return input.linkId ? { removeLinkIds: [input.linkId] } : {};
+            default:
+                return {};
         }
-        void _linkId; // Mark as intentionally unused for now
-
-        // Return resulting topology
-        const topo = getTopology();
-        return {
-            nodes: topo.nodes,
-            directedLinks: topo.links,
-            meta: {
-                provider: 'manualMutation',
-                inputHash: hashObject(input)
-            }
-        };
     },
 
     hashInput(input: ManualMutationInput): string {

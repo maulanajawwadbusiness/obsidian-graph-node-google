@@ -277,8 +277,12 @@ export function generateRandomGraph(
 
         const node = createNode(id, 4.0, 1.0, 'fiber'); // Light
 
-        // Pick Anchor
-        const ribAnchorIdx = ribIndices[Math.floor(rng.next() * ribIndices.length)];
+        // Pick Anchor (fallback to spine if no ribs exist)
+        const anchorPool = ribIndices.length > 0 ? ribIndices : spineIndices;
+        if (anchorPool.length === 0) {
+            continue;
+        }
+        const ribAnchorIdx = anchorPool[Math.floor(rng.next() * anchorPool.length)];
         const ribAnchor = nodes[ribAnchorIdx];
 
         // PLACEMENT: Small outward offset (clamped to prevent singularity)

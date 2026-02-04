@@ -5,69 +5,17 @@
  * Also provides ingestion and export functions.
  */
 
-import type { KGSpec, KGNode, KGLink } from './kgSpec';
-import type { Topology, DirectedLink, NodeSpec } from './topologyTypes';
+import type { KGSpec } from './kgSpec';
+import type { Topology } from './topologyTypes';
 import { validateKGSpec } from './kgSpecValidation';
 import { getTopology, reportTopologyMutationRejection } from './topologyControl';
 import { ensureDirectedLinkIds } from './directedLinkId'; // STEP4-RUN4
+import { toTopologyFromKGSpec } from './kgSpecToTopology';
 // STEP3-RUN5-V4-FIX1: Removed unused recomputeSprings import
 // STEP7-RUN4: Import provider apply function
 import { applyTopologyFromProvider } from './providers';
 
-/**
- * Convert KGNode to NodeSpec.
- */
-function kgNodeToNodeSpec(node: KGNode): NodeSpec {
-    return {
-        id: node.id,
-        label: node.label || node.id,
-        meta: {
-            kind: node.kind,
-            source: node.source,
-            payload: node.payload
-        }
-    };
-}
-
-/**
- * Convert KGLink to DirectedLink.
- */
-function kgLinkToDirectedLink(link: KGLink): DirectedLink {
-    return {
-        from: link.from,
-        to: link.to,
-        kind: link.rel || 'relates', // STEP3-RUN5-FIX7: Default missing rel to 'relates'
-        weight: link.weight ?? 1.0,
-        meta: {
-            directed: link.directed !== false, // Default true
-            ...link.meta
-        }
-    };
-}
-
-/**
- * Convert KGSpec to Topology.
- * 
- * This is a pure function - does not mutate global state.
- * Caller should validate spec first.
- * 
- * @param spec The KGSpec to convert
- * @returns Topology object
- */
-export function toTopologyFromKGSpec(spec: KGSpec): Topology {
-    const topology: Topology = {
-        nodes: spec.nodes.map(kgNodeToNodeSpec),
-        links: spec.links.map(kgLinkToDirectedLink)
-    };
-
-    // Console proof (dev-only)
-    if (import.meta.env.DEV) {
-        console.log(`[KGLoader] Converted KGSpec to Topology: ${topology.nodes.length} nodes, ${topology.links.length} links`);
-        console.log(`[KGLoader] Sample links (first 5):`, topology.links.slice(0, 5));
-    }
-
-    return topology;
-}
+export { toTopologyFromKGSpec };
 
 /**
  * Options for topology ingestion.
@@ -137,17 +85,15 @@ export function setTopologyFromKGSpec(spec: KGSpec, opts: IngestOptions = {}): b
         console.warn(`[KGLoader] Validation SKIPPED${docTag} (opts.validate=false)`);
     }
 
-    // Convert and load
-    const topology = toTopologyFromKGSpec(spec);
-
-    // STEP4-RUN4: Ensure all links have IDs (generate if missing)
-    topology.links = ensureDirectedLinkIds(topology.links);
-    console.log(`[KGLoader] Ensured link IDs: ${topology.links.length} links`);
-
     // STEP7-RUN4: Apply via provider (includes normalization + determinism)
     const result = applyTopologyFromProvider('kgSpec', spec, {
         docId: spec.docId
     });
+
+    if (result.rejected) {
+        console.error('[KGLoader] Provider rejected topology apply');
+        return false;
+    }
 
     if (!result.changed && import.meta.env.DEV) {
         console.log('[KGLoader] Provider: No changes (identical topology)');

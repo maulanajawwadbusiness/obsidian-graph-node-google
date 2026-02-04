@@ -39,7 +39,7 @@ export const DEFAULT_PHYSICS_CONFIG: ForceConfig = {
 
     // Decoupled Spacing Controls (Phase 1)
     // These values preserve exact springLength=500 behavior
-    targetSpacing: 300 * EDGE_LEN_SCALE,        // Base: 300 (Reduced). Scaled by EDGE_LEN_SCALE.
+    targetSpacing: 150 * EDGE_LEN_SCALE,        // Base: 300 (Reduced). Scaled by EDGE_LEN_SCALE.
     initScale: 0.1,           // Current ratio (springLength * 0.1 for initial positions)
     snapImpulseScale: 0.4,    // Current ratio (springLength * 0.4 for impulse, clamped 120-600)
     initStrategy: 'spread',   // Default to spread seeding (no explosion start)
@@ -128,7 +128,7 @@ export const DEFAULT_PHYSICS_CONFIG: ForceConfig = {
     // ANCHOR: Harmonic Net (Uniform Link Lengths)
     // ---------------------------------------------------------------------------
     // Uniform rest length for all springs (creates harmonic net, not stressed web)
-    linkRestLength: 104 * EDGE_LEN_SCALE,  // Base: 104 (Reduced). Scaled by EDGE_LEN_SCALE.
+    linkRestLength: 52 * EDGE_LEN_SCALE,  // Base: 52 (Reduced 2x). Scaled by EDGE_LEN_SCALE.
     // Dead zone for soft springs (no force within this band)
     springDeadZone: 0.15,  // ±15% of rest length
 

@@ -89,26 +89,29 @@ export function deriveSpringEdges(
         const existing = edgeMap.get(key);
         if (existing) {
             // STEP 8 - RUN 9: Deterministic parallel link resolution
-            // Rule: "Strongest wins" - use lowest compliance (highest stiffness)
+            // Rule: "Strongest wins" - use lowest scaled compliance (highest stiffness)
             const existingParams = existing.meta?.policyParams as any;
-            const existingCompliance = existingParams?.compliance ?? 0.01;
-            const newCompliance = policyParams.compliance ?? 0.01;
+            const existingCompliance = existing.compliance ?? (existingParams?.compliance ?? 0.01);
+            const weight = link.weight ?? 1.0;
+            const clampedWeight = Math.max(0.1, Math.min(1.0, weight));
+            const newComplianceBase = policyParams.compliance ?? 0.01;
+            const newCompliance = newComplianceBase / clampedWeight;
 
-            if (policyParams.compliance !== undefined && policyParams.compliance < existingCompliance) {
+            if (newCompliance < existingCompliance) {
                 // New link is stronger, update spring params
-                const weight = link.weight ?? 1.0;
-                const clampedWeight = Math.max(0.1, Math.min(1.0, weight));
-                const scaledCompliance = policyParams.compliance / clampedWeight;
-
                 existing.restLen = policyParams.restLength;
                 existing.stiffness = clampedWeight; // Legacy mode
-                existing.compliance = scaledCompliance; // XPBD mode
+                existing.compliance = newCompliance; // XPBD mode
                 existing.meta = {
                     policyParams,
                     edgeType: link.kind || 'relates',
                     dampingScale: policyParams.dampingScale,
                     // Keep track of all edge types for forensics
-                    allEdgeTypes: [...(existing.meta?.allEdgeTypes as string[] || [existing.meta?.edgeType as string]), link.kind || 'relates']
+                    allEdgeTypes: [
+                        ...(existing.meta?.allEdgeTypes as string[] || []),
+                        ...(existing.meta?.edgeType ? [existing.meta?.edgeType as string] : []),
+                        link.kind || 'relates'
+                    ]
                 };
 
                 if (import.meta.env.DEV && !opts?.silent) {
@@ -159,18 +162,20 @@ export function deriveSpringEdges(
     }
 
     // STEP 8 - RUN 5: Edges already have restLen from policy, no need to computeRestLengths
-    const edges = Array.from(edgeMap.values());
+    const edges = Array.from(edgeMap.entries())
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([, edge]) => edge);
 
     // Collect stats for logging (counts per edge type, compliance stats)
     const edgeTypeCounts = new Map<string, number>();
     const complianceValues: number[] = [];
     for (const edge of edges) {
-        const policy = edge.meta?.policyParams as any;
-        if (policy?.edgeType) {
-            edgeTypeCounts.set(policy.edgeType, (edgeTypeCounts.get(policy.edgeType) || 0) + 1);
+        const edgeType = edge.meta?.edgeType as string | undefined;
+        if (edgeType) {
+            edgeTypeCounts.set(edgeType, (edgeTypeCounts.get(edgeType) || 0) + 1);
         }
-        if (policy?.compliance !== undefined) {
-            complianceValues.push(policy.compliance);
+        if (edge.compliance !== undefined) {
+            complianceValues.push(edge.compliance);
         }
     }
 

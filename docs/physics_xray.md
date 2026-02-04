@@ -1,7 +1,7 @@
 # Physics Engine X-Ray: Movement & Performance
 
 **Target**: Deep Forensics of Node Movement & Optimization Strategies
-**Date**: 2026-01-30
+**Date**: 2026-02-04
 
 ## 1. Top-Level Doctrine: "Visual Dignity" (0-Slush)
 The engine prioritizes **1:1 Time Match over Simulation Fidelity**.
@@ -41,7 +41,7 @@ The ticking loop (`src/physics/engine/engineTick.ts`) execution order:
 2.  **MotionPolicy**: Computes global temperature and degrade scalars.
 3.  **Force Pass** (Soft: Repulsion, Springs) -> *includes Deterministic Singularity Handling*
 4.  **Integration** (Euler) -> *Updates x = x + v*
-    - **Damping (XPBD-Specific)**: Applied via `applyDamping()` using `effectiveDamping = config.xpbdDamping ?? DEFAULT_XPBD_DAMPING (0.20)`. Formula: `v *= exp(-effectiveDamping * 5.0 * dt)`. Half-life: ~0.69s (vs legacy 0.15s). Safety clamped to [0, 2].
+    - **Damping (XPBD-Specific)**: Applied via `applyDamping()` using `effectiveDamping = config.xpbdDamping ...... DEFAULT_XPBD_DAMPING (0.20)`. Formula: `v *= exp(-effectiveDamping * 5.0 * dt)`. Half-life: ~0.69s (vs legacy 0.15s). Safety clamped to [0, 2].
 5.  **XPBD Constraints** (`engineTickXPBD.ts`):
     - **Solver**: Iterative Edge Distance Constraints.
     - **Loop**: Default Idle=2, Drag=6 (Hard Cap 12).
@@ -49,8 +49,16 @@ The ticking loop (`src/physics/engine/engineTick.ts`) execution order:
 6.  **Reconcile**: Updates velocity based on position corrections ($v = \Delta x / dt$).
 7.  **Correction Diffusion** -> *Smoothes jitter*
 
-### MotionPolicy (Energy → Ramps)
+### MotionPolicy (Energy -> Ramps)
 Energy thresholds are now routed through a unified `MotionPolicy` ramp set (early-expansion, expansion, diffusion, hub relief). Note: Start-only ramps (like Carrier Flow) are **disabled** under the `spread` init strategy.
+
+## 4.2 Physics Mapping Policy (Edge Types -> Springs)
+Directed knowledge edges are mapped into undirected physics springs by a deterministic policy layer.
+
+- Seam: `deriveSpringEdges(topology, config, policy)` in `src/graph/springDerivation.ts`.
+- Policy module: `src/graph/physicsMappingPolicy/` (DefaultPhysicsMappingPolicy).
+- Determinism: same topology + same policy yields identical spring set and params.
+- Safety: unknown edge types fall back to '*' policy with a single warning.
 
 ## 4.1 Initialization Strategy (No Explosion Start)
 The default init strategy is now **`spread`**, which seeds dots in a wide, deterministic spiral/disc with a minimum separation epsilon. This removes the need for pre-roll or impulse kicks while still preventing true `distance=0` singularities. Use `initStrategy: "legacy"` only when you explicitly want the previous pre-roll/impulse behavior.
@@ -69,7 +77,7 @@ User interaction must never feel degraded.
     *   **Dt Clamp**: Frame deltas capped at 32ms (max 2 substeps) to prevent "spiral of death".
     *   **Idle Mode**: Debt is aggressively shed (dropped) during idle to ensure instant "wake up" without catch-up lag.
 
-## 6. Move-Leak Hardening (01–22 + Interaction)
+## 6. Move-Leak Hardening (01-22 + Interaction)
 **Status**: Secured.
 
 ### A. The Four-Layer Shield
@@ -128,7 +136,7 @@ New telemetry in `[RenderPerf]` and `[PhysicsPasses]`:
 *   `[RenderDrift]`: Logs global angle if micro-drift is active (should be 0).
 *   **Physics HUD (Debug Panel)**: 
     *   **2-Column Layout**: Left (Summary/Controls) | Right (Ledgers).
-    *   **Energy Ledger**: Real-time v² breakdown per stage (Input, Spring, Repulse, Constrain) to find energy leaks.
+    *   **Energy Ledger**: Real-time v^2 breakdown per stage (Input, Spring, Repulse, Constrain) to find energy leaks.
     *   **Fight Ledger**: Conflict% and correction mag per constraint stage.
 *   **Feel Markers (Debug Panel)**: Dev-only canvas markers show rest state (cyan/amber) and conflict halos per dot.
 

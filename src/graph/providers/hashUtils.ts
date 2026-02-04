@@ -59,17 +59,31 @@ function canonicalStringifyReplacer(_key: string, value: unknown): unknown {
  * @returns Hexadecimal hash string
  */
 export function hashTopologySnapshot(
-    nodes: { id: string }[],
-    links: { from: string; to: string }[]
+    nodes: { id: string; label?: string }[],
+    links: { id?: string; from: string; to: string; kind?: string; weight?: number; meta?: unknown }[]
 ): string {
-    // Sort by ID for stability
-    const sortedNodeIds = [...nodes].map(n => n.id).sort();
-    const sortedLinks = [...links]
-        .map(l => `${l.from}->${l.to}`)
-        .sort();
+    const canonical = {
+        nodes: [...nodes]
+            .map(n => ({ id: n.id, label: n.label }))
+            .sort((a, b) => a.id.localeCompare(b.id)),
+        links: [...links]
+            .map(l => ({
+                id: l.id,
+                from: l.from,
+                to: l.to,
+                kind: l.kind || 'relates',
+                weight: l.weight ?? 1,
+                meta: l.meta
+            }))
+            .sort((a, b) => {
+                if (a.from !== b.from) return a.from.localeCompare(b.from);
+                if (a.to !== b.to) return a.to.localeCompare(b.to);
+                if (a.kind !== b.kind) return a.kind.localeCompare(b.kind);
+                return hashObject(a).localeCompare(hashObject(b));
+            })
+    };
 
-    const combined = [...sortedNodeIds, ...sortedLinks].join('|');
-    return hashString(combined);
+    return hashObject(canonical);
 }
 
 /**
@@ -81,5 +95,7 @@ export function hashTopologySnapshot(
  */
 export function truncateHash(hash: string, maxLength = 8): string {
     if (hash.length <= maxLength) return hash;
-    return hash.slice(0, maxLength) + '…';
+    return hash.slice(0, maxLength) + '...';
 }
+
+

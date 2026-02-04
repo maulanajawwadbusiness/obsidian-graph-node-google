@@ -7,8 +7,15 @@
 import type { Topology } from '../topologyTypes';
 import type { ProviderMetadata, ProviderApplyResult } from './providerTypes';
 import { getProvider } from './providerRegistry';
-import { setTopology, patchTopology, getTopologyVersion } from '../topologyControl';
-import { truncateHash } from './hashUtils';
+import {
+    setTopology,
+    patchTopology,
+    getTopologyVersion,
+    getTopology,
+    reportTopologyMutationRejection,
+    reportTopologyMutationNoop
+} from '../topologyControl';
+import { hashObject, hashTopologySnapshot, truncateHash } from './hashUtils';
 
 /**
  * Apply topology from a provider.
@@ -36,19 +43,43 @@ export function applyTopologyFromProvider<TInput = unknown>(
     const versionBefore = getTopologyVersion();
 
     // Hash input for observability
-    const inputHash = provider.hashInput
-        ? provider.hashInput(input)
-        : truncateHash(JSON.stringify(input).slice(0, 64));
+    let inputHash = '';
+    try {
+        inputHash = provider.hashInput
+            ? provider.hashInput(input)
+            : hashObject(input);
+    } catch (err) {
+        inputHash = hashObject({ error: 'hashInputFailed' });
+        if (import.meta.env.DEV) {
+            console.warn('[Provider] hashInput failed; using fallback hash', err);
+        }
+    }
 
     // Build snapshot
-    const snapshot = provider.buildSnapshot(input);
+    let snapshot: ReturnType<typeof provider.buildSnapshot>;
+    try {
+        snapshot = provider.buildSnapshot(input);
+    } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        reportTopologyMutationRejection(
+            'topologyProvider',
+            [`Provider '${providerName}' buildSnapshot failed: ${message}`],
+            meta?.docId,
+            { docId: meta?.docId, providerName: providerName, inputHash }
+        );
+        return {
+            changed: false,
+            rejected: true,
+            rejectionReason: message
+        };
+    }
 
     // Merge metadata
     const providerMeta: ProviderMetadata = {
         provider: provider.name,
         ...snapshot.meta,
         ...meta,
-        inputHash
+        inputHash: snapshot.meta?.inputHash || inputHash
     };
 
     // Console output (dev-only, single groupCollapsed)
@@ -56,12 +87,12 @@ export function applyTopologyFromProvider<TInput = unknown>(
         const nodeCount = snapshot.nodes.length;
         const linkCount = snapshot.directedLinks.length;
         console.groupCollapsed(
-            `[Provider] ${providerName} (hash=${inputHash}) ` +
+            `[Provider] ${providerName} (hash=${truncateHash(providerMeta.inputHash)}) ` +
             `N=${nodeCount} L=${linkCount} docId=${providerMeta.docId || 'none'}`
         );
         console.log({
             provider: providerName,
-            inputHash,
+            inputHash: providerMeta.inputHash,
             docId: providerMeta.docId,
             nodes: nodeCount,
             links: linkCount
@@ -75,22 +106,38 @@ export function applyTopologyFromProvider<TInput = unknown>(
         links: snapshot.directedLinks
     };
 
+    const current = getTopology();
+    const currentHash = hashTopologySnapshot(current.nodes, current.links);
+    const nextHash = hashTopologySnapshot(snapshot.nodes, snapshot.directedLinks);
+    if (currentHash === nextHash) {
+        reportTopologyMutationNoop(
+            'topologyProvider',
+            {
+                docId: providerMeta.docId,
+                providerName: providerName,
+                inputHash: providerMeta.inputHash
+            },
+            `provider '${providerName}': no changes`
+        );
+        return {
+            changed: false,
+            rejected: false,
+            version: versionBefore
+        };
+    }
+
     // Apply via existing seam (STEP7-RUN5: include provider metadata)
     setTopology(topology, undefined, {
         source: 'topologyProvider',
         docId: providerMeta.docId,
         providerName: providerName,
-        inputHash
+        inputHash: providerMeta.inputHash
     });
 
     const versionAfter = getTopologyVersion();
     const changed = versionAfter !== versionBefore;
 
-    return {
-        changed,
-        rejected: false,
-        version: versionAfter
-    };
+    return { changed, rejected: false, version: versionAfter };
 }
 
 /**
@@ -139,7 +186,7 @@ export function applyPatchFromProvider<TInput = unknown>(
     // Hash input
     const inputHash = provider.hashInput
         ? provider.hashInput(input)
-        : truncateHash(JSON.stringify(input).slice(0, 64));
+        : hashObject(input);
 
     // Build patch
     const patchSpec = provider.buildPatch(currentTopo, input);
@@ -147,7 +194,7 @@ export function applyPatchFromProvider<TInput = unknown>(
     // Console output
     if (import.meta.env.DEV) {
         console.groupCollapsed(
-            `[Provider] ${providerName} PATCH (hash=${inputHash}) ` +
+            `[Provider] ${providerName} PATCH (hash=${truncateHash(inputHash)}) ` +
             `addN=${patchSpec.addNodes?.length || 0} ` +
             `rmN=${patchSpec.removeNodes?.length || 0} ` +
             `addL=${patchSpec.addLinks?.length || 0} ` +
@@ -170,5 +217,3 @@ export function applyPatchFromProvider<TInput = unknown>(
     };
 }
 
-// Import getTopology for patch function
-import { getTopology } from '../topologyControl';

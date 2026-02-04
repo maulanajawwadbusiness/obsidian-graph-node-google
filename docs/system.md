@@ -43,6 +43,28 @@ The application layers, ordered by z-index (lowest to highest):
 ## 3. Physics Architecture And Contract
 The graph is driven by a **Hybrid Solver** (`src/physics/`) prioritizing "Visual Dignity" over pure simulation accuracy.
 
+### Policy Layer (Physics Mapping)
+- Mapping of directed knowledge link types to undirected physics spring params is centralized in `src/graph/physicsMappingPolicy/`.
+- The seam is `deriveSpringEdges(topology, config, policy)` in `src/graph/springDerivation.ts`.
+- Policy is deterministic: same topology + same policy -> identical spring set and params.
+
+### Edge Length Knobs (Current Gap)
+There is a known gap between the policy rest length and XPBD constraint rest length.
+What you see on screen is driven by XPBD constraints, which currently use the
+current distance at spawn, not `linkRestLength`.
+
+Knobs that actually change visible edge length right now:
+- `targetSpacing` in `src/physics/config.ts` (used by mapping policy to set spring rest length)
+- Per-edge rest length policy in `src/graph/physicsMappingPolicy/defaultPolicy.ts`
+
+Knobs that do NOT change visible edge length in XPBD:
+- `linkRestLength` in `src/physics/config.ts` (used in edge relaxation/force pass, not XPBD rest length)
+
+Unification fix (future):
+- In `src/physics/engine/engineTickXPBD.ts`, use per-link rest length
+  (from `link.length` or derived spring restLen) instead of spawn distance
+  when building XPBD constraints.
+
 ### A. The XPBD Solver (Unified)
 1.  **Forces (Soft)**: Repulsion, Center Gravity. Drive organic layout.
 2.  **XPBD Constraints (Hard)**: Edge Distance solver with Compliance ($\alpha$). Replaces legacy Springs.
@@ -72,7 +94,7 @@ When stressed (`degradeLevel > 0`), we reduce workload by **skipping entire pass
 *   **Fix #22 (Fairness)**: "Hot Pairs" (pairs under pressure) are prioritized 1:1 even in degraded mode to prevent far-field crawl.
 
 ### C. Move-Leak Hardening (Invariants)
-Post-Fixes #01–#22, the system guarantees:
+Post-Fixes #01-#22, the system guarantees:
 
 1.  **Render Correctness**:
     *   **Unified Transform**: `CameraTransform` singleton ensures Input and Render matrices are identical.
@@ -201,7 +223,7 @@ for dot hover visuals (match pixels, no ghosting).
 *   **`dimEnergy`** stays > 0 during fade-out and only clears neighbor sets once it hits ~0.
 *   **Non-neighbor opacity** targets `neighborDimOpacity` (0.2 = 20%).
 
-### C. Pass Ordering (Edges → Dots)
+### C. Pass Ordering (Edges -> Dots)
 1.  **Edges Pass 1**: draw all non-neighbor edges at `dimOpacity`.
 2.  **Edges Pass 2**: draw neighbor edges in `neighborEdgeColor` using `dimEnergy` as alpha.
 3.  **Dots Pass**: apply `nodeOpacity` per dot (neighbors + hovered remain full opacity).

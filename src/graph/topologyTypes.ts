@@ -9,11 +9,11 @@
 export type NodeId = string;
 
 /**
- * Directed knowledge link (A→B).
- * Preserves semantic direction - A→B and B→A are distinct.
+ * Directed knowledge link (A->B).
+ * Preserves semantic direction - A->B and B->A are distinct.
  * 
  * STEP4-RUN3: Added `id` field for stable addressing.
- * - Allows parallel edges (multiple A→B with different rel/meta)
+ * - Allows parallel edges (multiple A->B with different rel/meta)
  * - Never uses endpoint sorting for identity
  * - If missing, generated at load time
  */
@@ -40,7 +40,7 @@ export interface NodeSpec {
  * Complete topology (knowledge graph + derived physics).
  * 
  * STEP3: Separated directed knowledge from undirected physics.
- * - `links`: Directed knowledge edges (A→B and B→A are distinct)
+ * - `links`: Directed knowledge edges (A->B and B->A are distinct)
  * - `springs`: Undirected physics springs (derived from links, deduplicated)
  */
 export interface Topology {
@@ -69,3 +69,6 @@ export interface SpringEdge {
     contributors?: string[]; // STEP4-RUN7: IDs of directed links that created this spring
     meta?: Record<string, unknown>;
 }
+
+
+

@@ -7,7 +7,8 @@
 
 import type { KGSpec } from '../kgSpec';
 import type { TopologyProvider } from './providerTypes';
-import { toTopologyFromKGSpec } from '../kgSpecLoader';
+import { toTopologyFromKGSpec } from '../kgSpecToTopology';
+import { ensureDirectedLinkIds } from '../directedLinkId';
 import { hashObject } from './hashUtils';
 
 /**
@@ -16,17 +17,89 @@ import { hashObject } from './hashUtils';
 export interface KGSpecProviderOptions {
     /** Whether to sort nodes/links by ID (default true) */
     sortById?: boolean;
-    /** Whether to deduplicate links (default true) */
-    deduplicateLinks?: boolean;
 }
 
 /**
  * Default options
  */
 const DEFAULT_OPTIONS: KGSpecProviderOptions = {
-    sortById: true,
-    deduplicateLinks: true
+    sortById: true
 };
+
+function normalizeNodes(spec: KGSpec) {
+    const nodes = spec.nodes.map(node => ({
+        ...node,
+        label: node.label?.trim() || node.id
+    }));
+
+    const seenIds = new Set<string>();
+    const duplicates: string[] = [];
+    for (const node of nodes) {
+        if (!node.id) {
+            duplicates.push('(missing id)');
+            continue;
+        }
+        if (seenIds.has(node.id)) {
+            duplicates.push(node.id);
+            continue;
+        }
+        seenIds.add(node.id);
+    }
+
+    if (duplicates.length > 0) {
+        const sample = duplicates.slice(0, 10).join(', ');
+        const suffix = duplicates.length > 10 ? ` (+${duplicates.length - 10} more)` : '';
+        throw new Error(`KGSpecProvider: duplicate node id(s): ${sample}${suffix}`);
+    }
+
+    return nodes;
+}
+
+function normalizeLinks(spec: KGSpec) {
+    return spec.links.map(link => ({
+        ...link,
+        rel: link.rel?.trim() || 'relates',
+        weight: link.weight ?? 1.0
+    }));
+}
+
+function buildLinkSortKey(link: ReturnType<typeof normalizeLinks>[number]): string {
+    const rel = link.rel?.trim() || 'relates';
+    const hash = hashObject({
+        from: link.from,
+        to: link.to,
+        rel,
+        weight: link.weight ?? 1.0,
+        directed: link.directed !== false,
+        meta: link.meta
+    });
+    return `${link.from}|${link.to}|${rel}|${hash}`;
+}
+
+function normalizeSpecForHash(nodes: ReturnType<typeof normalizeNodes>, links: ReturnType<typeof normalizeLinks>) {
+    const normalizedNodes = [...nodes]
+        .map(node => ({
+            id: node.id,
+            label: node.label?.trim() || node.id,
+            kind: node.kind,
+            source: node.source,
+            payload: node.payload
+        }))
+        .sort((a, b) => a.id.localeCompare(b.id));
+
+    const normalizedLinks = [...links]
+        .map(link => ({
+            from: link.from,
+            to: link.to,
+            rel: link.rel?.trim() || 'relates',
+            weight: link.weight ?? 1.0,
+            directed: link.directed !== false,
+            meta: link.meta
+        }))
+        .sort((a, b) => buildLinkSortKey(a).localeCompare(buildLinkSortKey(b)));
+
+    return { normalizedNodes, normalizedLinks };
+}
 
 /**
  * KGSpec Topology Provider
@@ -37,74 +110,77 @@ export const KGSpecProvider: TopologyProvider<KGSpec> = {
     name: 'kgSpec',
 
     buildSnapshot(spec: KGSpec) {
-        // Use existing converter
-        let topology = toTopologyFromKGSpec(spec);
-
-        // STEP7-RUN11: Strengthen normalization
         const opts = DEFAULT_OPTIONS;
-
-        // 1. Normalize nodes (trim labels, fallback to ID)
-        topology.nodes = topology.nodes.map(node => ({
-            ...node,
-            label: node.label?.trim() || node.id
-        }));
-
-        // 2. Normalize links (trim kind, default to 'relates')
-        topology.links = topology.links.map(link => ({
-            ...link,
-            kind: link.kind?.trim() || 'relates'
-        }));
-
-        // 3. Deduplicate nodes by ID (keep first occurrence)
-        const seenNodeIds = new Set<string>();
-        topology.nodes = topology.nodes.filter(node => {
-            if (seenNodeIds.has(node.id)) {
-                if (import.meta.env.DEV) {
-                    console.warn(`[KGSpecProvider] Dedup: duplicate node ID ${node.id}`);
-                }
-                return false;
-            }
-            seenNodeIds.add(node.id);
-            return true;
+        const normalizedNodes = normalizeNodes(spec);
+        const normalizedLinks = normalizeLinks(spec);
+        const { normalizedLinks: hashLinks, normalizedNodes: hashNodes } =
+            normalizeSpecForHash(normalizedNodes, normalizedLinks);
+        const inputHash = hashObject({
+            specVersion: spec.specVersion,
+            docId: spec.docId,
+            nodes: hashNodes,
+            links: hashLinks
         });
 
-        // 4. Deduplicate links by (from, to, kind) tuple (keep first)
-        const seenLinkKeys = new Set<string>();
-        topology.links = topology.links.filter(link => {
-            const key = `${link.from}:${link.to}:${link.kind}`;
-            if (seenLinkKeys.has(key)) {
-                if (import.meta.env.DEV) {
-                    console.warn(`[KGSpecProvider] Dedup: duplicate link ${key}`);
-                }
-                return false;
-            }
-            seenLinkKeys.add(key);
-            return true;
+        // Convert to topology after validation
+        const topology = toTopologyFromKGSpec({
+            ...spec,
+            nodes: normalizedNodes,
+            links: normalizedLinks
         });
 
-        // 5. Sort by ID (canonical ordering)
+        // Stable sort for deterministic link IDs
+        const sortedLinks = [...topology.links].sort((a, b) => {
+            if (a.from !== b.from) return a.from.localeCompare(b.from);
+            if (a.to !== b.to) return a.to.localeCompare(b.to);
+            if ((a.kind || 'relates') !== (b.kind || 'relates')) {
+                return (a.kind || 'relates').localeCompare(b.kind || 'relates');
+            }
+            const aKey = hashObject({
+                from: a.from,
+                to: a.to,
+                kind: a.kind || 'relates',
+                weight: a.weight ?? 1,
+                meta: a.meta
+            });
+            const bKey = hashObject({
+                from: b.from,
+                to: b.to,
+                kind: b.kind || 'relates',
+                weight: b.weight ?? 1,
+                meta: b.meta
+            });
+            return aKey.localeCompare(bKey);
+        });
+
+        const linksWithIds = ensureDirectedLinkIds(sortedLinks);
+
         if (opts.sortById) {
             topology.nodes.sort((a, b) => a.id.localeCompare(b.id));
-            topology.links.sort((a, b) => {
-                // Primary: from, Secondary: to, Tertiary: kind
-                if (a.from !== b.from) return a.from.localeCompare(b.from);
-                if (a.to !== b.to) return a.to.localeCompare(b.to);
-                return (a.kind || 'relates').localeCompare(b.kind || 'relates');
-            });
+            linksWithIds.sort((a, b) => (a.id || '').localeCompare(b.id || ''));
         }
 
         return {
             nodes: topology.nodes,
-            directedLinks: topology.links,
+            directedLinks: linksWithIds,
             meta: {
                 provider: 'kgSpec',
                 docId: spec.docId,
-                inputHash: hashObject(spec)
+                inputHash
             }
         };
     },
 
     hashInput(spec: KGSpec): string {
-        return hashObject(spec);
+        const normalizedNodes = normalizeNodes(spec);
+        const normalizedLinks = normalizeLinks(spec);
+        const { normalizedLinks: hashLinks, normalizedNodes: hashNodes } =
+            normalizeSpecForHash(normalizedNodes, normalizedLinks);
+        return hashObject({
+            specVersion: spec.specVersion,
+            docId: spec.docId,
+            nodes: hashNodes,
+            links: hashLinks
+        });
     }
 };

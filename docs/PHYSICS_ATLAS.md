@@ -4,7 +4,7 @@
 **Truth Source (Goal):** `docs/acceptance_good_springmass_in_hand.md`
 **Truth Source (Code):** `docs/handoff_xpbd_implementation_2026_02_01.md`
 
-> **STOP.** If you are new to this physics engine, **DO NOT TOUCH CODE** until you have read the [Acceptance Spec](acceptance_good_springmass_in_hand.md) and verified T1–T7 in the Playground.
+> **STOP.** If you are new to this physics engine, **DO NOT TOUCH CODE** until you have read the [Acceptance Spec](acceptance_good_springmass_in_hand.md) and verified T1-T7 in the Playground.
 
 a. "first 60 seconds ritual"
 a 6-step checklist: open atlas -> run t1-t3 -> check mode text -> check nearOverlapCount -> check
@@ -17,14 +17,14 @@ commit."
 ## 1. North Star: "Good Spring-Mass"
 The graph is a **physical object**, not a diagram. It must pass the **Hand-Feel Protocol**:
 1.  **Crisp:** 1:1 drag response. No mush.
-2.  **Elastic:** Clean ringdown (1–2 overshoots). No jelly.
+2.  **Elastic:** Clean ringdown (1-2 overshoots). No jelly.
 3.  **Solid:** Hard collisions. No overlap soup.
 4.  **Calm:** Dead silence at rest (Jitter < 0.005).
 
-**Use the HUD Checklist** (Right Column) to verify T1–T7.
+**Use the HUD Checklist** (Right Column) to verify T1-T7.
 *   [T1] Drag (Gap < 50px)
 *   [T2] Recoil (< 3s)
-*   [T3] Collision (Recovery 1.0–1.5s)
+*   [T3] Collision (Recovery 1.0-1.5s)
 *   [T4] Locality (No Teleport)
 *   [T5] Rest (Sleep)
 *   [T6] DT Quarantine (Proof)
@@ -32,26 +32,26 @@ The graph is a **physical object**, not a diagram. It must pass the **Hand-Feel 
 
 ---
 
-## 2. Document Map (The A–J Canvas)
+## 2. Document Map (The A-J Canvas)
 Every subsystem has a forensic trace. Use this map to find the "Why".
 
 | ID | Domain | Question Answered | Canonical Doc | HUD/Telemetry Proof |
 | :--- | :--- | :--- | :--- | :--- |
-| **A** | **Data Ownership** | Who writes `node.x/y`? | [forensic_node_xy_write_ownership.md](forensic_node_xy_write_ownership.md) | `debugNoRenderMotion` |
-| **B** | **Inventory** | Where are all forces/motors? | [forensic_sharp_inventory.md](forensic_sharp_inventory.md) | `debugDisableAllVMods` |
-| **C** | **Magnitudes** | What are the real runtime units? | [forensic_native_ledger.md](forensic_native_ledger.md) | `repulsionMaxMag`, `springCorrMax` |
-| **D** | **Repulsion** | Why doesn't it explode? | [forensic_repulsion_placement_and_scaling.md](forensic_repulsion_placement_and_scaling.md) | `nearOverlapCount`, `repulsionClamped` |
-| **E** | **XPBD Architecture** | How does the solver work? | [handoff_xpbd_implementation_2026_02_01.md](handoff_xpbd_implementation_2026_02_01.md) | `propEdgesSolved`, `maxAbsC` |
-| **F** | **Drag Gating** | Why is it so fast? | [report_drag_gating_run6.md](report_drag_gating_run6.md) | `dragActive`, `coverage` |
-| **G** | **Ghost Vel** | Why do nodes teleport? | [forensic_ghost_velocity_reconcile_compat.md](forensic_ghost_velocity_reconcile_compat.md) | `maxPrevGap`, `ghostVelSuspectCount` |
-| **H** | **Isolation** | Is Legacy interfering? | [forensic_mode_isolation_hybrid_vs_xpbd.md](forensic_mode_isolation_hybrid_vs_xpbd.md) | `mode` text (HUD top) |
-| **I** | **Startup** | Why does spawn explore? | [forensic_spawn_startup_hygiene.md](forensic_spawn_startup_hygiene.md) | `startupNanCount`, `minPairDist` |
-| **J** | **Acceptance** | **Is it good?** | [acceptance_good_springmass_in_hand.md](acceptance_good_springmass_in_hand.md) | **T1–T7 Checklist** |
+| **A** | **Data Ownership** | Who writes `node.x/y`... | [forensic_node_xy_write_ownership.md](forensic_node_xy_write_ownership.md) | `debugNoRenderMotion` |
+| **B** | **Inventory** | Where are all forces/motors... | [forensic_sharp_inventory.md](forensic_sharp_inventory.md) | `debugDisableAllVMods` |
+| **C** | **Magnitudes** | What are the real runtime units... | [forensic_native_ledger.md](forensic_native_ledger.md) | `repulsionMaxMag`, `springCorrMax` |
+| **D** | **Repulsion** | Why doesn't it explode... | [forensic_repulsion_placement_and_scaling.md](forensic_repulsion_placement_and_scaling.md) | `nearOverlapCount`, `repulsionClamped` |
+| **E** | **XPBD Architecture** | How does the solver work... | [handoff_xpbd_implementation_2026_02_01.md](handoff_xpbd_implementation_2026_02_01.md) | `propEdgesSolved`, `maxAbsC` |
+| **F** | **Drag Gating** | Why is it so fast... | [report_drag_gating_run6.md](report_drag_gating_run6.md) | `dragActive`, `coverage` |
+| **G** | **Ghost Vel** | Why do nodes teleport... | [forensic_ghost_velocity_reconcile_compat.md](forensic_ghost_velocity_reconcile_compat.md) | `maxPrevGap`, `ghostVelSuspectCount` |
+| **H** | **Isolation** | Is Legacy interfering... | [forensic_mode_isolation_hybrid_vs_xpbd.md](forensic_mode_isolation_hybrid_vs_xpbd.md) | `mode` text (HUD top) |
+| **I** | **Startup** | Why does spawn explore... | [forensic_spawn_startup_hygiene.md](forensic_spawn_startup_hygiene.md) | `startupNanCount`, `minPairDist` |
+| **J** | **Acceptance** | **Is it good...** | [acceptance_good_springmass_in_hand.md](acceptance_good_springmass_in_hand.md) | **T1-T7 Checklist** |
 
 ---
 
 ## 3. Symptom Router
-*Fast-path diagnosis: "I see X, where do I look?"*
+*Fast-path diagnosis: "I see X, where do I look..."*
 
 | Symptom | Probable Cause | First Doc | HUD Check |
 | :--- | :--- | :--- | :--- |
@@ -71,9 +71,10 @@ These are the **Hard Invariants**. Breaking them breaks the engine.
 2.  **DT Firewall**: If `dt > 200ms`, the engine MUST clamp or slice. Never integrate a 1s delta.
 3.  **Visual Truth**: `node.x/y` is ONLY written by the integrator, the XPBD Constraint Solver, or the user (drag). Render loop must NOT mutate physics state.
 4.  **Unit Invariance**: Physics runs in **World Space**. Zoom level (Canvas transform) must NOT affect force magnitudes.
+5.  **Mapping Determinism**: Edge-type physics mapping must be deterministic (see `src/graph/physicsMappingPolicy/` and `deriveSpringEdges`).
 
 ## 5. Maintenance
-*   **When to update:** If you add a new solver, a new force, or change the `TimePolicy`.
+*   **When to update:** If you add a new solver, a new force, change the `TimePolicy`, or change physics mapping policy defaults.
 *   **How to update:**
     1.  Create a new `forensic_*.md` doc.
     2.  Add it to the **Document Map** (Table 2).

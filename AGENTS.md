@@ -53,6 +53,9 @@ Only use `task_boundary` for distinct, complex sub-tasks (~1 per 5 steps).
 ### POWERSHELL CAUTION
 Do NOT use `&&` in the terminal. It breaks the parser. Use separate commands or use `;` correctly.
 
+### ASCII ONLY
+Use pure ASCII characters in code, comments, logs, and docs. Avoid Unicode arrows, ellipses, and typographic dashes to prevent mojibake.
+
 ### DO NOT Break The "Dot"
 Terminology matters. In the graph, we render "Dots", not "Nodes" (though the data structure is a node). Keep performance-first language.
 
@@ -66,6 +69,12 @@ Terminology matters. In the graph, we render "Dots", not "Nodes" (though the dat
 *   **Config**: Always pass a `ForceConfig` (or `DEFAULT_PHYSICS_CONFIG`) when mutating topology so rest-length policy is consistent.
 *   **Direct Mutation Ban**: Do NOT mutate or replace topology data outside the control API (including in dev helpers).
 *   **Fallback Is Not A Contract**: The `getTopology()` fallback derive is a safety net, not a substitute for correct mutation.
+
+### EDGE LENGTH GAP (CURRENT)
+*   **Gap**: XPBD constraints currently use spawn distance as rest length, not `linkRestLength`.
+*   **Visible Knobs**: Use `targetSpacing` or the mapping policy rest length scale to change visible edge length.
+*   **Not Effective**: `linkRestLength` does NOT change XPBD edge length today.
+*   **Unification Fix**: Use per-link rest length in `engineTickXPBD.ts` when building constraints.
 
 ### POINTER CAPTURE BUBBLING (Visual UI)
 *   **Problem**: In `GraphPhysicsPlayground`, the parent container captures the pointer on `pointerdown` for drag handling.

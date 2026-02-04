@@ -1,7 +1,7 @@
 // type check enabled
 import React, { useRef, useState, useEffect, useLayoutEffect } from 'react';
 import { PhysicsEngine } from '../physics/engine';
-import { ForceConfig } from '../physics/types';
+import { ForceConfig, PhysicsNode } from '../physics/types';
 import { DEFAULT_PHYSICS_CONFIG } from '../physics/config';
 import { DRAG_ENABLED, SkinMode, getTheme } from '../visual/theme';
 import { CanvasOverlays } from './components/CanvasOverlays';
@@ -76,7 +76,7 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
         aspectRatio: 0,
         lifecycleMs: 0
     });
-    const [spawnCount, setSpawnCount] = useState(5);
+    const [spawnCount, setSpawnCount] = useState(4);
     const [seed, setSeed] = useState(Date.now()); // Seed for deterministic generation
 
     // FIX: Adaptive Scale (Temp)
@@ -433,22 +433,59 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
         return () => window.removeEventListener('keydown', handleGlobalKeydown, { capture: true });
     }, []);
 
+    const buildControlledGraph = (activeConfig: ForceConfig) => {
+        const spacing = Math.max(120, activeConfig.targetSpacing * 0.6);
+        const nodes: PhysicsNode[] = [
+            { id: 'n1', x: -spacing, y: 0, vx: 0, vy: 0, fx: 0, fy: 0, mass: 3, radius: 8, isFixed: false, warmth: 1.0, role: 'spine', label: 'Node 1' },
+            { id: 'n2', x: 0, y: -spacing * 0.7, vx: 0, vy: 0, fx: 0, fy: 0, mass: 2, radius: 6, isFixed: false, warmth: 1.0, role: 'rib', label: 'Node 2' },
+            { id: 'n3', x: 0, y: spacing * 0.7, vx: 0, vy: 0, fx: 0, fy: 0, mass: 2, radius: 6, isFixed: false, warmth: 1.0, role: 'rib', label: 'Node 3' },
+            { id: 'n4', x: spacing, y: spacing * 0.7, vx: 0, vy: 0, fx: 0, fy: 0, mass: 1, radius: 5, isFixed: false, warmth: 1.0, role: 'fiber', label: 'Node 4' }
+        ];
+
+        const topology = {
+            nodes: nodes.map(node => ({
+                id: node.id,
+                label: node.label,
+                meta: { role: node.role }
+            })),
+            links: [
+                { from: 'n1', to: 'n2', kind: 'manual', weight: 1.0 },
+                { from: 'n1', to: 'n3', kind: 'manual', weight: 1.0 },
+                { from: 'n3', to: 'n4', kind: 'manual', weight: 1.0 },
+                { from: 'n4', to: 'n1', kind: 'manual', weight: 1.0 }
+            ]
+        };
+
+        return { nodes, topology };
+    };
+
     const spawnGraph = (count: number, newSeed: number) => {
         const engine = engineRef.current;
         if (!engine) return;
         engine.clear();
         setSeed(newSeed);
-        const { nodes, links } = generateRandomGraph(
-            count,
-            config.targetSpacing,
-            config.initScale,
-            newSeed,
-            config.initStrategy,
-            config.minNodeDistance
-        );
+        const useControlled = count === 4;
+        let nodes: PhysicsNode[] = [];
+        let topology: ReturnType<typeof legacyToTopology>;
 
-        // RUN 4: Convert to Topology and use API
-        const topology = legacyToTopology(nodes, links);
+        if (useControlled) {
+            const controlled = buildControlledGraph(config);
+            nodes = controlled.nodes;
+            topology = controlled.topology;
+            console.log('[Run4] Using controlled topology: n1->n2, n1->n3, n3->n4');
+        } else {
+            const random = generateRandomGraph(
+                count,
+                config.targetSpacing,
+                config.initScale,
+                newSeed,
+                config.initStrategy,
+                config.minNodeDistance
+            );
+            nodes = random.nodes;
+            // RUN 4: Convert to Topology and use API
+            topology = legacyToTopology(random.nodes, random.links);
+        }
 
         // Console proof
         console.log(`[Run4] Topology set: ${topology.nodes.length} nodes, ${topology.links.length} directed links`);
@@ -489,6 +526,11 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
         physicsLinks.forEach(l => engine.addLink(l));
         engine.resetLifecycle();
     };
+
+    useEffect(() => {
+        // Spawn the controlled 4-dot topology on load.
+        spawnGraph(4, 1337);
+    }, []);
 
     const handleSpawn = () => {
         // Generate new random seed for each spawn

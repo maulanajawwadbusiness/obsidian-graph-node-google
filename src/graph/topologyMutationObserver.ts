@@ -31,7 +31,8 @@ export type MutationSource =
     | 'removeKnowledgeLink'
     | 'updateKnowledgeLink'
     | 'clearTopology'
-    | 'kgSpecLoader';
+    | 'kgSpecLoader'
+    | 'topologyProvider';
 
 /**
  * Diff summary for directed links

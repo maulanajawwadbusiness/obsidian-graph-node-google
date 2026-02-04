@@ -9,6 +9,7 @@ import type { KGSpec, KGNode, KGLink } from './kgSpec';
 import type { Topology, DirectedLink, NodeSpec } from './topologyTypes';
 import { validateKGSpec } from './kgSpecValidation';
 import { setTopology, getTopology } from './topologyControl';
+import { recomputeSprings } from './topologySpringRecompute'; // STEP3-RUN5-FIX11
 
 /**
  * Convert KGNode to NodeSpec.
@@ -32,7 +33,7 @@ function kgLinkToDirectedLink(link: KGLink): DirectedLink {
     return {
         from: link.from,
         to: link.to,
-        kind: link.rel, // Map rel to kind
+        kind: link.rel || 'related', // STEP3-RUN5-FIX7: Default missing rel to 'related'
         weight: link.weight || 1.0,
         meta: {
             directed: link.directed !== false, // Default true
@@ -116,7 +117,13 @@ export function setTopologyFromKGSpec(spec: KGSpec, opts: IngestOptions = {}): b
     const topology = toTopologyFromKGSpec(spec);
     setTopology(topology);
 
+    // STEP3-RUN5-FIX11: Recompute springs after KGSpec load
+    // KGSpec contains directed knowledge links; springs must be derived
+    const topologyWithSprings = recomputeSprings(topology);
+    setTopology(topologyWithSprings); // Update with springs
+
     console.log(`[KGLoader] ✓ Loaded KGSpec (${spec.specVersion}): ${spec.nodes.length} nodes, ${spec.links.length} links`);
+    console.log(`[KGLoader] ✓ Recomputed ${topologyWithSprings.springs?.length || 0} springs from directed links`);
     if (spec.docId) {
         console.log(`[KGLoader] Source docId: ${spec.docId}`);
     }

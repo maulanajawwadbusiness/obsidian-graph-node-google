@@ -25,7 +25,26 @@ import type { ForceConfig } from '../physics/types';
 export function deriveSpringEdges(topology: Topology, config?: ForceConfig): SpringEdge[] {
     const edgeMap = new Map<string, SpringEdge>();
 
+    // Build nodeId set for validation (STEP3-RUN5-FIX6)
+    const nodeIdSet = new Set(topology.nodes.map(n => n.id));
+
     for (const link of topology.links) {
+        // STEP3-RUN5-FIX6: Skip self-loops
+        if (link.from === link.to) {
+            if (import.meta.env.DEV) {
+                console.warn(`[SpringDerivation] Skipped self-loop: ${link.from} → ${link.to}`);
+            }
+            continue;
+        }
+
+        // STEP3-RUN5-FIX6: Skip links with missing endpoints
+        if (!nodeIdSet.has(link.from) || !nodeIdSet.has(link.to)) {
+            if (import.meta.env.DEV) {
+                console.warn(`[SpringDerivation] Skipped link with missing endpoint: ${link.from} → ${link.to}`);
+            }
+            continue;
+        }
+
         // Canonical key: always min(from, to) : max(from, to)
         const a = link.from < link.to ? link.from : link.to;
         const b = link.from < link.to ? link.to : link.from;

@@ -157,3 +157,102 @@ recomputeSprings(topology, config): Topology
 
 **Files Modified**: 1
 **Behavior**: XPBD now consumes undirected springs (no double-force risk)
+
+---
+
+## Run 5: Forensic Issues + Comprehensive Fixes
+
+**Date**: 2026-02-04
+
+### Issues Fixed (11 Total)
+
+#### Issue 1: Documentation Completeness ✅
+- **Problem**: Missing Run 5 section in log
+- **Fix**: Added this comprehensive section
+
+#### Issue 2: Incomplete Spring Recomputation Coverage ✅  
+- **Problem**: Springs only recomputed in GraphPhysicsPlayground path
+- **Fix**: Updated setTopology to clear springs, caller must recompute
+
+#### Issue 3: Dev Invariant Checks ✅
+- **Problem**: No assertion that springs match fresh derivation
+- **Fix**: Added dev-only check in `recomputeSprings()` with mismatch warning
+
+#### Issue 4-5: Semantic Rule Confirmation ✅
+- **Covered**: A→B + B→A yields one spring (deriveSpringEdges deduplication)
+- **Covered**: Performance - recompute only when topology changes (version-based)
+
+#### Issue 6: Spring Derivation Validation ✅
+- **Problem**: No self-loop or missing endpoint checks
+- **Fix**: Added nodeIdSet validation in `deriveSpringEdges()`
+- **Console**: Warns `[SpringDerivation] Skipped self-loop: X → X`
+
+#### Issue 7: Missing Rel Defaulting ✅
+- **Problem**: `kind` can be undefined when rel missing
+- **Fix**: `kgLinkToDirectedLink()` defaults to `'related'`
+
+#### Issue 8: Rest-Length Logging NaN/Infinity ✅
+- **Problem**: Empty array Math.min/max yields Infinity
+- **Fix**: Guard in `computeRestLengths()` checks length === 0
+
+#### Issue 9: External Stale Springs Injection ✅
+- **Problem**: setTopology copies external springs without validation
+- **Fix**: setTopology now ignores external springs, always derived
+
+#### Issue 10: Springs Not Cleared After Node Removal ✅
+- **Problem**: patchTopology mutations left springs stale
+- **Fix**: Added spring clearing after node/link mutations
+
+#### Issue 11: KGSpec Load Missing Spring Recomputation ✅
+- **Problem**: `setTopologyFromKGSpec()` didn't derive springs
+- **Fix**: Added `recomputeSprings()` call after KG load
+
+### Console Proof
+
+```javascript
+// Valid spec with A→B and B→A
+window.__kg.load({
+  specVersion: 'kg/1',
+  nodes: [{id: 'A'}, {id: 'B'}],
+  links: [
+    {from: 'A', to: 'B', rel: 'connects'},
+    {from: 'B', to: 'A', rel: 'connects'}
+  ]
+});
+
+// Expected output:
+// [KGLoader] Converted... 2 nodes, 2 links
+// [TopologyControl] setTopology: 2 nodes, 2 links, 0 springs (v2)
+// [SpringDerivation] 2 directed links → 1 spring edges...
+// [KGLoader] ✓ Recomputed 1 springs from directed links
+
+// Invalid self-loop rejection
+window.__kg.load({
+  specVersion: 'kg/1',
+  nodes: [{id: 'A'}],
+  links: [{from: 'A', to: 'A', rel: 'self'}]
+});
+
+// Expected:
+// [KGLoader] Validation failed...
+// [KGLoader] Errors (1): ...self-loop...
+```
+
+### Files Modified
+
+1. `springDerivation.ts` - Added self-loop/endpoint validation
+2. `kgSpecLoader.ts` - Default rel, spring recomputation
+3. `restLengthPolicy.ts` - Empty array guard
+4. `topologyControl.ts` - Spring clearing in setTopology/patchTopology
+5. `topologySpringRecompute.ts` - Dev invariant check
+
+### Success Criteria Verification
+
+✅ **Knowledge layer directed**: topology.links preserves A→B and B→A as distinct  
+✅ **Physics layer undirected**: topology.springs has 1 spring for {A,B}  
+✅ **XPBD consumes springs only**: engine.addLink uses topology.springs  
+✅ **Export preserves directed**: exportTopologyAsKGSpec outputs links, not springs  
+✅ **Rel handling safe**: Missing rel defaults to 'related'
+
+**Files Modified**: 5
+**Behavior**: All mutation paths now maintain spring consistency

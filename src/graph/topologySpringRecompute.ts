@@ -26,6 +26,16 @@ export function recomputeSprings(topology: Topology, config?: ForceConfig): Topo
     // Derive springs from knowledge links (already handles deduplication)
     const springs = deriveSpringEdges(topology, config);
 
+    // STEP3-RUN5-FIX3: Dev-only invariant check
+    if (import.meta.env.DEV && topology.springs && topology.springs.length > 0) {
+        const freshCount = springs.length;
+        const existingCount = topology.springs.length;
+        if (freshCount !== existingCount) {
+            console.warn(`[TopologySpringRecompute] ⚠ Spring count mismatch! Fresh=${freshCount}, Existing=${existingCount}`);
+            console.warn(`[TopologySpringRecompute] Springs were stale - replacing with fresh derivation`);
+        }
+    }
+
     // Return updated topology with springs
     return {
         ...topology,

@@ -61,13 +61,16 @@ export function computeRestLengths(
         restLengths.set(key, restLen);
     }
 
-    // RUN 9: Console proof
+    // RUN 9: Console proof (STEP3-RUN5-FIX8: Guard for empty springs)
     const lengths = Array.from(restLengths.values());
-    const min = Math.min(...lengths);
-    const max = Math.max(...lengths);
-    const avg = lengths.reduce((sum, len) => sum + len, 0) / lengths.length;
-
-    console.log(`[Run9] Rest length policy: ${lengths.length} edges, min=${min.toFixed(1)}px, max=${max.toFixed(1)}px, avg=${avg.toFixed(1)}px`);
+    if (lengths.length === 0) {
+        console.log(`[Run9] Rest length policy: 0 edges (empty graph)`);
+    } else {
+        const min = Math.min(...lengths);
+        const max = Math.max(...lengths);
+        const avg = lengths.reduce((sum: number, len: number) => sum + len, 0) / lengths.length;
+        console.log(`[Run9] Rest length policy: ${lengths.length} edges, min=${min.toFixed(1)}px, max=${max.toFixed(1)}px, avg=${avg.toFixed(1)}px`);
+    }
 
     return restLengths;
 }

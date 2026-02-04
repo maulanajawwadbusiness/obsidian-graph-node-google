@@ -21,12 +21,16 @@ let topologyVersion = 0;
 /**
  * Set the entire topology (replaces current state).
  * Creates a defensive copy to prevent external mutation.
+ * 
+ * STEP3-RUN5-FIX2,9: Always recompute springs from links.
+ * External callers cannot inject stale springs; we derive them here.
  */
 export function setTopology(topology: Topology): void {
+    // STEP3-RUN5-FIX9: Ignore external springs, we'll recompute
     currentTopology = {
         nodes: [...topology.nodes],
         links: [...topology.links],
-        springs: topology.springs ? [...topology.springs] : [] // STEP3-RUN2: Copy springs if provided
+        springs: [] // Will be recomputed by caller (GraphPhysicsPlayground or kgSpecLoader)
     };
     topologyVersion++;
     console.log(`[TopologyControl] setTopology: ${currentTopology.nodes.length} nodes, ${currentTopology.links.length} links, ${currentTopology.springs?.length || 0} springs (v${topologyVersion})`);
@@ -179,6 +183,15 @@ export function patchTopology(patch: TopologyPatch): void {
         linksRemoved: (patch.removeLinks?.length || 0),
         linksReplaced: patch.setLinks ? true : false
     };
+
+    // STEP3-RUN5-FIX10: Clear springs after node/link mutations
+    //  Springs must be recomputed by caller after patch
+    if (diff.nodesRemoved > 0 || diff.linksAdded > 0 || diff.linksRemoved > 0 || diff.linksReplaced) {
+        currentTopology.springs = [];
+        if (import.meta.env.DEV) {
+            console.log(`[TopologyControl] Springs cleared after patch (must recompute)`);
+        }
+    }
 
     console.log(
         `[TopologyControl] patchTopology: nodes ${before.nodes}→${after.nodes}, links ${before.links}→${after.links} (v${topologyVersion})`,

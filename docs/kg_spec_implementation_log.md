@@ -122,3 +122,99 @@ Implement validation rules.
 
 **Files Added**: 1
 **Behavior**: None (types only)
+
+---
+
+## Run 3: Validation Rules
+
+**Date**: 2026-02-04
+
+### New File: `src/graph/kgSpecValidation.ts`
+
+#### Function: `validateKGSpec(spec): ValidationResult`
+
+##### Checks (Errors)
+1. `specVersion` exists and equals 'kg/1'
+2. `nodes` array exists and is valid
+3. All nodes have non-empty `id` field
+4. No duplicate node IDs
+5. `links` array exists and is valid
+6. All links have `from` and `to` fields
+7. No self-loops (`from === to`)
+8. No missing endpoint node IDs
+
+##### Checks (Warnings)
+1. Missing `rel` field on links
+2. Weight outside [0,1] range
+3. Empty graph (no nodes)
+4. Graph with nodes but no links
+
+#### Return Type
+```typescript
+{
+    ok: boolean,       // True if no errors
+    errors: string[],  // Fatal issues
+    warnings: string[] // Non-fatal issues
+}
+```
+
+### Design
+- **Purely structural**: No physics assumptions
+- **Clear messages**: Each error/warning descriptive
+- **Fail-fast**: Stop validation if fundamental structures missing
+- **Defensive**: Checks array types before iteration
+
+### Verification
+- **Build**: Passed ✓
+- **Logic**: Covers all failure modes from pre-step2
+
+**Files Added**: 1
+**Behavior**: None (validation only)
+
+---
+
+## Run 4: Loader KGSpec → Topology
+
+**Date**: 2026-02-04
+
+### New File: `src/graph/kgSpecLoader.ts`
+
+#### Functions
+
+1. **toTopologyFromKGSpec(spec): Topology**
+   - Pure conversion (no state mutation)
+   - Maps KGNode → NodeSpec
+   - Maps KGLink → DirectedLink
+   - Console logs (dev-only): node/link counts + samples
+
+2. **setTopologyFromKGSpec(spec, opts?): boolean**
+   - Validates first (optional)
+   - Rejects on errors → no topology mutation
+   - Calls setTopology() if valid
+   - Returns success/failure
+
+3. **exportTopologyAsKGSpec(topology?): KGSpec**
+   - Roundtrip function for debug/save/load
+   - Adds provenance metadata
+
+#### Console Proof
+```
+[KGLoader] Converted KGSpec to Topology: 4 nodes, 3 links
+[KGLoader] Sample links (first 5): [...]
+[KGLoader] ✓ Loaded KGSpec (kg/1): 4 nodes, 3 links
+```
+
+#### Mapping
+- `id` → `id`
+- `label` → `label` (or id if missing)
+- `kind` → `meta.kind`
+- `rel` → `kind` (DirectedLink)
+- `weight` → `weight`
+- `source`, `payload` → `meta`
+
+### Verification
+- **Build**: Passed ✓
+- **Behavior**: Ingestion API working, validation enforced
+
+**Files Added**: 1
+**Behavior**: Can now load KGSpec into topology (but not wired to UI yet)

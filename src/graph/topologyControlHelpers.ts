@@ -35,8 +35,12 @@ export function computeLinkDiff(
     }
 
     // Find updated links (same ID, different content)
-    const beforeMap = new Map(linksBefore.map(l => [l.id!, l]).filter(([id]) => id));
-    const afterMap = new Map(linksAfter.map(l => [l.id!, l]).filter(([id]) => id));
+    const beforeMap = new Map<string, DirectedLink>(
+        linksBefore.map(l => [l.id!, l]).filter(([id]) => id) as [string, DirectedLink][]
+    );
+    const afterMap = new Map<string, DirectedLink>(
+        linksAfter.map(l => [l.id!, l]).filter(([id]) => id) as [string, DirectedLink][]
+    );
 
     for (const [id, afterLink] of afterMap) {
         const beforeLink = beforeMap.get(id);
@@ -44,8 +48,7 @@ export function computeLinkDiff(
             beforeLink.from !== afterLink.from ||
             beforeLink.to !== afterLink.to ||
             beforeLink.weight !== afterLink.weight ||
-            beforeLink.kind !== afterLink.kind ||
-            beforeLink.rel !== afterLink.rel
+            beforeLink.kind !== afterLink.kind
         )) {
             updated.push(id);
         }

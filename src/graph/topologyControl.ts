@@ -207,7 +207,6 @@ export function setTopology(topology: Topology, config?: ForceConfig): void {
     };
     const linksBefore = [...currentTopology.links];
     const springsBefore = currentTopology.springs ? [...currentTopology.springs] : [];
-    const springsBefore = currentTopology.springs ? [...currentTopology.springs] : [];
 
     if (!validation.ok) {
         logValidationFailure(validation, 'setTopology');
@@ -583,7 +582,12 @@ export function clearTopology(): void {
         springs: []
     };
     topologyVersion++;
-    console.log(`[TopologyControl] clearTopology (v${topologyVersion})`);
+
+    if (import.meta.env.DEV) {
+        console.log(`[TopologyControl] clearTopology (v${topologyVersion})`);
+    }
+
+    const invariantWarnings = devAssertTopologyInvariants(currentTopology, undefined, 'clearTopology');
 
     const countsAfter = {
         nodes: currentTopology.nodes.length,
@@ -601,6 +605,7 @@ export function clearTopology(): void {
         countsAfter,
         linkDiff,
         springDiff,
+        invariantWarnings: invariantWarnings.length > 0 ? invariantWarnings : undefined,
         mutationId: 0,
         timestamp: 0
     });
@@ -639,6 +644,7 @@ export function patchTopology(patch: TopologyPatch, config?: ForceConfig): void 
         springs: currentTopology.springs?.length || 0
     };
     const linksBefore = [...currentTopology.links];
+    const springsBefore = currentTopology.springs ? [...currentTopology.springs] : [];
 
     let nextNodes = [...currentTopology.nodes];
     let nextLinks = ensureDirectedLinkIds([...currentTopology.links]);

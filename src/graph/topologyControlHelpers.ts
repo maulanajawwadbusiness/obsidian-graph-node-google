@@ -1,13 +1,18 @@
 /**
+ * STEP6-RUN4: Helper for topology control operations
+ */
+
+import type { DirectedLink } from './topologyTypes';
+import type { LinkDiff } from './topologyMutationObserver';
+
+/**
  * Compute link diff between before and after states.
  * Returns truncated arrays (first 10 items) with full counts.
- * 
- * STEP6-RUN4: Helper for patchTopology event emission.
  */
-function computeLinkDiff(
+export function computeLinkDiff(
     linksBefore: DirectedLink[],
     linksAfter: DirectedLink[]
-): import('./topologyMutationObserver').LinkDiff {
+): LinkDiff {
     const beforeIds = new Set(linksBefore.map(l => l.id).filter(Boolean));
     const afterIds = new Set(linksAfter.map(l => l.id).filter(Boolean));
 
@@ -30,8 +35,8 @@ function computeLinkDiff(
     }
 
     // Find updated links (same ID, different content)
-    const beforeMap = new Map(linksBefore.map(l => [l.id, l]).filter(([id]) => id));
-    const afterMap = new Map(linksAfter.map(l => [l.id, l]).filter(([id]) => id));
+    const beforeMap = new Map(linksBefore.map(l => [l.id!, l]).filter(([id]) => id));
+    const afterMap = new Map(linksAfter.map(l => [l.id!, l]).filter(([id]) => id));
 
     for (const [id, afterLink] of afterMap) {
         const beforeLink = beforeMap.get(id);
@@ -42,7 +47,7 @@ function computeLinkDiff(
             beforeLink.kind !== afterLink.kind ||
             beforeLink.rel !== afterLink.rel
         )) {
-            updated.push(id as string);
+            updated.push(id);
         }
     }
 

@@ -60,6 +60,13 @@ Terminology matters. In the graph, we render "Dots", not "Nodes" (though the dat
 *   **Default Stance**: Prioritize standard Web APIs over third-party libraries.
 *   **Heuristic**: "Can this be written robustly in <100 lines?" If yes, own the code.
 
+### TOPOLOGY MUTATION SEAM (NON-NEGOTIABLE)
+*   **Rule**: All topology changes MUST go through `setTopology()` or `patchTopology()` in `src/graph/topologyControl.ts`.
+*   **Springs**: Never set `topology.springs` directly. Springs are derived from directed knowledge links.
+*   **Config**: Always pass a `ForceConfig` (or `DEFAULT_PHYSICS_CONFIG`) when mutating topology so rest-length policy is consistent.
+*   **Direct Mutation Ban**: Do NOT mutate or replace topology data outside the control API (including in dev helpers).
+*   **Fallback Is Not A Contract**: The `getTopology()` fallback derive is a safety net, not a substitute for correct mutation.
+
 ### POINTER CAPTURE BUBBLING (Visual UI)
 *   **Problem**: In `GraphPhysicsPlayground`, the parent container captures the pointer on `pointerdown` for drag handling.
 *   **Risk**: Any UI button (Overlay, Toggle) that sits on top MUST stop propagation of `onPointerDown`.

@@ -9,14 +9,20 @@
 export type NodeId = string;
 
 /**
- * Directed knowledge link between two nodes.
- * This represents semantic relationships (e.g., "A causes B", "A references B").
+ * Directed knowledge link (A→B).
+ * Preserves semantic direction - A→B and B→A are distinct.
+ * 
+ * STEP4-RUN3: Added `id` field for stable addressing.
+ * - Allows parallel edges (multiple A→B with different rel/meta)
+ * - Never uses endpoint sorting for identity
+ * - If missing, generated at load time
  */
 export interface DirectedLink {
+    id?: string;        // STEP4-RUN3: Unique identifier (never sorts endpoints)
     from: NodeId;
     to: NodeId;
-    kind?: string;          // e.g., 'causal', 'reference', 'structural'
-    weight?: number;        // Semantic strength (0-1), optional
+    kind?: string;      // Relationship type (e.g., 'causes', 'supports')
+    weight?: number;    // Semantic strength (0-1), optional
     meta?: Record<string, unknown>; // Extensible metadata
 }
 

@@ -10,6 +10,7 @@ import type { Topology, DirectedLink, NodeSpec } from './topologyTypes';
 import { validateKGSpec } from './kgSpecValidation';
 import { setTopology, getTopology } from './topologyControl';
 import { DEFAULT_PHYSICS_CONFIG } from '../physics/config';
+import { ensureDirectedLinkIds } from './directedLinkId'; // STEP4-RUN4
 // STEP3-RUN5-V4-FIX1: Removed unused recomputeSprings import
 
 /**
@@ -116,6 +117,10 @@ export function setTopologyFromKGSpec(spec: KGSpec, opts: IngestOptions = {}): b
 
     // Convert and load
     const topology = toTopologyFromKGSpec(spec);
+
+    // STEP4-RUN4: Ensure all links have IDs (generate if missing)
+    topology.links = ensureDirectedLinkIds(topology.links);
+    console.log(`[KGLoader] Ensured link IDs: ${topology.links.length} links`);
 
     // STEP3-RUN5-V3-FIX2: Call setTopology ONCE - it recomputes springs internally
     // STEP3-RUN5-V5-FIX1: Pass default config for rest-length policy

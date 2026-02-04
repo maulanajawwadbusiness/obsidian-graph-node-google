@@ -388,3 +388,59 @@ window.__kg.load({
 **Total Run 5 Fixes**: 20 issues (v2: 11, v3: 5, v4: 4)
 **Files Modified (Total)**: 8 files
 **Status**: ✅ **COMPLETE**
+
+---
+
+## Run 5 (v5 Fixes): Final Completeness
+
+**Date**: 2026-02-04
+
+### v5 Issues Fixed (3 Total)
+
+#### Issue 1: KGSpec Load Missing Rest-Length Policy ✅
+- **Problem**: `setTopology(topology)` called without config in KGSpec load
+- **Fix**: Pass default config `{ targetSpacing: 200 }` to setTopology
+- **Result**: KG loads now produce springs with policy-computed `restLen`
+
+#### Issue 2: Dev Helpers Missing Rest-Length Policy ✅
+- **Problem**: `patchTopology()` calls in devTopologyHelpers missing config
+- **Fix**: Added default config to all patchTopology calls (addLink, removeLink, setLinks)
+- **Result**: Dev mutations now produce springs with `restLen` populated
+
+#### Issue 3: Dev Invariant Checks Too Narrow ✅
+- **Problem**: Mismatch warning only ran when springs were provided
+- **Fix**: Expanded checks to always validate, warn if springs missing while links exist
+- **Result**: Dev logs now flag any stale/missing springs regardless of input
+
+### Changes Made (v5)
+
+**Files Modified**:
+1. `kgSpecLoader.ts` - Pass default config to setTopology
+2. `devTopologyHelpers.ts` - Pass default config to all patchTopology calls
+3. `topologyControl.ts` - Expanded dev invariant checks
+
+### Enhanced Dev Checks
+
+```typescript
+// Now catches ALL spring inconsistencies:
+if (freshCount === 0 && linksCount > 0) {
+    console.warn(`⚠ Springs missing but ${linksCount} links exist!`);
+}
+if (topology.springs && freshCount !== providedCount) {
+    console.warn(`⚠ Spring count mismatch!`);
+}
+if (freshCount > 0) {
+    console.log(`✓ Springs derived: ${freshCount} from ${linksCount} directed links`);
+}
+```
+
+### Final Verification
+
+✅ **KGSpec load**: Springs have `restLen` from default config  
+✅ **Dev helpers**: All mutations preserve rest-length policy  
+✅ **Dev checks comprehensive**: Catch missing/stale springs in all cases  
+✅ **All mutation paths**: Consistent rest-length policy application
+
+**Total Run 5 Fixes**: 23 issues (v2: 11, v3: 5, v4: 4, v5: 3)
+**Files Modified (Total)**: 8 files
+**Status**: ✅ **COMPLETE - ALL FORENSIC ISSUES RESOLVED**

@@ -39,12 +39,28 @@ export function setTopology(topology: Topology, config?: any): void {
     currentTopology.springs = deriveSpringEdges(currentTopology, config);
 
     // STEP3-RUN5-V4-FIX3: Dev-only invariant check (moved from recomputeSprings)
-    if (import.meta.env.DEV && topology.springs && topology.springs.length > 0) {
+    // STEP3-RUN5-V5-FIX3: Expanded to catch missing springs even when none provided
+    if (import.meta.env.DEV) {
         const freshCount = currentTopology.springs.length;
-        const providedCount = topology.springs.length;
-        if (freshCount !== providedCount) {
-            console.warn(`[TopologyControl] ⚠ Spring count mismatch! Fresh=${freshCount}, Provided=${providedCount}`);
-            console.warn(`[TopologyControl] Provided springs were stale - replaced with fresh derivation`);
+        const linksCount = currentTopology.links.length;
+
+        // Check if springs were provided and differ from fresh derivation
+        if (topology.springs && topology.springs.length > 0) {
+            const providedCount = topology.springs.length;
+            if (freshCount !== providedCount) {
+                console.warn(`[TopologyControl] ⚠ Spring count mismatch! Fresh=${freshCount}, Provided=${providedCount}`);
+                console.warn(`[TopologyControl] Provided springs were stale - replaced with fresh derivation`);
+            }
+        }
+
+        // Check if springs are missing while links exist
+        if (freshCount === 0 && linksCount > 0) {
+            console.warn(`[TopologyControl] ⚠ Springs missing but ${linksCount} links exist! This should not happen.`);
+        }
+
+        // Log successful derivation
+        if (freshCount > 0) {
+            console.log(`[TopologyControl] ✓ Springs derived: ${freshCount} from ${linksCount} directed links`);
         }
     }
 

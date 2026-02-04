@@ -24,6 +24,7 @@ export const devTopologyHelpers = {
      */
     addLink(fromId: string, toId: string, kind?: string) {
         console.log(`[DevTopology] addLink: ${fromId} → ${toId} (kind: ${kind || 'manual'})`);
+        // STEP3-RUN5-V5-FIX2: Pass default config for rest-length policy
         patchTopology({
             addLinks: [{
                 from: fromId,
@@ -31,7 +32,7 @@ export const devTopologyHelpers = {
                 kind: kind || 'manual',
                 weight: 1.0
             }]
-        });
+        }, { targetSpacing: 200 });
     },
 
     /**
@@ -39,9 +40,10 @@ export const devTopologyHelpers = {
      */
     removeLink(fromId: string, toId: string) {
         console.log(`[DevTopology] removeLink: ${fromId} → ${toId}`);
+        // STEP3-RUN5-V5-FIX2: Pass default config for rest-length policy
         patchTopology({
             removeLinks: [{ from: fromId, to: toId }]
-        });
+        }, { targetSpacing: 200 });
     },
 
     /**
@@ -49,9 +51,10 @@ export const devTopologyHelpers = {
      */
     setLinks(links: DirectedLink[]) {
         console.log(`[DevTopology] setLinks: replacing with ${links.length} links`);
+        // STEP3-RUN5-V5-FIX2: Pass default config for rest-length policy
         patchTopology({
             setLinks: links
-        });
+        }, { targetSpacing: 200 });
     },
 
     /**

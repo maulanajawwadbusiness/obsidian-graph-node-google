@@ -117,7 +117,8 @@ export function setTopologyFromKGSpec(spec: KGSpec, opts: IngestOptions = {}): b
     const topology = toTopologyFromKGSpec(spec);
 
     // STEP3-RUN5-V3-FIX2: Call setTopology ONCE - it recomputes springs internally
-    setTopology(topology);
+    // STEP3-RUN5-V5-FIX1: Pass default config for rest-length policy
+    setTopology(topology, { targetSpacing: 200 });
 
     const finalTopology = getTopology(); // Get the topology with recomputed springs
     console.log(`[KGLoader] ✓ Loaded KGSpec (${spec.specVersion}): ${spec.nodes.length} nodes, ${spec.links.length} links`);

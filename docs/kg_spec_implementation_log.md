@@ -218,3 +218,76 @@ Implement validation rules.
 
 **Files Added**: 1
 **Behavior**: Can now load KGSpec into topology (but not wired to UI yet)
+
+---
+
+## Run 5: Ingestion API (Already Complete in Run 4)
+
+**Note**: Run 5 was already implemented as part of Run 4's `kgSpecLoader.ts`.
+
+### Function: `setTopologyFromKGSpec(spec, opts?)`
+
+**Features**:
+- Validates before mutating (optional, default true)
+- Rejects on errors → no topology change
+- Console warns with error details
+- Returns boolean success/failure
+
+**Options**:
+- `validate?: boolean` - Run validation first (default true)
+- `allowWarnings?: boolean` - Accept spec with warnings (default true)
+
+**Console Output**:
+```
+[KGLoader] Validation failed. Topology NOT updated.
+[KGLoader] Errors (2): ...
+[KGLoader] ✓ Loaded KGSpec (kg/1): 4 nodes, 3 links
+```
+
+**Behavior**: Same as run 4 - ingestion API already working.
+
+---
+
+## Run 6: Dev Console Commands
+
+**Date**: 2026-02-04
+
+### New File: `src/graph/devKGHelpers.ts`
+
+#### Exposed API: `window.__kg` (Dev-Only)
+
+1. **load(spec)** - Load KGSpec object
+2. **loadJson(jsonString)** - Parse and load JSON string
+3. **validate(spec)** - Validate without loading
+4. **dump()** - Export current topology as KGSpec
+5. **loadExample()** - Load EXAMPLE_KG_SPEC
+
+#### Dev Gating
+- Top-of-file guard: `if (!import.meta.env.DEV) throw Error`
+- Runtime gate: `if (import.meta.env.DEV && typeof window)`
+- Dynamic import in GraphPhysicsPlayground.tsx
+
+#### Console Proof
+```javascript
+// In browser console:
+window.__kg.loadExample();
+// → [DevKG] loadExample: loading EXAMPLE_KG_SPEC...
+// → [DevKG] load: attempting to load spec with 4 nodes, 3 links
+// → [KGLoader] ✓ Loaded KGSpec (kg/1): 4 nodes, 3 links
+
+window.__kg.dump();
+// → [DevKG] dump: exporting current topology as KGSpec...
+// → [DevKG] Exported spec: {...}
+
+window.__kg.validate(someSpec);
+// → [DevKG] Validation PASSED ✓
+```
+
+### Integration
+**File**: `GraphPhysicsPlayground.tsx`
+- Added dynamic import: `import('../graph/devKGHelpers')`
+- Guards with `if (import.meta.env.DEV)`
+
+**Files Added**: 1
+**Files Modified**: 1
+**Behavior**: `window.__kg` available in dev mode

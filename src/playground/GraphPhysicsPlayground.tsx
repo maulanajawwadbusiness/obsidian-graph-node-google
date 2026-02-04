@@ -33,6 +33,8 @@ import { springEdgesToPhysicsLinks } from '../graph/springToPhysics';
 // PRE-STEP2: Only import in dev mode to prevent bundling in production
 if (import.meta.env.DEV) {
     import('../graph/devTopologyHelpers');
+    // STEP2-RUN6: Dev console KG helpers (exposes window.__kg)
+    import('../graph/devKGHelpers');
 }
 
 // -----------------------------------------------------------------------------

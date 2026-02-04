@@ -60,4 +60,10 @@ export interface Topology {
  * STEP4-RUN7: Added `contributors` for provenance tracking.
  */
 export interface SpringEdge {
+    a: NodeId;  // Unordered pair (no direction)
+    b: NodeId;
+    restLen: number;
+    stiffness: number;
+    contributors?: string[]; // STEP4-RUN7: IDs of directed links that created this spring
+    meta?: Record<string, unknown>;
 }

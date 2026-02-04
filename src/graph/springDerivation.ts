@@ -63,14 +63,11 @@ export function deriveSpringEdges(topology: Topology, config?: ForceConfig): Spr
                 console.log(`[SpringDerivation] Merged spring {${a}, ${b}}: ${existing.contributors?.length || 0} contributors`);
             }
         } else {
-            // Create new spring
+            // Create new spring (restLen computed later by computeRestLengths)
             const spring: SpringEdge = {
                 a,
                 b,
-                // The original code computes rest lengths later.
-                // This line assumes computeRestLength is defined and used for initial value.
-                // If not, this will cause a compilation error or incorrect behavior.
-                restLen: (link as any).restLen || undefined, // Placeholder, as computeRestLength is not defined in original context
+                restLen: 0, // Placeholder, will be computed by computeRestLengths()
                 stiffness: link.weight || 1.0,
                 contributors: link.id ? [link.id] : [] // STEP4-RUN7: Track first contributor
             };
@@ -80,19 +77,7 @@ export function deriveSpringEdges(topology: Topology, config?: ForceConfig): Spr
 
     const edges = Array.from(edgeMap.values());
 
-    // RUN 9: Apply rest length policy
-    if (config) {
-        const restLengths = computeRestLengths(edges, topology, null, config);
-        for (const edge of edges) {
-            const key = `${edge.a}:${edge.b}`;
-            edge.restLen = restLengths.get(key);
-        }
-    }
-
-    // Console proof
-    const totalDirectedLinks = topology.links.length;
-    const dedupeRate = totalDirectedLinks > 0
-        ? ((1 - edges.length / totalDirectedLinks) * 100).toFixed(1)
+        ?((1 - edges.length / totalDirectedLinks) * 100).toFixed(1)
         : '0.0';
 
     console.log(`[Run9] deriveSpringEdges: ${totalDirectedLinks} directed links → ${edges.length} spring edges (dedupe: ${dedupeRate}%)`);

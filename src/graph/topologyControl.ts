@@ -54,6 +54,20 @@ type LinkValidation = {
     };
 };
 
+export type MutationSource =
+    | 'setTopology'
+    | 'patchTopology'
+    | 'addKnowledgeLink'
+    | 'removeKnowledgeLink'
+    | 'updateKnowledgeLink'
+    | 'clearTopology'
+    | 'kgSpecLoader';
+
+export interface MutationMeta {
+    source?: MutationSource;
+    docId?: string;
+}
+
 function validateLinks(
     links: DirectedLink[],
     nodeIdSet: Set<string>,
@@ -101,17 +115,6 @@ function validateLinks(
         errors,
         counts: { selfLoops, missingEndpoints, duplicateIds }
     };
-}
-
-function logValidationFailure(result: LinkValidation, context: string): void {
-    console.error(`[TopologyControl] ${context} rejected: invalid links`);
-    for (const err of result.errors) {
-        console.error(`  - ${err}`);
-    }
-    const { selfLoops, missingEndpoints, duplicateIds } = result.counts;
-    console.error(
-        `[TopologyControl] ${context} summary: selfLoops=${selfLoops}, missingEndpoints=${missingEndpoints}, duplicateIds=${duplicateIds}`
-    );
 }
 
 function devAssertTopologyInvariants(
@@ -193,7 +196,9 @@ function ensureSprings(reason: string, config?: ForceConfig): void {
  * STEP3-RUN5-V4-FIX2: Accept optional config for rest-length policy.
  * STEP5-RUN4: Reject mutation if link invariants fail.
  */
-export function setTopology(topology: Topology, config?: ForceConfig): void {
+export function setTopology(topology: Topology, config?: ForceConfig, meta?: MutationMeta): void {
+    const mutationSource = meta?.source || 'setTopology';
+    const docId = meta?.docId;
     const linksWithIds = ensureDirectedLinkIds(topology.links);
     const nodeIdSet = new Set(topology.nodes.map(n => n.id));
     const validation = validateLinks(linksWithIds, nodeIdSet, 'setTopology');
@@ -209,12 +214,12 @@ export function setTopology(topology: Topology, config?: ForceConfig): void {
     const springsBefore = currentTopology.springs ? [...currentTopology.springs] : [];
 
     if (!validation.ok) {
-        logValidationFailure(validation, 'setTopology');
-
         // STEP6-RUN3: Emit rejected event
         emitMutationEventSafe({
             status: 'rejected' as const,
-            source: 'setTopology' as const,
+            source: mutationSource,
+            reason: 'validation' as const,
+            docId,
             versionBefore,
             versionAfter: versionBefore,
             countsBefore,
@@ -242,12 +247,6 @@ export function setTopology(topology: Topology, config?: ForceConfig): void {
         springs: currentTopology.springs?.length || 0
     };
 
-    if (import.meta.env.DEV) {
-        console.log(
-            `[TopologyControl] setTopology: ${currentTopology.nodes.length} nodes, ${currentTopology.links.length} links (v${topologyVersion})`
-        );
-    }
-
     const invariantWarnings = devAssertTopologyInvariants(currentTopology, config, 'setTopology');
 
     // STEP6-RUN3: Emit applied event
@@ -255,7 +254,8 @@ export function setTopology(topology: Topology, config?: ForceConfig): void {
     const springDiff = computeSpringDiff(springsBefore, currentTopology.springs);
     emitMutationEventSafe({
         status: 'applied' as const,
-        source: 'setTopology' as const,
+        source: mutationSource,
+        docId,
         versionBefore,
         versionAfter: topologyVersion,
         countsBefore,
@@ -288,6 +288,31 @@ export function getTopologyVersion(): number {
     return topologyVersion;
 }
 
+export function reportTopologyMutationRejection(
+    source: MutationSource,
+    validationErrors: string[],
+    docId?: string
+): void {
+    const versionBefore = topologyVersion;
+    const countsBefore = {
+        nodes: currentTopology.nodes.length,
+        directedLinks: currentTopology.links.length,
+        springs: currentTopology.springs?.length || 0
+    };
+    emitMutationEventSafe({
+        status: 'rejected' as const,
+        source,
+        docId,
+        versionBefore,
+        versionAfter: versionBefore,
+        countsBefore,
+        countsAfter: countsBefore,
+        validationErrors,
+        mutationId: 0,
+        timestamp: 0
+    });
+}
+
 /**
  * Add a knowledge link and return its ID.
  * If link doesn't have an ID, one is generated.
@@ -307,10 +332,10 @@ export function addKnowledgeLink(link: DirectedLink, config?: ForceConfig): stri
     const validation = validateLinks([candidate], nodeIdSet, 'addKnowledgeLink');
 
     if (!validation.ok) {
-        logValidationFailure(validation, 'addKnowledgeLink');
         emitMutationEventSafe({
             status: 'rejected' as const,
             source: 'addKnowledgeLink' as const,
+            reason: 'validation' as const,
             versionBefore,
             versionAfter: versionBefore,
             countsBefore,
@@ -323,14 +348,10 @@ export function addKnowledgeLink(link: DirectedLink, config?: ForceConfig): stri
     }
 
     if (candidate.id && currentTopology.links.some(l => l.id === candidate.id)) {
-        if (import.meta.env.DEV) {
-            console.warn(
-                `[TopologyControl] addKnowledgeLink: duplicate link id ${candidate.id}, rejected`
-            );
-        }
         emitMutationEventSafe({
             status: 'rejected' as const,
             source: 'addKnowledgeLink' as const,
+            reason: 'validation' as const,
             versionBefore,
             versionAfter: versionBefore,
             countsBefore,
@@ -345,12 +366,6 @@ export function addKnowledgeLink(link: DirectedLink, config?: ForceConfig): stri
     currentTopology.links.push(candidate);
     currentTopology.springs = deriveSpringEdges(currentTopology, config || DEFAULT_PHYSICS_CONFIG);
     topologyVersion++;
-
-    if (import.meta.env.DEV) {
-        console.log(
-            `[TopologyControl] addKnowledgeLink: ${candidate.from} -> ${candidate.to} (id: ${candidate.id})`
-        );
-    }
 
     const invariantWarnings = devAssertTopologyInvariants(currentTopology, config, 'addKnowledgeLink');
 
@@ -400,10 +415,6 @@ export function removeKnowledgeLink(linkId: string, config?: ForceConfig): boole
         currentTopology.springs = deriveSpringEdges(currentTopology, config || DEFAULT_PHYSICS_CONFIG);
         topologyVersion++;
 
-        if (import.meta.env.DEV) {
-            console.log(`[TopologyControl] removeKnowledgeLink: removed link ${linkId}`);
-        }
-
         const invariantWarnings = devAssertTopologyInvariants(currentTopology, config, 'removeKnowledgeLink');
 
         const countsAfter = {
@@ -426,11 +437,11 @@ export function removeKnowledgeLink(linkId: string, config?: ForceConfig): boole
             mutationId: 0,
             timestamp: 0
         });
-    } else if (import.meta.env.DEV) {
-        console.warn(`[TopologyControl] removeKnowledgeLink: link ${linkId} not found`);
+    } else {
         emitMutationEventSafe({
             status: 'rejected' as const,
             source: 'removeKnowledgeLink' as const,
+            reason: 'validation' as const,
             versionBefore,
             versionAfter: versionBefore,
             countsBefore,
@@ -464,12 +475,10 @@ export function updateKnowledgeLink(
     const link = currentTopology.links.find(l => l.id === linkId);
 
     if (!link) {
-        if (import.meta.env.DEV) {
-            console.warn(`[TopologyControl] updateKnowledgeLink: link ${linkId} not found`);
-        }
         emitMutationEventSafe({
             status: 'rejected' as const,
             source: 'updateKnowledgeLink' as const,
+            reason: 'validation' as const,
             versionBefore,
             versionAfter: versionBefore,
             countsBefore,
@@ -482,12 +491,10 @@ export function updateKnowledgeLink(
     }
 
     if (patch.id && patch.id !== linkId) {
-        console.warn(
-            `[TopologyControl] updateKnowledgeLink: id is stable; attempted ${linkId} -> ${patch.id}`
-        );
         emitMutationEventSafe({
             status: 'rejected' as const,
             source: 'updateKnowledgeLink' as const,
+            reason: 'validation' as const,
             versionBefore,
             versionAfter: versionBefore,
             countsBefore,
@@ -503,10 +510,10 @@ export function updateKnowledgeLink(
     const nodeIdSet = new Set(currentTopology.nodes.map(n => n.id));
     const validation = validateLinks([nextLink], nodeIdSet, 'updateKnowledgeLink');
     if (!validation.ok) {
-        logValidationFailure(validation, 'updateKnowledgeLink');
         emitMutationEventSafe({
             status: 'rejected' as const,
             source: 'updateKnowledgeLink' as const,
+            reason: 'validation' as const,
             versionBefore,
             versionAfter: versionBefore,
             countsBefore,
@@ -525,10 +532,6 @@ export function updateKnowledgeLink(
     }
 
     topologyVersion++;
-
-    if (import.meta.env.DEV) {
-        console.log(`[TopologyControl] updateKnowledgeLink: updated link ${linkId}`);
-    }
 
     const invariantWarnings = devAssertTopologyInvariants(currentTopology, config, 'updateKnowledgeLink');
 
@@ -583,10 +586,6 @@ export function clearTopology(): void {
     };
     topologyVersion++;
 
-    if (import.meta.env.DEV) {
-        console.log(`[TopologyControl] clearTopology (v${topologyVersion})`);
-    }
-
     const invariantWarnings = devAssertTopologyInvariants(currentTopology, undefined, 'clearTopology');
 
     const countsAfter = {
@@ -631,11 +630,6 @@ export interface TopologyPatch {
  * STEP5-RUN4: Reject entire patch if any invariants fail.
  */
 export function patchTopology(patch: TopologyPatch, config?: ForceConfig): void {
-    const before = {
-        nodes: currentTopology.nodes.length,
-        links: currentTopology.links.length
-    };
-
     // STEP6-RUN4: Capture before state
     const versionBefore = topologyVersion;
     const countsBefore = {
@@ -648,8 +642,6 @@ export function patchTopology(patch: TopologyPatch, config?: ForceConfig): void 
 
     let nextNodes = [...currentTopology.nodes];
     let nextLinks = ensureDirectedLinkIds([...currentTopology.links]);
-    let removedLinkCount = 0;
-    let acceptedLinks = 0;
     let changed = false;
 
     // Remove nodes
@@ -669,9 +661,7 @@ export function patchTopology(patch: TopologyPatch, config?: ForceConfig): void 
     // Remove links by ID
     if (patch.removeLinkIds && patch.removeLinkIds.length > 0) {
         const removeIdSet = new Set(patch.removeLinkIds);
-        const beforeLinks = nextLinks.length;
         nextLinks = nextLinks.filter(l => !l.id || !removeIdSet.has(l.id));
-        removedLinkCount += beforeLinks - nextLinks.length;
         changed = true;
     }
 
@@ -708,9 +698,7 @@ export function patchTopology(patch: TopologyPatch, config?: ForceConfig): void 
                 continue;
             }
 
-            const beforeLinks = nextLinks.length;
             nextLinks = nextLinks.filter(l => l.id !== removeId);
-            removedLinkCount += beforeLinks - nextLinks.length;
             changed = true;
         }
     }
@@ -724,11 +712,22 @@ export function patchTopology(patch: TopologyPatch, config?: ForceConfig): void 
     // Add links
     if (patch.addLinks && patch.addLinks.length > 0) {
         nextLinks.push(...patch.addLinks);
-        acceptedLinks += patch.addLinks.length;
         changed = true;
     }
 
     if (!changed) {
+        emitMutationEventSafe({
+            status: 'rejected' as const,
+            source: 'patchTopology' as const,
+            reason: 'noop' as const,
+            versionBefore,
+            versionAfter: versionBefore,
+            countsBefore,
+            countsAfter: countsBefore,
+            validationErrors: ['patchTopology: no changes'],
+            mutationId: 0,
+            timestamp: 0
+        });
         return;
     }
 
@@ -737,12 +736,11 @@ export function patchTopology(patch: TopologyPatch, config?: ForceConfig): void 
     const validation = validateLinks(nextLinks, nodeIdSet, 'patchTopology');
 
     if (!validation.ok) {
-        logValidationFailure(validation, 'patchTopology');
-
         // STEP6-RUN4: Emit rejected event
         emitMutationEventSafe({
             status: 'rejected' as const,
             source: 'patchTopology' as const,
+            reason: 'validation' as const,
             versionBefore,
             versionAfter: versionBefore,
             countsBefore,
@@ -762,30 +760,12 @@ export function patchTopology(patch: TopologyPatch, config?: ForceConfig): void 
     currentTopology.springs = deriveSpringEdges(currentTopology, config || DEFAULT_PHYSICS_CONFIG);
     topologyVersion++;
 
-    const after = {
-        nodes: currentTopology.nodes.length,
-        links: currentTopology.links.length
-    };
-
     // STEP6-RUN4: Capture after state
     const countsAfter = {
         nodes: currentTopology.nodes.length,
         directedLinks: currentTopology.links.length,
         springs: currentTopology.springs?.length || 0
     };
-
-    const diff = {
-        nodesAdded: patch.addNodes?.length || 0,
-        nodesRemoved: patch.removeNodes?.length || 0,
-        linksAdded: acceptedLinks,
-        linksRemoved: removedLinkCount,
-        linksReplaced: !!patch.setLinks
-    };
-
-    console.log(
-        `[TopologyControl] patchTopology: nodes ${before.nodes}->${after.nodes}, links ${before.links}->${after.links} (v${topologyVersion})`,
-        diff
-    );
 
     const invariantWarnings = devAssertTopologyInvariants(currentTopology, config, 'patchTopology');
 

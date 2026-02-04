@@ -17,6 +17,11 @@ if (!import.meta.env.DEV) {
 export type MutationStatus = 'applied' | 'rejected';
 
 /**
+ * Rejection/noop reason
+ */
+export type MutationReason = 'validation' | 'noop' | 'other';
+
+/**
  * Mutation source/reason
  */
 export type MutationSource =
@@ -70,6 +75,7 @@ export interface TopologyMutationEvent {
     // Status
     status: MutationStatus;
     source: MutationSource;
+    reason?: MutationReason;   // Why rejected/noop (validation/noop/other)
     docId?: string;            // If from KGSpec load
 
     // Version tracking
@@ -102,6 +108,60 @@ const mutationHistory: TopologyMutationEvent[] = [];
 const MAX_HISTORY_SIZE = 200;
 const observers: Set<MutationObserverCallback> = new Set();
 
+function formatDelta(before: number, after: number): string {
+    const delta = after - before;
+    return delta >= 0 ? `+${delta}` : `${delta}`;
+}
+
+function buildSummary(event: TopologyMutationEvent): string {
+    const status = event.status === 'applied' ? 'APPLIED' : 'REJECTED';
+    const version = `${event.versionBefore}->${event.versionAfter}`;
+    const before = event.countsBefore;
+    const after = event.countsAfter;
+    const docTag = event.docId ? ` docId=${event.docId}` : '';
+    const reasonTag = event.reason ? ` reason=${event.reason}` : '';
+    const linkCounts = event.linkDiff
+        ? ` link+${event.linkDiff.addedCount}/-${event.linkDiff.removedCount}/~${event.linkDiff.updatedCount}`
+        : '';
+    const springCounts = event.springDiff
+        ? ` spring+${event.springDiff.addedCount}/-${event.springDiff.removedCount}`
+        : '';
+    const errorCount = event.validationErrors?.length || 0;
+    const warningCount = event.invariantWarnings?.length || 0;
+    const errorsTag = errorCount > 0 ? ` errors=${errorCount}` : '';
+    const warningsTag = warningCount > 0 ? ` warnings=${warningCount}` : '';
+
+    return `[TopologyMutation] #${event.mutationId} ${status} ${event.source}${docTag}${reasonTag} v${version} ` +
+        `N/L/S ${before.nodes}/${before.directedLinks}/${before.springs} -> ${after.nodes}/${after.directedLinks}/${after.springs} ` +
+        `dN=${formatDelta(before.nodes, after.nodes)} dL=${formatDelta(before.directedLinks, after.directedLinks)} dS=${formatDelta(before.springs, after.springs)}` +
+        `${linkCounts}${springCounts}${errorsTag}${warningsTag}`;
+}
+
+function logMutationSummary(event: TopologyMutationEvent): void {
+    const summary = buildSummary(event);
+    console.groupCollapsed(summary);
+    console.log({
+        status: event.status,
+        source: event.source,
+        docId: event.docId,
+        version: `${event.versionBefore}->${event.versionAfter}`,
+        countsBefore: event.countsBefore,
+        countsAfter: event.countsAfter,
+        linkDiffCounts: event.linkDiff ? {
+            added: event.linkDiff.addedCount,
+            removed: event.linkDiff.removedCount,
+            updated: event.linkDiff.updatedCount
+        } : undefined,
+        springDiffCounts: event.springDiff ? {
+            added: event.springDiff.addedCount,
+            removed: event.springDiff.removedCount
+        } : undefined,
+        validationErrors: event.validationErrors?.length || 0,
+        invariantWarnings: event.invariantWarnings?.length || 0
+    });
+    console.groupEnd();
+}
+
 /**
  * Emit a mutation event.
  * Adds to history ring buffer and notifies observers.
@@ -116,6 +176,8 @@ export function emitMutationEvent(event: TopologyMutationEvent): void {
     if (mutationHistory.length > MAX_HISTORY_SIZE) {
         mutationHistory.shift(); // Remove oldest
     }
+
+    logMutationSummary(event);
 
     // Notify observers
     observers.forEach(cb => {

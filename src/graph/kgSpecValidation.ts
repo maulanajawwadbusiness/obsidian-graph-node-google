@@ -7,6 +7,17 @@
 
 import type { KGSpec } from './kgSpec';
 
+const KNOWN_REL_TYPES = new Set([
+    'relates',
+    'causes',
+    'supports',
+    'contradicts',
+    'mitigates',
+    'refutes',
+    'evidence',
+    'references'
+]);
+
 /**
  * Validation result.
  * 
@@ -46,7 +57,6 @@ export interface ValidationResult {
 export function validateKGSpec(spec: KGSpec): ValidationResult {
     const errors: string[] = [];
     const warnings: string[] = [];
-
     // 1. Check specVersion
     if (!spec.specVersion) {
         errors.push('Missing specVersion');
@@ -97,13 +107,15 @@ export function validateKGSpec(spec: KGSpec): ValidationResult {
         }
 
         if (!link.rel) {
-            warnings.push(`Link ${i} (${link.from}→${link.to}): missing rel type`);
+            warnings.push(`Link ${i} (${link.from}->${link.to}): missing rel type`);
+        } else if (!KNOWN_REL_TYPES.has(link.rel)) {
+            warnings.push(`Link ${i} (${link.from}->${link.to}): unknown rel '${link.rel}'`);
         }
 
         // Check self-loops
         if (link.from === link.to) {
             selfLoopCount++;
-            invalidLinks.push(`Link ${i}: self-loop ${link.from}→${link.to}`);
+            invalidLinks.push(`Link ${i}: self-loop ${link.from}->${link.to}`);
             continue;
         }
 
@@ -119,12 +131,12 @@ export function validateKGSpec(spec: KGSpec): ValidationResult {
 
         // Check weight range
         if (link.weight !== undefined && (link.weight < 0 || link.weight > 1)) {
-            warnings.push(`Link ${i} (${link.from}→${link.to}): weight ${link.weight} outside [0,1] range`);
+            warnings.push(`Link ${i} (${link.from}->${link.to}): weight ${link.weight} outside [0,1] range`);
         }
 
         // STEP5-RUN2: Check for NaN/Infinity
         if (link.weight !== undefined && !isFinite(link.weight)) {
-            errors.push(`Link ${i} (${link.from}→${link.to}): weight is NaN or Infinity`);
+            errors.push(`Link ${i} (${link.from}->${link.to}): weight is NaN or Infinity`);
         }
     }
 

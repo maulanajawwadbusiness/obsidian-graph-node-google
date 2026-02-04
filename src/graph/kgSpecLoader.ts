@@ -35,8 +35,8 @@ function kgLinkToDirectedLink(link: KGLink): DirectedLink {
     return {
         from: link.from,
         to: link.to,
-        kind: link.rel || 'related', // STEP3-RUN5-FIX7: Default missing rel to 'related'
-        weight: link.weight || 1.0,
+        kind: link.rel || 'relates', // STEP3-RUN5-FIX7: Default missing rel to 'relates'
+        weight: link.weight ?? 1.0,
         meta: {
             directed: link.directed !== false, // Default true
             ...link.meta
@@ -90,6 +90,7 @@ export interface IngestOptions {
  */
 export function setTopologyFromKGSpec(spec: KGSpec, opts: IngestOptions = {}): boolean {
     const shouldValidate = opts.validate !== false; // Default true
+    const allowWarnings = opts.allowWarnings !== false; // Default true
 
     // STEP5-RUN3: Validation gate
     if (shouldValidate) {
@@ -98,17 +99,23 @@ export function setTopologyFromKGSpec(spec: KGSpec, opts: IngestOptions = {}): b
         // Log validation results
         if (result.errors.length > 0) {
             console.error('[KGLoader] Validation FAILED - spec rejected:');
-            result.errors.forEach(err => console.error(`  ✗ ${err}`));
+            result.errors.forEach(err => console.error(`  - ${err}`));
             if (result.warnings.length > 0) {
                 console.warn('[KGLoader] Warnings (not shown due to errors):');
-                result.warnings.forEach(warn => console.warn(`  ⚠ ${warn}`));
+                result.warnings.forEach(warn => console.warn(`  - ${warn}`));
             }
             return false; // Reject load, do NOT mutate topology
         }
 
         if (result.warnings.length > 0) {
+            if (!allowWarnings) {
+                console.error('[KGLoader] Validation warnings rejected (allowWarnings=false):');
+                result.warnings.forEach(warn => console.error(`  - ${warn}`));
+                return false; // Reject load, do NOT mutate topology
+            }
+
             console.warn('[KGLoader] Validation passed with warnings:');
-            result.warnings.forEach(warn => console.warn(`  ⚠ ${warn}`));
+            result.warnings.forEach(warn => console.warn(`  - ${warn}`));
 
             // Use normalized spec if available
             if (result.normalizedSpec) {
@@ -116,7 +123,7 @@ export function setTopologyFromKGSpec(spec: KGSpec, opts: IngestOptions = {}): b
                 spec = result.normalizedSpec;
             }
         } else {
-            console.log('[KGLoader] Validation passed ✓');
+            console.log('[KGLoader] Validation passed');
         }
     } else {
         console.warn('[KGLoader] Validation SKIPPED (opts.validate=false)');
@@ -135,8 +142,8 @@ export function setTopologyFromKGSpec(spec: KGSpec, opts: IngestOptions = {}): b
 
     console.log('[KGLoader] Topology loaded successfully');
     const finalTopology = getTopology(); // Get the topology with recomputed springs
-    console.log(`[KGLoader] ✓ Loaded KGSpec (${spec.specVersion}): ${spec.nodes.length} nodes, ${spec.links.length} links`);
-    console.log(`[KGLoader] ✓ Springs recomputed: ${finalTopology.springs?.length || 0} springs from directed links`);
+    console.log(`[KGLoader] Loaded KGSpec (${spec.specVersion}): ${spec.nodes.length} nodes, ${spec.links.length} links`);
+    console.log(`[KGLoader] Springs recomputed: ${finalTopology.springs?.length || 0} springs from directed links`);
     if (spec.docId) {
         console.log(`[KGLoader] Source docId: ${spec.docId}`);
     }

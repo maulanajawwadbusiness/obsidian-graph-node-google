@@ -84,11 +84,52 @@ export function deriveSpringEdges(topology: Topology, config?: ForceConfig): Spr
         }
     }
 
+    // STEP5-RUN5: Numeric safety - drop invalid springs
+    const validEdges: SpringEdge[] = [];
+    let droppedNaN = 0;
+    let droppedInvalidRestLen = 0;
+    let droppedInvalidStiffness = 0;
+
+    for (const edge of edges) {
+        // Check for NaN/Infinity
+        if (!isFinite(edge.restLen) || !isFinite(edge.stiffness)) {
+            if (import.meta.env.DEV) {
+                console.warn(`[SpringDerivation] Dropped spring {${edge.a}, ${edge.b}}: NaN/Infinity (restLen=${edge.restLen}, stiffness=${edge.stiffness}, contributors=${edge.contributors?.join(', ')})`);
+            }
+            droppedNaN++;
+            continue;
+        }
+
+        // Check restLen bounds (must be positive)
+        if (edge.restLen <= 0) {
+            if (import.meta.env.DEV) {
+                console.warn(`[SpringDerivation] Dropped spring {${edge.a}, ${edge.b}}: invalid restLen=${edge.restLen} (contributors=${edge.contributors?.join(', ')})`);
+            }
+            droppedInvalidRestLen++;
+            continue;
+        }
+
+        // Check stiffness bounds (must be positive)
+        if (edge.stiffness <= 0) {
+            if (import.meta.env.DEV) {
+                console.warn(`[SpringDerivation] Dropped spring {${edge.a}, ${edge.b}}: invalid stiffness=${edge.stiffness} (contributors=${edge.contributors?.join(', ')})`);
+            }
+            droppedInvalidStiffness++;
+            continue;
+        }
+
+        validEdges.push(edge);
+    }
+
+    if (droppedNaN > 0 || droppedInvalidRestLen > 0 || droppedInvalidStiffness > 0) {
+        console.warn(`[SpringDerivation] Safety: dropped ${droppedNaN} NaN/Infinity, ${droppedInvalidRestLen} invalid restLen, ${droppedInvalidStiffness} invalid stiffness`);
+    }
+
     const dedupeRate = totalDirectedLinks > 0
-        ? ((1 - edges.length / totalDirectedLinks) * 100).toFixed(1)
+        ? ((1 - validEdges.length / totalDirectedLinks) * 100).toFixed(1)
         : '0.0';
 
-    console.log(`[Run9] deriveSpringEdges: ${totalDirectedLinks} directed links -> ${edges.length} spring edges (dedupe: ${dedupeRate}%)`);
+    console.log(`[Run9] deriveSpringEdges: ${totalDirectedLinks} directed links -> ${validEdges.length} spring edges (dedupe: ${dedupeRate}%)`);
 
-    return edges;
+    return validEdges;
 }

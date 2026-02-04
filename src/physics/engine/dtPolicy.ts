@@ -25,7 +25,6 @@ export const DEFAULT_DT_CONFIG: DtPolicyConfig = {
 // We keep this purely functional if possible, but EMA requires state.
 // We'll return a helper class or just valid functions.
 export class TimePolicy {
-    private lastDtMs = 16.666;
     private spikeCounter = 0;
     private quarantineLevel = 0; // 0..1
 

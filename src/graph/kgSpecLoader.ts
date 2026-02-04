@@ -9,7 +9,7 @@ import type { KGSpec } from './kgSpec';
 import type { Topology } from './topologyTypes';
 import { validateKGSpec } from './kgSpecValidation';
 import { getTopology, reportTopologyMutationRejection } from './topologyControl';
-import { ensureDirectedLinkIds } from './directedLinkId'; // STEP4-RUN4
+// import { ensureDirectedLinkIds } from './directedLinkId'; // STEP4-RUN4 - unused
 import { toTopologyFromKGSpec } from './kgSpecToTopology';
 // STEP3-RUN5-V4-FIX1: Removed unused recomputeSprings import
 // STEP7-RUN4: Import provider apply function

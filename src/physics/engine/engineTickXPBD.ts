@@ -327,7 +327,6 @@ const solveXPBDEdgeConstraints = (engine: PhysicsEngineTickContext, dt: number) 
     }
 
     let earlyBreak = false;
-    let prevIterCorrMax = Number.MAX_VALUE;
     let usedIterations = 0;
 
     // Solver Loop (Multi-Iteration)
@@ -451,8 +450,6 @@ const solveXPBDEdgeConstraints = (engine: PhysicsEngineTickContext, dt: number) 
 
         if (iter === 0 && engine.xpbdFrameAccum) engine.xpbdFrameAccum.springs.maxAbsCFirst = iterAbsCMax;
         if (engine.xpbdFrameAccum) engine.xpbdFrameAccum.springs.maxAbsC = iterAbsCMax;
-
-        prevIterCorrMax = iterCorrMax;
     }
 
     if (engine.xpbdFrameAccum) {

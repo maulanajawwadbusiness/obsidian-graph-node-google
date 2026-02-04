@@ -16,7 +16,7 @@ export type FullChatbarMessagesProps = {
     showJumpToLatest: boolean;
     messagesContainerRef: React.RefObject<HTMLDivElement>;
     messagesEndRef: React.RefObject<HTMLDivElement>;
-    onScroll: () => void;
+    onScroll: (e: React.UIEvent<HTMLDivElement>) => void;
     onJumpToLatest: () => void;
     getMessageStyle: (msg: FullChatMessage, prevMsg: FullChatMessage | undefined) => React.CSSProperties;
 };

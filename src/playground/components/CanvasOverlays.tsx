@@ -19,7 +19,7 @@ import type { ForceConfig } from '../../physics/types';
 const stopPropagation = (e: React.MouseEvent) => e.stopPropagation();
 type CanvasOverlaysProps = {
     config?: ForceConfig;
-    onConfigChange?: (key: keyof ForceConfig, value: number | boolean) => void;
+    onConfigChange?: (key: keyof ForceConfig, value: number | boolean | string) => void;
     debugOpen: boolean;
     metrics: PlaygroundMetrics;
     onCloseDebug: () => void;

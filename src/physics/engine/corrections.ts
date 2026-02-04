@@ -205,13 +205,13 @@ export const applyCorrectionsWithDiffusion = (
 
         // Check directional continuity
         let attenuationFactor = 1.0;
-        let signFlip = false;
+        // let signFlip = false;
 
         if (node.lastCorrectionDir) {
             const dot = newDir.x * node.lastCorrectionDir.x + newDir.y * node.lastCorrectionDir.y;
             if (dot < -0.5) { // Significant reversal (>120 deg)
                 attenuationFactor = 0.2;
-                signFlip = true;
+                // signFlip = true;
                 node.corrSignFlip = true;
                 stats.corrSignFlipCount++;
             } else {

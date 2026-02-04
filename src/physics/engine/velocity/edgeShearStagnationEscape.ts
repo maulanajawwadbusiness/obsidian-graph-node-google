@@ -31,7 +31,7 @@ import { getNowMs } from '../engineTime';
  */
 export const applyEdgeShearStagnationEscape = (
     engine: PhysicsEngine,
-    nodeList: PhysicsNode[],
+    _nodeList: PhysicsNode[],
     policy: MotionPolicy,
     stats: DebugStats
 ) => {
@@ -41,7 +41,7 @@ export const applyEdgeShearStagnationEscape = (
     const passStats = getPassStats(stats, 'EdgeShearEscape');
     let unlockedPairs = 0;
 
-    const densityRadius = 30;
+    // const densityRadius = 30; // unused - using engine.localDensityCache instead
     const densityThreshold = 4;
     const restEps = 5.0;      // Edge must be within 5px of rest length
     const velEps = 0.3;       // Relative velocity threshold

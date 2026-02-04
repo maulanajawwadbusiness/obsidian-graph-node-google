@@ -95,7 +95,7 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
 
     const [skinMode, setSkinMode] = useState<SkinMode>('elegant'); // Skin toggle (default: elegant)
     const [cameraLocked, setCameraLocked] = useState(false);
-    const [showPresetHUD, setShowPresetHUD] = useState(false); // Toggle for preset HUD - set to true to show
+    const [showPresetHUD, _setShowPresetHUD] = useState(false); // Toggle for preset HUD - set to true to show
     const [showDebugGrid, setShowDebugGrid] = useState(false);
     const [pixelSnapping, setPixelSnapping] = useState(false);
     const [debugNoRenderMotion, setDebugNoRenderMotion] = useState(false);
@@ -103,7 +103,7 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
     const [showConflictMarkers, setShowConflictMarkers] = useState(false);
     const [forceShowRestMarkers, setForceShowRestMarkers] = useState(false);
     const [markerIntensity, setMarkerIntensity] = useState(1);
-    const [showTestBackend, setShowTestBackend] = useState(false);
+    const [showTestBackend, _setShowTestBackend] = useState(false);
     const [hudScenarioLabel, setHudScenarioLabel] = useState('');
     const [hudDragTargetId, setHudDragTargetId] = useState<string | null>(null);
     const [hudScores, setHudScores] = useState<Record<number, {
@@ -372,7 +372,7 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
     // ---------------------------------------------------------------------------
     // Config Updates
     // ---------------------------------------------------------------------------
-    const handleConfigChange = (key: keyof ForceConfig, value: number | boolean) => {
+    const handleConfigChange = (key: keyof ForceConfig, value: number | boolean | string) => {
         // Run 4: Fix stale closure by using updater
         setConfig(prev => {
             const newConfig = { ...prev, [key]: value };

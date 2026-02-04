@@ -261,7 +261,14 @@ export const integrateNodes = (
 
     // RUN 3: Store magnitude chain stats
     if (!stats.repulsionTruth) {
-        stats.repulsionTruth = {};
+        stats.repulsionTruth = {
+            maxDV: 0,
+            maxDX: 0,
+            dvCount: 0,
+            dxCount: 0,
+            effectiveDamping: 0,
+            maxVelocityEffective: 0,
+        };
     }
     stats.repulsionTruth.maxDV = maxDV;
     stats.repulsionTruth.maxDX = maxDX;

@@ -527,7 +527,7 @@ export class PhysicsEngine {
      * @param dt Delta time in seconds (e.g. 0.016 for 60fps)
      */
     tick(dt: number) {
-        runPhysicsTick(this as PhysicsEngineTickContext, dt);
+        runPhysicsTick(this as unknown as PhysicsEngineTickContext, dt);
     }
 
     public getNodeList(): PhysicsNode[] {

@@ -60,7 +60,7 @@ export function applyRepulsion(
         effectiveStrength *= 2.0; // Boost strength slightly to ensure gap holds
     }
 
-    const { repulsionStrength: _ignore1, repulsionMinDistance: _ignore2, ..._rest } = config; // Flatten for clarity overrides
+    // const { repulsionStrength: _ignore1, repulsionMinDistance: _ignore2, ..._rest } = config; // Flatten for clarity overrides - unused
     // Use effective values below
 
     const maxDistSq = repulsionDistanceMax * repulsionDistanceMax;

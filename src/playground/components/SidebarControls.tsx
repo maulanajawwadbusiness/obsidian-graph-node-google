@@ -6,7 +6,7 @@ import { SIDEBAR_CLOSE_STYLE, SIDEBAR_STYLE } from '../graphPlaygroundStyles';
 type SidebarControlsProps = {
     config: ForceConfig;
     onClose: () => void;
-    onConfigChange: (key: keyof ForceConfig, value: number | boolean) => void;
+    onConfigChange: (key: keyof ForceConfig, value: number | boolean | string) => void;
     onLogPreset: () => void;
     onReset: () => void;
     onSpawn: () => void;

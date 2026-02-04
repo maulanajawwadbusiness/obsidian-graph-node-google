@@ -11,6 +11,8 @@ export type PhysicsEngineInteractionContext = {
     interactionLock: boolean;
     interactionLockReason: string | null;
     lastDraggedNodeId: string | null;
+    lastReleasedNodeId: string | null;
+    lastReleaseFrame: number;
     lastWakeTime: number;
     lastImpulseTime: number;
     hasFiredImpulse: boolean;
@@ -83,7 +85,7 @@ export const updateBounds = (engine: PhysicsEngineInteractionContext, width: num
     wakeAll(engine);
 };
 
-export const grabNode = (engine: PhysicsEngineInteractionContext, nodeId: string, position: { x: number; y: number }) => {
+export const grabNode = (engine: PhysicsEngineInteractionContext, nodeId: string, _position: { x: number; y: number }) => {
     if (engine.nodes.has(nodeId)) {
         engine.draggedNodeId = nodeId;
         engine.lastDraggedNodeId = nodeId;

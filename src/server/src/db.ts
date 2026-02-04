@@ -17,7 +17,7 @@ export async function getPool(): Promise<Pool> {
   // connector will create a secure connection to Cloud SQL
   const clientOpts = await connector.getOptions({
     instanceConnectionName: INSTANCE_CONNECTION_NAME,
-    ipType: "PUBLIC", // we enabled Public IP on the instance, so this works
+    ipType: "PUBLIC" as any, // we enabled Public IP on the instance, so this works
   });
 
   pool = new Pool({

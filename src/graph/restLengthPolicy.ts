@@ -19,10 +19,10 @@ import type { ForceConfig } from '../physics/types';
  * @returns Rest length in pixels
  */
 export function computeRestLen(
-    a: NodeId,
-    b: NodeId,
-    topology: Topology,
-    nodePositions: Map<string, { x: number; y: number }> | null,
+    _a: NodeId,
+    _b: NodeId,
+    _topology: Topology,
+    _nodePositions: Map<string, { x: number; y: number }> | null,
     config: ForceConfig
 ): number {
     // Policy: Use targetSpacing as base rest length

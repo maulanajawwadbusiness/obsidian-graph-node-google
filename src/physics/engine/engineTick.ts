@@ -526,7 +526,7 @@ export const runPhysicsTickLegacy = (engine: PhysicsEngineTickContext, dtIn: num
                 // Integration moves nodes.
                 // PostInteg -> PostConstraints (Should be stable? Constraints don't move nodes, buffer only)
                 // PostCorrect -> Final (Correct moves nodes)
-                const stableInteg = Math.abs(trace.find(t => t.stage === 'PostInteg')!.hash - trace.find(t => t.stage === 'PostMicro')!.hash) < 0.001; // Micro might move? No, Micro uses Force/Velocity mods usually? 
+                // const _stableInteg = Math.abs(trace.find(t => t.stage === 'PostInteg')!.hash - trace.find(t => t.stage === 'PostMicro')!.hash) < 0.001; // Micro might move? No, Micro uses Force/Velocity mods usually? 
                 // Wait, microSlip uses applyDenseCoreVelocityDeLocking -> VELOCITY mod.
                 // But applyLocalPhaseDiffusion? 
 
@@ -704,7 +704,7 @@ export const runPhysicsTickLegacy = (engine: PhysicsEngineTickContext, dtIn: num
                 assertMode(engine, debugStats, 'applyDenseCoreVelocityDeLocking');
                 applyDenseCoreVelocityDeLocking(engine as any, nodeList, motionPolicy, debugStats);
             } else {
-                if (debugStats) debugStats.microSlipDeniedByStartup = (debugStats.microSlipDeniedByStartup || 0) + 1;
+                if (debugStats) debugStats.spawn.microSlipDeniedByStartup = (debugStats.spawn.microSlipDeniedByStartup || 0) + 1;
             }
         }
 
@@ -725,7 +725,7 @@ export const runPhysicsTickLegacy = (engine: PhysicsEngineTickContext, dtIn: num
             assertMode(engine, debugStats, 'applyEdgeShearStagnationEscape');
             applyEdgeShearStagnationEscape(engine as any, nodeList, motionPolicy, debugStats);
         } else {
-            if (debugStats) debugStats.escapeDeniedByStartup = (debugStats.escapeDeniedByStartup || 0) + 1;
+            if (debugStats) debugStats.spawn.escapeDeniedByStartup = (debugStats.spawn.escapeDeniedByStartup || 0) + 1;
         }
 
         // Dense-core inertia relaxation - erases momentum memory in jammed dots

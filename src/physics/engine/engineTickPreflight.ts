@@ -168,7 +168,7 @@ export const runTickPreflight = (
             engine.startupStats.overlapCount0 = overlaps30;
             engine.startupStats.overlapCount100 = overlaps100;
             engine.startupStats.spawnOrderHash = orderHash;
-            engine.startupStats.peakOverlapFirst2s = Math.max(overlaps30, overlaps100);
+            engine.startupStats.peakOverlapFirst2s30 = overlaps30;
         } else if (engine.lifecycle < 2.0 && nodeList.length < 200) {
             // Peak tracking during first 2s
             // Just sample a few pairs or reuse logic? 

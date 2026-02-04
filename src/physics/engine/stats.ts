@@ -60,6 +60,14 @@ export type DebugStats = {
     safety: SafetyStats;
     repulsionProof: RepulsionProofStats; // New bucket
     expansionResistance: ExpansionResistanceStats;
+    repulsionTruth?: {
+        maxDV: number;
+        maxDX: number;
+        dvCount: number;
+        dxCount: number;
+        effectiveDamping: number;
+        maxVelocityEffective: number;
+    };
     dtSkew?: { min: number; max: number };
     correctionConflictCount: number;
     corrSignFlipCount: number; // New: Oscillation Metric

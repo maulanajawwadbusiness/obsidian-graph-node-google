@@ -36,7 +36,7 @@ export const applyLowForceStagnationEscape = (
     const passStats = getPassStats(stats, 'StagnationEscape');
     const affected = new Set<string>();
 
-    const densityRadius = 30;
+    // const densityRadius = 30; // unused - using engine.localDensityCache instead
     const densityThreshold = 4;
     const forceEpsilon = 0.5;  // Low-force threshold
     const driftMagnitude = 0.02 * driftStrength;  // Sub-pixel drift

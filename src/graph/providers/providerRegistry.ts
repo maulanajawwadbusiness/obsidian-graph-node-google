@@ -6,6 +6,7 @@
 
 import type { TopologyProvider, ProviderRegistryEntry } from './providerTypes';
 import { KGSpecProvider } from './KGSpecProvider';
+import { ManualMutationProvider } from './ManualMutationProvider';
 
 /**
  * Global provider registry
@@ -59,6 +60,10 @@ export function initializeDefaultProviders(): void {
         provider: KGSpecProvider,
         schemaVersion: 'kg/1',
         description: 'KGSpec topology provider (deterministic)'
+    });
+    registerProvider({
+        provider: ManualMutationProvider,
+        description: 'Manual mutation provider (addLink/removeLink)'
     });
 }
 

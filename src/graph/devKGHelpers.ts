@@ -217,6 +217,19 @@ export const devKGHelpers = {
     loadExample() {
         console.log('[DevKG] loadExample: loading EXAMPLE_KG_SPEC...');
         return devKGHelpers.load(EXAMPLE_KG_SPEC);
+    },
+
+    /**
+     * STEP7-RUN9: Test provider stability with shuffled input.
+     */
+    testStability() {
+        console.log('[DevKG] testStability: Running stability test...');
+        // Dynamic import to avoid bundling in production
+        import('./providers/stabilityTest').then(mod => {
+            const result = mod.runQuickStabilityTest();
+            console.log(`[DevKG] Stability test ${result.passed ? 'PASSED' : 'FAILED'}`);
+            return result;
+        });
     }
 };
 

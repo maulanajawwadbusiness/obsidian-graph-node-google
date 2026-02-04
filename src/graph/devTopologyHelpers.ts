@@ -140,6 +140,82 @@ export const devTopologyHelpers = {
             }));
             console.table(rows);
         }
+    },
+
+    /**
+     * STEP 8 - RUN 10: Dump physics mapping policy state.
+     * Shows edge type mappings and current spring stats.
+     */
+    physicsPolicyDump() {
+        if (!import.meta.env.DEV) return;
+
+        import('./physicsMappingPolicy').then(mod => {
+            const { DEFAULT_EDGE_TYPE_POLICY, PARAM_CLAMP } = mod;
+
+            console.group('[PhysicsMappingPolicy] Policy Configuration');
+
+            // Dump edge type mappings
+            console.log('Edge Type Mappings:');
+            const mappings = Object.entries(DEFAULT_EDGE_TYPE_POLICY)
+                .filter(([key]) => key !== '*')
+                .map(([type, params]) => ({
+                    Type: type,
+                    Compliance: params.compliance ?? '(global)',
+                    RestPolicy: params.restLengthPolicy || 'inherit',
+                    RestScale: params.restLengthScale ?? '-',
+                    DampingScale: params.dampingScale ?? 1.0
+                }));
+            console.table(mappings);
+
+            // Dump clamp ranges
+            console.log('Parameter Clamp Ranges:');
+            const clamps = [
+                { Param: 'compliance', Min: PARAM_CLAMP.compliance.min, Max: PARAM_CLAMP.compliance.max },
+                { Param: 'dampingScale', Min: PARAM_CLAMP.dampingScale.min, Max: PARAM_CLAMP.dampingScale.max },
+                { Param: 'restLength', Min: PARAM_CLAMP.restLength.min, Max: PARAM_CLAMP.restLength.max },
+                { Param: 'restLengthScale', Min: PARAM_CLAMP.restLengthScale.min, Max: PARAM_CLAMP.restLengthScale.max }
+            ];
+            console.table(clamps);
+
+            // Dump current spring stats
+            const topology = getTopology();
+            if (topology.springs && topology.springs.length > 0) {
+                console.log(`Current Springs: ${topology.springs.length}`);
+
+                const edgeTypeCounts = new Map<string, number>();
+                const stiffnessValues: number[] = [];
+                const restLenValues: number[] = [];
+
+                for (const spring of topology.springs) {
+                    const edgeType = (spring.meta as any)?.edgeType || 'unknown';
+                    edgeTypeCounts.set(edgeType, (edgeTypeCounts.get(edgeType) || 0) + 1);
+                    stiffnessValues.push(spring.stiffness);
+                    restLenValues.push(spring.restLen);
+                }
+
+                console.log('Edge Type Counts:');
+                const typeRows = Array.from(edgeTypeCounts.entries()).map(([type, count]) => ({ Type: type, Count: count }));
+                console.table(typeRows);
+
+                if (stiffnessValues.length > 0) {
+                    const minS = Math.min(...stiffnessValues);
+                    const maxS = Math.max(...stiffnessValues);
+                    const avgS = stiffnessValues.reduce((a, b) => a + b, 0) / stiffnessValues.length;
+                    console.log(`Stiffness: min=${minS.toFixed(2)}, max=${maxS.toFixed(2)}, avg=${avgS.toFixed(2)}`);
+                }
+
+                if (restLenValues.length > 0) {
+                    const minR = Math.min(...restLenValues);
+                    const maxR = Math.max(...restLenValues);
+                    const avgR = restLenValues.reduce((a, b) => a + b, 0) / restLenValues.length;
+                    console.log(`Rest Length: min=${minR.toFixed(1)}px, max=${maxR.toFixed(1)}px, avg=${avgR.toFixed(1)}px`);
+                }
+            } else {
+                console.log('Current Springs: (none)');
+            }
+
+            console.groupEnd();
+        });
     }
 };
 

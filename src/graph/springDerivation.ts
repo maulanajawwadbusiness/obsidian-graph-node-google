@@ -96,12 +96,13 @@ export function deriveSpringEdges(
 
             if (policyParams.compliance !== undefined && policyParams.compliance < existingCompliance) {
                 // New link is stronger, update spring params
-                const newStiffness = policyParams.compliance > 0
-                    ? (1.0 / policyParams.compliance) * (link.weight ?? 1.0)
-                    : 1000;
+                const weight = link.weight ?? 1.0;
+                const clampedWeight = Math.max(0.1, Math.min(1.0, weight));
+                const scaledCompliance = policyParams.compliance / clampedWeight;
 
                 existing.restLen = policyParams.restLength;
-                existing.stiffness = newStiffness;
+                existing.stiffness = clampedWeight; // Legacy mode
+                existing.compliance = scaledCompliance; // XPBD mode
                 existing.meta = {
                     policyParams,
                     edgeType: link.kind || 'relates',
@@ -125,21 +126,25 @@ export function deriveSpringEdges(
                 console.log(`[SpringDerivation] Merged spring {${a}, ${b}}: ${existing.contributors?.length || 0} contributors`);
             }
         } else {
-            // STEP 8 - RUN 5: Use policy params for spring properties
-            // Convert compliance (inverse stiffness) to stiffness
-            const policyStiffness = policyParams.compliance > 0
-                ? 1.0 / policyParams.compliance
-                : 1000; // Cap at very high stiffness for near-zero compliance
+            // STEP 8 - RUN 5/11: Use policy params for spring properties
+            // Store compliance for XPBD mode
+            // Keep old stiffness semantics for legacy mode (link.weight 0-1 range)
 
-            // Scale by link weight if present (semantic confidence)
+            // For XPBD: store compliance, scaled by weight (lower weight = higher compliance = softer)
             const weight = link.weight ?? 1.0;
-            const finalStiffness = policyStiffness * weight;
+            const clampedWeight = Math.max(0.1, Math.min(1.0, weight)); // Clamp to safe range
+            const policyCompliance = policyParams.compliance ?? 0.01; // Default global compliance
+            const scaledCompliance = policyCompliance / clampedWeight; // Scale compliance by weight
+
+            // For legacy: keep old semantics (stiffness = link.weight 0-1)
+            const legacyStiffness = clampedWeight;
 
             const spring: SpringEdge = {
                 a,
                 b,
                 restLen: policyParams.restLength, // Use policy-computed rest length
-                stiffness: finalStiffness, // Use policy-computed stiffness
+                stiffness: legacyStiffness, // Old semantics for legacy mode
+                compliance: scaledCompliance, // New field for XPBD mode
                 contributors: link.id ? [link.id] : [],
                 // STEP 8 - RUN 3: Store policy metadata
                 meta: {

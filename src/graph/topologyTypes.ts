@@ -56,14 +56,16 @@ export interface Topology {
 /**
  * STEP3-RUN2: Undirected physics spring edge.
  * Derived from directed knowledge links via deduplication.
- * 
+ *
  * STEP4-RUN7: Added `contributors` for provenance tracking.
+ * STEP8-RUN11: Added `compliance` field for XPBD (inverse stiffness).
  */
 export interface SpringEdge {
     a: NodeId;  // Unordered pair (no direction)
     b: NodeId;
     restLen: number;
-    stiffness: number;
+    stiffness: number;  // For legacy mode (0-1 range, multiplied by link weight)
+    compliance?: number;  // STEP8-RUN11: For XPBD mode (inverse stiffness, m/N)
     contributors?: string[]; // STEP4-RUN7: IDs of directed links that created this spring
     meta?: Record<string, unknown>;
 }

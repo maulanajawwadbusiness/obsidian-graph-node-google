@@ -18,7 +18,7 @@ export interface AnalysisLink {
     toIndex: number;
     type: string;
     weight: number;
-    rationale?: string;
+    rationale: string;
 }
 
 export interface AnalysisResult {
@@ -98,7 +98,7 @@ Graph constraints:
 Output format:
 - paper_title: short title for the document
 - main_points: array of { index, title, explanation }
-- links: array of { from_index, to_index, type, weight, rationale? }
+- links: array of { from_index, to_index, type, weight, rationale }
 Return valid JSON only.
 
     ${getAiLanguageDirective()}
@@ -143,7 +143,7 @@ Return valid JSON only.
                             weight: { type: "number" },
                             rationale: { type: "string" }
                         },
-                        required: ["from_index", "to_index", "type", "weight"],
+                        required: ["from_index", "to_index", "type", "weight", "rationale"],
                         additionalProperties: false
                     }
                 }
@@ -155,7 +155,7 @@ Return valid JSON only.
         const result = await client.generateStructured<{
             paper_title: string;
             main_points: { index: number; title: string; explanation: string }[];
-            links: { from_index: number; to_index: number; type: string; weight: number; rationale?: string }[];
+            links: { from_index: number; to_index: number; type: string; weight: number; rationale: string }[];
         }>(
             schema,
             prompt,

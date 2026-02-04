@@ -115,15 +115,13 @@ export function setTopologyFromKGSpec(spec: KGSpec, opts: IngestOptions = {}): b
 
     // Convert and load
     const topology = toTopologyFromKGSpec(spec);
+
+    // STEP3-RUN5-V3-FIX2: Call setTopology ONCE - it recomputes springs internally
     setTopology(topology);
 
-    // STEP3-RUN5-FIX11: Recompute springs after KGSpec load
-    // KGSpec contains directed knowledge links; springs must be derived
-    const topologyWithSprings = recomputeSprings(topology);
-    setTopology(topologyWithSprings); // Update with springs
-
+    const finalTopology = getTopology(); // Get the topology with recomputed springs
     console.log(`[KGLoader] ✓ Loaded KGSpec (${spec.specVersion}): ${spec.nodes.length} nodes, ${spec.links.length} links`);
-    console.log(`[KGLoader] ✓ Recomputed ${topologyWithSprings.springs?.length || 0} springs from directed links`);
+    console.log(`[KGLoader] ✓ Springs recomputed: ${finalTopology.springs?.length || 0} springs from directed links`);
     if (spec.docId) {
         console.log(`[KGLoader] Source docId: ${spec.docId}`);
     }

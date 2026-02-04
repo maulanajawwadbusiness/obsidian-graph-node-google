@@ -23,7 +23,7 @@ import { PopupPortal } from '../popup/PopupPortal';
 import { RotationCompass } from './components/RotationCompass';
 import { FullChatProvider, FullChatbar, FullChatToggle, useFullChat } from '../fullchat';
 // RUN 4: Topology API imports
-import { setTopology, getTopologyVersion } from '../graph/topologyControl';
+import { setTopology, getTopologyVersion, getTopology } from '../graph/topologyControl'; // STEP3-RUN5-V3-FIX3: Added getTopology
 import { legacyToTopology } from '../graph/topologyAdapter';
 // RUN 5: Spring derivation import
 import { deriveSpringEdges } from '../graph/springDerivation';
@@ -446,37 +446,43 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
 
         // RUN 4: Convert to Topology and use API
         const topology = legacyToTopology(nodes, links);
-        const beforeVersion = getTopologyVersion();
-        setTopology(topology);
-        const afterVersion = getTopologyVersion();
-
-        // RUN 7: Version change detection
-        console.log(`[Run7] Topology version: ${beforeVersion} → ${afterVersion} (changed: ${beforeVersion !== afterVersion})`)
-
-            ;
 
         // Console proof
         console.log(`[Run4] Topology set: ${topology.nodes.length} nodes, ${topology.links.length} directed links`);
         console.log(`[Run4] Sample links (first 5):`, topology.links.slice(0, 5));
 
-        // STEP3-RUN3: Recompute undirected springs from directed knowledge links
-        const topologyWithSprings = recomputeSprings(topology, config);
-        setTopology(topologyWithSprings); // Update with springs
-        console.log(`[STEP3-RUN3] Springs recomputed: ${topologyWithSprings.springs?.length || 0} undirected springs from ${topology.links.length} directed links`);
+        // STEP3-RUN5-V3-FIX3: Call setTopology ONCE - it recomputes springs internally
+        const beforeVersion = getTopologyVersion();
+        setTopology(topology);
+        const afterVersion = getTopologyVersion();
+        console.log(`[Run7] Topology version: ${beforeVersion} → ${afterVersion} (changed: ${beforeVersion !== afterVersion})`);
 
-        // RUN 5: Test spring edge derivation
-        // RUN 9: Now passing config for rest length policy
+        // Get final topology with springs
+        const finalTopology = getTopology();
+        console.log(`[STEP3-RUN3] Springs recomputed internally: ${finalTopology.springs?.length || 0} undirected springs from ${topology.links.length} directed links`);
+
+        // RUN 5: Test spring edge derivation (legacy check)
         const springEdges = deriveSpringEdges(topology, config);
         console.log(`[Run5] Spring edges derived: ${springEdges.length}`);
         console.log(`[Run5] Sample spring edges (first 3):`, springEdges.slice(0, 3));
 
-        // STEP3-RUN4: Engine now consumes topology.springs (undirected physics)
-        const physicsLinks = springEdgesToPhysicsLinks(topologyWithSprings.springs || []);
+        // STEP3-RUN5-V3-FIX5: Fallback-derive for XPBD if springs missing
+        let physicsLinks: any[] = [];
+        if (!finalTopology.springs || finalTopology.springs.length === 0) {
+            if (finalTopology.links.length > 0) {
+                console.warn(`[STEP3-FIX5] ⚠ Springs missing but links exist! Fallback-deriving for XPBD...`);
+                const fallbackSprings = deriveSpringEdges(finalTopology, config);
+                physicsLinks = springEdgesToPhysicsLinks(fallbackSprings);
+            }
+        } else {
+            physicsLinks = springEdgesToPhysicsLinks(finalTopology.springs);
+        }
+
         console.log(`[Run6] Engine wiring: ${nodes.length} nodes, ${physicsLinks.length} physics links`);
         console.log(`[STEP3-RUN4] XPBD consuming ${physicsLinks.length} springs (not ${topology.links.length} directed links)`);
 
         nodes.forEach(n => engine.addNode(n));
-        physicsLinks.forEach(l => engine.addLink(l)); // Now using derived links, not raw generator output
+        physicsLinks.forEach(l => engine.addLink(l));
         engine.resetLifecycle();
     };
 

@@ -57,6 +57,14 @@ export interface ValidationResult {
 export function validateKGSpec(spec: KGSpec): ValidationResult {
     const errors: string[] = [];
     const warnings: string[] = [];
+    let needsNormalization = false;
+    let trimmedNodeIdCount = 0;
+    const trimmedNodeIdSamples: string[] = [];
+    let trimmedLinkEndpointCount = 0;
+    const trimmedLinkEndpointSamples: string[] = [];
+    let trimmedRelCount = 0;
+    const trimmedRelSamples: string[] = [];
+
     // 1. Check specVersion
     if (!spec.specVersion) {
         errors.push('Missing specVersion');
@@ -70,14 +78,27 @@ export function validateKGSpec(spec: KGSpec): ValidationResult {
         return { ok: false, errors, warnings }; // Cannot continue validation
     }
 
-    // 3. Check for missing node IDs
-    const nodesWithoutId = spec.nodes.filter(n => !n.id || typeof n.id !== 'string');
+    // 3. Normalize node IDs (trim) and check for missing/invalid
+    const normalizedNodes = spec.nodes.map(node => {
+        const rawId = node.id;
+        const trimmedId = typeof rawId === 'string' ? rawId.trim() : rawId;
+        if (typeof rawId === 'string' && rawId !== trimmedId) {
+            needsNormalization = true;
+            trimmedNodeIdCount++;
+            if (trimmedNodeIdSamples.length < 2) {
+                trimmedNodeIdSamples.push(`${rawId} -> ${trimmedId}`);
+            }
+        }
+        return { ...node, id: trimmedId as any };
+    });
+
+    const nodesWithoutId = normalizedNodes.filter(n => !n.id || typeof n.id !== 'string');
     if (nodesWithoutId.length > 0) {
         errors.push(`${nodesWithoutId.length} node(s) missing or invalid id`);
     }
 
     // 4. Check for duplicate node IDs
-    const nodeIds = spec.nodes.map(n => n.id).filter(Boolean);
+    const nodeIds = normalizedNodes.map(n => n.id).filter(Boolean);
     const duplicates = nodeIds.filter((id, index) => nodeIds.indexOf(id) !== index);
     if (duplicates.length > 0) {
         errors.push(`Duplicate node IDs: ${[...new Set(duplicates)].join(', ')}`);
@@ -99,44 +120,75 @@ export function validateKGSpec(spec: KGSpec): ValidationResult {
 
     for (let i = 0; i < spec.links.length; i++) {
         const link = spec.links[i];
+        const rawFrom = link.from;
+        const rawTo = link.to;
+        const rawRel = link.rel;
+
+        const trimmedFrom = typeof rawFrom === 'string' ? rawFrom.trim() : rawFrom;
+        const trimmedTo = typeof rawTo === 'string' ? rawTo.trim() : rawTo;
+        const trimmedRel = typeof rawRel === 'string' ? rawRel.trim() : rawRel;
+
+        if (typeof rawFrom === 'string' && rawFrom !== trimmedFrom) {
+            needsNormalization = true;
+            trimmedLinkEndpointCount++;
+            if (trimmedLinkEndpointSamples.length < 2) {
+                trimmedLinkEndpointSamples.push(`from:${rawFrom} -> ${trimmedFrom}`);
+            }
+        }
+
+        if (typeof rawTo === 'string' && rawTo !== trimmedTo) {
+            needsNormalization = true;
+            trimmedLinkEndpointCount++;
+            if (trimmedLinkEndpointSamples.length < 2) {
+                trimmedLinkEndpointSamples.push(`to:${rawTo} -> ${trimmedTo}`);
+            }
+        }
+
+        if (typeof rawRel === 'string' && rawRel !== trimmedRel) {
+            needsNormalization = true;
+            trimmedRelCount++;
+            if (trimmedRelSamples.length < 2) {
+                trimmedRelSamples.push(`${rawRel} -> ${trimmedRel}`);
+            }
+        }
 
         // Check required fields
-        if (!link.from || !link.to) {
+        if (!trimmedFrom || !trimmedTo) {
             invalidLinks.push(`Link ${i}: missing from/to`);
             continue;
         }
 
-        if (!link.rel) {
-            warnings.push(`Link ${i} (${link.from}->${link.to}): missing rel type`);
-        } else if (!KNOWN_REL_TYPES.has(link.rel)) {
-            warnings.push(`Link ${i} (${link.from}->${link.to}): unknown rel '${link.rel}'`);
+        if (!trimmedRel) {
+            warnings.push(`Link ${i} (${trimmedFrom}->${trimmedTo}): missing rel type`);
+        } else if (!KNOWN_REL_TYPES.has(trimmedRel)) {
+            warnings.push(`Link ${i} (${trimmedFrom}->${trimmedTo}): unknown rel '${trimmedRel}'`);
         }
 
         // Check self-loops
-        if (link.from === link.to) {
+        if (trimmedFrom === trimmedTo) {
             selfLoopCount++;
-            invalidLinks.push(`Link ${i}: self-loop ${link.from}->${link.to}`);
+            invalidLinks.push(`Link ${i}: self-loop ${trimmedFrom}->${trimmedTo}`);
             continue;
         }
 
         // Check missing endpoints
-        if (!nodeIdSet.has(link.from) || !nodeIdSet.has(link.to)) {
+        if (!nodeIdSet.has(trimmedFrom) || !nodeIdSet.has(trimmedTo)) {
             missingEndpointCount++;
             const missing = [];
-            if (!nodeIdSet.has(link.from)) missing.push(`from=${link.from}`);
-            if (!nodeIdSet.has(link.to)) missing.push(`to=${link.to}`);
+            if (!nodeIdSet.has(trimmedFrom)) missing.push(`from=${trimmedFrom}`);
+            if (!nodeIdSet.has(trimmedTo)) missing.push(`to=${trimmedTo}`);
             invalidLinks.push(`Link ${i}: missing endpoints (${missing.join(', ')})`);
             continue;
         }
 
         // Check weight range
         if (link.weight !== undefined && (link.weight < 0 || link.weight > 1)) {
-            warnings.push(`Link ${i} (${link.from}->${link.to}): weight ${link.weight} outside [0,1] range`);
+            warnings.push(`Link ${i} (${trimmedFrom}->${trimmedTo}): weight ${link.weight} outside [0,1] range`);
         }
 
         // STEP5-RUN2: Check for NaN/Infinity
         if (link.weight !== undefined && !isFinite(link.weight)) {
-            errors.push(`Link ${i} (${link.from}->${link.to}): weight is NaN or Infinity`);
+            errors.push(`Link ${i} (${trimmedFrom}->${trimmedTo}): weight is NaN or Infinity`);
         }
     }
 
@@ -164,17 +216,39 @@ export function validateKGSpec(spec: KGSpec): ValidationResult {
 
     // STEP5-RUN2: Create normalized spec if warnings exist
     let normalizedSpec: KGSpec | undefined;
-    if (warnings.length > 0 && errors.length === 0) {
+    if ((warnings.length > 0 || needsNormalization) && errors.length === 0) {
+        if (trimmedNodeIdCount > 0) {
+            warnings.push(
+                `Trimmed ${trimmedNodeIdCount} node id(s) (e.g., ${trimmedNodeIdSamples.join(', ')})`
+            );
+        }
+        if (trimmedLinkEndpointCount > 0) {
+            warnings.push(
+                `Trimmed ${trimmedLinkEndpointCount} link endpoint(s) (e.g., ${trimmedLinkEndpointSamples.join(', ')})`
+            );
+        }
+        if (trimmedRelCount > 0) {
+            warnings.push(
+                `Trimmed ${trimmedRelCount} rel value(s) (e.g., ${trimmedRelSamples.join(', ')})`
+            );
+        }
+
         normalizedSpec = {
             ...spec,
+            nodes: normalizedNodes.map(node => ({
+                ...node,
+                id: typeof node.id === 'string' ? node.id.trim() : node.id
+            })),
             links: spec.links.map(link => ({
                 ...link,
+                from: typeof link.from === 'string' ? link.from.trim() : link.from,
+                to: typeof link.to === 'string' ? link.to.trim() : link.to,
                 // Clamp weight to [0, 1]
                 weight: link.weight !== undefined
                     ? Math.max(0, Math.min(1, link.weight))
                     : link.weight,
                 // Default rel to 'relates'
-                rel: link.rel || 'relates'
+                rel: (typeof link.rel === 'string' ? link.rel.trim() : link.rel) || 'relates'
             }))
         };
     }

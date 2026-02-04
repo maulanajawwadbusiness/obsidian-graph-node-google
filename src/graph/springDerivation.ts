@@ -67,7 +67,7 @@ export function deriveSpringEdges(topology: Topology, config?: ForceConfig): Spr
                 a,
                 b,
                 restLen: 0,
-                stiffness: link.weight || 1.0,
+                stiffness: link.weight ?? 1.0,
                 contributors: link.id ? [link.id] : []
             };
             edgeMap.set(key, spring);

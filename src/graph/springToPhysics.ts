@@ -16,10 +16,10 @@ export function springEdgeToPhysicsLink(edge: SpringEdge): PhysicsLink {
         source: edge.a,
         target: edge.b,
         length: edge.restLen, // Use policy-computed rest length
-        strength: edge.strength,
+        strength: edge.stiffness,
         // Preserve metadata for traceability
         lengthBias: 1.0,
-        stiffnessBias: edge.strength || 1.0
+        stiffnessBias: edge.stiffness ?? 1.0
     };
 }
 

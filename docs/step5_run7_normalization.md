@@ -8,38 +8,39 @@ Define canonical normalization rules that are deterministic and stable across ru
 ## Normalization Rules
 
 ### Rule 1: Weight Clamping
-**Input**: `weight` outside [0, 1]  
-**Action**: Clamp to [0, 1]  
-**Location**: `kgSpecValidation.ts` - already implemented in Run 2
+**Input**: `weight` outside [0, 1]
+**Action**: Clamp to [0, 1]
+**Location**: `kgSpecValidation.ts`
 
 ```typescript
-weight: link.weight !== undefined 
+weight: link.weight !== undefined
     ? Math.max(0, Math.min(1, link.weight))
     : link.weight
 ```
 
 ### Rule 2: Default Rel
-**Input**: Missing `rel` field  
-**Action**: Default to `'relates'`  
-**Location**: `kgSpecValidation.ts` - already implemented in Run 2
+**Input**: Missing `rel` field
+**Action**: Default to `'relates'`
+**Location**: `kgSpecValidation.ts`
 
 ```typescript
 rel: link.rel || 'relates'
 ```
 
 ### Rule 3: String Trimming
-**Input**: Node IDs, link endpoints with whitespace  
-**Action**: Trim whitespace  
-**Location**: Add to `kgSpecValidation.ts`
+**Input**: Node IDs, link endpoints, rel with whitespace
+**Action**: Trim whitespace
+**Location**: `kgSpecValidation.ts`
 
 ### Rule 4: Weight Defaults
-**Input**: Missing `weight` field  
-**Action**: Default to `1.0`  
-**Location**: `kgSpecLoader.ts` - already uses `?? 1.0`
+**Input**: Missing `weight` field
+**Action**: Default to `1.0`
+**Location**: `kgSpecLoader.ts`
 
 ## Implementation
 
-Most normalization already exists. Need to add string trimming.
+All normalization rules are implemented in `kgSpecValidation.ts`. Trimming emits warnings
+and returns a normalized spec with trimmed ids/endpoints/rel.
 
 ## Console Proof
 
@@ -64,8 +65,8 @@ window.__kg.load(spec1);
 
 ## Verification
 
-✅ Same input always produces same normalized output  
-✅ Normalization is idempotent (normalizing twice = normalizing once)  
-✅ No random values or timestamps in normalization
+[OK] Same input always produces same normalized output
+[OK] Normalization is idempotent (normalizing twice = normalizing once)
+[OK] No random values or timestamps in normalization
 
-**Status**: COMPLETE (normalization already implemented in runs 1-3)
+**Status**: COMPLETE

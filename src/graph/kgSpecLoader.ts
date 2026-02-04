@@ -9,7 +9,7 @@ import type { KGSpec, KGNode, KGLink } from './kgSpec';
 import type { Topology, DirectedLink, NodeSpec } from './topologyTypes';
 import { validateKGSpec } from './kgSpecValidation';
 import { setTopology, getTopology } from './topologyControl';
-import { recomputeSprings } from './topologySpringRecompute'; // STEP3-RUN5-FIX11
+// STEP3-RUN5-V4-FIX1: Removed unused recomputeSprings import
 
 /**
  * Convert KGNode to NodeSpec.

@@ -29,8 +29,7 @@ import { legacyToTopology } from '../graph/topologyAdapter';
 import { deriveSpringEdges } from '../graph/springDerivation';
 // RUN 6: Spring-to-physics converter import
 import { springEdgesToPhysicsLinks } from '../graph/springToPhysics';
-// STEP3-RUN3: Spring recomputation helper
-import { recomputeSprings } from '../graph/topologySpringRecompute';
+// STEP3-RUN5-V4-FIX1: Removed unused recomputeSprings import
 // RUN 8: Dev console helpers (exposes window.__topology)
 // PRE-STEP2: Only import in dev mode to prevent bundling in production
 if (import.meta.env.DEV) {
@@ -452,8 +451,9 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
         console.log(`[Run4] Sample links (first 5):`, topology.links.slice(0, 5));
 
         // STEP3-RUN5-V3-FIX3: Call setTopology ONCE - it recomputes springs internally
+        // STEP3-RUN5-V4-FIX2: Pass config for rest-length policy
         const beforeVersion = getTopologyVersion();
-        setTopology(topology);
+        setTopology(topology, config);
         const afterVersion = getTopologyVersion();
         console.log(`[Run7] Topology version: ${beforeVersion} → ${afterVersion} (changed: ${beforeVersion !== afterVersion})`);
 

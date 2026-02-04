@@ -24,9 +24,10 @@ let topologyVersion = 0;
  * Creates a defensive copy to prevent external mutation.
  * 
  * STEP3-RUN5-V3-FIX1: Recompute springs internally within setTopology.
+ * STEP3-RUN5-V4-FIX2: Accept optional config for rest-length policy.
  * This is the single authoritative seam for topology changes.
  */
-export function setTopology(topology: Topology): void {
+export function setTopology(topology: Topology, config?: any): void {
     currentTopology = {
         nodes: [...topology.nodes],
         links: [...topology.links],
@@ -34,7 +35,18 @@ export function setTopology(topology: Topology): void {
     };
 
     // STEP3-RUN5-V3-FIX1: Always recompute springs from links
-    currentTopology.springs = deriveSpringEdges(currentTopology);
+    // STEP3-RUN5-V4-FIX2: Pass config for rest-length policy
+    currentTopology.springs = deriveSpringEdges(currentTopology, config);
+
+    // STEP3-RUN5-V4-FIX3: Dev-only invariant check (moved from recomputeSprings)
+    if (import.meta.env.DEV && topology.springs && topology.springs.length > 0) {
+        const freshCount = currentTopology.springs.length;
+        const providedCount = topology.springs.length;
+        if (freshCount !== providedCount) {
+            console.warn(`[TopologyControl] ⚠ Spring count mismatch! Fresh=${freshCount}, Provided=${providedCount}`);
+            console.warn(`[TopologyControl] Provided springs were stale - replaced with fresh derivation`);
+        }
+    }
 
     topologyVersion++;
     console.log(`[TopologyControl] setTopology: ${currentTopology.nodes.length} nodes, ${currentTopology.links.length} links, ${currentTopology.springs?.length || 0} springs (v${topologyVersion})`);
@@ -85,10 +97,12 @@ export interface TopologyPatch {
 }
 
 /**
- * Apply an incremental patch to the topology.
+ * Apply a patch to the current topology.
  * More efficient than setTopology for small changes.
+ * 
+ * STEP3-RUN5-V4-FIX2: Accept optional config for rest-length policy.
  */
-export function patchTopology(patch: TopologyPatch): void {
+export function patchTopology(patch: TopologyPatch, config?: any): void {
     const before = {
         nodes: currentTopology.nodes.length,
         links: currentTopology.links.length
@@ -189,9 +203,9 @@ export function patchTopology(patch: TopologyPatch): void {
     };
 
     // STEP3-RUN5-V3-FIX4: Recompute springs after node/link mutations
-    // (not just clear - must actually recompute)
+    // STEP3-RUN5-V4-FIX2: Pass config for rest-length policy
     if (diff.nodesRemoved > 0 || diff.linksAdded > 0 || diff.linksRemoved > 0 || diff.linksReplaced) {
-        currentTopology.springs = deriveSpringEdges(currentTopology);
+        currentTopology.springs = deriveSpringEdges(currentTopology, config);
         if (import.meta.env.DEV) {
             console.log(`[TopologyControl] Springs recomputed after patch: ${currentTopology.springs.length} springs`);
         }

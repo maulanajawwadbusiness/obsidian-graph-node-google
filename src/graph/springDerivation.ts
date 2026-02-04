@@ -18,6 +18,10 @@ import { DefaultPhysicsMappingPolicy } from './physicsMappingPolicy';
  * - Every directed link produces one undirected spring edge
  * - De-duplicate: A->B and B->A become one spring (min,max canonical key)
  * - Spring edge stores reference to source DirectedLink IDs for traceability
+ * - STEP 8 - RUN 9: Parallel links (multiple links between same node pair) resolve deterministically:
+ *   - "Strongest wins": lowest compliance (highest stiffness) dominates
+ *   - All link IDs collected in contributors for traceability
+ *   - All edge types tracked in meta.allEdgeTypes
  *
  * RUN 9: Now applies rest length policy to each spring edge.
  * STEP 8 - RUN 3: Added physics mapping policy (optional, defaults to baseline behavior).
@@ -84,6 +88,34 @@ export function deriveSpringEdges(
         // De-duplicate
         const existing = edgeMap.get(key);
         if (existing) {
+            // STEP 8 - RUN 9: Deterministic parallel link resolution
+            // Rule: "Strongest wins" - use lowest compliance (highest stiffness)
+            const existingParams = existing.meta?.policyParams as any;
+            const existingCompliance = existingParams?.compliance ?? 0.01;
+            const newCompliance = policyParams.compliance ?? 0.01;
+
+            if (policyParams.compliance !== undefined && policyParams.compliance < existingCompliance) {
+                // New link is stronger, update spring params
+                const newStiffness = policyParams.compliance > 0
+                    ? (1.0 / policyParams.compliance) * (link.weight ?? 1.0)
+                    : 1000;
+
+                existing.restLen = policyParams.restLength;
+                existing.stiffness = newStiffness;
+                existing.meta = {
+                    policyParams,
+                    edgeType: link.kind || 'relates',
+                    dampingScale: policyParams.dampingScale,
+                    // Keep track of all edge types for forensics
+                    allEdgeTypes: [...(existing.meta?.allEdgeTypes as string[] || [existing.meta?.edgeType as string]), link.kind || 'relates']
+                };
+
+                if (import.meta.env.DEV && !opts?.silent) {
+                    console.log(`[SpringDerivation] Parallel link {${a}, ${b}}: stronger type '${link.kind}' (compliance ${newCompliance} < ${existingCompliance})`);
+                }
+            }
+
+            // Always add to contributors
             if (!existing.contributors) existing.contributors = [];
             if (link.id) {
                 existing.contributors.push(link.id);
@@ -113,7 +145,8 @@ export function deriveSpringEdges(
                 meta: {
                     policyParams,
                     edgeType: link.kind || 'relates',
-                    dampingScale: policyParams.dampingScale
+                    dampingScale: policyParams.dampingScale,
+                    allEdgeTypes: [link.kind || 'relates'] // Track all edge types for parallel links
                 }
             };
             edgeMap.set(key, spring);

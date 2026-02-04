@@ -4,7 +4,10 @@
 **Arnvoid** is a conversational graph interface designed for deep reasoning over complex knowledgebases. It acts as a "thinking partner" that lives inside the user's obsidian graph, providing context-aware synthesis and exploration.
 
 The core flow is the **Paper Essence Pipeline**:
-`Document (PDF/MD/TXT) -> AI Paper Analyzer -> 5 Key Nodes + Node Knowledge (Title/Summary) -> Interactive Graph -> Contextual Chat`.
+`Document (PDF/MD/TXT) -> AI Paper Analyzer -> Key Dots + Directed Links + Node Knowledge -> Interactive Graph -> Contextual Chat`.
+
+## 1.1 ASCII Only
+Use pure ASCII characters in code, comments, logs, and documentation. Avoid Unicode arrows, ellipses, and typographic dashes to prevent mojibake.
 
 ## 2. UI Surface Map & Ownership
 
@@ -147,6 +150,13 @@ Arnvoid uses a unified AI layer (`src/ai/`) that abstracts provider details behi
 *   **Behavior Doctrine**:
     *   **Fake Streaming**: Client-side character ticking (15ms) used where backend streaming is unavailable.
     *   **Abort Model**: Every AI loop uses an `AbortController`.
+
+### C. Paper Analyzer Output (Directed Map)
+*   **Prompt + Schema**: `src/ai/paperAnalyzer.ts` now requires both points and directed links.
+*   **Output Fields**:
+    *   `main_points`: indexed points (0..N-1), each with title and explanation.
+    *   `links`: directed edges using `from_index` and `to_index`.
+*   **Wiring**: `src/document/nodeBinding.ts` maps indices to live dot IDs, calls `setTopology(...)`, then rebuilds physics links from derived springs.
 
 ## 6. Context Doctrine
 Intelligence is relative to context. We maintain three levels:

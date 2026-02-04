@@ -5,6 +5,10 @@
 
 import type { PhysicsEngine } from '../physics/engine';
 import type { ParsedDocument } from './types';
+import { setTopology, getTopology } from '../graph/topologyControl';
+import { deriveSpringEdges } from '../graph/springDerivation';
+import { springEdgesToPhysicsLinks } from '../graph/springToPhysics';
+import type { DirectedLink } from '../graph/topologyTypes';
 
 
 export function applyFirstWordsToNodes(
@@ -48,8 +52,17 @@ export async function applyAnalysisToNodes(
   setAIActivity(true);
 
   try {
+    const orderedNodes = Array.from(engine.nodes.values())
+      .sort((a, b) => a.id.localeCompare(b.id));
+    const nodeCount = orderedNodes.length;
+
+    if (nodeCount === 0) {
+      console.warn('[AI] No nodes available for analysis binding');
+      return;
+    }
+
     // Call AI Analyzer
-    const { points } = await analyzeDocument(documentText);
+    const { points, links, paperTitle } = await analyzeDocument(documentText, { nodeCount });
 
     // Gate check
     const currentDocId = getCurrentDocId();
@@ -60,32 +73,84 @@ export async function applyAnalysisToNodes(
       return;
     }
 
-    // Apply points to nodes
-    const nodes = Array.from(engine.nodes.values()).slice(0, 5);
-    nodes.forEach((node, i) => {
-      const point = points[i];
-      if (point) {
-        // Update Label
-        node.label = point.title;
+    const pointByIndex = new Map(points.map(p => [p.index, p]));
+    const indexToNodeId = new Map<number, string>();
 
-        // Update Meta (Popup Knowledge)
+    // Apply points to nodes (by stable index)
+    orderedNodes.forEach((node, i) => {
+      indexToNodeId.set(i, node.id);
+      const point = pointByIndex.get(i);
+      if (point) {
+        node.label = point.title;
         node.meta = {
           docId: documentId,
           sourceTitle: point.title,
           sourceSummary: point.summary
         };
-
         console.log(`[AI] Node ${i}: "${point.title}"`);
       }
     });
 
+    // Build directed links from AI output
+    const directedLinks: DirectedLink[] = [];
+    let invalidLinkCount = 0;
+    for (const link of links) {
+      const fromId = indexToNodeId.get(link.fromIndex);
+      const toId = indexToNodeId.get(link.toIndex);
+      if (!fromId || !toId || fromId === toId) {
+        invalidLinkCount += 1;
+        continue;
+      }
+      const weight = Number.isFinite(link.weight)
+        ? Math.max(0.05, Math.min(2.0, link.weight))
+        : 1.0;
+      directedLinks.push({
+        from: fromId,
+        to: toId,
+        kind: link.type || 'relates',
+        weight
+      });
+    }
+
+    if (invalidLinkCount > 0) {
+      console.warn(`[AI] Dropped ${invalidLinkCount} invalid link(s)`);
+    }
+
+    const topologyNodes = orderedNodes.map((node, i) => {
+      const point = pointByIndex.get(i);
+      return {
+        id: node.id,
+        label: point?.title || node.label,
+        meta: { role: node.role }
+      };
+    });
+
+    setTopology({
+      nodes: topologyNodes,
+      links: directedLinks
+    }, engine.config, { source: 'setTopology', docId: documentId });
+
+    const finalTopology = getTopology();
+    const springs = finalTopology.springs && finalTopology.springs.length > 0
+      ? finalTopology.springs
+      : deriveSpringEdges(finalTopology, engine.config);
+    const physicsLinks = springEdgesToPhysicsLinks(springs);
+
+    const nodesSnapshot = [...orderedNodes];
+    engine.clear();
+    nodesSnapshot.forEach(n => engine.addNode(n));
+    physicsLinks.forEach(l => engine.addLink(l));
+    engine.resetLifecycle();
+
     // Dispatch Inferred Title (Main Topic)
-    if (points.length > 0) {
-      setInferredTitle(points[0].title);
-      console.log(`[AI] Inferred Title: "${points[0].title}"`);
+    const inferred = paperTitle || points[0]?.title;
+    if (inferred) {
+      setInferredTitle(inferred);
+      console.log(`[AI] Inferred Title: "${inferred}"`);
     }
 
     console.log(`[AI] Applied ${points.length} analysis points`);
+    console.log(`[AI] Applied ${directedLinks.length} directed links`);
 
   } catch (error) {
     console.error('[AI] Analysis failed:', error);

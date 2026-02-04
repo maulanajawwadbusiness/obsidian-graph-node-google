@@ -75,10 +75,12 @@ export function applyTopologyFromProvider<TInput = unknown>(
         links: snapshot.directedLinks
     };
 
-    // Apply via existing seam
+    // Apply via existing seam (STEP7-RUN5: include provider metadata)
     setTopology(topology, undefined, {
         source: 'topologyProvider',
-        docId: providerMeta.docId
+        docId: providerMeta.docId,
+        providerName: providerName,
+        inputHash
     });
 
     const versionAfter = getTopologyVersion();

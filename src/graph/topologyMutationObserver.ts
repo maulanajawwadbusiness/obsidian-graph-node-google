@@ -77,6 +77,8 @@ export interface TopologyMutationEvent {
     source: MutationSource;
     reason?: MutationReason;   // Why rejected/noop (validation/noop/other)
     docId?: string;            // If from KGSpec load
+    providerName?: string;     // STEP7-RUN5: Provider name (e.g., 'kgSpec')
+    inputHash?: string;        // STEP7-RUN5: Hash of input for observability
 
     // Version tracking
     versionBefore: number;
@@ -120,6 +122,8 @@ function buildSummary(event: TopologyMutationEvent): string {
     const after = event.countsAfter;
     const docTag = event.docId ? ` docId=${event.docId}` : '';
     const reasonTag = event.reason ? ` reason=${event.reason}` : '';
+    const providerTag = event.providerName ? ` provider=${event.providerName}` : '';
+    const hashTag = event.inputHash ? ` hash=${event.inputHash}` : '';
     const linkCounts = event.linkDiff
         ? ` link+${event.linkDiff.addedCount}/-${event.linkDiff.removedCount}/~${event.linkDiff.updatedCount}`
         : '';
@@ -131,7 +135,7 @@ function buildSummary(event: TopologyMutationEvent): string {
     const errorsTag = errorCount > 0 ? ` errors=${errorCount}` : '';
     const warningsTag = warningCount > 0 ? ` warnings=${warningCount}` : '';
 
-    return `[TopologyMutation] #${event.mutationId} ${status} ${event.source}${docTag}${reasonTag} v${version} ` +
+    return `[TopologyMutation] #${event.mutationId} ${status} ${event.source}${docTag}${providerTag}${hashTag}${reasonTag} v${version} ` +
         `N/L/S ${before.nodes}/${before.directedLinks}/${before.springs} -> ${after.nodes}/${after.directedLinks}/${after.springs} ` +
         `dN=${formatDelta(before.nodes, after.nodes)} dL=${formatDelta(before.directedLinks, after.directedLinks)} dS=${formatDelta(before.springs, after.springs)}` +
         `${linkCounts}${springCounts}${errorsTag}${warningsTag}`;
@@ -143,6 +147,8 @@ function logMutationSummary(event: TopologyMutationEvent): void {
     console.log({
         status: event.status,
         source: event.source,
+        providerName: event.providerName,  // STEP7-RUN5
+        inputHash: event.inputHash,         // STEP7-RUN5
         docId: event.docId,
         version: `${event.versionBefore}->${event.versionAfter}`,
         countsBefore: event.countsBefore,

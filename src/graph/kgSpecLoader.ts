@@ -8,10 +8,12 @@
 import type { KGSpec, KGNode, KGLink } from './kgSpec';
 import type { Topology, DirectedLink, NodeSpec } from './topologyTypes';
 import { validateKGSpec } from './kgSpecValidation';
-import { setTopology, getTopology } from './topologyControl';
+import { setTopology, getTopology, reportTopologyMutationRejection } from './topologyControl';
 import { DEFAULT_PHYSICS_CONFIG } from '../physics/config';
 import { ensureDirectedLinkIds } from './directedLinkId'; // STEP4-RUN4
 // STEP3-RUN5-V4-FIX1: Removed unused recomputeSprings import
+// STEP7-RUN4: Import provider apply function
+import { applyTopologyFromProvider } from './providers';
 
 /**
  * Convert KGNode to NodeSpec.
@@ -105,6 +107,7 @@ export function setTopologyFromKGSpec(spec: KGSpec, opts: IngestOptions = {}): b
                 console.warn(`[KGLoader] Warnings${docTag} (not shown due to errors):`);
                 result.warnings.forEach(warn => console.warn(`  - ${warn}`));
             }
+            reportTopologyMutationRejection('kgSpecLoader', result.errors, spec.docId);
             return false; // Reject load, do NOT mutate topology
         }
 
@@ -112,6 +115,11 @@ export function setTopologyFromKGSpec(spec: KGSpec, opts: IngestOptions = {}): b
             if (!allowWarnings) {
                 console.error(`[KGLoader] Validation warnings rejected${docTag} (allowWarnings=false):`);
                 result.warnings.forEach(warn => console.error(`  - ${warn}`));
+                reportTopologyMutationRejection(
+                    'kgSpecLoader',
+                    result.warnings.map(warn => `warning: ${warn}`),
+                    spec.docId
+                );
                 return false; // Reject load, do NOT mutate topology
             }
 
@@ -137,11 +145,16 @@ export function setTopologyFromKGSpec(spec: KGSpec, opts: IngestOptions = {}): b
     topology.links = ensureDirectedLinkIds(topology.links);
     console.log(`[KGLoader] Ensured link IDs: ${topology.links.length} links`);
 
-    // STEP3-RUN5-V3-FIX2: Call setTopology ONCE - it recomputes springs internally
-    // STEP3-RUN5-V5-FIX1: Pass default config for rest-length policy
-    setTopology(topology, DEFAULT_PHYSICS_CONFIG);
+    // STEP7-RUN4: Apply via provider (includes normalization + determinism)
+    const result = applyTopologyFromProvider('kgSpec', spec, {
+        docId: spec.docId
+    });
 
-    console.log('[KGLoader] Topology loaded successfully');
+    if (!result.changed && import.meta.env.DEV) {
+        console.log('[KGLoader] Provider: No changes (identical topology)');
+    }
+
+    console.log('[KGLoader] Topology loaded successfully via provider');
     const finalTopology = getTopology(); // Get the topology with recomputed springs
     console.log(`[KGLoader] Loaded KGSpec (${spec.specVersion}): ${spec.nodes.length} nodes, ${spec.links.length} links`);
     console.log(`[KGLoader] Springs recomputed: ${finalTopology.springs?.length || 0} springs from directed links`);

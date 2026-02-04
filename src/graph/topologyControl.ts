@@ -61,11 +61,14 @@ export type MutationSource =
     | 'removeKnowledgeLink'
     | 'updateKnowledgeLink'
     | 'clearTopology'
-    | 'kgSpecLoader';
+    | 'kgSpecLoader'
+    | 'topologyProvider';  // STEP7-RUN5: Added for provider layer
 
 export interface MutationMeta {
     source?: MutationSource;
     docId?: string;
+    providerName?: string;  // STEP7-RUN5: Provider name (e.g., 'kgSpec')
+    inputHash?: string;     // STEP7-RUN5: Hash of input for observability
 }
 
 function validateLinks(
@@ -199,6 +202,9 @@ function ensureSprings(reason: string, config?: ForceConfig): void {
 export function setTopology(topology: Topology, config?: ForceConfig, meta?: MutationMeta): void {
     const mutationSource = meta?.source || 'setTopology';
     const docId = meta?.docId;
+    // STEP7-RUN5: Extract provider metadata
+    const providerName = meta?.providerName;
+    const inputHash = meta?.inputHash;
     const linksWithIds = ensureDirectedLinkIds(topology.links);
     const nodeIdSet = new Set(topology.nodes.map(n => n.id));
     const validation = validateLinks(linksWithIds, nodeIdSet, 'setTopology');
@@ -220,6 +226,8 @@ export function setTopology(topology: Topology, config?: ForceConfig, meta?: Mut
             source: mutationSource,
             reason: 'validation' as const,
             docId,
+            providerName,  // STEP7-RUN5
+            inputHash,     // STEP7-RUN5
             versionBefore,
             versionAfter: versionBefore,
             countsBefore,
@@ -256,6 +264,8 @@ export function setTopology(topology: Topology, config?: ForceConfig, meta?: Mut
         status: 'applied' as const,
         source: mutationSource,
         docId,
+        providerName,  // STEP7-RUN5
+        inputHash,     // STEP7-RUN5
         versionBefore,
         versionAfter: topologyVersion,
         countsBefore,

@@ -130,10 +130,10 @@ export const devTopologyHelpers = {
                 ID: e.mutationId,
                 Status: e.status,
                 Source: e.source,
-                'V→': `${e.versionBefore}→${e.versionAfter}`,
-                'ΔN': e.countsAfter.nodes - e.countsBefore.nodes,
-                'ΔL': e.countsAfter.directedLinks - e.countsBefore.directedLinks,
-                'ΔS': e.countsAfter.springs - e.countsBefore.springs
+                'V->': `${e.versionBefore}->${e.versionAfter}`,
+                dN: e.countsAfter.nodes - e.countsBefore.nodes,
+                dL: e.countsAfter.directedLinks - e.countsBefore.directedLinks,
+                dS: e.countsAfter.springs - e.countsBefore.springs
             }));
             console.table(rows);
         }

@@ -29,6 +29,8 @@ import { legacyToTopology } from '../graph/topologyAdapter';
 import { deriveSpringEdges } from '../graph/springDerivation';
 // RUN 6: Spring-to-physics converter import
 import { springEdgesToPhysicsLinks } from '../graph/springToPhysics';
+// STEP3-RUN3: Spring recomputation helper
+import { recomputeSprings } from '../graph/topologySpringRecompute';
 // RUN 8: Dev console helpers (exposes window.__topology)
 // PRE-STEP2: Only import in dev mode to prevent bundling in production
 if (import.meta.env.DEV) {
@@ -449,11 +451,18 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
         const afterVersion = getTopologyVersion();
 
         // RUN 7: Version change detection
-        console.log(`[Run7] Topology version: ${beforeVersion} → ${afterVersion} (changed: ${beforeVersion !== afterVersion})`);
+        console.log(`[Run7] Topology version: ${beforeVersion} → ${afterVersion} (changed: ${beforeVersion !== afterVersion})`)
+
+            ;
 
         // Console proof
         console.log(`[Run4] Topology set: ${topology.nodes.length} nodes, ${topology.links.length} directed links`);
         console.log(`[Run4] Sample links (first 5):`, topology.links.slice(0, 5));
+
+        // STEP3-RUN3: Recompute undirected springs from directed knowledge links
+        const topologyWithSprings = recomputeSprings(topology, config);
+        setTopology(topologyWithSprings); // Update with springs
+        console.log(`[STEP3-RUN3] Springs recomputed: ${topologyWithSprings.springs?.length || 0} undirected springs from ${topology.links.length} directed links`);
 
         // RUN 5: Test spring edge derivation
         // RUN 9: Now passing config for rest length policy
@@ -461,9 +470,10 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
         console.log(`[Run5] Spring edges derived: ${springEdges.length}`);
         console.log(`[Run5] Sample spring edges (first 3):`, springEdges.slice(0, 3));
 
-        // RUN 6: Wire engine to ONLY use derived spring edges
-        const physicsLinks = springEdgesToPhysicsLinks(springEdges);
-        console.log(`[Run6] Engine wiring: ${nodes.length} nodes, ${physicsLinks.length} physics links (from ${topology.links.length} directed)`);
+        // STEP3-RUN4: Engine now consumes topology.springs (undirected physics)
+        const physicsLinks = springEdgesToPhysicsLinks(topologyWithSprings.springs || []);
+        console.log(`[Run6] Engine wiring: ${nodes.length} nodes, ${physicsLinks.length} physics links`);
+        console.log(`[STEP3-RUN4] XPBD consuming ${physicsLinks.length} springs (not ${topology.links.length} directed links)`);
 
         nodes.forEach(n => engine.addNode(n));
         physicsLinks.forEach(l => engine.addLink(l)); // Now using derived links, not raw generator output

@@ -109,3 +109,51 @@ Updated state management:
 
 **Files Modified**: 2
 **Behavior**: Springs storage added (but not yet populated)
+
+---
+
+## Run 3: Derive Springs from Knowledge
+
+**Date**: 2026-02-04
+
+### New File: `topologySpringRecompute.ts`
+Helper function to recompute springs from knowledge links:
+```typescript
+recomputeSprings(topology, config): Topology
+```
+
+**Integration**: `GraphPhysicsPlayground.tsx`
+- After `setTopology(topology)`, calls `recomputeSprings()`
+- Stores result in `topology.springs`
+- Console: `[STEP3-RUN3] Springs recomputed: Z undirected springs from Y directed links`
+
+### Key Points
+- **Deduplication**: Uses existing `deriveSpringEdges()` logic
+- **One-way**: Springs derived FROM links, never reverse
+- **Safe**: Existing deduplication prevents self-loops, missing endpoints
+
+**Files Added**: 1
+**Files Modified**: 1
+**Behavior**: Springs now populated after topology mutations
+
+---
+
+## Run 4: Rewire XPBD to Springs
+
+**Date**: 2026-02-04
+
+### Engine Consumption Change
+**Before**: `springEdgesToPhysicsLinks(springEdges)` (ephemeral)  
+**After**: `springEdgesToPhysicsLinks(topology.springs || [])` (stored)
+
+**File**: `GraphPhysicsPlayground.tsx`
+- Changed `springEdges` source to `topology.springs`
+- Console: `[STEP3-RUN4] XPBD consuming X springs (not Y directed links)`
+
+###Success Criteria Check
+✅ **Knowledge layer directed**: topology.links preserves A→B and B→A  
+✅ **Physics layer undirected**: topology.springs dedups to {A,B}  
+✅ **XPBD consumes springs only**: engine.addLink() uses topology.springs
+
+**Files Modified**: 1
+**Behavior**: XPBD now consumes undirected springs (no double-force risk)

@@ -2,8 +2,8 @@
  * STEP6-RUN4: Helper for topology control operations
  */
 
-import type { DirectedLink } from './topologyTypes';
-import type { LinkDiff } from './topologyMutationObserver';
+import type { DirectedLink, SpringEdge } from './topologyTypes';
+import type { LinkDiff, SpringDiff } from './topologyMutationObserver';
 
 /**
  * Compute link diff between before and after states.
@@ -58,5 +58,45 @@ export function computeLinkDiff(
         addedCount: added.length,
         removedCount: removed.length,
         updatedCount: updated.length
+    };
+}
+
+function getSpringKey(spring: SpringEdge): string {
+    const a = spring.a;
+    const b = spring.b;
+    return a < b ? `${a}|${b}` : `${b}|${a}`;
+}
+
+/**
+ * Compute spring diff between before and after states.
+ * Returns truncated arrays (first 10 items) with full counts.
+ */
+export function computeSpringDiff(
+    springsBefore: SpringEdge[] = [],
+    springsAfter: SpringEdge[] = []
+): SpringDiff {
+    const beforeKeys = new Set(springsBefore.map(getSpringKey));
+    const afterKeys = new Set(springsAfter.map(getSpringKey));
+
+    const added: string[] = [];
+    const removed: string[] = [];
+
+    for (const key of afterKeys) {
+        if (!beforeKeys.has(key)) {
+            added.push(key);
+        }
+    }
+
+    for (const key of beforeKeys) {
+        if (!afterKeys.has(key)) {
+            removed.push(key);
+        }
+    }
+
+    return {
+        added: added.slice(0, 10),
+        removed: removed.slice(0, 10),
+        addedCount: added.length,
+        removedCount: removed.length
     };
 }

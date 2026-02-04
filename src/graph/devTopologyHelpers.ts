@@ -70,33 +70,9 @@ export const devTopologyHelpers = {
         console.log(`[DevTopology] Topology v${getTopologyVersion()}:`, {
             nodes: t.nodes.length,
             links: t.links.length,
-            nodesSample: t.nodes.slice(0, 5),
-            linksSample: t.links.slice(0, 10)
-        });
-        return t;
-    },
-
-    /**
-     * Get current version number.
-     */
-    version() {
-        return getTopologyVersion();
-    },
-
-    /**
-     * Clear all topology.
-     */
-    clear() {
-        console.log('[DevTopology] Clearing all topology');
-        clearTopology();
-    }
-};
-
-// PRE-STEP2: Dev-only + browser-only gating
-// Only expose to window.__topology in development mode AND browser environment
-if (import.meta.env.DEV && typeof window !== 'undefined') {
-    (window as any).__topology = devTopologyHelpers;
-    console.log('[DevTopology] Console helpers loaded (DEV MODE). Try: window.__topology.dump()');
-} else if (typeof window !== 'undefined') {
-    console.log('[DevTopology] Helpers disabled in production build.');
+            if(import.meta.env.DEV && typeof window !== 'undefined') {
+            (window as any).__topology = devTopologyHelpers;
+            console.log('[DevTopology] Console helpers loaded (DEV MODE). Try: window.__topology.dump()');
+        } else if(typeof window !== 'undefined') {
+            console.log('[DevTopology] Helpers disabled in production build.');
 }

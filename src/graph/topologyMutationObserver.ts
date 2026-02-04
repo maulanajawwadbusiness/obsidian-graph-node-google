@@ -176,7 +176,6 @@ export function getLastMutation(verbose?: boolean): TopologyMutationEvent | null
  */
 export function clearMutationHistory(): void {
     mutationHistory.length = 0;
-    mutationIdCounter = 0;
     console.log('[MutationObserver] History cleared');
 }
 

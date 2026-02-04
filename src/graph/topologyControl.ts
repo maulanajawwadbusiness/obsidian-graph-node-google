@@ -10,17 +10,27 @@ import type { ForceConfig } from '../physics/types';
 import { DEFAULT_PHYSICS_CONFIG } from '../physics/config';
 import { deriveSpringEdges } from './springDerivation';
 import { ensureDirectedLinkIds } from './directedLinkId';
+import { computeLinkDiff, computeSpringDiff } from './topologyControlHelpers';
 
 // STEP6-RUN3: Import mutation observer (dev-only)
 let emitMutationEvent: any = null;
-let computeLinkDiff: any = null;
+const pendingMutationEvents: any[] = [];
 if (import.meta.env.DEV) {
     import('./topologyMutationObserver').then(mod => {
         emitMutationEvent = mod.emitMutationEvent;
+        while (pendingMutationEvents.length > 0) {
+            emitMutationEvent(pendingMutationEvents.shift());
+        }
     });
-    import('./topologyControlHelpers').then(mod => {
-        computeLinkDiff = mod.computeLinkDiff;
-    });
+}
+
+function emitMutationEventSafe(event: any): void {
+    if (!import.meta.env.DEV) return;
+    if (emitMutationEvent) {
+        emitMutationEvent(event);
+        return;
+    }
+    pendingMutationEvents.push(event);
 }
 
 /**
@@ -108,14 +118,17 @@ function devAssertTopologyInvariants(
     topology: Topology,
     config: ForceConfig | undefined,
     context: string
-): void {
-    if (!import.meta.env.DEV) return;
+): string[] {
+    if (!import.meta.env.DEV) return [];
 
+    const warnings: string[] = [];
     let hasIssue = false;
     const missingIds = topology.links.filter(l => !l.id).length;
     if (missingIds > 0) {
         hasIssue = true;
-        console.warn(`[TopologyControl] ${context}: ${missingIds} link(s) missing id`);
+        const msg = `[TopologyControl] ${context}: ${missingIds} link(s) missing id`;
+        warnings.push(msg);
+        console.warn(msg);
     }
 
     const linkIdSet = new Set(topology.links.map(l => l.id).filter(Boolean));
@@ -125,7 +138,9 @@ function devAssertTopologyInvariants(
             if (!linkIdSet.has(contributor)) {
                 missingContributorCount++;
                 if (missingContributorCount <= 3) {
-                    console.warn(`[TopologyControl] ${context}: spring contributor missing link id ${contributor}`);
+                    const msg = `[TopologyControl] ${context}: spring contributor missing link id ${contributor}`;
+                    warnings.push(msg);
+                    console.warn(msg);
                 }
             }
         }
@@ -133,7 +148,9 @@ function devAssertTopologyInvariants(
 
     if (missingContributorCount > 0) {
         hasIssue = true;
-        console.warn(`[TopologyControl] ${context}: ${missingContributorCount} missing spring contributor link id(s)`);
+        const msg = `[TopologyControl] ${context}: ${missingContributorCount} missing spring contributor link id(s)`;
+        warnings.push(msg);
+        console.warn(msg);
     }
 
     const freshSprings = deriveSpringEdges(
@@ -144,12 +161,15 @@ function devAssertTopologyInvariants(
     const currentCount = topology.springs?.length || 0;
     if (currentCount !== freshSprings.length) {
         hasIssue = true;
-        console.warn(`[TopologyControl] ${context}: spring count mismatch (current=${currentCount}, fresh=${freshSprings.length})`);
+        const msg = `[TopologyControl] ${context}: spring count mismatch (current=${currentCount}, fresh=${freshSprings.length})`;
+        warnings.push(msg);
+        console.warn(msg);
     }
 
     if (hasIssue) {
         console.warn(`[TopologyControl] ${context}: dev-only invariant check failed`);
     }
+    return warnings;
 }
 
 function ensureSprings(reason: string, config?: ForceConfig): void {
@@ -185,24 +205,25 @@ export function setTopology(topology: Topology, config?: ForceConfig): void {
         directedLinks: currentTopology.links.length,
         springs: currentTopology.springs?.length || 0
     };
+    const linksBefore = [...currentTopology.links];
+    const springsBefore = currentTopology.springs ? [...currentTopology.springs] : [];
+    const springsBefore = currentTopology.springs ? [...currentTopology.springs] : [];
 
     if (!validation.ok) {
         logValidationFailure(validation, 'setTopology');
 
         // STEP6-RUN3: Emit rejected event
-        if (import.meta.env.DEV && emitMutationEvent) {
-            emitMutationEvent({
-                status: 'rejected' as const,
-                source: 'setTopology' as const,
-                versionBefore,
-                versionAfter: versionBefore,
-                countsBefore,
-                countsAfter: countsBefore,
-                validationErrors: validation.errors,
-                mutationId: 0,
-                timestamp: 0
-            });
-        }
+        emitMutationEventSafe({
+            status: 'rejected' as const,
+            source: 'setTopology' as const,
+            versionBefore,
+            versionAfter: versionBefore,
+            countsBefore,
+            countsAfter: countsBefore,
+            validationErrors: validation.errors,
+            mutationId: 0,
+            timestamp: 0
+        });
         return;
     }
 
@@ -228,21 +249,24 @@ export function setTopology(topology: Topology, config?: ForceConfig): void {
         );
     }
 
-    devAssertTopologyInvariants(currentTopology, config, 'setTopology');
+    const invariantWarnings = devAssertTopologyInvariants(currentTopology, config, 'setTopology');
 
     // STEP6-RUN3: Emit applied event
-    if (import.meta.env.DEV && emitMutationEvent) {
-        emitMutationEvent({
-            status: 'applied' as const,
-            source: 'setTopology' as const,
-            versionBefore,
-            versionAfter: topologyVersion,
-            countsBefore,
-            countsAfter,
-            mutationId: 0,
-            timestamp: 0
-        });
-    }
+    const linkDiff = computeLinkDiff(linksBefore, currentTopology.links);
+    const springDiff = computeSpringDiff(springsBefore, currentTopology.springs);
+    emitMutationEventSafe({
+        status: 'applied' as const,
+        source: 'setTopology' as const,
+        versionBefore,
+        versionAfter: topologyVersion,
+        countsBefore,
+        countsAfter,
+        linkDiff,
+        springDiff,
+        invariantWarnings: invariantWarnings.length > 0 ? invariantWarnings : undefined,
+        mutationId: 0,
+        timestamp: 0
+    });
 }
 
 /**
@@ -270,12 +294,32 @@ export function getTopologyVersion(): number {
  * If link doesn't have an ID, one is generated.
  */
 export function addKnowledgeLink(link: DirectedLink, config?: ForceConfig): string {
+    const versionBefore = topologyVersion;
+    const countsBefore = {
+        nodes: currentTopology.nodes.length,
+        directedLinks: currentTopology.links.length,
+        springs: currentTopology.springs?.length || 0
+    };
+    const linksBefore = [...currentTopology.links];
+    const springsBefore = currentTopology.springs ? [...currentTopology.springs] : [];
+
     const nodeIdSet = new Set(currentTopology.nodes.map(n => n.id));
     const candidate = ensureDirectedLinkIds([link], currentTopology.links)[0];
     const validation = validateLinks([candidate], nodeIdSet, 'addKnowledgeLink');
 
     if (!validation.ok) {
         logValidationFailure(validation, 'addKnowledgeLink');
+        emitMutationEventSafe({
+            status: 'rejected' as const,
+            source: 'addKnowledgeLink' as const,
+            versionBefore,
+            versionAfter: versionBefore,
+            countsBefore,
+            countsAfter: countsBefore,
+            validationErrors: validation.errors,
+            mutationId: 0,
+            timestamp: 0
+        });
         return '';
     }
 
@@ -285,6 +329,17 @@ export function addKnowledgeLink(link: DirectedLink, config?: ForceConfig): stri
                 `[TopologyControl] addKnowledgeLink: duplicate link id ${candidate.id}, rejected`
             );
         }
+        emitMutationEventSafe({
+            status: 'rejected' as const,
+            source: 'addKnowledgeLink' as const,
+            versionBefore,
+            versionAfter: versionBefore,
+            countsBefore,
+            countsAfter: countsBefore,
+            validationErrors: [`addKnowledgeLink: duplicate link id ${candidate.id}`],
+            mutationId: 0,
+            timestamp: 0
+        });
         return '';
     }
 
@@ -298,7 +353,28 @@ export function addKnowledgeLink(link: DirectedLink, config?: ForceConfig): stri
         );
     }
 
-    devAssertTopologyInvariants(currentTopology, config, 'addKnowledgeLink');
+    const invariantWarnings = devAssertTopologyInvariants(currentTopology, config, 'addKnowledgeLink');
+
+    const countsAfter = {
+        nodes: currentTopology.nodes.length,
+        directedLinks: currentTopology.links.length,
+        springs: currentTopology.springs?.length || 0
+    };
+    const linkDiff = computeLinkDiff(linksBefore, currentTopology.links);
+    const springDiff = computeSpringDiff(springsBefore, currentTopology.springs);
+    emitMutationEventSafe({
+        status: 'applied' as const,
+        source: 'addKnowledgeLink' as const,
+        versionBefore,
+        versionAfter: topologyVersion,
+        countsBefore,
+        countsAfter,
+        linkDiff,
+        springDiff,
+        invariantWarnings: invariantWarnings.length > 0 ? invariantWarnings : undefined,
+        mutationId: 0,
+        timestamp: 0
+    });
 
     return candidate.id || '';
 }
@@ -308,6 +384,15 @@ export function addKnowledgeLink(link: DirectedLink, config?: ForceConfig): stri
  * NEVER affects other links (even with same endpoints).
  */
 export function removeKnowledgeLink(linkId: string, config?: ForceConfig): boolean {
+    const versionBefore = topologyVersion;
+    const countsBefore = {
+        nodes: currentTopology.nodes.length,
+        directedLinks: currentTopology.links.length,
+        springs: currentTopology.springs?.length || 0
+    };
+    const linksBefore = [...currentTopology.links];
+    const springsBefore = currentTopology.springs ? [...currentTopology.springs] : [];
+
     const beforeCount = currentTopology.links.length;
     currentTopology.links = currentTopology.links.filter(l => l.id !== linkId);
     const removed = currentTopology.links.length < beforeCount;
@@ -320,9 +405,41 @@ export function removeKnowledgeLink(linkId: string, config?: ForceConfig): boole
             console.log(`[TopologyControl] removeKnowledgeLink: removed link ${linkId}`);
         }
 
-        devAssertTopologyInvariants(currentTopology, config, 'removeKnowledgeLink');
+        const invariantWarnings = devAssertTopologyInvariants(currentTopology, config, 'removeKnowledgeLink');
+
+        const countsAfter = {
+            nodes: currentTopology.nodes.length,
+            directedLinks: currentTopology.links.length,
+            springs: currentTopology.springs?.length || 0
+        };
+        const linkDiff = computeLinkDiff(linksBefore, currentTopology.links);
+        const springDiff = computeSpringDiff(springsBefore, currentTopology.springs);
+        emitMutationEventSafe({
+            status: 'applied' as const,
+            source: 'removeKnowledgeLink' as const,
+            versionBefore,
+            versionAfter: topologyVersion,
+            countsBefore,
+            countsAfter,
+            linkDiff,
+            springDiff,
+            invariantWarnings: invariantWarnings.length > 0 ? invariantWarnings : undefined,
+            mutationId: 0,
+            timestamp: 0
+        });
     } else if (import.meta.env.DEV) {
         console.warn(`[TopologyControl] removeKnowledgeLink: link ${linkId} not found`);
+        emitMutationEventSafe({
+            status: 'rejected' as const,
+            source: 'removeKnowledgeLink' as const,
+            versionBefore,
+            versionAfter: versionBefore,
+            countsBefore,
+            countsAfter: countsBefore,
+            validationErrors: [`removeKnowledgeLink: link ${linkId} not found`],
+            mutationId: 0,
+            timestamp: 0
+        });
     }
 
     return removed;
@@ -336,12 +453,32 @@ export function updateKnowledgeLink(
     patch: Partial<DirectedLink>,
     config?: ForceConfig
 ): boolean {
+    const versionBefore = topologyVersion;
+    const countsBefore = {
+        nodes: currentTopology.nodes.length,
+        directedLinks: currentTopology.links.length,
+        springs: currentTopology.springs?.length || 0
+    };
+    const linksBefore = [...currentTopology.links];
+    const springsBefore = currentTopology.springs ? [...currentTopology.springs] : [];
+
     const link = currentTopology.links.find(l => l.id === linkId);
 
     if (!link) {
         if (import.meta.env.DEV) {
             console.warn(`[TopologyControl] updateKnowledgeLink: link ${linkId} not found`);
         }
+        emitMutationEventSafe({
+            status: 'rejected' as const,
+            source: 'updateKnowledgeLink' as const,
+            versionBefore,
+            versionAfter: versionBefore,
+            countsBefore,
+            countsAfter: countsBefore,
+            validationErrors: [`updateKnowledgeLink: link ${linkId} not found`],
+            mutationId: 0,
+            timestamp: 0
+        });
         return false;
     }
 
@@ -349,6 +486,17 @@ export function updateKnowledgeLink(
         console.warn(
             `[TopologyControl] updateKnowledgeLink: id is stable; attempted ${linkId} -> ${patch.id}`
         );
+        emitMutationEventSafe({
+            status: 'rejected' as const,
+            source: 'updateKnowledgeLink' as const,
+            versionBefore,
+            versionAfter: versionBefore,
+            countsBefore,
+            countsAfter: countsBefore,
+            validationErrors: [`updateKnowledgeLink: id is stable; attempted ${linkId} -> ${patch.id}`],
+            mutationId: 0,
+            timestamp: 0
+        });
         return false;
     }
 
@@ -357,6 +505,17 @@ export function updateKnowledgeLink(
     const validation = validateLinks([nextLink], nodeIdSet, 'updateKnowledgeLink');
     if (!validation.ok) {
         logValidationFailure(validation, 'updateKnowledgeLink');
+        emitMutationEventSafe({
+            status: 'rejected' as const,
+            source: 'updateKnowledgeLink' as const,
+            versionBefore,
+            versionAfter: versionBefore,
+            countsBefore,
+            countsAfter: countsBefore,
+            validationErrors: validation.errors,
+            mutationId: 0,
+            timestamp: 0
+        });
         return false;
     }
 
@@ -372,7 +531,28 @@ export function updateKnowledgeLink(
         console.log(`[TopologyControl] updateKnowledgeLink: updated link ${linkId}`);
     }
 
-    devAssertTopologyInvariants(currentTopology, config, 'updateKnowledgeLink');
+    const invariantWarnings = devAssertTopologyInvariants(currentTopology, config, 'updateKnowledgeLink');
+
+    const countsAfter = {
+        nodes: currentTopology.nodes.length,
+        directedLinks: currentTopology.links.length,
+        springs: currentTopology.springs?.length || 0
+    };
+    const linkDiff = computeLinkDiff(linksBefore, currentTopology.links);
+    const springDiff = computeSpringDiff(springsBefore, currentTopology.springs);
+    emitMutationEventSafe({
+        status: 'applied' as const,
+        source: 'updateKnowledgeLink' as const,
+        versionBefore,
+        versionAfter: topologyVersion,
+        countsBefore,
+        countsAfter,
+        linkDiff,
+        springDiff,
+        invariantWarnings: invariantWarnings.length > 0 ? invariantWarnings : undefined,
+        mutationId: 0,
+        timestamp: 0
+    });
 
     return true;
 }
@@ -388,6 +568,15 @@ export function getKnowledgeLink(linkId: string): DirectedLink | undefined {
  * Clear the topology (remove all nodes and links).
  */
 export function clearTopology(): void {
+    const versionBefore = topologyVersion;
+    const countsBefore = {
+        nodes: currentTopology.nodes.length,
+        directedLinks: currentTopology.links.length,
+        springs: currentTopology.springs?.length || 0
+    };
+    const linksBefore = [...currentTopology.links];
+    const springsBefore = currentTopology.springs ? [...currentTopology.springs] : [];
+
     currentTopology = {
         nodes: [],
         links: [],
@@ -395,6 +584,26 @@ export function clearTopology(): void {
     };
     topologyVersion++;
     console.log(`[TopologyControl] clearTopology (v${topologyVersion})`);
+
+    const countsAfter = {
+        nodes: currentTopology.nodes.length,
+        directedLinks: currentTopology.links.length,
+        springs: currentTopology.springs?.length || 0
+    };
+    const linkDiff = computeLinkDiff(linksBefore, currentTopology.links);
+    const springDiff = computeSpringDiff(springsBefore, currentTopology.springs);
+    emitMutationEventSafe({
+        status: 'applied' as const,
+        source: 'clearTopology' as const,
+        versionBefore,
+        versionAfter: topologyVersion,
+        countsBefore,
+        countsAfter,
+        linkDiff,
+        springDiff,
+        mutationId: 0,
+        timestamp: 0
+    });
 }
 
 /**
@@ -525,19 +734,17 @@ export function patchTopology(patch: TopologyPatch, config?: ForceConfig): void 
         logValidationFailure(validation, 'patchTopology');
 
         // STEP6-RUN4: Emit rejected event
-        if (import.meta.env.DEV && emitMutationEvent) {
-            emitMutationEvent({
-                status: 'rejected' as const,
-                source: 'patchTopology' as const,
-                versionBefore,
-                versionAfter: versionBefore,
-                countsBefore,
-                countsAfter: countsBefore,
-                validationErrors: validation.errors,
-                mutationId: 0,
-                timestamp: 0
-            });
-        }
+        emitMutationEventSafe({
+            status: 'rejected' as const,
+            source: 'patchTopology' as const,
+            versionBefore,
+            versionAfter: versionBefore,
+            countsBefore,
+            countsAfter: countsBefore,
+            validationErrors: validation.errors,
+            mutationId: 0,
+            timestamp: 0
+        });
         return;
     }
 
@@ -574,21 +781,22 @@ export function patchTopology(patch: TopologyPatch, config?: ForceConfig): void 
         diff
     );
 
-    devAssertTopologyInvariants(currentTopology, config, 'patchTopology');
+    const invariantWarnings = devAssertTopologyInvariants(currentTopology, config, 'patchTopology');
 
     // STEP6-RUN4: Emit applied event with link diff
-    if (import.meta.env.DEV && emitMutationEvent && computeLinkDiff) {
-        const linkDiff = computeLinkDiff(linksBefore, currentTopology.links);
-        emitMutationEvent({
-            status: 'applied' as const,
-            source: 'patchTopology' as const,
-            versionBefore,
-            versionAfter: topologyVersion,
-            countsBefore,
-            countsAfter,
-            linkDiff,
-            mutationId: 0,
-            timestamp: 0
-        });
-    }
+    const linkDiff = computeLinkDiff(linksBefore, currentTopology.links);
+    const springDiff = computeSpringDiff(springsBefore, currentTopology.springs);
+    emitMutationEventSafe({
+        status: 'applied' as const,
+        source: 'patchTopology' as const,
+        versionBefore,
+        versionAfter: topologyVersion,
+        countsBefore,
+        countsAfter,
+        linkDiff,
+        springDiff,
+        invariantWarnings: invariantWarnings.length > 0 ? invariantWarnings : undefined,
+        mutationId: 0,
+        timestamp: 0
+    });
 }

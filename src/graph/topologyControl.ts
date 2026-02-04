@@ -6,6 +6,8 @@
  */
 
 import type { Topology, NodeSpec, DirectedLink } from './topologyTypes';
+import type { ForceConfig } from '../physics/types';
+import { DEFAULT_PHYSICS_CONFIG } from '../physics/config';
 import { deriveSpringEdges } from './springDerivation'; // STEP3-RUN5-V3-FIX1
 
 /**
@@ -27,7 +29,7 @@ let topologyVersion = 0;
  * STEP3-RUN5-V4-FIX2: Accept optional config for rest-length policy.
  * This is the single authoritative seam for topology changes.
  */
-export function setTopology(topology: Topology, config?: any): void {
+export function setTopology(topology: Topology, config?: ForceConfig): void {
     currentTopology = {
         nodes: [...topology.nodes],
         links: [...topology.links],
@@ -36,7 +38,7 @@ export function setTopology(topology: Topology, config?: any): void {
 
     // STEP3-RUN5-V3-FIX1: Always recompute springs from links
     // STEP3-RUN5-V4-FIX2: Pass config for rest-length policy
-    currentTopology.springs = deriveSpringEdges(currentTopology, config);
+    currentTopology.springs = deriveSpringEdges(currentTopology, config || DEFAULT_PHYSICS_CONFIG);
 
     // STEP3-RUN5-V4-FIX3: Dev-only invariant check (moved from recomputeSprings)
     // STEP3-RUN5-V5-FIX3: Expanded to catch missing springs even when none provided
@@ -118,7 +120,7 @@ export interface TopologyPatch {
  * 
  * STEP3-RUN5-V4-FIX2: Accept optional config for rest-length policy.
  */
-export function patchTopology(patch: TopologyPatch, config?: any): void {
+export function patchTopology(patch: TopologyPatch, config?: ForceConfig): void {
     const before = {
         nodes: currentTopology.nodes.length,
         links: currentTopology.links.length
@@ -221,7 +223,7 @@ export function patchTopology(patch: TopologyPatch, config?: any): void {
     // STEP3-RUN5-V3-FIX4: Recompute springs after node/link mutations
     // STEP3-RUN5-V4-FIX2: Pass config for rest-length policy
     if (diff.nodesRemoved > 0 || diff.linksAdded > 0 || diff.linksRemoved > 0 || diff.linksReplaced) {
-        currentTopology.springs = deriveSpringEdges(currentTopology, config);
+        currentTopology.springs = deriveSpringEdges(currentTopology, config || DEFAULT_PHYSICS_CONFIG);
         if (import.meta.env.DEV) {
             console.log(`[TopologyControl] Springs recomputed after patch: ${currentTopology.springs.length} springs`);
         }

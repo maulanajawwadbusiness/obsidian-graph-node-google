@@ -12,8 +12,9 @@ if (!import.meta.env.DEV) {
     throw new Error('[SECURITY] devTopologyHelpers loaded in production build - CHECK IMPORTS');
 }
 
-import { getTopology, setTopology, patchTopology, clearTopology, getTopologyVersion } from './topologyControl';
+import { getTopology, patchTopology, clearTopology, getTopologyVersion } from './topologyControl';
 import type { DirectedLink } from './topologyTypes';
+import { DEFAULT_PHYSICS_CONFIG } from '../physics/config';
 
 /**
  * Minimal dev helpers for console testing.
@@ -32,7 +33,7 @@ export const devTopologyHelpers = {
                 kind: kind || 'manual',
                 weight: 1.0
             }]
-        }, { targetSpacing: 200 });
+        }, DEFAULT_PHYSICS_CONFIG);
     },
 
     /**
@@ -43,7 +44,7 @@ export const devTopologyHelpers = {
         // STEP3-RUN5-V5-FIX2: Pass default config for rest-length policy
         patchTopology({
             removeLinks: [{ from: fromId, to: toId }]
-        }, { targetSpacing: 200 });
+        }, DEFAULT_PHYSICS_CONFIG);
     },
 
     /**
@@ -54,7 +55,7 @@ export const devTopologyHelpers = {
         // STEP3-RUN5-V5-FIX2: Pass default config for rest-length policy
         patchTopology({
             setLinks: links
-        }, { targetSpacing: 200 });
+        }, DEFAULT_PHYSICS_CONFIG);
     },
 
     /**

@@ -9,6 +9,7 @@ import type { KGSpec, KGNode, KGLink } from './kgSpec';
 import type { Topology, DirectedLink, NodeSpec } from './topologyTypes';
 import { validateKGSpec } from './kgSpecValidation';
 import { setTopology, getTopology } from './topologyControl';
+import { DEFAULT_PHYSICS_CONFIG } from '../physics/config';
 // STEP3-RUN5-V4-FIX1: Removed unused recomputeSprings import
 
 /**
@@ -118,7 +119,7 @@ export function setTopologyFromKGSpec(spec: KGSpec, opts: IngestOptions = {}): b
 
     // STEP3-RUN5-V3-FIX2: Call setTopology ONCE - it recomputes springs internally
     // STEP3-RUN5-V5-FIX1: Pass default config for rest-length policy
-    setTopology(topology, { targetSpacing: 200 });
+    setTopology(topology, DEFAULT_PHYSICS_CONFIG);
 
     const finalTopology = getTopology(); // Get the topology with recomputed springs
     console.log(`[KGLoader] ✓ Loaded KGSpec (${spec.specVersion}): ${spec.nodes.length} nodes, ${spec.links.length} links`);

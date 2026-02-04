@@ -5,6 +5,13 @@
  * DO NOT use in production code.
  */
 
+// CRITICAL SAFEGUARD: This module should NEVER be bundled in production
+// Primary gating is via dynamic import in GraphPhysicsPlayground.tsx
+// This is a defensive backup in case of accidental static import
+if (!import.meta.env.DEV) {
+    throw new Error('[SECURITY] devTopologyHelpers loaded in production build - CHECK IMPORTS');
+}
+
 import { getTopology, setTopology, patchTopology, clearTopology, getTopologyVersion } from './topologyControl';
 import type { DirectedLink } from './topologyTypes';
 

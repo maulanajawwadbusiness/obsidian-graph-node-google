@@ -12,7 +12,8 @@ import type { Topology, DirectedLink, NodeSpec } from './topologyTypes';
  */
 let currentTopology: Topology = {
     nodes: [],
-    links: []
+    links: [],
+    springs: [] // STEP3-RUN2: Explicit storage for undirected physics springs
 };
 
 let topologyVersion = 0;
@@ -24,10 +25,11 @@ let topologyVersion = 0;
 export function setTopology(topology: Topology): void {
     currentTopology = {
         nodes: [...topology.nodes],
-        links: [...topology.links]
+        links: [...topology.links],
+        springs: topology.springs ? [...topology.springs] : [] // STEP3-RUN2: Copy springs if provided
     };
     topologyVersion++;
-    console.log(`[TopologyControl] setTopology: ${currentTopology.nodes.length} nodes, ${currentTopology.links.length} links (v${topologyVersion})`);
+    console.log(`[TopologyControl] setTopology: ${currentTopology.nodes.length} nodes, ${currentTopology.links.length} links, ${currentTopology.springs?.length || 0} springs (v${topologyVersion})`);
 }
 
 /**
@@ -36,7 +38,8 @@ export function setTopology(topology: Topology): void {
 export function getTopology(): Topology {
     return {
         nodes: [...currentTopology.nodes],
-        links: [...currentTopology.links]
+        links: [...currentTopology.links],
+        springs: currentTopology.springs ? [...currentTopology.springs] : [] // STEP3-RUN2: Return springs copy
     };
 }
 
@@ -54,10 +57,12 @@ export function getTopologyVersion(): number {
 export function clearTopology(): void {
     currentTopology = {
         nodes: [],
-        links: []
+        links: [],
+        springs: [] // STEP3-RUN2: Clear springs too
     };
     topologyVersion++;
-    console.log(`[TopologyControl] clearTopology (v${topologyVersion})`);
+    console.log(`[TopologyControl] clearTopology (v${topologyVersion})`)
+        ;
 }
 
 /**

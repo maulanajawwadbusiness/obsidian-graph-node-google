@@ -31,12 +31,20 @@ export interface NodeSpec {
 }
 
 /**
- * The complete knowledge graph topology.
- * This is the single source of truth for connectivity.
+ * Complete topology (knowledge graph + derived physics).
+ * 
+ * STEP3: Separated directed knowledge from undirected physics.
+ * - `links`: Directed knowledge edges (A→B and B→A are distinct)
+ * - `springs`: Undirected physics springs (derived from links, deduplicated)
  */
 export interface Topology {
     nodes: NodeSpec[];
+
+    /** Directed knowledge links (preserves semantic direction) */
     links: DirectedLink[];
+
+    /** Undirected physics springs (derived from links, one per {A,B} pair) */
+    springs?: SpringEdge[];
 }
 
 /**

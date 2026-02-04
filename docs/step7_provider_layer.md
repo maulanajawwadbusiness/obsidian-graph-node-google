@@ -184,6 +184,77 @@ console.log(event.reason); // 'validation'
 console.log(event.validationErrors); // ['duplicate node ID: A']
 ```
 
+## Manual Acceptance Walkthrough
+
+### Step 1: Load a KGSpec via Provider
+
+1. Open the app in dev mode
+2. Open browser console (F12)
+3. Load example KGSpec:
+```javascript
+window.__kg.loadExample()
+```
+4. Verify:
+- Graph appears with nodes and links
+- Console shows `[Provider] kgSpec` log group
+- Last mutation event shows `provider: 'kgSpec'`, `hash: '...'`
+
+### Step 2: Verify Provider Metadata
+
+```javascript
+// Check last mutation includes provider info
+const event = await window.__topology.mutations.last(true);
+console.log('Source:', event.source);           // 'topologyProvider'
+console.log('Provider:', event.providerName);   // 'kgSpec'
+console.log('Hash:', event.inputHash);          // e.g., 'A3F7B2C1'
+console.log('DocId:', event.docId);             // undefined or doc ID
+```
+
+### Step 3: Test Determinism (Shuffle Test)
+
+```javascript
+// Run stability test
+window.__kg.testStability()
+// Output: "Stability test PASSED" - same hash after 5 shuffles
+```
+
+### Step 4: Test No-Op Detection
+
+```javascript
+// Load same spec twice
+window.__kg.loadExample()
+const v1 = window.__topology.version()
+
+window.__kg.loadExample()
+const v2 = window.__topology.version()
+
+console.log('Version unchanged:', v1 === v2)  // true
+
+// Check reason
+const event = await window.__topology.mutations.last()
+console.log('Reason:', event.reason)  // 'noop'
+```
+
+### Step 5: View Mutation Table with Provider Columns
+
+```javascript
+// Show last 10 mutations with provider info
+await window.__topology.mutations.table(10)
+// Columns: ID | Status | Source | Provider | Hash | V-> | dN | dL | dS
+```
+
+### Step 6: Test Manual Mutation Provider
+
+```javascript
+// Add a link
+window.__topology.addLink('n0', 'n5', 'manual')
+
+// Check provider field (should be empty for direct API calls)
+const event = await window.__topology.mutations.last()
+console.log('Source:', event.source)  // 'addKnowledgeLink'
+console.log('Provider:', event.providerName)  // undefined (direct API)
+```
+
 ## Architecture
 
 ```

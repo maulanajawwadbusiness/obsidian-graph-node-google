@@ -9,6 +9,7 @@ import type { Topology, NodeSpec, DirectedLink } from './topologyTypes';
 import type { ForceConfig } from '../physics/types';
 import { DEFAULT_PHYSICS_CONFIG } from '../physics/config';
 import { deriveSpringEdges } from './springDerivation'; // STEP3-RUN5-V3-FIX1
+import { ensureDirectedLinkIds } from './directedLinkId'; // STEP4-RUN5
 
 /**
  * Internal state (private to this module)
@@ -99,6 +100,111 @@ export function getTopology(): Topology {
  */
 export function getTopologyVersion(): number {
     return topologyVersion;
+}
+
+/**
+ * STEP4-RUN5: Add a knowledge link and return its ID.
+ * If link doesn't have an ID, one is generated.
+ * 
+ * @param link The directed link to add
+ * @param config Optional physics config for spring recomputation
+ * @returns The link ID
+ */
+export function addKnowledgeLink(link: DirectedLink, config?: ForceConfig): string {
+    // Ensure link has an ID
+    const linksWithIds = ensureDirectedLinkIds([link]);
+    const linkWithId = linksWithIds[0];
+
+    // Add to topology
+    currentTopology.links.push(linkWithId);
+
+    // Recompute springs
+    currentTopology.springs = deriveSpringEdges(currentTopology, config || DEFAULT_PHYSICS_CONFIG);
+
+    topologyVersion++;
+
+    if (import.meta.env.DEV) {
+        console.log(`[TopologyControl] addKnowledgeLink: ${linkWithId.from} → ${linkWithId.to} (id: ${linkWithId.id})`);
+    }
+
+    return linkWithId.id!;
+}
+
+/**
+ * STEP4-RUN5: Remove a knowledge link by ID.
+ * NEVER affects other links (even with same endpoints).
+ * 
+ * @param linkId The link ID to remove
+ * @param config Optional physics config for spring recomputation
+ * @returns Whether the link was found and removed
+ */
+export function removeKnowledgeLink(linkId: string, config?: ForceConfig): boolean {
+    const beforeCount = currentTopology.links.length;
+
+    // Remove by ID (NOT by endpoints)
+    currentTopology.links = currentTopology.links.filter(l => l.id !== linkId);
+
+    const removed = currentTopology.links.length < beforeCount;
+
+    if (removed) {
+        // Recompute springs
+        currentTopology.springs = deriveSpringEdges(currentTopology, config || DEFAULT_PHYSICS_CONFIG);
+        topologyVersion++;
+
+        if (import.meta.env.DEV) {
+            console.log(`[TopologyControl] removeKnowledgeLink: removed link ${linkId}`);
+        }
+    } else if (import.meta.env.DEV) {
+        console.warn(`[TopologyControl] removeKnowledgeLink: link ${linkId} not found`);
+    }
+
+    return removed;
+}
+
+/**
+ * STEP4-RUN5: Update a knowledge link by ID.
+ * 
+ * @param linkId The link ID to update
+ * @param patch Partial link data to merge
+ * @param config Optional physics config for spring recomputation
+ * @returns Whether the link was found and updated
+ */
+export function updateKnowledgeLink(linkId: string, patch: Partial<DirectedLink>, config?: ForceConfig): boolean {
+    const link = currentTopology.links.find(l => l.id === linkId);
+
+    if (!link) {
+        if (import.meta.env.DEV) {
+            console.warn(`[TopologyControl] updateKnowledgeLink: link ${linkId} not found`);
+        }
+        return false;
+    }
+
+    // Merge patch (preserve ID)
+    Object.assign(link, patch);
+    link.id = linkId; // Ensure ID never changes
+
+    // Recompute springs if endpoints or weight changed
+    if (patch.from !== undefined || patch.to !== undefined || patch.weight !== undefined) {
+        currentTopology.springs = deriveSpringEdges(currentTopology, config || DEFAULT_PHYSICS_CONFIG);
+    }
+
+    topologyVersion++;
+
+    if (import.meta.env.DEV) {
+        console.log(`[TopologyControl] updateKnowledgeLink: updated link ${linkId}`);
+    }
+
+    return true;
+}
+
+/**
+ * STEP4-RUN5: Get a knowledge link by ID.
+ * 
+ * @param linkId The link ID
+ * @returns The link or undefined if not found
+ */
+export function getKnowledgeLink(linkId: string): DirectedLink | undefined {
+    return currentTopology.links.find(l => l.id === linkId);
 }
 
 /**

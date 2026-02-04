@@ -126,10 +126,13 @@ export const devTopologyHelpers = {
                 console.log('[DevTopology] No mutations yet');
                 return;
             }
+            // STEP7-RUN12: Include provider and hash columns
             const rows = events.map(e => ({
                 ID: e.mutationId,
                 Status: e.status,
                 Source: e.source,
+                Provider: e.providerName || '-',
+                Hash: e.inputHash?.slice(0, 8) || '-',
                 'V->': `${e.versionBefore}->${e.versionAfter}`,
                 dN: e.countsAfter.nodes - e.countsBefore.nodes,
                 dL: e.countsAfter.directedLinks - e.countsBefore.directedLinks,

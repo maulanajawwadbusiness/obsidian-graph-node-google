@@ -6,7 +6,6 @@
  */
 
 import type { Topology, SpringEdge } from './topologyTypes';
-import { computeRestLengths } from './restLengthPolicy';
 import type { ForceConfig } from '../physics/types';
 import { DEFAULT_PHYSICS_CONFIG } from '../physics/config';
 import type { PhysicsMappingPolicy } from './physicsMappingPolicy';
@@ -94,29 +93,46 @@ export function deriveSpringEdges(
                 console.log(`[SpringDerivation] Merged spring {${a}, ${b}}: ${existing.contributors?.length || 0} contributors`);
             }
         } else {
+            // STEP 8 - RUN 5: Use policy params for spring properties
+            // Convert compliance (inverse stiffness) to stiffness
+            const policyStiffness = policyParams.compliance > 0
+                ? 1.0 / policyParams.compliance
+                : 1000; // Cap at very high stiffness for near-zero compliance
+
+            // Scale by link weight if present (semantic confidence)
+            const weight = link.weight ?? 1.0;
+            const finalStiffness = policyStiffness * weight;
+
             const spring: SpringEdge = {
                 a,
                 b,
-                restLen: 0, // Will be set by rest length policy
-                stiffness: link.weight ?? 1.0,
+                restLen: policyParams.restLength, // Use policy-computed rest length
+                stiffness: finalStiffness, // Use policy-computed stiffness
                 contributors: link.id ? [link.id] : [],
-                // STEP 8 - RUN 3: Store policy metadata (no behavior change yet)
+                // STEP 8 - RUN 3: Store policy metadata
                 meta: {
                     policyParams,
-                    edgeType: link.kind || 'relates'
+                    edgeType: link.kind || 'relates',
+                    dampingScale: policyParams.dampingScale
                 }
             };
             edgeMap.set(key, spring);
         }
     }
 
+    // STEP 8 - RUN 5: Edges already have restLen from policy, no need to computeRestLengths
     const edges = Array.from(edgeMap.values());
-    const restLengths = computeRestLengths(edges, topology, null, appliedConfig, opts);
+
+    // Collect stats for logging (counts per edge type, compliance stats)
+    const edgeTypeCounts = new Map<string, number>();
+    const complianceValues: number[] = [];
     for (const edge of edges) {
-        const key = `${edge.a}:${edge.b}`;
-        const restLen = restLengths.get(key);
-        if (restLen !== undefined) {
-            edge.restLen = restLen;
+        const policy = edge.meta?.policyParams as any;
+        if (policy?.edgeType) {
+            edgeTypeCounts.set(policy.edgeType, (edgeTypeCounts.get(policy.edgeType) || 0) + 1);
+        }
+        if (policy?.compliance !== undefined) {
+            complianceValues.push(policy.compliance);
         }
     }
 
@@ -167,6 +183,22 @@ export function deriveSpringEdges(
 
     if (!opts?.silent && import.meta.env.DEV) {
         console.log(`[Run9] deriveSpringEdges: ${totalDirectedLinks} directed links -> ${validEdges.length} spring edges (dedupe: ${dedupeRate}%)`);
+
+        // STEP 8 - RUN 6: Policy summary logging
+        if (edgeTypeCounts.size > 0) {
+            const typeSummary = Array.from(edgeTypeCounts.entries())
+                .map(([type, count]) => `${type}:${count}`)
+                .join(', ');
+            console.log(`[PhysicsMappingPolicy] Edge types: ${typeSummary}`);
+        }
+
+        if (complianceValues.length > 0) {
+            const minC = Math.min(...complianceValues);
+            const maxC = Math.max(...complianceValues);
+            const avgC = complianceValues.reduce((a, b) => a + b, 0) / complianceValues.length;
+            console.log(`[PhysicsMappingPolicy] Compliance: min=${minC.toFixed(4)}, max=${maxC.toFixed(4)}, avg=${avgC.toFixed(4)}`);
+        }
+
         console.groupEnd();
     }
 

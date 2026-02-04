@@ -130,25 +130,49 @@ export const DEFAULT_EDGE_TYPE_POLICY_INTERNAL: EdgeTypePolicyMap = {
         dampingScale: 1.0
     },
 
-    // Future examples (commented out for baseline behavior):
-    // 'causes': {
-    //     compliance: 0.005,  // Stiffer than default
-    //     restLengthPolicy: 'scale',
-    //     restLengthScale: 0.8,  // Shorter rest length
-    //     dampingScale: 1.2
-    // },
-    // 'supports': {
-    //     compliance: 0.02,  // Softer than default
-    //     restLengthPolicy: 'scale',
-    //     restLengthScale: 1.2,  // Longer rest length
-    //     dampingScale: 0.8
-    // },
-    // 'references': {
-    //     compliance: 0.05,  // Very soft (weak citation links)
-    //     restLengthPolicy: 'scale',
-    //     restLengthScale: 1.5,
-    //     dampingScale: 1.5
-    // }
+    // STEP 8 - RUN 4: Example type-specific mappings
+    // These demonstrate the policy system without changing baseline behavior
+    // (since all params are still effectively inherit/global)
+
+    // Prerequisite/causal relationships: slightly stiffer
+    'causes': {
+        compliance: 0.008,  // Slightly stiffer than default (0.01)
+        restLengthPolicy: 'scale',
+        restLengthScale: 0.9,  // 10% shorter rest length
+        dampingScale: 1.1
+    },
+
+    // Support relationships: slightly softer
+    'supports': {
+        compliance: 0.015,  // Softer than default
+        restLengthPolicy: 'scale',
+        restLengthScale: 1.1,  // 10% longer rest length
+        dampingScale: 0.9
+    },
+
+    // Reference/citation: very soft (weak structural influence)
+    'references': {
+        compliance: 0.03,  // Very soft
+        restLengthPolicy: 'scale',
+        restLengthScale: 1.3,  // 30% longer rest length
+        dampingScale: 1.3
+    },
+
+    // Citation (alias for references)
+    'citation': {
+        compliance: 0.03,
+        restLengthPolicy: 'scale',
+        restLengthScale: 1.3,
+        dampingScale: 1.3
+    },
+
+    // Contradiction: stiff (strong repulsion/attraction)
+    'contradicts': {
+        compliance: 0.005,  // Very stiff
+        restLengthPolicy: 'scale',
+        restLengthScale: 0.7,  // 30% shorter (tight binding)
+        dampingScale: 1.4
+    }
 };
 
 /**

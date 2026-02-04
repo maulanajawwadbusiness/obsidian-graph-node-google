@@ -20,6 +20,7 @@ import { isFinite as _isFinite } from './numberUtils';
  * - Falls back to global config for unspecified params
  * - Clamps params to sane ranges
  * - Unknown edge types use wildcard ('*') policy
+ * STEP 8 - RUN 13: Added validation for unknown types and invalid ranges.
  */
 export const DefaultPhysicsMappingPolicy: PhysicsMappingPolicy = {
     name: 'default',
@@ -30,6 +31,11 @@ export const DefaultPhysicsMappingPolicy: PhysicsMappingPolicy = {
         const edgeType = (link.kind || 'relates').trim();
         const policy = getEdgeTypePolicy(edgeType);
 
+        // STEP 8 - RUN 13: Warn once for unknown edge types
+        if (import.meta.env.DEV && !isKnownEdgeType(edgeType) && edgeType !== 'relates') {
+            warnUnknownEdgeType(edgeType);
+        }
+
         // Compute rest length
         const restLength = computeRestLength(policy, globalConfig.targetSpacing);
 
@@ -39,15 +45,21 @@ export const DefaultPhysicsMappingPolicy: PhysicsMappingPolicy = {
         // Compute damping scale
         const dampingScale = computeDampingScale(policy, globalConfig.damping);
 
-        // Validate params
+        // STEP 8 - RUN 13: Enhanced validation with range warnings
         if (!_isFinite(restLength) || !_isFinite(compliance) || !_isFinite(dampingScale)) {
             if (import.meta.env.DEV) {
-                console.warn(
-                    `[PhysicsMappingPolicy] Invalid params for link ${link.id}: ` +
-                    `restLength=${restLength}, compliance=${compliance}, dampingScale=${dampingScale}`
+                console.error(
+                    `[PhysicsMappingPolicy] Invalid params (NaN/Infinity) for link ${link.id}: ` +
+                    `edgeType=${edgeType}, restLength=${restLength}, compliance=${compliance}, ` +
+                    `dampingScale=${dampingScale}`
                 );
             }
             return undefined;
+        }
+
+        // Warn if params were clamped to valid range
+        if (import.meta.env.DEV) {
+            validateParamRanges(edgeType, policy, restLength, compliance, dampingScale);
         }
 
         return {
@@ -144,4 +156,86 @@ function computeDampingScale(
  */
 function clamp(value: number, min: number, max: number): number {
     return Math.max(min, Math.min(max, value));
+}
+
+/**
+ * STEP 8 - RUN 13: Track warned unknown edge types to avoid spam.
+ */
+const warnedUnknownTypes = new Set<string>();
+
+/**
+ * Check if an edge type has a specific policy (not wildcard).
+ */
+function isKnownEdgeType(edgeType: string): boolean {
+    return DEFAULT_EDGE_TYPE_POLICY_INTERNAL.hasOwnProperty(edgeType);
+}
+
+/**
+ * Warn once per unknown edge type.
+ */
+function warnUnknownEdgeType(edgeType: string): void {
+    if (!warnedUnknownTypes.has(edgeType)) {
+        warnedUnknownTypes.add(edgeType);
+        console.warn(
+            `[PhysicsMappingPolicy] Unknown edge type '${edgeType}' - using wildcard '*' policy. ` +
+            `Add to DEFAULT_EDGE_TYPE_POLICY for type-specific params.`
+        );
+    }
+}
+
+/**
+ * STEP 8 - RUN 13: Validate parameter ranges and warn if clamped.
+ */
+function validateParamRanges(
+    edgeType: string,
+    policy: EdgeTypeParams,
+    _restLength: number,
+    _compliance: number,
+    _dampingScale: number
+): void {
+    const warnings: string[] = [];
+
+    // Check compliance range
+    if (policy.compliance !== undefined) {
+        if (policy.compliance < PARAM_CLAMP.compliance.min) {
+            warnings.push(`compliance ${policy.compliance} clamped to ${PARAM_CLAMP.compliance.min}`);
+        } else if (policy.compliance > PARAM_CLAMP.compliance.max) {
+            warnings.push(`compliance ${policy.compliance} clamped to ${PARAM_CLAMP.compliance.max}`);
+        }
+    }
+
+    // Check restLengthScale range
+    if (policy.restLengthScale !== undefined) {
+        if (policy.restLengthScale < PARAM_CLAMP.restLengthScale.min) {
+            warnings.push(`restLengthScale ${policy.restLengthScale} clamped to ${PARAM_CLAMP.restLengthScale.min}`);
+        } else if (policy.restLengthScale > PARAM_CLAMP.restLengthScale.max) {
+            warnings.push(`restLengthScale ${policy.restLengthScale} clamped to ${PARAM_CLAMP.restLengthScale.max}`);
+        }
+    }
+
+    // Check dampingScale range
+    if (policy.dampingScale !== undefined) {
+        if (policy.dampingScale < PARAM_CLAMP.dampingScale.min) {
+            warnings.push(`dampingScale ${policy.dampingScale} clamped to ${PARAM_CLAMP.dampingScale.min}`);
+        } else if (policy.dampingScale > PARAM_CLAMP.dampingScale.max) {
+            warnings.push(`dampingScale ${policy.dampingScale} clamped to ${PARAM_CLAMP.dampingScale.max}`);
+        }
+    }
+
+    // Check restLengthPixels range
+    if (policy.restLengthPixels !== undefined) {
+        if (policy.restLengthPixels < PARAM_CLAMP.restLength.min) {
+            warnings.push(`restLengthPixels ${policy.restLengthPixels} clamped to ${PARAM_CLAMP.restLength.min}`);
+        } else if (policy.restLengthPixels > PARAM_CLAMP.restLength.max) {
+            warnings.push(`restLengthPixels ${policy.restLengthPixels} clamped to ${PARAM_CLAMP.restLength.max}`);
+        }
+    }
+
+    // Log warnings if any
+    if (warnings.length > 0) {
+        console.warn(
+            `[PhysicsMappingPolicy] Edge type '${edgeType}': ` +
+            `params were clamped to valid ranges: ${warnings.join(', ')}`
+        );
+    }
 }

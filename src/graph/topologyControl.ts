@@ -11,6 +11,18 @@ import { DEFAULT_PHYSICS_CONFIG } from '../physics/config';
 import { deriveSpringEdges } from './springDerivation';
 import { ensureDirectedLinkIds } from './directedLinkId';
 
+// STEP6-RUN3: Import mutation observer (dev-only)
+let emitMutationEvent: any = null;
+let computeLinkDiff: any = null;
+if (import.meta.env.DEV) {
+    import('./topologyMutationObserver').then(mod => {
+        emitMutationEvent = mod.emitMutationEvent;
+    });
+    import('./topologyControlHelpers').then(mod => {
+        computeLinkDiff = mod.computeLinkDiff;
+    });
+}
+
 /**
  * Internal state (private to this module)
  */
@@ -166,8 +178,31 @@ export function setTopology(topology: Topology, config?: ForceConfig): void {
     const nodeIdSet = new Set(topology.nodes.map(n => n.id));
     const validation = validateLinks(linksWithIds, nodeIdSet, 'setTopology');
 
+    // STEP6-RUN3: Capture before state
+    const versionBefore = topologyVersion;
+    const countsBefore = {
+        nodes: currentTopology.nodes.length,
+        directedLinks: currentTopology.links.length,
+        springs: currentTopology.springs?.length || 0
+    };
+
     if (!validation.ok) {
         logValidationFailure(validation, 'setTopology');
+
+        // STEP6-RUN3: Emit rejected event
+        if (import.meta.env.DEV && emitMutationEvent) {
+            emitMutationEvent({
+                status: 'rejected' as const,
+                source: 'setTopology' as const,
+                versionBefore,
+                versionAfter: versionBefore,
+                countsBefore,
+                countsAfter: countsBefore,
+                validationErrors: validation.errors,
+                mutationId: 0,
+                timestamp: 0
+            });
+        }
         return;
     }
 
@@ -180,6 +215,13 @@ export function setTopology(topology: Topology, config?: ForceConfig): void {
     currentTopology.springs = deriveSpringEdges(currentTopology, config || DEFAULT_PHYSICS_CONFIG);
     topologyVersion++;
 
+    // STEP6-RUN3: Capture after state
+    const countsAfter = {
+        nodes: currentTopology.nodes.length,
+        directedLinks: currentTopology.links.length,
+        springs: currentTopology.springs?.length || 0
+    };
+
     if (import.meta.env.DEV) {
         console.log(
             `[TopologyControl] setTopology: ${currentTopology.nodes.length} nodes, ${currentTopology.links.length} links (v${topologyVersion})`
@@ -187,6 +229,20 @@ export function setTopology(topology: Topology, config?: ForceConfig): void {
     }
 
     devAssertTopologyInvariants(currentTopology, config, 'setTopology');
+
+    // STEP6-RUN3: Emit applied event
+    if (import.meta.env.DEV && emitMutationEvent) {
+        emitMutationEvent({
+            status: 'applied' as const,
+            source: 'setTopology' as const,
+            versionBefore,
+            versionAfter: topologyVersion,
+            countsBefore,
+            countsAfter,
+            mutationId: 0,
+            timestamp: 0
+        });
+    }
 }
 
 /**
@@ -366,6 +422,15 @@ export function patchTopology(patch: TopologyPatch, config?: ForceConfig): void 
         links: currentTopology.links.length
     };
 
+    // STEP6-RUN4: Capture before state
+    const versionBefore = topologyVersion;
+    const countsBefore = {
+        nodes: currentTopology.nodes.length,
+        directedLinks: currentTopology.links.length,
+        springs: currentTopology.springs?.length || 0
+    };
+    const linksBefore = [...currentTopology.links];
+
     let nextNodes = [...currentTopology.nodes];
     let nextLinks = ensureDirectedLinkIds([...currentTopology.links]);
     let removedLinkCount = 0;
@@ -458,6 +523,21 @@ export function patchTopology(patch: TopologyPatch, config?: ForceConfig): void 
 
     if (!validation.ok) {
         logValidationFailure(validation, 'patchTopology');
+
+        // STEP6-RUN4: Emit rejected event
+        if (import.meta.env.DEV && emitMutationEvent) {
+            emitMutationEvent({
+                status: 'rejected' as const,
+                source: 'patchTopology' as const,
+                versionBefore,
+                versionAfter: versionBefore,
+                countsBefore,
+                countsAfter: countsBefore,
+                validationErrors: validation.errors,
+                mutationId: 0,
+                timestamp: 0
+            });
+        }
         return;
     }
 
@@ -474,6 +554,13 @@ export function patchTopology(patch: TopologyPatch, config?: ForceConfig): void 
         links: currentTopology.links.length
     };
 
+    // STEP6-RUN4: Capture after state
+    const countsAfter = {
+        nodes: currentTopology.nodes.length,
+        directedLinks: currentTopology.links.length,
+        springs: currentTopology.springs?.length || 0
+    };
+
     const diff = {
         nodesAdded: patch.addNodes?.length || 0,
         nodesRemoved: patch.removeNodes?.length || 0,
@@ -488,4 +575,20 @@ export function patchTopology(patch: TopologyPatch, config?: ForceConfig): void 
     );
 
     devAssertTopologyInvariants(currentTopology, config, 'patchTopology');
+
+    // STEP6-RUN4: Emit applied event with link diff
+    if (import.meta.env.DEV && emitMutationEvent && computeLinkDiff) {
+        const linkDiff = computeLinkDiff(linksBefore, currentTopology.links);
+        emitMutationEvent({
+            status: 'applied' as const,
+            source: 'patchTopology' as const,
+            versionBefore,
+            versionAfter: topologyVersion,
+            countsBefore,
+            countsAfter,
+            linkDiff,
+            mutationId: 0,
+            timestamp: 0
+        });
+    }
 }

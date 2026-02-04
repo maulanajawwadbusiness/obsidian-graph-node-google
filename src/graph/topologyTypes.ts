@@ -54,16 +54,10 @@ export interface Topology {
 }
 
 /**
- * Undirected spring edge for physics simulation.
- * Derived from DirectedLink(s) via a transformation function.
+ * STEP3-RUN2: Undirected physics spring edge.
+ * Derived from directed knowledge links via deduplication.
+ * 
+ * STEP4-RUN7: Added `contributors` for provenance tracking.
  */
 export interface SpringEdge {
-    a: NodeId;              // Always min(from, to) for canonical ordering
-    b: NodeId;              // Always max(from, to)
-    restLen?: number;       // Rest length in pixels (optional override)
-    strength?: number;      // Spring stiffness (optional override)
-    meta?: {
-        sourceLinks?: string[]; // IDs of DirectedLinks that created this spring
-        [key: string]: unknown;
-    };
 }

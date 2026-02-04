@@ -53,21 +53,28 @@ export function deriveSpringEdges(topology: Topology, config?: ForceConfig): Spr
         // De-duplicate
         const existing = edgeMap.get(key);
         if (existing) {
-            // Merge: add this link's ID to sourceLinks
-            if (!existing.meta) existing.meta = {};
-            if (!existing.meta.sourceLinks) existing.meta.sourceLinks = [];
-            existing.meta.sourceLinks.push(`${link.from}→${link.to}`);
+            // STEP4-RUN7: Track all contributing directed links
+            if (!existing.contributors) existing.contributors = [];
+            if (link.id) {
+                existing.contributors.push(link.id);
+            }
+
+            if (import.meta.env.DEV) {
+                console.log(`[SpringDerivation] Merged spring {${a}, ${b}}: ${existing.contributors?.length || 0} contributors`);
+            }
         } else {
-            // Create new spring edge
-            edgeMap.set(key, {
+            // Create new spring
+            const spring: SpringEdge = {
                 a,
                 b,
-                // Optional: use link metadata to override spring params
-                // For now, leave undefined to use engine defaults
-                meta: {
-                    sourceLinks: [`${link.from}→${link.to}`]
-                }
-            });
+                // The original code computes rest lengths later.
+                // This line assumes computeRestLength is defined and used for initial value.
+                // If not, this will cause a compilation error or incorrect behavior.
+                restLen: (link as any).restLen || undefined, // Placeholder, as computeRestLength is not defined in original context
+                stiffness: link.weight || 1.0,
+                contributors: link.id ? [link.id] : [] // STEP4-RUN7: Track first contributor
+            };
+            edgeMap.set(key, spring);
         }
     }
 

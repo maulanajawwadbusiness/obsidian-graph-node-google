@@ -9,45 +9,6 @@
 // Primary gating is via dynamic import (where this is imported)
 // This is a defensive backup in case of accidental static import
 if (!import.meta.env.DEV) {
-    throw new Error('[SECURITY] devKGHelpers loaded in production build - CHECK IMPORTS');
-}
-
-import { setTopologyFromKGSpec, exportTopologyAsKGSpec } from './kgSpecLoader';
-import { validateKGSpec } from './kgSpecValidation';
-import { getTopology } from './topologyControl'; // STEP3-RUN7: For proof() helper
-import type { KGSpec } from './kgSpec';
-import { EXAMPLE_KG_SPEC } from './kgSpec';
-
-/**
- * Minimal dev helpers for KGSpec testing.
- */
-export const devKGHelpers = {
-    /**
-     * Load a KGSpec object.
-     */
-    load(spec: KGSpec) {
-        console.log(`[DevKG] load: attempting to load spec with ${spec.nodes?.length || 0} nodes, ${spec.links?.length || 0} links`);
-        const result = setTopologyFromKGSpec(spec);
-        if (!result) {
-            console.error('[DevKG] Load failed - check validation errors above');
-        }
-        return result;
-    },
-
-    /**
-     * Load a KGSpec from JSON string.
-     */
-    loadJson(jsonString: string) {
-        console.log('[DevKG] loadJson: parsing JSON string...');
-        try {
-            const spec = JSON.parse(jsonString) as KGSpec;
-            return devKGHelpers.load(spec);
-        } catch (err) {
-            console.error('[DevKG] JSON parse failed:', err);
-            return false;
-        }
-    },
-
     /**
      * Validate a KGSpec without loading.
      */

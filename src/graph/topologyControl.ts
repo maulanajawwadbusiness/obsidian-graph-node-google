@@ -42,9 +42,10 @@ function ensureSprings(reason: string, config?: ForceConfig): void {
  * This is the single authoritative seam for topology changes.
  */
 export function setTopology(topology: Topology, config?: ForceConfig): void {
+    const linksWithIds = ensureDirectedLinkIds(topology.links);
     currentTopology = {
         nodes: [...topology.nodes],
-        links: [...topology.links],
+        links: [...linksWithIds],
         springs: [] // Will be computed immediately below
     };
 
@@ -57,6 +58,21 @@ export function setTopology(topology: Topology, config?: ForceConfig): void {
     if (import.meta.env.DEV) {
         const freshCount = currentTopology.springs.length;
         const linksCount = currentTopology.links.length;
+        const seenIds = new Set<string>();
+        const dupes: string[] = [];
+
+        for (const link of currentTopology.links) {
+            if (!link.id) continue;
+            if (seenIds.has(link.id)) {
+                dupes.push(link.id);
+            } else {
+                seenIds.add(link.id);
+            }
+        }
+
+        if (dupes.length > 0) {
+            console.warn(`[TopologyControl] Duplicate directed link IDs detected:`, dupes);
+        }
 
         // Check if springs were provided and differ from fresh derivation
         if (topology.springs && topology.springs.length > 0) {
@@ -112,8 +128,15 @@ export function getTopologyVersion(): number {
  */
 export function addKnowledgeLink(link: DirectedLink, config?: ForceConfig): string {
     // Ensure link has an ID
-    const linksWithIds = ensureDirectedLinkIds([link]);
+    const linksWithIds = ensureDirectedLinkIds([link], currentTopology.links);
     const linkWithId = linksWithIds[0];
+
+    if (linkWithId.id && currentTopology.links.some(l => l.id === linkWithId.id)) {
+        if (import.meta.env.DEV) {
+            console.warn(`[TopologyControl] addKnowledgeLink: link ID already exists, skipping add (${linkWithId.id})`);
+        }
+        return linkWithId.id;
+    }
 
     // Add to topology
     currentTopology.links.push(linkWithId);
@@ -124,7 +147,7 @@ export function addKnowledgeLink(link: DirectedLink, config?: ForceConfig): stri
     topologyVersion++;
 
     if (import.meta.env.DEV) {
-        console.log(`[TopologyControl] addKnowledgeLink: ${linkWithId.from} → ${linkWithId.to} (id: ${linkWithId.id})`);
+        console.log(`[TopologyControl] addKnowledgeLink: ${linkWithId.from} -> ${linkWithId.to} (id: ${linkWithId.id})`);
     }
 
     return linkWithId.id!;
@@ -228,7 +251,8 @@ export interface TopologyPatch {
     addNodes?: NodeSpec[];
     removeNodes?: string[]; // Node IDs to remove
     addLinks?: DirectedLink[];
-    removeLinks?: Array<{ from: string; to: string }>; // Link endpoints to remove
+    removeLinkIds?: string[]; // Preferred: remove by directedLinkId
+    removeLinks?: Array<{ id?: string; from?: string; to?: string }>; // Legacy: avoid endpoint removal when possible
     setLinks?: DirectedLink[]; // Replace all links (keep nodes)
 }
 
@@ -243,6 +267,10 @@ export function patchTopology(patch: TopologyPatch, config?: ForceConfig): void 
         nodes: currentTopology.nodes.length,
         links: currentTopology.links.length
     };
+
+    currentTopology.links = ensureDirectedLinkIds(currentTopology.links);
+    let removedLinkCount = 0;
+    let acceptedLinks = 0;
 
     // Remove nodes
     if (patch.removeNodes && patch.removeNodes.length > 0) {
@@ -260,18 +288,54 @@ export function patchTopology(patch: TopologyPatch, config?: ForceConfig): void 
     }
 
     // Remove links
-    if (patch.removeLinks && patch.removeLinks.length > 0) {
-        const removeKeys = new Set(
-            patch.removeLinks.map(l => `${l.from}:${l.to}`)
-        );
+    if (patch.removeLinkIds && patch.removeLinkIds.length > 0) {
+        const removeIdSet = new Set(patch.removeLinkIds);
+        const beforeLinks = currentTopology.links.length;
         currentTopology.links = currentTopology.links.filter(
-            l => !removeKeys.has(`${l.from}:${l.to}`)
+            l => !l.id || !removeIdSet.has(l.id)
         );
+        removedLinkCount += beforeLinks - currentTopology.links.length;
+    }
+
+    if (patch.removeLinks && patch.removeLinks.length > 0) {
+        for (const remove of patch.removeLinks) {
+            let removeId = remove.id;
+
+            if (!removeId && remove.from && remove.to) {
+                const matches = currentTopology.links.filter(
+                    l => l.from === remove.from && l.to === remove.to
+                );
+
+                if (matches.length === 0) {
+                    if (import.meta.env.DEV) {
+                        console.warn(`[TopologyControl] removeLinks: no match for ${remove.from} -> ${remove.to}`);
+                    }
+                    continue;
+                }
+
+                if (matches.length > 1 && import.meta.env.DEV) {
+                    console.warn(`[TopologyControl] removeLinks: multiple matches for ${remove.from} -> ${remove.to}; removing first only`);
+                }
+
+                removeId = matches[0].id;
+            }
+
+            if (!removeId) {
+                if (import.meta.env.DEV) {
+                    console.warn('[TopologyControl] removeLinks: missing id or endpoints');
+                }
+                continue;
+            }
+
+            const beforeLinks = currentTopology.links.length;
+            currentTopology.links = currentTopology.links.filter(l => l.id !== removeId);
+            removedLinkCount += beforeLinks - currentTopology.links.length;
+        }
     }
 
     // Set links (replace all)
     if (patch.setLinks) {
-        currentTopology.links = [...patch.setLinks];
+        currentTopology.links = ensureDirectedLinkIds(patch.setLinks);
     }
 
     // PRE-STEP2: Add links with validation
@@ -280,45 +344,45 @@ export function patchTopology(patch: TopologyPatch, config?: ForceConfig): void 
         const nodeIdSet = new Set(currentTopology.nodes.map(n => n.id));
 
         // Validation counters
-        let accepted = 0;
         let rejectedSelfLoops = 0;
         let rejectedMissingEndpoint = 0;
-        let deduped = 0;
+        let rejectedDuplicateId = 0;
 
-        // Track existing links for deduplication
-        const existingKeys = new Set(currentTopology.links.map(l => `${l.from}:${l.to}`));
+        const incomingLinks = ensureDirectedLinkIds(patch.addLinks, currentTopology.links);
+        const existingIds = new Set(currentTopology.links.map(l => l.id).filter(Boolean));
 
-        for (const link of patch.addLinks) {
+        for (const link of incomingLinks) {
             // Validation 1: Reject self-loops
             if (link.from === link.to) {
-                console.warn(`[TopologyControl] Rejected self-loop: ${link.from} → ${link.to}`);
+                console.warn(`[TopologyControl] Rejected self-loop: ${link.from} -> ${link.to}`);
                 rejectedSelfLoops++;
                 continue;
             }
 
             // Validation 2: Reject links with missing endpoints
             if (!nodeIdSet.has(link.from) || !nodeIdSet.has(link.to)) {
-                console.warn(`[TopologyControl] Rejected link with missing endpoint: ${link.from} → ${link.to} (nodes exist: from=${nodeIdSet.has(link.from)}, to=${nodeIdSet.has(link.to)})`);
+                console.warn(`[TopologyControl] Rejected link with missing endpoint: ${link.from} -> ${link.to} (nodes exist: from=${nodeIdSet.has(link.from)}, to=${nodeIdSet.has(link.to)})`);
                 rejectedMissingEndpoint++;
                 continue;
             }
 
-            // Validation 3: Check for duplicates
-            const key = `${link.from}:${link.to}`;
-            if (existingKeys.has(key)) {
-                deduped++;
+            // Validation 3: Reject duplicate IDs
+            if (link.id && existingIds.has(link.id)) {
+                rejectedDuplicateId++;
                 continue;
             }
 
             // Accept link
             currentTopology.links.push(link);
-            existingKeys.add(key);
-            accepted++;
+            if (link.id) {
+                existingIds.add(link.id);
+            }
+            acceptedLinks++;
         }
 
         // Log validation summary if any rejections occurred
-        if (rejectedSelfLoops > 0 || rejectedMissingEndpoint > 0 || deduped > 0) {
-            console.log(`[TopologyControl] Validation: accepted=${accepted}, rejectedSelfLoops=${rejectedSelfLoops}, rejectedMissing=${rejectedMissingEndpoint}, deduped=${deduped}`);
+        if (rejectedSelfLoops > 0 || rejectedMissingEndpoint > 0 || rejectedDuplicateId > 0) {
+            console.log(`[TopologyControl] Validation: accepted=${acceptedLinks}, rejectedSelfLoops=${rejectedSelfLoops}, rejectedMissing=${rejectedMissingEndpoint}, duplicateIds=${rejectedDuplicateId}`);
         }
     }
 
@@ -333,8 +397,8 @@ export function patchTopology(patch: TopologyPatch, config?: ForceConfig): void 
     const diff = {
         nodesAdded: (patch.addNodes?.length || 0),
         nodesRemoved: (patch.removeNodes?.length || 0),
-        linksAdded: (patch.addLinks?.length || 0),
-        linksRemoved: (patch.removeLinks?.length || 0),
+        linksAdded: acceptedLinks,
+        linksRemoved: removedLinkCount,
         linksReplaced: patch.setLinks ? true : false
     };
 
@@ -348,7 +412,7 @@ export function patchTopology(patch: TopologyPatch, config?: ForceConfig): void 
     }
 
     console.log(
-        `[TopologyControl] patchTopology: nodes ${before.nodes}→${after.nodes}, links ${before.links}→${after.links} (v${topologyVersion})`,
+        `[TopologyControl] patchTopology: nodes ${before.nodes}->${after.nodes}, links ${before.links}->${after.links} (v${topologyVersion})`,
         diff
     );
 }

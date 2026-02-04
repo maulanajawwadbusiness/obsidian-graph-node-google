@@ -9,6 +9,8 @@ import type { KGSpec } from './kgSpec';
 
 /**
  * Validation result.
+ * 
+ * STEP5-RUN2: Added normalizedSpec for graceful degradation.
  */
 export interface ValidationResult {
     /** Whether the spec is valid */
@@ -19,6 +21,9 @@ export interface ValidationResult {
 
     /** Non-fatal warnings */
     warnings: string[];
+
+    /** STEP5-RUN2: Normalized/clamped spec (if warnings exist) */
+    normalizedSpec?: KGSpec;
 }
 
 /**
@@ -116,6 +121,11 @@ export function validateKGSpec(spec: KGSpec): ValidationResult {
         if (link.weight !== undefined && (link.weight < 0 || link.weight > 1)) {
             warnings.push(`Link ${i} (${link.from}→${link.to}): weight ${link.weight} outside [0,1] range`);
         }
+
+        // STEP5-RUN2: Check for NaN/Infinity
+        if (link.weight !== undefined && !isFinite(link.weight)) {
+            errors.push(`Link ${i} (${link.from}→${link.to}): weight is NaN or Infinity`);
+        }
     }
 
     // Aggregate link errors
@@ -140,9 +150,27 @@ export function validateKGSpec(spec: KGSpec): ValidationResult {
         warnings.push('No links in graph');
     }
 
+    // STEP5-RUN2: Create normalized spec if warnings exist
+    let normalizedSpec: KGSpec | undefined;
+    if (warnings.length > 0 && errors.length === 0) {
+        normalizedSpec = {
+            ...spec,
+            links: spec.links.map(link => ({
+                ...link,
+                // Clamp weight to [0, 1]
+                weight: link.weight !== undefined
+                    ? Math.max(0, Math.min(1, link.weight))
+                    : link.weight,
+                // Default rel to 'relates'
+                rel: link.rel || 'relates'
+            }))
+        };
+    }
+
     return {
         ok: errors.length === 0,
         errors,
-        warnings
+        warnings,
+        normalizedSpec
     };
 }

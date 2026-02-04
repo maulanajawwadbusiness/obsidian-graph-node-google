@@ -12,7 +12,7 @@ if (!import.meta.env.DEV) {
     throw new Error('[SECURITY] devTopologyHelpers loaded in production build - CHECK IMPORTS');
 }
 
-import { getTopology, patchTopology, clearTopology, getTopologyVersion } from './topologyControl';
+import { getTopology, addKnowledgeLink, removeKnowledgeLink, patchTopology, clearTopology, getTopologyVersion } from './topologyControl';
 import type { DirectedLink } from './topologyTypes';
 import { DEFAULT_PHYSICS_CONFIG } from '../physics/config';
 
@@ -24,27 +24,31 @@ export const devTopologyHelpers = {
      * Add a single directed link.
      */
     addLink(fromId: string, toId: string, kind?: string) {
-        console.log(`[DevTopology] addLink: ${fromId} → ${toId} (kind: ${kind || 'manual'})`);
-        // STEP3-RUN5-V5-FIX2: Pass default config for rest-length policy
-        patchTopology({
-            addLinks: [{
-                from: fromId,
-                to: toId,
-                kind: kind || 'manual',
-                weight: 1.0
-            }]
+        const id = addKnowledgeLink({
+            from: fromId,
+            to: toId,
+            kind: kind || 'manual',
+            weight: 1.0
         }, DEFAULT_PHYSICS_CONFIG);
+        console.log(`[DevTopology] addLink: ${fromId} -> ${toId} (kind: ${kind || 'manual'}, id: ${id})`);
+        return id;
     },
 
     /**
      * Remove a directed link.
      */
-    removeLink(fromId: string, toId: string) {
-        console.log(`[DevTopology] removeLink: ${fromId} → ${toId}`);
-        // STEP3-RUN5-V5-FIX2: Pass default config for rest-length policy
-        patchTopology({
-            removeLinks: [{ from: fromId, to: toId }]
-        }, DEFAULT_PHYSICS_CONFIG);
+    removeLink(idOrFrom: string, toId?: string) {
+        if (toId) {
+            console.warn(`[DevTopology] removeLink: endpoint removal is ambiguous; use directedLinkId when possible`);
+            const match = getTopology().links.find(l => l.from === idOrFrom && l.to === toId);
+            if (!match || !match.id) {
+                console.warn(`[DevTopology] removeLink: no match for ${idOrFrom} -> ${toId}`);
+                return false;
+            }
+            return removeKnowledgeLink(match.id, DEFAULT_PHYSICS_CONFIG);
+        }
+
+        return removeKnowledgeLink(idOrFrom, DEFAULT_PHYSICS_CONFIG);
     },
 
     /**

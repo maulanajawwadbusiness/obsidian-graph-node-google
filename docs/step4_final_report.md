@@ -11,6 +11,14 @@ Successfully eliminated endpoint-based addressing hazards by implementing stable
 
 **Key Achievement**: A→B (causes), A→B (supports), and B→A (refutes) can now coexist as distinct links with unique IDs, while physics correctly deduplicates to a single spring {A,B}.
 
+## Review Fixes (2026-02-04)
+
+- Directed link IDs now use ASCII format `from->to::rel::index`, and generation avoids collisions with existing links.
+- `patchTopology` no longer dedupes or bulk-removes by endpoints; prefer `removeLinkIds`, and legacy endpoint removal deletes only the first match (with a warning).
+- `deriveSpringEdges()` now reliably applies rest-length policy and logs dedupe rate without syntax errors.
+- Legacy Unicode arrow IDs (`from→to::rel::index`) are accepted when parsing for backward compatibility.
+- KGSpec `rel` is mapped into `DirectedLink.kind` at load time, so ID generation uses the original relationship.
+
 ---
 
 ## Problem Statement

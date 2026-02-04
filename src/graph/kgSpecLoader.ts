@@ -89,30 +89,37 @@ export interface IngestOptions {
  * @returns Whether the load succeeded
  */
 export function setTopologyFromKGSpec(spec: KGSpec, opts: IngestOptions = {}): boolean {
-    const { validate = true, allowWarnings = true } = opts;
+    const shouldValidate = opts.validate !== false; // Default true
 
-    // Validate first
-    if (validate) {
+    // STEP5-RUN3: Validation gate
+    if (shouldValidate) {
         const result = validateKGSpec(spec);
 
-        if (!result.ok) {
-            console.warn('[KGLoader] Validation failed. Topology NOT updated.');
-            console.warn(`[KGLoader] Errors (${result.errors.length}):`, result.errors);
+        // Log validation results
+        if (result.errors.length > 0) {
+            console.error('[KGLoader] Validation FAILED - spec rejected:');
+            result.errors.forEach(err => console.error(`  ✗ ${err}`));
             if (result.warnings.length > 0) {
-                console.warn(`[KGLoader] Warnings (${result.warnings.length}):`, result.warnings);
+                console.warn('[KGLoader] Warnings (not shown due to errors):');
+                result.warnings.forEach(warn => console.warn(`  ⚠ ${warn}`));
             }
-            return false;
-        }
-
-        if (result.warnings.length > 0 && !allowWarnings) {
-            console.warn('[KGLoader] Warnings found and allowWarnings=false. Topology NOT updated.');
-            console.warn(`[KGLoader] Warnings (${result.warnings.length}):`, result.warnings);
-            return false;
+            return false; // Reject load, do NOT mutate topology
         }
 
         if (result.warnings.length > 0) {
-            console.log(`[KGLoader] ${result.warnings.length} warning(s):`, result.warnings);
+            console.warn('[KGLoader] Validation passed with warnings:');
+            result.warnings.forEach(warn => console.warn(`  ⚠ ${warn}`));
+
+            // Use normalized spec if available
+            if (result.normalizedSpec) {
+                console.log('[KGLoader] Using normalized spec (clamped/defaulted values)');
+                spec = result.normalizedSpec;
+            }
+        } else {
+            console.log('[KGLoader] Validation passed ✓');
         }
+    } else {
+        console.warn('[KGLoader] Validation SKIPPED (opts.validate=false)');
     }
 
     // Convert and load
@@ -126,6 +133,7 @@ export function setTopologyFromKGSpec(spec: KGSpec, opts: IngestOptions = {}): b
     // STEP3-RUN5-V5-FIX1: Pass default config for rest-length policy
     setTopology(topology, DEFAULT_PHYSICS_CONFIG);
 
+    console.log('[KGLoader] Topology loaded successfully');
     const finalTopology = getTopology(); // Get the topology with recomputed springs
     console.log(`[KGLoader] ✓ Loaded KGSpec (${spec.specVersion}): ${spec.nodes.length} nodes, ${spec.links.length} links`);
     console.log(`[KGLoader] ✓ Springs recomputed: ${finalTopology.springs?.length || 0} springs from directed links`);

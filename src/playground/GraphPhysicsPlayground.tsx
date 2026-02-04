@@ -30,7 +30,10 @@ import { deriveSpringEdges } from '../graph/springDerivation';
 // RUN 6: Spring-to-physics converter import
 import { springEdgesToPhysicsLinks } from '../graph/springToPhysics';
 // RUN 8: Dev console helpers (exposes window.__topology)
-import '../graph/devTopologyHelpers';
+// PRE-STEP2: Only import in dev mode to prevent bundling in production
+if (import.meta.env.DEV) {
+    import('../graph/devTopologyHelpers');
+}
 
 // -----------------------------------------------------------------------------
 // Main Component (Internal)

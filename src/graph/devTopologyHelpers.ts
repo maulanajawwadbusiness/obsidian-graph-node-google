@@ -77,8 +77,11 @@ export const devTopologyHelpers = {
     }
 };
 
-// Expose to window for dev console
-if (typeof window !== 'undefined') {
+// PRE-STEP2: Dev-only + browser-only gating
+// Only expose to window.__topology in development mode AND browser environment
+if (import.meta.env.DEV && typeof window !== 'undefined') {
     (window as any).__topology = devTopologyHelpers;
-    console.log('[DevTopology] Console helpers loaded. Try: window.__topology.dump()');
+    console.log('[DevTopology] Console helpers loaded (DEV MODE). Try: window.__topology.dump()');
+} else if (typeof window !== 'undefined') {
+    console.log('[DevTopology] Helpers disabled in production build.');
 }

@@ -15,7 +15,7 @@ export const STRINGS = {
         // Mini Chat
         "miniChat.header": "Analisis Mini",
         "miniChat.closeTooltip": "Tutup",
-        "miniChat.extendTooltip": "Lanjut ke Pembicaraan Utama",
+        "miniChat.extendTooltip": "Debatkan ke Pembicaraan Utama",
         "miniChat.extendAria": "Kirim ke Pembicaraan Utama",
         "miniChat.nodeLabel": "Node {label}",
         "miniChat.fallbackNode": "node ini",
@@ -35,13 +35,13 @@ export const STRINGS = {
         "tooltip.jumpToLatest": "Loncat ke pesan terbaru",
 
         // Full Chat
-        "fullChat.placeholder": "Telusuri pikiran di sini...", // Inferred commonly needed
+        "fullChat.placeholder": "Debatkan kesulitanmu di paper ini", // Inferred commonly needed
         "fullChat.jumpToLatest": "Loncat ke terbaru",
-        "fullChat.emptyStateTitle": "Berpikir",
+        "fullChat.emptyStateTitle": "Menalarkan",
         "fullChat.emptyStateDesc": "Ruang tenang untuk berpikir.",
         "fullChat.emptyStateThinking": "Memikirkan {label}",
-        "fullChat.emptyStateTrace": "Telusuri pikiran Anda di sini.",
-        "fullChat.emptyStateTraceDefault": "Pilih sebuah node, atau mulai langsung.",
+        "fullChat.emptyStateTrace": "Telusuri pertanyaan Anda di sini.",
+        "fullChat.emptyStateTraceDefault": "Ragukan pertanyaanmu, atau mulai langsung di sini.",
 
         // Document Viewer
         "docViewer.title": "Penampil Dokumen",
@@ -90,7 +90,7 @@ export const STRINGS = {
         "tooltip.jumpToLatest": "Jump to latest",
 
         // Full Chat
-        "fullChat.placeholder": "Trace the thought here...",
+        "fullChat.placeholder": "Trace your map through conversation",
         "fullChat.jumpToLatest": "Jump to latest",
         "fullChat.emptyStateTitle": "Reasoning",
         "fullChat.emptyStateDesc": "A quiet space for reasoning",

@@ -111,9 +111,52 @@ export function patchTopology(patch: TopologyPatch): void {
         currentTopology.links = [...patch.setLinks];
     }
 
-    // Add links
+    // PRE-STEP2: Add links with validation
     if (patch.addLinks && patch.addLinks.length > 0) {
-        currentTopology.links.push(...patch.addLinks);
+        // Build node ID set for validation
+        const nodeIdSet = new Set(currentTopology.nodes.map(n => n.id));
+
+        // Validation counters
+        let accepted = 0;
+        let rejectedSelfLoops = 0;
+        let rejectedMissingEndpoint = 0;
+        let deduped = 0;
+
+        // Track existing links for deduplication
+        const existingKeys = new Set(currentTopology.links.map(l => `${l.from}:${l.to}`));
+
+        for (const link of patch.addLinks) {
+            // Validation 1: Reject self-loops
+            if (link.from === link.to) {
+                console.warn(`[TopologyControl] Rejected self-loop: ${link.from} → ${link.to}`);
+                rejectedSelfLoops++;
+                continue;
+            }
+
+            // Validation 2: Reject links with missing endpoints
+            if (!nodeIdSet.has(link.from) || !nodeIdSet.has(link.to)) {
+                console.warn(`[TopologyControl] Rejected link with missing endpoint: ${link.from} → ${link.to} (nodes exist: from=${nodeIdSet.has(link.from)}, to=${nodeIdSet.has(link.to)})`);
+                rejectedMissingEndpoint++;
+                continue;
+            }
+
+            // Validation 3: Check for duplicates
+            const key = `${link.from}:${link.to}`;
+            if (existingKeys.has(key)) {
+                deduped++;
+                continue;
+            }
+
+            // Accept link
+            currentTopology.links.push(link);
+            existingKeys.add(key);
+            accepted++;
+        }
+
+        // Log validation summary if any rejections occurred
+        if (rejectedSelfLoops > 0 || rejectedMissingEndpoint > 0 || deduped > 0) {
+            console.log(`[TopologyControl] Validation: accepted=${accepted}, rejectedSelfLoops=${rejectedSelfLoops}, rejectedMissing=${rejectedMissingEndpoint}, deduped=${deduped}`);
+        }
     }
 
     topologyVersion++;

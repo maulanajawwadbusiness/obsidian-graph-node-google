@@ -360,7 +360,7 @@ export const ELEGANT_THEME: ThemeConfig = {
     primaryBlueDefault: '#63abff',  // Dark blue (no hover)
     primaryBlueHover: '#63abff',    // Bright blue (hovered)
     hoverRadiusMultiplier: 2.2,     // DEPRECATED
-    hoverDebugEnabled: true,        // Debug mode (re-enable to see radius/halo circles)
+    hoverDebugEnabled: false,        // Debug mode (re-enable to see radius/halo circles)
     hoverDebugStateSentinel: false, // Extra debug logging (state sentinel)
 
     // Hover energy system (smooth proximity)

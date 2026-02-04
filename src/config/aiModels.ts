@@ -8,7 +8,7 @@ export const AI_MODELS = {
      * Main Chat (FullChat & MiniChat)
      * Requires streaming capability and reasoning support.
      */
-    CHAT: 'gpt-5-nano',
+    CHAT: 'gpt-5.1',
 
     /**
      * Prefill Suggestions

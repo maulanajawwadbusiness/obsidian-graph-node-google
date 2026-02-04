@@ -47,8 +47,8 @@ export const HEADER_STYLE: React.CSSProperties = {
 
 export const TITLE_STYLE: React.CSSProperties = {
     fontSize: '13px',
-    fontWeight: 'var(--font-title-weight, 700)',
-    letterSpacing: '0.5px',
+    fontWeight: 600,
+    letterSpacing: '0.2px',
     textTransform: 'uppercase' as const,
     color: VOID.energyGlow,
     textShadow: `0 0 20px ${VOID.energySubtle}`,

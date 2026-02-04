@@ -11,7 +11,7 @@ type HalfLeftWindowProps = {
 };
 
 const PANEL_STYLE: React.CSSProperties = {
-    flex: '0 0 50%',
+    flex: '0 0 30%', //30% width left
     height: '100%',
     backgroundColor: 'rgba(15, 15, 26, 0.98)',
     borderRight: '1px solid rgba(99, 171, 255, 0.2)',
@@ -35,7 +35,7 @@ const HEADER_STYLE: React.CSSProperties = {
 
 const TITLE_STYLE: React.CSSProperties = {
     fontSize: '13px',
-    fontWeight: 'var(--font-title-weight, 700)',
+    fontWeight: 600,
     letterSpacing: '0.2px',
     opacity: 0.85,
 };

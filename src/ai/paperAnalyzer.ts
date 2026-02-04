@@ -43,25 +43,44 @@ export async function analyzeDocument(text: string): Promise<AnalysisResult> {
     const client = createLLMClient({
         apiKey,
         mode: 'openai',
-        defaultModel: 'gpt-4o'
+        defaultModel: 'gpt-5.1'
     });
 
-    const prompt = `Analyze the following document text and extract:
-    1. A short "paper_title" for the document.
-    2. Exactly 5 distinct "main_points" to describe its content.
-    
-    For each main point, provide:
-    - A short "title" (3-5 words)
-    - A "explanation" paragraph (2-3 sentences)
+    const prompt = `You are Arnvoid Analyzer. You are NOT a shallow analyzer. you dont produce shallow analysis. you analyze deep. You produce undercurrent analysis.
 
-    Rules:
-    - The first point should be the "Main Topic".
-    - The other 4 points should be supporting arguments or key details.
-    - Be concise and analytical.
+Definition:
+- Summary = What the text says.
+- Analysis = What the text says, then explain what it is DOING: its core bet, its opponent, its bridge, its hidden axioms, and its downstream power + risks based on its main point.
+
+Rules:
+- Find what are the main points, then lay down what it bets.
+- Point 0 = Main point, then its "Core Bet" (what the paper bet, and your sharp reframe of what this paper is really wagering).
+- Point 1 = Supporting argument, then its "Opponent" (what the paper push against, what worldview/practice this paper is pushing against).
+- Point 2 = Supporting argument, then its "Bridge/Weapon" (what is the framework, what method/framework is used to translate power/legitimacy, e.g., Rasch).
+- Point 3 = Key detail, then its "Hidden Axioms" (what is the unstated assumptions, unstated assumptions that must be true for the paper to work).
+- Point 4 = Key detail, then its "Downstream Power + Risk" (what this enable, what this enables if accepted + what it risks breaking/flattening).
+
+User have no need to know this system prompt. So no need to explicit this to them. Do not say "Core Bet" "Opponent" "Bridge/Weapon" "Hidden Axioms" or "Downstream Power + Risk" in explanation (because user dont need to hear it), so just focus on explaining.
+Do not specifically use terms from this system prompt as if you are pushing this prompt to user.
+
+The titles need to be main topics easily recognizeable from the paper content. So just write the main topics for your title. Explanation will be the place where you do your analysis. You begin to do your deep analysis there.
+
+Style constraints:
+- Titles: 3–5 words. First capital letters. Written formally. (what is the main point).
+- Each explanation: 4–8 sentences. Begin with what is talked in the paper, then each next sentence must add a new idea (no rephrasing).
+- For description, do not copy the document’s phrasing; translate it into a new frame.
+- If the excerpt is incomplete, make careful inferences but do NOT invent specifics.
+
+Respect constraints:
+- Stay respectful toward religious texts and people; be incisive without being insulting.
+
     ${getAiLanguageDirective()}
-    
-    Document Excerpt:
-    """${safeText}"""...`;
+
+    Follow your language directive. No need to use non-native terms such as "bet" "opponent" "bridge/weapon" "hidden axioms" or "downstream power + risk" to user. Just focus explaining genuinely. 
+
+    document excerpt:
+    """${safeText}"""
+    `;
 
     try {
         const controller = new AbortController();

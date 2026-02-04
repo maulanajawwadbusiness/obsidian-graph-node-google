@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useDocument } from '../../store/documentStore';
 import { t } from '../../i18n/t';
+import documentIcon from '../../assets/document_icon.png';
 
 /**
  * Bottom-left button to toggle the left viewer window.
@@ -15,33 +16,46 @@ const stopPropagation = (e: React.MouseEvent) => e.stopPropagation();
 
 const BUTTON_STYLE: React.CSSProperties = {
     position: 'absolute',
-    bottom: '20px',
-    left: '20px',
-    padding: '8px 14px',
-    fontSize: '13px',
-    backgroundColor: 'rgba(20, 20, 30, 0.85)',
-    color: 'rgba(180, 190, 210, 0.9)',
-    border: '1px solid rgba(99, 171, 255, 0.3)',
-    borderRadius: '6px',
+    bottom: '30px',
+    left: '28px',
+    width: '28px',
+    height: '30px',
+    padding: 0,
+    backgroundColor: 'transparent',
+    border: 'none',
     cursor: 'pointer',
-    fontFamily: 'system-ui, -apple-system, sans-serif',
-    backdropFilter: 'blur(8px)',
-    transition: 'all 0.2s ease',
+    opacity: 0.35,
+    transition: 'opacity 0.2s ease',
     zIndex: 100,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+};
+
+const IMG_STYLE: React.CSSProperties = {
+    width: '28px',
+    height: '28px',
+    objectFit: 'contain',
 };
 
 export const TextPreviewButton: React.FC<TextPreviewButtonProps> = ({ onToggle }) => {
     const { state, togglePreview } = useDocument();
     const open = state.previewOpen;
+    const [isHovered, setIsHovered] = useState(false);
 
     return (
         <button
             type="button"
-            style={BUTTON_STYLE}
+            style={{
+                ...BUTTON_STYLE,
+                opacity: isHovered ? 0.65 : 0.35,
+            }}
             onMouseDown={stopPropagation}
             onMouseMove={stopPropagation}
             onMouseUp={stopPropagation}
             onPointerDown={stopPropagation}
+            onMouseEnter={() => setIsHovered(true)}
+            onMouseLeave={() => setIsHovered(false)}
             onClick={(e) => {
                 stopPropagation(e);
                 (onToggle ?? togglePreview)();
@@ -49,7 +63,7 @@ export const TextPreviewButton: React.FC<TextPreviewButtonProps> = ({ onToggle }
             aria-label={open ? t('tooltip.closeViewer') : t('tooltip.openViewer')}
             title={open ? t('tooltip.closeViewer') : t('tooltip.openViewer')}
         >
-            {open ? `✕ ${t('textPreview.close')}` : `📄 ${t('textPreview.open')}`}
+            <img src={documentIcon} alt="Document" style={IMG_STYLE} />
         </button>
     );
 };

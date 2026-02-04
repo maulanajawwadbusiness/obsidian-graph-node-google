@@ -1,3 +1,0 @@
-﻿    labelDebugEnabled: boolean;        // Show anchor cross + bbox
-    labelForceHorizontal: boolean;     // Force labels to be screen-horizontal (cancel rotation)
-}

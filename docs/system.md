@@ -9,6 +9,10 @@ The core flow is the **Paper Essence Pipeline**:
 ## 1.1 ASCII Only
 Use pure ASCII characters in code, comments, logs, and documentation. Avoid Unicode arrows, ellipses, and typographic dashes to prevent mojibake.
 
+## 1.2 Frontend Env Vars
+API base must use a single canonical key:
+- `VITE_API_BASE_URL` (do not use `VITE_API_BASE`).
+
 ## 2. UI Surface Map & Ownership
 
 The application layers, ordered by z-index (lowest to highest):

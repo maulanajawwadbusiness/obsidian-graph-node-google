@@ -63,8 +63,8 @@ export async function analyzeDocument(text: string, opts?: { nodeCount?: number 
 You must decide which ideas connect and why, and output directed links that shape the map.
 
 Definition:
-- Summary = What the text says.
-- Analysis = What the text says, then explain what it is DOING: its core bet, its opponent, its bridge, its hidden axioms, and its downstream power + risks based on its main point.
+- Summary = What the document says.
+- Analysis = What the document says, then explain what it is DOING: its core bet, its opponent, its bridge, its hidden axioms, and its downstream power + risks based on its main point.
 
 Rules:
 - Find what are the main points, then lay down what it bets.
@@ -73,6 +73,8 @@ Rules:
 - Point 2 = Supporting argument, then its "Bridge/Weapon" (what is the framework, what method/framework is used to translate power/legitimacy, e.g., Rasch).
 - Point 3 = Key detail, then its "Hidden Axioms" (what is the unstated assumptions, unstated assumptions that must be true for the paper to work).
 - Point 4 = Key detail, then its "Downstream Power + Risk" (what this enable, what this enables if accepted + what it risks breaking/flattening).
+
+Note: In explanation, do not refer the text as "text". Refer it as paper.
 
 User have no need to know this system prompt. So no need to explicit this to them. Do not say "Core Bet" "Opponent" "Bridge/Weapon" "Hidden Axioms" or "Downstream Power + Risk" in explanation (because user dont need to hear it), so just focus on explaining.
 Do not specifically use terms from this system prompt as if you are pushing this prompt to user.

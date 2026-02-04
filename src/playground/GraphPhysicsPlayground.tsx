@@ -22,6 +22,7 @@ import { PopupProvider, usePopup } from '../popup/PopupStore';
 import { PopupPortal } from '../popup/PopupPortal';
 import { RotationCompass } from './components/RotationCompass';
 import { FullChatProvider, FullChatbar, FullChatToggle, useFullChat } from '../fullchat';
+import TestBackend from '../components/TestBackend';
 // RUN 4: Topology API imports
 import { setTopology, getTopologyVersion, getTopology } from '../graph/topologyControl'; // STEP3-RUN5-V3-FIX3: Added getTopology
 import { legacyToTopology } from '../graph/topologyAdapter';
@@ -102,6 +103,7 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
     const [showConflictMarkers, setShowConflictMarkers] = useState(false);
     const [forceShowRestMarkers, setForceShowRestMarkers] = useState(false);
     const [markerIntensity, setMarkerIntensity] = useState(1);
+    const [showTestBackend, setShowTestBackend] = useState(false);
     const [hudScenarioLabel, setHudScenarioLabel] = useState('');
     const [hudDragTargetId, setHudDragTargetId] = useState<string | null>(null);
     const [hudScores, setHudScores] = useState<Record<number, {
@@ -722,6 +724,7 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
                     hudScores={hudScores}
                 />
                 <TextPreviewButton onToggle={toggleViewer} />
+                {showTestBackend && <TestBackend />}
                 <AIActivityGlyph />
                 <AnalysisOverlay />
                 {SHOW_MAP_TITLE && <MapTitleBlock />}

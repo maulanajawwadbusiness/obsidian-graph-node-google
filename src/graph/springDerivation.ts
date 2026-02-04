@@ -23,7 +23,11 @@ import { DEFAULT_PHYSICS_CONFIG } from '../physics/config';
  * @param config Physics configuration (for rest length policy)
  * @returns Array of undirected spring edges for physics
  */
-export function deriveSpringEdges(topology: Topology, config?: ForceConfig): SpringEdge[] {
+export function deriveSpringEdges(
+    topology: Topology,
+    config?: ForceConfig,
+    opts?: { silent?: boolean }
+): SpringEdge[] {
     const edgeMap = new Map<string, SpringEdge>();
     const nodeIdSet = new Set(topology.nodes.map(n => n.id));
     const totalDirectedLinks = topology.links.length;
@@ -32,7 +36,7 @@ export function deriveSpringEdges(topology: Topology, config?: ForceConfig): Spr
     for (const link of topology.links) {
         // Skip self-loops
         if (link.from === link.to) {
-            if (import.meta.env.DEV) {
+            if (import.meta.env.DEV && !opts?.silent) {
                 console.warn(`[SpringDerivation] Skipped self-loop: ${link.from} -> ${link.to}`);
             }
             continue;
@@ -40,7 +44,7 @@ export function deriveSpringEdges(topology: Topology, config?: ForceConfig): Spr
 
         // Skip links with missing endpoints
         if (!nodeIdSet.has(link.from) || !nodeIdSet.has(link.to)) {
-            if (import.meta.env.DEV) {
+            if (import.meta.env.DEV && !opts?.silent) {
                 console.warn(`[SpringDerivation] Skipped link with missing endpoint: ${link.from} -> ${link.to}`);
             }
             continue;
@@ -59,7 +63,7 @@ export function deriveSpringEdges(topology: Topology, config?: ForceConfig): Spr
                 existing.contributors.push(link.id);
             }
 
-            if (import.meta.env.DEV) {
+            if (import.meta.env.DEV && !opts?.silent) {
                 console.log(`[SpringDerivation] Merged spring {${a}, ${b}}: ${existing.contributors?.length || 0} contributors`);
             }
         } else {
@@ -75,7 +79,7 @@ export function deriveSpringEdges(topology: Topology, config?: ForceConfig): Spr
     }
 
     const edges = Array.from(edgeMap.values());
-    const restLengths = computeRestLengths(edges, topology, null, appliedConfig);
+    const restLengths = computeRestLengths(edges, topology, null, appliedConfig, opts);
     for (const edge of edges) {
         const key = `${edge.a}:${edge.b}`;
         const restLen = restLengths.get(key);
@@ -93,7 +97,7 @@ export function deriveSpringEdges(topology: Topology, config?: ForceConfig): Spr
     for (const edge of edges) {
         // Check for NaN/Infinity
         if (!isFinite(edge.restLen) || !isFinite(edge.stiffness)) {
-            if (import.meta.env.DEV) {
+            if (import.meta.env.DEV && !opts?.silent) {
                 console.warn(`[SpringDerivation] Dropped spring {${edge.a}, ${edge.b}}: NaN/Infinity (restLen=${edge.restLen}, stiffness=${edge.stiffness}, contributors=${edge.contributors?.join(', ')})`);
             }
             droppedNaN++;
@@ -102,7 +106,7 @@ export function deriveSpringEdges(topology: Topology, config?: ForceConfig): Spr
 
         // Check restLen bounds (must be positive)
         if (edge.restLen <= 0) {
-            if (import.meta.env.DEV) {
+            if (import.meta.env.DEV && !opts?.silent) {
                 console.warn(`[SpringDerivation] Dropped spring {${edge.a}, ${edge.b}}: invalid restLen=${edge.restLen} (contributors=${edge.contributors?.join(', ')})`);
             }
             droppedInvalidRestLen++;
@@ -111,7 +115,7 @@ export function deriveSpringEdges(topology: Topology, config?: ForceConfig): Spr
 
         // Check stiffness bounds (must be positive)
         if (edge.stiffness <= 0) {
-            if (import.meta.env.DEV) {
+            if (import.meta.env.DEV && !opts?.silent) {
                 console.warn(`[SpringDerivation] Dropped spring {${edge.a}, ${edge.b}}: invalid stiffness=${edge.stiffness} (contributors=${edge.contributors?.join(', ')})`);
             }
             droppedInvalidStiffness++;
@@ -121,7 +125,7 @@ export function deriveSpringEdges(topology: Topology, config?: ForceConfig): Spr
         validEdges.push(edge);
     }
 
-    if (droppedNaN > 0 || droppedInvalidRestLen > 0 || droppedInvalidStiffness > 0) {
+    if (!opts?.silent && (droppedNaN > 0 || droppedInvalidRestLen > 0 || droppedInvalidStiffness > 0) && import.meta.env.DEV) {
         console.warn(`[SpringDerivation] Safety: dropped ${droppedNaN} NaN/Infinity, ${droppedInvalidRestLen} invalid restLen, ${droppedInvalidStiffness} invalid stiffness`);
     }
 
@@ -129,7 +133,9 @@ export function deriveSpringEdges(topology: Topology, config?: ForceConfig): Spr
         ? ((1 - validEdges.length / totalDirectedLinks) * 100).toFixed(1)
         : '0.0';
 
-    console.log(`[Run9] deriveSpringEdges: ${totalDirectedLinks} directed links -> ${validEdges.length} spring edges (dedupe: ${dedupeRate}%)`);
+    if (!opts?.silent && import.meta.env.DEV) {
+        console.log(`[Run9] deriveSpringEdges: ${totalDirectedLinks} directed links -> ${validEdges.length} spring edges (dedupe: ${dedupeRate}%)`);
+    }
 
     return validEdges;
 }

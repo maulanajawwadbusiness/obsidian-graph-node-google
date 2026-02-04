@@ -1,6 +1,6 @@
 # Step 5 Acceptance Checklist
 
-**Date**: 2026-02-04  
+**Date**: 2026-02-04
 **Purpose**: Manual verification that Step 5 validation and invariants work correctly
 
 ## Prerequisites
@@ -8,6 +8,7 @@
 1. Build and run dev server: `npm run dev`
 2. Open browser console
 3. Ensure `window.__kg` is available
+4. Ensure `window.__topology` is available
 
 ## Test Suite
 
@@ -32,7 +33,7 @@ window.__kg.load(validSpec);
 [KGLoader] Topology loaded successfully
 ```
 
-**Pass Criteria**: ✓ No errors, topology loads successfully
+**Pass Criteria**: No errors, topology loads successfully
 
 ---
 
@@ -54,7 +55,7 @@ window.__kg.load(selfLoopSpec);
   - Found 1 self-loop(s)
 ```
 
-**Pass Criteria**: ✓ Validation fails, topology NOT mutated
+**Pass Criteria**: Validation fails, topology NOT mutated
 
 ---
 
@@ -76,7 +77,7 @@ window.__kg.load(missingEndpointSpec);
   - Found 1 link(s) with missing endpoints
 ```
 
-**Pass Criteria**: ✓ Validation fails, topology NOT mutated
+**Pass Criteria**: Validation fails, topology NOT mutated
 
 ---
 
@@ -99,7 +100,7 @@ window.__kg.load(outOfBoundsSpec);
 [KGLoader] Using normalized spec (clamped/defaulted values)
 ```
 
-**Pass Criteria**: ✓ Loads with warning, weight clamped to 1.0
+**Pass Criteria**: Loads with warning, weight clamped to 1.0
 
 ---
 
@@ -121,7 +122,7 @@ window.__kg.load(nanWeightSpec);
   - Link 0 (A->B): weight is NaN or Infinity
 ```
 
-**Pass Criteria**: ✓ Validation fails, topology NOT mutated
+**Pass Criteria**: Validation fails, topology NOT mutated
 
 ---
 
@@ -146,7 +147,7 @@ window.__kg.load(whitespaceSpec);
 [KGLoader] Using normalized spec (clamped/defaulted values)
 ```
 
-**Pass Criteria**: ✓ Loads with warnings, IDs/endpoints/rel trimmed
+**Pass Criteria**: Loads with warnings, IDs/endpoints/rel trimmed
 
 ---
 
@@ -168,7 +169,7 @@ window.__kg.contractTests();
 === Results: 6/6 passed, 0 failed ===
 ```
 
-**Pass Criteria**: ✓ All 6 tests pass
+**Pass Criteria**: All 6 tests pass
 
 ---
 
@@ -176,7 +177,7 @@ window.__kg.contractTests();
 
 ```javascript
 // Get initial state
-const beforeVersion = window.__topo.version();
+const beforeVersion = window.__topology.version();
 
 // Attempt to load invalid spec
 const invalidSpec = {
@@ -188,7 +189,7 @@ const invalidSpec = {
 window.__kg.load(invalidSpec);
 
 // Check state unchanged
-const afterVersion = window.__topo.version();
+const afterVersion = window.__topology.version();
 console.log('Version unchanged:', beforeVersion === afterVersion);
 ```
 
@@ -199,13 +200,13 @@ console.log('Version unchanged:', beforeVersion === afterVersion);
 Version unchanged: true
 ```
 
-**Pass Criteria**: ✓ Topology version unchanged after failed load
+**Pass Criteria**: Topology version unchanged after failed load
 
 ---
 
 ## Summary
 
-**Total Tests**: 8  
+**Total Tests**: 8
 **Required Passes**: 8/8
 
 **Sign-off**: All tests must pass for Step 5 acceptance.

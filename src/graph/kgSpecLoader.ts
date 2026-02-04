@@ -91,6 +91,7 @@ export interface IngestOptions {
 export function setTopologyFromKGSpec(spec: KGSpec, opts: IngestOptions = {}): boolean {
     const shouldValidate = opts.validate !== false; // Default true
     const allowWarnings = opts.allowWarnings !== false; // Default true
+    const docTag = spec.docId ? ` docId=${spec.docId}` : '';
 
     // STEP5-RUN3: Validation gate
     if (shouldValidate) {
@@ -98,10 +99,10 @@ export function setTopologyFromKGSpec(spec: KGSpec, opts: IngestOptions = {}): b
 
         // Log validation results
         if (result.errors.length > 0) {
-            console.error('[KGLoader] Validation FAILED - spec rejected:');
+            console.error(`[KGLoader] Validation FAILED${docTag} - spec rejected:`);
             result.errors.forEach(err => console.error(`  - ${err}`));
             if (result.warnings.length > 0) {
-                console.warn('[KGLoader] Warnings (not shown due to errors):');
+                console.warn(`[KGLoader] Warnings${docTag} (not shown due to errors):`);
                 result.warnings.forEach(warn => console.warn(`  - ${warn}`));
             }
             return false; // Reject load, do NOT mutate topology
@@ -109,12 +110,12 @@ export function setTopologyFromKGSpec(spec: KGSpec, opts: IngestOptions = {}): b
 
         if (result.warnings.length > 0) {
             if (!allowWarnings) {
-                console.error('[KGLoader] Validation warnings rejected (allowWarnings=false):');
+                console.error(`[KGLoader] Validation warnings rejected${docTag} (allowWarnings=false):`);
                 result.warnings.forEach(warn => console.error(`  - ${warn}`));
                 return false; // Reject load, do NOT mutate topology
             }
 
-            console.warn('[KGLoader] Validation passed with warnings:');
+            console.warn(`[KGLoader] Validation passed with warnings${docTag}:`);
             result.warnings.forEach(warn => console.warn(`  - ${warn}`));
 
             // Use normalized spec if available
@@ -123,10 +124,10 @@ export function setTopologyFromKGSpec(spec: KGSpec, opts: IngestOptions = {}): b
                 spec = result.normalizedSpec;
             }
         } else {
-            console.log('[KGLoader] Validation passed');
+            console.log(`[KGLoader] Validation passed${docTag}`);
         }
     } else {
-        console.warn('[KGLoader] Validation SKIPPED (opts.validate=false)');
+        console.warn(`[KGLoader] Validation SKIPPED${docTag} (opts.validate=false)`);
     }
 
     // Convert and load

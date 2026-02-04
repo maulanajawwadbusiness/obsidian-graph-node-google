@@ -4,10 +4,10 @@
  * Functions to apply provider output to topology via existing seam.
  */
 
-import type { Topology, TopologyPatch } from '../topologyTypes';
-import type { TopologyProvider, ProviderMetadata, ProviderApplyResult } from './providerTypes';
+import type { Topology } from '../topologyTypes';
+import type { ProviderMetadata, ProviderApplyResult } from './providerTypes';
 import { getProvider } from './providerRegistry';
-import { setTopology, patchTopology, getTopologyVersion, reportTopologyMutationRejection } from '../topologyControl';
+import { setTopology, patchTopology, getTopologyVersion } from '../topologyControl';
 import { truncateHash } from './hashUtils';
 
 /**
@@ -104,7 +104,7 @@ export function applyTopologyFromProvider<TInput = unknown>(
 export function applyPatchFromProvider<TInput = unknown>(
     providerName: string,
     input: TInput,
-    meta?: Partial<ProviderMetadata>
+    _meta?: Partial<ProviderMetadata>
 ): ProviderApplyResult {
     const provider = getProvider(providerName);
     if (!provider) {
@@ -126,7 +126,7 @@ export function applyPatchFromProvider<TInput = unknown>(
     }
 
     const versionBefore = getTopologyVersion();
-    const currentTopo = setTopology && getTopology ? getTopology() : null;
+    const currentTopo = getTopology();
 
     if (!currentTopo) {
         return {
@@ -143,13 +143,6 @@ export function applyPatchFromProvider<TInput = unknown>(
 
     // Build patch
     const patchSpec = provider.buildPatch(currentTopo, input);
-
-    // Merge metadata
-    const providerMeta: ProviderMetadata = {
-        provider: provider.name,
-        ...meta,
-        inputHash
-    };
 
     // Console output
     if (import.meta.env.DEV) {

@@ -9,7 +9,7 @@
  */
 
 import type { DirectedLink } from '../topologyTypes';
-import type { TopologyProvider, TopologySnapshot, TopologyPatchSpec } from './providerTypes';
+import type { TopologyProvider, TopologySnapshot } from './providerTypes';
 import { hashObject } from './hashUtils';
 import { addKnowledgeLink, removeKnowledgeLink, getTopology } from '../topologyControl';
 
@@ -35,12 +35,12 @@ export const ManualMutationProvider: TopologyProvider<ManualMutationInput> = {
     name: 'manualMutation',
 
     buildSnapshot(input: ManualMutationInput): TopologySnapshot {
-        // Execute mutation
-        let result = '';
+        // Execute mutation (linkId result is tracked for debugging)
+        let _linkId = '';
         switch (input.type) {
             case 'addLink':
                 if (input.link) {
-                    result = addKnowledgeLink(input.link);
+                    _linkId = addKnowledgeLink(input.link);
                 }
                 break;
             case 'removeLink':
@@ -49,6 +49,7 @@ export const ManualMutationProvider: TopologyProvider<ManualMutationInput> = {
                 }
                 break;
         }
+        void _linkId; // Mark as intentionally unused for now
 
         // Return resulting topology
         const topo = getTopology();

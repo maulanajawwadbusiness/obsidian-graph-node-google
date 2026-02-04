@@ -8,8 +8,7 @@
 import type { KGSpec, KGNode, KGLink } from './kgSpec';
 import type { Topology, DirectedLink, NodeSpec } from './topologyTypes';
 import { validateKGSpec } from './kgSpecValidation';
-import { setTopology, getTopology, reportTopologyMutationRejection } from './topologyControl';
-import { DEFAULT_PHYSICS_CONFIG } from '../physics/config';
+import { getTopology, reportTopologyMutationRejection } from './topologyControl';
 import { ensureDirectedLinkIds } from './directedLinkId'; // STEP4-RUN4
 // STEP3-RUN5-V4-FIX1: Removed unused recomputeSprings import
 // STEP7-RUN4: Import provider apply function

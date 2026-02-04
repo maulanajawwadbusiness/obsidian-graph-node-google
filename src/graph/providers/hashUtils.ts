@@ -37,7 +37,7 @@ export function hashObject(obj: unknown): string {
 /**
  * JSON replacer that sorts object keys for stable serialization.
  */
-function canonicalStringifyReplacer(key: string, value: unknown): unknown {
+function canonicalStringifyReplacer(_key: string, value: unknown): unknown {
     if (value && typeof value === 'object' && !Array.isArray(value)) {
         // Sort object keys
         const sortedKeys = Object.keys(value).sort();

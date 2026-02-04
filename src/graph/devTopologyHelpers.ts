@@ -70,9 +70,81 @@ export const devTopologyHelpers = {
         console.log(`[DevTopology] Topology v${getTopologyVersion()}:`, {
             nodes: t.nodes.length,
             links: t.links.length,
-            if(import.meta.env.DEV && typeof window !== 'undefined') {
-            (window as any).__topology = devTopologyHelpers;
-            console.log('[DevTopology] Console helpers loaded (DEV MODE). Try: window.__topology.dump()');
-        } else if(typeof window !== 'undefined') {
-            console.log('[DevTopology] Helpers disabled in production build.');
+            nodesSample: t.nodes.slice(0, 5),
+            linksSample: t.links.slice(0, 10)
+        });
+        return t;
+    },
+
+    /**
+     * Get current version number.
+     */
+    version() {
+        return getTopologyVersion();
+    },
+
+    /**
+     * Clear the topology.
+     */
+    clear() {
+        clearTopology();
+    },
+
+    /**
+     * STEP6-RUN6: Mutation history API
+     */
+    mutations: {
+        async history(limit?: number) {
+            if (!import.meta.env.DEV) return [];
+            const mod = await import('./topologyMutationObserver');
+            return mod.getMutationHistory(limit);
+        },
+
+        async last(verbose?: boolean) {
+            if (!import.meta.env.DEV) return null;
+            const mod = await import('./topologyMutationObserver');
+            return mod.getLastMutation(verbose);
+        },
+
+        async clear() {
+            if (!import.meta.env.DEV) return;
+            const mod = await import('./topologyMutationObserver');
+            mod.clearMutationHistory();
+        },
+
+        async on(callback: (event: any) => void) {
+            if (!import.meta.env.DEV) return () => { };
+            const mod = await import('./topologyMutationObserver');
+            return mod.subscribeMutationObserver(callback);
+        },
+
+        async table(limit: number = 10) {
+            if (!import.meta.env.DEV) return;
+            const mod = await import('./topologyMutationObserver');
+            const events = mod.getMutationHistory(limit);
+            if (events.length === 0) {
+                console.log('[DevTopology] No mutations yet');
+                return;
+            }
+            const rows = events.map(e => ({
+                ID: e.mutationId,
+                Status: e.status,
+                Source: e.source,
+                'V→': `${e.versionBefore}→${e.versionAfter}`,
+                'ΔN': e.countsAfter.nodes - e.countsBefore.nodes,
+                'ΔL': e.countsAfter.directedLinks - e.countsBefore.directedLinks,
+                'ΔS': e.countsAfter.springs - e.countsBefore.springs
+            }));
+            console.table(rows);
+        }
+    }
+};
+
+// PRE-STEP2: Dev-only + browser-only gating
+// Only expose to window.__topology in development mode AND browser environment
+if (import.meta.env.DEV && typeof window !== 'undefined') {
+    (window as any).__topology = devTopologyHelpers;
+    console.log('[DevTopology] Console helpers loaded (DEV MODE). Try: window.__topology.dump()');
+} else if (typeof window !== 'undefined') {
+    console.log('[DevTopology] Helpers disabled in production build.');
 }

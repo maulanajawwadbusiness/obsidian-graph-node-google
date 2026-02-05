@@ -1,19 +1,40 @@
 # Report: Auth Sessions in Postgres (2026-02-05)
 
 ## Summary
-Switched session storage from memory to Postgres and hardened cookie + token verification behavior.
+Switched session storage from memory to Postgres and hardened CORS, cookie handling, and token verification.
 
 ## Changes
-- /auth/google now verifies ID tokens with google-auth-library, upserts the user, inserts a session row, and sets the session cookie.
-- /me now reads the cookie, joins sessions to users, and returns ok true with user or null.
-- /auth/logout now deletes the session row and clears the cookie with res.clearCookie using the same attributes.
-- Cookie logic now uses isProd() (K_SERVICE or NODE_ENV=production) to decide Secure.
+- Replaced custom CORS middleware with cors package and default dev origins.
+- /auth/google verifies ID tokens with google-auth-library, upserts the user, inserts a session row, and sets the session cookie.
+- /me reads the cookie, joins sessions to users, and clears stale or expired cookies.
+- /auth/logout deletes the session row and clears the cookie using matching attributes.
+- Cookie logic uses isProd() (K_SERVICE or NODE_ENV=production) to decide Secure.
 
 ## Cookie Policy
 - httpOnly: true
 - sameSite: lax (default)
 - secure: true in prod, false on localhost unless overridden by SESSION_COOKIE_SECURE
 - path: /
+
+## CORS Policy
+- Uses cors package with credentials true.
+- Allowed origins:
+  - If ALLOWED_ORIGINS is set, only those origins are allowed.
+  - Otherwise defaults to http://localhost:5173 and http://127.0.0.1:5173.
+- OPTIONS always returns 204 with proper headers.
+
+## Env Vars (Dev vs Prod)
+Dev:
+- ALLOWED_ORIGINS is optional (defaults to localhost:5173 and 127.0.0.1:5173)
+- NODE_ENV can be unset or development
+- SESSION_COOKIE_SAMESITE=lax
+- SESSION_COOKIE_SECURE=false (optional; auto false when not prod)
+
+Prod (Cloud Run):
+- K_SERVICE is set automatically
+- SESSION_COOKIE_SAMESITE=lax
+- SESSION_COOKIE_SECURE=true (or leave unset to use prod default)
+- ALLOWED_ORIGINS should be set if frontend is on a different origin
 
 ## Schema Expectations
 - users.id is BIGSERIAL (bigint)
@@ -92,7 +113,15 @@ Expected:
 - Status 200
 - Body: {"ok":true,"user":{...}}
 
-### E) Verify logout clears cookie and session
+### E) Verify expired or missing session clears cookie
+1) Manually delete the session row in Postgres for the current cookie.
+2) Call /me again.
+Expected:
+- Status 200
+- Body: {"ok":true,"user":null}
+- Response headers include Set-Cookie that clears arnvoid_session
+
+### F) Verify logout clears cookie and session
 1) Trigger logout in the app (or call POST /auth/logout from the console).
 2) In DevTools -> Network, inspect the /auth/logout response headers.
 Expected:
@@ -101,6 +130,13 @@ Expected:
 Expected:
 - Status 200
 - Body: {"ok":true,"user":null}
+
+### Paste Results
+Please paste only:
+- Status codes
+- Response headers
+- JSON bodies
+Do not paste idToken or cookies.
 
 ## Deploy Command (Laptop)
 From repo root:
@@ -122,6 +158,6 @@ If Cloud Run complains about base image resolution, add:
 ```
 
 ## Notes
-- Token validation no longer uses tokeninfo.
+- Token validation does not use tokeninfo.
 - isProd() is true when K_SERVICE is set or NODE_ENV is production.
-- Do not share idToken values in chat. Use DevTools to verify Set-Cookie and response bodies.
+- Do not share idToken values in chat.

@@ -1,4 +1,5 @@
 import crypto from "crypto";
+import cors from "cors";
 import express from "express";
 import { OAuth2Client } from "google-auth-library";
 import { getPool } from "./db";
@@ -26,6 +27,7 @@ const COOKIE_SAMESITE = (process.env.SESSION_COOKIE_SAMESITE || "lax").toLowerCa
 const COOKIE_SECURE = process.env.SESSION_COOKIE_SECURE
   ? process.env.SESSION_COOKIE_SECURE === "true"
   : null;
+const DEFAULT_DEV_ORIGINS = ["http://localhost:5173", "http://127.0.0.1:5173"];
 const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || "")
   .split(",")
   .map((value) => value.trim())
@@ -33,23 +35,27 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || "")
 
 app.use(express.json({ limit: "1mb" }));
 
-app.use((req, res, next) => {
-  const origin = req.headers.origin;
-  if (origin && ALLOWED_ORIGINS.includes(origin)) {
-    res.setHeader("Access-Control-Allow-Origin", origin);
-    res.setHeader("Access-Control-Allow-Credentials", "true");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
-    res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
-    res.setHeader("Vary", "Origin");
-
-    if (req.method === "OPTIONS") {
-      res.status(204).end();
+const corsAllowedOrigins = ALLOWED_ORIGINS.length > 0 ? ALLOWED_ORIGINS : DEFAULT_DEV_ORIGINS;
+const corsOptions: cors.CorsOptions = {
+  origin: (origin, cb) => {
+    if (!origin) {
+      cb(null, true);
       return;
     }
-  }
+    if (corsAllowedOrigins.includes(origin)) {
+      console.log(`[cors] allowed origin: ${origin}`);
+      cb(null, true);
+      return;
+    }
+    cb(new Error("Not allowed by CORS"));
+  },
+  credentials: true,
+  methods: ["GET", "POST", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"]
+};
 
-  next();
-});
+app.use(cors(corsOptions));
+app.options("*", cors(corsOptions));
 
 function parseCookies(headerValue?: string) {
   const cookies: Record<string, string> = {};
@@ -89,6 +95,16 @@ function resolveCookieOptions() {
       : prod;
 
   return { sameSite, secure };
+}
+
+function clearSessionCookie(res: express.Response) {
+  const { sameSite, secure } = resolveCookieOptions();
+  res.clearCookie(COOKIE_NAME, {
+    httpOnly: true,
+    sameSite,
+    secure,
+    path: "/"
+  });
 }
 
 app.get("/health", async (_req, res) => {
@@ -209,82 +225,74 @@ app.post("/auth/google", async (req, res) => {
   });
 });
 
-app.get("/me", (req, res) => {
-  (async () => {
-    const cookies = parseCookies(req.headers.cookie);
-    const sessionId = cookies[COOKIE_NAME];
-    if (!sessionId) {
+app.get("/me", async (req, res) => {
+  const cookies = parseCookies(req.headers.cookie);
+  const sessionId = cookies[COOKIE_NAME];
+  if (!sessionId) {
+    res.json({ ok: true, user: null });
+    return;
+  }
+
+  try {
+    const pool = await getPool();
+    const result = await pool.query(
+      `select sessions.expires_at as expires_at,
+              users.google_sub as google_sub,
+              users.email as email,
+              users.name as name,
+              users.picture as picture
+       from sessions
+       join users on users.id = sessions.user_id
+       where sessions.id = $1`,
+      [sessionId]
+    );
+
+    const row = result.rows[0];
+    if (!row) {
+      clearSessionCookie(res);
+      console.log("[auth] session missing -> cleared cookie");
       res.json({ ok: true, user: null });
       return;
     }
 
-    try {
-      const pool = await getPool();
-      const result = await pool.query(
-        `select sessions.expires_at as expires_at,
-                users.google_sub as google_sub,
-                users.email as email,
-                users.name as name,
-                users.picture as picture
-         from sessions
-         join users on users.id = sessions.user_id
-         where sessions.id = $1`,
-        [sessionId]
-      );
-
-      const row = result.rows[0];
-      if (!row) {
-        res.json({ ok: true, user: null });
-        return;
-      }
-
-      const expiresAt = row.expires_at ? new Date(row.expires_at) : null;
-      if (expiresAt && Date.now() > expiresAt.getTime()) {
-        await pool.query("delete from sessions where id = $1", [sessionId]);
-        res.json({ ok: true, user: null });
-        return;
-      }
-
-      res.json({
-        ok: true,
-        user: {
-          sub: row.google_sub,
-          email: row.email ?? undefined,
-          name: row.name ?? undefined,
-          picture: row.picture ?? undefined
-        }
-      });
-    } catch (e) {
-      res.status(500).json({ ok: false, error: `db error: ${String(e)}` });
+    const expiresAt = row.expires_at ? new Date(row.expires_at) : null;
+    if (expiresAt && Date.now() > expiresAt.getTime()) {
+      await pool.query("delete from sessions where id = $1", [sessionId]);
+      clearSessionCookie(res);
+      console.log("[auth] session expired -> cleared cookie");
+      res.json({ ok: true, user: null });
+      return;
     }
-  })();
+
+    res.json({
+      ok: true,
+      user: {
+        sub: row.google_sub,
+        email: row.email ?? undefined,
+        name: row.name ?? undefined,
+        picture: row.picture ?? undefined
+      }
+    });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: `db error: ${String(e)}` });
+  }
 });
 
-app.post("/auth/logout", (req, res) => {
-  (async () => {
-    const cookies = parseCookies(req.headers.cookie);
-    const sessionId = cookies[COOKIE_NAME];
-    if (sessionId) {
-      try {
-        const pool = await getPool();
-        await pool.query("delete from sessions where id = $1", [sessionId]);
-      } catch (e) {
-        res.status(500).json({ ok: false, error: `db error: ${String(e)}` });
-        return;
-      }
+app.post("/auth/logout", async (req, res) => {
+  const cookies = parseCookies(req.headers.cookie);
+  const sessionId = cookies[COOKIE_NAME];
+  if (sessionId) {
+    try {
+      const pool = await getPool();
+      await pool.query("delete from sessions where id = $1", [sessionId]);
+    } catch (e) {
+      res.status(500).json({ ok: false, error: `db error: ${String(e)}` });
+      return;
     }
+  }
 
-    const { sameSite, secure } = resolveCookieOptions();
-
-    res.clearCookie(COOKIE_NAME, {
-      httpOnly: true,
-      sameSite,
-      secure,
-      path: "/"
-    });
-
-    res.json({ ok: true });
-  })();
+  clearSessionCookie(res);
+  res.json({ ok: true });
 });
 
 app.listen(port, () => {

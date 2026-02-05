@@ -13,6 +13,7 @@
   "description": "",
   "dependencies": {
     "@google-cloud/cloud-sql-connector": "^1.9.0",
+    "cors": "^2.8.5",
     "express": "^5.2.1",
     "google-auth-library": "^10.5.0",
     "pg": "^8.18.0"

@@ -6,7 +6,7 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL;
 
 export function GoogleLoginButton() {
   const [status, setStatus] = useState<string>("not logged in yet");
-  const { user, loading, refreshMe } = useAuth();
+  const { user, loading, refreshMe, logout } = useAuth();
 
   return (
     <div id="google-login-area" style={{ display: "grid", gap: 8 }}>
@@ -24,7 +24,21 @@ export function GoogleLoginButton() {
           <div>
             signed in as {user.name || user.email || "unknown"}
           </div>
-          {/* TODO(auth): add logout button wired to POST /auth/logout */}
+          <button
+            onClick={() => void logout()}
+            onPointerDown={(e) => e.stopPropagation()}
+            style={{
+              fontSize: 12,
+              padding: "4px 8px",
+              borderRadius: 6,
+              border: "1px solid rgba(255,255,255,0.2)",
+              background: "rgba(255,255,255,0.08)",
+              color: "#fff",
+              cursor: "pointer"
+            }}
+          >
+            logout
+          </button>
         </div>
       ) : null}
 

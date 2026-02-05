@@ -18,6 +18,7 @@ type TokenInfo = {
   picture?: string;
 };
 
+
 const app = express();
 const port = Number(process.env.PORT || 8080);
 
@@ -28,15 +29,13 @@ const COOKIE_SECURE = process.env.SESSION_COOKIE_SECURE
   ? process.env.SESSION_COOKIE_SECURE === "true"
   : null;
 const DEFAULT_DEV_ORIGINS = ["http://localhost:5173", "http://127.0.0.1:5173"];
-const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || "")
-  .split(",")
-  .map((value) => value.trim())
-  .filter(Boolean);
+const allowedOrigins =
+  process.env.ALLOWED_ORIGINS?.split(",").map((value) => value.trim()).filter(Boolean) ??
+  DEFAULT_DEV_ORIGINS;
 
 app.use(express.json({ limit: "1mb" }));
 
-const corsAllowedOrigins = ALLOWED_ORIGINS.length > 0 ? ALLOWED_ORIGINS : DEFAULT_DEV_ORIGINS;
-if (isProd() && ALLOWED_ORIGINS.length === 0) {
+if (isProd() && allowedOrigins.length === 0) {
   console.warn("[cors] ALLOWED_ORIGINS not set in prod; CORS will block real frontend");
 }
 const corsOptions: cors.CorsOptions = {
@@ -45,12 +44,12 @@ const corsOptions: cors.CorsOptions = {
       cb(null, true);
       return;
     }
-    if (corsAllowedOrigins.includes(origin)) {
+    if (allowedOrigins.includes(origin)) {
       console.log(`[cors] allowed origin: ${origin}`);
       cb(null, true);
       return;
     }
-    cb(new Error("Not allowed by CORS"));
+    cb(new Error(`CORS blocked origin: ${origin}`));
   },
   credentials: true,
   methods: ["GET", "POST", "OPTIONS"],
@@ -132,6 +131,8 @@ app.post("/auth/google", async (req, res) => {
     res.status(500).json({ ok: false, error: "GOOGLE_CLIENT_ID is not set" });
     return;
   }
+
+  console.log("[auth] requiredAudience:", process.env.GOOGLE_CLIENT_ID);
 
   let tokenInfo: TokenInfo | null = null;
   try {

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { GoogleLogin } from "@react-oauth/google";
-import { useAuth } from "../auth/useAuth";
+import { useAuth } from "../auth/AuthProvider";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL;
 
@@ -9,7 +9,7 @@ export function GoogleLoginButton() {
   const { user, loading, refreshMe } = useAuth();
 
   return (
-    <div style={{ display: "grid", gap: 8 }}>
+    <div id="google-login-area" style={{ display: "grid", gap: 8 }}>
       {loading ? <div>checking session...</div> : null}
 
       {!loading && user ? (

@@ -20,21 +20,21 @@ type TokenInfo = {
 
 
 const app = express();
+app.set("trust proxy", 1);
 const port = Number(process.env.PORT || 8080);
 
 const COOKIE_NAME = process.env.SESSION_COOKIE_NAME || "arnvoid_session";
 const SESSION_TTL_MS = Number(process.env.SESSION_TTL_MS || 1000 * 60 * 60 * 24 * 7);
-const COOKIE_SAMESITE = (process.env.SESSION_COOKIE_SAMESITE || "lax").toLowerCase();
-const COOKIE_SECURE = process.env.SESSION_COOKIE_SECURE
-  ? process.env.SESSION_COOKIE_SECURE === "true"
-  : null;
+const COOKIE_SAMESITE = "lax";
 const DEFAULT_DEV_ORIGINS = ["http://localhost:5173", "http://127.0.0.1:5173"];
-const allowedOrigins =
-  process.env.ALLOWED_ORIGINS?.split(",").map((value) => value.trim()).filter(Boolean) ??
-  DEFAULT_DEV_ORIGINS;
+const allowedOrigins = (process.env.ALLOWED_ORIGINS ?? "")
+  .split(",")
+  .map((value) => value.trim())
+  .filter(Boolean);
 
 app.use(express.json({ limit: "1mb" }));
 
+const corsAllowedOrigins = allowedOrigins.length > 0 ? allowedOrigins : DEFAULT_DEV_ORIGINS;
 if (isProd() && allowedOrigins.length === 0) {
   console.warn("[cors] ALLOWED_ORIGINS not set in prod; CORS will block real frontend");
 }
@@ -44,7 +44,7 @@ const corsOptions: cors.CorsOptions = {
       cb(null, true);
       return;
     }
-    if (allowedOrigins.includes(origin)) {
+    if (corsAllowedOrigins.includes(origin)) {
       console.log(`[cors] allowed origin: ${origin}`);
       cb(null, true);
       return;
@@ -85,16 +85,8 @@ function isProd() {
 }
 
 function resolveCookieOptions() {
-  const prod = isProd();
-  let sameSite = normalizeSameSite(COOKIE_SAMESITE);
-  if (!prod && sameSite === "none") {
-    sameSite = "lax";
-  }
-
-  const secure =
-    typeof COOKIE_SECURE === "boolean"
-      ? COOKIE_SECURE
-      : prod;
+  const sameSite = normalizeSameSite(COOKIE_SAMESITE);
+  const secure = isProd();
 
   return { sameSite, secure };
 }

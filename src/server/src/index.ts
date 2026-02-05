@@ -9,11 +9,6 @@ type SessionUser = {
   picture?: string;
 };
 
-type SessionRecord = {
-  user: SessionUser;
-  expiresAt: number;
-};
-
 type TokenInfo = {
   aud?: string;
   sub?: string;
@@ -37,8 +32,6 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || "")
   .split(",")
   .map((value) => value.trim())
   .filter(Boolean);
-
-const sessions = new Map<string, SessionRecord>();
 
 app.use(express.json({ limit: "1mb" }));
 
@@ -74,22 +67,6 @@ function parseCookies(headerValue?: string) {
   }
 
   return cookies;
-}
-
-function getSession(req: express.Request) {
-  const cookies = parseCookies(req.headers.cookie);
-  const sessionId = cookies[COOKIE_NAME];
-  if (!sessionId) return null;
-
-  const record = sessions.get(sessionId);
-  if (!record) return null;
-
-  if (Date.now() > record.expiresAt) {
-    sessions.delete(sessionId);
-    return null;
-  }
-
-  return record;
 }
 
 function normalizeSameSite(value: string): "lax" | "none" | "strict" {
@@ -159,7 +136,42 @@ app.post("/auth/google", async (req, res) => {
   };
 
   const sessionId = crypto.randomUUID();
-  sessions.set(sessionId, { user, expiresAt: Date.now() + SESSION_TTL_MS });
+  const expiresAt = new Date(Date.now() + SESSION_TTL_MS);
+
+  let userRow: {
+    id: string;
+    google_sub: string;
+    email: string | null;
+    name: string | null;
+    picture: string | null;
+  } | null = null;
+
+  try {
+    const pool = await getPool();
+    const upsertResult = await pool.query(
+      `insert into users (google_sub, email, name, picture)
+       values ($1, $2, $3, $4)
+       on conflict (google_sub)
+       do update set email = excluded.email, name = excluded.name, picture = excluded.picture
+       returning id, google_sub, email, name, picture`,
+      [user.sub, user.email ?? null, user.name ?? null, user.picture ?? null]
+    );
+    userRow = upsertResult.rows[0] || null;
+
+    if (!userRow) {
+      res.status(500).json({ ok: false, error: "failed to upsert user" });
+      return;
+    }
+
+    await pool.query(
+      `insert into sessions (id, user_id, expires_at)
+       values ($1, $2, $3)`,
+      [sessionId, userRow.id, expiresAt]
+    );
+  } catch (e) {
+    res.status(500).json({ ok: false, error: `db error: ${String(e)}` });
+    return;
+  }
 
   const sameSite = normalizeSameSite(COOKIE_SAMESITE);
   const secure = sameSite === "none" ? true : COOKIE_SECURE;
@@ -172,38 +184,95 @@ app.post("/auth/google", async (req, res) => {
     maxAge: SESSION_TTL_MS
   });
 
-  res.json({ ok: true, user });
+  res.json({
+    ok: true,
+    user: {
+      sub: userRow.google_sub,
+      email: userRow.email ?? undefined,
+      name: userRow.name ?? undefined,
+      picture: userRow.picture ?? undefined
+    }
+  });
 });
 
 app.get("/me", (req, res) => {
-  const session = getSession(req);
-  if (!session) {
-    res.status(401).json({ ok: false, user: null });
-    return;
-  }
+  (async () => {
+    const cookies = parseCookies(req.headers.cookie);
+    const sessionId = cookies[COOKIE_NAME];
+    if (!sessionId) {
+      res.status(401).json({ ok: false, user: null });
+      return;
+    }
 
-  res.json({ ok: true, user: session.user });
+    try {
+      const pool = await getPool();
+      const result = await pool.query(
+        `select sessions.expires_at as expires_at,
+                users.google_sub as google_sub,
+                users.email as email,
+                users.name as name,
+                users.picture as picture
+         from sessions
+         join users on users.id = sessions.user_id
+         where sessions.id = $1`,
+        [sessionId]
+      );
+
+      const row = result.rows[0];
+      if (!row) {
+        res.status(401).json({ ok: false, user: null });
+        return;
+      }
+
+      const expiresAt = row.expires_at ? new Date(row.expires_at) : null;
+      if (expiresAt && Date.now() > expiresAt.getTime()) {
+        await pool.query("delete from sessions where id = $1", [sessionId]);
+        res.status(401).json({ ok: false, user: null });
+        return;
+      }
+
+      res.json({
+        ok: true,
+        user: {
+          sub: row.google_sub,
+          email: row.email ?? undefined,
+          name: row.name ?? undefined,
+          picture: row.picture ?? undefined
+        }
+      });
+    } catch (e) {
+      res.status(500).json({ ok: false, error: `db error: ${String(e)}` });
+    }
+  })();
 });
 
 app.post("/auth/logout", (req, res) => {
-  const cookies = parseCookies(req.headers.cookie);
-  const sessionId = cookies[COOKIE_NAME];
-  if (sessionId) {
-    sessions.delete(sessionId);
-  }
+  (async () => {
+    const cookies = parseCookies(req.headers.cookie);
+    const sessionId = cookies[COOKIE_NAME];
+    if (sessionId) {
+      try {
+        const pool = await getPool();
+        await pool.query("delete from sessions where id = $1", [sessionId]);
+      } catch (e) {
+        res.status(500).json({ ok: false, error: `db error: ${String(e)}` });
+        return;
+      }
+    }
 
-  const sameSite = normalizeSameSite(COOKIE_SAMESITE);
-  const secure = sameSite === "none" ? true : COOKIE_SECURE;
+    const sameSite = normalizeSameSite(COOKIE_SAMESITE);
+    const secure = sameSite === "none" ? true : COOKIE_SECURE;
 
-  res.cookie(COOKIE_NAME, "", {
-    httpOnly: true,
-    sameSite,
-    secure,
-    path: "/",
-    maxAge: 0
-  });
+    res.cookie(COOKIE_NAME, "", {
+      httpOnly: true,
+      sameSite,
+      secure,
+      path: "/",
+      maxAge: 0
+    });
 
-  res.json({ ok: true });
+    res.json({ ok: true });
+  })();
 });
 
 app.listen(port, () => {

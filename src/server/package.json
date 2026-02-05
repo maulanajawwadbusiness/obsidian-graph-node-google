@@ -12,7 +12,8 @@
     "db:healthcheck": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/db-healthcheck.ps1",
     "db:schema": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/db-schema.ps1",
     "db:dump:schema": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/db-dump-schema.ps1",
-    "db:apply": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/db-apply.ps1"
+    "db:apply": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/db-apply.ps1",
+    "migrate": "node-pg-migrate"
   },
   "keywords": [],
   "author": "",

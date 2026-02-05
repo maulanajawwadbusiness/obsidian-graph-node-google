@@ -17,6 +17,7 @@ Set these in your shell before running the scripts:
 - `DB_NAME` (example: `arnvoid`)
 - `DB_USER` (example: `arnvoid_app`)
 - `DB_PASSWORD` (example: `your_password_here`)
+- `DATABASE_URL` (optional, used by `npm run migrate`, example: `postgres://DB_USER:DB_PASSWORD@127.0.0.1:5432/DB_NAME`)
 
 ## Where To Run
 Run all commands from `src/server`:
@@ -60,6 +61,11 @@ npm run db:schema
 - Dump schema to `docs/db/schema.sql`:
 ```
 npm run db:dump:schema
+```
+
+- Run migrations (requires `DATABASE_URL` and proxy):
+```
+npm run migrate
 ```
 
 - Apply a single SQL file (`docs/db/next.sql`):

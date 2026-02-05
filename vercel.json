@@ -1,0 +1,6 @@
+{
+    "rewrites": [
+      { "source": "/api/(.*)", "destination": "https://arnvoid-api-242743978070.asia-southeast2.run.app/$1" }
+    ]
+  }
+  

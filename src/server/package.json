@@ -5,7 +5,14 @@
   "scripts": {
     "dev": "ts-node src/index.ts",
     "build": "tsc",
-    "start": "node dist/index.js"
+    "start": "node dist/index.js",
+    "db:proxy": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/db-proxy.ps1",
+    "db:psql": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/db-psql.ps1",
+    "db:ping": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/db-ping.ps1",
+    "db:healthcheck": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/db-healthcheck.ps1",
+    "db:schema": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/db-schema.ps1",
+    "db:dump:schema": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/db-dump-schema.ps1",
+    "db:apply": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/db-apply.ps1"
   },
   "keywords": [],
   "author": "",

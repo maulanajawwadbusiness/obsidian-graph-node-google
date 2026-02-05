@@ -7,10 +7,6 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL;
 export function GoogleLoginButton() {
   const [status, setStatus] = useState<string>("not logged in yet");
   const { user, loading, refreshMe } = useAuth();
-  const locale =
-    typeof navigator !== "undefined" && navigator.language
-      ? navigator.language
-      : "en";
 
   return (
     <div style={{ display: "grid", gap: 8 }}>
@@ -38,7 +34,6 @@ export function GoogleLoginButton() {
         shape="rectangular"
         logo_alignment="left"
         width={240}
-        locale={locale}
         click_listener={() => {}}
         onSuccess={async (cred) => {
           try {

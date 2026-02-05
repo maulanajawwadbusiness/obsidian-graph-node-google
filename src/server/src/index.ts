@@ -38,8 +38,8 @@ const corsAllowedOrigins = allowedOrigins.length > 0 ? allowedOrigins : DEFAULT_
 if (isProd() && allowedOrigins.length === 0) {
   console.warn("[cors] ALLOWED_ORIGINS not set in prod; CORS will block real frontend");
 }
-const corsOptions: cors.CorsOptions = {
-  origin: (origin, cb) => {
+const corsOptions = {
+  origin: (origin: string | undefined, cb: (err: Error | null, allow?: boolean) => void) => {
     if (!origin) {
       cb(null, true);
       return;

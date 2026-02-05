@@ -29,7 +29,7 @@ export async function apiGet(path: string): Promise<ApiGetResult> {
   const url = resolveUrl(BASE, path);
   console.log(`[apiGet] GET ${url}`);
 
-  const res = await fetch(url);
+  const res = await fetch(url, { credentials: 'include' });
   const contentType = res.headers.get('content-type') || '';
   const text = await res.text();
   const isJson = contentType.includes('application/json');

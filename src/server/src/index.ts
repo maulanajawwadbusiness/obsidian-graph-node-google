@@ -276,12 +276,11 @@ app.post("/auth/logout", (req, res) => {
 
     const { sameSite, secure } = resolveCookieOptions();
 
-    res.cookie(COOKIE_NAME, "", {
+    res.clearCookie(COOKIE_NAME, {
       httpOnly: true,
       sameSite,
       secure,
-      path: "/",
-      maxAge: 0
+      path: "/"
     });
 
     res.json({ ok: true });

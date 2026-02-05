@@ -25,6 +25,10 @@ API base must use a single canonical key:
 - `SESSION_COOKIE_SAMESITE`
 - `SESSION_COOKIE_NAME`
 
+## 1.5 Vercel Proxy CORS
+- If frontend is served from `https://beta.arnvoid.com` and calls `/api`, backend must allow origin `https://beta.arnvoid.com`.
+- CORS allowlist is driven by `ALLOWED_ORIGINS` (comma-separated). If empty, default includes localhost and beta.
+
 ## 2. UI Surface Map & Ownership
 
 The application layers, ordered by z-index (lowest to highest):

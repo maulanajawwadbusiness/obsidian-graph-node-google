@@ -61,6 +61,7 @@ Use pure ASCII characters in code, comments, logs, and docs. Avoid Unicode arrow
 ### AUTH COOKIE RULES
 *   **Frontend**: All backend calls must include `credentials: "include"`.
 *   **Cookie**: Session cookie is `arnvoid_session` and must be cleared with matching options (path, sameSite, secure).
+*   **Vercel Proxy**: If frontend is `https://beta.arnvoid.com`, backend CORS must allow that origin.
 
 ### DO NOT Break The "Dot"
 Terminology matters. In the graph, we render "Dots", not "Nodes" (though the data structure is a node). Keep performance-first language.

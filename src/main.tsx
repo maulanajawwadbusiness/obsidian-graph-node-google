@@ -2,6 +2,7 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { GoogleOAuthProvider } from '@react-oauth/google'
 import { GraphPhysicsPlayground } from './playground/GraphPhysicsPlayground'
+import { AuthProvider } from './auth/AuthProvider'
 import './index.css'
 import './styles/fonts.css'
 
@@ -15,7 +16,9 @@ console.log('[auth] VITE_GOOGLE_CLIENT_ID', googleClientId)
 ReactDOM.createRoot(document.getElementById('root')!).render(
     <React.StrictMode>
         <GoogleOAuthProvider clientId={googleClientId} locale={googleLocale}>
-            <GraphPhysicsPlayground />
+            <AuthProvider>
+                <GraphPhysicsPlayground />
+            </AuthProvider>
         </GoogleOAuthProvider>
     </React.StrictMode>,
 )

@@ -63,6 +63,15 @@ Use pure ASCII characters in code, comments, logs, and docs. Avoid Unicode arrow
 *   **Cookie**: Session cookie is `arnvoid_session` and must be cleared with matching options (path, sameSite, secure).
 *   **Vercel Proxy**: If frontend is `https://beta.arnvoid.com`, backend CORS must allow that origin.
 
+### AUTH SAFETY + SHARPNESS
+*   **Single Truth**: `/me` is the only source of truth for logged-in user state.
+*   **No Local Storage**: Never store tokens in localStorage or sessionStorage.
+*   **Credentials Required**: All auth requests must use `credentials: "include"`.
+*   **CORS Discipline**: Never set CORS origin to `*` when credentials are enabled.
+*   **No Secret Logs**: Never log idTokens, cookies, or auth headers.
+*   **Origin Changes**: When OAuth origins change, document exact allowed origins.
+*   **Movable UI**: Keep auth UI components easy to relocate (no hard-coupling).
+
 ### DO NOT Break The "Dot"
 Terminology matters. In the graph, we render "Dots", not "Nodes" (though the data structure is a node). Keep performance-first language.
 

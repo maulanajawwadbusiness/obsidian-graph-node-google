@@ -56,6 +56,9 @@ Excluding: node_modules, dist, build, .git
 |   |   `-- GraphPhysicsPlayground.tsx # ROOT CONTAINER
 |   |-- popup/                 # Node Popups and MiniChat
 |   |-- server/                # Backend (Cloud Run service)
+|   |-- auth/                  # Auth state + session UI
+|   |   |-- AuthProvider.tsx   # React Context auth state
+|   |   `-- SessionExpiryBanner.tsx # Session expiry banner
 |   |-- main.tsx               # Entry Point
 |   `-- index.css              # Global Styles
 |-- index.html                 # HTML Entry
@@ -77,6 +80,11 @@ Note: Counts are estimated post-modularization.
 9. src/ArnvoidDocumentViewer/ArnvoidDocumentViewer.tsx (312 lines) - Doc Viewer
 10. src/playground/rendering/renderLoopScheduler.ts (New) - Loop Logic
 11. src/components/GoogleLoginButton.tsx - Google login entry
+12. src/auth/AuthProvider.tsx - Auth context + /me bootstrap
+13. src/auth/SessionExpiryBanner.tsx - Session expiry UI
+14. src/api.ts - Backend fetch helper (credentials include)
+15. src/server/src/index.ts - Auth routes and cookies
+16. src/server/src/db.ts - Cloud SQL connector + pool
 
 ## 3. Core Runtime Loops
 
@@ -128,3 +136,24 @@ Note: Counts are estimated post-modularization.
 - [Degrade]: level, passes, budgetMs.
 - [Hand]: dragging=Y, localBoost=Y.
 - [SlushWatch]: Warnings if debt persists despite drop logic.
+
+## 7. Auth Flow Map (Google Login + Sessions)
+
+Key files:
+- `src/auth/AuthProvider.tsx` (single source of truth for auth state)
+- `src/auth/SessionExpiryBanner.tsx` (expiry UI)
+- `src/components/GoogleLoginButton.tsx` (Google login entry)
+- `src/api.ts` (GET /me with `credentials: "include"`)
+- `src/server/src/index.ts` (auth routes, cookie, sessions)
+- `src/server/src/db.ts` (Postgres connection)
+
+Follow the auth flow:
+1. User clicks login button -> Google returns `idToken`.
+2. Frontend sends `POST /auth/google` with `idToken`.
+3. Backend verifies token, inserts session row, sets `arnvoid_session` cookie.
+4. Frontend calls `GET /me`, updates React Context user.
+5. UI reads user state from `AuthProvider` and renders signed-in status.
+6. Logout calls `POST /auth/logout`, clears session + cookie, user becomes null.
+
+Note:
+- `src/auth/useAuth.ts` was replaced by `AuthProvider.tsx`.

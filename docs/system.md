@@ -29,6 +29,55 @@ API base must use a single canonical key:
 - If frontend is served from `https://beta.arnvoid.com` and calls `/api`, backend must allow origin `https://beta.arnvoid.com`.
 - CORS allowlist is driven by `ALLOWED_ORIGINS` (comma-separated). If empty, default includes localhost and beta.
 
+## 1.6 Auth: Google Login + Sessions
+### Architecture (High Level)
+- Frontend calls `/api/*` on `https://beta.arnvoid.com`.
+- Vercel rewrite proxies `/api` to Cloud Run backend.
+- Backend verifies Google ID token, writes session to Postgres, sets `arnvoid_session` cookie.
+- Frontend bootstraps session via `GET /me` and stores user in React Context.
+
+### Core Endpoints
+- `POST /auth/google` (exchanges Google ID token for session)
+- `GET /me` (returns `{ ok: true, user: User | null }`)
+- `POST /auth/logout` (deletes session and clears cookie)
+
+### Cookie Behavior
+- Cookie name: `arnvoid_session`
+- `httpOnly: true`
+- `sameSite: "lax"` (same-site)
+- `secure: true` in prod, `false` for localhost
+- `path: "/"`
+
+### Required Env Vars
+Frontend:
+- `VITE_API_BASE_URL` (for beta: `/api`)
+- `VITE_GOOGLE_CLIENT_ID`
+
+Backend:
+- `GOOGLE_CLIENT_ID`
+- `ALLOWED_ORIGINS` (comma-separated)
+- `SESSION_COOKIE_SAMESITE` (optional override)
+- `SESSION_COOKIE_NAME` (optional override)
+- Postgres vars (see `src/server/src/db.ts`)
+
+### Session Expiry UI
+Files:
+- `src/auth/AuthProvider.tsx` (single source of truth, `/me` bootstrap, expiry detection)
+- `src/auth/SessionExpiryBanner.tsx` (UI banner)
+Triggers:
+- If user was previously logged in and `/me` later returns `user: null` or `401/403`, banner is shown.
+- Success from `/me` with a user clears the expiry flag.
+
+### Local Run
+- Frontend: `npm run dev` (uses `VITE_API_BASE_URL`)
+- Backend: `cd src/server` then `npm run start` (or `npm run dev` if available)
+- Ensure `ALLOWED_ORIGINS` includes `http://localhost:5173` and `http://127.0.0.1:5173`.
+
+### Prod (Beta Domain)
+- Frontend: `https://beta.arnvoid.com`
+- Backend: Cloud Run behind Vercel `/api` rewrite
+- Ensure `ALLOWED_ORIGINS` includes `https://beta.arnvoid.com`
+
 ## 2. UI Surface Map & Ownership
 
 The application layers, ordered by z-index (lowest to highest):

@@ -78,6 +78,19 @@ Triggers:
 - Backend: Cloud Run behind Vercel `/api` rewrite
 - Ensure `ALLOWED_ORIGINS` includes `https://beta.arnvoid.com`
 
+## 1.7 Database Operations (Laptop-First)
+All routine DB work should run from the laptop. Do not use the Cloud Console for schema edits.
+
+Key references:
+- Workflow: `docs/db.md`
+- Scripts: `src/server/scripts`
+- Migrations: `src/server/migrations` (node-pg-migrate)
+
+Quick notes:
+- Start Cloud SQL Auth Proxy to `127.0.0.1:5432` using `INSTANCE_CONNECTION_NAME`.
+- Run commands from `src/server` using npm scripts.
+- Migrations use `npm run migrate` and expect `DATABASE_URL` (see `docs/db.md`).
+
 ## 2. UI Surface Map & Ownership
 
 The application layers, ordered by z-index (lowest to highest):

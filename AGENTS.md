@@ -31,12 +31,14 @@ The Canvas (Graph) is the substrate. Panels (Chat, Docs) and the Analysis Overla
 | **Mini Chat** | `src/popup/` | Node popover chat logic (`PopupStore.tsx`). |
 | **Document Pipe** | `src/store/documentStore.tsx` | Worker-based parsing (PDF/TXT/MD). |
 | **UI Markers** | `src/playground/components/` | `BrandLabel` (Top-Left) and `MapTitleBlock` (Title). |
+| **DB Ops** | `docs/db.md`, `src/server/scripts`, `src/server/migrations` | Laptop-first DB workflow and migrations. |
 
 ## 3. Safe Workflow
 
 1.  **Scan**: Read `docs/repo_xray.md`.
     *   **Physics Work**: **STOP.** Read `docs/PHYSICS_ATLAS.md` first. The Acceptance Tests (T1–T7) are your Truth Harness.
     *   **Render/DPR Work**: Read `docs/onboarding_dpr_rendering.md`. **Mandatory for avoiding visual regressions.**
+    *   **DB Work**: Read `docs/db.md` and run DB tasks from `src/server` using npm scripts.
     *   Do not guess.
 2.  **Dissect**: Identify load-bearing logic (runIds, refs, context priorities).
 3.  **Instrument**: Add minimal metrics/logs before changing behavior.

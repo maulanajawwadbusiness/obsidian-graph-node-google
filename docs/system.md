@@ -13,6 +13,18 @@ Use pure ASCII characters in code, comments, logs, and documentation. Avoid Unic
 API base must use a single canonical key:
 - `VITE_API_BASE_URL` (do not use `VITE_API_BASE`).
 
+## 1.3 Auth And Sessions
+- Cookie auth uses `arnvoid_session` and must be sent with `credentials: "include"` on every backend request.
+- Logout path is `POST /auth/logout`.
+- Same-site deployments use `SameSite=Lax`; cross-site requires `SameSite=None` with `Secure=true`.
+- Login entry point is `src/components/GoogleLoginButton.tsx` (POST `/auth/google`).
+
+## 1.4 Backend Env Vars (Auth)
+- `GOOGLE_CLIENT_ID`
+- `ALLOWED_ORIGINS`
+- `SESSION_COOKIE_SAMESITE`
+- `SESSION_COOKIE_NAME`
+
 ## 2. UI Surface Map & Ownership
 
 The application layers, ordered by z-index (lowest to highest):

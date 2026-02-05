@@ -44,6 +44,7 @@ The Canvas (Graph) is the substrate. Panels (Chat, Docs) and the Analysis Overla
 5.  **Verify**: Manual verification is required.
 6.  **Docs**: Update `docs/*.md` to reflect new truth.
 7.  **Commit**: Use compact, descriptive messages (`feat(chat): ...`).
+    *   **Auth Work**: Update `docs/report_2026_02_05_auth_session_postgres.md` when touching auth, session, or CORS behavior.
 
 ## 4. CRITICAL WARNINGS
 
@@ -56,6 +57,10 @@ Do NOT use `&&` in the terminal. It breaks the parser. Use separate commands or 
 
 ### ASCII ONLY
 Use pure ASCII characters in code, comments, logs, and docs. Avoid Unicode arrows, ellipses, and typographic dashes to prevent mojibake.
+
+### AUTH COOKIE RULES
+*   **Frontend**: All backend calls must include `credentials: "include"`.
+*   **Cookie**: Session cookie is `arnvoid_session` and must be cleared with matching options (path, sameSite, secure).
 
 ### DO NOT Break The "Dot"
 Terminology matters. In the graph, we render "Dots", not "Nodes" (though the data structure is a node). Keep performance-first language.

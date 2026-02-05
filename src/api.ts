@@ -29,6 +29,7 @@ export async function apiGet(path: string): Promise<ApiGetResult> {
   const url = resolveUrl(BASE, path);
   console.log(`[apiGet] GET ${url}`);
 
+  // All backend calls must include credentials for cookie auth.
   const res = await fetch(url, { credentials: 'include' });
   const contentType = res.headers.get('content-type') || '';
   const text = await res.text();
@@ -67,3 +68,5 @@ export async function apiGet(path: string): Promise<ApiGetResult> {
     error
   };
 }
+
+// TODO(auth): add a client helper for POST /auth/logout (credentials include) when UI is added.

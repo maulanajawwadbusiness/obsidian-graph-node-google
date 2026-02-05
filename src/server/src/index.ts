@@ -58,7 +58,7 @@ const corsOptions: cors.CorsOptions = {
 };
 
 app.use(cors(corsOptions));
-app.options("*", cors(corsOptions));
+app.options(/.*/, cors(corsOptions));
 
 function parseCookies(headerValue?: string) {
   const cookies: Record<string, string> = {};

@@ -16,6 +16,7 @@ Excluding: node_modules, dist, build, .git
 |   |-- forensic_report_2026_02_01_doc_sync.md # DOCUMENTATION SYNC REPORT
 |   |-- report_2026_01_31_modularization.md    # MODULARIZATION REPORT
 |   |-- report_2026_02_01_comprehensive_physics_hardening.md # HARDENING REPORT
+|   |-- report_2026_02_05_auth_session_postgres.md # Auth sessions, cookies, CORS
 |   `-- ... (forensic reports)
 |-- src/
 |   |-- ai/                    # AI Layer (Provider Agnostic)
@@ -54,6 +55,7 @@ Excluding: node_modules, dist, build, .git
 |   |   |-- useGraphRendering.ts # HOOK WIRING
 |   |   `-- GraphPhysicsPlayground.tsx # ROOT CONTAINER
 |   |-- popup/                 # Node Popups and MiniChat
+|   |-- server/                # Backend (Cloud Run service)
 |   |-- main.tsx               # Entry Point
 |   `-- index.css              # Global Styles
 |-- index.html                 # HTML Entry
@@ -74,6 +76,7 @@ Note: Counts are estimated post-modularization.
 8. src/physics/engine/forcePass.ts (200 lines) - Forces
 9. src/ArnvoidDocumentViewer/ArnvoidDocumentViewer.tsx (312 lines) - Doc Viewer
 10. src/playground/rendering/renderLoopScheduler.ts (New) - Loop Logic
+11. src/components/GoogleLoginButton.tsx - Google login entry
 
 ## 3. Core Runtime Loops
 

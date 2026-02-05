@@ -1,14 +1,34 @@
 import { useState } from "react";
 import { GoogleLogin } from "@react-oauth/google";
+import { useAuth } from "../auth/useAuth";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL;
 
 export function GoogleLoginButton() {
   const [status, setStatus] = useState<string>("not logged in yet");
-  const [userJson, setUserJson] = useState<string>("");
+  const { user, loading, refreshMe } = useAuth();
 
   return (
     <div style={{ display: "grid", gap: 8 }}>
+      {loading ? <div>checking session...</div> : null}
+
+      {!loading && user ? (
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          {user.picture ? (
+            <img
+              src={user.picture}
+              alt="avatar"
+              style={{ width: 24, height: 24, borderRadius: 12 }}
+            />
+          ) : null}
+          <div>
+            signed in as {user.name || user.email || "unknown"}
+          </div>
+          {/* TODO(auth): add logout button wired to POST /auth/logout */}
+        </div>
+      ) : null}
+
+      {!loading && !user ? (
       <GoogleLogin
         onSuccess={async (cred) => {
           try {
@@ -34,12 +54,11 @@ export function GoogleLoginButton() {
             const data = await r.json().catch(() => null);
             if (!r.ok || !data?.ok) {
               setStatus(`backend rejected status=${r.status}`);
-              setUserJson(JSON.stringify(data, null, 2));
               return;
             }
 
             setStatus("ok: logged in");
-            setUserJson(JSON.stringify(data.user, null, 2));
+            await refreshMe();
           } catch (e) {
             setStatus(`error: ${String(e)}`);
           }
@@ -48,10 +67,9 @@ export function GoogleLoginButton() {
           setStatus("google login failed");
         }}
       />
+      ) : null}
 
       <div style={{ whiteSpace: "pre-wrap", fontFamily: "monospace" }}>{status}</div>
-
-      {userJson ? <pre style={{ whiteSpace: "pre-wrap" }}>{userJson}</pre> : null}
     </div>
   );
 }

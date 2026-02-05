@@ -1,5 +1,6 @@
 import crypto from "crypto";
 import express from "express";
+import { OAuth2Client } from "google-auth-library";
 import { getPool } from "./db";
 
 type SessionUser = {
@@ -10,24 +11,21 @@ type SessionUser = {
 };
 
 type TokenInfo = {
-  aud?: string;
   sub?: string;
   email?: string;
   name?: string;
   picture?: string;
-  exp?: string;
-  email_verified?: string;
 };
 
 const app = express();
 const port = Number(process.env.PORT || 8080);
 
-const COOKIE_NAME = process.env.SESSION_COOKIE_NAME || "session";
+const COOKIE_NAME = process.env.SESSION_COOKIE_NAME || "arnvoid_session";
 const SESSION_TTL_MS = Number(process.env.SESSION_TTL_MS || 1000 * 60 * 60 * 24 * 7);
 const COOKIE_SAMESITE = (process.env.SESSION_COOKIE_SAMESITE || "lax").toLowerCase();
 const COOKIE_SECURE = process.env.SESSION_COOKIE_SECURE
   ? process.env.SESSION_COOKIE_SECURE === "true"
-  : process.env.NODE_ENV === "production";
+  : null;
 const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || "")
   .split(",")
   .map((value) => value.trim())
@@ -74,6 +72,25 @@ function normalizeSameSite(value: string): "lax" | "none" | "strict" {
   return "lax";
 }
 
+function isProd() {
+  return Boolean(process.env.K_SERVICE) || process.env.NODE_ENV === "production";
+}
+
+function resolveCookieOptions() {
+  const prod = isProd();
+  let sameSite = normalizeSameSite(COOKIE_SAMESITE);
+  if (!prod && sameSite === "none") {
+    sameSite = "lax";
+  }
+
+  const secure =
+    typeof COOKIE_SECURE === "boolean"
+      ? COOKIE_SECURE
+      : prod;
+
+  return { sameSite, secure };
+}
+
 app.get("/health", async (_req, res) => {
   try {
     const pool = await getPool();
@@ -99,32 +116,30 @@ app.post("/auth/google", async (req, res) => {
 
   let tokenInfo: TokenInfo | null = null;
   try {
-    const tokenRes = await fetch(
-      `https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(idToken)}`
-    );
-    if (!tokenRes.ok) {
-      res.status(401).json({ ok: false, error: "invalid google token" });
+    const oauthClient = new OAuth2Client(clientId);
+    const ticket = await oauthClient.verifyIdToken({
+      idToken,
+      audience: clientId
+    });
+    const payload = ticket.getPayload();
+    if (!payload?.sub) {
+      res.status(401).json({ ok: false, error: "token missing subject" });
       return;
     }
-    tokenInfo = (await tokenRes.json()) as TokenInfo;
+
+    tokenInfo = {
+      sub: payload.sub,
+      email: payload.email ?? undefined,
+      name: payload.name ?? undefined,
+      picture: payload.picture ?? undefined
+    };
   } catch (e) {
-    res.status(502).json({ ok: false, error: `token validation failed: ${String(e)}` });
+    res.status(401).json({ ok: false, error: `token validation failed: ${String(e)}` });
     return;
   }
 
   if (!tokenInfo?.sub) {
     res.status(401).json({ ok: false, error: "token missing subject" });
-    return;
-  }
-
-  if (tokenInfo.aud !== clientId) {
-    res.status(401).json({ ok: false, error: "token audience mismatch" });
-    return;
-  }
-
-  const expSeconds = tokenInfo.exp ? Number(tokenInfo.exp) : 0;
-  if (expSeconds && Date.now() / 1000 > expSeconds) {
-    res.status(401).json({ ok: false, error: "token expired" });
     return;
   }
 
@@ -173,8 +188,7 @@ app.post("/auth/google", async (req, res) => {
     return;
   }
 
-  const sameSite = normalizeSameSite(COOKIE_SAMESITE);
-  const secure = sameSite === "none" ? true : COOKIE_SECURE;
+  const { sameSite, secure } = resolveCookieOptions();
 
   res.cookie(COOKIE_NAME, sessionId, {
     httpOnly: true,
@@ -200,7 +214,7 @@ app.get("/me", (req, res) => {
     const cookies = parseCookies(req.headers.cookie);
     const sessionId = cookies[COOKIE_NAME];
     if (!sessionId) {
-      res.status(401).json({ ok: false, user: null });
+      res.json({ ok: true, user: null });
       return;
     }
 
@@ -220,14 +234,14 @@ app.get("/me", (req, res) => {
 
       const row = result.rows[0];
       if (!row) {
-        res.status(401).json({ ok: false, user: null });
+        res.json({ ok: true, user: null });
         return;
       }
 
       const expiresAt = row.expires_at ? new Date(row.expires_at) : null;
       if (expiresAt && Date.now() > expiresAt.getTime()) {
         await pool.query("delete from sessions where id = $1", [sessionId]);
-        res.status(401).json({ ok: false, user: null });
+        res.json({ ok: true, user: null });
         return;
       }
 
@@ -260,8 +274,7 @@ app.post("/auth/logout", (req, res) => {
       }
     }
 
-    const sameSite = normalizeSameSite(COOKIE_SAMESITE);
-    const secure = sameSite === "none" ? true : COOKIE_SECURE;
+    const { sameSite, secure } = resolveCookieOptions();
 
     res.cookie(COOKIE_NAME, "", {
       httpOnly: true,

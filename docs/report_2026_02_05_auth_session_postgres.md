@@ -12,9 +12,15 @@ Switched session storage from memory to Postgres and hardened CORS, cookie handl
 
 ## Cookie Policy
 - httpOnly: true
-- sameSite: lax (default)
+- sameSite: lax (default for same-site)
 - secure: true in prod, false on localhost unless overridden by SESSION_COOKIE_SECURE
 - path: /
+
+### Same-Site vs Cross-Site
+- Same-site (frontend and backend on same site): SameSite=lax is correct.
+- Cross-site (different domains): set SESSION_COOKIE_SAMESITE=none and SESSION_COOKIE_SECURE=true.
+
+CSRF note: If we ever set SameSite=None, add CSRF protection for state-changing routes (logout, etc).
 
 ## CORS Policy
 - Uses cors package with credentials true.
@@ -32,9 +38,17 @@ Dev:
 
 Prod (Cloud Run):
 - K_SERVICE is set automatically
-- SESSION_COOKIE_SAMESITE=lax
+- GOOGLE_CLIENT_ID is required
+- ALLOWED_ORIGINS is required if frontend is on a different origin
+  - Example: ALLOWED_ORIGINS=https://frontend.example.com
+- SESSION_COOKIE_SAMESITE=lax (default; set to none only for cross-site)
 - SESSION_COOKIE_SECURE=true (or leave unset to use prod default)
-- ALLOWED_ORIGINS should be set if frontend is on a different origin
+
+## Prod Deploy Checklist
+- Set GOOGLE_CLIENT_ID
+- Set ALLOWED_ORIGINS
+- Set SESSION_COOKIE_SAMESITE (optional; only if cross-site)
+- Confirm frontend fetch uses credentials:"include" for /auth/google, /me, /auth/logout
 
 ## Schema Expectations
 - users.id is BIGSERIAL (bigint)
@@ -148,7 +162,7 @@ gcloud run deploy arnvoid-api \
   --platform managed \
   --allow-unauthenticated \
   --add-cloudsql-instances arnvoid-project:asia-southeast2:arnvoid-postgres \
-  --set-env-vars INSTANCE_CONNECTION_NAME=REPLACE_ME,DB_USER=REPLACE_ME,DB_PASSWORD=REPLACE_ME,DB_NAME=REPLACE_ME,GOOGLE_CLIENT_ID=REPLACE_ME,SESSION_COOKIE_SAMESITE=lax
+  --set-env-vars INSTANCE_CONNECTION_NAME=REPLACE_ME,DB_USER=REPLACE_ME,DB_PASSWORD=REPLACE_ME,DB_NAME=REPLACE_ME,GOOGLE_CLIENT_ID=REPLACE_ME,SESSION_COOKIE_SAMESITE=lax,ALLOWED_ORIGINS=https://frontend.example.com
 ```
 
 If Cloud Run complains about base image resolution, add:

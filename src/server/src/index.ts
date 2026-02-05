@@ -36,6 +36,9 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || "")
 app.use(express.json({ limit: "1mb" }));
 
 const corsAllowedOrigins = ALLOWED_ORIGINS.length > 0 ? ALLOWED_ORIGINS : DEFAULT_DEV_ORIGINS;
+if (isProd() && ALLOWED_ORIGINS.length === 0) {
+  console.warn("[cors] ALLOWED_ORIGINS not set in prod; CORS will block real frontend");
+}
 const corsOptions: cors.CorsOptions = {
   origin: (origin, cb) => {
     if (!origin) {

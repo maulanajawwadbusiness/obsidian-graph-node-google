@@ -27,6 +27,7 @@ const COOKIE_NAME = process.env.SESSION_COOKIE_NAME || "arnvoid_session";
 const SESSION_TTL_MS = Number(process.env.SESSION_TTL_MS || 1000 * 60 * 60 * 24 * 7);
 const COOKIE_SAMESITE = "lax";
 const DEFAULT_DEV_ORIGINS = ["http://localhost:5173", "http://127.0.0.1:5173"];
+const DEFAULT_ALLOWED_ORIGINS = ["https://beta.arnvoid.com"];
 const allowedOrigins = (process.env.ALLOWED_ORIGINS ?? "")
   .split(",")
   .map((value) => value.trim())
@@ -34,7 +35,10 @@ const allowedOrigins = (process.env.ALLOWED_ORIGINS ?? "")
 
 app.use(express.json({ limit: "1mb" }));
 
-const corsAllowedOrigins = allowedOrigins.length > 0 ? allowedOrigins : DEFAULT_DEV_ORIGINS;
+const corsAllowedOrigins =
+  allowedOrigins.length > 0
+    ? allowedOrigins
+    : [...DEFAULT_ALLOWED_ORIGINS, ...DEFAULT_DEV_ORIGINS];
 if (isProd() && allowedOrigins.length === 0) {
   console.warn("[cors] ALLOWED_ORIGINS not set in prod; CORS will block real frontend");
 }
@@ -49,6 +53,7 @@ const corsOptions = {
       cb(null, true);
       return;
     }
+    console.warn(`[cors] blocked origin: ${origin}`);
     cb(new Error(`CORS blocked origin: ${origin}`));
   },
   credentials: true,

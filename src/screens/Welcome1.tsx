@@ -56,7 +56,7 @@ const ROOT_STYLE: React.CSSProperties = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    background: '#000000',
+    background: '#0D0D16',
     color: '#e7e7e7',
     overflow: 'hidden',
 };

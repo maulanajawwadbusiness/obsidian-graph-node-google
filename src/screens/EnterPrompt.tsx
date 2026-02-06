@@ -1,5 +1,6 @@
 import React from 'react';
 import { LoginOverlay } from '../auth/LoginOverlay';
+import { PromptCard } from '../components/PromptCard';
 
 type EnterPromptProps = {
     onEnter: () => void;
@@ -10,54 +11,57 @@ type EnterPromptProps = {
 export const EnterPrompt: React.FC<EnterPromptProps> = ({ onEnter, onBack, onSkip }) => {
     return (
         <div style={ROOT_STYLE}>
-            <div style={CARD_STYLE}>
-                <div style={TITLE_STYLE}>Enter Prompt</div>
-                <div style={BODY_STYLE}>
-                    Placeholder page. Use the sign-in overlay to continue.
+            <div style={SIDEBAR_STYLE}>
+                <div style={SIDEBAR_CONTENT_STYLE}>
+                    <div style={SIDEBAR_LABEL_STYLE}>Sidebar</div>
                 </div>
-                <div style={INPUT_PLACEHOLDER_STYLE}>Prompt input placeholder</div>
             </div>
-            <LoginOverlay open={true} onContinue={onEnter} onBack={onBack} onSkip={onSkip} />
+
+            <PromptCard lang="id" />
+
+            <LoginOverlay
+                open={true}
+                onContinue={onEnter}
+                onBack={onBack}
+                onSkip={onSkip}
+            />
         </div>
     );
 };
 
 const ROOT_STYLE: React.CSSProperties = {
-    minHeight: '100vh',
     display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: '32px',
-    background: '#0f1115',
+    width: '100%',
+    minHeight: '100vh',
+    background: '#0D0D16',
     color: '#e7e7e7',
 };
 
-const CARD_STYLE: React.CSSProperties = {
-    width: '100%',
-    maxWidth: '520px',
+const SIDEBAR_STYLE: React.CSSProperties = {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: '280px',
+    background: '#0D0D16',
+    borderRight: '1px solid #1e2330',
     display: 'flex',
     flexDirection: 'column',
-    gap: '16px',
-    textAlign: 'center',
+    zIndex: 50,
 };
 
-const TITLE_STYLE: React.CSSProperties = {
-    fontSize: '28px',
-    fontWeight: 700,
-    letterSpacing: '0.5px',
+const SIDEBAR_CONTENT_STYLE: React.CSSProperties = {
+    flex: 1,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '24px',
 };
 
-const BODY_STYLE: React.CSSProperties = {
-    fontSize: '16px',
-    lineHeight: 1.6,
-    color: '#b9bcc5',
-};
-
-const INPUT_PLACEHOLDER_STYLE: React.CSSProperties = {
-    padding: '12px 14px',
-    borderRadius: '8px',
-    border: '1px solid #2b2f3a',
-    background: '#141923',
-    color: '#7f8796',
+const SIDEBAR_LABEL_STYLE: React.CSSProperties = {
     fontSize: '14px',
+    color: '#5a6070',
+    fontFamily: 'var(--font-ui)',
+    textTransform: 'uppercase',
+    letterSpacing: '0.5px',
 };

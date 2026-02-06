@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useEffect } from 'react';
+import { ONBOARDING_MANIFESTO_MS } from '../config/env';
 
 type Welcome2Props = {
     onNext: () => void;
@@ -7,21 +8,42 @@ type Welcome2Props = {
 };
 
 export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) => {
+    const MANIFESTO_TEXT = `For me, I often feel tired when I read paper at 2 am.
+
+We human has been using the same text medium over the past 50 years.
+
+I think it is time for us to think differently on how to process information`;
+
+    const [typingProgress, setTypingProgress] = React.useState(1.0);
+
+    const startTyping = React.useCallback(() => {
+        console.log('[welcome2] Typing animation stub called (no animation yet)');
+    }, []);
+
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            onNext();
+        }, ONBOARDING_MANIFESTO_MS);
+
+        return () => clearTimeout(timer);
+    }, [onNext]);
+
     return (
         <div style={ROOT_STYLE}>
-            <div style={CARD_STYLE}>
-                <div style={TITLE_STYLE}>Welcome</div>
-                <div style={BODY_STYLE}>
-                    This is a placeholder for welcome page 2.
+            <div style={CONTENT_STYLE}>
+                <div
+                    id="welcome2-manifesto-text"
+                    className="welcome2-typable-text"
+                    style={TEXT_STYLE}
+                >
+                    {MANIFESTO_TEXT}
                 </div>
+
                 <div style={BUTTON_ROW_STYLE}>
-                    <button type="button" style={SECONDARY_BUTTON_STYLE} onClick={onBack}>
+                    <button type="button" style={BUTTON_STYLE} onClick={onBack}>
                         Back
                     </button>
-                    <button type="button" style={PRIMARY_BUTTON_STYLE} onClick={onNext}>
-                        Next
-                    </button>
-                    <button type="button" style={SECONDARY_BUTTON_STYLE} onClick={onSkip}>
+                    <button type="button" style={BUTTON_STYLE} onClick={onSkip}>
                         Skip
                     </button>
                 </div>
@@ -32,53 +54,39 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
 
 const ROOT_STYLE: React.CSSProperties = {
     minHeight: '100vh',
+    width: '100%',
     display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: '32px',
-    background: '#0f1115',
+    alignItems: 'flex-start',
+    justifyContent: 'flex-start',
+    padding: '64px',
+    background: '#0D0D16',
     color: '#e7e7e7',
+    boxSizing: 'border-box',
 };
 
-const CARD_STYLE: React.CSSProperties = {
-    width: '100%',
-    maxWidth: '520px',
+const CONTENT_STYLE: React.CSSProperties = {
     display: 'flex',
     flexDirection: 'column',
-    gap: '16px',
-    textAlign: 'center',
+    gap: '40px',
+    maxWidth: '760px',
+    width: '100%',
 };
 
-const TITLE_STYLE: React.CSSProperties = {
-    fontSize: '32px',
-    fontWeight: 700,
-    letterSpacing: '0.5px',
-};
-
-const BODY_STYLE: React.CSSProperties = {
-    fontSize: '16px',
-    lineHeight: 1.6,
+const TEXT_STYLE: React.CSSProperties = {
+    fontSize: '18px',
+    lineHeight: 1.8,
     color: '#b9bcc5',
+    whiteSpace: 'pre-line',
+    fontFamily: 'var(--font-ui)',
 };
 
 const BUTTON_ROW_STYLE: React.CSSProperties = {
     display: 'flex',
-    justifyContent: 'center',
     gap: '12px',
     flexWrap: 'wrap',
 };
 
-const PRIMARY_BUTTON_STYLE: React.CSSProperties = {
-    padding: '10px 16px',
-    borderRadius: '8px',
-    border: '1px solid #2b2f3a',
-    background: '#1f2430',
-    color: '#f2f2f2',
-    cursor: 'pointer',
-    fontSize: '14px',
-};
-
-const SECONDARY_BUTTON_STYLE: React.CSSProperties = {
+const BUTTON_STYLE: React.CSSProperties = {
     padding: '10px 16px',
     borderRadius: '8px',
     border: '1px solid #2b2f3a',
@@ -86,4 +94,5 @@ const SECONDARY_BUTTON_STYLE: React.CSSProperties = {
     color: '#c7cbd6',
     cursor: 'pointer',
     fontSize: '14px',
+    fontFamily: 'var(--font-ui)',
 };

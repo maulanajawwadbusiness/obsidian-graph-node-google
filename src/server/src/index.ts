@@ -5,7 +5,8 @@ import { OAuth2Client } from "google-auth-library";
 import { getPool } from "./db";
 import { getUsdToIdr } from "./fx/fxService";
 import { midtransRequest } from "./midtrans/client";
-import { generateStructuredJson, generateText, generateTextStream, type LlmError } from "./llm/llmClient";
+import { getProvider } from "./llm/getProvider";
+import { type LlmError } from "./llm/llmClient";
 import { LLM_LIMITS } from "./llm/limits";
 import { selectProvider } from "./llm/providerSelector";
 import { validateChat, validatePaperAnalyze, validatePrefill } from "./llm/validate";
@@ -784,7 +785,8 @@ app.post("/api/llm/paper-analyze", requireAuth, async (req, res) => {
 
   try {
     const providerChoice = await selectProvider({ userId, endpointKind: "analyze" });
-    console.log(`[llm] provider_policy selected=${providerChoice.provider} cohort=${providerChoice.is_free_user} used_tokens=${providerChoice.user_used_tokens} pool_remaining=${providerChoice.remaining_tokens} cap=${providerChoice.user_cap} reason=${providerChoice.reason} date_key=${providerChoice.date_key}`);
+    const provider = getProvider("openai");
+    console.log(`[llm] provider_policy selected=${providerChoice.provider} cohort=${providerChoice.is_free_user} used_tokens=${providerChoice.user_used_tokens} pool_remaining=${providerChoice.remaining_tokens} cap=${providerChoice.user_cap} reason=${providerChoice.reason} date_key=${providerChoice.date_key} actual_provider=${provider.name}`);
 
     const inputTokensEstimate = estimateTokensFromText(validation.text);
     const fx = await getUsdToIdr();
@@ -826,7 +828,7 @@ app.post("/api/llm/paper-analyze", requireAuth, async (req, res) => {
       return;
     }
 
-    const result = await generateStructuredJson({
+    const result = await provider.generateStructuredJson({
       model: validation.model,
       input: validation.text,
       schema: {
@@ -1142,7 +1144,8 @@ app.post("/api/llm/prefill", requireAuth, async (req, res) => {
 
   try {
     const providerChoice = await selectProvider({ userId, endpointKind: "prefill" });
-    console.log(`[llm] provider_policy selected=${providerChoice.provider} cohort=${providerChoice.is_free_user} used_tokens=${providerChoice.user_used_tokens} pool_remaining=${providerChoice.remaining_tokens} cap=${providerChoice.user_cap} reason=${providerChoice.reason} date_key=${providerChoice.date_key}`);
+    const provider = getProvider("openai");
+    console.log(`[llm] provider_policy selected=${providerChoice.provider} cohort=${providerChoice.is_free_user} used_tokens=${providerChoice.user_used_tokens} pool_remaining=${providerChoice.remaining_tokens} cap=${providerChoice.user_cap} reason=${providerChoice.reason} date_key=${providerChoice.date_key} actual_provider=${provider.name}`);
 
     const promptParts: string[] = [];
     promptParts.push(`Target Node: ${validation.nodeLabel}`);
@@ -1211,7 +1214,7 @@ app.post("/api/llm/prefill", requireAuth, async (req, res) => {
       return;
     }
 
-    const result = await generateText({
+    const result = await provider.generateText({
       model: validation.model,
       input
     });
@@ -1394,7 +1397,8 @@ app.post("/api/llm/chat", requireAuth, async (req, res) => {
 
   try {
     const providerChoice = await selectProvider({ userId, endpointKind: "chat" });
-    console.log(`[llm] provider_policy selected=${providerChoice.provider} cohort=${providerChoice.is_free_user} used_tokens=${providerChoice.user_used_tokens} pool_remaining=${providerChoice.remaining_tokens} cap=${providerChoice.user_cap} reason=${providerChoice.reason} date_key=${providerChoice.date_key}`);
+    const provider = getProvider("openai");
+    console.log(`[llm] provider_policy selected=${providerChoice.provider} cohort=${providerChoice.is_free_user} used_tokens=${providerChoice.user_used_tokens} pool_remaining=${providerChoice.remaining_tokens} cap=${providerChoice.user_cap} reason=${providerChoice.reason} date_key=${providerChoice.date_key} actual_provider=${provider.name}`);
 
     const systemPrompt = validation.systemPrompt || "";
     chatInput = `${systemPrompt}\n\nUSER PROMPT:\n${validation.userPrompt}`;
@@ -1437,7 +1441,7 @@ app.post("/api/llm/chat", requireAuth, async (req, res) => {
       return;
     }
 
-    const stream = generateTextStream({
+    const stream = provider.generateTextStream({
       model: validation.model,
       input: chatInput
     });

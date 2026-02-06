@@ -11,7 +11,7 @@ import { recordTokenSpend } from "./llm/freePoolAccounting";
 import { type LlmError } from "./llm/llmClient";
 import { LLM_LIMITS } from "./llm/limits";
 import { getProvider } from "./llm/getProvider";
-import { pickProviderForRequest } from "./llm/providerRouter";
+import { pickProviderForRequest, type ProviderPolicyMeta } from "./llm/providerRouter";
 import { validateChat, validatePaperAnalyze, validatePrefill } from "./llm/validate";
 import { mapModel } from "./llm/models/modelMap";
 import { initUsageTracker, type UsageRecord } from "./llm/usage/usageTracker";
@@ -207,6 +207,8 @@ function logLlmRequest(fields: {
   tokenizer_encoding_used?: string | null;
   tokenizer_fallback_reason?: string | null;
   freepool_decrement_tokens?: number | null;
+  freepool_decrement_applied?: boolean | null;
+  freepool_decrement_reason?: string | null;
 }) {
   console.log(JSON.stringify({
     request_id: fields.request_id,
@@ -234,6 +236,8 @@ function logLlmRequest(fields: {
     rupiah_balance_before: fields.rupiah_balance_before ?? null,
     rupiah_balance_after: fields.rupiah_balance_after ?? null,
     freepool_decrement_tokens: fields.freepool_decrement_tokens ?? null,
+    freepool_decrement_applied: fields.freepool_decrement_applied ?? null,
+    freepool_decrement_reason: fields.freepool_decrement_reason ?? null,
     structured_output_mode: fields.structured_output_mode ?? null,
     validation_result: fields.validation_result ?? null
   }));
@@ -791,12 +795,10 @@ app.post("/api/llm/paper-analyze", requireAuth, async (req, res) => {
   let providerModelId = "";
   let usageRecord: UsageRecord | null = null;
   let freepoolDecrement: number | null = null;
+  let freepoolApplied: boolean | null = null;
+  let freepoolReason: string | null = null;
   let providerUsage: ProviderUsage | null = null;
-  let providerModelId = "";
-  let providerName: "openai" | "openrouter" | null = null;
-  let usageRecord: UsageRecord | null = null;
-  let freepoolDecrement: number | null = null;
-  let providerUsage: ProviderUsage | null = null;
+  let policyMeta: ProviderPolicyMeta | null = null;
 
   const validation = validatePaperAnalyze(req.body);
   if ("ok" in validation && validation.ok === false) {
@@ -1108,16 +1110,29 @@ app.post("/api/llm/paper-analyze", requireAuth, async (req, res) => {
     rupiahAfter = chargeResult.balance_after;
 
     if (provider.name === "openai") {
-      try {
-        await recordTokenSpend({
-          userId,
-          dateKey: router.policyMeta.date_key,
-          tokensUsed: usageRecord.total_tokens
-        });
-        freepoolDecrement = usageRecord.total_tokens;
-      } catch {
-        // Ignore pool accounting failure.
+      const eligible = router.policyMeta.cohort_selected && router.policyMeta.reason === "free_ok";
+      if (eligible) {
+        try {
+          const applied = await recordTokenSpend({
+            requestId,
+            userId,
+            dateKey: router.policyMeta.date_key,
+            tokensUsed: usageRecord.total_tokens
+          });
+          freepoolApplied = applied.applied;
+          freepoolDecrement = applied.applied ? usageRecord.total_tokens : 0;
+          freepoolReason = applied.applied ? "applied" : "already_ledgered";
+        } catch {
+          freepoolApplied = false;
+          freepoolReason = "error";
+        }
+      } else {
+        freepoolApplied = false;
+        freepoolReason = router.policyMeta.cohort_selected ? "cap_exhausted" : "not_in_cohort";
       }
+    } else {
+      freepoolApplied = false;
+      freepoolReason = "provider_not_openai";
     }
 
     res.setHeader("X-Request-Id", requestId);
@@ -1148,6 +1163,8 @@ app.post("/api/llm/paper-analyze", requireAuth, async (req, res) => {
       tokenizer_encoding_used: usageRecord?.tokenizer_encoding_used ?? null,
       tokenizer_fallback_reason: usageRecord?.tokenizer_fallback_reason ?? null,
       freepool_decrement_tokens: freepoolDecrement,
+      freepool_decrement_applied: freepoolApplied,
+      freepool_decrement_reason: freepoolReason,
       structured_output_mode: structuredOutputMode,
       validation_result: validationResult
     });
@@ -1277,6 +1294,8 @@ app.post("/api/llm/prefill", requireAuth, async (req, res) => {
   let providerName: "openai" | "openrouter" | null = null;
   let usageRecord: UsageRecord | null = null;
   let freepoolDecrement: number | null = null;
+  let freepoolApplied: boolean | null = null;
+  let freepoolReason: string | null = null;
   let providerUsage: ProviderUsage | null = null;
 
   const validation = validatePrefill(req.body);
@@ -1492,16 +1511,29 @@ app.post("/api/llm/prefill", requireAuth, async (req, res) => {
     rupiahAfter = chargeResult.balance_after;
 
     if (provider.name === "openai") {
-      try {
-        await recordTokenSpend({
-          userId,
-          dateKey: router.policyMeta.date_key,
-          tokensUsed: usageRecord.total_tokens
-        });
-        freepoolDecrement = usageRecord.total_tokens;
-      } catch {
-        // Ignore pool accounting failure.
+      const eligible = router.policyMeta.cohort_selected && router.policyMeta.reason === "free_ok";
+      if (eligible) {
+        try {
+          const applied = await recordTokenSpend({
+            requestId,
+            userId,
+            dateKey: router.policyMeta.date_key,
+            tokensUsed: usageRecord.total_tokens
+          });
+          freepoolApplied = applied.applied;
+          freepoolDecrement = applied.applied ? usageRecord.total_tokens : 0;
+          freepoolReason = applied.applied ? "applied" : "already_ledgered";
+        } catch {
+          freepoolApplied = false;
+          freepoolReason = "error";
+        }
+      } else {
+        freepoolApplied = false;
+        freepoolReason = router.policyMeta.cohort_selected ? "cap_exhausted" : "not_in_cohort";
       }
+    } else {
+      freepoolApplied = false;
+      freepoolReason = "provider_not_openai";
     }
 
     res.setHeader("X-Request-Id", requestId);
@@ -1530,7 +1562,9 @@ app.post("/api/llm/prefill", requireAuth, async (req, res) => {
       provider_usage_fields_present: getUsageFieldList(providerUsage),
       tokenizer_encoding_used: usageRecord?.tokenizer_encoding_used ?? null,
       tokenizer_fallback_reason: usageRecord?.tokenizer_fallback_reason ?? null,
-      freepool_decrement_tokens: freepoolDecrement
+      freepool_decrement_tokens: freepoolDecrement,
+      freepool_decrement_applied: freepoolApplied,
+      freepool_decrement_reason: freepoolReason
     });
   } finally {
     releaseLlmSlot(userId);
@@ -1623,6 +1657,7 @@ app.post("/api/llm/chat", requireAuth, async (req, res) => {
     const router = await pickProviderForRequest({ userId, endpointKind: "chat" });
     const provider = router.provider;
     providerName = provider.name;
+    policyMeta = router.policyMeta;
     routerDateKey = router.policyMeta.date_key;
     providerModelId = mapModel(provider.name, validation.model);
     console.log(`[llm] provider_policy selected=${router.selectedProviderName} actual_provider=${provider.name} logical_model=${validation.model} provider_model_id=${providerModelId} cohort=${router.policyMeta.cohort_selected} used_tokens=${router.policyMeta.user_used_tokens_today} pool_remaining=${router.policyMeta.pool_remaining_tokens} cap=${router.policyMeta.user_free_cap} reason=${router.policyMeta.reason} date_key=${router.policyMeta.date_key}`);
@@ -1777,17 +1812,30 @@ app.post("/api/llm/chat", requireAuth, async (req, res) => {
       terminationReason = "insufficient_rupiah";
     }
 
-    if (providerName === "openai" && routerDateKey) {
-      try {
-        await recordTokenSpend({
-          userId,
-          dateKey: routerDateKey,
-          tokensUsed: usageRecord.total_tokens
-        });
-        freepoolDecrement = usageRecord.total_tokens;
-      } catch {
-        // Ignore pool accounting failure.
+    if (providerName === "openai" && routerDateKey && policyMeta) {
+      const eligible = policyMeta.cohort_selected && policyMeta.reason === "free_ok";
+      if (eligible) {
+        try {
+          const applied = await recordTokenSpend({
+            requestId,
+            userId,
+            dateKey: routerDateKey,
+            tokensUsed: usageRecord.total_tokens
+          });
+          freepoolApplied = applied.applied;
+          freepoolDecrement = applied.applied ? usageRecord.total_tokens : 0;
+          freepoolReason = applied.applied ? "applied" : "already_ledgered";
+        } catch {
+          freepoolApplied = false;
+          freepoolReason = "error";
+        }
+      } else {
+        freepoolApplied = false;
+        freepoolReason = policyMeta.cohort_selected ? "cap_exhausted" : "not_in_cohort";
       }
+    } else {
+      freepoolApplied = false;
+      freepoolReason = policyMeta ? "provider_not_openai" : "policy_missing";
     }
 
     releaseLlmSlot(userId);
@@ -1818,7 +1866,9 @@ app.post("/api/llm/chat", requireAuth, async (req, res) => {
       provider_usage_fields_present: getUsageFieldList(providerUsage),
       tokenizer_encoding_used: usageRecord?.tokenizer_encoding_used ?? null,
       tokenizer_fallback_reason: usageRecord?.tokenizer_fallback_reason ?? null,
-      freepool_decrement_tokens: freepoolDecrement
+      freepool_decrement_tokens: freepoolDecrement,
+      freepool_decrement_applied: freepoolApplied,
+      freepool_decrement_reason: freepoolReason
     });
   }
 });

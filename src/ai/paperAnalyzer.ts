@@ -3,7 +3,6 @@
  */
 
 import { AI_MODELS } from '../config/aiModels';
-import { getLang } from '../i18n/lang';
 import { apiPost } from '../api';
 
 export interface AnalysisPoint {
@@ -26,18 +25,6 @@ export interface AnalysisResult {
     links: AnalysisLink[];
 }
 
-// Fallback if AI fails: creates deterministic placeholders
-function createFallbackPoints(words: string[]): AnalysisPoint[] {
-    const isId = getLang() === 'id';
-    return words.slice(0, 5).map((word, index) => ({
-        index,
-        title: word,
-        summary: isId
-            ? `Ini adalah konsep kunci yang berasal dari "${word}". Sistem saat ini berjalan dalam mode fallback, sehingga ringkasan ini hanya placeholder. Dalam keadaan terhubung sepenuhnya, ini akan berisi penjelasan rinci tentang bagaimana "${word}" berhubungan dengan teks sumber.`
-            : `This is a key concept derived from "${word}". The system is currently running in fallback mode, so this summary is a placeholder. In a fully connected state, this would contain a detailed explanation of how "${word}" relates to the source text.`
-    }));
-}
-
 export async function analyzeDocument(text: string, opts?: { nodeCount?: number }): Promise<AnalysisResult> {
     const nodeCount = Math.max(2, Math.min(12, opts?.nodeCount ?? 5));
 
@@ -54,14 +41,12 @@ export async function analyzeDocument(text: string, opts?: { nodeCount?: number 
 
         if (result.status === 401 || result.status === 403) {
             console.warn('[PaperAnalyzer] Unauthorized; please log in');
-            const words = text.split(/\s+/).filter(w => w.length > 5);
-            return { points: createFallbackPoints(words).slice(0, nodeCount), links: [] };
+            throw new Error('unauthorized');
         }
 
         if (!result.ok || !result.data || typeof result.data !== 'object') {
-            console.warn('[PaperAnalyzer] Server response error; using fallback');
-            const words = text.split(/\s+/).filter(w => w.length > 5);
-            return { points: createFallbackPoints(words).slice(0, nodeCount), links: [] };
+            console.warn('[PaperAnalyzer] Server response error');
+            throw new Error('analysis failed');
         }
 
         const payload = result.data as {
@@ -77,9 +62,8 @@ export async function analyzeDocument(text: string, opts?: { nodeCount?: number 
         };
 
         if (!payload.ok) {
-            console.warn('[PaperAnalyzer] Server error; using fallback');
-            const words = text.split(/\s+/).filter(w => w.length > 5);
-            return { points: createFallbackPoints(words).slice(0, nodeCount), links: [] };
+            console.warn('[PaperAnalyzer] Server error');
+            throw new Error('analysis failed');
         }
 
         const structured = payload.json || payload;
@@ -102,7 +86,6 @@ export async function analyzeDocument(text: string, opts?: { nodeCount?: number 
 
     } catch (err) {
         console.error('[PaperAnalyzer] Analysis failed:', err);
-        const words = text.split(/\s+/).slice(0, 20); // Fallback source
-        return { points: createFallbackPoints(words).slice(0, nodeCount), links: [] };
+        throw err;
     }
 }

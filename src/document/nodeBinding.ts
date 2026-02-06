@@ -45,11 +45,13 @@ export async function applyAnalysisToNodes(
   documentId: string,
   getCurrentDocId: () => string | null,
   setAIActivity: (active: boolean) => void,
+  setAIError: (error: string | null) => void,
   setInferredTitle: (title: string | null) => void
 ): Promise<void> {
   console.log(`[AI] Starting paper analysis for doc ${documentId.slice(0, 8)}...`);
 
   setAIActivity(true);
+  setAIError(null);
 
   try {
     const orderedNodes = Array.from(engine.nodes.values())
@@ -154,6 +156,11 @@ export async function applyAnalysisToNodes(
 
   } catch (error) {
     console.error('[AI] Analysis failed:', error);
+    const raw = error instanceof Error ? error.message : 'analysis failed';
+    const message = raw === 'unauthorized'
+      ? 'Please log in to run analysis.'
+      : 'Hey, your analysis failed.';
+    setAIError(message);
   } finally {
     setAIActivity(false);
   }

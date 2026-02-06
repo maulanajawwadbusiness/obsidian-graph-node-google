@@ -16,6 +16,7 @@ type DocumentAction =
     | { type: 'SET_PREVIEW'; open: boolean }
     | { type: 'CLEAR_DOCUMENT' }
     | { type: 'SET_AI_ACTIVITY'; active: boolean }
+    | { type: 'SET_AI_ERROR'; error: string | null }
     | { type: 'SET_INFERRED_TITLE'; title: string | null };
 
 // Initial state
@@ -25,6 +26,7 @@ const initialState: DocumentState = {
     errorMessage: null,
     previewOpen: false,
     aiActivity: false,
+    aiErrorMessage: null,
     inferredTitle: null,
 };
 
@@ -55,6 +57,8 @@ function documentReducer(state: DocumentState, action: DocumentAction): Document
             return { ...initialState, previewOpen: state.previewOpen };
         case 'SET_AI_ACTIVITY':
             return { ...state, aiActivity: action.active };
+        case 'SET_AI_ERROR':
+            return { ...state, aiErrorMessage: action.error };
         case 'SET_INFERRED_TITLE':
             return { ...state, inferredTitle: action.title };
         default:
@@ -73,6 +77,7 @@ interface DocumentContextValue {
     clearDocument: () => void;
     parseFile: (file: File) => Promise<ParsedDocument | null>;
     setAIActivity: (active: boolean) => void;
+    setAIError: (error: string | null) => void;
     setInferredTitle: (title: string | null) => void;
 }
 
@@ -126,6 +131,7 @@ export function DocumentProvider({ children }: { children: ReactNode }) {
         clearDocument: () => dispatch({ type: 'CLEAR_DOCUMENT' }),
         parseFile,
         setAIActivity: (active) => dispatch({ type: 'SET_AI_ACTIVITY', active }),
+        setAIError: (error) => dispatch({ type: 'SET_AI_ERROR', error }),
         setInferredTitle: (title) => dispatch({ type: 'SET_INFERRED_TITLE', title })
     };
 

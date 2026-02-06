@@ -25,5 +25,6 @@ export interface DocumentState {
     errorMessage: string | null;
     previewOpen: boolean;
     aiActivity: boolean;           // True while AI is generating labels
+    aiErrorMessage?: string | null;
     inferredTitle?: string | null;
 }

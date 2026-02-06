@@ -15,7 +15,6 @@ import { useGraphRendering } from './useGraphRendering';
 import { generateRandomGraph } from './graphRandom';
 import { DocumentProvider, useDocument } from '../store/documentStore';
 import { applyFirstWordsToNodes, applyAnalysisToNodes } from '../document/nodeBinding';
-import { AnalysisOverlay } from '../components/AnalysisOverlay';
 import { MapTitleBlock } from './components/MapTitleBlock';
 import { BrandLabel } from './components/BrandLabel';
 import { PopupProvider, usePopup } from '../popup/PopupStore';
@@ -24,6 +23,7 @@ import { RotationCompass } from './components/RotationCompass';
 import { FullChatProvider, FullChatbar, FullChatToggle, useFullChat } from '../fullchat';
 import TestBackend from '../components/TestBackend';
 import { SessionExpiryBanner } from '../auth/SessionExpiryBanner';
+import { LoadingScreen } from '../screens/LoadingScreen';
 // RUN 4: Topology API imports
 import { setTopology, getTopologyVersion, getTopology } from '../graph/topologyControl'; // STEP3-RUN5-V3-FIX3: Added getTopology
 import { legacyToTopology } from '../graph/topologyAdapter';
@@ -58,6 +58,11 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
     const popupContext = usePopup();
     const fullChatContext = useFullChat();
     const fullChatOpen = fullChatContext.isOpen;
+
+    const aiErrorMessage = documentContext.state.aiErrorMessage;
+    if (documentContext.state.aiActivity || aiErrorMessage) {
+        return <LoadingScreen errorMessage={aiErrorMessage || null} />;
+    }
 
     // State for React UI
     const [config, setConfig] = useState<ForceConfig>(DEFAULT_PHYSICS_CONFIG);
@@ -365,6 +370,7 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
                 docId,
                 () => docId,
                 documentContext.setAIActivity,
+                documentContext.setAIError,
                 documentContext.setInferredTitle
             );
         }
@@ -728,7 +734,6 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
                 <TextPreviewButton onToggle={toggleViewer} />
                 {showTestBackend && <TestBackend />}
                 <AIActivityGlyph />
-                <AnalysisOverlay />
                 {SHOW_MAP_TITLE && <MapTitleBlock />}
                 {SHOW_BRAND_LABEL && <BrandLabel />}
                 <PopupPortal engineRef={engineRef} />

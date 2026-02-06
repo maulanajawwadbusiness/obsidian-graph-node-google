@@ -14,12 +14,6 @@ We human has been using the same text medium over the past 50 years.
 
 I think it is time for us to think differently on how to process information`;
 
-    const [typingProgress, setTypingProgress] = React.useState(1.0);
-
-    const startTyping = React.useCallback(() => {
-        console.log('[welcome2] Typing animation stub called (no animation yet)');
-    }, []);
-
     useEffect(() => {
         const timer = setTimeout(() => {
             onNext();

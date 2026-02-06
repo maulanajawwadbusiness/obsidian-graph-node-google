@@ -9,6 +9,7 @@ type Welcome1Props = {
 };
 
 export const Welcome1: React.FC<Welcome1Props> = ({ onNext, onSkip }) => {
+    void onSkip;
     const { enterFullscreen } = useFullscreen();
 
     const SUBTITLE_TEXT = 'Antarmuka Pengetahuan Dua Dimensi';

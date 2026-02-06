@@ -3,6 +3,7 @@ import cors from "cors";
 import express from "express";
 import { OAuth2Client } from "google-auth-library";
 import { getPool } from "./db";
+import { getUsdToIdr } from "./fx/fxService";
 import { midtransRequest } from "./midtrans/client";
 import { generateStructuredJson, generateText, generateTextStream, type LlmError } from "./llm/llmClient";
 import { LLM_LIMITS } from "./llm/limits";
@@ -724,6 +725,9 @@ app.post("/api/llm/paper-analyze", requireAuth, async (req, res) => {
   let rupiahCost: number | null = null;
   let rupiahBefore: number | null = null;
   let rupiahAfter: number | null = null;
+  let fxRate = 0;
+  let fxRate = 0;
+  let fxRate = 0;
 
   const validation = validatePaperAnalyze(req.body);
   if ("ok" in validation && validation.ok === false) {
@@ -779,10 +783,13 @@ app.post("/api/llm/paper-analyze", requireAuth, async (req, res) => {
 
   try {
     const inputTokensEstimate = estimateTokensFromText(validation.text);
+    const fx = await getUsdToIdr();
+    fxRate = fx.rate;
     const estimated = estimateIdrCost({
       model: validation.model,
       inputTokens: inputTokensEstimate,
-      outputTokens: 0
+      outputTokens: 0,
+      fxRate
     });
     const balanceSnapshot = await getBalance(userId);
     if (balanceSnapshot.balance_idr < estimated.idrCostRounded) {
@@ -895,7 +902,8 @@ app.post("/api/llm/paper-analyze", requireAuth, async (req, res) => {
     const pricing = estimateIdrCost({
       model: validation.model,
       inputTokens,
-      outputTokens
+      outputTokens,
+      fxRate
     });
     const chargeResult = await chargeForLlm({
       userId,
@@ -1160,10 +1168,13 @@ app.post("/api/llm/prefill", requireAuth, async (req, res) => {
     const input = `${systemPrompt}\n\nCONTEXT:\n${promptParts.join("\n")}`;
 
     const inputTokensEstimate = estimateTokensFromText(input);
+    const fx = await getUsdToIdr();
+    fxRate = fx.rate;
     const estimated = estimateIdrCost({
       model: validation.model,
       inputTokens: inputTokensEstimate,
-      outputTokens: 0
+      outputTokens: 0,
+      fxRate
     });
     const balanceSnapshot = await getBalance(userId);
     if (balanceSnapshot.balance_idr < estimated.idrCostRounded) {
@@ -1234,7 +1245,8 @@ app.post("/api/llm/prefill", requireAuth, async (req, res) => {
     const pricing = estimateIdrCost({
       model: validation.model,
       inputTokens,
-      outputTokens
+      outputTokens,
+      fxRate
     });
     const chargeResult = await chargeForLlm({
       userId,
@@ -1377,10 +1389,13 @@ app.post("/api/llm/chat", requireAuth, async (req, res) => {
     const systemPrompt = validation.systemPrompt || "";
     chatInput = `${systemPrompt}\n\nUSER PROMPT:\n${validation.userPrompt}`;
     const inputTokensEstimate = estimateTokensFromText(chatInput);
+    const fx = await getUsdToIdr();
+    fxRate = fx.rate;
     const estimated = estimateIdrCost({
       model: validation.model,
       inputTokens: inputTokensEstimate,
-      outputTokens: 0
+      outputTokens: 0,
+      fxRate
     });
     const balanceSnapshot = await getBalance(userId);
     if (balanceSnapshot.balance_idr < estimated.idrCostRounded) {
@@ -1470,7 +1485,8 @@ app.post("/api/llm/chat", requireAuth, async (req, res) => {
     const pricing = estimateIdrCost({
       model: validation.model,
       inputTokens: inputTokensEstimate,
-      outputTokens: outputTokensEstimate
+      outputTokens: outputTokensEstimate,
+      fxRate
     });
     const chargeResult = await chargeForLlm({
       userId,

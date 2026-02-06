@@ -72,7 +72,7 @@ const CONTENT_STYLE: React.CSSProperties = {
 
 const TITLE_STYLE: React.CSSProperties = {
     fontSize: '27px',
-    fontWeight: 700,
+    fontWeight: 900,
     letterSpacing: '1px',
     fontFamily: 'var(--font-ui)',
     color: '#b9bcc5',

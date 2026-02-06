@@ -79,7 +79,9 @@ export async function runOpenrouterAnalyze(opts: {
   }
 
   const firstJson = tryParseJson(first.text);
-  const firstValidation = firstJson ? validateParsed(firstJson, opts.nodeCount) : { ok: false, errors: ["invalid json"] };
+  const firstValidation: AnalyzeValidationResult = firstJson
+    ? validateParsed(firstJson, opts.nodeCount)
+    : { ok: false, errors: ["invalid json"] };
 
   if (firstValidation.ok) {
     return { ok: true, json: firstValidation.value, usage: first.usage, validation_result: "ok" };
@@ -96,7 +98,9 @@ export async function runOpenrouterAnalyze(opts: {
   }
 
   const retryJson = tryParseJson(retry.text);
-  const retryValidation = retryJson ? validateParsed(retryJson, opts.nodeCount) : { ok: false, errors: ["invalid json"] };
+  const retryValidation: AnalyzeValidationResult = retryJson
+    ? validateParsed(retryJson, opts.nodeCount)
+    : { ok: false, errors: ["invalid json"] };
 
   if (retryValidation.ok) {
     return { ok: true, json: retryValidation.value, usage: retry.usage, validation_result: "retry_ok" };

@@ -37,3 +37,8 @@ Frontend:
 ## Fonts
 - UI default: Quicksand (via CSS vars)
 - Titles: Segoe UI -> Public Sans -> system
+## Money UX (Frontend)
+- Always-visible rupiah balance anchor in the app shell.
+- Shortage warning gate for paid actions with topup CTA.
+- Money notices for payment/balance/deduction outcomes.
+- Reports: docs/report_2026_02_07_moneyux_final.md and step reports.

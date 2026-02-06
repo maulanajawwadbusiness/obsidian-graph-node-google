@@ -2,17 +2,18 @@ import crypto from "crypto";
 import type { LlmProvider } from "./types";
 import type { LlmError, LlmStream, LlmStructuredResult, LlmTextResult } from "../llmClient";
 import type { ProviderUsage } from "../usage/providerUsage";
+import type { LogicalModel } from "../models/logicalModels";
 import { normalizeUsage } from "../usage/providerUsage";
 import { mapModel } from "../models/modelMap";
 
 type TextOpts = {
-  model: string;
+  model: LogicalModel;
   input: string;
   timeoutMs?: number;
 };
 
 type StructuredOpts = {
-  model: string;
+  model: LogicalModel;
   input: string;
   schema: object;
   timeoutMs?: number;
@@ -90,7 +91,11 @@ function extractUsage(data: any): ProviderUsage | undefined {
   return normalizeUsage(data?.usage) || undefined;
 }
 
-async function postJson(path: string, body: object, timeoutMs: number) {
+async function postJson(
+  path: string,
+  body: object,
+  timeoutMs: number
+): Promise<{ ok: true; response: Response } | { ok: false; error: "missing api key" }> {
   const apiKey = getApiKey();
   if (!apiKey) {
     return { ok: false, error: "missing api key" as const };
@@ -233,17 +238,16 @@ function generateTextStream(opts: TextOpts): LlmStream {
   const request_id = crypto.randomUUID();
   const timeoutMs = opts.timeoutMs ?? DEFAULT_STREAM_TIMEOUT_MS;
   const providerModel = mapModel("openrouter", opts.model);
-  let finalStatus: "ok" | "error" = "ok";
   let resolveUsage: ((usage: ProviderUsage | null) => void) | null = null;
   const providerUsagePromise = new Promise<ProviderUsage | null>((resolve) => {
     resolveUsage = resolve;
   });
   let latestUsage: ProviderUsage | null = null;
+  void latestUsage;
 
   const stream = (async function* () {
     const apiKey = getApiKey();
     if (!apiKey) {
-      finalStatus = "error";
       throw new OpenRouterStreamError(createError({
         request_id,
         code: "unauthorized",
@@ -265,7 +269,6 @@ function generateTextStream(opts: TextOpts): LlmStream {
       });
 
       if (!response.ok || !response.body) {
-        finalStatus = "error";
         throw new OpenRouterStreamError(createError({
           request_id,
           code: mapStatusToCode(response.status),
@@ -309,7 +312,6 @@ function generateTextStream(opts: TextOpts): LlmStream {
             }
 
             if (event?.error) {
-              finalStatus = "error";
               if (!yieldedAny) {
                 throw new OpenRouterStreamError(createError({
                   request_id,
@@ -336,7 +338,6 @@ function generateTextStream(opts: TextOpts): LlmStream {
       }
     } catch (err: any) {
       const isTimeout = err?.name === "AbortError";
-      finalStatus = "error";
       if (err instanceof OpenRouterStreamError) throw err;
       throw new OpenRouterStreamError(createError({
         request_id,

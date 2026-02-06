@@ -13,7 +13,7 @@ import { LLM_LIMITS } from "./llm/limits";
 import { getProvider } from "./llm/getProvider";
 import { upsertAuditRecord } from "./llm/audit/llmAudit";
 import { pickProviderForRequest, type ProviderPolicyMeta } from "./llm/providerRouter";
-import { validateChat, validatePaperAnalyze, validatePrefill } from "./llm/validate";
+import { validateChat, validatePaperAnalyze, validatePrefill, type ValidationError } from "./llm/validate";
 import { mapModel } from "./llm/models/modelMap";
 import { initUsageTracker, type UsageRecord } from "./llm/usage/usageTracker";
 import { normalizeUsage, type ProviderUsage } from "./llm/usage/providerUsage";
@@ -179,6 +179,10 @@ function releaseLlmSlot(userId: string) {
 function sendApiError(res: express.Response, status: number, body: ApiError) {
   res.setHeader("X-Request-Id", body.request_id);
   res.status(status).json(body);
+}
+
+function isValidationError(value: unknown): value is ValidationError {
+  return Boolean(value) && typeof value === "object" && (value as ValidationError).ok === false;
 }
 
 function logLlmRequest(fields: {
@@ -678,7 +682,7 @@ app.post("/auth/logout", async (req, res) => {
   res.json({ ok: true });
 });
 
-app.get("/api/rupiah/me", requireAuth, async (req, res) => {
+app.get("/api/rupiah/me", requireAuth, async (_req, res) => {
   const user = res.locals.user as AuthContext;
   try {
     const balance = await getBalance(String(user.id));
@@ -797,78 +801,7 @@ app.post("/api/llm/paper-analyze", requireAuth, async (req, res) => {
   let rupiahCost: number | null = null;
   let rupiahBefore: number | null = null;
   let rupiahAfter: number | null = null;
-  let routerDateKey = "";
   let fxRate = 0;
-  let providerName: "openai" | "openrouter" | null = null;
-  let providerModelId = "";
-  let usageRecord: UsageRecord | null = null;
-  let freepoolDecrement: number | null = null;
-  let freepoolApplied: boolean | null = null;
-  let freepoolReason: string | null = null;
-  let providerUsage: ProviderUsage | null = null;
-  let policyMeta: ProviderPolicyMeta | null = null;
-  let auditWritten = false;
-  let auditSelectedProvider = "unknown";
-  let auditActualProvider = "unknown";
-  let auditLogicalModel = typeof req.body?.model === "string" ? req.body.model : "unknown";
-  let auditProviderModelId = "unknown";
-  let auditUsageSource = "estimate_wordcount";
-  let auditInputTokens = 0;
-  let auditOutputTokens = 0;
-  let auditTotalTokens = 0;
-  let auditTokenizerEncoding: string | null = null;
-  let auditTokenizerFallback: string | null = null;
-  let auditProviderUsagePresent = false;
-  let auditFxRate: number | null = null;
-  let auditPriceUsdPerM = getPriceUsdPerM(auditLogicalModel);
-  let auditCostIdr = 0;
-  let auditBalanceBefore: number | null = null;
-  let auditBalanceAfter: number | null = null;
-  let auditChargeStatus = "unknown";
-  let auditChargeError: string | null = null;
-  let auditFreepoolApplied = false;
-  let auditFreepoolDecrement = 0;
-  let auditFreepoolReason: string | null = null;
-  let auditHttpStatus: number | null = null;
-  let auditTerminationReason: string | null = null;
-
-  async function writeAudit() {
-    if (auditWritten) return;
-    auditWritten = true;
-    try {
-      await upsertAuditRecord({
-        request_id: requestId,
-        user_id: userId,
-        endpoint_kind: "chat",
-        selected_provider: auditSelectedProvider,
-        actual_provider_used: auditActualProvider,
-        logical_model: auditLogicalModel,
-        provider_model_id: auditProviderModelId,
-        usage_source: auditUsageSource,
-        input_tokens: auditInputTokens,
-        output_tokens: auditOutputTokens,
-        total_tokens: auditTotalTokens,
-        tokenizer_encoding_used: auditTokenizerEncoding,
-        tokenizer_fallback_reason: auditTokenizerFallback,
-        provider_usage_present: auditProviderUsagePresent,
-        fx_usd_idr: auditFxRate,
-        price_usd_per_mtoken: auditPriceUsdPerM,
-        markup_multiplier: MARKUP_MULTIPLIER,
-        cost_idr: auditCostIdr,
-        balance_before_idr: auditBalanceBefore,
-        balance_after_idr: auditBalanceAfter,
-        charge_status: auditChargeStatus,
-        charge_error_code: auditChargeError,
-        freepool_applied: auditFreepoolApplied,
-        freepool_decrement_tokens: auditFreepoolDecrement,
-        freepool_reason: auditFreepoolReason,
-        http_status: auditHttpStatus,
-        termination_reason: auditTerminationReason
-      });
-    } catch {
-      // Ignore audit write failures.
-    }
-  }
   let providerName: "openai" | "openrouter" | null = null;
   let providerModelId = "";
   let usageRecord: UsageRecord | null = null;
@@ -938,19 +871,18 @@ app.post("/api/llm/paper-analyze", requireAuth, async (req, res) => {
       // Ignore audit write failures.
     }
   }
-  let policyMeta: ProviderPolicyMeta | null = null;
 
-  const validation = validatePaperAnalyze(req.body);
-  if ("ok" in validation && validation.ok === false) {
-    auditHttpStatus = validation.status;
+  const validationResult = validatePaperAnalyze(req.body);
+  if (isValidationError(validationResult)) {
+    auditHttpStatus = validationResult.status;
     auditTerminationReason = "validation_error";
     auditChargeStatus = "skipped";
     await writeAudit();
-    sendApiError(res, validation.status, {
+    sendApiError(res, validationResult.status, {
       ok: false,
       request_id: requestId,
-      code: validation.code,
-      error: validation.error
+      code: validationResult.code,
+      error: validationResult.error
     });
     logLlmRequest({
       request_id: requestId,
@@ -960,7 +892,7 @@ app.post("/api/llm/paper-analyze", requireAuth, async (req, res) => {
       input_chars: typeof req.body?.text === "string" ? req.body.text.length : 0,
       output_chars: 0,
       duration_ms: Date.now() - startedAt,
-      status_code: validation.status,
+      status_code: validationResult.status,
       termination_reason: "validation_error",
       rupiah_cost: null,
       rupiah_balance_before: null,
@@ -969,6 +901,7 @@ app.post("/api/llm/paper-analyze", requireAuth, async (req, res) => {
     llmRequestsInflight -= 1;
     return;
   }
+  const validation = validationResult;
 
   if (!acquireLlmSlot(userId)) {
     auditHttpStatus = 429;
@@ -1034,9 +967,6 @@ app.post("/api/llm/paper-analyze", requireAuth, async (req, res) => {
     const inputTokensEstimate = usageTracker.getInputTokensEstimate();
     const fx = await getUsdToIdr();
     fxRate = fx.rate;
-    auditFxRate = fxRate;
-    auditFxRate = fxRate;
-    auditFxRate = fxRate;
     auditFxRate = fxRate;
     const estimated = estimateIdrCost({
       model: validation.model,
@@ -1599,17 +1529,17 @@ app.post("/api/llm/prefill", requireAuth, async (req, res) => {
     }
   }
 
-  const validation = validatePrefill(req.body);
-  if ("ok" in validation && validation.ok === false) {
-    auditHttpStatus = validation.status;
+  const validationResult = validatePrefill(req.body);
+  if (isValidationError(validationResult)) {
+    auditHttpStatus = validationResult.status;
     auditTerminationReason = "validation_error";
     auditChargeStatus = "skipped";
     await writeAudit();
-    sendApiError(res, validation.status, {
+    sendApiError(res, validationResult.status, {
       ok: false,
       request_id: requestId,
-      code: validation.code,
-      error: validation.error
+      code: validationResult.code,
+      error: validationResult.error
     });
     logLlmRequest({
       request_id: requestId,
@@ -1619,7 +1549,7 @@ app.post("/api/llm/prefill", requireAuth, async (req, res) => {
       input_chars: typeof req.body?.nodeLabel === "string" ? req.body.nodeLabel.length : 0,
       output_chars: 0,
       duration_ms: Date.now() - startedAt,
-      status_code: validation.status,
+      status_code: validationResult.status,
       termination_reason: "validation_error",
       rupiah_cost: null,
       rupiah_balance_before: null,
@@ -1628,6 +1558,7 @@ app.post("/api/llm/prefill", requireAuth, async (req, res) => {
     llmRequestsInflight -= 1;
     return;
   }
+  const validation = validationResult;
 
   if (!acquireLlmSlot(userId)) {
     auditHttpStatus = 429;
@@ -1941,20 +1872,89 @@ app.post("/api/llm/chat", requireAuth, async (req, res) => {
   let rupiahCost: number | null = null;
   let rupiahBefore: number | null = null;
   let rupiahAfter: number | null = null;
-  let routerDateKey = "";
   let fxRate = 0;
+  let providerName: "openai" | "openrouter" | null = null;
+  let providerModelId = "";
+  let usageRecord: UsageRecord | null = null;
+  let freepoolDecrement: number | null = null;
+  let freepoolApplied: boolean | null = null;
+  let freepoolReason: string | null = null;
+  let providerUsage: ProviderUsage | null = null;
+  let policyMeta: ProviderPolicyMeta | null = null;
+  let auditWritten = false;
+  let auditSelectedProvider = "unknown";
+  let auditActualProvider = "unknown";
+  let auditLogicalModel = typeof req.body?.model === "string" ? req.body.model : "unknown";
+  let auditProviderModelId = "unknown";
+  let auditUsageSource = "estimate_wordcount";
+  let auditInputTokens = 0;
+  let auditOutputTokens = 0;
+  let auditTotalTokens = 0;
+  let auditTokenizerEncoding: string | null = null;
+  let auditTokenizerFallback: string | null = null;
+  let auditProviderUsagePresent = false;
+  let auditFxRate: number | null = null;
+  let auditPriceUsdPerM = getPriceUsdPerM(auditLogicalModel);
+  let auditCostIdr = 0;
+  let auditBalanceBefore: number | null = null;
+  let auditBalanceAfter: number | null = null;
+  let auditChargeStatus = "unknown";
+  let auditChargeError: string | null = null;
+  let auditFreepoolApplied = false;
+  let auditFreepoolDecrement = 0;
+  let auditFreepoolReason: string | null = null;
+  let auditHttpStatus: number | null = null;
+  let auditTerminationReason: string | null = null;
 
-  const validation = validateChat(req.body);
-  if ("ok" in validation && validation.ok === false) {
-    auditHttpStatus = validation.status;
+  async function writeAudit() {
+    if (auditWritten) return;
+    auditWritten = true;
+    try {
+      await upsertAuditRecord({
+        request_id: requestId,
+        user_id: userId,
+        endpoint_kind: "chat",
+        selected_provider: auditSelectedProvider,
+        actual_provider_used: auditActualProvider,
+        logical_model: auditLogicalModel,
+        provider_model_id: auditProviderModelId,
+        usage_source: auditUsageSource,
+        input_tokens: auditInputTokens,
+        output_tokens: auditOutputTokens,
+        total_tokens: auditTotalTokens,
+        tokenizer_encoding_used: auditTokenizerEncoding,
+        tokenizer_fallback_reason: auditTokenizerFallback,
+        provider_usage_present: auditProviderUsagePresent,
+        fx_usd_idr: auditFxRate,
+        price_usd_per_mtoken: auditPriceUsdPerM,
+        markup_multiplier: MARKUP_MULTIPLIER,
+        cost_idr: auditCostIdr,
+        balance_before_idr: auditBalanceBefore,
+        balance_after_idr: auditBalanceAfter,
+        charge_status: auditChargeStatus,
+        charge_error_code: auditChargeError,
+        freepool_applied: auditFreepoolApplied,
+        freepool_decrement_tokens: auditFreepoolDecrement,
+        freepool_reason: auditFreepoolReason,
+        http_status: auditHttpStatus,
+        termination_reason: auditTerminationReason
+      });
+    } catch {
+      // Ignore audit write failures.
+    }
+  }
+
+  const validationResult = validateChat(req.body);
+  if (isValidationError(validationResult)) {
+    auditHttpStatus = validationResult.status;
     auditTerminationReason = "validation_error";
     auditChargeStatus = "skipped";
     await writeAudit();
-    sendApiError(res, validation.status, {
+    sendApiError(res, validationResult.status, {
       ok: false,
       request_id: requestId,
-      code: validation.code,
-      error: validation.error
+      code: validationResult.code,
+      error: validationResult.error
     });
     logLlmRequest({
       request_id: requestId,
@@ -1964,7 +1964,7 @@ app.post("/api/llm/chat", requireAuth, async (req, res) => {
       input_chars: typeof req.body?.userPrompt === "string" ? req.body.userPrompt.length : 0,
       output_chars: 0,
       duration_ms: Date.now() - startedAt,
-      status_code: validation.status,
+      status_code: validationResult.status,
       termination_reason: "validation_error",
       rupiah_cost: null,
       rupiah_balance_before: null,
@@ -1974,6 +1974,7 @@ app.post("/api/llm/chat", requireAuth, async (req, res) => {
     llmRequestsStreaming -= 1;
     return;
   }
+  const validation = validationResult;
 
   if (!acquireLlmSlot(userId)) {
     auditHttpStatus = 429;
@@ -2026,7 +2027,6 @@ app.post("/api/llm/chat", requireAuth, async (req, res) => {
     const provider = router.provider;
     providerName = provider.name;
     policyMeta = router.policyMeta;
-    routerDateKey = router.policyMeta.date_key;
     providerModelId = mapModel(provider.name, validation.model);
     auditSelectedProvider = router.selectedProviderName;
     auditActualProvider = provider.name;
@@ -2212,14 +2212,14 @@ app.post("/api/llm/chat", requireAuth, async (req, res) => {
       auditChargeError = "insufficient_rupiah";
     }
 
-    if (providerName === "openai" && routerDateKey && policyMeta) {
+    if (providerName === "openai" && policyMeta) {
       const eligible = policyMeta.cohort_selected && policyMeta.reason === "free_ok";
       if (eligible) {
         try {
           const applied = await recordTokenSpend({
             requestId,
             userId,
-            dateKey: routerDateKey,
+            dateKey: policyMeta.date_key,
             tokensUsed: usageRecord.total_tokens
           });
           freepoolApplied = applied.applied;

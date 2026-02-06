@@ -193,3 +193,22 @@ Backend:
 - `src/server/src/llm/audit/llmAudit.ts` (request audit upsert)
 - `src/server/migrations/1770382500000_add_llm_request_audit.js`
 - `src/server/migrations/1770382000000_add_openai_free_pool_ledger.js`
+
+## 11. Money UX (Frontend)
+
+Frontend components and stores:
+- src/components/BalanceBadge.tsx
+- src/components/ShortageWarning.tsx
+- src/components/MoneyNoticeStack.tsx
+- src/store/balanceStore.ts
+- src/money/shortageStore.ts
+- src/money/ensureSufficientBalance.ts
+- src/money/estimateCost.ts
+- src/money/topupEvents.ts
+- src/money/moneyNotices.ts
+
+Reports:
+- docs/report_2026_02_07_moneyux_final.md
+- docs/report_2026_02_07_moneyux_step1_balance_anchor.md
+- docs/report_2026_02_07_moneyux_step4_shortage_warning.md
+- docs/report_2026_02_07_moneyux_step7_failure_states.md

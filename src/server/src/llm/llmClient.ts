@@ -440,6 +440,7 @@ export function generateTextStream(opts: TextOpts): LlmStream {
     resolveUsage = resolve;
   });
   let latestUsage: ProviderUsage | null = null;
+  void latestUsage;
 
   const stream = (async function* () {
     if (!hasFetch()) {

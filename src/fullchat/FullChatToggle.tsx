@@ -2,7 +2,6 @@ import React from 'react';
 import { useFullChat } from './FullChatStore';
 import chatbarIcon from '../assets/chatbar_icon.png';
 import chatbarIconMobile from '../assets/chatbar_icon_mobile.png';
-import { t } from '../i18n/t';
 
 /**
  * FullChatToggle - Bottom-right toggle button for Full Chatbar

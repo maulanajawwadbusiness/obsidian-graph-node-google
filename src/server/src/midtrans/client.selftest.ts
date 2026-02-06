@@ -2,10 +2,6 @@ import { midtransRequest } from './client';
 
 type TestResult = { name: string; ok: boolean; detail?: string };
 
-function assert(condition: boolean, message: string) {
-  if (!condition) throw new Error(message);
-}
-
 function makeResponse(status: number, body: string, statusText = ''): Response {
   const ok = status >= 200 && status < 300;
   return {

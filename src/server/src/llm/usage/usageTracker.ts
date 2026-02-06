@@ -1,7 +1,7 @@
 import { estimateTokensFromText } from "../../pricing/tokenEstimate";
 import type { LogicalModel } from "../models/logicalModels";
 import { normalizeUsage, type ProviderUsage } from "./providerUsage";
-import { countTokensForMessages, countTokensForText, messagesToCanonicalText } from "./tokenCounter";
+import { countTokensForText, messagesToCanonicalText } from "./tokenCounter";
 
 export type UsageRecord = {
   provider: "openai" | "openrouter";

@@ -2,6 +2,7 @@ import React from 'react';
 import { createPaymentGopayQris, getPaymentStatus, type PaymentAction } from '../api';
 import { refreshBalance } from '../store/balanceStore';
 import { subscribeTopupOpen } from '../money/topupEvents';
+import { pushMoneyNotice } from '../money/moneyNotices';
 
 const DEFAULT_AMOUNT = 1000;
 const POLL_FAST_MS = 1000;
@@ -16,6 +17,8 @@ type PaymentState = {
     lastUpdated: number;
 };
 
+type PaymentPhase = 'idle' | 'starting' | 'pending' | 'success' | 'failed' | 'cancelled';
+
 type PaymentPanelProps = {
     onPaid?: (orderId: string) => void;
 };
@@ -27,6 +30,7 @@ export const PaymentGopayPanel: React.FC<PaymentPanelProps> = ({ onPaid }) => {
     const [isBusy, setIsBusy] = React.useState(false);
     const [error, setError] = React.useState<string | null>(null);
     const [lastStatus, setLastStatus] = React.useState<string>('');
+    const [phase, setPhase] = React.useState<PaymentPhase>('idle');
 
     React.useEffect(() => {
         return subscribeTopupOpen(() => {
@@ -61,6 +65,16 @@ export const PaymentGopayPanel: React.FC<PaymentPanelProps> = ({ onPaid }) => {
             if (now - startMs > POLL_TIMEOUT_MS) {
                 logStatus('timeout');
                 setError('Payment timed out');
+                setPhase('failed');
+                pushMoneyNotice({
+                    kind: 'payment',
+                    status: 'warning',
+                    title: 'Pembayaran tertunda',
+                    message: 'Pembayaran diproses, saldo mungkin terlambat beberapa detik. Saldo belum berubah.',
+                    ctas: [
+                        { label: 'Cek ulang saldo', onClick: () => void refreshBalance({ force: true }) }
+                    ]
+                });
                 stop();
                 return;
             }
@@ -74,12 +88,32 @@ export const PaymentGopayPanel: React.FC<PaymentPanelProps> = ({ onPaid }) => {
                 logStatus(status);
 
                 if (status === 'settlement' || status === 'capture') {
+                    setPhase('success');
+                    pushMoneyNotice({
+                        kind: 'payment',
+                        status: 'success',
+                        title: 'Pembayaran berhasil',
+                        message: 'Saldo sudah bertambah.',
+                        ctas: [
+                            { label: 'Cek ulang saldo', onClick: () => void refreshBalance({ force: true }) }
+                        ]
+                    });
                     void refreshBalance();
                     onPaid?.(orderId);
                     stop();
                     return;
                 }
                 if (status === 'expire' || status === 'cancel' || status === 'deny' || status === 'failed') {
+                    setPhase('failed');
+                    pushMoneyNotice({
+                        kind: 'payment',
+                        status: 'warning',
+                        title: 'Pembayaran gagal atau kedaluwarsa',
+                        message: 'Saldo tidak berubah.',
+                        ctas: [
+                            { label: 'Coba lagi', onClick: () => setIsOpen(true) }
+                        ]
+                    });
                     stop();
                     return;
                 }
@@ -96,6 +130,16 @@ export const PaymentGopayPanel: React.FC<PaymentPanelProps> = ({ onPaid }) => {
 
     React.useEffect(() => {
         if (!state?.orderId) return;
+        setPhase('pending');
+        pushMoneyNotice({
+            kind: 'payment',
+            status: 'info',
+            title: 'Menunggu pembayaran',
+            message: 'Saldo akan diperbarui otomatis setelah pembayaran selesai.',
+            ctas: [
+                { label: 'Cek ulang saldo', onClick: () => void refreshBalance({ force: true }) }
+            ]
+        });
         const stop = startPolling(state.orderId);
         return () => stop();
     }, [state?.orderId, startPolling]);
@@ -103,10 +147,21 @@ export const PaymentGopayPanel: React.FC<PaymentPanelProps> = ({ onPaid }) => {
     const handleCreate = async () => {
         setIsBusy(true);
         setError(null);
+        setPhase('starting');
         try {
             const result = await createPaymentGopayQris(amount);
             if (!result.ok || !result.data || typeof result.data !== 'object') {
                 setError(result.error || 'Payment request failed');
+                setPhase('failed');
+                pushMoneyNotice({
+                    kind: 'payment',
+                    status: 'error',
+                    title: 'Gagal memulai pembayaran',
+                    message: 'Koneksi bermasalah. Saldo tidak berubah.',
+                    ctas: [
+                        { label: 'Coba lagi', onClick: () => handleCreate() }
+                    ]
+                });
                 return;
             }
             const data = result.data as {
@@ -117,6 +172,7 @@ export const PaymentGopayPanel: React.FC<PaymentPanelProps> = ({ onPaid }) => {
             const orderId = data.order_id || '';
             if (!orderId) {
                 setError('Missing order_id');
+                setPhase('failed');
                 return;
             }
             setState({
@@ -128,6 +184,16 @@ export const PaymentGopayPanel: React.FC<PaymentPanelProps> = ({ onPaid }) => {
             logStatus(data.transaction_status || 'pending');
         } catch (e) {
             setError(`Payment request failed: ${String(e)}`);
+            setPhase('failed');
+            pushMoneyNotice({
+                kind: 'payment',
+                status: 'error',
+                title: 'Gagal memulai pembayaran',
+                message: 'Koneksi bermasalah. Saldo tidak berubah.',
+                ctas: [
+                    { label: 'Coba lagi', onClick: () => handleCreate() }
+                ]
+            });
         } finally {
             setIsBusy(false);
         }
@@ -153,7 +219,16 @@ export const PaymentGopayPanel: React.FC<PaymentPanelProps> = ({ onPaid }) => {
                 <button
                     type="button"
                     style={CLOSE_BUTTON_STYLE}
-                    onClick={() => setIsOpen(false)}
+                    onClick={() => {
+                        setIsOpen(false);
+                        setPhase('cancelled');
+                        pushMoneyNotice({
+                            kind: 'payment',
+                            status: 'warning',
+                            title: 'Pembayaran dibatalkan',
+                            message: 'Saldo tidak berubah.'
+                        });
+                    }}
                     onPointerDown={(e) => e.stopPropagation()}
                 >
                     Close
@@ -187,6 +262,27 @@ export const PaymentGopayPanel: React.FC<PaymentPanelProps> = ({ onPaid }) => {
 
             {error ? <div style={ERROR_STYLE}>{error}</div> : null}
 
+            {phase === 'pending' ? (
+                <div style={INFO_STYLE}>
+                    Menunggu pembayaran. Saldo akan diperbarui otomatis setelah pembayaran selesai.
+                </div>
+            ) : null}
+            {phase === 'failed' ? (
+                <div style={INFO_STYLE}>
+                    Pembayaran gagal atau tertunda. Saldo tidak berubah.
+                </div>
+            ) : null}
+            {phase === 'cancelled' ? (
+                <div style={INFO_STYLE}>
+                    Pembayaran dibatalkan. Saldo tidak berubah.
+                </div>
+            ) : null}
+            {phase === 'success' ? (
+                <div style={INFO_STYLE}>
+                    Pembayaran berhasil. Saldo bertambah.
+                </div>
+            ) : null}
+
             {qrAction?.url ? (
                 <div style={QR_WRAPPER_STYLE}>
                     <img src={qrAction.url} alt="QR code" style={QR_IMAGE_STYLE} />
@@ -205,6 +301,15 @@ export const PaymentGopayPanel: React.FC<PaymentPanelProps> = ({ onPaid }) => {
                 onPointerDown={(e) => e.stopPropagation()}
             >
                 Open Wallet
+            </button>
+
+            <button
+                type="button"
+                style={SECONDARY_BUTTON_STYLE}
+                onClick={() => void refreshBalance({ force: true })}
+                onPointerDown={(e) => e.stopPropagation()}
+            >
+                Cek ulang saldo
             </button>
 
             {state?.status === 'settlement' || state?.status === 'capture' ? (
@@ -330,6 +435,12 @@ const ERROR_STYLE: React.CSSProperties = {
 const SUCCESS_STYLE: React.CSSProperties = {
     fontSize: '12px',
     color: '#6fe1a2',
+    fontFamily: 'var(--font-ui)',
+};
+
+const INFO_STYLE: React.CSSProperties = {
+    fontSize: '12px',
+    color: '#8c93a6',
     fontFamily: 'var(--font-ui)',
 };
 

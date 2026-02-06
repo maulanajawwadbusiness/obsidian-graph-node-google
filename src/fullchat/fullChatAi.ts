@@ -7,6 +7,7 @@ import { refreshBalance, getBalanceState } from '../store/balanceStore';
 import { ensureSufficientBalance } from '../money/ensureSufficientBalance';
 import { estimateIdrCost } from '../money/estimateCost';
 import { showShortage } from '../money/shortageStore';
+import { pushMoneyNotice } from '../money/moneyNotices';
 
 // =============================================================================
 // TYPES
@@ -144,6 +145,12 @@ async function* realResponseGenerator(
                 shortfallIdr: shortfall,
                 context: 'chat'
             });
+            pushMoneyNotice({
+                kind: 'deduction',
+                status: 'warning',
+                title: 'Saldo tidak cukup',
+                message: 'Perkiraan biaya lebih kecil dari biaya akhir. Saldo tidak berubah.'
+            });
             return;
         }
         if (err instanceof Error && err.message === 'unauthorized') {
@@ -151,6 +158,17 @@ async function* realResponseGenerator(
             yield isId
                 ? 'Silakan masuk terlebih dahulu untuk menggunakan chat.'
                 : 'Please log in to use chat.';
+            return;
+        }
+        if (err instanceof Error && err.name === 'AbortError') {
+            if (!signal?.aborted) {
+                pushMoneyNotice({
+                    kind: 'deduction',
+                    status: 'info',
+                    title: 'Respons dihentikan',
+                    message: 'Biaya dihitung dari respons yang sudah terbentuk.'
+                });
+            }
             return;
         }
         console.error('[FullChatAI] real stream failed', {
@@ -163,6 +181,12 @@ async function* realResponseGenerator(
         // If network error, we probably want to show it or fallback.
         // Lets fallback to mock for robustness per "just works" rule.
         console.warn('[FullChatAI] error_fallback_to_mock');
+        pushMoneyNotice({
+            kind: 'deduction',
+            status: 'warning',
+            title: 'Koneksi terputus',
+            message: 'Saldo akan tersinkron otomatis. Saldo saat ini mungkin belum berubah.'
+        });
         yield* mockResponseGenerator(context);
     } finally {
         void refreshBalance();

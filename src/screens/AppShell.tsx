@@ -5,6 +5,7 @@ import { Welcome2 } from './Welcome2';
 import { EnterPrompt } from './EnterPrompt';
 import { BalanceBadge } from '../components/BalanceBadge';
 import { ShortageWarning } from '../components/ShortageWarning';
+import { MoneyNoticeStack } from '../components/MoneyNoticeStack';
 
 const Graph = React.lazy(() =>
     import('../playground/GraphPhysicsPlayground').then((mod) => ({
@@ -43,6 +44,7 @@ export const AppShell: React.FC = () => {
                 </Suspense>
                 <BalanceBadge />
                 <ShortageWarning />
+                <MoneyNoticeStack />
             </div>
         );
     }
@@ -56,6 +58,7 @@ export const AppShell: React.FC = () => {
                 />
                 <BalanceBadge />
                 <ShortageWarning />
+                <MoneyNoticeStack />
             </div>
         );
     }
@@ -70,6 +73,7 @@ export const AppShell: React.FC = () => {
                 />
                 <BalanceBadge />
                 <ShortageWarning />
+                <MoneyNoticeStack />
             </div>
         );
     }
@@ -83,6 +87,7 @@ export const AppShell: React.FC = () => {
             />
             <BalanceBadge />
             <ShortageWarning />
+            <MoneyNoticeStack />
         </div>
     );
 };

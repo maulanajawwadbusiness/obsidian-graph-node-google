@@ -1,5 +1,6 @@
 import React from 'react';
 import { refreshBalance, useBalanceStore } from '../store/balanceStore';
+import { pushMoneyNotice } from '../money/moneyNotices';
 
 function formatRupiah(value: number | null): string {
     if (value === null || Number.isNaN(value)) {
@@ -11,6 +12,7 @@ function formatRupiah(value: number | null): string {
 
 export const BalanceBadge: React.FC = () => {
     const { balanceIdr, status } = useBalanceStore();
+    const lastNoticeRef = React.useRef<string | null>(null);
 
     React.useEffect(() => {
         if (status === 'idle') {
@@ -18,10 +20,37 @@ export const BalanceBadge: React.FC = () => {
         }
     }, [status]);
 
+    React.useEffect(() => {
+        if (status !== 'unauthorized' && status !== 'error') {
+            lastNoticeRef.current = null;
+            return;
+        }
+        if (lastNoticeRef.current) return;
+        const id = pushMoneyNotice({
+            kind: 'balance',
+            status: status === 'unauthorized' ? 'warning' : 'error',
+            title: status === 'unauthorized' ? 'Saldo belum tersedia' : 'Saldo belum terbaca',
+            message: status === 'unauthorized'
+                ? 'Silakan login untuk melihat saldo. Saldo tidak berubah.'
+                : 'Koneksi bermasalah. Saldo tidak berubah.',
+            ctas: [
+                {
+                    label: 'Cek ulang saldo',
+                    onClick: () => void refreshBalance({ force: true })
+                }
+            ]
+        });
+        lastNoticeRef.current = id;
+    }, [status]);
+
     const display = status === 'loading' && balanceIdr === null ? 'Rp ...' : formatRupiah(balanceIdr);
 
     return (
-        <div style={WRAP_STYLE} onPointerDown={(e) => e.stopPropagation()}>
+        <div
+            style={WRAP_STYLE}
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={() => void refreshBalance({ force: true })}
+        >
             <div style={LABEL_STYLE}>Saldo</div>
             <div style={VALUE_STYLE}>{display}</div>
         </div>

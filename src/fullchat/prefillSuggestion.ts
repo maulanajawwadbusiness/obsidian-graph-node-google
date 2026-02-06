@@ -7,6 +7,7 @@ import { refreshBalance } from '../store/balanceStore';
 import { ensureSufficientBalance } from '../money/ensureSufficientBalance';
 import { estimateIdrCost } from '../money/estimateCost';
 import { showShortage } from '../money/shortageStore';
+import { pushMoneyNotice } from '../money/moneyNotices';
 
 export interface MiniChatHistory {
     role: 'user' | 'ai';
@@ -134,6 +135,12 @@ async function refinePromptWithReal(context: PrefillContext, options: { signal?:
                     requiredIdr: needed,
                     shortfallIdr: shortfall,
                     context: 'prefill'
+                });
+                pushMoneyNotice({
+                    kind: 'deduction',
+                    status: 'warning',
+                    title: 'Saldo tidak cukup',
+                    message: 'Perkiraan biaya lebih kecil dari biaya akhir. Saldo tidak berubah.'
                 });
                 return makeSeedPrompt(context);
             }

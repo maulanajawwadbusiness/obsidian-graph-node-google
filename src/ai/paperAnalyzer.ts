@@ -8,6 +8,7 @@ import { refreshBalance } from '../store/balanceStore';
 import { ensureSufficientBalance } from '../money/ensureSufficientBalance';
 import { estimateIdrCost } from '../money/estimateCost';
 import { showShortage } from '../money/shortageStore';
+import { pushMoneyNotice } from '../money/moneyNotices';
 
 export interface AnalysisPoint {
     index: number;   // 0-based index (maps to node index)
@@ -87,6 +88,12 @@ export async function analyzeDocument(text: string, opts?: { nodeCount?: number 
                     requiredIdr: needed,
                     shortfallIdr: shortfall,
                     context: 'analysis'
+                });
+                pushMoneyNotice({
+                    kind: 'deduction',
+                    status: 'warning',
+                    title: 'Saldo tidak cukup',
+                    message: 'Perkiraan biaya lebih kecil dari biaya akhir. Saldo tidak berubah.'
                 });
                 throw new Error('insufficient_balance');
             }

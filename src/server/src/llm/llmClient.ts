@@ -3,6 +3,7 @@ import crypto from "crypto";
 type LlmErrorCode =
   | "bad_request"
   | "unauthorized"
+  | "rate_limited"
   | "upstream_error"
   | "timeout"
   | "parse_error";
@@ -68,9 +69,14 @@ function getBaseUrl(): string {
   return process.env.OPENAI_RESPONSES_URL || "https://api.openai.com/v1/responses";
 }
 
+function hasFetch(): boolean {
+  return typeof fetch === "function";
+}
+
 function mapStatusToCode(status?: number): LlmErrorCode {
   if (!status) return "upstream_error";
   if (status === 400) return "bad_request";
+  if (status === 429) return "rate_limited";
   if (status === 401 || status === 403) return "unauthorized";
   return "upstream_error";
 }
@@ -139,6 +145,22 @@ function logRequestEnd(fields: {
 export async function generateStructuredJson(opts: StructuredOpts): Promise<LlmStructuredResult> {
   const request_id = crypto.randomUUID();
   const startedAt = Date.now();
+  if (!hasFetch()) {
+    const err = createError({
+      request_id,
+      code: "upstream_error",
+      error: "fetch not available"
+    });
+    logRequestEnd({
+      request_id,
+      kind: "structured",
+      model: opts.model,
+      input_chars: opts.input.length,
+      duration_ms: Date.now() - startedAt,
+      status: "error"
+    });
+    return err;
+  }
   const apiKey = getApiKey();
   if (!apiKey) {
     const err = createError({
@@ -273,6 +295,22 @@ export async function generateStructuredJson(opts: StructuredOpts): Promise<LlmS
 export async function generateText(opts: TextOpts): Promise<LlmTextResult> {
   const request_id = crypto.randomUUID();
   const startedAt = Date.now();
+  if (!hasFetch()) {
+    const err = createError({
+      request_id,
+      code: "upstream_error",
+      error: "fetch not available"
+    });
+    logRequestEnd({
+      request_id,
+      kind: "text",
+      model: opts.model,
+      input_chars: opts.input.length,
+      duration_ms: Date.now() - startedAt,
+      status: "error"
+    });
+    return err;
+  }
   const apiKey = getApiKey();
   if (!apiKey) {
     const err = createError({
@@ -384,6 +422,15 @@ export function generateTextStream(opts: TextOpts): LlmStream {
   let finalStatus: "ok" | "error" = "ok";
 
   const stream = (async function* () {
+    if (!hasFetch()) {
+      finalStatus = "error";
+      const err = createError({
+        request_id,
+        code: "upstream_error",
+        error: "fetch not available"
+      });
+      throw new LlmStreamError(err);
+    }
     if (!apiKey) {
       finalStatus = "error";
       const err = createError({

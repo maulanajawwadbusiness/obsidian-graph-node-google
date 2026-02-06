@@ -1,6 +1,6 @@
-export const shorthands = undefined;
+exports.shorthands = undefined;
 
-export const up = (pgm) => {
+exports.up = (pgm) => {
   pgm.createTable('payment_transactions', {
     id: {
       type: 'uuid',
@@ -96,7 +96,7 @@ export const up = (pgm) => {
   pgm.createIndex('payment_webhook_events', 'midtrans_transaction_id');
 };
 
-export const down = (pgm) => {
+exports.down = (pgm) => {
   pgm.dropTable('payment_webhook_events');
   pgm.dropTable('payment_transactions');
 };

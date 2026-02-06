@@ -14,8 +14,8 @@ import { getProvider } from "./llm/getProvider";
 import { pickProviderForRequest } from "./llm/providerRouter";
 import { validateChat, validatePaperAnalyze, validatePrefill } from "./llm/validate";
 import { mapModel } from "./llm/models/modelMap";
+import { initUsageTracker, type UsageRecord } from "./llm/usage/usageTracker";
 import { estimateIdrCost } from "./pricing/pricingCalculator";
-import { estimateTokensFromText } from "./pricing/tokenEstimate";
 import { applyTopupFromMidtrans, chargeForLlm, getBalance } from "./rupiah/rupiahService";
 
 type SessionUser = {
@@ -192,15 +192,22 @@ function logLlmRequest(fields: {
   rupiah_cost?: number | null;
   rupiah_balance_before?: number | null;
   rupiah_balance_after?: number | null;
+  provider?: "openai" | "openrouter" | null;
   provider_model_id?: string | null;
   structured_output_mode?: string | null;
   validation_result?: string | null;
+  usage_input_tokens?: number | null;
+  usage_output_tokens?: number | null;
+  usage_total_tokens?: number | null;
+  usage_source?: string | null;
+  freepool_decrement_tokens?: number | null;
 }) {
   console.log(JSON.stringify({
     request_id: fields.request_id,
     endpoint: fields.endpoint,
     user_id: fields.user_id,
     model: fields.model,
+    provider: fields.provider ?? null,
     provider_model_id: fields.provider_model_id ?? null,
     input_chars: fields.input_chars,
     output_chars: fields.output_chars,
@@ -208,9 +215,14 @@ function logLlmRequest(fields: {
     time_to_first_token_ms: fields.time_to_first_token_ms ?? null,
     status_code: fields.status_code,
     termination_reason: fields.termination_reason,
+    usage_input_tokens: fields.usage_input_tokens ?? null,
+    usage_output_tokens: fields.usage_output_tokens ?? null,
+    usage_total_tokens: fields.usage_total_tokens ?? null,
+    usage_source: fields.usage_source ?? null,
     rupiah_cost: fields.rupiah_cost ?? null,
     rupiah_balance_before: fields.rupiah_balance_before ?? null,
     rupiah_balance_after: fields.rupiah_balance_after ?? null,
+    freepool_decrement_tokens: fields.freepool_decrement_tokens ?? null,
     structured_output_mode: fields.structured_output_mode ?? null,
     validation_result: fields.validation_result ?? null
   }));
@@ -755,7 +767,14 @@ app.post("/api/llm/paper-analyze", requireAuth, async (req, res) => {
   let rupiahAfter: number | null = null;
   let routerDateKey = "";
   let fxRate = 0;
+  let providerName: "openai" | "openrouter" | null = null;
   let providerModelId = "";
+  let usageRecord: UsageRecord | null = null;
+  let freepoolDecrement: number | null = null;
+  let providerModelId = "";
+  let providerName: "openai" | "openrouter" | null = null;
+  let usageRecord: UsageRecord | null = null;
+  let freepoolDecrement: number | null = null;
 
   const validation = validatePaperAnalyze(req.body);
   if ("ok" in validation && validation.ok === false) {
@@ -821,13 +840,20 @@ app.post("/api/llm/paper-analyze", requireAuth, async (req, res) => {
       forcedProvider = true;
     }
 
+    providerName = provider.name;
     providerModelId = mapModel(provider.name, validation.model);
     console.log(`[llm] provider_policy selected=${router.selectedProviderName} actual_provider=${provider.name} logical_model=${validation.model} provider_model_id=${providerModelId} cohort=${router.policyMeta.cohort_selected} used_tokens=${router.policyMeta.user_used_tokens_today} pool_remaining=${router.policyMeta.pool_remaining_tokens} cap=${router.policyMeta.user_free_cap} reason=${router.policyMeta.reason} date_key=${router.policyMeta.date_key}`);
     if (forcedProvider) {
       console.log("[llm] analyze forced_provider=openai reason=analyze_requires_strict_json");
     }
 
-    const inputTokensEstimate = estimateTokensFromText(validation.text);
+    const usageTracker = initUsageTracker({
+      provider: provider.name,
+      logical_model: validation.model,
+      provider_model_id: providerModelId
+    });
+    usageTracker.recordInputText(validation.text);
+    const inputTokensEstimate = usageTracker.getInputTokensEstimate();
     const fx = await getUsdToIdr();
     fxRate = fx.rate;
     const estimated = estimateIdrCost({
@@ -1008,19 +1034,12 @@ app.post("/api/llm/paper-analyze", requireAuth, async (req, res) => {
     }
 
     const outputTextLength = JSON.stringify(resultJson || {}).length;
-    const usageInput = usage?.input_tokens;
-    const usageOutput = usage?.output_tokens;
-    const inputTokens = Number.isFinite(usageInput)
-      ? Number(usageInput)
-      : estimateTokensFromText(validation.text);
-    const outputTokens = Number.isFinite(usageOutput)
-      ? Number(usageOutput)
-      : estimateTokensFromText(JSON.stringify(resultJson || {}));
-    const tokensUsed = inputTokens + outputTokens;
+    usageTracker.recordOutputText(JSON.stringify(resultJson || {}));
+    usageRecord = usageTracker.finalize({ providerUsage: usage });
     const pricing = estimateIdrCost({
       model: validation.model,
-      inputTokens,
-      outputTokens,
+      inputTokens: usageRecord.input_tokens,
+      outputTokens: usageRecord.output_tokens,
       fxRate
     });
     const chargeResult = await chargeForLlm({
@@ -1063,13 +1082,14 @@ app.post("/api/llm/paper-analyze", requireAuth, async (req, res) => {
     rupiahBefore = chargeResult.balance_before;
     rupiahAfter = chargeResult.balance_after;
 
-    if (router.selectedProviderName === "openai") {
+    if (provider.name === "openai") {
       try {
         await recordTokenSpend({
           userId,
           dateKey: router.policyMeta.date_key,
-          tokensUsed
+          tokensUsed: usageRecord.total_tokens
         });
+        freepoolDecrement = usageRecord.total_tokens;
       } catch {
         // Ignore pool accounting failure.
       }
@@ -1089,9 +1109,15 @@ app.post("/api/llm/paper-analyze", requireAuth, async (req, res) => {
       duration_ms: Date.now() - startedAt,
       status_code: 200,
       termination_reason: "success",
+      provider: providerName,
       rupiah_cost: rupiahCost,
       rupiah_balance_before: rupiahBefore,
       rupiah_balance_after: rupiahAfter,
+      usage_input_tokens: usageRecord?.input_tokens ?? null,
+      usage_output_tokens: usageRecord?.output_tokens ?? null,
+      usage_total_tokens: usageRecord?.total_tokens ?? null,
+      usage_source: usageRecord?.source ?? null,
+      freepool_decrement_tokens: freepoolDecrement,
       structured_output_mode: structuredOutputMode,
       validation_result: validationResult
     });
@@ -1218,6 +1244,9 @@ app.post("/api/llm/prefill", requireAuth, async (req, res) => {
   let rupiahBefore: number | null = null;
   let rupiahAfter: number | null = null;
   let fxRate = 0;
+  let providerName: "openai" | "openrouter" | null = null;
+  let usageRecord: UsageRecord | null = null;
+  let freepoolDecrement: number | null = null;
 
   const validation = validatePrefill(req.body);
   if ("ok" in validation && validation.ok === false) {
@@ -1274,6 +1303,7 @@ app.post("/api/llm/prefill", requireAuth, async (req, res) => {
   try {
     const router = await pickProviderForRequest({ userId, endpointKind: "prefill" });
     const provider = router.provider;
+    providerName = provider.name;
     const providerModelId = mapModel(provider.name, validation.model);
     console.log(`[llm] provider_policy selected=${router.selectedProviderName} actual_provider=${provider.name} logical_model=${validation.model} provider_model_id=${providerModelId} cohort=${router.policyMeta.cohort_selected} used_tokens=${router.policyMeta.user_used_tokens_today} pool_remaining=${router.policyMeta.pool_remaining_tokens} cap=${router.policyMeta.user_free_cap} reason=${router.policyMeta.reason} date_key=${router.policyMeta.date_key}`);
 
@@ -1307,7 +1337,13 @@ app.post("/api/llm/prefill", requireAuth, async (req, res) => {
 
     const input = `${systemPrompt}\n\nCONTEXT:\n${promptParts.join("\n")}`;
 
-    const inputTokensEstimate = estimateTokensFromText(input);
+    const usageTracker = initUsageTracker({
+      provider: provider.name,
+      logical_model: validation.model,
+      provider_model_id: providerModelId
+    });
+    usageTracker.recordInputText(input);
+    const inputTokensEstimate = usageTracker.getInputTokensEstimate();
     const fx = await getUsdToIdr();
     fxRate = fx.rate;
     const estimated = estimateIdrCost({
@@ -1376,19 +1412,12 @@ app.post("/api/llm/prefill", requireAuth, async (req, res) => {
       return;
     }
 
-    const usageInput = result.usage?.input_tokens;
-    const usageOutput = result.usage?.output_tokens;
-    const inputTokens = Number.isFinite(usageInput)
-      ? Number(usageInput)
-      : estimateTokensFromText(input);
-    const outputTokens = Number.isFinite(usageOutput)
-      ? Number(usageOutput)
-      : estimateTokensFromText(result.text);
-    const tokensUsed = inputTokens + outputTokens;
+    usageTracker.recordOutputText(result.text);
+    usageRecord = usageTracker.finalize({ providerUsage: result.usage });
     const pricing = estimateIdrCost({
       model: validation.model,
-      inputTokens,
-      outputTokens,
+      inputTokens: usageRecord.input_tokens,
+      outputTokens: usageRecord.output_tokens,
       fxRate
     });
     const chargeResult = await chargeForLlm({
@@ -1429,13 +1458,14 @@ app.post("/api/llm/prefill", requireAuth, async (req, res) => {
     rupiahBefore = chargeResult.balance_before;
     rupiahAfter = chargeResult.balance_after;
 
-    if (router.selectedProviderName === "openai") {
+    if (provider.name === "openai") {
       try {
         await recordTokenSpend({
           userId,
           dateKey: router.policyMeta.date_key,
-          tokensUsed
+          tokensUsed: usageRecord.total_tokens
         });
+        freepoolDecrement = usageRecord.total_tokens;
       } catch {
         // Ignore pool accounting failure.
       }
@@ -1454,9 +1484,15 @@ app.post("/api/llm/prefill", requireAuth, async (req, res) => {
       duration_ms: Date.now() - startedAt,
       status_code: 200,
       termination_reason: "success",
+      provider: providerName,
       rupiah_cost: rupiahCost,
       rupiah_balance_before: rupiahBefore,
-      rupiah_balance_after: rupiahAfter
+      rupiah_balance_after: rupiahAfter,
+      usage_input_tokens: usageRecord?.input_tokens ?? null,
+      usage_output_tokens: usageRecord?.output_tokens ?? null,
+      usage_total_tokens: usageRecord?.total_tokens ?? null,
+      usage_source: usageRecord?.source ?? null,
+      freepool_decrement_tokens: freepoolDecrement
     });
   } finally {
     releaseLlmSlot(userId);
@@ -1536,10 +1572,10 @@ app.post("/api/llm/chat", requireAuth, async (req, res) => {
   let streamStarted = false;
   let cancelled = false;
   let outputChars = 0;
-  let outputText = "";
   let firstTokenAt: number | null = null;
   let terminationReason = "success";
   let chatInput = "";
+  let usageTracker: ReturnType<typeof initUsageTracker> | null = null;
   req.on("close", () => {
     cancelled = true;
   });
@@ -1547,13 +1583,20 @@ app.post("/api/llm/chat", requireAuth, async (req, res) => {
   try {
     const router = await pickProviderForRequest({ userId, endpointKind: "chat" });
     const provider = router.provider;
+    providerName = provider.name;
     routerDateKey = router.policyMeta.date_key;
     providerModelId = mapModel(provider.name, validation.model);
     console.log(`[llm] provider_policy selected=${router.selectedProviderName} actual_provider=${provider.name} logical_model=${validation.model} provider_model_id=${providerModelId} cohort=${router.policyMeta.cohort_selected} used_tokens=${router.policyMeta.user_used_tokens_today} pool_remaining=${router.policyMeta.pool_remaining_tokens} cap=${router.policyMeta.user_free_cap} reason=${router.policyMeta.reason} date_key=${router.policyMeta.date_key}`);
 
     const systemPrompt = validation.systemPrompt || "";
     chatInput = `${systemPrompt}\n\nUSER PROMPT:\n${validation.userPrompt}`;
-    const inputTokensEstimate = estimateTokensFromText(chatInput);
+    usageTracker = initUsageTracker({
+      provider: provider.name,
+      logical_model: validation.model,
+      provider_model_id: providerModelId
+    });
+    usageTracker.recordInputText(chatInput);
+    const inputTokensEstimate = usageTracker.getInputTokensEstimate();
     const fx = await getUsdToIdr();
     fxRate = fx.rate;
     const estimated = estimateIdrCost({
@@ -1608,7 +1651,7 @@ app.post("/api/llm/chat", requireAuth, async (req, res) => {
         firstTokenAt = Date.now();
       }
       outputChars += chunk.length;
-      outputText += chunk;
+      usageTracker.recordOutputChunk(chunk);
       res.write(chunk);
     }
 
@@ -1646,13 +1689,19 @@ app.post("/api/llm/chat", requireAuth, async (req, res) => {
       terminationReason = "upstream_error";
     }
   } finally {
-    const outputTokensEstimate = estimateTokensFromText(outputText);
-    const inputTokensEstimate = estimateTokensFromText(chatInput);
-    const tokensUsed = inputTokensEstimate + outputTokensEstimate;
+    if (!usageTracker) {
+      usageTracker = initUsageTracker({
+        provider: providerName ?? "openai",
+        logical_model: validation.model,
+        provider_model_id: providerModelId || "unknown"
+      });
+      usageTracker.recordInputText(chatInput);
+    }
+    usageRecord = usageTracker.finalize({});
     const pricing = estimateIdrCost({
       model: validation.model,
-      inputTokens: inputTokensEstimate,
-      outputTokens: outputTokensEstimate,
+      inputTokens: usageRecord.input_tokens,
+      outputTokens: usageRecord.output_tokens,
       fxRate
     });
     const chargeResult = await chargeForLlm({
@@ -1669,13 +1718,14 @@ app.post("/api/llm/chat", requireAuth, async (req, res) => {
       terminationReason = "insufficient_rupiah";
     }
 
-    if (provider.name === "openai" && routerDateKey) {
+    if (providerName === "openai" && routerDateKey) {
       try {
         await recordTokenSpend({
           userId,
           dateKey: routerDateKey,
-          tokensUsed
+          tokensUsed: usageRecord.total_tokens
         });
+        freepoolDecrement = usageRecord.total_tokens;
       } catch {
         // Ignore pool accounting failure.
       }
@@ -1696,9 +1746,15 @@ app.post("/api/llm/chat", requireAuth, async (req, res) => {
       time_to_first_token_ms: firstTokenAt ? firstTokenAt - startedAt : null,
       status_code: statusCode,
       termination_reason: terminationReason,
+      provider: providerName,
       rupiah_cost: rupiahCost,
       rupiah_balance_before: rupiahBefore,
-      rupiah_balance_after: rupiahAfter
+      rupiah_balance_after: rupiahAfter,
+      usage_input_tokens: usageRecord?.input_tokens ?? null,
+      usage_output_tokens: usageRecord?.output_tokens ?? null,
+      usage_total_tokens: usageRecord?.total_tokens ?? null,
+      usage_source: usageRecord?.source ?? null,
+      freepool_decrement_tokens: freepoolDecrement
     });
   }
 });

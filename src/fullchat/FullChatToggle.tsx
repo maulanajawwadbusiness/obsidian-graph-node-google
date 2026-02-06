@@ -1,6 +1,7 @@
 import React from 'react';
 import { useFullChat } from './FullChatStore';
 import chatbarIcon from '../assets/chatbar_icon.png';
+import chatbarIconMobile from '../assets/chatbar_icon_mobile.png';
 import { t } from '../i18n/t';
 
 /**
@@ -37,8 +38,19 @@ const ICON_STYLE_HOVER: React.CSSProperties = {
 };
 
 export const FullChatToggle: React.FC = () => {
-    const { isOpen, openFullChat } = useFullChat();
+    const { isOpen } = useFullChat();
     const [isHovered, setIsHovered] = React.useState(false);
+
+    // Mobile detection: < 768px is standard mobile breakpoint
+    const [isMobile, setIsMobile] = React.useState(
+        typeof window !== 'undefined' ? window.innerWidth < 768 : false
+    );
+
+    React.useEffect(() => {
+        const handleResize = () => setIsMobile(window.innerWidth < 768);
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
 
     if (isOpen) return null;
 
@@ -48,16 +60,16 @@ export const FullChatToggle: React.FC = () => {
         <button
             type="button"
             style={TOGGLE_STYLE}
-            onClick={openFullChat}
+            onClick={undefined}
             onPointerDown={stopPropagation}
             onMouseDown={stopPropagation}
-            aria-label={t('tooltip.openChat')}
-            title={t('tooltip.openChat')}
+            aria-label={undefined}
+            title={undefined}
             onMouseEnter={() => setIsHovered(true)}
             onMouseLeave={() => setIsHovered(false)}
         >
             <img
-                src={chatbarIcon}
+                src={isMobile ? chatbarIconMobile : chatbarIcon}
                 alt=""
                 style={{
                     ...ICON_STYLE,

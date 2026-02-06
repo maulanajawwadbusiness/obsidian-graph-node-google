@@ -714,7 +714,8 @@ export const FullChatbar: React.FC<FullChatbarProps> = ({ engineRef }) => {
 
     // Get message style with turn spacing
     // Optimized to not recreate on every message update during streaming
-    if (!fullChat.isOpen) return null;
+    // Chatbar menu disabled - toggle button is decorative only
+    return null;
 
     return (
         <div

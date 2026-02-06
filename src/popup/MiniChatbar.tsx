@@ -452,40 +452,42 @@ export const MiniChatbar: React.FC<MiniChatbarProps> = ({ messages, onSend, onCl
                     placeholder={t('nodePopup.inputPlaceholder')}
                     style={INPUT_FIELD_STYLE}
                 />
-                <button
-                    onClick={handleSendToFullChat}
-                    title={t('miniChat.extendTooltip')}
-                    aria-label={t('miniChat.extendAria')}
-                    style={{
-                        background: 'transparent',
-                        border: 'none',
-                        width: '31px', // +10%
-                        height: '31px', // +10%
-                        borderRadius: '50%',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        cursor: 'pointer',
-                        opacity: 0.5,
-                        flexShrink: 0,
-                        padding: 0,
-                        marginLeft: '4px', // Balance visual spacing (SendButton has 4px padding)
-                    }}
-                    onMouseEnter={(e) => e.currentTarget.style.opacity = '0.8'}
-                    onMouseLeave={(e) => e.currentTarget.style.opacity = '0.5'}
-                    onPointerDown={stopPropagation}
-                >
-                    <img
-                        src={handoffIcon}
-                        alt="Expand"
+                <div style={{ display: 'none' }}>
+                    <button
+                        onClick={handleSendToFullChat}
+                        title={t('miniChat.extendTooltip')}
+                        aria-label={t('miniChat.extendAria')}
                         style={{
-                            width: '20px', // +10%
-                            height: '20px', // +10%
-                            objectFit: 'contain',
-                            filter: 'brightness(0) saturate(100%) invert(83%) sepia(6%) saturate(347%) hue-rotate(178deg) brightness(91%) contrast(88%)' // Matches rgba(180, 190, 210, 0.9) roughly or just use brightness/opacity
+                            background: 'transparent',
+                            border: 'none',
+                            width: '31px', // +10%
+                            height: '31px', // +10%
+                            borderRadius: '50%',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            cursor: 'pointer',
+                            opacity: 0.5,
+                            flexShrink: 0,
+                            padding: 0,
+                            marginLeft: '4px', // Balance visual spacing (SendButton has 4px padding)
                         }}
-                    />
-                </button>
+                        onMouseEnter={(e) => e.currentTarget.style.opacity = '0.8'}
+                        onMouseLeave={(e) => e.currentTarget.style.opacity = '0.5'}
+                        onPointerDown={stopPropagation}
+                    >
+                        <img
+                            src={handoffIcon}
+                            alt="Expand"
+                            style={{
+                                width: '20px', // +10%
+                                height: '20px', // +10%
+                                objectFit: 'contain',
+                                filter: 'brightness(0) saturate(100%) invert(83%) sepia(6%) saturate(347%) hue-rotate(178deg) brightness(91%) contrast(88%)' // Matches rgba(180, 190, 210, 0.9) roughly or just use brightness/opacity
+                            }}
+                        />
+                    </button>
+                </div>
                 <SendButton onClick={handleSend} disabled={!inputText.trim()} />
             </div>
         </div>

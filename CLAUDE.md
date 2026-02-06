@@ -92,6 +92,7 @@ Terminology matters. In the graph, we render "Dots", not "Nodes" (though the dat
     4.  **Panels Own Input**: When an overlay/panel is open, it must fully own pointer + wheel events inside its bounds.
 
 ### SECRETS POLICY (NON-NEGOTIABLE)
+*   **Hard rule**: Never write secrets into docs or logs. Always redact values.
 *   **NEVER write secrets to repo files**: This includes ALL files (code, docs, logs, configs), even if gitignored.
 *   **Secrets include**: API keys, tokens, passwords, OAuth secrets, session IDs, cookie values, private keys, webhooks, DATABASE_URL passwords.
 *   **Forensic reports**: Only prove existence of env var NAMES with line ranges. Values MUST be redacted as `<REDACTED>`. Do NOT show length, prefix, or suffix.

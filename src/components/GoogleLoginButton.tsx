@@ -5,11 +5,14 @@ import { useAuth } from "../auth/AuthProvider";
 const API_BASE = import.meta.env.VITE_API_BASE_URL;
 
 export function GoogleLoginButton() {
-  const [status, setStatus] = useState<string>("not logged in yet");
+  const [status, setStatus] = useState<string>("");
   const { user, loading, refreshMe, logout } = useAuth();
 
   return (
-    <div id="google-login-area" style={{ display: "grid", gap: 8 }}>
+    <div
+      id="google-login-area"
+      style={{ display: "grid", gap: 8, justifyItems: "center" }}
+    >
       {loading ? <div>checking session...</div> : null}
 
       {!loading && user ? (
@@ -88,7 +91,11 @@ export function GoogleLoginButton() {
       />
       ) : null}
 
-      <div style={{ whiteSpace: "pre-wrap", fontFamily: "monospace" }}>{status}</div>
+      {status ? (
+        <div style={{ whiteSpace: "pre-wrap", fontFamily: "monospace" }}>
+          {status}
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -784,9 +784,7 @@ app.post("/api/llm/paper-analyze", requireAuth, async (req, res) => {
 
   try {
     const providerChoice = await selectProvider({ userId, endpointKind: "analyze" });
-    if (providerChoice.provider === "openrouter") {
-      console.log(`[llm] provider_policy would_select=openrouter reason=${providerChoice.reason} date_key=${providerChoice.date_key} remaining=${providerChoice.remaining_tokens}`);
-    }
+    console.log(`[llm] provider_policy selected=${providerChoice.provider} cohort=${providerChoice.is_free_user} used_tokens=${providerChoice.user_used_tokens} pool_remaining=${providerChoice.remaining_tokens} cap=${providerChoice.user_cap} reason=${providerChoice.reason} date_key=${providerChoice.date_key}`);
 
     const inputTokensEstimate = estimateTokensFromText(validation.text);
     const fx = await getUsdToIdr();
@@ -1144,9 +1142,7 @@ app.post("/api/llm/prefill", requireAuth, async (req, res) => {
 
   try {
     const providerChoice = await selectProvider({ userId, endpointKind: "prefill" });
-    if (providerChoice.provider === "openrouter") {
-      console.log(`[llm] provider_policy would_select=openrouter reason=${providerChoice.reason} date_key=${providerChoice.date_key} remaining=${providerChoice.remaining_tokens}`);
-    }
+    console.log(`[llm] provider_policy selected=${providerChoice.provider} cohort=${providerChoice.is_free_user} used_tokens=${providerChoice.user_used_tokens} pool_remaining=${providerChoice.remaining_tokens} cap=${providerChoice.user_cap} reason=${providerChoice.reason} date_key=${providerChoice.date_key}`);
 
     const promptParts: string[] = [];
     promptParts.push(`Target Node: ${validation.nodeLabel}`);
@@ -1398,9 +1394,7 @@ app.post("/api/llm/chat", requireAuth, async (req, res) => {
 
   try {
     const providerChoice = await selectProvider({ userId, endpointKind: "chat" });
-    if (providerChoice.provider === "openrouter") {
-      console.log(`[llm] provider_policy would_select=openrouter reason=${providerChoice.reason} date_key=${providerChoice.date_key} remaining=${providerChoice.remaining_tokens}`);
-    }
+    console.log(`[llm] provider_policy selected=${providerChoice.provider} cohort=${providerChoice.is_free_user} used_tokens=${providerChoice.user_used_tokens} pool_remaining=${providerChoice.remaining_tokens} cap=${providerChoice.user_cap} reason=${providerChoice.reason} date_key=${providerChoice.date_key}`);
 
     const systemPrompt = validation.systemPrompt || "";
     chatInput = `${systemPrompt}\n\nUSER PROMPT:\n${validation.userPrompt}`;

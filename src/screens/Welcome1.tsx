@@ -94,6 +94,7 @@ const SUBTITLE_WRAPPER_STYLE: React.CSSProperties = {
     alignItems: 'center',
     justifyContent: 'center',
     gap: '2px',
+    position: 'relative',
 };
 
 const SUBTITLE_TEXT_STYLE: React.CSSProperties = {
@@ -105,6 +106,8 @@ const SUBTITLE_TEXT_STYLE: React.CSSProperties = {
 };
 
 const CURSOR_STYLE: React.CSSProperties = {
+    position: 'absolute',
+    right: '-10px',
     fontSize: '27px',
     color: '#63abff',
     animation: 'blink 1s step-end infinite',

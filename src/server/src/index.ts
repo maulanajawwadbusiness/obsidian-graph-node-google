@@ -2,6 +2,8 @@ import crypto from "crypto";
 import cors from "cors";
 import express from "express";
 import { OAuth2Client } from "google-auth-library";
+import { CREDITS_COSTS } from "./credits/creditsCosts";
+import { applyTopupFromMidtrans, deductForLlm, getBalance } from "./credits/creditsService";
 import { getPool } from "./db";
 import { midtransRequest } from "./midtrans/client";
 import { generateStructuredJson, generateText, generateTextStream, type LlmError } from "./llm/llmClient";
@@ -125,6 +127,7 @@ type ApiErrorCode =
   | "bad_request"
   | "too_large"
   | "unauthorized"
+  | "insufficient_credits"
   | "rate_limited"
   | "upstream_error"
   | "timeout"
@@ -177,6 +180,9 @@ function logLlmRequest(fields: {
   time_to_first_token_ms?: number | null;
   status_code: number;
   termination_reason: string;
+  credits_cost?: number | null;
+  credits_balance_before?: number | null;
+  credits_balance_after?: number | null;
 }) {
   console.log(JSON.stringify({
     request_id: fields.request_id,
@@ -188,7 +194,10 @@ function logLlmRequest(fields: {
     duration_ms: fields.duration_ms,
     time_to_first_token_ms: fields.time_to_first_token_ms ?? null,
     status_code: fields.status_code,
-    termination_reason: fields.termination_reason
+    termination_reason: fields.termination_reason,
+    credits_cost: fields.credits_cost ?? null,
+    credits_balance_before: fields.credits_balance_before ?? null,
+    credits_balance_after: fields.credits_balance_after ?? null
   }));
 }
 
@@ -210,6 +219,7 @@ function mapLlmErrorToStatus(error: LlmError): number {
 }
 
 function mapTerminationReason(statusCode: number, code?: string) {
+  if (statusCode === 402 || code === "insufficient_credits") return "insufficient_credits";
   if (statusCode === 429) return "rate_limited";
   if (statusCode === 400 || statusCode === 413) return "validation_error";
   if (statusCode === 504 || code === "timeout") return "timeout";
@@ -313,6 +323,8 @@ app.post("/api/payments/webhook", async (req, res) => {
   }
 
   let processingError: string | null = null;
+  let creditApplyError: string | null = null;
+  let shouldApplyCredits = false;
   if (verified && orderId) {
     try {
       const pool = await getPool();
@@ -337,6 +349,9 @@ app.post("/api/payments/webhook", async (req, res) => {
         if (updateResult.rowCount === 0) {
           processingError = "order not found";
         }
+        if (paidAt) {
+          shouldApplyCredits = true;
+        }
         await client.query("COMMIT");
       } catch (e) {
         await client.query("ROLLBACK");
@@ -349,6 +364,34 @@ app.post("/api/payments/webhook", async (req, res) => {
     }
   } else if (!verified) {
     processingError = "signature not verified";
+  }
+
+  if (!processingError && shouldApplyCredits && orderId) {
+    try {
+      const pool = await getPool();
+      const result = await pool.query(
+        `select user_id, gross_amount
+           from payment_transactions
+          where order_id = $1`,
+        [orderId]
+      );
+      const row = result.rows[0];
+      if (row) {
+        await applyTopupFromMidtrans({
+          userId: String(row.user_id),
+          orderId,
+          amount: Number(row.gross_amount || 0)
+        });
+      } else {
+        creditApplyError = "credits apply failed: missing transaction row";
+      }
+    } catch (e) {
+      creditApplyError = "credits apply failed";
+    }
+  }
+
+  if (!processingError && creditApplyError) {
+    processingError = creditApplyError;
   }
 
   try {
@@ -560,6 +603,16 @@ app.post("/auth/logout", async (req, res) => {
   res.json({ ok: true });
 });
 
+app.get("/api/credits/me", requireAuth, async (req, res) => {
+  const user = res.locals.user as AuthContext;
+  try {
+    const balance = await getBalance(String(user.id));
+    res.json({ ok: true, balance: balance.balance, updated_at: balance.updated_at });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: "failed to load credits balance" });
+  }
+});
+
 app.post("/api/payments/gopayqris/create", requireAuth, async (req, res) => {
   const user = res.locals.user as AuthContext;
   const grossAmount = parseGrossAmount(req.body?.gross_amount, 1000);
@@ -666,6 +719,12 @@ app.post("/api/llm/paper-analyze", requireAuth, async (req, res) => {
   llmRequestsInflight += 1;
   const user = res.locals.user as AuthContext;
   const userId = getUserId(user);
+  const creditsCost = CREDITS_COSTS.prefill;
+  let creditsBefore: number | null = null;
+  let creditsAfter: number | null = null;
+  const creditsCost = CREDITS_COSTS.paperAnalyze;
+  let creditsBefore: number | null = null;
+  let creditsAfter: number | null = null;
 
   const validation = validatePaperAnalyze(req.body);
   if ("ok" in validation && validation.ok === false) {
@@ -684,7 +743,10 @@ app.post("/api/llm/paper-analyze", requireAuth, async (req, res) => {
       output_chars: 0,
       duration_ms: Date.now() - startedAt,
       status_code: validation.status,
-      termination_reason: "validation_error"
+      termination_reason: "validation_error",
+      credits_cost: null,
+      credits_balance_before: null,
+      credits_balance_after: null
     });
     llmRequestsInflight -= 1;
     return;
@@ -707,13 +769,48 @@ app.post("/api/llm/paper-analyze", requireAuth, async (req, res) => {
       output_chars: 0,
       duration_ms: Date.now() - startedAt,
       status_code: 429,
-      termination_reason: "rate_limited"
+      termination_reason: "rate_limited",
+      credits_cost: null,
+      credits_balance_before: null,
+      credits_balance_after: null
     });
     llmRequestsInflight -= 1;
     return;
   }
 
   try {
+    const creditResult = await deductForLlm({
+      userId,
+      requestId,
+      amount: creditsCost
+    });
+    if (!creditResult.ok) {
+      sendApiError(res, 402, {
+        ok: false,
+        request_id: requestId,
+        code: "insufficient_credits",
+        error: "insufficient credits"
+      });
+      logLlmRequest({
+        request_id: requestId,
+        endpoint: "/api/llm/paper-analyze",
+        user_id: userId,
+        model: validation.model,
+        input_chars: validation.text.length,
+        output_chars: 0,
+        duration_ms: Date.now() - startedAt,
+        status_code: 402,
+        termination_reason: "insufficient_credits",
+        credits_cost: creditsCost,
+        credits_balance_before: creditResult.balance,
+        credits_balance_after: creditResult.balance
+      });
+      return;
+    }
+
+    creditsBefore = creditResult.balance_before;
+    creditsAfter = creditResult.balance_after;
+
     const result = await generateStructuredJson({
       model: validation.model,
       input: validation.text,
@@ -761,12 +858,12 @@ app.post("/api/llm/paper-analyze", requireAuth, async (req, res) => {
       const status = mapLlmErrorToStatus(result);
       sendApiError(res, status, {
         ok: false,
-        request_id: result.request_id,
+        request_id: requestId,
         code: result.code as ApiErrorCode,
         error: result.error
       });
       logLlmRequest({
-        request_id: result.request_id,
+        request_id: requestId,
         endpoint: "/api/llm/paper-analyze",
         user_id: userId,
         model: validation.model,
@@ -774,16 +871,19 @@ app.post("/api/llm/paper-analyze", requireAuth, async (req, res) => {
         output_chars: 0,
         duration_ms: Date.now() - startedAt,
         status_code: status,
-        termination_reason: mapTerminationReason(status, result.code)
+        termination_reason: mapTerminationReason(status, result.code),
+        credits_cost: creditsCost,
+        credits_balance_before: creditsBefore,
+        credits_balance_after: creditsAfter
       });
       return;
     }
 
-    res.setHeader("X-Request-Id", result.request_id);
-    res.json({ ok: true, request_id: result.request_id, json: result.json });
+    res.setHeader("X-Request-Id", requestId);
+    res.json({ ok: true, request_id: requestId, json: result.json });
     const outputSize = JSON.stringify(result.json || {}).length;
     logLlmRequest({
-      request_id: result.request_id,
+      request_id: requestId,
       endpoint: "/api/llm/paper-analyze",
       user_id: userId,
       model: validation.model,
@@ -791,7 +891,10 @@ app.post("/api/llm/paper-analyze", requireAuth, async (req, res) => {
       output_chars: outputSize,
       duration_ms: Date.now() - startedAt,
       status_code: 200,
-      termination_reason: "success"
+      termination_reason: "success",
+      credits_cost: creditsCost,
+      credits_balance_before: creditsBefore,
+      credits_balance_after: creditsAfter
     });
   } finally {
     releaseLlmSlot(userId);
@@ -809,7 +912,7 @@ app.get("/api/payments/:orderId/status", requireAuth, async (req, res) => {
 
   const pool = await getPool();
   const existing = await pool.query(
-    `select order_id, status, payment_type, midtrans_transaction_id, paid_at
+    `select order_id, status, payment_type, midtrans_transaction_id, paid_at, gross_amount
        from payment_transactions
       where order_id = $1 and user_id = $2`,
     [orderId, user.id]
@@ -848,6 +951,18 @@ app.get("/api/payments/:orderId/status", requireAuth, async (req, res) => {
         return;
       }
 
+      if (paidAt) {
+        try {
+          await applyTopupFromMidtrans({
+            userId: String(user.id),
+            orderId,
+            amount: Number(row.gross_amount || 0)
+          });
+        } catch {
+          // Ignore credit application failures here.
+        }
+      }
+
       res.json({
         ok: true,
         order_id: orderId,
@@ -869,6 +984,18 @@ app.get("/api/payments/:orderId/status", requireAuth, async (req, res) => {
       midtrans_error: statusResult.error
     });
     return;
+  }
+
+  if (row.paid_at) {
+    try {
+      await applyTopupFromMidtrans({
+        userId: String(user.id),
+        orderId,
+        amount: Number(row.gross_amount || 0)
+      });
+    } catch {
+      // Ignore credit application failures here.
+    }
   }
 
   res.json({
@@ -906,7 +1033,10 @@ app.post("/api/llm/prefill", requireAuth, async (req, res) => {
       output_chars: 0,
       duration_ms: Date.now() - startedAt,
       status_code: validation.status,
-      termination_reason: "validation_error"
+      termination_reason: "validation_error",
+      credits_cost: null,
+      credits_balance_before: null,
+      credits_balance_after: null
     });
     llmRequestsInflight -= 1;
     return;
@@ -929,13 +1059,48 @@ app.post("/api/llm/prefill", requireAuth, async (req, res) => {
       output_chars: 0,
       duration_ms: Date.now() - startedAt,
       status_code: 429,
-      termination_reason: "rate_limited"
+      termination_reason: "rate_limited",
+      credits_cost: null,
+      credits_balance_before: null,
+      credits_balance_after: null
     });
     llmRequestsInflight -= 1;
     return;
   }
 
   try {
+    const creditResult = await deductForLlm({
+      userId,
+      requestId,
+      amount: creditsCost
+    });
+    if (!creditResult.ok) {
+      sendApiError(res, 402, {
+        ok: false,
+        request_id: requestId,
+        code: "insufficient_credits",
+        error: "insufficient credits"
+      });
+      logLlmRequest({
+        request_id: requestId,
+        endpoint: "/api/llm/prefill",
+        user_id: userId,
+        model: validation.model,
+        input_chars: validation.nodeLabel.length,
+        output_chars: 0,
+        duration_ms: Date.now() - startedAt,
+        status_code: 402,
+        termination_reason: "insufficient_credits",
+        credits_cost: creditsCost,
+        credits_balance_before: creditResult.balance,
+        credits_balance_after: creditResult.balance
+      });
+      return;
+    }
+
+    creditsBefore = creditResult.balance_before;
+    creditsAfter = creditResult.balance_after;
+
     const promptParts: string[] = [];
     promptParts.push(`Target Node: ${validation.nodeLabel}`);
     if (validation.content) {
@@ -975,12 +1140,12 @@ app.post("/api/llm/prefill", requireAuth, async (req, res) => {
       const status = mapLlmErrorToStatus(result);
       sendApiError(res, status, {
         ok: false,
-        request_id: result.request_id,
+        request_id: requestId,
         code: result.code as ApiErrorCode,
         error: result.error
       });
       logLlmRequest({
-        request_id: result.request_id,
+        request_id: requestId,
         endpoint: "/api/llm/prefill",
         user_id: userId,
         model: validation.model,
@@ -988,15 +1153,18 @@ app.post("/api/llm/prefill", requireAuth, async (req, res) => {
         output_chars: 0,
         duration_ms: Date.now() - startedAt,
         status_code: status,
-        termination_reason: mapTerminationReason(status, result.code)
+        termination_reason: mapTerminationReason(status, result.code),
+        credits_cost: creditsCost,
+        credits_balance_before: creditsBefore,
+        credits_balance_after: creditsAfter
       });
       return;
     }
 
-    res.setHeader("X-Request-Id", result.request_id);
-    res.json({ ok: true, request_id: result.request_id, prompt: result.text });
+    res.setHeader("X-Request-Id", requestId);
+    res.json({ ok: true, request_id: requestId, prompt: result.text });
     logLlmRequest({
-      request_id: result.request_id,
+      request_id: requestId,
       endpoint: "/api/llm/prefill",
       user_id: userId,
       model: validation.model,
@@ -1004,7 +1172,10 @@ app.post("/api/llm/prefill", requireAuth, async (req, res) => {
       output_chars: result.text.length,
       duration_ms: Date.now() - startedAt,
       status_code: 200,
-      termination_reason: "success"
+      termination_reason: "success",
+      credits_cost: creditsCost,
+      credits_balance_before: creditsBefore,
+      credits_balance_after: creditsAfter
     });
   } finally {
     releaseLlmSlot(userId);
@@ -1020,6 +1191,9 @@ app.post("/api/llm/chat", requireAuth, async (req, res) => {
   llmRequestsStreaming += 1;
   const user = res.locals.user as AuthContext;
   const userId = getUserId(user);
+  const creditsCost = CREDITS_COSTS.chat;
+  let creditsBefore: number | null = null;
+  let creditsAfter: number | null = null;
 
   const validation = validateChat(req.body);
   if ("ok" in validation && validation.ok === false) {
@@ -1038,7 +1212,10 @@ app.post("/api/llm/chat", requireAuth, async (req, res) => {
       output_chars: 0,
       duration_ms: Date.now() - startedAt,
       status_code: validation.status,
-      termination_reason: "validation_error"
+      termination_reason: "validation_error",
+      credits_cost: null,
+      credits_balance_before: null,
+      credits_balance_after: null
     });
     llmRequestsInflight -= 1;
     llmRequestsStreaming -= 1;
@@ -1062,7 +1239,10 @@ app.post("/api/llm/chat", requireAuth, async (req, res) => {
       output_chars: 0,
       duration_ms: Date.now() - startedAt,
       status_code: 429,
-      termination_reason: "rate_limited"
+      termination_reason: "rate_limited",
+      credits_cost: null,
+      credits_balance_before: null,
+      credits_balance_after: null
     });
     llmRequestsInflight -= 1;
     llmRequestsStreaming -= 1;
@@ -1080,6 +1260,40 @@ app.post("/api/llm/chat", requireAuth, async (req, res) => {
   });
 
   try {
+    const creditResult = await deductForLlm({
+      userId,
+      requestId,
+      amount: creditsCost
+    });
+    if (!creditResult.ok) {
+      sendApiError(res, 402, {
+        ok: false,
+        request_id: requestId,
+        code: "insufficient_credits",
+        error: "insufficient credits"
+      });
+      logLlmRequest({
+        request_id: requestId,
+        endpoint: "/api/llm/chat",
+        user_id: userId,
+        model: validation.model,
+        input_chars: validation.userPrompt.length,
+        output_chars: 0,
+        duration_ms: Date.now() - startedAt,
+        status_code: 402,
+        termination_reason: "insufficient_credits",
+        credits_cost: creditsCost,
+        credits_balance_before: creditResult.balance,
+        credits_balance_after: creditResult.balance
+      });
+      statusCode = 402;
+      terminationReason = "insufficient_credits";
+      return;
+    }
+
+    creditsBefore = creditResult.balance_before;
+    creditsAfter = creditResult.balance_after;
+
     const systemPrompt = validation.systemPrompt || "";
     const input = `${systemPrompt}\n\nUSER PROMPT:\n${validation.userPrompt}`;
 
@@ -1088,7 +1302,7 @@ app.post("/api/llm/chat", requireAuth, async (req, res) => {
       input
     });
 
-    res.setHeader("X-Request-Id", stream.request_id);
+    res.setHeader("X-Request-Id", requestId);
     res.setHeader("Content-Type", "text/plain; charset=utf-8");
 
     for await (const chunk of stream) {
@@ -1114,7 +1328,7 @@ app.post("/api/llm/chat", requireAuth, async (req, res) => {
         statusCode = mapLlmErrorToStatus(info);
         sendApiError(res, statusCode, {
           ok: false,
-          request_id: info.request_id,
+          request_id: requestId,
           code: info.code as ApiErrorCode,
           error: info.error
         });
@@ -1139,7 +1353,7 @@ app.post("/api/llm/chat", requireAuth, async (req, res) => {
     llmRequestsInflight -= 1;
     llmRequestsStreaming -= 1;
     logLlmRequest({
-      request_id: streamStarted ? res.getHeader("X-Request-Id")?.toString() || requestId : requestId,
+      request_id: requestId,
       endpoint: "/api/llm/chat",
       user_id: userId,
       model: validation.model,
@@ -1148,7 +1362,10 @@ app.post("/api/llm/chat", requireAuth, async (req, res) => {
       duration_ms: Date.now() - startedAt,
       time_to_first_token_ms: firstTokenAt ? firstTokenAt - startedAt : null,
       status_code: statusCode,
-      termination_reason: terminationReason
+      termination_reason: terminationReason,
+      credits_cost: creditsCost,
+      credits_balance_before: creditsBefore,
+      credits_balance_after: creditsAfter
     });
   }
 });

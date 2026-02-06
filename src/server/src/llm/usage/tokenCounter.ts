@@ -1,7 +1,6 @@
 import type { LogicalModel } from "../models/logicalModels";
 
 type EncodingModule = {
-  encoding_for_model: (model: string) => { encode: (text: string) => number[] | Uint32Array };
   get_encoding: (name: string) => { encode: (text: string) => number[] | Uint32Array };
 };
 
@@ -32,15 +31,9 @@ async function getEncoding(logicalModel: LogicalModel) {
   if (cachedEncoding && cachedEncoding.name === encodingName) {
     return { encoding: cachedEncoding, encodingName };
   }
-  try {
-    const encoding = module.encoding_for_model(encodingName);
-    cachedEncoding = { name: encodingName, encode: encoding.encode.bind(encoding) };
-    return { encoding: cachedEncoding, encodingName };
-  } catch {
-    const encoding = module.get_encoding(encodingName);
-    cachedEncoding = { name: encodingName, encode: encoding.encode.bind(encoding) };
-    return { encoding: cachedEncoding, encodingName };
-  }
+  const encoding = module.get_encoding(encodingName);
+  cachedEncoding = { name: encodingName, encode: encoding.encode.bind(encoding) };
+  return { encoding: cachedEncoding, encodingName };
 }
 
 export async function countTokensForText(opts: {
@@ -65,17 +58,21 @@ export async function countTokensForMessages(opts: {
   logicalModel: LogicalModel;
   messages: Array<{ role?: string; content?: string; text?: string }>;
 }): Promise<{ tokens: number; encoding: string } | null> {
-  const combined = opts.messages
-    .map((msg) => {
-      const role = msg.role ? `${msg.role}:` : "";
-      const content = typeof msg.content === "string" ? msg.content : typeof msg.text === "string" ? msg.text : "";
-      return `${role}${content}`;
-    })
-    .join("\n");
+  const combined = messagesToCanonicalText(opts.messages);
   return countTokensForText({
     provider: opts.provider,
     providerModelId: opts.providerModelId,
     logicalModel: opts.logicalModel,
     text: combined
   });
+}
+
+export function messagesToCanonicalText(messages: Array<{ role?: string; content?: string; text?: string }>): string {
+  return messages
+    .map((msg) => {
+      const role = msg.role ? `${msg.role}:` : "";
+      const content = typeof msg.content === "string" ? msg.content : typeof msg.text === "string" ? msg.text : "";
+      return `${role}${content}`;
+    })
+    .join("\n");
 }

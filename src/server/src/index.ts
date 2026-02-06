@@ -872,7 +872,8 @@ app.post("/api/llm/paper-analyze", requireAuth, async (req, res) => {
     const usageTracker = initUsageTracker({
       provider: provider.name,
       logical_model: validation.model,
-      provider_model_id: providerModelId
+      provider_model_id: providerModelId,
+      request_id: requestId
     });
     usageTracker.recordInputText(validation.text);
     const inputTokensEstimate = usageTracker.getInputTokensEstimate();
@@ -1370,7 +1371,8 @@ app.post("/api/llm/prefill", requireAuth, async (req, res) => {
     const usageTracker = initUsageTracker({
       provider: provider.name,
       logical_model: validation.model,
-      provider_model_id: providerModelId
+      provider_model_id: providerModelId,
+      request_id: requestId
     });
     usageTracker.recordInputText(input);
     const inputTokensEstimate = usageTracker.getInputTokensEstimate();
@@ -1630,9 +1632,14 @@ app.post("/api/llm/chat", requireAuth, async (req, res) => {
     usageTracker = initUsageTracker({
       provider: provider.name,
       logical_model: validation.model,
-      provider_model_id: providerModelId
+      provider_model_id: providerModelId,
+      request_id: requestId
     });
-    usageTracker.recordInputText(chatInput);
+    const chatMessages = [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: validation.userPrompt }
+    ];
+    usageTracker.recordInputMessages(chatMessages);
     const inputTokensEstimate = usageTracker.getInputTokensEstimate();
     const fx = await getUsdToIdr();
     fxRate = fx.rate;
@@ -1730,9 +1737,14 @@ app.post("/api/llm/chat", requireAuth, async (req, res) => {
       usageTracker = initUsageTracker({
         provider: providerName ?? "openai",
         logical_model: validation.model,
-        provider_model_id: providerModelId || "unknown"
+        provider_model_id: providerModelId || "unknown",
+        request_id: requestId
       });
-      usageTracker.recordInputText(chatInput);
+      const chatMessages = [
+        { role: "system", content: validation.systemPrompt || "" },
+        { role: "user", content: validation.userPrompt }
+      ];
+      usageTracker.recordInputMessages(chatMessages);
     }
     if (providerUsage === null) {
       const streamUsage = stream?.providerUsagePromise;

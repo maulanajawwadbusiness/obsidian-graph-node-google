@@ -1,7 +1,7 @@
 import { estimateTokensFromText } from "../../pricing/tokenEstimate";
 import type { LogicalModel } from "../models/logicalModels";
 import { normalizeUsage, type ProviderUsage } from "./providerUsage";
-import { countTokensForText } from "./tokenCounter";
+import { countTokensForMessages, countTokensForText, messagesToCanonicalText } from "./tokenCounter";
 
 export type UsageRecord = {
   provider: "openai" | "openrouter";
@@ -24,9 +24,13 @@ type UsageTrackerState = {
   output_tokens_est: number;
   output_carry: string;
   input_text: string;
+  input_messages_text: string;
   output_text: string;
   output_truncated: boolean;
   input_truncated: boolean;
+  finalized: boolean;
+  finalized_result: UsageRecord | null;
+  request_id?: string;
 };
 
 const MAX_TOKENIZER_TEXT_CHARS = 2_000_000;
@@ -71,6 +75,7 @@ export function initUsageTracker(ctx: {
   provider: "openai" | "openrouter";
   logical_model: LogicalModel;
   provider_model_id: string;
+  request_id?: string;
 }) {
   const state: UsageTrackerState = {
     provider: ctx.provider,
@@ -80,9 +85,13 @@ export function initUsageTracker(ctx: {
     output_tokens_est: 0,
     output_carry: "",
     input_text: "",
+    input_messages_text: "",
     output_text: "",
     output_truncated: false,
-    input_truncated: false
+    input_truncated: false,
+    finalized: false,
+    finalized_result: null,
+    request_id: ctx.request_id
   };
 
   function recordInputText(input: unknown) {
@@ -94,6 +103,19 @@ export function initUsageTracker(ctx: {
         state.input_truncated = true;
       } else {
         state.input_text += text;
+      }
+    }
+  }
+
+  function recordInputMessages(messages: Array<{ role?: string; content?: string; text?: string }>) {
+    const canonical = messagesToCanonicalText(messages);
+    if (!canonical) return;
+    state.input_tokens_est += estimateTokensFromText(canonical);
+    if (!state.input_truncated) {
+      if (state.input_messages_text.length + canonical.length > MAX_TOKENIZER_TEXT_CHARS) {
+        state.input_truncated = true;
+      } else {
+        state.input_messages_text += canonical;
       }
     }
   }
@@ -126,6 +148,9 @@ export function initUsageTracker(ctx: {
   }
 
   async function finalize(opts: { providerUsage?: ProviderUsage | null }): Promise<UsageRecord> {
+    if (state.finalized && state.finalized_result) {
+      return state.finalized_result;
+    }
     const providerUsage = normalizeUsage(opts.providerUsage || null);
     const providerInput = providerUsage?.input_tokens;
     const providerOutput = providerUsage?.output_tokens;
@@ -135,7 +160,7 @@ export function initUsageTracker(ctx: {
       const inputTokens = Number.isFinite(providerInput) ? Number(providerInput) : state.input_tokens_est;
       const outputTokens = Number.isFinite(providerOutput) ? Number(providerOutput) : state.output_tokens_est;
       const totalTokens = Number.isFinite(providerTotal) ? Number(providerTotal) : inputTokens + outputTokens;
-      return {
+      const result: UsageRecord = {
         provider: state.provider,
         logical_model: state.logical_model,
         provider_model_id: state.provider_model_id,
@@ -144,15 +169,37 @@ export function initUsageTracker(ctx: {
         total_tokens: totalTokens,
         source: "provider_usage"
       };
+      state.finalized = true;
+      state.finalized_result = result;
+      if (state.request_id) {
+        console.log(JSON.stringify({
+          event: "usage_finalize",
+          request_id: state.request_id,
+          provider: state.provider,
+          logical_model: state.logical_model,
+          usage_source: result.source,
+          input_tokens: result.input_tokens,
+          output_tokens: result.output_tokens,
+          total_tokens: result.total_tokens
+        }));
+      }
+      return result;
     }
 
     if (!state.input_truncated && !state.output_truncated) {
-      const inputTokenResult = await countTokensForText({
-        provider: state.provider,
-        providerModelId: state.provider_model_id,
-        logicalModel: state.logical_model,
-        text: state.input_text
-      });
+      const inputTokenResult = state.input_messages_text
+        ? await countTokensForText({
+            provider: state.provider,
+            providerModelId: state.provider_model_id,
+            logicalModel: state.logical_model,
+            text: state.input_messages_text
+          })
+        : await countTokensForText({
+            provider: state.provider,
+            providerModelId: state.provider_model_id,
+            logicalModel: state.logical_model,
+            text: state.input_text
+          });
       const outputTokenResult = await countTokensForText({
         provider: state.provider,
         providerModelId: state.provider_model_id,
@@ -160,7 +207,7 @@ export function initUsageTracker(ctx: {
         text: state.output_text
       });
       if (inputTokenResult && outputTokenResult) {
-        return {
+        const result: UsageRecord = {
           provider: state.provider,
           logical_model: state.logical_model,
           provider_model_id: state.provider_model_id,
@@ -170,11 +217,27 @@ export function initUsageTracker(ctx: {
           source: "tokenizer_count",
           tokenizer_encoding_used: inputTokenResult.encoding
         };
+        state.finalized = true;
+        state.finalized_result = result;
+        if (state.request_id) {
+          console.log(JSON.stringify({
+            event: "usage_finalize",
+            request_id: state.request_id,
+            provider: state.provider,
+            logical_model: state.logical_model,
+            usage_source: result.source,
+            input_tokens: result.input_tokens,
+            output_tokens: result.output_tokens,
+            total_tokens: result.total_tokens,
+            tokenizer_encoding_used: result.tokenizer_encoding_used ?? null
+          }));
+        }
+        return result;
       }
     }
 
     const totalTokens = state.input_tokens_est + state.output_tokens_est;
-    return {
+    const result: UsageRecord = {
       provider: state.provider,
       logical_model: state.logical_model,
       provider_model_id: state.provider_model_id,
@@ -182,8 +245,28 @@ export function initUsageTracker(ctx: {
       output_tokens: state.output_tokens_est,
       total_tokens: totalTokens,
       source: "estimate_wordcount",
-      tokenizer_fallback_reason: state.input_truncated || state.output_truncated ? "text_too_large" : "tokenizer_unavailable"
+      tokenizer_fallback_reason: state.input_truncated || state.output_truncated
+        ? "text_too_large"
+        : state.input_text.length === 0 && state.input_messages_text.length === 0
+          ? "missing_input"
+          : "tokenizer_unavailable"
     };
+    state.finalized = true;
+    state.finalized_result = result;
+    if (state.request_id) {
+      console.log(JSON.stringify({
+        event: "usage_finalize",
+        request_id: state.request_id,
+        provider: state.provider,
+        logical_model: state.logical_model,
+        usage_source: result.source,
+        input_tokens: result.input_tokens,
+        output_tokens: result.output_tokens,
+        total_tokens: result.total_tokens,
+        tokenizer_fallback_reason: result.tokenizer_fallback_reason ?? null
+      }));
+    }
+    return result;
   }
 
   function getInputTokensEstimate() {
@@ -196,6 +279,7 @@ export function initUsageTracker(ctx: {
 
   return {
     recordInputText,
+    recordInputMessages,
     recordOutputChunk,
     recordOutputText,
     finalize,

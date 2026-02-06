@@ -91,6 +91,18 @@ Quick notes:
 - Run commands from `src/server` using npm scripts.
 - Migrations use `npm run migrate` and expect `DATABASE_URL` (see `docs/db.md`).
 
+## 1.8 Payments (GoPay QRIS)
+Backend endpoints:
+- `POST /api/payments/gopayqris/create` (auth required)
+- `GET /api/payments/:orderId/status` (auth required)
+- `POST /api/payments/webhook` (public)
+
+Frontend wiring:
+- UI entry lives in `src/components/PaymentGopayPanel.tsx` and is rendered inside `src/components/PromptCard.tsx`.
+- API helpers live in `src/api.ts` and must use `credentials: "include"`.
+- For QR display, use action name `qr-code` or `generate-qr-code`.
+- For mobile, use action name `deeplink-redirect`.
+
 ## 2. UI Surface Map & Ownership
 
 The application layers, ordered by z-index (lowest to highest):

@@ -109,6 +109,11 @@ Terminology matters. In the graph, we render "Dots", not "Nodes" (though the dat
     3.  **Backdrop**: For click-outside-to-close, use a full-screen backdrop with `pointerEvents: 'auto'`, `onPointerDown` stop, and `onClick` close.
     4.  **Panels Own Input**: When an overlay/panel is open, it must fully own pointer + wheel events inside its bounds.
 
+### SECRETS POLICY (NON-NEGOTIABLE)
+*   **Never paste or store secrets** in repo files or logs. Always redact values.
+*   **No secret logs**: Do not log tokens, cookies, auth headers, or keys.
+*   **Docs**: Use placeholders like `<REDACTED>` only. Never include real values.
+
 ## 5. Perf Doctrine (Physics)
 
 ### A. The Scheduler

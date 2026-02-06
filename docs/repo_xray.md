@@ -85,6 +85,9 @@ Note: Counts are estimated post-modularization.
 14. src/api.ts - Backend fetch helper (credentials include)
 15. src/server/src/index.ts - Auth routes and cookies
 16. src/server/src/db.ts - Cloud SQL connector + pool
+17. src/components/PaymentGopayPanel.tsx - QRIS payment UI panel
+18. src/components/PromptCard.tsx - EnterPrompt main card (renders payment panel)
+19. src/screens/EnterPrompt.tsx - Onboarding prompt screen
 
 ## 3. Core Runtime Loops
 
@@ -157,3 +160,14 @@ Follow the auth flow:
 
 Note:
 - `src/auth/useAuth.ts` was replaced by `AuthProvider.tsx`.
+
+## 8. Payments (GoPay QRIS)
+Frontend:
+- `src/components/PaymentGopayPanel.tsx` for QRIS UI and polling.
+- `src/components/PromptCard.tsx` renders the payment panel.
+- `src/api.ts` includes `createPaymentGopayQris` and `getPaymentStatus` helpers.
+
+Backend:
+- `POST /api/payments/gopayqris/create`
+- `GET /api/payments/:orderId/status`
+- `POST /api/payments/webhook`

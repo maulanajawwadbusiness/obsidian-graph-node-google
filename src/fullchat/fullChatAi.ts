@@ -3,9 +3,10 @@ import type { AiContext } from './fullChatTypes';
 import { getAiLanguageDirective } from '../i18n/aiLanguage';
 import { getLang } from '../i18n/lang';
 import { AI_MODELS } from '../config/aiModels';
-import { refreshBalance } from '../store/balanceStore';
+import { refreshBalance, getBalanceState } from '../store/balanceStore';
 import { ensureSufficientBalance } from '../money/ensureSufficientBalance';
 import { estimateIdrCost } from '../money/estimateCost';
+import { showShortage } from '../money/shortageStore';
 
 // =============================================================================
 // TYPES
@@ -61,7 +62,8 @@ async function* realResponseGenerator(
     try {
         const systemPrompt = buildSystemPrompt(context);
         const estimatedCost = estimateIdrCost('chat', `${systemPrompt}\n${userPrompt}`);
-        if (!ensureSufficientBalance({ requiredIdr: estimatedCost, context: 'chat' })) {
+        const okToProceed = await ensureSufficientBalance({ requiredIdr: estimatedCost, context: 'chat' });
+        if (!okToProceed) {
             return;
         }
 
@@ -74,24 +76,47 @@ async function* realResponseGenerator(
 
         console.log(`[FullChatAI] calling_real_stream model=${MODEL}`);
 
+        const controller = new AbortController();
+        if (signal) {
+            signal.addEventListener('abort', () => controller.abort(), { once: true });
+        }
         const stream = fetchChatStream({
             model: MODEL,
             userPrompt,
             context,
             systemPrompt,
-            signal
+            signal: controller.signal
         });
 
         let totalChars = 0;
         console.log('[FullChatAI] consuming generator...');
         let chunkCount = 0;
+        const baseText = `${systemPrompt}\n${userPrompt}`;
+        const { balanceIdr } = getBalanceSnapshot();
+        const balanceForChat = typeof balanceIdr === 'number' ? balanceIdr : null;
+        let outputText = '';
         for await (const chunk of stream) {
-            if (signal?.aborted) break;
+            if (signal?.aborted || controller.signal.aborted) break;
             if (chunkCount < 10) {
                 console.log(`[FullChatAI] got_delta len=${chunk.length}`);
                 chunkCount++;
             }
             yield chunk;
+            outputText += chunk;
+            if (balanceForChat !== null) {
+                const projectedCost = estimateIdrCost('chat', `${baseText}\n${outputText}`);
+                if (projectedCost > balanceForChat) {
+                    const shortfall = Math.max(0, projectedCost - balanceForChat);
+                    showShortage({
+                        balanceIdr: balanceForChat,
+                        requiredIdr: projectedCost,
+                        shortfallIdr: shortfall,
+                        context: 'chat'
+                    });
+                    controller.abort();
+                    break;
+                }
+            }
             totalChars += chunk.length;
         }
         console.log('[FullChatAI] generator completed');
@@ -101,6 +126,25 @@ async function* realResponseGenerator(
         if (signal?.aborted || (err instanceof Error && err.name === 'AbortError')) {
             console.log('[FullChatAI] aborted');
             throw err;
+        }
+        if (err instanceof Error && err.message.startsWith('insufficient_rupiah:')) {
+            const payload = JSON.parse(err.message.replace('insufficient_rupiah:', '')) as {
+                balance_idr?: number;
+                needed_idr?: number;
+                shortfall_idr?: number;
+            };
+            const needed = typeof payload.needed_idr === 'number' ? payload.needed_idr : 0;
+            const balance = typeof payload.balance_idr === 'number' ? payload.balance_idr : null;
+            const shortfall = typeof payload.shortfall_idr === 'number'
+                ? payload.shortfall_idr
+                : Math.max(0, needed - (balance ?? 0));
+            showShortage({
+                balanceIdr: balance,
+                requiredIdr: needed,
+                shortfallIdr: shortfall,
+                context: 'chat'
+            });
+            return;
         }
         if (err instanceof Error && err.message === 'unauthorized') {
             const isId = getLang() === 'id';
@@ -155,6 +199,10 @@ async function* mockResponseGenerator(context: AiContext): AsyncGenerator<string
     yield response;
 }
 
+function getBalanceSnapshot() {
+    return getBalanceState();
+}
+
 function resolveUrl(base: string, path: string) {
     const trimmedBase = base.replace(/\/+$/, '');
     const normalizedPath = path.startsWith('/') ? path : `/${path}`;
@@ -194,6 +242,23 @@ function fetchChatStream(opts: {
         }
 
         if (!res.ok || !res.body) {
+            const text = await res.text();
+            const contentType = res.headers.get('content-type') || '';
+            if (res.status === 402 && contentType.includes('application/json')) {
+                try {
+                    const payload = JSON.parse(text) as {
+                        code?: string;
+                        balance_idr?: number;
+                        needed_idr?: number;
+                        shortfall_idr?: number;
+                    };
+                    if (payload.code === 'insufficient_rupiah') {
+                        throw new Error(`insufficient_rupiah:${JSON.stringify(payload)}`);
+                    }
+                } catch {
+                    // fall through to generic error
+                }
+            }
             throw new Error(`stream_http_${res.status}`);
         }
 

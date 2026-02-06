@@ -6,6 +6,7 @@ import { apiPost } from '../api';
 import { refreshBalance } from '../store/balanceStore';
 import { ensureSufficientBalance } from '../money/ensureSufficientBalance';
 import { estimateIdrCost } from '../money/estimateCost';
+import { showShortage } from '../money/shortageStore';
 
 export interface MiniChatHistory {
     role: 'user' | 'ai';
@@ -89,7 +90,8 @@ async function refinePromptWithReal(context: PrefillContext, options: { signal?:
     try {
         const rawText = `${context.nodeLabel} ${context.miniChatMessages.map((msg) => msg.text).join(' ')}`;
         const estimatedCost = estimateIdrCost('prefill', rawText);
-        if (!ensureSufficientBalance({ requiredIdr: estimatedCost, context: 'prefill' })) {
+        const okToProceed = await ensureSufficientBalance({ requiredIdr: estimatedCost, context: 'prefill' });
+        if (!okToProceed) {
             return makeSeedPrompt(context);
         }
         const res = await withTimeoutAndAbort(
@@ -116,6 +118,25 @@ async function refinePromptWithReal(context: PrefillContext, options: { signal?:
 
         const payload = res.data as { ok?: boolean; prompt?: string; text?: string };
         if (!payload.ok) {
+            if ((payload as { code?: string }).code === 'insufficient_rupiah') {
+                const p = payload as {
+                    balance_idr?: number;
+                    needed_idr?: number;
+                    shortfall_idr?: number;
+                };
+                const needed = typeof p.needed_idr === 'number' ? p.needed_idr : estimatedCost;
+                const balance = typeof p.balance_idr === 'number' ? p.balance_idr : null;
+                const shortfall = typeof p.shortfall_idr === 'number'
+                    ? p.shortfall_idr
+                    : Math.max(0, needed - (balance ?? 0));
+                showShortage({
+                    balanceIdr: balance,
+                    requiredIdr: needed,
+                    shortfallIdr: shortfall,
+                    context: 'prefill'
+                });
+                return makeSeedPrompt(context);
+            }
             console.warn('[PrefillAI] server error, falling back to mock');
             return refinePromptMock(context, options);
         }

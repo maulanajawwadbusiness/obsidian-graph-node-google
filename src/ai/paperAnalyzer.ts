@@ -7,6 +7,7 @@ import { apiPost } from '../api';
 import { refreshBalance } from '../store/balanceStore';
 import { ensureSufficientBalance } from '../money/ensureSufficientBalance';
 import { estimateIdrCost } from '../money/estimateCost';
+import { showShortage } from '../money/shortageStore';
 
 export interface AnalysisPoint {
     index: number;   // 0-based index (maps to node index)
@@ -35,7 +36,8 @@ export async function analyzeDocument(text: string, opts?: { nodeCount?: number 
     // Take first 6000 chars (approx 1500 tokens) - usually covers abstract + intro
     const safeText = text.slice(0, 6000);
     const estimatedCost = estimateIdrCost('analysis', safeText);
-    if (!ensureSufficientBalance({ requiredIdr: estimatedCost, context: 'analysis' })) {
+    const okToProceed = await ensureSufficientBalance({ requiredIdr: estimatedCost, context: 'analysis' });
+    if (!okToProceed) {
         throw new Error('insufficient_balance');
     }
 
@@ -69,6 +71,25 @@ export async function analyzeDocument(text: string, opts?: { nodeCount?: number 
         };
 
         if (!payload.ok) {
+            if ((payload as { code?: string }).code === 'insufficient_rupiah') {
+                const p = payload as {
+                    balance_idr?: number;
+                    needed_idr?: number;
+                    shortfall_idr?: number;
+                };
+                const needed = typeof p.needed_idr === 'number' ? p.needed_idr : estimatedCost;
+                const balance = typeof p.balance_idr === 'number' ? p.balance_idr : null;
+                const shortfall = typeof p.shortfall_idr === 'number'
+                    ? p.shortfall_idr
+                    : Math.max(0, needed - (balance ?? 0));
+                showShortage({
+                    balanceIdr: balance,
+                    requiredIdr: needed,
+                    shortfallIdr: shortfall,
+                    context: 'analysis'
+                });
+                throw new Error('insufficient_balance');
+            }
             console.warn('[PaperAnalyzer] Server error');
             throw new Error('analysis failed');
         }

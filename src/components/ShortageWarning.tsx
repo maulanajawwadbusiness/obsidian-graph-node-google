@@ -2,7 +2,10 @@ import React from 'react';
 import { hideShortage, useShortageStore } from '../money/shortageStore';
 import { openTopupPanel } from '../money/topupEvents';
 
-function formatRupiah(value: number): string {
+function formatRupiah(value: number | null): string {
+    if (value === null || Number.isNaN(value)) {
+        return 'Rp ...';
+    }
     const formatted = new Intl.NumberFormat('id-ID').format(Math.max(0, Math.floor(value)));
     return `Rp ${formatted}`;
 }

@@ -4,7 +4,7 @@ export type ShortageContext = 'analysis' | 'chat' | 'prefill';
 
 export type ShortageState = {
     open: boolean;
-    balanceIdr: number;
+    balanceIdr: number | null;
     requiredIdr: number;
     shortfallIdr: number;
     context: ShortageContext;
@@ -14,7 +14,7 @@ const listeners = new Set<() => void>();
 
 let state: ShortageState = {
     open: false,
-    balanceIdr: 0,
+    balanceIdr: null,
     requiredIdr: 0,
     shortfallIdr: 0,
     context: 'analysis'
@@ -32,7 +32,7 @@ function setState(next: Partial<ShortageState>) {
 }
 
 export function showShortage(params: {
-    balanceIdr: number;
+    balanceIdr: number | null;
     requiredIdr: number;
     shortfallIdr: number;
     context: ShortageContext;

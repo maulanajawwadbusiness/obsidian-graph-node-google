@@ -4,6 +4,9 @@ import express from "express";
 import { OAuth2Client } from "google-auth-library";
 import { getPool } from "./db";
 import { midtransRequest } from "./midtrans/client";
+import { generateStructuredJson, generateText, generateTextStream, type LlmError } from "./llm/llmClient";
+import { LLM_LIMITS } from "./llm/limits";
+import { validateChat, validatePaperAnalyze, validatePrefill } from "./llm/validate";
 
 type SessionUser = {
   sub: string;
@@ -39,7 +42,7 @@ const allowedOrigins = (process.env.ALLOWED_ORIGINS ?? "")
   .map((value) => value.trim())
   .filter(Boolean);
 
-app.use(express.json({ limit: "1mb" }));
+app.use(express.json({ limit: LLM_LIMITS.jsonBodyLimit }));
 
 const corsAllowedOrigins =
   allowedOrigins.length > 0
@@ -116,6 +119,79 @@ function parseGrossAmount(value: unknown, fallbackAmount: number): number | null
   const rounded = Math.trunc(amount);
   if (rounded <= 0) return null;
   return rounded;
+}
+
+type ApiErrorCode =
+  | "bad_request"
+  | "too_large"
+  | "unauthorized"
+  | "rate_limited"
+  | "upstream_error"
+  | "timeout"
+  | "parse_error";
+
+type ApiError = {
+  ok: false;
+  request_id: string;
+  code: ApiErrorCode;
+  error: string;
+};
+
+const llmConcurrency = new Map<string, number>();
+const MAX_CONCURRENT_LLM = 2;
+
+function getUserId(user: AuthContext): string {
+  return String(user.id);
+}
+
+function acquireLlmSlot(userId: string): boolean {
+  const current = llmConcurrency.get(userId) || 0;
+  if (current >= MAX_CONCURRENT_LLM) return false;
+  llmConcurrency.set(userId, current + 1);
+  return true;
+}
+
+function releaseLlmSlot(userId: string) {
+  const current = llmConcurrency.get(userId) || 0;
+  const next = current - 1;
+  if (next <= 0) llmConcurrency.delete(userId);
+  else llmConcurrency.set(userId, next);
+}
+
+function sendApiError(res: express.Response, status: number, body: ApiError) {
+  res.setHeader("X-Request-Id", body.request_id);
+  res.status(status).json(body);
+}
+
+function logLlmRequest(fields: {
+  request_id: string;
+  endpoint: string;
+  user_id: string;
+  model: string;
+  input_chars: number;
+  duration_ms: number;
+  status_code: number;
+}) {
+  console.log(
+    `[llm_api] request_end request_id=${fields.request_id} endpoint=${fields.endpoint} user_id=${fields.user_id} model=${fields.model} input_chars=${fields.input_chars} duration_ms=${fields.duration_ms} status_code=${fields.status_code}`
+  );
+}
+
+function mapLlmErrorToStatus(error: LlmError): number {
+  switch (error.code) {
+    case "bad_request":
+      return 400;
+    case "rate_limited":
+      return 429;
+    case "timeout":
+      return 504;
+    case "parse_error":
+      return 502;
+    case "unauthorized":
+      return 401;
+    default:
+      return 502;
+  }
 }
 
 function sanitizeActions(value: unknown): Array<{ name: string; method: string; url: string }> {
@@ -551,6 +627,132 @@ app.post("/api/payments/gopayqris/create", requireAuth, async (req, res) => {
   });
 });
 
+app.post("/api/llm/paper-analyze", requireAuth, async (req, res) => {
+  const startedAt = Date.now();
+  const requestId = crypto.randomUUID();
+  const user = res.locals.user as AuthContext;
+  const userId = getUserId(user);
+
+  const validation = validatePaperAnalyze(req.body);
+  if ("ok" in validation && validation.ok === false) {
+    sendApiError(res, validation.status, {
+      ok: false,
+      request_id: requestId,
+      code: validation.code,
+      error: validation.error
+    });
+    logLlmRequest({
+      request_id: requestId,
+      endpoint: "/api/llm/paper-analyze",
+      user_id: userId,
+      model: req.body?.model || "unknown",
+      input_chars: typeof req.body?.text === "string" ? req.body.text.length : 0,
+      duration_ms: Date.now() - startedAt,
+      status_code: validation.status
+    });
+    return;
+  }
+
+  if (!acquireLlmSlot(userId)) {
+    sendApiError(res, 429, {
+      ok: false,
+      request_id: requestId,
+      code: "rate_limited",
+      error: "too many concurrent requests"
+    });
+    res.setHeader("Retry-After", "5");
+    logLlmRequest({
+      request_id: requestId,
+      endpoint: "/api/llm/paper-analyze",
+      user_id: userId,
+      model: validation.model,
+      input_chars: validation.text.length,
+      duration_ms: Date.now() - startedAt,
+      status_code: 429
+    });
+    return;
+  }
+
+  try {
+    const result = await generateStructuredJson({
+      model: validation.model,
+      input: validation.text,
+      schema: {
+        type: "object",
+        properties: {
+          paper_title: { type: "string" },
+          main_points: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                index: { type: "integer" },
+                title: { type: "string" },
+                explanation: { type: "string" }
+              },
+              required: ["index", "title", "explanation"],
+              additionalProperties: false
+            },
+            minItems: validation.nodeCount,
+            maxItems: validation.nodeCount
+          },
+          links: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                from_index: { type: "integer" },
+                to_index: { type: "integer" },
+                type: { type: "string" },
+                weight: { type: "number" },
+                rationale: { type: "string" }
+              },
+              required: ["from_index", "to_index", "type", "weight", "rationale"],
+              additionalProperties: false
+            }
+          }
+        },
+        required: ["paper_title", "main_points", "links"],
+        additionalProperties: false
+      }
+    });
+
+    if (!result.ok) {
+      const status = mapLlmErrorToStatus(result);
+      sendApiError(res, status, {
+        ok: false,
+        request_id: result.request_id,
+        code: result.code as ApiErrorCode,
+        error: result.error
+      });
+      logLlmRequest({
+        request_id: result.request_id,
+        endpoint: "/api/llm/paper-analyze",
+        user_id: userId,
+        model: validation.model,
+        input_chars: validation.text.length,
+        duration_ms: Date.now() - startedAt,
+        status_code: status
+      });
+      return;
+    }
+
+    res.setHeader("X-Request-Id", result.request_id);
+    res.json({ ok: true, request_id: result.request_id, json: result.json });
+    logLlmRequest({
+      request_id: result.request_id,
+      endpoint: "/api/llm/paper-analyze",
+      user_id: userId,
+      model: validation.model,
+      input_chars: validation.text.length,
+      duration_ms: Date.now() - startedAt,
+      status_code: 200
+    });
+  } finally {
+    releaseLlmSlot(userId);
+  }
+});
+
 app.get("/api/payments/:orderId/status", requireAuth, async (req, res) => {
   const user = res.locals.user as AuthContext;
   const orderId = String(req.params.orderId || "");
@@ -631,6 +833,237 @@ app.get("/api/payments/:orderId/status", requireAuth, async (req, res) => {
     transaction_id: row.midtrans_transaction_id,
     paid_at: row.paid_at || null
   });
+});
+
+app.post("/api/llm/prefill", requireAuth, async (req, res) => {
+  const startedAt = Date.now();
+  const requestId = crypto.randomUUID();
+  const user = res.locals.user as AuthContext;
+  const userId = getUserId(user);
+
+  const validation = validatePrefill(req.body);
+  if ("ok" in validation && validation.ok === false) {
+    sendApiError(res, validation.status, {
+      ok: false,
+      request_id: requestId,
+      code: validation.code,
+      error: validation.error
+    });
+    logLlmRequest({
+      request_id: requestId,
+      endpoint: "/api/llm/prefill",
+      user_id: userId,
+      model: req.body?.model || "unknown",
+      input_chars: typeof req.body?.nodeLabel === "string" ? req.body.nodeLabel.length : 0,
+      duration_ms: Date.now() - startedAt,
+      status_code: validation.status
+    });
+    return;
+  }
+
+  if (!acquireLlmSlot(userId)) {
+    sendApiError(res, 429, {
+      ok: false,
+      request_id: requestId,
+      code: "rate_limited",
+      error: "too many concurrent requests"
+    });
+    res.setHeader("Retry-After", "5");
+    logLlmRequest({
+      request_id: requestId,
+      endpoint: "/api/llm/prefill",
+      user_id: userId,
+      model: validation.model,
+      input_chars: validation.nodeLabel.length,
+      duration_ms: Date.now() - startedAt,
+      status_code: 429
+    });
+    return;
+  }
+
+  try {
+    const promptParts: string[] = [];
+    promptParts.push(`Target Node: ${validation.nodeLabel}`);
+    if (validation.content) {
+      promptParts.push(`Node Knowledge: \"${validation.content.title}\" - ${validation.content.summary.slice(0, 150)}...`);
+    }
+    if (validation.miniChatMessages && validation.miniChatMessages.length > 0) {
+      const recent = validation.miniChatMessages.slice(-4);
+      promptParts.push("Recent Chat History:");
+      for (const msg of recent) {
+        const text = msg.text.length > 300 ? `${msg.text.slice(0, 300)}...` : msg.text;
+        promptParts.push(`${msg.role.toUpperCase()}: ${text}`);
+      }
+    } else {
+      promptParts.push("(No previous chat history)");
+    }
+
+    const systemPrompt = [
+      "You are generating ONE suggested prompt to prefill a chat input.",
+      "Rules:",
+      "- One line only.",
+      "- Actionable and specific to the node.",
+      "- No prefixes like \"suggested prompt:\".",
+      "- No quotes.",
+      "- Max 160 characters.",
+      "- Tone: calm, analytical, dark-elegant.",
+      "- Return ONLY the prompt text."
+    ].join("\n");
+
+    const input = `${systemPrompt}\n\nCONTEXT:\n${promptParts.join("\n")}`;
+
+    const result = await generateText({
+      model: validation.model,
+      input
+    });
+
+    if (!result.ok) {
+      const status = mapLlmErrorToStatus(result);
+      sendApiError(res, status, {
+        ok: false,
+        request_id: result.request_id,
+        code: result.code as ApiErrorCode,
+        error: result.error
+      });
+      logLlmRequest({
+        request_id: result.request_id,
+        endpoint: "/api/llm/prefill",
+        user_id: userId,
+        model: validation.model,
+        input_chars: validation.nodeLabel.length,
+        duration_ms: Date.now() - startedAt,
+        status_code: status
+      });
+      return;
+    }
+
+    res.setHeader("X-Request-Id", result.request_id);
+    res.json({ ok: true, request_id: result.request_id, prompt: result.text });
+    logLlmRequest({
+      request_id: result.request_id,
+      endpoint: "/api/llm/prefill",
+      user_id: userId,
+      model: validation.model,
+      input_chars: validation.nodeLabel.length,
+      duration_ms: Date.now() - startedAt,
+      status_code: 200
+    });
+  } finally {
+    releaseLlmSlot(userId);
+  }
+});
+
+app.post("/api/llm/chat", requireAuth, async (req, res) => {
+  const startedAt = Date.now();
+  const requestId = crypto.randomUUID();
+  const user = res.locals.user as AuthContext;
+  const userId = getUserId(user);
+
+  const validation = validateChat(req.body);
+  if ("ok" in validation && validation.ok === false) {
+    sendApiError(res, validation.status, {
+      ok: false,
+      request_id: requestId,
+      code: validation.code,
+      error: validation.error
+    });
+    logLlmRequest({
+      request_id: requestId,
+      endpoint: "/api/llm/chat",
+      user_id: userId,
+      model: req.body?.model || "unknown",
+      input_chars: typeof req.body?.userPrompt === "string" ? req.body.userPrompt.length : 0,
+      duration_ms: Date.now() - startedAt,
+      status_code: validation.status
+    });
+    return;
+  }
+
+  if (!acquireLlmSlot(userId)) {
+    sendApiError(res, 429, {
+      ok: false,
+      request_id: requestId,
+      code: "rate_limited",
+      error: "too many concurrent requests"
+    });
+    res.setHeader("Retry-After", "5");
+    logLlmRequest({
+      request_id: requestId,
+      endpoint: "/api/llm/chat",
+      user_id: userId,
+      model: validation.model,
+      input_chars: validation.userPrompt.length,
+      duration_ms: Date.now() - startedAt,
+      status_code: 429
+    });
+    return;
+  }
+
+  let statusCode = 200;
+  let streamStarted = false;
+  let cancelled = false;
+  req.on("close", () => {
+    cancelled = true;
+  });
+
+  try {
+    const systemPrompt = validation.systemPrompt || "";
+    const input = `${systemPrompt}\n\nUSER PROMPT:\n${validation.userPrompt}`;
+
+    const stream = generateTextStream({
+      model: validation.model,
+      input
+    });
+
+    res.setHeader("X-Request-Id", stream.request_id);
+    res.setHeader("Content-Type", "text/plain; charset=utf-8");
+
+    for await (const chunk of stream) {
+      if (cancelled) break;
+      if (!streamStarted) {
+        streamStarted = true;
+      }
+      res.write(chunk);
+    }
+
+    res.end();
+    statusCode = 200;
+  } catch (err: any) {
+    const info = err?.info as LlmError | undefined;
+    if (!streamStarted) {
+      if (info) {
+        statusCode = mapLlmErrorToStatus(info);
+        sendApiError(res, statusCode, {
+          ok: false,
+          request_id: info.request_id,
+          code: info.code as ApiErrorCode,
+          error: info.error
+        });
+      } else {
+        statusCode = 502;
+        sendApiError(res, statusCode, {
+          ok: false,
+          request_id: requestId,
+          code: "upstream_error",
+          error: "stream failed"
+        });
+      }
+    } else {
+      statusCode = 502;
+      res.end();
+    }
+  } finally {
+    releaseLlmSlot(userId);
+    logLlmRequest({
+      request_id: streamStarted ? res.getHeader("X-Request-Id")?.toString() || requestId : requestId,
+      endpoint: "/api/llm/chat",
+      user_id: userId,
+      model: validation.model,
+      input_chars: validation.userPrompt.length,
+      duration_ms: Date.now() - startedAt,
+      status_code: statusCode
+    });
+  }
 });
 
 app.listen(port, () => {

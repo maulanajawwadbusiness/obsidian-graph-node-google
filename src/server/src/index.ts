@@ -5,10 +5,10 @@ import { OAuth2Client } from "google-auth-library";
 import { getPool } from "./db";
 import { getUsdToIdr } from "./fx/fxService";
 import { midtransRequest } from "./midtrans/client";
-import { getProvider } from "./llm/getProvider";
+import { recordTokenSpend } from "./llm/freePoolAccounting";
 import { type LlmError } from "./llm/llmClient";
 import { LLM_LIMITS } from "./llm/limits";
-import { selectProvider } from "./llm/providerSelector";
+import { pickProviderForRequest } from "./llm/providerRouter";
 import { validateChat, validatePaperAnalyze, validatePrefill } from "./llm/validate";
 import { estimateIdrCost } from "./pricing/pricingCalculator";
 import { estimateTokensFromText } from "./pricing/tokenEstimate";
@@ -727,8 +727,7 @@ app.post("/api/llm/paper-analyze", requireAuth, async (req, res) => {
   let rupiahCost: number | null = null;
   let rupiahBefore: number | null = null;
   let rupiahAfter: number | null = null;
-  let fxRate = 0;
-  let fxRate = 0;
+  let routerDateKey = "";
   let fxRate = 0;
 
   const validation = validatePaperAnalyze(req.body);
@@ -784,9 +783,9 @@ app.post("/api/llm/paper-analyze", requireAuth, async (req, res) => {
   }
 
   try {
-    const providerChoice = await selectProvider({ userId, endpointKind: "analyze" });
-    const provider = getProvider("openai");
-    console.log(`[llm] provider_policy selected=${providerChoice.provider} cohort=${providerChoice.is_free_user} used_tokens=${providerChoice.user_used_tokens} pool_remaining=${providerChoice.remaining_tokens} cap=${providerChoice.user_cap} reason=${providerChoice.reason} date_key=${providerChoice.date_key} actual_provider=${provider.name}`);
+    const router = await pickProviderForRequest({ userId, endpointKind: "analyze" });
+    const provider = router.provider;
+    console.log(`[llm] provider_policy selected=${router.selectedProviderName} actual_provider=${provider.name} cohort=${router.policyMeta.cohort_selected} used_tokens=${router.policyMeta.user_used_tokens_today} pool_remaining=${router.policyMeta.pool_remaining_tokens} cap=${router.policyMeta.user_free_cap} reason=${router.policyMeta.reason} date_key=${router.policyMeta.date_key}`);
 
     const inputTokensEstimate = estimateTokensFromText(validation.text);
     const fx = await getUsdToIdr();
@@ -905,6 +904,7 @@ app.post("/api/llm/paper-analyze", requireAuth, async (req, res) => {
     const outputTokens = Number.isFinite(usageOutput)
       ? Number(usageOutput)
       : estimateTokensFromText(JSON.stringify(result.json || {}));
+    const tokensUsed = inputTokens + outputTokens;
     const pricing = estimateIdrCost({
       model: validation.model,
       inputTokens,
@@ -949,6 +949,18 @@ app.post("/api/llm/paper-analyze", requireAuth, async (req, res) => {
     rupiahCost = pricing.idrCostRounded;
     rupiahBefore = chargeResult.balance_before;
     rupiahAfter = chargeResult.balance_after;
+
+    if (router.selectedProviderName === "openai") {
+      try {
+        await recordTokenSpend({
+          userId,
+          dateKey: router.policyMeta.date_key,
+          tokensUsed
+        });
+      } catch {
+        // Ignore pool accounting failure.
+      }
+    }
 
     res.setHeader("X-Request-Id", requestId);
     res.json({ ok: true, request_id: requestId, json: result.json });
@@ -1089,6 +1101,7 @@ app.post("/api/llm/prefill", requireAuth, async (req, res) => {
   let rupiahCost: number | null = null;
   let rupiahBefore: number | null = null;
   let rupiahAfter: number | null = null;
+  let fxRate = 0;
 
   const validation = validatePrefill(req.body);
   if ("ok" in validation && validation.ok === false) {
@@ -1143,9 +1156,9 @@ app.post("/api/llm/prefill", requireAuth, async (req, res) => {
   }
 
   try {
-    const providerChoice = await selectProvider({ userId, endpointKind: "prefill" });
-    const provider = getProvider("openai");
-    console.log(`[llm] provider_policy selected=${providerChoice.provider} cohort=${providerChoice.is_free_user} used_tokens=${providerChoice.user_used_tokens} pool_remaining=${providerChoice.remaining_tokens} cap=${providerChoice.user_cap} reason=${providerChoice.reason} date_key=${providerChoice.date_key} actual_provider=${provider.name}`);
+    const router = await pickProviderForRequest({ userId, endpointKind: "prefill" });
+    const provider = router.provider;
+    console.log(`[llm] provider_policy selected=${router.selectedProviderName} actual_provider=${provider.name} cohort=${router.policyMeta.cohort_selected} used_tokens=${router.policyMeta.user_used_tokens_today} pool_remaining=${router.policyMeta.pool_remaining_tokens} cap=${router.policyMeta.user_free_cap} reason=${router.policyMeta.reason} date_key=${router.policyMeta.date_key}`);
 
     const promptParts: string[] = [];
     promptParts.push(`Target Node: ${validation.nodeLabel}`);
@@ -1252,6 +1265,7 @@ app.post("/api/llm/prefill", requireAuth, async (req, res) => {
     const outputTokens = Number.isFinite(usageOutput)
       ? Number(usageOutput)
       : estimateTokensFromText(result.text);
+    const tokensUsed = inputTokens + outputTokens;
     const pricing = estimateIdrCost({
       model: validation.model,
       inputTokens,
@@ -1295,6 +1309,18 @@ app.post("/api/llm/prefill", requireAuth, async (req, res) => {
     rupiahBefore = chargeResult.balance_before;
     rupiahAfter = chargeResult.balance_after;
 
+    if (router.selectedProviderName === "openai") {
+      try {
+        await recordTokenSpend({
+          userId,
+          dateKey: router.policyMeta.date_key,
+          tokensUsed
+        });
+      } catch {
+        // Ignore pool accounting failure.
+      }
+    }
+
     res.setHeader("X-Request-Id", requestId);
     res.json({ ok: true, request_id: requestId, prompt: result.text });
     logLlmRequest({
@@ -1328,6 +1354,8 @@ app.post("/api/llm/chat", requireAuth, async (req, res) => {
   let rupiahCost: number | null = null;
   let rupiahBefore: number | null = null;
   let rupiahAfter: number | null = null;
+  let routerDateKey = "";
+  let fxRate = 0;
 
   const validation = validateChat(req.body);
   if ("ok" in validation && validation.ok === false) {
@@ -1396,9 +1424,10 @@ app.post("/api/llm/chat", requireAuth, async (req, res) => {
   });
 
   try {
-    const providerChoice = await selectProvider({ userId, endpointKind: "chat" });
-    const provider = getProvider("openai");
-    console.log(`[llm] provider_policy selected=${providerChoice.provider} cohort=${providerChoice.is_free_user} used_tokens=${providerChoice.user_used_tokens} pool_remaining=${providerChoice.remaining_tokens} cap=${providerChoice.user_cap} reason=${providerChoice.reason} date_key=${providerChoice.date_key} actual_provider=${provider.name}`);
+    const router = await pickProviderForRequest({ userId, endpointKind: "chat" });
+    const provider = router.provider;
+    routerDateKey = router.policyMeta.date_key;
+    console.log(`[llm] provider_policy selected=${router.selectedProviderName} actual_provider=${provider.name} cohort=${router.policyMeta.cohort_selected} used_tokens=${router.policyMeta.user_used_tokens_today} pool_remaining=${router.policyMeta.pool_remaining_tokens} cap=${router.policyMeta.user_free_cap} reason=${router.policyMeta.reason} date_key=${router.policyMeta.date_key}`);
 
     const systemPrompt = validation.systemPrompt || "";
     chatInput = `${systemPrompt}\n\nUSER PROMPT:\n${validation.userPrompt}`;
@@ -1496,6 +1525,7 @@ app.post("/api/llm/chat", requireAuth, async (req, res) => {
   } finally {
     const outputTokensEstimate = estimateTokensFromText(outputText);
     const inputTokensEstimate = estimateTokensFromText(chatInput);
+    const tokensUsed = inputTokensEstimate + outputTokensEstimate;
     const pricing = estimateIdrCost({
       model: validation.model,
       inputTokens: inputTokensEstimate,
@@ -1514,6 +1544,18 @@ app.post("/api/llm/chat", requireAuth, async (req, res) => {
       rupiahAfter = chargeResult.balance_after;
     } else {
       terminationReason = "insufficient_rupiah";
+    }
+
+    if (provider.name === "openai" && routerDateKey) {
+      try {
+        await recordTokenSpend({
+          userId,
+          dateKey: routerDateKey,
+          tokensUsed
+        });
+      } catch {
+        // Ignore pool accounting failure.
+      }
     }
 
     releaseLlmSlot(userId);

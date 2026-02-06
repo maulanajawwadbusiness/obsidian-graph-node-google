@@ -3,6 +3,7 @@ import cors from "cors";
 import express from "express";
 import { OAuth2Client } from "google-auth-library";
 import { getPool } from "./db";
+import { midtransRequest } from "./midtrans/client";
 
 type SessionUser = {
   sub: string;
@@ -18,6 +19,11 @@ type TokenInfo = {
   picture?: string;
 };
 
+type AuthContext = {
+  id: string;
+  google_sub: string;
+  email?: string | null;
+};
 
 const app = express();
 app.set("trust proxy", 1);
@@ -61,9 +67,6 @@ const corsOptions = {
   allowedHeaders: ["Content-Type", "Authorization"]
 };
 
-app.use(cors(corsOptions));
-app.options(/.*/, cors(corsOptions));
-
 function parseCookies(headerValue?: string) {
   const cookies: Record<string, string> = {};
   if (!headerValue) return cookies;
@@ -105,6 +108,65 @@ function clearSessionCookie(res: express.Response) {
     path: "/"
   });
 }
+
+function parseGrossAmount(value: unknown, fallbackAmount: number): number | null {
+  if (value === undefined || value === null) return fallbackAmount;
+  const amount = typeof value === "string" ? Number(value) : Number(value);
+  if (!Number.isFinite(amount)) return null;
+  const rounded = Math.trunc(amount);
+  if (rounded <= 0) return null;
+  return rounded;
+}
+
+function sanitizeActions(value: unknown): Array<{ name: string; method: string; url: string }> {
+  if (!Array.isArray(value)) return [];
+  const out: Array<{ name: string; method: string; url: string }> = [];
+  for (const item of value) {
+    if (!item || typeof item !== "object") continue;
+    const name = String((item as { name?: unknown }).name || "").trim();
+    const method = String((item as { method?: unknown }).method || "").trim();
+    const url = String((item as { url?: unknown }).url || "").trim();
+    if (name && method && url) out.push({ name, method, url });
+  }
+  return out;
+}
+
+function isPaidStatus(status: string | undefined): boolean {
+  return status === "settlement" || status === "capture";
+}
+
+async function requireAuth(req: express.Request, res: express.Response, next: express.NextFunction) {
+  const cookies = parseCookies(req.headers.cookie);
+  const sessionId = cookies[COOKIE_NAME];
+  if (!sessionId) {
+    res.status(401).json({ ok: false, error: "unauthorized" });
+    return;
+  }
+
+  try {
+    const pool = await getPool();
+    const result = await pool.query(
+      `select users.id as id, users.google_sub as google_sub, users.email as email
+       from sessions
+       join users on users.id = sessions.user_id
+       where sessions.id = $1 and sessions.expires_at > now()`,
+      [sessionId]
+    );
+    const row = result.rows[0] as AuthContext | undefined;
+    if (!row) {
+      clearSessionCookie(res);
+      res.status(401).json({ ok: false, error: "invalid session" });
+      return;
+    }
+    res.locals.user = row;
+    next();
+  } catch (e) {
+    res.status(500).json({ ok: false, error: `db error: ${String(e)}` });
+  }
+}
+
+app.use(cors(corsOptions));
+app.options(/.*/, cors(corsOptions));
 
 app.get("/health", async (_req, res) => {
   try {
@@ -294,6 +356,187 @@ app.post("/auth/logout", async (req, res) => {
 
   clearSessionCookie(res);
   res.json({ ok: true });
+});
+
+app.post("/api/payments/gopayqris/create", requireAuth, async (req, res) => {
+  const user = res.locals.user as AuthContext;
+  const grossAmount = parseGrossAmount(req.body?.gross_amount, 1000);
+  if (!grossAmount) {
+    res.status(400).json({ ok: false, error: "invalid gross_amount" });
+    return;
+  }
+
+  const orderId = `arnv-${user.id}-${Date.now()}`;
+  const now = new Date();
+  const rowId = crypto.randomUUID();
+
+  try {
+    const pool = await getPool();
+    await pool.query(
+      `insert into payment_transactions
+        (id, user_id, order_id, gross_amount, payment_type, status, created_at, updated_at)
+       values ($1, $2, $3, $4, $5, $6, $7, $8)`,
+      [rowId, user.id, orderId, grossAmount, "gopay", "created", now, now]
+    );
+  } catch (e) {
+    res.status(500).json({ ok: false, error: "failed to create transaction" });
+    return;
+  }
+
+  const chargePayload = {
+    payment_type: "gopay",
+    transaction_details: {
+      order_id: orderId,
+      gross_amount: grossAmount
+    },
+    gopay: {
+      enable_callback: true,
+      callback_url: "https://<your-domain>/payment/gopay-finish"
+    }
+  };
+
+  const midtransResult = await midtransRequest("/v2/charge", {
+    method: "POST",
+    body: chargePayload
+  });
+
+  if (midtransResult.ok === false) {
+    try {
+      const pool = await getPool();
+      await pool.query(
+        `update payment_transactions
+            set status = $2,
+                midtrans_response_json = $3,
+                updated_at = $4
+          where order_id = $1`,
+        [orderId, "failed", midtransResult.error, new Date()]
+      );
+    } catch {
+      // Ignore update failure here.
+    }
+
+    res.status(502).json({ ok: false, error: midtransResult.error, order_id: orderId });
+    return;
+  }
+
+  const data = midtransResult.data as {
+    transaction_id?: string;
+    transaction_status?: string;
+    payment_type?: string;
+    actions?: unknown;
+  };
+
+  const transactionId = data.transaction_id || null;
+  const transactionStatus = data.transaction_status || "pending";
+  const paymentType = data.payment_type || "gopay";
+  const actions = sanitizeActions(data.actions);
+
+  try {
+    const pool = await getPool();
+    await pool.query(
+      `update payment_transactions
+          set status = $2,
+              midtrans_transaction_id = $3,
+              midtrans_response_json = $4,
+              updated_at = $5
+        where order_id = $1`,
+      [orderId, transactionStatus, transactionId, midtransResult.data, new Date()]
+    );
+  } catch (e) {
+    res.status(500).json({ ok: false, error: "failed to store transaction" });
+    return;
+  }
+
+  res.json({
+    ok: true,
+    order_id: orderId,
+    transaction_id: transactionId,
+    payment_type: paymentType,
+    transaction_status: transactionStatus,
+    actions
+  });
+});
+
+app.get("/api/payments/:orderId/status", requireAuth, async (req, res) => {
+  const user = res.locals.user as AuthContext;
+  const orderId = String(req.params.orderId || "");
+  if (!orderId) {
+    res.status(400).json({ ok: false, error: "missing orderId" });
+    return;
+  }
+
+  const pool = await getPool();
+  const existing = await pool.query(
+    `select order_id, status, payment_type, midtrans_transaction_id, paid_at
+       from payment_transactions
+      where order_id = $1 and user_id = $2`,
+    [orderId, user.id]
+  );
+
+  const row = existing.rows[0];
+  if (!row) {
+    res.status(404).json({ ok: false, error: "not found" });
+    return;
+  }
+
+  if (row.status === "pending") {
+    const statusResult = await midtransRequest(`/v2/${orderId}/status`, { method: "GET" });
+    if (statusResult.ok) {
+      const data = statusResult.data as { transaction_status?: string; transaction_id?: string };
+      const nextStatus = data.transaction_status || row.status;
+      const now = new Date();
+      const paidAt = isPaidStatus(nextStatus) ? now : null;
+
+      try {
+        await pool.query(
+          `update payment_transactions
+              set status = $2,
+                  midtrans_transaction_id = coalesce($3, midtrans_transaction_id),
+                  midtrans_response_json = $4,
+                  updated_at = $5,
+                  paid_at = case
+                    when paid_at is null and $6 is not null then $6
+                    else paid_at
+                  end
+            where order_id = $1`,
+          [orderId, nextStatus, data.transaction_id || null, statusResult.data, now, paidAt]
+        );
+      } catch (e) {
+        res.status(500).json({ ok: false, error: "failed to update status" });
+        return;
+      }
+
+      res.json({
+        ok: true,
+        order_id: orderId,
+        status: nextStatus,
+        payment_type: row.payment_type,
+        transaction_id: data.transaction_id || row.midtrans_transaction_id,
+        paid_at: paidAt || row.paid_at || null
+      });
+      return;
+    }
+
+    res.json({
+      ok: true,
+      order_id: orderId,
+      status: row.status,
+      payment_type: row.payment_type,
+      transaction_id: row.midtrans_transaction_id,
+      paid_at: row.paid_at || null,
+      midtrans_error: statusResult.error
+    });
+    return;
+  }
+
+  res.json({
+    ok: true,
+    order_id: orderId,
+    status: row.status,
+    payment_type: row.payment_type,
+    transaction_id: row.midtrans_transaction_id,
+    paid_at: row.paid_at || null
+  });
 });
 
 app.listen(port, () => {

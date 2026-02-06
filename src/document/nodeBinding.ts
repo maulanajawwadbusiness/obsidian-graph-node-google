@@ -158,8 +158,8 @@ export async function applyAnalysisToNodes(
     console.error('[AI] Analysis failed:', error);
     const raw = error instanceof Error ? error.message : 'analysis failed';
     const message = raw === 'unauthorized'
-      ? 'Please log in to run analysis.'
-      : 'Hey, your analysis failed.';
+      ? 'We could not reach the server, so analysis did not run. Please log in and try again.'
+      : 'We could not reach the server, so analysis did not run. Your graph is unchanged.';
     setAIError(message);
   } finally {
     setAIActivity(false);

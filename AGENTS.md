@@ -32,6 +32,7 @@ The Canvas (Graph) is the substrate. Panels (Chat, Docs) and the Loading Screen 
 | **Document Pipe** | `src/store/documentStore.tsx` | Worker-based parsing (PDF/TXT/MD). |
 | **UI Markers** | `src/playground/components/` | `BrandLabel` (Top-Left) and `MapTitleBlock` (Title). |
 | **DB Ops** | `docs/db.md`, `src/server/scripts`, `src/server/migrations` | Laptop-first DB workflow and migrations. |
+| **LLM Usage/Billing** | `src/server/src/llm/usage`, `src/server/src/llm/audit`, `src/server/src/pricing` | Usage tracking, audit persistence, and rupiah pricing. |
 
 ## 3. Safe Workflow
 

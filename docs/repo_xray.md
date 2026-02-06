@@ -2,7 +2,7 @@
 
 Generated for External AI Context Loading
 Target: Deep Codebase Understanding without Repo Access
-Date: 2026-02-04
+Date: 2026-02-06
 
 ## 1. Repository Tree (Depth 4)
 Excluding: node_modules, dist, build, .git
@@ -86,10 +86,10 @@ Note: Counts are estimated post-modularization.
 15. src/server/src/index.ts - Auth routes, payments, LLM endpoints
 16. src/server/src/llm/llmClient.ts - Server LLM client (Responses API)
 17. src/server/src/db.ts - Cloud SQL connector + pool
-18. src/components/PaymentGopayPanel.tsx - QRIS payment UI panel
-19. src/components/PromptCard.tsx - EnterPrompt main card (renders payment panel)
-20. src/screens/EnterPrompt.tsx - Onboarding prompt screen
-21. src/screens/LoadingScreen.tsx - Analysis loading/error state
+18. src/server/src/llm/usage/usageTracker.ts - LLM usage tracker and tokenizer fallback
+19. src/server/src/llm/audit/llmAudit.ts - LLM audit persistence
+20. src/components/PaymentGopayPanel.tsx - QRIS payment UI panel
+21. src/components/PromptCard.tsx - EnterPrompt main card (renders payment panel)
 
 ## 3. Core Runtime Loops
 
@@ -184,3 +184,12 @@ Client call sites:
 - `src/ai/paperAnalyzer.ts`
 - `src/fullchat/fullChatAi.ts`
 - `src/fullchat/prefillSuggestion.ts`
+
+## 10. LLM Usage + Audit
+Backend:
+- `src/server/src/llm/usage/usageTracker.ts` (provider usage + tokenizer fallback)
+- `src/server/src/llm/usage/providerUsage.ts`
+- `src/server/src/llm/usage/tokenCounter.ts` (@dqbd/tiktoken)
+- `src/server/src/llm/audit/llmAudit.ts` (request audit upsert)
+- `src/server/migrations/1770382500000_add_llm_request_audit.js`
+- `src/server/migrations/1770382000000_add_openai_free_pool_ledger.js`

@@ -13,6 +13,8 @@ import type { AiContext } from './fullChatTypes';
  * - Smooth conversation flow
  */
 
+const FULLCHAT_ENABLED = false;
+
 const initialState: FullChatState = {
     isOpen: false,
     messages: [],
@@ -28,16 +30,19 @@ export function FullChatProvider({ children }: { children: ReactNode }) {
     const refineAbortController = useRef<AbortController | null>(null);
 
     const openFullChat = useCallback(() => {
+        if (!FULLCHAT_ENABLED) return;
         console.log('[FullChat] Toggled: true');
         setState(prev => ({ ...prev, isOpen: true }));
     }, []);
 
     const closeFullChat = useCallback(() => {
+        if (!FULLCHAT_ENABLED) return;
         console.log('[FullChat] Toggled: false');
         setState(prev => ({ ...prev, isOpen: false }));
     }, []);
 
     const toggleFullChat = useCallback(() => {
+        if (!FULLCHAT_ENABLED) return;
         setState(prev => {
             const next = !prev.isOpen;
             console.log('[FullChat] Toggled:', next);
@@ -74,6 +79,7 @@ export function FullChatProvider({ children }: { children: ReactNode }) {
     // Send user message and create placeholder for AI response
     // context is now required for AI generation
     const sendMessage = useCallback((text: string, context: AiContext) => {
+        if (!FULLCHAT_ENABLED) return;
         console.log(`[AI_SEND] surface=fullchat lang=${context.nodeLabel ? 'id' : 'en'} message="${text}"`);
 
         // 1. Cancel previous generation if any
@@ -157,6 +163,7 @@ export function FullChatProvider({ children }: { children: ReactNode }) {
 
 
     const receiveFromMiniChat = useCallback((context: MiniChatContext) => {
+        if (!FULLCHAT_ENABLED) return;
         console.log('[FullChat] Handoff received:', context);
 
         // 1. Generate Seed (Instant)
@@ -242,6 +249,7 @@ export function FullChatProvider({ children }: { children: ReactNode }) {
 
     const contextValue: FullChatContextValue = {
         ...state,
+        isOpen: FULLCHAT_ENABLED ? state.isOpen : false,
         openFullChat,
         closeFullChat,
         toggleFullChat,

@@ -13,7 +13,7 @@ export function GoogleLoginButton() {
       id="google-login-area"
       style={{ display: "grid", gap: 8, justifyItems: "center" }}
     >
-      {loading ? <div>checking session...</div> : null}
+      {loading ? <div>Checking session...</div> : null}
 
       {!loading && user ? (
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -25,7 +25,7 @@ export function GoogleLoginButton() {
             />
           ) : null}
           <div>
-            signed in as {user.name || user.email || "unknown"}
+            Signed in as {user.name || user.email || "unknown"}
           </div>
           <button
             onClick={() => void logout()}
@@ -40,7 +40,7 @@ export function GoogleLoginButton() {
               cursor: "pointer"
             }}
           >
-            logout
+            Logout
           </button>
         </div>
       ) : null}
@@ -60,10 +60,10 @@ export function GoogleLoginButton() {
                   return;
                 }
 
-                setStatus("got google token... sending to backend...");
+                setStatus("Got Google token... sending to backend...");
                 const idToken = cred.credential;
                 if (!idToken) {
-                  setStatus("no credential from google");
+                  setStatus("No credential from Google");
                   return;
                 }
 
@@ -76,18 +76,18 @@ export function GoogleLoginButton() {
 
                 const data = await r.json().catch(() => null);
                 if (!r.ok || !data?.ok) {
-                  setStatus(`backend rejected status=${r.status}`);
+                  setStatus(`Backend rejected status=${r.status}`);
                   return;
                 }
 
-                setStatus("ok: logged in");
+                setStatus("Ok: logged in");
                 await refreshMe();
               } catch (e) {
-                setStatus(`error: ${String(e)}`);
+                setStatus(`Error: ${String(e)}`);
               }
             }}
             onError={() => {
-              setStatus("google login failed");
+              setStatus("Google login failed");
             }}
           />
         </div>

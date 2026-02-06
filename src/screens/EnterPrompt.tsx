@@ -1,5 +1,6 @@
 import React from 'react';
 import { LoginOverlay } from '../auth/LoginOverlay';
+import { useAuth } from '../auth/AuthProvider';
 import { PromptCard } from '../components/PromptCard';
 
 type EnterPromptProps = {
@@ -9,6 +10,8 @@ type EnterPromptProps = {
 };
 
 export const EnterPrompt: React.FC<EnterPromptProps> = ({ onEnter, onBack, onSkip }) => {
+    const { user } = useAuth();
+
     return (
         <div style={ROOT_STYLE}>
             <div style={SIDEBAR_STYLE}>
@@ -20,7 +23,7 @@ export const EnterPrompt: React.FC<EnterPromptProps> = ({ onEnter, onBack, onSki
             <PromptCard lang="id" />
 
             <LoginOverlay
-                open={true}
+                open={!user}
                 onContinue={onEnter}
                 onBack={onBack}
                 onSkip={onSkip}

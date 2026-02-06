@@ -36,11 +36,11 @@ export const LoginOverlay: React.FC<LoginOverlayProps> = ({
             onWheel={(e) => e.stopPropagation()}
         >
             <div style={CARD_STYLE} onPointerDown={(e) => e.stopPropagation()}>
-                <div style={TITLE_STYLE}>sign in</div>
-                <div style={SUBTEXT_STYLE}>sign in to continue</div>
+                <div style={TITLE_STYLE}>Sign In</div>
+                <div style={SUBTEXT_STYLE}>Sign in to continue</div>
 
                 {loading && (
-                    <div style={STATUS_STYLE}>checking session...</div>
+                    <div style={STATUS_STYLE}>Checking session...</div>
                 )}
 
                 {!loading && !user && (
@@ -57,7 +57,7 @@ export const LoginOverlay: React.FC<LoginOverlayProps> = ({
                             />
                         ) : null}
                         <div style={SIGNED_IN_TEXT_STYLE}>
-                            <div style={SIGNED_IN_LABEL_STYLE}>signed in</div>
+                            <div style={SIGNED_IN_LABEL_STYLE}>Signed in</div>
                             <div>{user.name || user.email || 'unknown'}</div>
                         </div>
                     </div>

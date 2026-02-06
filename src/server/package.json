@@ -15,7 +15,8 @@
     "db:apply": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/db-apply.ps1",
     "migrate": "node-pg-migrate",
     "test:midtrans-client": "ts-node src/midtrans/client.selftest.ts",
-    "test:midtrans-prod-charge": "ts-node src/midtrans/smoke.charge.prod.ts"
+    "test:midtrans-prod-charge": "ts-node src/midtrans/smoke.charge.prod.ts",
+    "test:midtrans-prod-gopayqris": "ts-node src/midtrans/smoke.gopayqris.prod.ts"
   },
   "keywords": [],
   "author": "",

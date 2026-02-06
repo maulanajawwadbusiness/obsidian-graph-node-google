@@ -1,38 +1,44 @@
 /**
- * Midtrans production charge smoke test.
+ * Midtrans production GoPay QRIS charge smoke test.
  *
  * Run:
- *   npm run test:midtrans-prod-charge
+ *   npm run test:midtrans-prod-gopayqris
  */
 
 import fs from 'fs';
 import path from 'path';
 import { midtransRequest } from './client';
 
-function sanitizeVaNumbers(
-  value: unknown
-): Array<{ bank: string; va_number: string }> | null {
-  if (!Array.isArray(value)) return null;
-  const out: Array<{ bank: string; va_number: string }> = [];
+type ActionSummary = {
+  name: string;
+  method: string;
+  url: string;
+};
+
+function sanitizeActions(value: unknown): ActionSummary[] {
+  if (!Array.isArray(value)) return [];
+  const out: ActionSummary[] = [];
   for (const item of value) {
     if (!item || typeof item !== 'object') continue;
-    const bank = String((item as { bank?: unknown }).bank || '').trim();
-    const vaNumber = String((item as { va_number?: unknown }).va_number || '').trim();
-    if (bank && vaNumber) out.push({ bank, va_number: vaNumber });
+    const name = String((item as { name?: unknown }).name || '').trim();
+    const method = String((item as { method?: unknown }).method || '').trim();
+    const url = String((item as { url?: unknown }).url || '').trim();
+    if (name && method && url) out.push({ name, method, url });
   }
-  return out.length > 0 ? out : null;
+  return out;
 }
 
 async function run(): Promise<void> {
-  const orderId = `arnv-prod-smoke-${Date.now()}`;
+  const orderId = `arnv-prod-gopayqris-${Date.now()}`;
   const payload = {
-    payment_type: 'bank_transfer',
+    payment_type: 'gopay',
     transaction_details: {
       order_id: orderId,
       gross_amount: 1000
     },
-    bank_transfer: {
-      bank: 'bca'
+    gopay: {
+      enable_callback: true,
+      callback_url: 'https://<your-domain>/payment/gopay-finish'
     }
   };
 
@@ -49,30 +55,33 @@ async function run(): Promise<void> {
   }
 
   const data = result.data as {
+    status_code?: string;
+    status_message?: string;
     order_id?: string;
     transaction_id?: string;
     transaction_status?: string;
     payment_type?: string;
-    va_numbers?: unknown;
-    permata_va_number?: string;
+    actions?: unknown;
   };
 
-  const vaNumbers = sanitizeVaNumbers(data.va_numbers);
+  const actions = sanitizeActions(data.actions);
 
   console.log(`[midtrans] charge ok status=${result.status}`);
+  console.log(`status_code=${data.status_code || ''}`);
+  console.log(`status_message=${data.status_message || ''}`);
   console.log(`order_id=${data.order_id || orderId}`);
   console.log(`transaction_id=${data.transaction_id || ''}`);
   console.log(`transaction_status=${data.transaction_status || ''}`);
   console.log(`payment_type=${data.payment_type || ''}`);
-  if (vaNumbers) {
-    console.log(`va_numbers=${JSON.stringify(vaNumbers)}`);
-  }
-  if (data.permata_va_number) {
-    console.log(`permata_va_number=${data.permata_va_number}`);
+
+  if (actions.length > 0) {
+    for (const action of actions) {
+      console.log(`action=${action.name} method=${action.method} url=${action.url}`);
+    }
   }
 
-  const outDir = path.join('tmp', 'midtrans');
-  const outFile = path.join(outDir, `charge-response-${orderId}.json`);
+  const outDir = path.join('.local');
+  const outFile = path.join(outDir, 'midtrans-last-response.json');
 
   fs.mkdirSync(outDir, { recursive: true });
   fs.writeFileSync(outFile, JSON.stringify(result.data, null, 2));

@@ -4,6 +4,8 @@ import { getAiLanguageDirective } from '../i18n/aiLanguage';
 import { getLang } from '../i18n/lang';
 import { AI_MODELS } from '../config/aiModels';
 import { refreshBalance } from '../store/balanceStore';
+import { ensureSufficientBalance } from '../money/ensureSufficientBalance';
+import { estimateIdrCost } from '../money/estimateCost';
 
 // =============================================================================
 // TYPES
@@ -58,6 +60,10 @@ async function* realResponseGenerator(
 
     try {
         const systemPrompt = buildSystemPrompt(context);
+        const estimatedCost = estimateIdrCost('chat', `${systemPrompt}\n${userPrompt}`);
+        if (!ensureSufficientBalance({ requiredIdr: estimatedCost, context: 'chat' })) {
+            return;
+        }
 
         // True Stream Implementation
         // ---------------------------------------------------------------------

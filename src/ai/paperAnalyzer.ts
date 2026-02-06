@@ -5,6 +5,8 @@
 import { AI_MODELS } from '../config/aiModels';
 import { apiPost } from '../api';
 import { refreshBalance } from '../store/balanceStore';
+import { ensureSufficientBalance } from '../money/ensureSufficientBalance';
+import { estimateIdrCost } from '../money/estimateCost';
 
 export interface AnalysisPoint {
     index: number;   // 0-based index (maps to node index)
@@ -32,6 +34,10 @@ export async function analyzeDocument(text: string, opts?: { nodeCount?: number 
     // Safety truncation (keep costs low while maintaining context)
     // Take first 6000 chars (approx 1500 tokens) - usually covers abstract + intro
     const safeText = text.slice(0, 6000);
+    const estimatedCost = estimateIdrCost('analysis', safeText);
+    if (!ensureSufficientBalance({ requiredIdr: estimatedCost, context: 'analysis' })) {
+        throw new Error('insufficient_balance');
+    }
 
     try {
         const result = await apiPost('/api/llm/paper-analyze', {

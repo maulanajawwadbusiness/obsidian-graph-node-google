@@ -4,6 +4,8 @@ import { t } from '../i18n/t';
 import { getLang } from '../i18n/lang';
 import { apiPost } from '../api';
 import { refreshBalance } from '../store/balanceStore';
+import { ensureSufficientBalance } from '../money/ensureSufficientBalance';
+import { estimateIdrCost } from '../money/estimateCost';
 
 export interface MiniChatHistory {
     role: 'user' | 'ai';
@@ -85,6 +87,11 @@ const REAL_TIMEOUT_MS = 2500;
 async function refinePromptWithReal(context: PrefillContext, options: { signal?: AbortSignal }): Promise<string> {
     let didCall = false;
     try {
+        const rawText = `${context.nodeLabel} ${context.miniChatMessages.map((msg) => msg.text).join(' ')}`;
+        const estimatedCost = estimateIdrCost('prefill', rawText);
+        if (!ensureSufficientBalance({ requiredIdr: estimatedCost, context: 'prefill' })) {
+            return makeSeedPrompt(context);
+        }
         const res = await withTimeoutAndAbort(
             apiPost('/api/llm/prefill', {
                 model: AI_MODELS.PREFILL,

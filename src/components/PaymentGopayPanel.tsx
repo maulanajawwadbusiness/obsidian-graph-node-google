@@ -1,6 +1,7 @@
 import React from 'react';
 import { createPaymentGopayQris, getPaymentStatus, type PaymentAction } from '../api';
 import { refreshBalance } from '../store/balanceStore';
+import { subscribeTopupOpen } from '../money/topupEvents';
 
 const DEFAULT_AMOUNT = 1000;
 const POLL_FAST_MS = 1000;
@@ -26,6 +27,12 @@ export const PaymentGopayPanel: React.FC<PaymentPanelProps> = ({ onPaid }) => {
     const [isBusy, setIsBusy] = React.useState(false);
     const [error, setError] = React.useState<string | null>(null);
     const [lastStatus, setLastStatus] = React.useState<string>('');
+
+    React.useEffect(() => {
+        return subscribeTopupOpen(() => {
+            setIsOpen(true);
+        });
+    }, []);
 
     const qrAction = state?.actions.find((action) =>
         action.name === 'qr-code' || action.name === 'generate-qr-code' || action.name === 'generate-qr-code-v2'

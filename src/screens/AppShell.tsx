@@ -4,6 +4,7 @@ import { Welcome1 } from './Welcome1';
 import { Welcome2 } from './Welcome2';
 import { EnterPrompt } from './EnterPrompt';
 import { BalanceBadge } from '../components/BalanceBadge';
+import { ShortageWarning } from '../components/ShortageWarning';
 
 const Graph = React.lazy(() =>
     import('../playground/GraphPhysicsPlayground').then((mod) => ({
@@ -41,6 +42,7 @@ export const AppShell: React.FC = () => {
                     <Graph />
                 </Suspense>
                 <BalanceBadge />
+                <ShortageWarning />
             </div>
         );
     }
@@ -53,6 +55,7 @@ export const AppShell: React.FC = () => {
                     onSkip={() => setScreen('graph')}
                 />
                 <BalanceBadge />
+                <ShortageWarning />
             </div>
         );
     }
@@ -66,6 +69,7 @@ export const AppShell: React.FC = () => {
                     onSkip={() => setScreen('graph')}
                 />
                 <BalanceBadge />
+                <ShortageWarning />
             </div>
         );
     }
@@ -78,6 +82,7 @@ export const AppShell: React.FC = () => {
                 onSkip={() => setScreen('graph')}
             />
             <BalanceBadge />
+            <ShortageWarning />
         </div>
     );
 };

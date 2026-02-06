@@ -11,8 +11,6 @@ const googleLocale =
     typeof navigator !== 'undefined' && navigator.language
         ? navigator.language
         : 'en'
-console.log('[auth] VITE_GOOGLE_CLIENT_ID', googleClientId)
-
 ReactDOM.createRoot(document.getElementById('root')!).render(
     <React.StrictMode>
         <GoogleOAuthProvider clientId={googleClientId} locale={googleLocale}>

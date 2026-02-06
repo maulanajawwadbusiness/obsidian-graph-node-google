@@ -23,7 +23,6 @@ import { PopupPortal } from '../popup/PopupPortal';
 import { RotationCompass } from './components/RotationCompass';
 import { FullChatProvider, FullChatbar, FullChatToggle, useFullChat } from '../fullchat';
 import TestBackend from '../components/TestBackend';
-import { GoogleLoginButton } from '../components/GoogleLoginButton';
 import { SessionExpiryBanner } from '../auth/SessionExpiryBanner';
 // RUN 4: Topology API imports
 import { setTopology, getTopologyVersion, getTopology } from '../graph/topologyControl'; // STEP3-RUN5-V3-FIX3: Added getTopology
@@ -734,19 +733,6 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
                 {SHOW_BRAND_LABEL && <BrandLabel />}
                 <PopupPortal engineRef={engineRef} />
                 <RotationCompass engineRef={engineRef} />
-                <div
-                    style={{
-                        position: 'absolute',
-                        top: '12px',
-                        right: '12px',
-                        zIndex: 1000,
-                        pointerEvents: 'auto'
-                    }}
-                    onPointerDown={(e) => e.stopPropagation()}
-                >
-                    <GoogleLoginButton />
-                </div>
-
                 {/* STEP 5/5 RUN 2: Minimal preset controls for hand calibration */}
                 {showPresetHUD && (
                     <div style={{

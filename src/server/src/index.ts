@@ -135,6 +135,23 @@ function isPaidStatus(status: string | undefined): boolean {
   return status === "settlement" || status === "capture";
 }
 
+function verifyMidtransSignature(body: any): boolean {
+  const serverKey = process.env.MIDTRANS_SERVER_KEY;
+  if (!serverKey) return false;
+  const orderId = String(body?.order_id || "");
+  const statusCode = String(body?.status_code || "");
+  const grossAmount = String(body?.gross_amount || "");
+  const signatureKey = String(body?.signature_key || "");
+  if (!orderId || !statusCode || !grossAmount || !signatureKey) return false;
+
+  const expected = crypto
+    .createHash("sha512")
+    .update(`${orderId}${statusCode}${grossAmount}${serverKey}`)
+    .digest("hex");
+
+  return expected === signatureKey;
+}
+
 async function requireAuth(req: express.Request, res: express.Response, next: express.NextFunction) {
   const cookies = parseCookies(req.headers.cookie);
   const sessionId = cookies[COOKIE_NAME];
@@ -164,6 +181,83 @@ async function requireAuth(req: express.Request, res: express.Response, next: ex
     res.status(500).json({ ok: false, error: `db error: ${String(e)}` });
   }
 }
+
+app.post("/api/payments/webhook", async (req, res) => {
+  const body = req.body ?? {};
+  const now = new Date();
+  const eventId = crypto.randomUUID();
+  const orderId = body?.order_id ? String(body.order_id) : null;
+  const transactionId = body?.transaction_id ? String(body.transaction_id) : null;
+  const signatureKey = body?.signature_key ? String(body.signature_key) : null;
+  const verified = verifyMidtransSignature(body);
+
+  try {
+    const pool = await getPool();
+    await pool.query(
+      `insert into payment_webhook_events
+        (id, received_at, order_id, midtrans_transaction_id, raw_body, signature_key, is_verified, processed)
+       values ($1, $2, $3, $4, $5, $6, $7, $8)`,
+      [eventId, now, orderId, transactionId, body, signatureKey, verified, false]
+    );
+  } catch (e) {
+    res.status(200).json({ ok: false, error: "failed to store webhook" });
+    return;
+  }
+
+  let processingError: string | null = null;
+  if (verified && orderId) {
+    try {
+      const pool = await getPool();
+      const client = await pool.connect();
+      try {
+        await client.query("BEGIN");
+        const status = body?.transaction_status ? String(body.transaction_status) : "unknown";
+        const paidAt = isPaidStatus(status) ? now : null;
+        const updateResult = await client.query(
+          `update payment_transactions
+             set status = $2,
+                 midtrans_transaction_id = coalesce($3, midtrans_transaction_id),
+                 midtrans_response_json = $4,
+                 updated_at = $5,
+                 paid_at = case
+                   when paid_at is null and $6 is not null then $6
+                   else paid_at
+                 end
+           where order_id = $1`,
+          [orderId, status, transactionId, body, now, paidAt]
+        );
+        if (updateResult.rowCount === 0) {
+          processingError = "order not found";
+        }
+        await client.query("COMMIT");
+      } catch (e) {
+        await client.query("ROLLBACK");
+        processingError = "failed to update transaction";
+      } finally {
+        client.release();
+      }
+    } catch (e) {
+      processingError = "failed to update transaction";
+    }
+  } else if (!verified) {
+    processingError = "signature not verified";
+  }
+
+  try {
+    const pool = await getPool();
+    await pool.query(
+      `update payment_webhook_events
+         set processed = $2, processing_error = $3
+       where id = $1`,
+      [eventId, true, processingError]
+    );
+  } catch (e) {
+    res.status(200).json({ ok: false, error: "failed to finalize webhook" });
+    return;
+  }
+
+  res.status(200).json({ ok: true });
+});
 
 app.use(cors(corsOptions));
 app.options(/.*/, cors(corsOptions));

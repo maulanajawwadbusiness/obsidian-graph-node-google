@@ -139,6 +139,9 @@ type ApiError = {
 
 const llmConcurrency = new Map<string, number>();
 const MAX_CONCURRENT_LLM = 2;
+let llmRequestsTotal = 0;
+let llmRequestsInflight = 0;
+let llmRequestsStreaming = 0;
 
 function getUserId(user: AuthContext): string {
   return String(user.id);
@@ -169,12 +172,24 @@ function logLlmRequest(fields: {
   user_id: string;
   model: string;
   input_chars: number;
+  output_chars: number;
   duration_ms: number;
+  time_to_first_token_ms?: number | null;
   status_code: number;
+  termination_reason: string;
 }) {
-  console.log(
-    `[llm_api] request_end request_id=${fields.request_id} endpoint=${fields.endpoint} user_id=${fields.user_id} model=${fields.model} input_chars=${fields.input_chars} duration_ms=${fields.duration_ms} status_code=${fields.status_code}`
-  );
+  console.log(JSON.stringify({
+    request_id: fields.request_id,
+    endpoint: fields.endpoint,
+    user_id: fields.user_id,
+    model: fields.model,
+    input_chars: fields.input_chars,
+    output_chars: fields.output_chars,
+    duration_ms: fields.duration_ms,
+    time_to_first_token_ms: fields.time_to_first_token_ms ?? null,
+    status_code: fields.status_code,
+    termination_reason: fields.termination_reason
+  }));
 }
 
 function mapLlmErrorToStatus(error: LlmError): number {
@@ -193,6 +208,23 @@ function mapLlmErrorToStatus(error: LlmError): number {
       return 502;
   }
 }
+
+function mapTerminationReason(statusCode: number, code?: string) {
+  if (statusCode === 429) return "rate_limited";
+  if (statusCode === 400 || statusCode === 413) return "validation_error";
+  if (statusCode === 504 || code === "timeout") return "timeout";
+  if (code === "upstream_error" || statusCode >= 500) return "upstream_error";
+  if (statusCode === 200) return "success";
+  return "upstream_error";
+}
+
+setInterval(() => {
+  console.log(JSON.stringify({
+    llm_requests_total: llmRequestsTotal,
+    llm_requests_inflight: llmRequestsInflight,
+    llm_requests_streaming: llmRequestsStreaming
+  }));
+}, 60000);
 
 function sanitizeActions(value: unknown): Array<{ name: string; method: string; url: string }> {
   if (!Array.isArray(value)) return [];
@@ -630,6 +662,8 @@ app.post("/api/payments/gopayqris/create", requireAuth, async (req, res) => {
 app.post("/api/llm/paper-analyze", requireAuth, async (req, res) => {
   const startedAt = Date.now();
   const requestId = crypto.randomUUID();
+  llmRequestsTotal += 1;
+  llmRequestsInflight += 1;
   const user = res.locals.user as AuthContext;
   const userId = getUserId(user);
 
@@ -647,9 +681,12 @@ app.post("/api/llm/paper-analyze", requireAuth, async (req, res) => {
       user_id: userId,
       model: req.body?.model || "unknown",
       input_chars: typeof req.body?.text === "string" ? req.body.text.length : 0,
+      output_chars: 0,
       duration_ms: Date.now() - startedAt,
-      status_code: validation.status
+      status_code: validation.status,
+      termination_reason: "validation_error"
     });
+    llmRequestsInflight -= 1;
     return;
   }
 
@@ -667,9 +704,12 @@ app.post("/api/llm/paper-analyze", requireAuth, async (req, res) => {
       user_id: userId,
       model: validation.model,
       input_chars: validation.text.length,
+      output_chars: 0,
       duration_ms: Date.now() - startedAt,
-      status_code: 429
+      status_code: 429,
+      termination_reason: "rate_limited"
     });
+    llmRequestsInflight -= 1;
     return;
   }
 
@@ -731,25 +771,31 @@ app.post("/api/llm/paper-analyze", requireAuth, async (req, res) => {
         user_id: userId,
         model: validation.model,
         input_chars: validation.text.length,
+        output_chars: 0,
         duration_ms: Date.now() - startedAt,
-        status_code: status
+        status_code: status,
+        termination_reason: mapTerminationReason(status, result.code)
       });
       return;
     }
 
     res.setHeader("X-Request-Id", result.request_id);
     res.json({ ok: true, request_id: result.request_id, json: result.json });
+    const outputSize = JSON.stringify(result.json || {}).length;
     logLlmRequest({
       request_id: result.request_id,
       endpoint: "/api/llm/paper-analyze",
       user_id: userId,
       model: validation.model,
       input_chars: validation.text.length,
+      output_chars: outputSize,
       duration_ms: Date.now() - startedAt,
-      status_code: 200
+      status_code: 200,
+      termination_reason: "success"
     });
   } finally {
     releaseLlmSlot(userId);
+    llmRequestsInflight -= 1;
   }
 });
 
@@ -838,6 +884,8 @@ app.get("/api/payments/:orderId/status", requireAuth, async (req, res) => {
 app.post("/api/llm/prefill", requireAuth, async (req, res) => {
   const startedAt = Date.now();
   const requestId = crypto.randomUUID();
+  llmRequestsTotal += 1;
+  llmRequestsInflight += 1;
   const user = res.locals.user as AuthContext;
   const userId = getUserId(user);
 
@@ -855,9 +903,12 @@ app.post("/api/llm/prefill", requireAuth, async (req, res) => {
       user_id: userId,
       model: req.body?.model || "unknown",
       input_chars: typeof req.body?.nodeLabel === "string" ? req.body.nodeLabel.length : 0,
+      output_chars: 0,
       duration_ms: Date.now() - startedAt,
-      status_code: validation.status
+      status_code: validation.status,
+      termination_reason: "validation_error"
     });
+    llmRequestsInflight -= 1;
     return;
   }
 
@@ -875,9 +926,12 @@ app.post("/api/llm/prefill", requireAuth, async (req, res) => {
       user_id: userId,
       model: validation.model,
       input_chars: validation.nodeLabel.length,
+      output_chars: 0,
       duration_ms: Date.now() - startedAt,
-      status_code: 429
+      status_code: 429,
+      termination_reason: "rate_limited"
     });
+    llmRequestsInflight -= 1;
     return;
   }
 
@@ -931,8 +985,10 @@ app.post("/api/llm/prefill", requireAuth, async (req, res) => {
         user_id: userId,
         model: validation.model,
         input_chars: validation.nodeLabel.length,
+        output_chars: 0,
         duration_ms: Date.now() - startedAt,
-        status_code: status
+        status_code: status,
+        termination_reason: mapTerminationReason(status, result.code)
       });
       return;
     }
@@ -945,17 +1001,23 @@ app.post("/api/llm/prefill", requireAuth, async (req, res) => {
       user_id: userId,
       model: validation.model,
       input_chars: validation.nodeLabel.length,
+      output_chars: result.text.length,
       duration_ms: Date.now() - startedAt,
-      status_code: 200
+      status_code: 200,
+      termination_reason: "success"
     });
   } finally {
     releaseLlmSlot(userId);
+    llmRequestsInflight -= 1;
   }
 });
 
 app.post("/api/llm/chat", requireAuth, async (req, res) => {
   const startedAt = Date.now();
   const requestId = crypto.randomUUID();
+  llmRequestsTotal += 1;
+  llmRequestsInflight += 1;
+  llmRequestsStreaming += 1;
   const user = res.locals.user as AuthContext;
   const userId = getUserId(user);
 
@@ -973,9 +1035,13 @@ app.post("/api/llm/chat", requireAuth, async (req, res) => {
       user_id: userId,
       model: req.body?.model || "unknown",
       input_chars: typeof req.body?.userPrompt === "string" ? req.body.userPrompt.length : 0,
+      output_chars: 0,
       duration_ms: Date.now() - startedAt,
-      status_code: validation.status
+      status_code: validation.status,
+      termination_reason: "validation_error"
     });
+    llmRequestsInflight -= 1;
+    llmRequestsStreaming -= 1;
     return;
   }
 
@@ -993,15 +1059,22 @@ app.post("/api/llm/chat", requireAuth, async (req, res) => {
       user_id: userId,
       model: validation.model,
       input_chars: validation.userPrompt.length,
+      output_chars: 0,
       duration_ms: Date.now() - startedAt,
-      status_code: 429
+      status_code: 429,
+      termination_reason: "rate_limited"
     });
+    llmRequestsInflight -= 1;
+    llmRequestsStreaming -= 1;
     return;
   }
 
   let statusCode = 200;
   let streamStarted = false;
   let cancelled = false;
+  let outputChars = 0;
+  let firstTokenAt: number | null = null;
+  let terminationReason = "success";
   req.on("close", () => {
     cancelled = true;
   });
@@ -1022,12 +1095,18 @@ app.post("/api/llm/chat", requireAuth, async (req, res) => {
       if (cancelled) break;
       if (!streamStarted) {
         streamStarted = true;
+        firstTokenAt = Date.now();
       }
+      outputChars += chunk.length;
       res.write(chunk);
     }
 
     res.end();
     statusCode = 200;
+    if (cancelled) {
+      terminationReason = "client_abort";
+      statusCode = 499;
+    }
   } catch (err: any) {
     const info = err?.info as LlmError | undefined;
     if (!streamStarted) {
@@ -1039,6 +1118,7 @@ app.post("/api/llm/chat", requireAuth, async (req, res) => {
           code: info.code as ApiErrorCode,
           error: info.error
         });
+        terminationReason = mapTerminationReason(statusCode, info.code);
       } else {
         statusCode = 502;
         sendApiError(res, statusCode, {
@@ -1047,21 +1127,28 @@ app.post("/api/llm/chat", requireAuth, async (req, res) => {
           code: "upstream_error",
           error: "stream failed"
         });
+        terminationReason = "upstream_error";
       }
     } else {
       statusCode = 502;
       res.end();
+      terminationReason = "upstream_error";
     }
   } finally {
     releaseLlmSlot(userId);
+    llmRequestsInflight -= 1;
+    llmRequestsStreaming -= 1;
     logLlmRequest({
       request_id: streamStarted ? res.getHeader("X-Request-Id")?.toString() || requestId : requestId,
       endpoint: "/api/llm/chat",
       user_id: userId,
       model: validation.model,
       input_chars: validation.userPrompt.length,
+      output_chars: outputChars,
       duration_ms: Date.now() - startedAt,
-      status_code: statusCode
+      time_to_first_token_ms: firstTokenAt ? firstTokenAt - startedAt : null,
+      status_code: statusCode,
+      termination_reason: terminationReason
     });
   }
 });

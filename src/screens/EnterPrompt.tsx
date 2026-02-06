@@ -1,4 +1,5 @@
 import React from 'react';
+import { LoginOverlay } from '../auth/LoginOverlay';
 
 type EnterPromptProps = {
     onEnter: () => void;
@@ -12,21 +13,11 @@ export const EnterPrompt: React.FC<EnterPromptProps> = ({ onEnter, onBack, onSki
             <div style={CARD_STYLE}>
                 <div style={TITLE_STYLE}>Enter Prompt</div>
                 <div style={BODY_STYLE}>
-                    Placeholder page. Login overlay will be added later.
+                    Placeholder page. Use the sign-in overlay to continue.
                 </div>
                 <div style={INPUT_PLACEHOLDER_STYLE}>Prompt input placeholder</div>
-                <div style={BUTTON_ROW_STYLE}>
-                    <button type="button" style={SECONDARY_BUTTON_STYLE} onClick={onBack}>
-                        Back
-                    </button>
-                    <button type="button" style={PRIMARY_BUTTON_STYLE} onClick={onEnter}>
-                        Enter
-                    </button>
-                    <button type="button" style={SECONDARY_BUTTON_STYLE} onClick={onSkip}>
-                        Skip
-                    </button>
-                </div>
             </div>
+            <LoginOverlay open={true} onContinue={onEnter} onBack={onBack} onSkip={onSkip} />
         </div>
     );
 };
@@ -68,32 +59,5 @@ const INPUT_PLACEHOLDER_STYLE: React.CSSProperties = {
     border: '1px solid #2b2f3a',
     background: '#141923',
     color: '#7f8796',
-    fontSize: '14px',
-};
-
-const BUTTON_ROW_STYLE: React.CSSProperties = {
-    display: 'flex',
-    justifyContent: 'center',
-    gap: '12px',
-    flexWrap: 'wrap',
-};
-
-const PRIMARY_BUTTON_STYLE: React.CSSProperties = {
-    padding: '10px 16px',
-    borderRadius: '8px',
-    border: '1px solid #2b2f3a',
-    background: '#1f2430',
-    color: '#f2f2f2',
-    cursor: 'pointer',
-    fontSize: '14px',
-};
-
-const SECONDARY_BUTTON_STYLE: React.CSSProperties = {
-    padding: '10px 16px',
-    borderRadius: '8px',
-    border: '1px solid #2b2f3a',
-    background: 'transparent',
-    color: '#c7cbd6',
-    cursor: 'pointer',
     fontSize: '14px',
 };

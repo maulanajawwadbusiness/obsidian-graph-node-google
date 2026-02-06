@@ -4,6 +4,7 @@
 
 import { AI_MODELS } from '../config/aiModels';
 import { apiPost } from '../api';
+import { refreshBalance } from '../store/balanceStore';
 
 export interface AnalysisPoint {
     index: number;   // 0-based index (maps to node index)
@@ -87,5 +88,7 @@ export async function analyzeDocument(text: string, opts?: { nodeCount?: number 
     } catch (err) {
         console.error('[PaperAnalyzer] Analysis failed:', err);
         throw err;
+    } finally {
+        void refreshBalance();
     }
 }

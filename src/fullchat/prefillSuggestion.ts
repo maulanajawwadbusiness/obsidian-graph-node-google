@@ -3,6 +3,7 @@ import { AI_MODELS } from '../config/aiModels';
 import { t } from '../i18n/t';
 import { getLang } from '../i18n/lang';
 import { apiPost } from '../api';
+import { refreshBalance } from '../store/balanceStore';
 
 export interface MiniChatHistory {
     role: 'user' | 'ai';
@@ -82,6 +83,7 @@ async function refinePromptMock(context: PrefillContext, options: { signal?: Abo
 const REAL_TIMEOUT_MS = 2500;
 
 async function refinePromptWithReal(context: PrefillContext, options: { signal?: AbortSignal }): Promise<string> {
+    let didCall = false;
     try {
         const res = await withTimeoutAndAbort(
             apiPost('/api/llm/prefill', {
@@ -93,6 +95,7 @@ async function refinePromptWithReal(context: PrefillContext, options: { signal?:
             REAL_TIMEOUT_MS,
             options.signal
         );
+        didCall = true;
 
         if (res.status === 401 || res.status === 403) {
             console.warn('[PrefillAI] unauthorized; please log in');
@@ -132,6 +135,10 @@ async function refinePromptWithReal(context: PrefillContext, options: { signal?:
         // On real errors (timeout, network), warn and fallback
         console.warn('[PrefillAI] real refine failed or timed out, falling back to mock', err);
         return refinePromptMock(context, options);
+    } finally {
+        if (didCall) {
+            void refreshBalance();
+        }
     }
 }
 

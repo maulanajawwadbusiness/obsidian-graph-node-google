@@ -3,6 +3,7 @@ import type { AiContext } from './fullChatTypes';
 import { getAiLanguageDirective } from '../i18n/aiLanguage';
 import { getLang } from '../i18n/lang';
 import { AI_MODELS } from '../config/aiModels';
+import { refreshBalance } from '../store/balanceStore';
 
 // =============================================================================
 // TYPES
@@ -90,7 +91,6 @@ async function* realResponseGenerator(
         console.log('[FullChatAI] generator completed');
 
         console.log(`[FullChatAI] response_streamed len=${totalChars}`);
-
     } catch (err) {
         if (signal?.aborted || (err instanceof Error && err.name === 'AbortError')) {
             console.log('[FullChatAI] aborted');
@@ -114,6 +114,8 @@ async function* realResponseGenerator(
         // Lets fallback to mock for robustness per "just works" rule.
         console.warn('[FullChatAI] error_fallback_to_mock');
         yield* mockResponseGenerator(context);
+    } finally {
+        void refreshBalance();
     }
 }
 

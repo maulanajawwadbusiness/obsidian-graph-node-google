@@ -1,5 +1,6 @@
 import React from 'react';
 import { createPaymentGopayQris, getPaymentStatus, type PaymentAction } from '../api';
+import { refreshBalance } from '../store/balanceStore';
 
 const DEFAULT_AMOUNT = 1000;
 const POLL_FAST_MS = 1000;
@@ -66,6 +67,7 @@ export const PaymentGopayPanel: React.FC<PaymentPanelProps> = ({ onPaid }) => {
                 logStatus(status);
 
                 if (status === 'settlement' || status === 'capture') {
+                    void refreshBalance();
                     onPaid?.(orderId);
                     stop();
                     return;
@@ -208,7 +210,7 @@ export const PaymentGopayPanel: React.FC<PaymentPanelProps> = ({ onPaid }) => {
 const LAUNCH_BUTTON_STYLE: React.CSSProperties = {
     position: 'absolute',
     top: '24px',
-    right: '72px',
+    right: '200px',
     padding: '6px 12px',
     borderRadius: '10px',
     border: '1px solid #2b2f3a',

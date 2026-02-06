@@ -75,7 +75,7 @@ const TITLE_STYLE: React.CSSProperties = {
     fontWeight: 700,
     letterSpacing: '1px',
     fontFamily: 'var(--font-ui)',
-    color: '#ffffff',
+    color: '#b9bcc5',
 };
 
 const SUBTITLE_WRAPPER_STYLE: React.CSSProperties = {

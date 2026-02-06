@@ -7,6 +7,7 @@ import { getUsdToIdr } from "./fx/fxService";
 import { midtransRequest } from "./midtrans/client";
 import { generateStructuredJson, generateText, generateTextStream, type LlmError } from "./llm/llmClient";
 import { LLM_LIMITS } from "./llm/limits";
+import { selectProvider } from "./llm/providerSelector";
 import { validateChat, validatePaperAnalyze, validatePrefill } from "./llm/validate";
 import { estimateIdrCost } from "./pricing/pricingCalculator";
 import { estimateTokensFromText } from "./pricing/tokenEstimate";
@@ -782,6 +783,11 @@ app.post("/api/llm/paper-analyze", requireAuth, async (req, res) => {
   }
 
   try {
+    const providerChoice = await selectProvider({ userId, endpointKind: "analyze" });
+    if (providerChoice.provider === "openrouter") {
+      console.log(`[llm] provider_policy would_select=openrouter reason=${providerChoice.reason} date_key=${providerChoice.date_key} remaining=${providerChoice.remaining_tokens}`);
+    }
+
     const inputTokensEstimate = estimateTokensFromText(validation.text);
     const fx = await getUsdToIdr();
     fxRate = fx.rate;
@@ -1137,6 +1143,11 @@ app.post("/api/llm/prefill", requireAuth, async (req, res) => {
   }
 
   try {
+    const providerChoice = await selectProvider({ userId, endpointKind: "prefill" });
+    if (providerChoice.provider === "openrouter") {
+      console.log(`[llm] provider_policy would_select=openrouter reason=${providerChoice.reason} date_key=${providerChoice.date_key} remaining=${providerChoice.remaining_tokens}`);
+    }
+
     const promptParts: string[] = [];
     promptParts.push(`Target Node: ${validation.nodeLabel}`);
     if (validation.content) {
@@ -1386,6 +1397,11 @@ app.post("/api/llm/chat", requireAuth, async (req, res) => {
   });
 
   try {
+    const providerChoice = await selectProvider({ userId, endpointKind: "chat" });
+    if (providerChoice.provider === "openrouter") {
+      console.log(`[llm] provider_policy would_select=openrouter reason=${providerChoice.reason} date_key=${providerChoice.date_key} remaining=${providerChoice.remaining_tokens}`);
+    }
+
     const systemPrompt = validation.systemPrompt || "";
     chatInput = `${systemPrompt}\n\nUSER PROMPT:\n${validation.userPrompt}`;
     const inputTokensEstimate = estimateTokensFromText(chatInput);

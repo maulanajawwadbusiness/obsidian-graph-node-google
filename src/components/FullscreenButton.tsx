@@ -10,6 +10,7 @@ type FullscreenButtonProps = {
 
 export const FullscreenButton: React.FC<FullscreenButtonProps> = ({ className, style }) => {
     const { isFullscreen, toggleFullscreen } = useFullscreen();
+    const [isHovered, setIsHovered] = React.useState(false);
 
     const handleClick = React.useCallback(() => {
         toggleFullscreen().catch((e: unknown) => {
@@ -25,6 +26,8 @@ export const FullscreenButton: React.FC<FullscreenButtonProps> = ({ className, s
                 ...BUTTON_STYLE,
                 ...style,
             }}
+            onMouseEnter={() => setIsHovered(true)}
+            onMouseLeave={() => setIsHovered(false)}
             onClick={(e) => {
                 e.stopPropagation();
                 handleClick();
@@ -35,7 +38,10 @@ export const FullscreenButton: React.FC<FullscreenButtonProps> = ({ className, s
             <img
                 src={isFullscreen ? fullscreenCloseIcon : fullscreenOpenIcon}
                 alt={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
-                style={ICON_STYLE}
+                style={{
+                    ...ICON_STYLE,
+                    opacity: isHovered ? 0.8 : 0.5,
+                }}
             />
         </button>
     );
@@ -63,5 +69,6 @@ const ICON_STYLE: React.CSSProperties = {
     width: '24px',
     height: '24px',
     objectFit: 'contain',
-    opacity: 0.7,
+    opacity: 0.5,
+    transition: 'opacity 0.2s ease',
 };

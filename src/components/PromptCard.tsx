@@ -30,6 +30,10 @@ export const PromptCard: React.FC<PromptCardProps> = ({ lang = 'id' }) => {
             <FullscreenButton />
 
             <div style={CARD_INNER_STYLE}>
+                <div style={GRAPH_PREVIEW_PLACEHOLDER_STYLE}>
+                    <div style={PLACEHOLDER_LABEL_STYLE}>Sample graph preview</div>
+                </div>
+
                 <div style={HEADLINE_STYLE}>
                     {texts.headlinePrefix}
                     <span
@@ -40,10 +44,6 @@ export const PromptCard: React.FC<PromptCardProps> = ({ lang = 'id' }) => {
                         {dynamicWord}
                     </span>
                     {texts.headlineSuffix}
-                </div>
-
-                <div style={GRAPH_PREVIEW_PLACEHOLDER_STYLE}>
-                    <div style={PLACEHOLDER_LABEL_STYLE}>Sample graph preview</div>
                 </div>
 
                 <div style={INPUT_PILL_STYLE}>

@@ -45,7 +45,7 @@ const SIDEBAR_STYLE: React.CSSProperties = {
     left: 0,
     top: 0,
     bottom: 0,
-    width: '280px',
+    width: '93px',
     background: '#0D0D16',
     borderRight: '1px solid #1e2330',
     display: 'flex',

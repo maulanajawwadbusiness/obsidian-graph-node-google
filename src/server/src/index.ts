@@ -10,6 +10,7 @@ import { type LlmError } from "./llm/llmClient";
 import { LLM_LIMITS } from "./llm/limits";
 import { pickProviderForRequest } from "./llm/providerRouter";
 import { validateChat, validatePaperAnalyze, validatePrefill } from "./llm/validate";
+import { mapModel } from "./llm/models/modelMap";
 import { estimateIdrCost } from "./pricing/pricingCalculator";
 import { estimateTokensFromText } from "./pricing/tokenEstimate";
 import { applyTopupFromMidtrans, chargeForLlm, getBalance } from "./rupiah/rupiahService";
@@ -187,12 +188,14 @@ function logLlmRequest(fields: {
   rupiah_cost?: number | null;
   rupiah_balance_before?: number | null;
   rupiah_balance_after?: number | null;
+  provider_model_id?: string | null;
 }) {
   console.log(JSON.stringify({
     request_id: fields.request_id,
     endpoint: fields.endpoint,
     user_id: fields.user_id,
     model: fields.model,
+    provider_model_id: fields.provider_model_id ?? null,
     input_chars: fields.input_chars,
     output_chars: fields.output_chars,
     duration_ms: fields.duration_ms,
@@ -729,6 +732,7 @@ app.post("/api/llm/paper-analyze", requireAuth, async (req, res) => {
   let rupiahAfter: number | null = null;
   let routerDateKey = "";
   let fxRate = 0;
+  let providerModelId = "";
 
   const validation = validatePaperAnalyze(req.body);
   if ("ok" in validation && validation.ok === false) {
@@ -785,7 +789,8 @@ app.post("/api/llm/paper-analyze", requireAuth, async (req, res) => {
   try {
     const router = await pickProviderForRequest({ userId, endpointKind: "analyze" });
     const provider = router.provider;
-    console.log(`[llm] provider_policy selected=${router.selectedProviderName} actual_provider=${provider.name} cohort=${router.policyMeta.cohort_selected} used_tokens=${router.policyMeta.user_used_tokens_today} pool_remaining=${router.policyMeta.pool_remaining_tokens} cap=${router.policyMeta.user_free_cap} reason=${router.policyMeta.reason} date_key=${router.policyMeta.date_key}`);
+    const providerModelId = mapModel(provider.name, validation.model);
+    console.log(`[llm] provider_policy selected=${router.selectedProviderName} actual_provider=${provider.name} logical_model=${validation.model} provider_model_id=${providerModelId} cohort=${router.policyMeta.cohort_selected} used_tokens=${router.policyMeta.user_used_tokens_today} pool_remaining=${router.policyMeta.pool_remaining_tokens} cap=${router.policyMeta.user_free_cap} reason=${router.policyMeta.reason} date_key=${router.policyMeta.date_key}`);
 
     const inputTokensEstimate = estimateTokensFromText(validation.text);
     const fx = await getUsdToIdr();
@@ -815,6 +820,7 @@ app.post("/api/llm/paper-analyze", requireAuth, async (req, res) => {
         endpoint: "/api/llm/paper-analyze",
         user_id: userId,
         model: validation.model,
+        provider_model_id: providerModelId,
         input_chars: validation.text.length,
         output_chars: 0,
         duration_ms: Date.now() - startedAt,
@@ -883,6 +889,7 @@ app.post("/api/llm/paper-analyze", requireAuth, async (req, res) => {
         endpoint: "/api/llm/paper-analyze",
         user_id: userId,
         model: validation.model,
+        provider_model_id: providerModelId,
         input_chars: validation.text.length,
         output_chars: 0,
         duration_ms: Date.now() - startedAt,
@@ -934,6 +941,7 @@ app.post("/api/llm/paper-analyze", requireAuth, async (req, res) => {
         endpoint: "/api/llm/paper-analyze",
         user_id: userId,
         model: validation.model,
+        provider_model_id: providerModelId,
         input_chars: validation.text.length,
         output_chars: outputTextLength,
         duration_ms: Date.now() - startedAt,
@@ -970,6 +978,7 @@ app.post("/api/llm/paper-analyze", requireAuth, async (req, res) => {
       endpoint: "/api/llm/paper-analyze",
       user_id: userId,
       model: validation.model,
+      provider_model_id: providerModelId,
       input_chars: validation.text.length,
       output_chars: outputSize,
       duration_ms: Date.now() - startedAt,
@@ -1158,7 +1167,8 @@ app.post("/api/llm/prefill", requireAuth, async (req, res) => {
   try {
     const router = await pickProviderForRequest({ userId, endpointKind: "prefill" });
     const provider = router.provider;
-    console.log(`[llm] provider_policy selected=${router.selectedProviderName} actual_provider=${provider.name} cohort=${router.policyMeta.cohort_selected} used_tokens=${router.policyMeta.user_used_tokens_today} pool_remaining=${router.policyMeta.pool_remaining_tokens} cap=${router.policyMeta.user_free_cap} reason=${router.policyMeta.reason} date_key=${router.policyMeta.date_key}`);
+    const providerModelId = mapModel(provider.name, validation.model);
+    console.log(`[llm] provider_policy selected=${router.selectedProviderName} actual_provider=${provider.name} logical_model=${validation.model} provider_model_id=${providerModelId} cohort=${router.policyMeta.cohort_selected} used_tokens=${router.policyMeta.user_used_tokens_today} pool_remaining=${router.policyMeta.pool_remaining_tokens} cap=${router.policyMeta.user_free_cap} reason=${router.policyMeta.reason} date_key=${router.policyMeta.date_key}`);
 
     const promptParts: string[] = [];
     promptParts.push(`Target Node: ${validation.nodeLabel}`);
@@ -1215,6 +1225,7 @@ app.post("/api/llm/prefill", requireAuth, async (req, res) => {
         endpoint: "/api/llm/prefill",
         user_id: userId,
         model: validation.model,
+        provider_model_id: providerModelId,
         input_chars: validation.nodeLabel.length,
         output_chars: 0,
         duration_ms: Date.now() - startedAt,
@@ -1245,6 +1256,7 @@ app.post("/api/llm/prefill", requireAuth, async (req, res) => {
         endpoint: "/api/llm/prefill",
         user_id: userId,
         model: validation.model,
+        provider_model_id: providerModelId,
         input_chars: validation.nodeLabel.length,
         output_chars: 0,
         duration_ms: Date.now() - startedAt,
@@ -1293,6 +1305,7 @@ app.post("/api/llm/prefill", requireAuth, async (req, res) => {
         endpoint: "/api/llm/prefill",
         user_id: userId,
         model: validation.model,
+        provider_model_id: providerModelId,
         input_chars: validation.nodeLabel.length,
         output_chars: result.text.length,
         duration_ms: Date.now() - startedAt,
@@ -1328,6 +1341,7 @@ app.post("/api/llm/prefill", requireAuth, async (req, res) => {
       endpoint: "/api/llm/prefill",
       user_id: userId,
       model: validation.model,
+      provider_model_id: providerModelId,
       input_chars: validation.nodeLabel.length,
       output_chars: result.text.length,
       duration_ms: Date.now() - startedAt,
@@ -1427,7 +1441,8 @@ app.post("/api/llm/chat", requireAuth, async (req, res) => {
     const router = await pickProviderForRequest({ userId, endpointKind: "chat" });
     const provider = router.provider;
     routerDateKey = router.policyMeta.date_key;
-    console.log(`[llm] provider_policy selected=${router.selectedProviderName} actual_provider=${provider.name} cohort=${router.policyMeta.cohort_selected} used_tokens=${router.policyMeta.user_used_tokens_today} pool_remaining=${router.policyMeta.pool_remaining_tokens} cap=${router.policyMeta.user_free_cap} reason=${router.policyMeta.reason} date_key=${router.policyMeta.date_key}`);
+    providerModelId = mapModel(provider.name, validation.model);
+    console.log(`[llm] provider_policy selected=${router.selectedProviderName} actual_provider=${provider.name} logical_model=${validation.model} provider_model_id=${providerModelId} cohort=${router.policyMeta.cohort_selected} used_tokens=${router.policyMeta.user_used_tokens_today} pool_remaining=${router.policyMeta.pool_remaining_tokens} cap=${router.policyMeta.user_free_cap} reason=${router.policyMeta.reason} date_key=${router.policyMeta.date_key}`);
 
     const systemPrompt = validation.systemPrompt || "";
     chatInput = `${systemPrompt}\n\nUSER PROMPT:\n${validation.userPrompt}`;
@@ -1456,6 +1471,7 @@ app.post("/api/llm/chat", requireAuth, async (req, res) => {
         endpoint: "/api/llm/chat",
         user_id: userId,
         model: validation.model,
+        provider_model_id: providerModelId,
         input_chars: validation.userPrompt.length,
         output_chars: 0,
         duration_ms: Date.now() - startedAt,
@@ -1566,6 +1582,7 @@ app.post("/api/llm/chat", requireAuth, async (req, res) => {
       endpoint: "/api/llm/chat",
       user_id: userId,
       model: validation.model,
+      provider_model_id: providerModelId || null,
       input_chars: validation.userPrompt.length,
       output_chars: outputChars,
       duration_ms: Date.now() - startedAt,

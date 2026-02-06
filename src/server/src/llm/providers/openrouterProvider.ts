@@ -1,6 +1,7 @@
 import crypto from "crypto";
 import type { LlmProvider } from "./types";
 import type { LlmError, LlmStream, LlmStructuredResult, LlmTextResult } from "../llmClient";
+import { mapModel } from "../models/modelMap";
 
 type TextOpts = {
   model: string;
@@ -115,10 +116,11 @@ async function postJson(path: string, body: object, timeoutMs: number) {
 async function generateText(opts: TextOpts): Promise<LlmTextResult> {
   const request_id = crypto.randomUUID();
   const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  const providerModel = mapModel("openrouter", opts.model);
   const result = await postJson(
     "/chat/completions",
     {
-      model: opts.model,
+      model: providerModel,
       messages: [{ role: "user", content: opts.input }],
       stream: false
     },
@@ -162,6 +164,7 @@ async function generateText(opts: TextOpts): Promise<LlmTextResult> {
 async function generateStructuredJson(opts: StructuredOpts): Promise<LlmStructuredResult> {
   const request_id = crypto.randomUUID();
   const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  const providerModel = mapModel("openrouter", opts.model);
   const systemPrompt = [
     "Return ONLY valid JSON that matches the provided JSON Schema.",
     "Do not include backticks or markdown.",
@@ -177,7 +180,7 @@ async function generateStructuredJson(opts: StructuredOpts): Promise<LlmStructur
   const result = await postJson(
     "/chat/completions",
     {
-      model: opts.model,
+      model: providerModel,
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt }
@@ -233,6 +236,7 @@ async function generateStructuredJson(opts: StructuredOpts): Promise<LlmStructur
 function generateTextStream(opts: TextOpts): LlmStream {
   const request_id = crypto.randomUUID();
   const timeoutMs = opts.timeoutMs ?? DEFAULT_STREAM_TIMEOUT_MS;
+  const providerModel = mapModel("openrouter", opts.model);
   let finalStatus: "ok" | "error" = "ok";
 
   const stream = (async function* () {
@@ -252,7 +256,7 @@ function generateTextStream(opts: TextOpts): LlmStream {
         method: "POST",
         headers: buildHeaders(apiKey),
         body: JSON.stringify({
-          model: opts.model,
+          model: providerModel,
           messages: [{ role: "user", content: opts.input }],
           stream: true
         }),

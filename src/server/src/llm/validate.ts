@@ -1,4 +1,4 @@
-import { AI_MODELS } from "../../config/aiModels";
+import { DEFAULT_LOGICAL_MODELS, type LogicalModel } from "./models/logicalModels";
 import { LLM_LIMITS } from "./limits";
 
 export type ValidationError = {
@@ -11,12 +11,12 @@ export type ValidationError = {
 export type PaperAnalyzeInput = {
   text: string;
   nodeCount: number;
-  model: string;
+  model: LogicalModel;
 };
 
 export type ChatInput = {
   userPrompt: string;
-  model: string;
+  model: LogicalModel;
   systemPrompt?: string;
   context: {
     nodeLabel?: string | null;
@@ -28,22 +28,22 @@ export type ChatInput = {
 
 export type PrefillInput = {
   nodeLabel: string;
-  model: string;
+  model: LogicalModel;
   miniChatMessages?: Array<{ role: "user" | "ai"; text: string }>;
   content?: { title: string; summary: string } | null;
 };
 
-const ALLOWED_MODELS = new Set<string>([
-  AI_MODELS.ANALYZER,
-  AI_MODELS.CHAT,
-  AI_MODELS.PREFILL
+const ALLOWED_MODELS = new Set<LogicalModel>([
+  DEFAULT_LOGICAL_MODELS.analyze,
+  DEFAULT_LOGICAL_MODELS.chat,
+  DEFAULT_LOGICAL_MODELS.prefill
 ]);
 
-function resolveModel(requested: unknown, fallback: string): string | ValidationError {
+function resolveModel(requested: unknown, fallback: LogicalModel): LogicalModel | ValidationError {
   if (requested !== undefined && requested !== null) {
-    if (!isString(requested) || !ALLOWED_MODELS.has(requested)) {
-      return invalidType("model");
-    }
+    if (!isString(requested)) return invalidType("model");
+    if (!ALLOWED_MODELS.has(requested as LogicalModel)) return invalidType("model");
+    return requested as LogicalModel;
   }
   return fallback;
 }
@@ -76,7 +76,7 @@ export function validatePaperAnalyze(body: any): PaperAnalyzeInput | ValidationE
     };
   }
 
-  const resolvedModel = resolveModel(body.model, AI_MODELS.ANALYZER);
+  const resolvedModel = resolveModel(body.model, DEFAULT_LOGICAL_MODELS.analyze);
   if (typeof resolvedModel !== "string") return resolvedModel;
 
   return { text: body.text, nodeCount, model: resolvedModel };
@@ -89,7 +89,7 @@ export function validateChat(body: any): ChatInput | ValidationError {
     return { ok: false, status: 413, code: "too_large", error: "userPrompt too large" };
   }
 
-  const resolvedModel = resolveModel(body.model, AI_MODELS.CHAT);
+  const resolvedModel = resolveModel(body.model, DEFAULT_LOGICAL_MODELS.chat);
   if (typeof resolvedModel !== "string") return resolvedModel;
 
   const context = body.context && typeof body.context === "object" ? body.context : {};
@@ -141,7 +141,7 @@ export function validatePrefill(body: any): PrefillInput | ValidationError {
     return { ok: false, status: 413, code: "too_large", error: "nodeLabel too large" };
   }
 
-  const resolvedModel = resolveModel(body.model, AI_MODELS.PREFILL);
+  const resolvedModel = resolveModel(body.model, DEFAULT_LOGICAL_MODELS.prefill);
   if (typeof resolvedModel !== "string") return resolvedModel;
 
   const content = body.content && typeof body.content === "object" ? body.content : null;

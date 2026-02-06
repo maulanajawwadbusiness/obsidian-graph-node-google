@@ -20,12 +20,20 @@ export type LlmStructuredOk = {
   ok: true;
   request_id: string;
   json: unknown;
+  usage?: {
+    input_tokens?: number;
+    output_tokens?: number;
+  };
 };
 
 export type LlmTextOk = {
   ok: true;
   request_id: string;
   text: string;
+  usage?: {
+    input_tokens?: number;
+    output_tokens?: number;
+  };
 };
 
 export type LlmStructuredResult = LlmStructuredOk | LlmError;
@@ -270,7 +278,17 @@ export async function generateStructuredJson(opts: StructuredOpts): Promise<LlmS
       status: "ok"
     });
 
-    return { ok: true, request_id, json: parsed };
+    return {
+      ok: true,
+      request_id,
+      json: parsed,
+      usage: data?.usage
+        ? {
+            input_tokens: data.usage.input_tokens,
+            output_tokens: data.usage.output_tokens
+          }
+        : undefined
+    };
   } catch (err: any) {
     const isTimeout = err?.name === "AbortError";
     const errorResult = createError({
@@ -392,7 +410,17 @@ export async function generateText(opts: TextOpts): Promise<LlmTextResult> {
       status: "ok"
     });
 
-    return { ok: true, request_id, text };
+    return {
+      ok: true,
+      request_id,
+      text,
+      usage: data?.usage
+        ? {
+            input_tokens: data.usage.input_tokens,
+            output_tokens: data.usage.output_tokens
+          }
+        : undefined
+    };
   } catch (err: any) {
     const isTimeout = err?.name === "AbortError";
     const errorResult = createError({

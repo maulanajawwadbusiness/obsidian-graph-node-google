@@ -2,13 +2,13 @@ import crypto from "crypto";
 import cors from "cors";
 import express from "express";
 import { OAuth2Client } from "google-auth-library";
-import { CREDITS_COSTS } from "./credits/creditsCosts";
-import { applyTopupFromMidtrans, deductForLlm, getBalance } from "./credits/creditsService";
 import { getPool } from "./db";
 import { midtransRequest } from "./midtrans/client";
 import { generateStructuredJson, generateText, generateTextStream, type LlmError } from "./llm/llmClient";
 import { LLM_LIMITS } from "./llm/limits";
 import { validateChat, validatePaperAnalyze, validatePrefill } from "./llm/validate";
+import { estimateIdrCost } from "./pricing/pricingCalculator";
+import { applyTopupFromMidtrans, chargeForLlm, getBalance } from "./rupiah/rupiahService";
 
 type SessionUser = {
   sub: string;
@@ -127,7 +127,7 @@ type ApiErrorCode =
   | "bad_request"
   | "too_large"
   | "unauthorized"
-  | "insufficient_credits"
+  | "insufficient_rupiah"
   | "rate_limited"
   | "upstream_error"
   | "timeout"
@@ -180,9 +180,9 @@ function logLlmRequest(fields: {
   time_to_first_token_ms?: number | null;
   status_code: number;
   termination_reason: string;
-  credits_cost?: number | null;
-  credits_balance_before?: number | null;
-  credits_balance_after?: number | null;
+  rupiah_cost?: number | null;
+  rupiah_balance_before?: number | null;
+  rupiah_balance_after?: number | null;
 }) {
   console.log(JSON.stringify({
     request_id: fields.request_id,
@@ -195,9 +195,9 @@ function logLlmRequest(fields: {
     time_to_first_token_ms: fields.time_to_first_token_ms ?? null,
     status_code: fields.status_code,
     termination_reason: fields.termination_reason,
-    credits_cost: fields.credits_cost ?? null,
-    credits_balance_before: fields.credits_balance_before ?? null,
-    credits_balance_after: fields.credits_balance_after ?? null
+    rupiah_cost: fields.rupiah_cost ?? null,
+    rupiah_balance_before: fields.rupiah_balance_before ?? null,
+    rupiah_balance_after: fields.rupiah_balance_after ?? null
   }));
 }
 
@@ -219,13 +219,18 @@ function mapLlmErrorToStatus(error: LlmError): number {
 }
 
 function mapTerminationReason(statusCode: number, code?: string) {
-  if (statusCode === 402 || code === "insufficient_credits") return "insufficient_credits";
+  if (statusCode === 402 || code === "insufficient_rupiah") return "insufficient_rupiah";
   if (statusCode === 429) return "rate_limited";
   if (statusCode === 400 || statusCode === 413) return "validation_error";
   if (statusCode === 504 || code === "timeout") return "timeout";
   if (code === "upstream_error" || statusCode >= 500) return "upstream_error";
   if (statusCode === 200) return "success";
   return "upstream_error";
+}
+
+function estimateTokensFromChars(chars: number): number {
+  if (!Number.isFinite(chars) || chars <= 0) return 0;
+  return Math.max(1, Math.ceil(chars / 4));
 }
 
 setInterval(() => {
@@ -323,7 +328,7 @@ app.post("/api/payments/webhook", async (req, res) => {
   }
 
   let processingError: string | null = null;
-  let creditApplyError: string | null = null;
+  let rupiahApplyError: string | null = null;
   let shouldApplyCredits = false;
   if (verified && orderId) {
     try {
@@ -380,18 +385,18 @@ app.post("/api/payments/webhook", async (req, res) => {
         await applyTopupFromMidtrans({
           userId: String(row.user_id),
           orderId,
-          amount: Number(row.gross_amount || 0)
+          amountIdr: Number(row.gross_amount || 0)
         });
       } else {
-        creditApplyError = "credits apply failed: missing transaction row";
+        rupiahApplyError = "rupiah apply failed: missing transaction row";
       }
     } catch (e) {
-      creditApplyError = "credits apply failed";
+      rupiahApplyError = "rupiah apply failed";
     }
   }
 
-  if (!processingError && creditApplyError) {
-    processingError = creditApplyError;
+  if (!processingError && rupiahApplyError) {
+    processingError = rupiahApplyError;
   }
 
   try {
@@ -603,13 +608,13 @@ app.post("/auth/logout", async (req, res) => {
   res.json({ ok: true });
 });
 
-app.get("/api/credits/me", requireAuth, async (req, res) => {
+app.get("/api/rupiah/me", requireAuth, async (req, res) => {
   const user = res.locals.user as AuthContext;
   try {
     const balance = await getBalance(String(user.id));
-    res.json({ ok: true, balance: balance.balance, updated_at: balance.updated_at });
+    res.json({ ok: true, balance_idr: balance.balance_idr, updated_at: balance.updated_at });
   } catch (e) {
-    res.status(500).json({ ok: false, error: "failed to load credits balance" });
+    res.status(500).json({ ok: false, error: "failed to load rupiah balance" });
   }
 });
 
@@ -719,12 +724,9 @@ app.post("/api/llm/paper-analyze", requireAuth, async (req, res) => {
   llmRequestsInflight += 1;
   const user = res.locals.user as AuthContext;
   const userId = getUserId(user);
-  const creditsCost = CREDITS_COSTS.prefill;
-  let creditsBefore: number | null = null;
-  let creditsAfter: number | null = null;
-  const creditsCost = CREDITS_COSTS.paperAnalyze;
-  let creditsBefore: number | null = null;
-  let creditsAfter: number | null = null;
+  let rupiahCost: number | null = null;
+  let rupiahBefore: number | null = null;
+  let rupiahAfter: number | null = null;
 
   const validation = validatePaperAnalyze(req.body);
   if ("ok" in validation && validation.ok === false) {
@@ -744,9 +746,9 @@ app.post("/api/llm/paper-analyze", requireAuth, async (req, res) => {
       duration_ms: Date.now() - startedAt,
       status_code: validation.status,
       termination_reason: "validation_error",
-      credits_cost: null,
-      credits_balance_before: null,
-      credits_balance_after: null
+      rupiah_cost: null,
+      rupiah_balance_before: null,
+      rupiah_balance_after: null
     });
     llmRequestsInflight -= 1;
     return;
@@ -770,26 +772,34 @@ app.post("/api/llm/paper-analyze", requireAuth, async (req, res) => {
       duration_ms: Date.now() - startedAt,
       status_code: 429,
       termination_reason: "rate_limited",
-      credits_cost: null,
-      credits_balance_before: null,
-      credits_balance_after: null
+      rupiah_cost: null,
+      rupiah_balance_before: null,
+      rupiah_balance_after: null
     });
     llmRequestsInflight -= 1;
     return;
   }
 
   try {
-    const creditResult = await deductForLlm({
-      userId,
-      requestId,
-      amount: creditsCost
+    const inputTokensEstimate = estimateTokensFromChars(validation.text.length);
+    const estimated = estimateIdrCost({
+      model: validation.model,
+      inputTokens: inputTokensEstimate,
+      outputTokens: 0
     });
-    if (!creditResult.ok) {
-      sendApiError(res, 402, {
+    const balanceSnapshot = await getBalance(userId);
+    if (balanceSnapshot.balance_idr < estimated.idrCostRounded) {
+      const shortfall = estimated.idrCostRounded - balanceSnapshot.balance_idr;
+      res.setHeader("X-Request-Id", requestId);
+      res.setHeader("X-Request-Id", requestId);
+      res.setHeader("X-Request-Id", requestId);
+      res.status(402).json({
         ok: false,
+        code: "insufficient_rupiah",
         request_id: requestId,
-        code: "insufficient_credits",
-        error: "insufficient credits"
+        needed_idr: estimated.idrCostRounded,
+        balance_idr: balanceSnapshot.balance_idr,
+        shortfall_idr: shortfall
       });
       logLlmRequest({
         request_id: requestId,
@@ -800,16 +810,13 @@ app.post("/api/llm/paper-analyze", requireAuth, async (req, res) => {
         output_chars: 0,
         duration_ms: Date.now() - startedAt,
         status_code: 402,
-        termination_reason: "insufficient_credits",
-        credits_cost: creditsCost,
-        credits_balance_before: creditResult.balance,
-        credits_balance_after: creditResult.balance
+        termination_reason: "insufficient_rupiah",
+        rupiah_cost: estimated.idrCostRounded,
+        rupiah_balance_before: balanceSnapshot.balance_idr,
+        rupiah_balance_after: balanceSnapshot.balance_idr
       });
       return;
     }
-
-    creditsBefore = creditResult.balance_before;
-    creditsAfter = creditResult.balance_after;
 
     const result = await generateStructuredJson({
       model: validation.model,
@@ -872,12 +879,65 @@ app.post("/api/llm/paper-analyze", requireAuth, async (req, res) => {
         duration_ms: Date.now() - startedAt,
         status_code: status,
         termination_reason: mapTerminationReason(status, result.code),
-        credits_cost: creditsCost,
-        credits_balance_before: creditsBefore,
-        credits_balance_after: creditsAfter
+        rupiah_cost: null,
+        rupiah_balance_before: null,
+        rupiah_balance_after: null
       });
       return;
     }
+
+    const outputTextLength = JSON.stringify(result.json || {}).length;
+    const usageInput = result.usage?.input_tokens;
+    const usageOutput = result.usage?.output_tokens;
+    const inputTokens = Number.isFinite(usageInput)
+      ? Number(usageInput)
+      : estimateTokensFromChars(validation.text.length);
+    const outputTokens = Number.isFinite(usageOutput)
+      ? Number(usageOutput)
+      : estimateTokensFromChars(outputTextLength);
+    const pricing = estimateIdrCost({
+      model: validation.model,
+      inputTokens,
+      outputTokens
+    });
+    const chargeResult = await chargeForLlm({
+      userId,
+      requestId,
+      amountIdr: pricing.idrCostRounded,
+      meta: { model: validation.model, totalTokens: pricing.totalTokens }
+    });
+    if (!chargeResult.ok) {
+      const shortfall = pricing.idrCostRounded - chargeResult.balance_idr;
+      res.setHeader("X-Request-Id", requestId);
+      res.setHeader("X-Request-Id", requestId);
+      res.status(402).json({
+        ok: false,
+        code: "insufficient_rupiah",
+        request_id: requestId,
+        needed_idr: pricing.idrCostRounded,
+        balance_idr: chargeResult.balance_idr,
+        shortfall_idr: shortfall
+      });
+      logLlmRequest({
+        request_id: requestId,
+        endpoint: "/api/llm/paper-analyze",
+        user_id: userId,
+        model: validation.model,
+        input_chars: validation.text.length,
+        output_chars: outputTextLength,
+        duration_ms: Date.now() - startedAt,
+        status_code: 402,
+        termination_reason: "insufficient_rupiah",
+        rupiah_cost: pricing.idrCostRounded,
+        rupiah_balance_before: chargeResult.balance_idr,
+        rupiah_balance_after: chargeResult.balance_idr
+      });
+      return;
+    }
+
+    rupiahCost = pricing.idrCostRounded;
+    rupiahBefore = chargeResult.balance_before;
+    rupiahAfter = chargeResult.balance_after;
 
     res.setHeader("X-Request-Id", requestId);
     res.json({ ok: true, request_id: requestId, json: result.json });
@@ -892,9 +952,9 @@ app.post("/api/llm/paper-analyze", requireAuth, async (req, res) => {
       duration_ms: Date.now() - startedAt,
       status_code: 200,
       termination_reason: "success",
-      credits_cost: creditsCost,
-      credits_balance_before: creditsBefore,
-      credits_balance_after: creditsAfter
+      rupiah_cost: rupiahCost,
+      rupiah_balance_before: rupiahBefore,
+      rupiah_balance_after: rupiahAfter
     });
   } finally {
     releaseLlmSlot(userId);
@@ -953,11 +1013,11 @@ app.get("/api/payments/:orderId/status", requireAuth, async (req, res) => {
 
       if (paidAt) {
         try {
-          await applyTopupFromMidtrans({
-            userId: String(user.id),
-            orderId,
-            amount: Number(row.gross_amount || 0)
-          });
+        await applyTopupFromMidtrans({
+          userId: String(user.id),
+          orderId,
+          amountIdr: Number(row.gross_amount || 0)
+        });
         } catch {
           // Ignore credit application failures here.
         }
@@ -991,7 +1051,7 @@ app.get("/api/payments/:orderId/status", requireAuth, async (req, res) => {
       await applyTopupFromMidtrans({
         userId: String(user.id),
         orderId,
-        amount: Number(row.gross_amount || 0)
+        amountIdr: Number(row.gross_amount || 0)
       });
     } catch {
       // Ignore credit application failures here.
@@ -1015,6 +1075,9 @@ app.post("/api/llm/prefill", requireAuth, async (req, res) => {
   llmRequestsInflight += 1;
   const user = res.locals.user as AuthContext;
   const userId = getUserId(user);
+  let rupiahCost: number | null = null;
+  let rupiahBefore: number | null = null;
+  let rupiahAfter: number | null = null;
 
   const validation = validatePrefill(req.body);
   if ("ok" in validation && validation.ok === false) {
@@ -1034,9 +1097,9 @@ app.post("/api/llm/prefill", requireAuth, async (req, res) => {
       duration_ms: Date.now() - startedAt,
       status_code: validation.status,
       termination_reason: "validation_error",
-      credits_cost: null,
-      credits_balance_before: null,
-      credits_balance_after: null
+      rupiah_cost: null,
+      rupiah_balance_before: null,
+      rupiah_balance_after: null
     });
     llmRequestsInflight -= 1;
     return;
@@ -1060,47 +1123,15 @@ app.post("/api/llm/prefill", requireAuth, async (req, res) => {
       duration_ms: Date.now() - startedAt,
       status_code: 429,
       termination_reason: "rate_limited",
-      credits_cost: null,
-      credits_balance_before: null,
-      credits_balance_after: null
+      rupiah_cost: null,
+      rupiah_balance_before: null,
+      rupiah_balance_after: null
     });
     llmRequestsInflight -= 1;
     return;
   }
 
   try {
-    const creditResult = await deductForLlm({
-      userId,
-      requestId,
-      amount: creditsCost
-    });
-    if (!creditResult.ok) {
-      sendApiError(res, 402, {
-        ok: false,
-        request_id: requestId,
-        code: "insufficient_credits",
-        error: "insufficient credits"
-      });
-      logLlmRequest({
-        request_id: requestId,
-        endpoint: "/api/llm/prefill",
-        user_id: userId,
-        model: validation.model,
-        input_chars: validation.nodeLabel.length,
-        output_chars: 0,
-        duration_ms: Date.now() - startedAt,
-        status_code: 402,
-        termination_reason: "insufficient_credits",
-        credits_cost: creditsCost,
-        credits_balance_before: creditResult.balance,
-        credits_balance_after: creditResult.balance
-      });
-      return;
-    }
-
-    creditsBefore = creditResult.balance_before;
-    creditsAfter = creditResult.balance_after;
-
     const promptParts: string[] = [];
     promptParts.push(`Target Node: ${validation.nodeLabel}`);
     if (validation.content) {
@@ -1131,6 +1162,40 @@ app.post("/api/llm/prefill", requireAuth, async (req, res) => {
 
     const input = `${systemPrompt}\n\nCONTEXT:\n${promptParts.join("\n")}`;
 
+    const inputTokensEstimate = estimateTokensFromChars(input.length);
+    const estimated = estimateIdrCost({
+      model: validation.model,
+      inputTokens: inputTokensEstimate,
+      outputTokens: 0
+    });
+    const balanceSnapshot = await getBalance(userId);
+    if (balanceSnapshot.balance_idr < estimated.idrCostRounded) {
+      const shortfall = estimated.idrCostRounded - balanceSnapshot.balance_idr;
+      res.status(402).json({
+        ok: false,
+        code: "insufficient_rupiah",
+        request_id: requestId,
+        needed_idr: estimated.idrCostRounded,
+        balance_idr: balanceSnapshot.balance_idr,
+        shortfall_idr: shortfall
+      });
+      logLlmRequest({
+        request_id: requestId,
+        endpoint: "/api/llm/prefill",
+        user_id: userId,
+        model: validation.model,
+        input_chars: validation.nodeLabel.length,
+        output_chars: 0,
+        duration_ms: Date.now() - startedAt,
+        status_code: 402,
+        termination_reason: "insufficient_rupiah",
+        rupiah_cost: estimated.idrCostRounded,
+        rupiah_balance_before: balanceSnapshot.balance_idr,
+        rupiah_balance_after: balanceSnapshot.balance_idr
+      });
+      return;
+    }
+
     const result = await generateText({
       model: validation.model,
       input
@@ -1154,12 +1219,62 @@ app.post("/api/llm/prefill", requireAuth, async (req, res) => {
         duration_ms: Date.now() - startedAt,
         status_code: status,
         termination_reason: mapTerminationReason(status, result.code),
-        credits_cost: creditsCost,
-        credits_balance_before: creditsBefore,
-        credits_balance_after: creditsAfter
+        rupiah_cost: null,
+        rupiah_balance_before: null,
+        rupiah_balance_after: null
       });
       return;
     }
+
+    const usageInput = result.usage?.input_tokens;
+    const usageOutput = result.usage?.output_tokens;
+    const inputTokens = Number.isFinite(usageInput)
+      ? Number(usageInput)
+      : estimateTokensFromChars(input.length);
+    const outputTokens = Number.isFinite(usageOutput)
+      ? Number(usageOutput)
+      : estimateTokensFromChars(result.text.length);
+    const pricing = estimateIdrCost({
+      model: validation.model,
+      inputTokens,
+      outputTokens
+    });
+    const chargeResult = await chargeForLlm({
+      userId,
+      requestId,
+      amountIdr: pricing.idrCostRounded,
+      meta: { model: validation.model, totalTokens: pricing.totalTokens }
+    });
+    if (!chargeResult.ok) {
+      const shortfall = pricing.idrCostRounded - chargeResult.balance_idr;
+      res.status(402).json({
+        ok: false,
+        code: "insufficient_rupiah",
+        request_id: requestId,
+        needed_idr: pricing.idrCostRounded,
+        balance_idr: chargeResult.balance_idr,
+        shortfall_idr: shortfall
+      });
+      logLlmRequest({
+        request_id: requestId,
+        endpoint: "/api/llm/prefill",
+        user_id: userId,
+        model: validation.model,
+        input_chars: validation.nodeLabel.length,
+        output_chars: result.text.length,
+        duration_ms: Date.now() - startedAt,
+        status_code: 402,
+        termination_reason: "insufficient_rupiah",
+        rupiah_cost: pricing.idrCostRounded,
+        rupiah_balance_before: chargeResult.balance_idr,
+        rupiah_balance_after: chargeResult.balance_idr
+      });
+      return;
+    }
+
+    rupiahCost = pricing.idrCostRounded;
+    rupiahBefore = chargeResult.balance_before;
+    rupiahAfter = chargeResult.balance_after;
 
     res.setHeader("X-Request-Id", requestId);
     res.json({ ok: true, request_id: requestId, prompt: result.text });
@@ -1173,9 +1288,9 @@ app.post("/api/llm/prefill", requireAuth, async (req, res) => {
       duration_ms: Date.now() - startedAt,
       status_code: 200,
       termination_reason: "success",
-      credits_cost: creditsCost,
-      credits_balance_before: creditsBefore,
-      credits_balance_after: creditsAfter
+      rupiah_cost: rupiahCost,
+      rupiah_balance_before: rupiahBefore,
+      rupiah_balance_after: rupiahAfter
     });
   } finally {
     releaseLlmSlot(userId);
@@ -1191,9 +1306,9 @@ app.post("/api/llm/chat", requireAuth, async (req, res) => {
   llmRequestsStreaming += 1;
   const user = res.locals.user as AuthContext;
   const userId = getUserId(user);
-  const creditsCost = CREDITS_COSTS.chat;
-  let creditsBefore: number | null = null;
-  let creditsAfter: number | null = null;
+  let rupiahCost: number | null = null;
+  let rupiahBefore: number | null = null;
+  let rupiahAfter: number | null = null;
 
   const validation = validateChat(req.body);
   if ("ok" in validation && validation.ok === false) {
@@ -1213,9 +1328,9 @@ app.post("/api/llm/chat", requireAuth, async (req, res) => {
       duration_ms: Date.now() - startedAt,
       status_code: validation.status,
       termination_reason: "validation_error",
-      credits_cost: null,
-      credits_balance_before: null,
-      credits_balance_after: null
+      rupiah_cost: null,
+      rupiah_balance_before: null,
+      rupiah_balance_after: null
     });
     llmRequestsInflight -= 1;
     llmRequestsStreaming -= 1;
@@ -1240,9 +1355,9 @@ app.post("/api/llm/chat", requireAuth, async (req, res) => {
       duration_ms: Date.now() - startedAt,
       status_code: 429,
       termination_reason: "rate_limited",
-      credits_cost: null,
-      credits_balance_before: null,
-      credits_balance_after: null
+      rupiah_cost: null,
+      rupiah_balance_before: null,
+      rupiah_balance_after: null
     });
     llmRequestsInflight -= 1;
     llmRequestsStreaming -= 1;
@@ -1255,22 +1370,30 @@ app.post("/api/llm/chat", requireAuth, async (req, res) => {
   let outputChars = 0;
   let firstTokenAt: number | null = null;
   let terminationReason = "success";
+  let chatInput = "";
   req.on("close", () => {
     cancelled = true;
   });
 
   try {
-    const creditResult = await deductForLlm({
-      userId,
-      requestId,
-      amount: creditsCost
+    const systemPrompt = validation.systemPrompt || "";
+    chatInput = `${systemPrompt}\n\nUSER PROMPT:\n${validation.userPrompt}`;
+    const inputTokensEstimate = estimateTokensFromChars(chatInput.length);
+    const estimated = estimateIdrCost({
+      model: validation.model,
+      inputTokens: inputTokensEstimate,
+      outputTokens: 0
     });
-    if (!creditResult.ok) {
-      sendApiError(res, 402, {
+    const balanceSnapshot = await getBalance(userId);
+    if (balanceSnapshot.balance_idr < estimated.idrCostRounded) {
+      const shortfall = estimated.idrCostRounded - balanceSnapshot.balance_idr;
+      res.status(402).json({
         ok: false,
+        code: "insufficient_rupiah",
         request_id: requestId,
-        code: "insufficient_credits",
-        error: "insufficient credits"
+        needed_idr: estimated.idrCostRounded,
+        balance_idr: balanceSnapshot.balance_idr,
+        shortfall_idr: shortfall
       });
       logLlmRequest({
         request_id: requestId,
@@ -1281,25 +1404,19 @@ app.post("/api/llm/chat", requireAuth, async (req, res) => {
         output_chars: 0,
         duration_ms: Date.now() - startedAt,
         status_code: 402,
-        termination_reason: "insufficient_credits",
-        credits_cost: creditsCost,
-        credits_balance_before: creditResult.balance,
-        credits_balance_after: creditResult.balance
+        termination_reason: "insufficient_rupiah",
+        rupiah_cost: estimated.idrCostRounded,
+        rupiah_balance_before: balanceSnapshot.balance_idr,
+        rupiah_balance_after: balanceSnapshot.balance_idr
       });
       statusCode = 402;
-      terminationReason = "insufficient_credits";
+      terminationReason = "insufficient_rupiah";
       return;
     }
 
-    creditsBefore = creditResult.balance_before;
-    creditsAfter = creditResult.balance_after;
-
-    const systemPrompt = validation.systemPrompt || "";
-    const input = `${systemPrompt}\n\nUSER PROMPT:\n${validation.userPrompt}`;
-
     const stream = generateTextStream({
       model: validation.model,
-      input
+      input: chatInput
     });
 
     res.setHeader("X-Request-Id", requestId);
@@ -1349,6 +1466,29 @@ app.post("/api/llm/chat", requireAuth, async (req, res) => {
       terminationReason = "upstream_error";
     }
   } finally {
+    if (terminationReason === "success") {
+      const outputTokensEstimate = estimateTokensFromChars(outputChars);
+      const inputTokensEstimate = estimateTokensFromChars(chatInput.length);
+      const pricing = estimateIdrCost({
+        model: validation.model,
+        inputTokens: inputTokensEstimate,
+        outputTokens: outputTokensEstimate
+      });
+      const chargeResult = await chargeForLlm({
+        userId,
+        requestId,
+        amountIdr: pricing.idrCostRounded,
+        meta: { model: validation.model, totalTokens: pricing.totalTokens }
+      });
+      if (chargeResult.ok) {
+        rupiahCost = pricing.idrCostRounded;
+        rupiahBefore = chargeResult.balance_before;
+        rupiahAfter = chargeResult.balance_after;
+      } else {
+        terminationReason = "insufficient_rupiah";
+      }
+    }
+
     releaseLlmSlot(userId);
     llmRequestsInflight -= 1;
     llmRequestsStreaming -= 1;
@@ -1363,9 +1503,9 @@ app.post("/api/llm/chat", requireAuth, async (req, res) => {
       time_to_first_token_ms: firstTokenAt ? firstTokenAt - startedAt : null,
       status_code: statusCode,
       termination_reason: terminationReason,
-      credits_cost: creditsCost,
-      credits_balance_before: creditsBefore,
-      credits_balance_after: creditsAfter
+      rupiah_cost: rupiahCost,
+      rupiah_balance_before: rupiahBefore,
+      rupiah_balance_after: rupiahAfter
     });
   }
 });

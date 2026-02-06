@@ -1,22 +1,22 @@
 import crypto from "crypto";
 import { getPool } from "../db";
 
-export type CreditsBalance = {
-  balance: number;
+export type RupiahBalance = {
+  balance_idr: number;
   updated_at: string;
 };
 
-export type CreditsApplyResult = {
+export type RupiahApplyResult = {
   ok: true;
   balance_before: number;
   balance_after: number;
   applied: boolean;
 };
 
-export type CreditsErrorResult = {
+export type RupiahErrorResult = {
   ok: false;
-  code: "insufficient_credits";
-  balance: number;
+  code: "insufficient_rupiah";
+  balance_idr: number;
 };
 
 async function withTransaction<T>(fn: (client: any) => Promise<T>): Promise<T> {
@@ -37,7 +37,7 @@ async function withTransaction<T>(fn: (client: any) => Promise<T>): Promise<T> {
 
 async function ensureBalanceRow(client: any, userId: string) {
   await client.query(
-    `insert into credits_balances (user_id, balance, updated_at)
+    `insert into rupiah_balances (user_id, balance_idr, updated_at)
      values ($1, 0, now())
      on conflict (user_id) do nothing`,
     [userId]
@@ -46,8 +46,8 @@ async function ensureBalanceRow(client: any, userId: string) {
 
 async function getBalanceForUpdate(client: any, userId: string) {
   const result = await client.query(
-    `select balance
-       from credits_balances
+    `select balance_idr
+       from rupiah_balances
       where user_id = $1
       for update`,
     [userId]
@@ -55,8 +55,8 @@ async function getBalanceForUpdate(client: any, userId: string) {
   if (result.rows.length === 0) {
     await ensureBalanceRow(client, userId);
     const retry = await client.query(
-      `select balance
-         from credits_balances
+      `select balance_idr
+         from rupiah_balances
         where user_id = $1
         for update`,
       [userId]
@@ -66,23 +66,23 @@ async function getBalanceForUpdate(client: any, userId: string) {
   return result.rows[0];
 }
 
-export async function getBalance(userId: string): Promise<CreditsBalance> {
+export async function getBalance(userId: string): Promise<RupiahBalance> {
   const pool = await getPool();
   await pool.query(
-    `insert into credits_balances (user_id, balance, updated_at)
+    `insert into rupiah_balances (user_id, balance_idr, updated_at)
      values ($1, 0, now())
      on conflict (user_id) do nothing`,
     [userId]
   );
   const result = await pool.query(
-    `select balance, updated_at
-       from credits_balances
+    `select balance_idr, updated_at
+       from rupiah_balances
       where user_id = $1`,
     [userId]
   );
   const row = result.rows[0];
   return {
-    balance: Number(row?.balance ?? 0),
+    balance_idr: Number(row?.balance_idr ?? 0),
     updated_at: row?.updated_at ? new Date(row.updated_at).toISOString() : new Date().toISOString()
   };
 }
@@ -90,21 +90,21 @@ export async function getBalance(userId: string): Promise<CreditsBalance> {
 export async function applyTopupFromMidtrans(opts: {
   userId: string;
   orderId: string;
-  amount: number;
-}): Promise<CreditsApplyResult> {
+  amountIdr: number;
+}): Promise<RupiahApplyResult> {
   return withTransaction(async (client) => {
-    const { userId, orderId, amount } = opts;
+    const { userId, orderId, amountIdr } = opts;
     await ensureBalanceRow(client, userId);
     const row = await getBalanceForUpdate(client, userId);
-    const balanceBefore = Number(row?.balance ?? 0);
+    const balanceBefore = Number(row?.balance_idr ?? 0);
 
     const insertResult = await client.query(
-      `insert into credits_ledger
-        (id, user_id, delta, reason, ref_type, ref_id, created_at)
+      `insert into rupiah_ledger
+        (id, user_id, delta_idr, reason, ref_type, ref_id, created_at)
        values ($1, $2, $3, $4, $5, $6, now())
        on conflict (reason, ref_type, ref_id) do nothing
        returning id`,
-      [crypto.randomUUID(), userId, amount, "topup", "midtrans_order", orderId]
+      [crypto.randomUUID(), userId, amountIdr, "topup", "midtrans_order", orderId]
     );
 
     if (insertResult.rowCount === 0) {
@@ -116,10 +116,10 @@ export async function applyTopupFromMidtrans(opts: {
       };
     }
 
-    const nextBalance = balanceBefore + amount;
+    const nextBalance = balanceBefore + amountIdr;
     await client.query(
-      `update credits_balances
-          set balance = $2, updated_at = now()
+      `update rupiah_balances
+          set balance_idr = $2, updated_at = now()
         where user_id = $1`,
       [userId, nextBalance]
     );
@@ -133,28 +133,29 @@ export async function applyTopupFromMidtrans(opts: {
   });
 }
 
-export async function deductForLlm(opts: {
+export async function chargeForLlm(opts: {
   userId: string;
   requestId: string;
-  amount: number;
-}): Promise<CreditsApplyResult | CreditsErrorResult> {
+  amountIdr: number;
+  meta: { model: string; totalTokens: number };
+}): Promise<RupiahApplyResult | RupiahErrorResult> {
   return withTransaction(async (client) => {
-    const { userId, requestId, amount } = opts;
+    const { userId, requestId, amountIdr } = opts;
     await ensureBalanceRow(client, userId);
     const row = await getBalanceForUpdate(client, userId);
-    const balanceBefore = Number(row?.balance ?? 0);
+    const balanceBefore = Number(row?.balance_idr ?? 0);
 
-    if (balanceBefore < amount) {
-      return { ok: false, code: "insufficient_credits", balance: balanceBefore };
+    if (balanceBefore < amountIdr) {
+      return { ok: false, code: "insufficient_rupiah", balance_idr: balanceBefore };
     }
 
     const insertResult = await client.query(
-      `insert into credits_ledger
-        (id, user_id, delta, reason, ref_type, ref_id, created_at)
+      `insert into rupiah_ledger
+        (id, user_id, delta_idr, reason, ref_type, ref_id, created_at)
        values ($1, $2, $3, $4, $5, $6, now())
        on conflict (reason, ref_type, ref_id) do nothing
        returning id`,
-      [crypto.randomUUID(), userId, -amount, "usage", "llm_request", requestId]
+      [crypto.randomUUID(), userId, -amountIdr, "usage", "llm_request", requestId]
     );
 
     if (insertResult.rowCount === 0) {
@@ -166,10 +167,10 @@ export async function deductForLlm(opts: {
       };
     }
 
-    const nextBalance = balanceBefore - amount;
+    const nextBalance = balanceBefore - amountIdr;
     await client.query(
-      `update credits_balances
-          set balance = $2, updated_at = now()
+      `update rupiah_balances
+          set balance_idr = $2, updated_at = now()
         where user_id = $1`,
       [userId, nextBalance]
     );

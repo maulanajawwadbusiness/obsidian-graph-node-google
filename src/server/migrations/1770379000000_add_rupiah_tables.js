@@ -1,7 +1,7 @@
 exports.shorthands = undefined;
 
 exports.up = (pgm) => {
-  pgm.createTable('credits_balances', {
+  pgm.createTable('rupiah_balances', {
     user_id: {
       type: 'bigint',
       primaryKey: true,
@@ -9,7 +9,7 @@ exports.up = (pgm) => {
       references: 'users(id)',
       onDelete: 'CASCADE'
     },
-    balance: {
+    balance_idr: {
       type: 'bigint',
       notNull: true,
       default: 0
@@ -21,7 +21,7 @@ exports.up = (pgm) => {
     }
   });
 
-  pgm.createTable('credits_ledger', {
+  pgm.createTable('rupiah_ledger', {
     id: {
       type: 'uuid',
       primaryKey: true,
@@ -33,7 +33,7 @@ exports.up = (pgm) => {
       references: 'users(id)',
       onDelete: 'CASCADE'
     },
-    delta: {
+    delta_idr: {
       type: 'bigint',
       notNull: true
     },
@@ -56,12 +56,12 @@ exports.up = (pgm) => {
     }
   });
 
-  pgm.createIndex('credits_ledger', ['reason', 'ref_type', 'ref_id'], { unique: true });
-  pgm.createIndex('credits_ledger', 'user_id');
-  pgm.createIndex('credits_ledger', 'created_at');
+  pgm.createIndex('rupiah_ledger', ['reason', 'ref_type', 'ref_id'], { unique: true });
+  pgm.createIndex('rupiah_ledger', 'user_id');
+  pgm.createIndex('rupiah_ledger', 'created_at');
 };
 
 exports.down = (pgm) => {
-  pgm.dropTable('credits_ledger');
-  pgm.dropTable('credits_balances');
+  pgm.dropTable('rupiah_ledger');
+  pgm.dropTable('rupiah_balances');
 };

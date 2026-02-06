@@ -12,7 +12,7 @@ export const FullscreenButton: React.FC<FullscreenButtonProps> = ({ className, s
     const { isFullscreen, toggleFullscreen } = useFullscreen();
 
     const handleClick = React.useCallback(() => {
-        toggleFullscreen().catch((e) => {
+        toggleFullscreen().catch((e: unknown) => {
             console.warn('[fullscreen] Toggle failed:', e);
         });
     }, [toggleFullscreen]);

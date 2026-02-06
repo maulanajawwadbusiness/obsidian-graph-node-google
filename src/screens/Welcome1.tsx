@@ -23,7 +23,7 @@ export const Welcome1: React.FC<Welcome1Props> = ({ onNext, onSkip }) => {
     }, [onNext]);
 
     useEffect(() => {
-        enterFullscreen().catch((e) => {
+        enterFullscreen().catch((e: unknown) => {
             console.warn('[welcome1] Auto-fullscreen blocked (user interaction required):', e);
         });
     }, [enterFullscreen]);

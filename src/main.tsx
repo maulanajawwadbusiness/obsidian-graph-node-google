@@ -1,7 +1,7 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { GoogleOAuthProvider } from '@react-oauth/google'
-import { GraphPhysicsPlayground } from './playground/GraphPhysicsPlayground'
+import { AppShell } from './screens/AppShell'
 import { AuthProvider } from './auth/AuthProvider'
 import './index.css'
 import './styles/fonts.css'
@@ -17,7 +17,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
     <React.StrictMode>
         <GoogleOAuthProvider clientId={googleClientId} locale={googleLocale}>
             <AuthProvider>
-                <GraphPhysicsPlayground />
+                <AppShell />
             </AuthProvider>
         </GoogleOAuthProvider>
     </React.StrictMode>,

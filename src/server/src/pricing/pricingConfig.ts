@@ -1,7 +1,8 @@
 export const MODEL_PRICE_USD_PER_MTOKEN_COMBINED: Record<string, number> = {
   "gpt-5.2": 15.75,
   "gpt-5.1": 11.25,
-  "gpt-5-nano": 2.5
+  "gpt-5-mini": 2.25,
+  "gpt-5-nano": 0.45
 };
 
 export const MARKUP_MULTIPLIER = 1.5;

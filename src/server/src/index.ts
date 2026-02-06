@@ -8,6 +8,7 @@ import { generateStructuredJson, generateText, generateTextStream, type LlmError
 import { LLM_LIMITS } from "./llm/limits";
 import { validateChat, validatePaperAnalyze, validatePrefill } from "./llm/validate";
 import { estimateIdrCost } from "./pricing/pricingCalculator";
+import { estimateTokensFromText } from "./pricing/tokenEstimate";
 import { applyTopupFromMidtrans, chargeForLlm, getBalance } from "./rupiah/rupiahService";
 
 type SessionUser = {
@@ -228,10 +229,6 @@ function mapTerminationReason(statusCode: number, code?: string) {
   return "upstream_error";
 }
 
-function estimateTokensFromChars(chars: number): number {
-  if (!Number.isFinite(chars) || chars <= 0) return 0;
-  return Math.max(1, Math.ceil(chars / 4));
-}
 
 setInterval(() => {
   console.log(JSON.stringify({
@@ -781,7 +778,7 @@ app.post("/api/llm/paper-analyze", requireAuth, async (req, res) => {
   }
 
   try {
-    const inputTokensEstimate = estimateTokensFromChars(validation.text.length);
+    const inputTokensEstimate = estimateTokensFromText(validation.text);
     const estimated = estimateIdrCost({
       model: validation.model,
       inputTokens: inputTokensEstimate,
@@ -891,10 +888,10 @@ app.post("/api/llm/paper-analyze", requireAuth, async (req, res) => {
     const usageOutput = result.usage?.output_tokens;
     const inputTokens = Number.isFinite(usageInput)
       ? Number(usageInput)
-      : estimateTokensFromChars(validation.text.length);
+      : estimateTokensFromText(validation.text);
     const outputTokens = Number.isFinite(usageOutput)
       ? Number(usageOutput)
-      : estimateTokensFromChars(outputTextLength);
+      : estimateTokensFromText(JSON.stringify(result.json || {}));
     const pricing = estimateIdrCost({
       model: validation.model,
       inputTokens,
@@ -1162,7 +1159,7 @@ app.post("/api/llm/prefill", requireAuth, async (req, res) => {
 
     const input = `${systemPrompt}\n\nCONTEXT:\n${promptParts.join("\n")}`;
 
-    const inputTokensEstimate = estimateTokensFromChars(input.length);
+    const inputTokensEstimate = estimateTokensFromText(input);
     const estimated = estimateIdrCost({
       model: validation.model,
       inputTokens: inputTokensEstimate,
@@ -1230,10 +1227,10 @@ app.post("/api/llm/prefill", requireAuth, async (req, res) => {
     const usageOutput = result.usage?.output_tokens;
     const inputTokens = Number.isFinite(usageInput)
       ? Number(usageInput)
-      : estimateTokensFromChars(input.length);
+      : estimateTokensFromText(input);
     const outputTokens = Number.isFinite(usageOutput)
       ? Number(usageOutput)
-      : estimateTokensFromChars(result.text.length);
+      : estimateTokensFromText(result.text);
     const pricing = estimateIdrCost({
       model: validation.model,
       inputTokens,
@@ -1368,6 +1365,7 @@ app.post("/api/llm/chat", requireAuth, async (req, res) => {
   let streamStarted = false;
   let cancelled = false;
   let outputChars = 0;
+  let outputText = "";
   let firstTokenAt: number | null = null;
   let terminationReason = "success";
   let chatInput = "";
@@ -1378,7 +1376,7 @@ app.post("/api/llm/chat", requireAuth, async (req, res) => {
   try {
     const systemPrompt = validation.systemPrompt || "";
     chatInput = `${systemPrompt}\n\nUSER PROMPT:\n${validation.userPrompt}`;
-    const inputTokensEstimate = estimateTokensFromChars(chatInput.length);
+    const inputTokensEstimate = estimateTokensFromText(chatInput);
     const estimated = estimateIdrCost({
       model: validation.model,
       inputTokens: inputTokensEstimate,
@@ -1429,6 +1427,7 @@ app.post("/api/llm/chat", requireAuth, async (req, res) => {
         firstTokenAt = Date.now();
       }
       outputChars += chunk.length;
+      outputText += chunk;
       res.write(chunk);
     }
 
@@ -1466,27 +1465,25 @@ app.post("/api/llm/chat", requireAuth, async (req, res) => {
       terminationReason = "upstream_error";
     }
   } finally {
-    if (terminationReason === "success") {
-      const outputTokensEstimate = estimateTokensFromChars(outputChars);
-      const inputTokensEstimate = estimateTokensFromChars(chatInput.length);
-      const pricing = estimateIdrCost({
-        model: validation.model,
-        inputTokens: inputTokensEstimate,
-        outputTokens: outputTokensEstimate
-      });
-      const chargeResult = await chargeForLlm({
-        userId,
-        requestId,
-        amountIdr: pricing.idrCostRounded,
-        meta: { model: validation.model, totalTokens: pricing.totalTokens }
-      });
-      if (chargeResult.ok) {
-        rupiahCost = pricing.idrCostRounded;
-        rupiahBefore = chargeResult.balance_before;
-        rupiahAfter = chargeResult.balance_after;
-      } else {
-        terminationReason = "insufficient_rupiah";
-      }
+    const outputTokensEstimate = estimateTokensFromText(outputText);
+    const inputTokensEstimate = estimateTokensFromText(chatInput);
+    const pricing = estimateIdrCost({
+      model: validation.model,
+      inputTokens: inputTokensEstimate,
+      outputTokens: outputTokensEstimate
+    });
+    const chargeResult = await chargeForLlm({
+      userId,
+      requestId,
+      amountIdr: pricing.idrCostRounded,
+      meta: { model: validation.model, totalTokens: pricing.totalTokens }
+    });
+    if (chargeResult.ok) {
+      rupiahCost = pricing.idrCostRounded;
+      rupiahBefore = chargeResult.balance_before;
+      rupiahAfter = chargeResult.balance_after;
+    } else {
+      terminationReason = "insufficient_rupiah";
     }
 
     releaseLlmSlot(userId);

@@ -46,49 +46,51 @@ export function GoogleLoginButton() {
       ) : null}
 
       {!loading && !user ? (
-      <GoogleLogin
-        text="signin_with"
-        shape="rectangular"
-        logo_alignment="left"
-        width={240}
-        click_listener={() => {}}
-        onSuccess={async (cred) => {
-          try {
-            if (!API_BASE || !API_BASE.trim()) {
-              setStatus("VITE_API_BASE_URL is missing");
-              return;
-            }
+        <div style={LOGIN_BUTTON_WRAP_STYLE}>
+          <GoogleLogin
+            text="signin_with"
+            shape="pill"
+            logo_alignment="left"
+            width={240}
+            click_listener={() => {}}
+            onSuccess={async (cred) => {
+              try {
+                if (!API_BASE || !API_BASE.trim()) {
+                  setStatus("VITE_API_BASE_URL is missing");
+                  return;
+                }
 
-            setStatus("got google token... sending to backend...");
-            const idToken = cred.credential;
-            if (!idToken) {
-              setStatus("no credential from google");
-              return;
-            }
+                setStatus("got google token... sending to backend...");
+                const idToken = cred.credential;
+                if (!idToken) {
+                  setStatus("no credential from google");
+                  return;
+                }
 
-            const r = await fetch(`${API_BASE}/auth/google`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              credentials: "include",
-              body: JSON.stringify({ idToken })
-            });
+                const r = await fetch(`${API_BASE}/auth/google`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  credentials: "include",
+                  body: JSON.stringify({ idToken })
+                });
 
-            const data = await r.json().catch(() => null);
-            if (!r.ok || !data?.ok) {
-              setStatus(`backend rejected status=${r.status}`);
-              return;
-            }
+                const data = await r.json().catch(() => null);
+                if (!r.ok || !data?.ok) {
+                  setStatus(`backend rejected status=${r.status}`);
+                  return;
+                }
 
-            setStatus("ok: logged in");
-            await refreshMe();
-          } catch (e) {
-            setStatus(`error: ${String(e)}`);
-          }
-        }}
-        onError={() => {
-          setStatus("google login failed");
-        }}
-      />
+                setStatus("ok: logged in");
+                await refreshMe();
+              } catch (e) {
+                setStatus(`error: ${String(e)}`);
+              }
+            }}
+            onError={() => {
+              setStatus("google login failed");
+            }}
+          />
+        </div>
       ) : null}
 
       {status ? (
@@ -99,3 +101,8 @@ export function GoogleLoginButton() {
     </div>
   );
 }
+
+const LOGIN_BUTTON_WRAP_STYLE = {
+  borderRadius: 15,
+  overflow: "hidden"
+};

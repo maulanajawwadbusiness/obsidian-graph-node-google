@@ -5,9 +5,12 @@ import { OAuth2Client } from "google-auth-library";
 import { getPool } from "./db";
 import { getUsdToIdr } from "./fx/fxService";
 import { midtransRequest } from "./midtrans/client";
+import { buildAnalyzeJsonSchema, validateAnalyzeJson } from "./llm/analyze/schema";
+import { runOpenrouterAnalyze } from "./llm/analyze/openrouterAnalyze";
 import { recordTokenSpend } from "./llm/freePoolAccounting";
 import { type LlmError } from "./llm/llmClient";
 import { LLM_LIMITS } from "./llm/limits";
+import { getProvider } from "./llm/getProvider";
 import { pickProviderForRequest } from "./llm/providerRouter";
 import { validateChat, validatePaperAnalyze, validatePrefill } from "./llm/validate";
 import { mapModel } from "./llm/models/modelMap";
@@ -136,7 +139,8 @@ type ApiErrorCode =
   | "rate_limited"
   | "upstream_error"
   | "timeout"
-  | "parse_error";
+  | "parse_error"
+  | "structured_output_invalid";
 
 type ApiError = {
   ok: false;
@@ -189,6 +193,8 @@ function logLlmRequest(fields: {
   rupiah_balance_before?: number | null;
   rupiah_balance_after?: number | null;
   provider_model_id?: string | null;
+  structured_output_mode?: string | null;
+  validation_result?: string | null;
 }) {
   console.log(JSON.stringify({
     request_id: fields.request_id,
@@ -204,7 +210,9 @@ function logLlmRequest(fields: {
     termination_reason: fields.termination_reason,
     rupiah_cost: fields.rupiah_cost ?? null,
     rupiah_balance_before: fields.rupiah_balance_before ?? null,
-    rupiah_balance_after: fields.rupiah_balance_after ?? null
+    rupiah_balance_after: fields.rupiah_balance_after ?? null,
+    structured_output_mode: fields.structured_output_mode ?? null,
+    validation_result: fields.validation_result ?? null
   }));
 }
 
@@ -230,9 +238,24 @@ function mapTerminationReason(statusCode: number, code?: string) {
   if (statusCode === 429) return "rate_limited";
   if (statusCode === 400 || statusCode === 413) return "validation_error";
   if (statusCode === 504 || code === "timeout") return "timeout";
+  if (code === "structured_output_invalid") return "structured_output_invalid";
   if (code === "upstream_error" || statusCode >= 500) return "upstream_error";
   if (statusCode === 200) return "success";
   return "upstream_error";
+}
+
+const ALLOW_OPENROUTER_ANALYZE = process.env.ALLOW_OPENROUTER_ANALYZE === "true";
+const OPENROUTER_ANALYZE_MODELS = new Set(
+  (process.env.OPENROUTER_ANALYZE_MODELS ?? "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean)
+);
+
+function isOpenrouterAnalyzeAllowed(model: string): boolean {
+  if (!ALLOW_OPENROUTER_ANALYZE) return false;
+  if (OPENROUTER_ANALYZE_MODELS.size === 0) return false;
+  return OPENROUTER_ANALYZE_MODELS.has(model);
 }
 
 
@@ -788,9 +811,21 @@ app.post("/api/llm/paper-analyze", requireAuth, async (req, res) => {
 
   try {
     const router = await pickProviderForRequest({ userId, endpointKind: "analyze" });
-    const provider = router.provider;
-    const providerModelId = mapModel(provider.name, validation.model);
+    let provider = router.provider;
+    let structuredOutputMode = provider.name === "openai" ? "openai_native" : "openrouter_prompt_json";
+    let forcedProvider = false;
+
+    if (provider.name === "openrouter" && !isOpenrouterAnalyzeAllowed(validation.model)) {
+      provider = getProvider("openai");
+      structuredOutputMode = "forced_openai";
+      forcedProvider = true;
+    }
+
+    providerModelId = mapModel(provider.name, validation.model);
     console.log(`[llm] provider_policy selected=${router.selectedProviderName} actual_provider=${provider.name} logical_model=${validation.model} provider_model_id=${providerModelId} cohort=${router.policyMeta.cohort_selected} used_tokens=${router.policyMeta.user_used_tokens_today} pool_remaining=${router.policyMeta.pool_remaining_tokens} cap=${router.policyMeta.user_free_cap} reason=${router.policyMeta.reason} date_key=${router.policyMeta.date_key}`);
+    if (forcedProvider) {
+      console.log("[llm] analyze forced_provider=openai reason=analyze_requires_strict_json");
+    }
 
     const inputTokensEstimate = estimateTokensFromText(validation.text);
     const fx = await getUsdToIdr();
@@ -833,84 +868,154 @@ app.post("/api/llm/paper-analyze", requireAuth, async (req, res) => {
       return;
     }
 
-    const result = await provider.generateStructuredJson({
-      model: validation.model,
-      input: validation.text,
-      schema: {
-        type: "object",
-        properties: {
-          paper_title: { type: "string" },
-          main_points: {
-            type: "array",
-            items: {
-              type: "object",
-              properties: {
-                index: { type: "integer" },
-                title: { type: "string" },
-                explanation: { type: "string" }
-              },
-              required: ["index", "title", "explanation"],
-              additionalProperties: false
-            },
-            minItems: validation.nodeCount,
-            maxItems: validation.nodeCount
-          },
-          links: {
-            type: "array",
-            items: {
-              type: "object",
-              properties: {
-                from_index: { type: "integer" },
-                to_index: { type: "integer" },
-                type: { type: "string" },
-                weight: { type: "number" },
-                rationale: { type: "string" }
-              },
-              required: ["from_index", "to_index", "type", "weight", "rationale"],
-              additionalProperties: false
-            }
-          }
-        },
-        required: ["paper_title", "main_points", "links"],
-        additionalProperties: false
-      }
-    });
+    const analyzeSchema = buildAnalyzeJsonSchema(validation.nodeCount);
+    let resultJson: unknown = null;
+    let usage: { input_tokens?: number; output_tokens?: number } | undefined;
+    let validationResult: "ok" | "retry_ok" | "failed" = "ok";
 
-    if (!result.ok) {
-      const status = mapLlmErrorToStatus(result);
-      sendApiError(res, status, {
-        ok: false,
-        request_id: requestId,
-        code: result.code as ApiErrorCode,
-        error: result.error
-      });
-      logLlmRequest({
-        request_id: requestId,
-        endpoint: "/api/llm/paper-analyze",
-        user_id: userId,
+    if (provider.name === "openrouter" && structuredOutputMode === "openrouter_prompt_json") {
+      const openrouterResult = await runOpenrouterAnalyze({
+        provider,
         model: validation.model,
-        provider_model_id: providerModelId,
-        input_chars: validation.text.length,
-        output_chars: 0,
-        duration_ms: Date.now() - startedAt,
-        status_code: status,
-        termination_reason: mapTerminationReason(status, result.code),
-        rupiah_cost: null,
-        rupiah_balance_before: null,
-        rupiah_balance_after: null
+        input: validation.text,
+        nodeCount: validation.nodeCount
       });
-      return;
+
+      if (!openrouterResult.ok) {
+        if ("code" in openrouterResult.error && openrouterResult.error.code === "structured_output_invalid") {
+          sendApiError(res, 502, {
+            ok: false,
+            request_id: requestId,
+            code: "structured_output_invalid",
+            error: "structured output invalid"
+          });
+          logLlmRequest({
+            request_id: requestId,
+            endpoint: "/api/llm/paper-analyze",
+            user_id: userId,
+            model: validation.model,
+            provider_model_id: providerModelId,
+            input_chars: validation.text.length,
+            output_chars: 0,
+            duration_ms: Date.now() - startedAt,
+            status_code: 502,
+            termination_reason: "structured_output_invalid",
+            rupiah_cost: null,
+            rupiah_balance_before: null,
+            rupiah_balance_after: null,
+            structured_output_mode: structuredOutputMode,
+            validation_result: "failed"
+          });
+          return;
+        }
+
+        const status = mapLlmErrorToStatus(openrouterResult.error as LlmError);
+        sendApiError(res, status, {
+          ok: false,
+          request_id: requestId,
+          code: (openrouterResult.error as LlmError).code as ApiErrorCode,
+          error: (openrouterResult.error as LlmError).error
+        });
+        logLlmRequest({
+          request_id: requestId,
+          endpoint: "/api/llm/paper-analyze",
+          user_id: userId,
+          model: validation.model,
+          provider_model_id: providerModelId,
+          input_chars: validation.text.length,
+          output_chars: 0,
+          duration_ms: Date.now() - startedAt,
+          status_code: status,
+          termination_reason: mapTerminationReason(status, (openrouterResult.error as LlmError).code),
+          rupiah_cost: null,
+          rupiah_balance_before: null,
+          rupiah_balance_after: null,
+          structured_output_mode: structuredOutputMode,
+          validation_result: "failed"
+        });
+        return;
+      }
+
+      resultJson = openrouterResult.json;
+      usage = openrouterResult.usage;
+      validationResult = openrouterResult.validation_result;
+    } else {
+      const result = await provider.generateStructuredJson({
+        model: validation.model,
+        input: validation.text,
+        schema: analyzeSchema
+      });
+
+      if (!result.ok) {
+        const status = mapLlmErrorToStatus(result);
+        sendApiError(res, status, {
+          ok: false,
+          request_id: requestId,
+          code: result.code as ApiErrorCode,
+          error: result.error
+        });
+        logLlmRequest({
+          request_id: requestId,
+          endpoint: "/api/llm/paper-analyze",
+          user_id: userId,
+          model: validation.model,
+          provider_model_id: providerModelId,
+          input_chars: validation.text.length,
+          output_chars: 0,
+          duration_ms: Date.now() - startedAt,
+          status_code: status,
+          termination_reason: mapTerminationReason(status, result.code),
+          rupiah_cost: null,
+          rupiah_balance_before: null,
+          rupiah_balance_after: null,
+          structured_output_mode: structuredOutputMode,
+          validation_result: "failed"
+        });
+        return;
+      }
+
+      const validationCheck = validateAnalyzeJson(result.json, validation.nodeCount);
+      if (!validationCheck.ok) {
+        sendApiError(res, 502, {
+          ok: false,
+          request_id: requestId,
+          code: "structured_output_invalid",
+          error: "structured output invalid"
+        });
+        logLlmRequest({
+          request_id: requestId,
+          endpoint: "/api/llm/paper-analyze",
+          user_id: userId,
+          model: validation.model,
+          provider_model_id: providerModelId,
+          input_chars: validation.text.length,
+          output_chars: 0,
+          duration_ms: Date.now() - startedAt,
+          status_code: 502,
+          termination_reason: "structured_output_invalid",
+          rupiah_cost: null,
+          rupiah_balance_before: null,
+          rupiah_balance_after: null,
+          structured_output_mode: structuredOutputMode,
+          validation_result: "failed"
+        });
+        return;
+      }
+
+      resultJson = validationCheck.value;
+      usage = result.usage;
+      validationResult = "ok";
     }
 
-    const outputTextLength = JSON.stringify(result.json || {}).length;
-    const usageInput = result.usage?.input_tokens;
-    const usageOutput = result.usage?.output_tokens;
+    const outputTextLength = JSON.stringify(resultJson || {}).length;
+    const usageInput = usage?.input_tokens;
+    const usageOutput = usage?.output_tokens;
     const inputTokens = Number.isFinite(usageInput)
       ? Number(usageInput)
       : estimateTokensFromText(validation.text);
     const outputTokens = Number.isFinite(usageOutput)
       ? Number(usageOutput)
-      : estimateTokensFromText(JSON.stringify(result.json || {}));
+      : estimateTokensFromText(JSON.stringify(resultJson || {}));
     const tokensUsed = inputTokens + outputTokens;
     const pricing = estimateIdrCost({
       model: validation.model,
@@ -971,8 +1076,8 @@ app.post("/api/llm/paper-analyze", requireAuth, async (req, res) => {
     }
 
     res.setHeader("X-Request-Id", requestId);
-    res.json({ ok: true, request_id: requestId, json: result.json });
-    const outputSize = JSON.stringify(result.json || {}).length;
+    res.json({ ok: true, request_id: requestId, json: resultJson });
+    const outputSize = JSON.stringify(resultJson || {}).length;
     logLlmRequest({
       request_id: requestId,
       endpoint: "/api/llm/paper-analyze",
@@ -986,7 +1091,9 @@ app.post("/api/llm/paper-analyze", requireAuth, async (req, res) => {
       termination_reason: "success",
       rupiah_cost: rupiahCost,
       rupiah_balance_before: rupiahBefore,
-      rupiah_balance_after: rupiahAfter
+      rupiah_balance_after: rupiahAfter,
+      structured_output_mode: structuredOutputMode,
+      validation_result: validationResult
     });
   } finally {
     releaseLlmSlot(userId);

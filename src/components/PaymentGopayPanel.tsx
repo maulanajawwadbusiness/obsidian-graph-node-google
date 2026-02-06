@@ -132,7 +132,7 @@ export const PaymentGopayPanel: React.FC<PaymentPanelProps> = ({ onPaid }) => {
                 onClick={() => setIsOpen(true)}
                 onPointerDown={(e) => e.stopPropagation()}
             >
-                Pay
+                Pay with QRIS
             </button>
         );
     }
@@ -140,7 +140,7 @@ export const PaymentGopayPanel: React.FC<PaymentPanelProps> = ({ onPaid }) => {
     return (
         <div style={PANEL_STYLE} onPointerDown={(e) => e.stopPropagation()}>
             <div style={PANEL_HEADER_STYLE}>
-                <div style={PANEL_TITLE_STYLE}>GoPay QRIS</div>
+                <div style={PANEL_TITLE_STYLE}>QRIS Payment</div>
                 <button
                     type="button"
                     style={CLOSE_BUTTON_STYLE}
@@ -169,7 +169,7 @@ export const PaymentGopayPanel: React.FC<PaymentPanelProps> = ({ onPaid }) => {
                 disabled={isBusy}
                 onPointerDown={(e) => e.stopPropagation()}
             >
-                {isBusy ? 'Generating...' : 'Generate QR'}
+                {isBusy ? 'Generating...' : 'Generate QRIS'}
             </button>
 
             <div style={STATUS_STYLE}>
@@ -195,7 +195,7 @@ export const PaymentGopayPanel: React.FC<PaymentPanelProps> = ({ onPaid }) => {
                 disabled={!deeplinkAction?.url}
                 onPointerDown={(e) => e.stopPropagation()}
             >
-                Open GoPay
+                Open Wallet
             </button>
 
             {state?.status === 'settlement' || state?.status === 'capture' ? (

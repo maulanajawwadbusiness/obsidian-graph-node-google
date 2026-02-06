@@ -39,6 +39,15 @@ const ALLOWED_MODELS = new Set<string>([
   AI_MODELS.PREFILL
 ]);
 
+function resolveModel(requested: unknown, fallback: string): string | ValidationError {
+  if (requested !== undefined && requested !== null) {
+    if (!isString(requested) || !ALLOWED_MODELS.has(requested)) {
+      return invalidType("model");
+    }
+  }
+  return fallback;
+}
+
 function isString(value: unknown): value is string {
   return typeof value === "string";
 }
@@ -67,10 +76,10 @@ export function validatePaperAnalyze(body: any): PaperAnalyzeInput | ValidationE
     };
   }
 
-  const model = isString(body.model) && body.model ? body.model : AI_MODELS.ANALYZER;
-  if (!ALLOWED_MODELS.has(model)) return invalidType("model");
+  const resolvedModel = resolveModel(body.model, AI_MODELS.ANALYZER);
+  if (typeof resolvedModel !== "string") return resolvedModel;
 
-  return { text: body.text, nodeCount, model };
+  return { text: body.text, nodeCount, model: resolvedModel };
 }
 
 export function validateChat(body: any): ChatInput | ValidationError {
@@ -80,8 +89,8 @@ export function validateChat(body: any): ChatInput | ValidationError {
     return { ok: false, status: 413, code: "too_large", error: "userPrompt too large" };
   }
 
-  const model = isString(body.model) && body.model ? body.model : AI_MODELS.CHAT;
-  if (!ALLOWED_MODELS.has(model)) return invalidType("model");
+  const resolvedModel = resolveModel(body.model, AI_MODELS.CHAT);
+  if (typeof resolvedModel !== "string") return resolvedModel;
 
   const context = body.context && typeof body.context === "object" ? body.context : {};
   const systemPrompt = isString(body.systemPrompt) ? body.systemPrompt : undefined;
@@ -114,7 +123,7 @@ export function validateChat(body: any): ChatInput | ValidationError {
 
   return {
     userPrompt: body.userPrompt,
-    model,
+    model: resolvedModel,
     systemPrompt,
     context: {
       nodeLabel,
@@ -132,8 +141,8 @@ export function validatePrefill(body: any): PrefillInput | ValidationError {
     return { ok: false, status: 413, code: "too_large", error: "nodeLabel too large" };
   }
 
-  const model = isString(body.model) && body.model ? body.model : AI_MODELS.PREFILL;
-  if (!ALLOWED_MODELS.has(model)) return invalidType("model");
+  const resolvedModel = resolveModel(body.model, AI_MODELS.PREFILL);
+  if (typeof resolvedModel !== "string") return resolvedModel;
 
   const content = body.content && typeof body.content === "object" ? body.content : null;
   if (content) {
@@ -158,7 +167,7 @@ export function validatePrefill(body: any): PrefillInput | ValidationError {
 
   return {
     nodeLabel: body.nodeLabel,
-    model,
+    model: resolvedModel,
     miniChatMessages,
     content: content ?? null
   };

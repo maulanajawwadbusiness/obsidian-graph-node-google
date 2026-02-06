@@ -1,6 +1,7 @@
 import { estimateTokensFromText } from "../../pricing/tokenEstimate";
 import type { LogicalModel } from "../models/logicalModels";
 import { normalizeUsage, type ProviderUsage } from "./providerUsage";
+import { countTokensForText } from "./tokenCounter";
 
 export type UsageRecord = {
   provider: "openai" | "openrouter";
@@ -9,8 +10,10 @@ export type UsageRecord = {
   input_tokens: number;
   output_tokens: number;
   total_tokens: number;
-  source: "provider_usage" | "estimate_wordcount";
+  source: "provider_usage" | "tokenizer_count" | "estimate_wordcount";
   notes?: string;
+  tokenizer_encoding_used?: string;
+  tokenizer_fallback_reason?: string;
 };
 
 type UsageTrackerState = {
@@ -20,7 +23,13 @@ type UsageTrackerState = {
   input_tokens_est: number;
   output_tokens_est: number;
   output_carry: string;
+  input_text: string;
+  output_text: string;
+  output_truncated: boolean;
+  input_truncated: boolean;
 };
+
+const MAX_TOKENIZER_TEXT_CHARS = 2_000_000;
 
 function countWordsWithCarry(text: string, carry: string) {
   const combined = carry + text;
@@ -69,13 +78,24 @@ export function initUsageTracker(ctx: {
     provider_model_id: ctx.provider_model_id,
     input_tokens_est: 0,
     output_tokens_est: 0,
-    output_carry: ""
+    output_carry: "",
+    input_text: "",
+    output_text: "",
+    output_truncated: false,
+    input_truncated: false
   };
 
   function recordInputText(input: unknown) {
     const text = normalizeInput(input);
     if (!text) return;
     state.input_tokens_est += estimateTokensFromText(text);
+    if (!state.input_truncated) {
+      if (state.input_text.length + text.length > MAX_TOKENIZER_TEXT_CHARS) {
+        state.input_truncated = true;
+      } else {
+        state.input_text += text;
+      }
+    }
   }
 
   function recordOutputChunk(chunk: string) {
@@ -83,15 +103,29 @@ export function initUsageTracker(ctx: {
     const counted = countWordsWithCarry(chunk, state.output_carry);
     state.output_tokens_est += counted.count;
     state.output_carry = counted.carry;
+    if (!state.output_truncated) {
+      if (state.output_text.length + chunk.length > MAX_TOKENIZER_TEXT_CHARS) {
+        state.output_truncated = true;
+      } else {
+        state.output_text += chunk;
+      }
+    }
   }
 
   function recordOutputText(text: string) {
     if (!text) return;
     state.output_tokens_est += estimateTokensFromText(text);
     state.output_carry = "";
+    if (!state.output_truncated) {
+      if (state.output_text.length + text.length > MAX_TOKENIZER_TEXT_CHARS) {
+        state.output_truncated = true;
+      } else {
+        state.output_text += text;
+      }
+    }
   }
 
-  function finalize(opts: { providerUsage?: ProviderUsage | null }): UsageRecord {
+  async function finalize(opts: { providerUsage?: ProviderUsage | null }): Promise<UsageRecord> {
     const providerUsage = normalizeUsage(opts.providerUsage || null);
     const providerInput = providerUsage?.input_tokens;
     const providerOutput = providerUsage?.output_tokens;
@@ -112,6 +146,33 @@ export function initUsageTracker(ctx: {
       };
     }
 
+    if (!state.input_truncated && !state.output_truncated) {
+      const inputTokenResult = await countTokensForText({
+        provider: state.provider,
+        providerModelId: state.provider_model_id,
+        logicalModel: state.logical_model,
+        text: state.input_text
+      });
+      const outputTokenResult = await countTokensForText({
+        provider: state.provider,
+        providerModelId: state.provider_model_id,
+        logicalModel: state.logical_model,
+        text: state.output_text
+      });
+      if (inputTokenResult && outputTokenResult) {
+        return {
+          provider: state.provider,
+          logical_model: state.logical_model,
+          provider_model_id: state.provider_model_id,
+          input_tokens: inputTokenResult.tokens,
+          output_tokens: outputTokenResult.tokens,
+          total_tokens: inputTokenResult.tokens + outputTokenResult.tokens,
+          source: "tokenizer_count",
+          tokenizer_encoding_used: inputTokenResult.encoding
+        };
+      }
+    }
+
     const totalTokens = state.input_tokens_est + state.output_tokens_est;
     return {
       provider: state.provider,
@@ -120,7 +181,8 @@ export function initUsageTracker(ctx: {
       input_tokens: state.input_tokens_est,
       output_tokens: state.output_tokens_est,
       total_tokens: totalTokens,
-      source: "estimate_wordcount"
+      source: "estimate_wordcount",
+      tokenizer_fallback_reason: state.input_truncated || state.output_truncated ? "text_too_large" : "tokenizer_unavailable"
     };
   }
 

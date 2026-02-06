@@ -204,6 +204,8 @@ function logLlmRequest(fields: {
   provider_usage_present?: boolean | null;
   provider_usage_source?: string | null;
   provider_usage_fields_present?: string[] | null;
+  tokenizer_encoding_used?: string | null;
+  tokenizer_fallback_reason?: string | null;
   freepool_decrement_tokens?: number | null;
 }) {
   console.log(JSON.stringify({
@@ -226,6 +228,8 @@ function logLlmRequest(fields: {
     provider_usage_present: fields.provider_usage_present ?? null,
     provider_usage_source: fields.provider_usage_source ?? null,
     provider_usage_fields_present: fields.provider_usage_fields_present ?? null,
+    tokenizer_encoding_used: fields.tokenizer_encoding_used ?? null,
+    tokenizer_fallback_reason: fields.tokenizer_fallback_reason ?? null,
     rupiah_cost: fields.rupiah_cost ?? null,
     rupiah_balance_before: fields.rupiah_balance_before ?? null,
     rupiah_balance_after: fields.rupiah_balance_after ?? null,
@@ -1055,7 +1059,7 @@ app.post("/api/llm/paper-analyze", requireAuth, async (req, res) => {
 
     const outputTextLength = JSON.stringify(resultJson || {}).length;
     usageTracker.recordOutputText(JSON.stringify(resultJson || {}));
-    usageRecord = usageTracker.finalize({ providerUsage });
+    usageRecord = await usageTracker.finalize({ providerUsage });
     const pricing = estimateIdrCost({
       model: validation.model,
       inputTokens: usageRecord.input_tokens,
@@ -1140,6 +1144,8 @@ app.post("/api/llm/paper-analyze", requireAuth, async (req, res) => {
       provider_usage_present: providerUsage ? true : false,
       provider_usage_source: providerUsage ? providerName : null,
       provider_usage_fields_present: getUsageFieldList(providerUsage),
+      tokenizer_encoding_used: usageRecord?.tokenizer_encoding_used ?? null,
+      tokenizer_fallback_reason: usageRecord?.tokenizer_fallback_reason ?? null,
       freepool_decrement_tokens: freepoolDecrement,
       structured_output_mode: structuredOutputMode,
       validation_result: validationResult
@@ -1438,7 +1444,7 @@ app.post("/api/llm/prefill", requireAuth, async (req, res) => {
 
     usageTracker.recordOutputText(result.text);
     providerUsage = normalizeUsage(result.usage) || null;
-    usageRecord = usageTracker.finalize({ providerUsage });
+    usageRecord = await usageTracker.finalize({ providerUsage });
     const pricing = estimateIdrCost({
       model: validation.model,
       inputTokens: usageRecord.input_tokens,
@@ -1520,6 +1526,8 @@ app.post("/api/llm/prefill", requireAuth, async (req, res) => {
       provider_usage_present: providerUsage ? true : false,
       provider_usage_source: providerUsage ? providerName : null,
       provider_usage_fields_present: getUsageFieldList(providerUsage),
+      tokenizer_encoding_used: usageRecord?.tokenizer_encoding_used ?? null,
+      tokenizer_fallback_reason: usageRecord?.tokenizer_fallback_reason ?? null,
       freepool_decrement_tokens: freepoolDecrement
     });
   } finally {
@@ -1736,7 +1744,7 @@ app.post("/api/llm/chat", requireAuth, async (req, res) => {
         }
       }
     }
-    usageRecord = usageTracker.finalize({ providerUsage });
+    usageRecord = await usageTracker.finalize({ providerUsage });
     const pricing = estimateIdrCost({
       model: validation.model,
       inputTokens: usageRecord.input_tokens,
@@ -1796,6 +1804,8 @@ app.post("/api/llm/chat", requireAuth, async (req, res) => {
       provider_usage_present: providerUsage ? true : false,
       provider_usage_source: providerUsage ? providerName : null,
       provider_usage_fields_present: getUsageFieldList(providerUsage),
+      tokenizer_encoding_used: usageRecord?.tokenizer_encoding_used ?? null,
+      tokenizer_fallback_reason: usageRecord?.tokenizer_fallback_reason ?? null,
       freepool_decrement_tokens: freepoolDecrement
     });
   }

@@ -43,7 +43,7 @@ export function SessionExpiryBanner({ onSignIn }: SessionExpiryBannerProps) {
       onPointerDown={(e) => e.stopPropagation()}
     >
       <div style={{ fontSize: 12 }}>
-        session expired. please sign in again.
+        Session expired. Please sign in again.
       </div>
       <div style={{ display: "flex", gap: 8 }}>
         <button
@@ -59,7 +59,7 @@ export function SessionExpiryBanner({ onSignIn }: SessionExpiryBannerProps) {
             cursor: "pointer"
           }}
         >
-          sign in
+          Sign In
         </button>
         <button
           onClick={dismissSessionExpired}

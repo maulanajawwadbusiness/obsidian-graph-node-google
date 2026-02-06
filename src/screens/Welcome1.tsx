@@ -107,7 +107,7 @@ const SUBTITLE_TEXT_STYLE: React.CSSProperties = {
 
 const CURSOR_STYLE: React.CSSProperties = {
     position: 'absolute',
-    right: '-10px',
+    right: '-14.5px',
     fontSize: '27px',
     color: '#63abff',
     animation: 'blink 1s step-end infinite',

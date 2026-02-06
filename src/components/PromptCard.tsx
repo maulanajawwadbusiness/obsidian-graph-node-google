@@ -9,8 +9,7 @@ const PROMPT_TEXTS = {
     id: {
         headlinePrefix: 'Telusuri kesulitan di dalam ',
         headlineSuffix: 'mu di sini',
-        placeholder: `Ubah pengetahuanmu menjadi antarmuka dua dimensi
-(Unggah papermu atau paste teks paper-mu ke sini)`,
+        placeholder: `Tempel atau unggah dokumenmu untuk mulai melakukan analisis dua dimensi di sini`,
     },
     en: {
         headlinePrefix: 'Explore difficulties in your ',

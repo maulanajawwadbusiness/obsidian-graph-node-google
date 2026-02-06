@@ -53,7 +53,7 @@ const ROOT_STYLE: React.CSSProperties = {
     alignItems: 'flex-start',
     justifyContent: 'flex-start',
     padding: '64px',
-    background: '#0D0D16',
+    background: '#06060A',
     color: '#e7e7e7',
     boxSizing: 'border-box',
 };

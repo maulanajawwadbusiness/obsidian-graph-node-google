@@ -91,6 +91,15 @@ Terminology matters. In the graph, we render "Dots", not "Nodes" (though the dat
     3.  **Backdrop**: For click-outside-to-close, use a full-screen backdrop with `pointerEvents: 'auto'`, `onPointerDown` stop, and `onClick` close.
     4.  **Panels Own Input**: When an overlay/panel is open, it must fully own pointer + wheel events inside its bounds.
 
+### SECRETS POLICY (NON-NEGOTIABLE)
+*   **NEVER write secrets to repo files**: This includes ALL files (code, docs, logs, configs), even if gitignored.
+*   **Secrets include**: API keys, tokens, passwords, OAuth secrets, session IDs, cookie values, private keys, webhooks, DATABASE_URL passwords.
+*   **Forensic reports**: Only prove existence of env var NAMES with line ranges. Values MUST be redacted as `<REDACTED>`. Do NOT show length, prefix, or suffix.
+*   **Console output**: Redact secrets before pasting into docs or issue trackers.
+*   **Screenshots**: Avoid screenshots that show secrets. If unavoidable, redact before committing.
+*   **Code examples**: Use placeholder values like `your-key-here` or `<REDACTED>`, never real keys.
+*   **Verification**: To prove a secret exists in code, show ONLY the variable name + file path + line number, never the value.
+
 ## 5. Perf Doctrine (Physics)
 
 ### A. The Scheduler

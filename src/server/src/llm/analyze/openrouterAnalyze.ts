@@ -74,7 +74,7 @@ export async function runOpenrouterAnalyze(opts: {
     input: firstPrompt
   });
 
-  if (!first.ok) {
+  if (first.ok === false) {
     return { ok: false, error: first, validation_result: "failed" };
   }
 
@@ -87,13 +87,17 @@ export async function runOpenrouterAnalyze(opts: {
     return { ok: true, json: firstValidation.value, usage: first.usage, validation_result: "ok" };
   }
 
-  const retryPrompt = buildPrompt(schema, opts.input, firstValidation.errors);
+  let retryErrors: string[] = [];
+  if (firstValidation.ok === false) {
+    retryErrors = firstValidation.errors;
+  }
+  const retryPrompt = buildPrompt(schema, opts.input, retryErrors);
   const retry = await opts.provider.generateText({
     model: opts.model,
     input: retryPrompt
   });
 
-  if (!retry.ok) {
+  if (retry.ok === false) {
     return { ok: false, error: retry, validation_result: "failed" };
   }
 

@@ -127,7 +127,7 @@ async function generateText(opts: TextOpts): Promise<LlmTextResult> {
     },
     timeoutMs
   );
-  if (!result.ok) {
+  if (result.ok === false) {
     return createError({
       request_id,
       code: "unauthorized",
@@ -190,7 +190,7 @@ async function generateStructuredJson(opts: StructuredOpts): Promise<LlmStructur
     },
     timeoutMs
   );
-  if (!result.ok) {
+  if (result.ok === false) {
     return createError({
       request_id,
       code: "unauthorized",

@@ -1032,8 +1032,9 @@ app.post("/api/llm/paper-analyze", requireAuth, async (req, res) => {
         nodeCount: validation.nodeCount
       });
 
-      if (!openrouterResult.ok) {
-        if ("code" in openrouterResult.error && openrouterResult.error.code === "structured_output_invalid") {
+      if (openrouterResult.ok === false) {
+        const openrouterError = openrouterResult.error;
+        if (openrouterError.code === "structured_output_invalid") {
           auditInputTokens = inputTokensEstimate;
           auditOutputTokens = 0;
           auditTotalTokens = inputTokensEstimate;
@@ -1070,7 +1071,7 @@ app.post("/api/llm/paper-analyze", requireAuth, async (req, res) => {
           return;
         }
 
-        const status = mapLlmErrorToStatus(openrouterResult.error as LlmError);
+        const status = mapLlmErrorToStatus(openrouterError as LlmError);
         auditInputTokens = inputTokensEstimate;
         auditOutputTokens = 0;
         auditTotalTokens = inputTokensEstimate;
@@ -1079,13 +1080,13 @@ app.post("/api/llm/paper-analyze", requireAuth, async (req, res) => {
         auditCostIdr = 0;
         auditChargeStatus = "skipped";
         auditHttpStatus = status;
-        auditTerminationReason = mapTerminationReason(status, (openrouterResult.error as LlmError).code);
+        auditTerminationReason = mapTerminationReason(status, (openrouterError as LlmError).code);
         await writeAudit();
         sendApiError(res, status, {
           ok: false,
           request_id: requestId,
-          code: (openrouterResult.error as LlmError).code as ApiErrorCode,
-          error: (openrouterResult.error as LlmError).error
+          code: (openrouterError as LlmError).code as ApiErrorCode,
+          error: (openrouterError as LlmError).error
         });
         logLlmRequest({
           request_id: requestId,
@@ -1097,7 +1098,7 @@ app.post("/api/llm/paper-analyze", requireAuth, async (req, res) => {
           output_chars: 0,
           duration_ms: Date.now() - startedAt,
           status_code: status,
-          termination_reason: mapTerminationReason(status, (openrouterResult.error as LlmError).code),
+          termination_reason: mapTerminationReason(status, (openrouterError as LlmError).code),
           rupiah_cost: null,
           rupiah_balance_before: null,
           rupiah_balance_after: null,
@@ -1118,8 +1119,9 @@ app.post("/api/llm/paper-analyze", requireAuth, async (req, res) => {
         schema: analyzeSchema
       });
 
-      if (!result.ok) {
-        const status = mapLlmErrorToStatus(result);
+      if (result.ok === false) {
+        const llmError = result;
+        const status = mapLlmErrorToStatus(llmError);
         auditInputTokens = inputTokensEstimate;
         auditOutputTokens = 0;
         auditTotalTokens = inputTokensEstimate;
@@ -1128,13 +1130,13 @@ app.post("/api/llm/paper-analyze", requireAuth, async (req, res) => {
         auditCostIdr = 0;
         auditChargeStatus = "skipped";
         auditHttpStatus = status;
-        auditTerminationReason = mapTerminationReason(status, result.code);
+        auditTerminationReason = mapTerminationReason(status, llmError.code);
         await writeAudit();
         sendApiError(res, status, {
           ok: false,
           request_id: requestId,
-          code: result.code as ApiErrorCode,
-          error: result.error
+          code: llmError.code as ApiErrorCode,
+          error: llmError.error
         });
         logLlmRequest({
           request_id: requestId,
@@ -1146,7 +1148,7 @@ app.post("/api/llm/paper-analyze", requireAuth, async (req, res) => {
           output_chars: 0,
           duration_ms: Date.now() - startedAt,
           status_code: status,
-          termination_reason: mapTerminationReason(status, result.code),
+          termination_reason: mapTerminationReason(status, llmError.code),
           rupiah_cost: null,
           rupiah_balance_before: null,
           rupiah_balance_after: null,
@@ -1222,11 +1224,12 @@ app.post("/api/llm/paper-analyze", requireAuth, async (req, res) => {
       amountIdr: pricing.idrCostRounded,
       meta: { model: validation.model, totalTokens: pricing.totalTokens }
     });
-    if (!chargeResult.ok) {
-      const shortfall = pricing.idrCostRounded - chargeResult.balance_idr;
+    if (chargeResult.ok === false) {
+      const chargeError = chargeResult;
+      const shortfall = pricing.idrCostRounded - chargeError.balance_idr;
       auditCostIdr = 0;
-      auditBalanceBefore = chargeResult.balance_idr;
-      auditBalanceAfter = chargeResult.balance_idr;
+      auditBalanceBefore = chargeError.balance_idr;
+      auditBalanceAfter = chargeError.balance_idr;
       auditChargeStatus = "failed";
       auditChargeError = "insufficient_rupiah";
       auditHttpStatus = 402;
@@ -1239,7 +1242,7 @@ app.post("/api/llm/paper-analyze", requireAuth, async (req, res) => {
         code: "insufficient_rupiah",
         request_id: requestId,
         needed_idr: pricing.idrCostRounded,
-        balance_idr: chargeResult.balance_idr,
+        balance_idr: chargeError.balance_idr,
         shortfall_idr: shortfall
       });
       logLlmRequest({
@@ -1254,8 +1257,8 @@ app.post("/api/llm/paper-analyze", requireAuth, async (req, res) => {
         status_code: 402,
         termination_reason: "insufficient_rupiah",
         rupiah_cost: pricing.idrCostRounded,
-        rupiah_balance_before: chargeResult.balance_idr,
-        rupiah_balance_after: chargeResult.balance_idr
+        rupiah_balance_before: chargeError.balance_idr,
+        rupiah_balance_after: chargeError.balance_idr
       });
       return;
     }
@@ -1415,6 +1418,11 @@ app.get("/api/payments/:orderId/status", requireAuth, async (req, res) => {
       return;
     }
 
+    let midtransError: unknown = null;
+    if (statusResult.ok === false) {
+      midtransError = statusResult.error;
+    }
+
     res.json({
       ok: true,
       order_id: orderId,
@@ -1422,7 +1430,7 @@ app.get("/api/payments/:orderId/status", requireAuth, async (req, res) => {
       payment_type: row.payment_type,
       transaction_id: row.midtrans_transaction_id,
       paid_at: row.paid_at || null,
-      midtrans_error: statusResult.error
+      midtrans_error: midtransError
     });
     return;
   }
@@ -1695,8 +1703,9 @@ app.post("/api/llm/prefill", requireAuth, async (req, res) => {
       input
     });
 
-    if (!result.ok) {
-      const status = mapLlmErrorToStatus(result);
+    if (result.ok === false) {
+      const llmError = result;
+      const status = mapLlmErrorToStatus(llmError);
       auditInputTokens = inputTokensEstimate;
       auditOutputTokens = 0;
       auditTotalTokens = inputTokensEstimate;
@@ -1705,13 +1714,13 @@ app.post("/api/llm/prefill", requireAuth, async (req, res) => {
       auditCostIdr = 0;
       auditChargeStatus = "skipped";
       auditHttpStatus = status;
-      auditTerminationReason = mapTerminationReason(status, result.code);
+      auditTerminationReason = mapTerminationReason(status, llmError.code);
       await writeAudit();
       sendApiError(res, status, {
         ok: false,
         request_id: requestId,
-        code: result.code as ApiErrorCode,
-        error: result.error
+        code: llmError.code as ApiErrorCode,
+        error: llmError.error
       });
       logLlmRequest({
         request_id: requestId,
@@ -1723,7 +1732,7 @@ app.post("/api/llm/prefill", requireAuth, async (req, res) => {
         output_chars: 0,
         duration_ms: Date.now() - startedAt,
         status_code: status,
-        termination_reason: mapTerminationReason(status, result.code),
+        termination_reason: mapTerminationReason(status, llmError.code),
         rupiah_cost: null,
         rupiah_balance_before: null,
         rupiah_balance_after: null
@@ -1753,11 +1762,12 @@ app.post("/api/llm/prefill", requireAuth, async (req, res) => {
       amountIdr: pricing.idrCostRounded,
       meta: { model: validation.model, totalTokens: pricing.totalTokens }
     });
-    if (!chargeResult.ok) {
-      const shortfall = pricing.idrCostRounded - chargeResult.balance_idr;
+    if (chargeResult.ok === false) {
+      const chargeError = chargeResult;
+      const shortfall = pricing.idrCostRounded - chargeError.balance_idr;
       auditCostIdr = 0;
-      auditBalanceBefore = chargeResult.balance_idr;
-      auditBalanceAfter = chargeResult.balance_idr;
+      auditBalanceBefore = chargeError.balance_idr;
+      auditBalanceAfter = chargeError.balance_idr;
       auditChargeStatus = "failed";
       auditChargeError = "insufficient_rupiah";
       auditHttpStatus = 402;
@@ -1768,7 +1778,7 @@ app.post("/api/llm/prefill", requireAuth, async (req, res) => {
         code: "insufficient_rupiah",
         request_id: requestId,
         needed_idr: pricing.idrCostRounded,
-        balance_idr: chargeResult.balance_idr,
+        balance_idr: chargeError.balance_idr,
         shortfall_idr: shortfall
       });
       logLlmRequest({
@@ -1783,8 +1793,8 @@ app.post("/api/llm/prefill", requireAuth, async (req, res) => {
         status_code: 402,
         termination_reason: "insufficient_rupiah",
         rupiah_cost: pricing.idrCostRounded,
-        rupiah_balance_before: chargeResult.balance_idr,
-        rupiah_balance_after: chargeResult.balance_idr
+        rupiah_balance_before: chargeError.balance_idr,
+        rupiah_balance_after: chargeError.balance_idr
       });
       return;
     }
@@ -2195,7 +2205,7 @@ app.post("/api/llm/chat", requireAuth, async (req, res) => {
       amountIdr: pricing.idrCostRounded,
       meta: { model: validation.model, totalTokens: pricing.totalTokens }
     });
-    if (chargeResult.ok) {
+    if (chargeResult.ok === true) {
       rupiahCost = pricing.idrCostRounded;
       rupiahBefore = chargeResult.balance_before;
       rupiahAfter = chargeResult.balance_after;
@@ -2204,10 +2214,11 @@ app.post("/api/llm/chat", requireAuth, async (req, res) => {
       auditBalanceAfter = chargeResult.balance_after;
       auditChargeStatus = "charged";
     } else {
+      const chargeError = chargeResult;
       terminationReason = "insufficient_rupiah";
       auditCostIdr = 0;
-      auditBalanceBefore = chargeResult.balance_idr;
-      auditBalanceAfter = chargeResult.balance_idr;
+      auditBalanceBefore = chargeError.balance_idr;
+      auditBalanceAfter = chargeError.balance_idr;
       auditChargeStatus = "failed";
       auditChargeError = "insufficient_rupiah";
     }

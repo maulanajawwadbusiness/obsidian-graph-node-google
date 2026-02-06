@@ -11,9 +11,9 @@ Jitter, layout thrashing, and frame drops are critical bugs.
 *   **Bounds**: Work per frame must be bounded.
 
 ### B. Panels = Input Black Holes
-The Canvas (Graph) is the substrate. Panels (Chat, Docs) and the Analysis Overlay float above it.
+The Canvas (Graph) is the substrate. Panels (Chat, Docs) and the Loading Screen float above it.
 *   **Rule**: When a panel is active, it must own 100% of the input events.
-*   **Shielding**: The `AnalysisOverlay` must block pointer + wheel events completely.
+*   **Shielding**: The `LoadingScreen` must block pointer + wheel events completely.
 *   **Drag Authority**: When dragging a dot, it must follow the cursor 1:1. Physics forces are ignored for the dragged node.
 
 ### C. Minimal Diffs & Side Reports

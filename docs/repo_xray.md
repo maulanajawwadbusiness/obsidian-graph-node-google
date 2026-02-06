@@ -83,11 +83,13 @@ Note: Counts are estimated post-modularization.
 12. src/auth/AuthProvider.tsx - Auth context + /me bootstrap
 13. src/auth/SessionExpiryBanner.tsx - Session expiry UI
 14. src/api.ts - Backend fetch helper (credentials include)
-15. src/server/src/index.ts - Auth routes and cookies
-16. src/server/src/db.ts - Cloud SQL connector + pool
-17. src/components/PaymentGopayPanel.tsx - QRIS payment UI panel
-18. src/components/PromptCard.tsx - EnterPrompt main card (renders payment panel)
-19. src/screens/EnterPrompt.tsx - Onboarding prompt screen
+15. src/server/src/index.ts - Auth routes, payments, LLM endpoints
+16. src/server/src/llm/llmClient.ts - Server LLM client (Responses API)
+17. src/server/src/db.ts - Cloud SQL connector + pool
+18. src/components/PaymentGopayPanel.tsx - QRIS payment UI panel
+19. src/components/PromptCard.tsx - EnterPrompt main card (renders payment panel)
+20. src/screens/EnterPrompt.tsx - Onboarding prompt screen
+21. src/screens/LoadingScreen.tsx - Analysis loading/error state
 
 ## 3. Core Runtime Loops
 
@@ -171,3 +173,14 @@ Backend:
 - `POST /api/payments/gopayqris/create`
 - `GET /api/payments/:orderId/status`
 - `POST /api/payments/webhook`
+
+## 9. LLM Endpoints (Server-Side)
+Backend:
+- `POST /api/llm/paper-analyze`
+- `POST /api/llm/chat`
+- `POST /api/llm/prefill`
+
+Client call sites:
+- `src/ai/paperAnalyzer.ts`
+- `src/fullchat/fullChatAi.ts`
+- `src/fullchat/prefillSuggestion.ts`

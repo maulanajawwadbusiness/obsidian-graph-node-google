@@ -24,6 +24,7 @@ API base must use a single canonical key:
 - `ALLOWED_ORIGINS`
 - `SESSION_COOKIE_SAMESITE`
 - `SESSION_COOKIE_NAME`
+- `OPENAI_API_KEY` (required for server LLM endpoints)
 
 ## 1.5 Vercel Proxy CORS
 - If frontend is served from `https://beta.arnvoid.com` and calls `/api`, backend must allow origin `https://beta.arnvoid.com`.
@@ -103,6 +104,17 @@ Frontend wiring:
 - For QR display, use action name `qr-code` or `generate-qr-code`.
 - For mobile, use action name `deeplink-redirect`.
 
+## 1.9 LLM Endpoints (Server-Side)
+Endpoints:
+- `POST /api/llm/paper-analyze` (structured JSON schema)
+- `POST /api/llm/chat` (streams raw text chunks)
+- `POST /api/llm/prefill` (returns `{ ok, request_id, prompt }`)
+
+Notes:
+- All endpoints require cookie auth (`credentials: "include"`).
+- Model defaults are enforced on the server via `AI_MODELS`.
+- Streaming responses use `Content-Type: text/plain; charset=utf-8`.
+
 ## 2. UI Surface Map & Ownership
 
 The application layers, ordered by z-index (lowest to highest):
@@ -130,9 +142,9 @@ The application layers, ordered by z-index (lowest to highest):
     *   **Ownership**: Consumes all interaction within its bounds.
     *   Owned by: `FullChatStore`.
 
-6.  **Analysis Overlay (`AnalysisOverlay`)**
-    *   **Highest Layer**. Dims the screen during AI parsing/analysis.
-    *   **Shielding Rule**: Blocks all pointer, wheel, and touch events to prevent graph disturbance during critical AI operations.
+6.  **Loading Screen (`LoadingScreen`)**
+    *   Full-screen state during analysis start/finish and analysis failures.
+    *   Replaces `AnalysisOverlay` in the graph UI.
 
 ## 3. Physics Architecture And Contract
 The graph is driven by a **Hybrid Solver** (`src/physics/`) prioritizing "Visual Dignity" over pure simulation accuracy.
@@ -255,17 +267,18 @@ Post-Fixes #01-#22, the system guarantees:
     *   **Verification**: Always manually verify click, close, and input focus before shipping new overlays.
 
 ## 5. AI Architecture
-Arnvoid uses a unified AI layer (`src/ai/`) that abstracts provider details behind a strict interface.
+Arnvoid uses server LLM endpoints for analyzer, chat, and prefill.
 
-### A. The Core: `LLMClient`
-*   **Contract**: All features talk to `LLMClient` (`generateText`, `generateTextStream`, `generateStructured`).
-*   **Provider Agnostic**: The application logic does not know if it's talking to OpenAI, OpenRouter, or a local model.
+### A. The Core: Server LLM Endpoints
+*   **Contract**: Frontend calls `/api/llm/*` endpoints for analyzer, chat, and prefill.
+*   **Provider**: Server uses OpenAI Responses API via `src/server/src/llm/llmClient.ts`.
+*   **Streaming**: Raw text chunks streamed to the client (no SSE framing).
 
 ### B. Current State
-*   **Primary**: `OpenAIClient` using the **Responses API** (`v1/responses`).
+*   **Primary**: Server-side OpenAI Responses API (`v1/responses`).
 *   **Behavior Doctrine**:
-    *   **Fake Streaming**: Client-side character ticking (15ms) used where backend streaming is unavailable.
-    *   **Abort Model**: Every AI loop uses an `AbortController`.
+    *   **Streaming**: Raw deltas are forwarded to the frontend.
+    *   **Abort Model**: Streaming closes on client disconnect or abort.
 
 ### C. Paper Analyzer Output (Directed Map)
 *   **Prompt + Schema**: `src/ai/paperAnalyzer.ts` now requires both points and directed links.

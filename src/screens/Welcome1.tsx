@@ -13,6 +13,8 @@ export const Welcome1: React.FC<Welcome1Props> = ({ onNext, onSkip }) => {
     const { enterFullscreen } = useFullscreen();
 
     const SUBTITLE_TEXT = 'Antarmuka Pengetahuan Dua Dimensi';
+    const CURSOR_DELAY_MS = 500;
+    const [showCursor, setShowCursor] = React.useState(false);
 
     useEffect(() => {
         const timer = setTimeout(() => {
@@ -27,6 +29,14 @@ export const Welcome1: React.FC<Welcome1Props> = ({ onNext, onSkip }) => {
             console.warn('[welcome1] Auto-fullscreen blocked (user interaction required):', e);
         });
     }, [enterFullscreen]);
+
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            setShowCursor(true);
+        }, CURSOR_DELAY_MS);
+
+        return () => clearTimeout(timer);
+    }, []);
 
     return (
         <div style={ROOT_STYLE}>
@@ -43,7 +53,7 @@ export const Welcome1: React.FC<Welcome1Props> = ({ onNext, onSkip }) => {
                     >
                         {SUBTITLE_TEXT}
                     </span>
-                    <span style={CURSOR_STYLE}>|</span>
+                    {showCursor ? <span style={CURSOR_STYLE}>|</span> : null}
                 </div>
             </div>
         </div>
@@ -57,7 +67,7 @@ const ROOT_STYLE: React.CSSProperties = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    background: '#0D0D16',
+    background: '#06060A',
     color: '#e7e7e7',
     overflow: 'hidden',
 };

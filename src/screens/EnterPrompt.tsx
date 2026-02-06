@@ -11,6 +11,7 @@ type EnterPromptProps = {
 
 export const EnterPrompt: React.FC<EnterPromptProps> = ({ onEnter, onBack, onSkip }) => {
     const { user } = useAuth();
+    const [isOverlayHidden, setIsOverlayHidden] = React.useState(false);
 
     return (
         <div style={ROOT_STYLE}>
@@ -23,10 +24,11 @@ export const EnterPrompt: React.FC<EnterPromptProps> = ({ onEnter, onBack, onSki
             <PromptCard lang="id" />
 
             <LoginOverlay
-                open={!user}
+                open={!user && !isOverlayHidden}
                 onContinue={onEnter}
                 onBack={onBack}
                 onSkip={onSkip}
+                onHide={() => setIsOverlayHidden(true)}
             />
         </div>
     );
@@ -36,7 +38,7 @@ const ROOT_STYLE: React.CSSProperties = {
     display: 'flex',
     width: '100%',
     minHeight: '100vh',
-    background: '#0D0D16',
+    background: '#06060A',
     color: '#e7e7e7',
 };
 
@@ -46,7 +48,7 @@ const SIDEBAR_STYLE: React.CSSProperties = {
     top: 0,
     bottom: 0,
     width: '93px',
-    background: '#0D0D16',
+    background: '#06060A',
     borderRight: '1px solid #1e2330',
     display: 'flex',
     flexDirection: 'column',

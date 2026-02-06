@@ -8,6 +8,7 @@ type LoginOverlayProps = {
     onContinue?: () => void;
     onBack?: () => void;
     onSkip?: () => void;
+    onHide?: () => void;
 };
 
 export const LoginOverlay: React.FC<LoginOverlayProps> = ({
@@ -15,6 +16,7 @@ export const LoginOverlay: React.FC<LoginOverlayProps> = ({
     onContinue,
     onBack,
     onSkip,
+    onHide,
 }) => {
     const { user, loading, error } = useAuth();
 
@@ -68,6 +70,15 @@ export const LoginOverlay: React.FC<LoginOverlayProps> = ({
                 )}
 
                 <div style={BUTTON_ROW_STYLE}>
+                    {onHide && (
+                        <button
+                            type="button"
+                            style={SECONDARY_BUTTON_STYLE}
+                            onClick={onHide}
+                        >
+                            Hide
+                        </button>
+                    )}
                     {onBack && (
                         <button
                             type="button"

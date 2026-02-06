@@ -1,9 +1,8 @@
-import { createLLMClient } from '../ai';
 import { getAiMode } from '../config/aiMode';
 import { AI_MODELS } from '../config/aiModels';
 import { t } from '../i18n/t';
-import { getAiLanguageDirective } from '../i18n/aiLanguage';
 import { getLang } from '../i18n/lang';
+import { apiPost } from '../api';
 
 export interface MiniChatHistory {
     role: 'user' | 'ai';
@@ -83,42 +82,35 @@ async function refinePromptMock(context: PrefillContext, options: { signal?: Abo
 const REAL_TIMEOUT_MS = 2500;
 
 async function refinePromptWithReal(context: PrefillContext, options: { signal?: AbortSignal }): Promise<string> {
-    const apiKey = import.meta.env.VITE_OPENAI_API_KEY;
-    if (!apiKey) {
-        console.warn('[PrefillAI] missing VITE_OPENAI_API_KEY, falling back to mock');
-        return refinePromptMock(context, options);
-    }
-
     try {
-        const client = createLLMClient({
-            apiKey,
-            mode: 'openai',
-            defaultModel: 'gpt-4o'
-        });
-
-        const prompt = buildRefinePacket(context);
-
-        // System Prompt
-        const systemPrompt = `You are generating ONE suggested prompt to prefill a chat input.
-Rules:
-- One line only.
-- Actionable and specific to the node.
-- No prefixes like "suggested prompt:".
-- No quotes.
-- Max 160 characters.
-- Tone: calm, analytical, dark-elegant.
-- Return ONLY the prompt text.
-${getAiLanguageDirective()}`;
-
-        // Execute with timeout and abort support
-        const rawOutput = await withTimeoutAndAbort(
-            client.generateText(
-                `${systemPrompt}\n\nCONTEXT:\n${prompt}`,
-                { model: AI_MODELS.PREFILL }
-            ),
+        const res = await withTimeoutAndAbort(
+            apiPost('/api/llm/prefill', {
+                model: AI_MODELS.PREFILL,
+                nodeLabel: context.nodeLabel,
+                miniChatMessages: context.miniChatMessages,
+                content: context.content ?? null
+            }),
             REAL_TIMEOUT_MS,
             options.signal
         );
+
+        if (res.status === 401 || res.status === 403) {
+            console.warn('[PrefillAI] unauthorized; please log in');
+            return refinePromptMock(context, options);
+        }
+
+        if (!res.ok || !res.data || typeof res.data !== 'object') {
+            console.warn('[PrefillAI] server response error, falling back to mock');
+            return refinePromptMock(context, options);
+        }
+
+        const payload = res.data as { ok?: boolean; prompt?: string; text?: string };
+        if (!payload.ok) {
+            console.warn('[PrefillAI] server error, falling back to mock');
+            return refinePromptMock(context, options);
+        }
+
+        const rawOutput = payload.prompt || payload.text || '';
 
         // Sanitize Output
         console.log(`[PrefillAI] raw_out len=${rawOutput?.length}`);
@@ -141,33 +133,6 @@ ${getAiLanguageDirective()}`;
         console.warn('[PrefillAI] real refine failed or timed out, falling back to mock', err);
         return refinePromptMock(context, options);
     }
-}
-
-/**
- * Packs context into a minimal string for the LLM
- */
-function buildRefinePacket(context: PrefillContext): string {
-    const { nodeLabel, miniChatMessages, content } = context;
-
-    let packet = `Target Node: ${nodeLabel}\n`;
-    if (content) {
-        packet += `Node Knowledge: "${content.title}" - ${content.summary.slice(0, 150)}...\n`;
-    }
-
-    // Add recent history (last 4 turns)
-    if (miniChatMessages && miniChatMessages.length > 0) {
-        const recent = miniChatMessages.slice(-4);
-        packet += `Recent Chat History:\n`;
-        recent.forEach(msg => {
-            const role = msg.role.toUpperCase();
-            const text = msg.text.length > 300 ? msg.text.slice(0, 300) + '...' : msg.text;
-            packet += `${role}: ${text}\n`;
-        });
-    } else {
-        packet += `(No previous chat history)\n`;
-    }
-
-    return packet;
 }
 
 /**

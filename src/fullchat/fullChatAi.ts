@@ -1,8 +1,8 @@
-import { createLLMClient } from '../ai';
 import { getAiMode } from '../config/aiMode';
 import type { AiContext } from './fullChatTypes';
 import { getAiLanguageDirective } from '../i18n/aiLanguage';
 import { getLang } from '../i18n/lang';
+import { AI_MODELS } from '../config/aiModels';
 
 // =============================================================================
 // TYPES
@@ -20,8 +20,6 @@ export interface AiResponse {
 // =============================================================================
 // CONSTANTS
 // =============================================================================
-
-import { AI_MODELS } from '../config/aiModels';
 
 const MODEL = AI_MODELS.CHAT;
 
@@ -41,12 +39,7 @@ export async function* generateResponseAsync(
     console.log(`[FullChatAI] generate_start mode=${mode}`);
 
     if (mode === 'real') {
-        const apiKey = import.meta.env.VITE_OPENAI_API_KEY;
-        if (!apiKey) {
-            console.warn('[FullChatAI] missing API Key, fallback to mock');
-            return yield* mockResponseGenerator(context);
-        }
-        return yield* realResponseGenerator(prompt, context, apiKey, signal);
+        return yield* realResponseGenerator(prompt, context, signal);
     } else {
         return yield* mockResponseGenerator(context);
     }
@@ -59,19 +52,11 @@ export async function* generateResponseAsync(
 async function* realResponseGenerator(
     userPrompt: string,
     context: AiContext,
-    apiKey: string,
     signal?: AbortSignal
 ): AsyncGenerator<string, void, unknown> {
 
     try {
-        const client = createLLMClient({
-            apiKey,
-            mode: 'openai',
-            defaultModel: MODEL
-        });
-
         const systemPrompt = buildSystemPrompt(context);
-        const fullPrompt = `${systemPrompt}\n\nUSER PROMPT:\n${userPrompt}`;
 
         // True Stream Implementation
         // ---------------------------------------------------------------------
@@ -82,9 +67,13 @@ async function* realResponseGenerator(
 
         console.log(`[FullChatAI] calling_real_stream model=${MODEL}`);
 
-        const stream = client.generateTextStream(fullPrompt, {
-            model: MODEL
-        }, signal);
+        const stream = fetchChatStream({
+            model: MODEL,
+            userPrompt,
+            context,
+            systemPrompt,
+            signal
+        });
 
         let totalChars = 0;
         console.log('[FullChatAI] consuming generator...');
@@ -106,6 +95,13 @@ async function* realResponseGenerator(
         if (signal?.aborted || (err instanceof Error && err.name === 'AbortError')) {
             console.log('[FullChatAI] aborted');
             throw err;
+        }
+        if (err instanceof Error && err.message === 'unauthorized') {
+            const isId = getLang() === 'id';
+            yield isId
+                ? 'Silakan masuk terlebih dahulu untuk menggunakan chat.'
+                : 'Please log in to use chat.';
+            return;
         }
         console.error('[FullChatAI] real stream failed', {
             name: err instanceof Error ? err.name : 'Unknown',
@@ -149,6 +145,66 @@ async function* mockResponseGenerator(context: AiContext): AsyncGenerator<string
     }
 
     yield response;
+}
+
+function resolveUrl(base: string, path: string) {
+    const trimmedBase = base.replace(/\/+$/, '');
+    const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+    return `${trimmedBase}${normalizedPath}`;
+}
+
+function fetchChatStream(opts: {
+    model: string;
+    userPrompt: string;
+    context: AiContext;
+    systemPrompt: string;
+    signal?: AbortSignal;
+}): AsyncGenerator<string, void, unknown> {
+    const base = import.meta.env.VITE_API_BASE_URL as string;
+    if (!base || !base.trim()) {
+        throw new Error('missing_api_base');
+    }
+
+    const url = resolveUrl(base, '/api/llm/chat');
+
+    return (async function* () {
+        const res = await fetch(url, {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                model: opts.model,
+                userPrompt: opts.userPrompt,
+                context: opts.context,
+                systemPrompt: opts.systemPrompt
+            }),
+            signal: opts.signal
+        });
+
+        if (res.status === 401 || res.status === 403) {
+            throw new Error('unauthorized');
+        }
+
+        if (!res.ok || !res.body) {
+            throw new Error(`stream_http_${res.status}`);
+        }
+
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder('utf-8');
+        try {
+            while (true) {
+                const { value, done } = await reader.read();
+                if (done) break;
+                if (opts.signal?.aborted) {
+                    throw new DOMException('Aborted', 'AbortError');
+                }
+                const chunk = decoder.decode(value, { stream: true });
+                if (chunk) yield chunk;
+            }
+        } finally {
+            reader.releaseLock();
+        }
+    })();
 }
 
 // =============================================================================

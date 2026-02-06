@@ -5,6 +5,7 @@ Date: 2026-02-06
 - Added a minimal onboarding screen flow (welcome1 -> welcome2 -> prompt) with a simple state machine.
 - Added env toggle `VITE_ONBOARDING_ENABLED` to enable or skip onboarding.
 - Graph map page is now lazy-loaded and only mounted when the flow reaches the graph screen.
+- Added a local toggle for screen persistence (`PERSIST_SCREEN`) in `src/screens/AppShell.tsx` (default: false).
 
 ## Env Toggle
 - `VITE_ONBOARDING_ENABLED` controls whether onboarding runs.
@@ -15,7 +16,7 @@ Date: 2026-02-06
 1) Set `VITE_ONBOARDING_ENABLED=true` and run the app.
 2) Verify: welcome1 -> next -> welcome2 -> next -> prompt -> enter -> graph.
 3) Verify skip buttons jump to graph.
-4) Refresh on a welcome screen to confirm the screen is restored (sessionStorage).
+4) If you enable `PERSIST_SCREEN=true`, refresh to confirm screen restore (sessionStorage).
 5) Set `VITE_ONBOARDING_ENABLED=false` and verify app starts on graph.
 
 ## Files Changed

@@ -4,27 +4,31 @@ import { Welcome1 } from './Welcome1';
 import { Welcome2 } from './Welcome2';
 import { EnterPrompt } from './EnterPrompt';
 
-const Graph = React.lazy(() => import('../playground/GraphPhysicsPlayground'));
+const Graph = React.lazy(() =>
+    import('../playground/GraphPhysicsPlayground').then((mod) => ({
+        default: mod.GraphPhysicsPlayground,
+    }))
+);
 
 type Screen = 'welcome1' | 'welcome2' | 'prompt' | 'graph';
-
 const STORAGE_KEY = 'arnvoid_screen';
+const PERSIST_SCREEN = false;
 
 function getInitialScreen(): Screen {
     if (!ONBOARDING_ENABLED) return 'graph';
-    if (typeof window === 'undefined') return 'welcome1';
-    const stored = sessionStorage.getItem(STORAGE_KEY) as Screen | null;
-    if (stored === 'welcome1' || stored === 'welcome2' || stored === 'prompt' || stored === 'graph') {
-        return stored;
+    if (PERSIST_SCREEN && typeof window !== 'undefined') {
+        const stored = sessionStorage.getItem(STORAGE_KEY) as Screen | null;
+        if (stored === 'welcome1' || stored === 'welcome2' || stored === 'prompt' || stored === 'graph') {
+            return stored;
+        }
     }
     return 'welcome1';
 }
 
 export const AppShell: React.FC = () => {
     const [screen, setScreen] = React.useState<Screen>(() => getInitialScreen());
-
     React.useEffect(() => {
-        if (!ONBOARDING_ENABLED) return;
+        if (!ONBOARDING_ENABLED || !PERSIST_SCREEN) return;
         if (typeof window === 'undefined') return;
         sessionStorage.setItem(STORAGE_KEY, screen);
     }, [screen]);

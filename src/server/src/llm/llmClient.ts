@@ -1,4 +1,6 @@
 import crypto from "crypto";
+import type { ProviderUsage } from "./usage/providerUsage";
+import { normalizeUsage } from "./usage/providerUsage";
 
 type LlmErrorCode =
   | "bad_request"
@@ -20,20 +22,14 @@ export type LlmStructuredOk = {
   ok: true;
   request_id: string;
   json: unknown;
-  usage?: {
-    input_tokens?: number;
-    output_tokens?: number;
-  };
+  usage?: ProviderUsage;
 };
 
 export type LlmTextOk = {
   ok: true;
   request_id: string;
   text: string;
-  usage?: {
-    input_tokens?: number;
-    output_tokens?: number;
-  };
+  usage?: ProviderUsage;
 };
 
 export type LlmStructuredResult = LlmStructuredOk | LlmError;
@@ -41,6 +37,7 @@ export type LlmTextResult = LlmTextOk | LlmError;
 
 export type LlmStream = AsyncGenerator<string, void, unknown> & {
   request_id: string;
+  providerUsagePromise?: Promise<ProviderUsage | null>;
 };
 
 type StructuredOpts = {
@@ -282,12 +279,7 @@ export async function generateStructuredJson(opts: StructuredOpts): Promise<LlmS
       ok: true,
       request_id,
       json: parsed,
-      usage: data?.usage
-        ? {
-            input_tokens: data.usage.input_tokens,
-            output_tokens: data.usage.output_tokens
-          }
-        : undefined
+      usage: normalizeUsage(data?.usage) || undefined
     };
   } catch (err: any) {
     const isTimeout = err?.name === "AbortError";
@@ -414,12 +406,7 @@ export async function generateText(opts: TextOpts): Promise<LlmTextResult> {
       ok: true,
       request_id,
       text,
-      usage: data?.usage
-        ? {
-            input_tokens: data.usage.input_tokens,
-            output_tokens: data.usage.output_tokens
-          }
-        : undefined
+      usage: normalizeUsage(data?.usage) || undefined
     };
   } catch (err: any) {
     const isTimeout = err?.name === "AbortError";
@@ -448,6 +435,11 @@ export function generateTextStream(opts: TextOpts): LlmStream {
   const startedAt = Date.now();
   const timeoutMs = opts.timeoutMs ?? DEFAULT_STREAM_TIMEOUT_MS;
   let finalStatus: "ok" | "error" = "ok";
+  let resolveUsage: ((usage: ProviderUsage | null) => void) | null = null;
+  const providerUsagePromise = new Promise<ProviderUsage | null>((resolve) => {
+    resolveUsage = resolve;
+  });
+  let latestUsage: ProviderUsage | null = null;
 
   const stream = (async function* () {
     if (!hasFetch()) {
@@ -529,6 +521,12 @@ export function generateTextStream(opts: TextOpts): LlmStream {
                 const delta = typeof event.delta === "string" ? event.delta : "";
                 if (delta) yield delta;
               }
+              if (event?.usage) {
+                latestUsage = normalizeUsage(event.usage);
+              }
+              if (event?.type === "response.completed" && event?.response?.usage) {
+                latestUsage = normalizeUsage(event.response.usage);
+              }
             } catch {
               // Ignore parse errors for non-json frames
             }
@@ -557,9 +555,11 @@ export function generateTextStream(opts: TextOpts): LlmStream {
         duration_ms: Date.now() - startedAt,
         status: finalStatus
       });
+      if (resolveUsage) resolveUsage(latestUsage);
     }
   })();
 
   (stream as LlmStream).request_id = request_id;
+  (stream as LlmStream).providerUsagePromise = providerUsagePromise;
   return stream as LlmStream;
 }

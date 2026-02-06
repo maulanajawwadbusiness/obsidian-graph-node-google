@@ -1,6 +1,8 @@
 import crypto from "crypto";
 import type { LlmProvider } from "./types";
 import type { LlmError, LlmStream, LlmStructuredResult, LlmTextResult } from "../llmClient";
+import type { ProviderUsage } from "../usage/providerUsage";
+import { normalizeUsage } from "../usage/providerUsage";
 import { mapModel } from "../models/modelMap";
 
 type TextOpts = {
@@ -84,14 +86,8 @@ function extractTextFromChatCompletion(data: any): string {
   return "";
 }
 
-function extractUsage(data: any) {
-  if (!data?.usage) return undefined;
-  const promptTokens = Number(data.usage.prompt_tokens);
-  const completionTokens = Number(data.usage.completion_tokens);
-  return {
-    input_tokens: Number.isFinite(promptTokens) ? promptTokens : undefined,
-    output_tokens: Number.isFinite(completionTokens) ? completionTokens : undefined
-  };
+function extractUsage(data: any): ProviderUsage | undefined {
+  return normalizeUsage(data?.usage) || undefined;
 }
 
 async function postJson(path: string, body: object, timeoutMs: number) {
@@ -238,6 +234,11 @@ function generateTextStream(opts: TextOpts): LlmStream {
   const timeoutMs = opts.timeoutMs ?? DEFAULT_STREAM_TIMEOUT_MS;
   const providerModel = mapModel("openrouter", opts.model);
   let finalStatus: "ok" | "error" = "ok";
+  let resolveUsage: ((usage: ProviderUsage | null) => void) | null = null;
+  const providerUsagePromise = new Promise<ProviderUsage | null>((resolve) => {
+    resolveUsage = resolve;
+  });
+  let latestUsage: ProviderUsage | null = null;
 
   const stream = (async function* () {
     const apiKey = getApiKey();
@@ -319,6 +320,10 @@ function generateTextStream(opts: TextOpts): LlmStream {
               return;
             }
 
+            if (event?.usage) {
+              latestUsage = normalizeUsage(event.usage);
+            }
+
             const delta = event?.choices?.[0]?.delta?.content;
             if (typeof delta === "string" && delta.length > 0) {
               yieldedAny = true;
@@ -340,10 +345,12 @@ function generateTextStream(opts: TextOpts): LlmStream {
       }));
     } finally {
       clearTimeout(timer);
+      if (resolveUsage) resolveUsage(latestUsage);
     }
   })();
 
   (stream as LlmStream).request_id = request_id;
+  (stream as LlmStream).providerUsagePromise = providerUsagePromise;
   return stream as LlmStream;
 }
 

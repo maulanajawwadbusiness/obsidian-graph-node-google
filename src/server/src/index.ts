@@ -15,6 +15,7 @@ import { pickProviderForRequest } from "./llm/providerRouter";
 import { validateChat, validatePaperAnalyze, validatePrefill } from "./llm/validate";
 import { mapModel } from "./llm/models/modelMap";
 import { initUsageTracker, type UsageRecord } from "./llm/usage/usageTracker";
+import { normalizeUsage, type ProviderUsage } from "./llm/usage/providerUsage";
 import { estimateIdrCost } from "./pricing/pricingCalculator";
 import { applyTopupFromMidtrans, chargeForLlm, getBalance } from "./rupiah/rupiahService";
 
@@ -200,6 +201,9 @@ function logLlmRequest(fields: {
   usage_output_tokens?: number | null;
   usage_total_tokens?: number | null;
   usage_source?: string | null;
+  provider_usage_present?: boolean | null;
+  provider_usage_source?: string | null;
+  provider_usage_fields_present?: string[] | null;
   freepool_decrement_tokens?: number | null;
 }) {
   console.log(JSON.stringify({
@@ -219,6 +223,9 @@ function logLlmRequest(fields: {
     usage_output_tokens: fields.usage_output_tokens ?? null,
     usage_total_tokens: fields.usage_total_tokens ?? null,
     usage_source: fields.usage_source ?? null,
+    provider_usage_present: fields.provider_usage_present ?? null,
+    provider_usage_source: fields.provider_usage_source ?? null,
+    provider_usage_fields_present: fields.provider_usage_fields_present ?? null,
     rupiah_cost: fields.rupiah_cost ?? null,
     rupiah_balance_before: fields.rupiah_balance_before ?? null,
     rupiah_balance_after: fields.rupiah_balance_after ?? null,
@@ -268,6 +275,15 @@ function isOpenrouterAnalyzeAllowed(model: string): boolean {
   if (!ALLOW_OPENROUTER_ANALYZE) return false;
   if (OPENROUTER_ANALYZE_MODELS.size === 0) return false;
   return OPENROUTER_ANALYZE_MODELS.has(model);
+}
+
+function getUsageFieldList(usage: ProviderUsage | null | undefined): string[] {
+  const fields: string[] = [];
+  if (!usage) return fields;
+  if (usage.input_tokens !== undefined) fields.push("input");
+  if (usage.output_tokens !== undefined) fields.push("output");
+  if (usage.total_tokens !== undefined) fields.push("total");
+  return fields;
 }
 
 
@@ -771,10 +787,12 @@ app.post("/api/llm/paper-analyze", requireAuth, async (req, res) => {
   let providerModelId = "";
   let usageRecord: UsageRecord | null = null;
   let freepoolDecrement: number | null = null;
+  let providerUsage: ProviderUsage | null = null;
   let providerModelId = "";
   let providerName: "openai" | "openrouter" | null = null;
   let usageRecord: UsageRecord | null = null;
   let freepoolDecrement: number | null = null;
+  let providerUsage: ProviderUsage | null = null;
 
   const validation = validatePaperAnalyze(req.body);
   if ("ok" in validation && validation.ok === false) {
@@ -964,6 +982,7 @@ app.post("/api/llm/paper-analyze", requireAuth, async (req, res) => {
 
       resultJson = openrouterResult.json;
       usage = openrouterResult.usage;
+      providerUsage = normalizeUsage(usage) || null;
       validationResult = openrouterResult.validation_result;
     } else {
       const result = await provider.generateStructuredJson({
@@ -1030,12 +1049,13 @@ app.post("/api/llm/paper-analyze", requireAuth, async (req, res) => {
 
       resultJson = validationCheck.value;
       usage = result.usage;
+      providerUsage = normalizeUsage(result.usage) || null;
       validationResult = "ok";
     }
 
     const outputTextLength = JSON.stringify(resultJson || {}).length;
     usageTracker.recordOutputText(JSON.stringify(resultJson || {}));
-    usageRecord = usageTracker.finalize({ providerUsage: usage });
+    usageRecord = usageTracker.finalize({ providerUsage });
     const pricing = estimateIdrCost({
       model: validation.model,
       inputTokens: usageRecord.input_tokens,
@@ -1117,6 +1137,9 @@ app.post("/api/llm/paper-analyze", requireAuth, async (req, res) => {
       usage_output_tokens: usageRecord?.output_tokens ?? null,
       usage_total_tokens: usageRecord?.total_tokens ?? null,
       usage_source: usageRecord?.source ?? null,
+      provider_usage_present: providerUsage ? true : false,
+      provider_usage_source: providerUsage ? providerName : null,
+      provider_usage_fields_present: getUsageFieldList(providerUsage),
       freepool_decrement_tokens: freepoolDecrement,
       structured_output_mode: structuredOutputMode,
       validation_result: validationResult
@@ -1247,6 +1270,7 @@ app.post("/api/llm/prefill", requireAuth, async (req, res) => {
   let providerName: "openai" | "openrouter" | null = null;
   let usageRecord: UsageRecord | null = null;
   let freepoolDecrement: number | null = null;
+  let providerUsage: ProviderUsage | null = null;
 
   const validation = validatePrefill(req.body);
   if ("ok" in validation && validation.ok === false) {
@@ -1413,7 +1437,8 @@ app.post("/api/llm/prefill", requireAuth, async (req, res) => {
     }
 
     usageTracker.recordOutputText(result.text);
-    usageRecord = usageTracker.finalize({ providerUsage: result.usage });
+    providerUsage = normalizeUsage(result.usage) || null;
+    usageRecord = usageTracker.finalize({ providerUsage });
     const pricing = estimateIdrCost({
       model: validation.model,
       inputTokens: usageRecord.input_tokens,
@@ -1492,6 +1517,9 @@ app.post("/api/llm/prefill", requireAuth, async (req, res) => {
       usage_output_tokens: usageRecord?.output_tokens ?? null,
       usage_total_tokens: usageRecord?.total_tokens ?? null,
       usage_source: usageRecord?.source ?? null,
+      provider_usage_present: providerUsage ? true : false,
+      provider_usage_source: providerUsage ? providerName : null,
+      provider_usage_fields_present: getUsageFieldList(providerUsage),
       freepool_decrement_tokens: freepoolDecrement
     });
   } finally {
@@ -1576,6 +1604,7 @@ app.post("/api/llm/chat", requireAuth, async (req, res) => {
   let terminationReason = "success";
   let chatInput = "";
   let usageTracker: ReturnType<typeof initUsageTracker> | null = null;
+  let stream: { providerUsagePromise?: Promise<ProviderUsage | null> } | null = null;
   req.on("close", () => {
     cancelled = true;
   });
@@ -1636,7 +1665,7 @@ app.post("/api/llm/chat", requireAuth, async (req, res) => {
       return;
     }
 
-    const stream = provider.generateTextStream({
+    stream = provider.generateTextStream({
       model: validation.model,
       input: chatInput
     });
@@ -1644,7 +1673,7 @@ app.post("/api/llm/chat", requireAuth, async (req, res) => {
     res.setHeader("X-Request-Id", requestId);
     res.setHeader("Content-Type", "text/plain; charset=utf-8");
 
-    for await (const chunk of stream) {
+    for await (const chunk of stream as any) {
       if (cancelled) break;
       if (!streamStarted) {
         streamStarted = true;
@@ -1697,7 +1726,17 @@ app.post("/api/llm/chat", requireAuth, async (req, res) => {
       });
       usageTracker.recordInputText(chatInput);
     }
-    usageRecord = usageTracker.finalize({});
+    if (providerUsage === null) {
+      const streamUsage = stream?.providerUsagePromise;
+      if (streamUsage) {
+        try {
+          providerUsage = await streamUsage;
+        } catch {
+          providerUsage = null;
+        }
+      }
+    }
+    usageRecord = usageTracker.finalize({ providerUsage });
     const pricing = estimateIdrCost({
       model: validation.model,
       inputTokens: usageRecord.input_tokens,
@@ -1754,6 +1793,9 @@ app.post("/api/llm/chat", requireAuth, async (req, res) => {
       usage_output_tokens: usageRecord?.output_tokens ?? null,
       usage_total_tokens: usageRecord?.total_tokens ?? null,
       usage_source: usageRecord?.source ?? null,
+      provider_usage_present: providerUsage ? true : false,
+      provider_usage_source: providerUsage ? providerName : null,
+      provider_usage_fields_present: getUsageFieldList(providerUsage),
       freepool_decrement_tokens: freepoolDecrement
     });
   }

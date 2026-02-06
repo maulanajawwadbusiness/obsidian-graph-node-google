@@ -1,11 +1,6 @@
 import { estimateTokensFromText } from "../../pricing/tokenEstimate";
 import type { LogicalModel } from "../models/logicalModels";
-
-export type ProviderUsage = {
-  input_tokens?: number;
-  output_tokens?: number;
-  total_tokens?: number;
-};
+import { normalizeUsage, type ProviderUsage } from "./providerUsage";
 
 export type UsageRecord = {
   provider: "openai" | "openrouter";
@@ -96,8 +91,8 @@ export function initUsageTracker(ctx: {
     state.output_carry = "";
   }
 
-  function finalize(opts: { providerUsage?: ProviderUsage }): UsageRecord {
-    const providerUsage = opts.providerUsage;
+  function finalize(opts: { providerUsage?: ProviderUsage | null }): UsageRecord {
+    const providerUsage = normalizeUsage(opts.providerUsage || null);
     const providerInput = providerUsage?.input_tokens;
     const providerOutput = providerUsage?.output_tokens;
     const providerTotal = providerUsage?.total_tokens;

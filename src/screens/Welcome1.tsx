@@ -1,4 +1,7 @@
-import React from 'react';
+import React, { useEffect } from 'react';
+import { FullscreenButton } from '../components/FullscreenButton';
+import { useFullscreen } from '../hooks/useFullscreen';
+import { ONBOARDING_SPLASH_MS } from '../config/env';
 
 type Welcome1Props = {
     onNext: () => void;
@@ -6,20 +9,40 @@ type Welcome1Props = {
 };
 
 export const Welcome1: React.FC<Welcome1Props> = ({ onNext, onSkip }) => {
+    const { enterFullscreen } = useFullscreen();
+
+    const SUBTITLE_TEXT = 'Antarmuka Pengetahuan Dua Dimensi';
+
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            onNext();
+        }, ONBOARDING_SPLASH_MS);
+
+        return () => clearTimeout(timer);
+    }, [onNext]);
+
+    useEffect(() => {
+        enterFullscreen().catch((e) => {
+            console.warn('[welcome1] Auto-fullscreen blocked (user interaction required):', e);
+        });
+    }, [enterFullscreen]);
+
     return (
         <div style={ROOT_STYLE}>
-            <div style={CARD_STYLE}>
-                <div style={TITLE_STYLE}>Welcome</div>
-                <div style={BODY_STYLE}>
-                    This is a placeholder for welcome page 1.
-                </div>
-                <div style={BUTTON_ROW_STYLE}>
-                    <button type="button" style={PRIMARY_BUTTON_STYLE} onClick={onNext}>
-                        Next
-                    </button>
-                    <button type="button" style={SECONDARY_BUTTON_STYLE} onClick={onSkip}>
-                        Skip
-                    </button>
+            <FullscreenButton />
+
+            <div style={CONTENT_STYLE}>
+                <div style={TITLE_STYLE}>Arnvoid</div>
+
+                <div style={SUBTITLE_WRAPPER_STYLE}>
+                    <span
+                        id="welcome1-subtitle-text"
+                        className="welcome1-typable-text"
+                        style={SUBTITLE_TEXT_STYLE}
+                    >
+                        {SUBTITLE_TEXT}
+                    </span>
+                    <span style={CURSOR_STYLE}>|</span>
                 </div>
             </div>
         </div>
@@ -27,58 +50,52 @@ export const Welcome1: React.FC<Welcome1Props> = ({ onNext, onSkip }) => {
 };
 
 const ROOT_STYLE: React.CSSProperties = {
+    position: 'relative',
     minHeight: '100vh',
+    width: '100%',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: '32px',
-    background: '#0f1115',
+    background: '#000000',
     color: '#e7e7e7',
+    overflow: 'hidden',
 };
 
-const CARD_STYLE: React.CSSProperties = {
-    width: '100%',
-    maxWidth: '520px',
+const CONTENT_STYLE: React.CSSProperties = {
     display: 'flex',
     flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
     gap: '16px',
     textAlign: 'center',
 };
 
 const TITLE_STYLE: React.CSSProperties = {
-    fontSize: '32px',
+    fontSize: '27px',
     fontWeight: 700,
-    letterSpacing: '0.5px',
+    letterSpacing: '1px',
+    fontFamily: 'var(--font-ui)',
+    color: '#ffffff',
 };
 
-const BODY_STYLE: React.CSSProperties = {
-    fontSize: '16px',
-    lineHeight: 1.6,
+const SUBTITLE_WRAPPER_STYLE: React.CSSProperties = {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '2px',
+};
+
+const SUBTITLE_TEXT_STYLE: React.CSSProperties = {
+    fontSize: '27px',
+    fontWeight: 400,
+    letterSpacing: '0.3px',
+    fontFamily: 'var(--font-ui)',
     color: '#b9bcc5',
 };
 
-const BUTTON_ROW_STYLE: React.CSSProperties = {
-    display: 'flex',
-    justifyContent: 'center',
-    gap: '12px',
-};
-
-const PRIMARY_BUTTON_STYLE: React.CSSProperties = {
-    padding: '10px 16px',
-    borderRadius: '8px',
-    border: '1px solid #2b2f3a',
-    background: '#1f2430',
-    color: '#f2f2f2',
-    cursor: 'pointer',
-    fontSize: '14px',
-};
-
-const SECONDARY_BUTTON_STYLE: React.CSSProperties = {
-    padding: '10px 16px',
-    borderRadius: '8px',
-    border: '1px solid #2b2f3a',
-    background: 'transparent',
-    color: '#c7cbd6',
-    cursor: 'pointer',
-    fontSize: '14px',
+const CURSOR_STYLE: React.CSSProperties = {
+    fontSize: '27px',
+    color: '#63abff',
+    animation: 'blink 1s step-end infinite',
+    fontFamily: 'monospace',
 };

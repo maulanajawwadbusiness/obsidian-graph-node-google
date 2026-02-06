@@ -1,5 +1,6 @@
 import React from 'react';
 import { FullscreenButton } from './FullscreenButton';
+import { PaymentGopayPanel } from './PaymentGopayPanel';
 
 type PromptCardProps = {
     lang?: 'id' | 'en';
@@ -27,6 +28,7 @@ export const PromptCard: React.FC<PromptCardProps> = ({ lang = 'id' }) => {
     return (
         <div style={CARD_STYLE}>
             <FullscreenButton />
+            <PaymentGopayPanel />
 
             <div style={CARD_INNER_STYLE}>
                 <div style={GRAPH_PREVIEW_PLACEHOLDER_STYLE}>

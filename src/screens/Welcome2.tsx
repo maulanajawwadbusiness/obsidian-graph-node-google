@@ -22,7 +22,7 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
     const rootRef = React.useRef<HTMLDivElement | null>(null);
     const builtTimeline = React.useMemo(
         () => buildWelcome2Timeline(MANIFESTO_TEXT, DEFAULT_CADENCE),
-        []
+        [MANIFESTO_TEXT, DEFAULT_CADENCE]
     );
     const { visibleText, visibleCharCount, phase, elapsedMs } = useTypedTimeline(builtTimeline);
     const lastAdvanceRef = React.useRef(0);

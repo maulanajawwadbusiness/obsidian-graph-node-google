@@ -13,43 +13,41 @@ export type CadenceConfig = {
 
 export type CadencePresetName = 'fast' | 'normal' | 'slow';
 
-export const CADENCE_PRESETS: Record<CadencePresetName, CadenceConfig> = {
-    fast: {
-        baseCharMs: 24,
-        spaceMs: 0,
-        commaPauseMs: 55,
-        periodPauseMs: 120,
-        questionPauseMs: 140,
-        newlinePauseMs: 90,
-        paragraphPauseMs: 210,
-        markerPauseDefaultMs: 180,
-        endHoldMs: 300,
-        speedMultiplier: 0.9,
-    },
-    normal: {
-        baseCharMs: 34,
-        spaceMs: 0,
-        commaPauseMs: 85,
-        periodPauseMs: 182,
-        questionPauseMs: 215,
-        newlinePauseMs: 143,
-        paragraphPauseMs: 338,
-        markerPauseDefaultMs: 286,
-        endHoldMs: 420,
+function scaleCadence(
+    cfg: CadenceConfig,
+    factor: number
+): CadenceConfig {
+    return {
+        baseCharMs: Math.max(0, Math.round(cfg.baseCharMs * factor)),
+        spaceMs: Math.max(0, Math.round(cfg.spaceMs * factor)),
+        commaPauseMs: Math.max(0, Math.round(cfg.commaPauseMs * factor)),
+        periodPauseMs: Math.max(0, Math.round(cfg.periodPauseMs * factor)),
+        questionPauseMs: Math.max(0, Math.round(cfg.questionPauseMs * factor)),
+        newlinePauseMs: Math.max(0, Math.round(cfg.newlinePauseMs * factor)),
+        paragraphPauseMs: Math.max(0, Math.round(cfg.paragraphPauseMs * factor)),
+        markerPauseDefaultMs: Math.max(0, Math.round(cfg.markerPauseDefaultMs * factor)),
+        endHoldMs: Math.max(0, Math.round(cfg.endHoldMs * factor)),
         speedMultiplier: 1.0,
-    },
-    slow: {
-        baseCharMs: 30,
-        spaceMs: 0,
-        commaPauseMs: 80,
-        periodPauseMs: 175,
-        questionPauseMs: 210,
-        newlinePauseMs: 130,
-        paragraphPauseMs: 320,
-        markerPauseDefaultMs: 260,
-        endHoldMs: 520,
-        speedMultiplier: 1.15,
-    },
+    };
+}
+
+const NORMAL_CADENCE: CadenceConfig = {
+    baseCharMs: 42,
+    spaceMs: 14,
+    commaPauseMs: 220,
+    periodPauseMs: 480,
+    questionPauseMs: 520,
+    newlinePauseMs: 420,
+    paragraphPauseMs: 1000,
+    markerPauseDefaultMs: 450,
+    endHoldMs: 900,
+    speedMultiplier: 1.0,
+};
+
+export const CADENCE_PRESETS: Record<CadencePresetName, CadenceConfig> = {
+    fast: scaleCadence(NORMAL_CADENCE, 0.85),
+    normal: NORMAL_CADENCE,
+    slow: scaleCadence(NORMAL_CADENCE, 1.25),
 };
 
 export const DEFAULT_CADENCE: CadenceConfig = CADENCE_PRESETS.normal;

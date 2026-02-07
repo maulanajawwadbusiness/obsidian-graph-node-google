@@ -141,29 +141,32 @@ function getPauseForChar(
     if (char === '?') {
         return { pauseReason: 'question', pauseAfterMs: cadence.questionPauseMs };
     }
-    if (char === '\n') {
-        const isSecondNewline = charIndex > 0 && renderChars[charIndex - 1] === '\n';
-        const isFirstInParagraphPair = charIndex + 1 < renderChars.length && renderChars[charIndex + 1] === '\n';
-        if (isSecondNewline) {
-            const preParagraphIndex = charIndex - 2;
-            const hadMarkerBeforeParagraph =
-                preParagraphIndex >= 0 && markerPauseByCharIndex[preParagraphIndex] !== undefined;
-            if (hadMarkerBeforeParagraph) {
-                return { pauseReason: 'lineBreak', pauseAfterMs: 0 };
-            }
-            return { pauseReason: 'paragraph', pauseAfterMs: cadence.paragraphPauseMs };
-        }
-        if (isFirstInParagraphPair) {
-            return { pauseReason: 'lineBreak', pauseAfterMs: 0 };
-        }
-        return { pauseReason: 'lineBreak', pauseAfterMs: cadence.newlinePauseMs };
-    }
-
     if (char === ' ') {
         return { pauseReason: 'space', pauseAfterMs: 0 };
     }
 
     return { pauseReason: 'base', pauseAfterMs: 0 };
+}
+
+function getParagraphExtraAfterSecondNewline(
+    charIndex: number,
+    markerPauseByCharIndex: Array<number | undefined>,
+    cadence: CadenceConfig
+): { pauseReason: PauseReason; pauseAfterMs: number } {
+    const preParagraphIndex = charIndex - 2;
+    const markerPause = preParagraphIndex >= 0 ? markerPauseByCharIndex[preParagraphIndex] : undefined;
+    const paragraphPause = cadence.paragraphPauseMs;
+
+    if (markerPause === undefined) {
+        return { pauseReason: 'paragraph', pauseAfterMs: paragraphPause };
+    }
+
+    // Marker before paragraph break owns the main breath; newline2 adds only the remainder.
+    const extra = Math.max(0, paragraphPause - markerPause);
+    if (extra <= 0) {
+        return { pauseReason: 'lineBreak', pauseAfterMs: 0 };
+    }
+    return { pauseReason: 'paragraph', pauseAfterMs: extra };
 }
 
 export function buildWelcome2Timeline(rawText: string, cadence: CadenceConfig = DEFAULT_CADENCE): BuiltTimeline {
@@ -182,13 +185,36 @@ export function buildWelcome2Timeline(rawText: string, cadence: CadenceConfig = 
     for (let i = 0; i < renderChars.length; i += 1) {
         const char = renderChars[i];
         const charClass = classifyChar(char);
-        const { pauseReason, pauseAfterMs } = getPauseForChar(
-            char,
-            i,
-            renderChars,
-            markerPauseByCharIndex,
-            tunedCadence
-        );
+        let pauseReason: PauseReason = 'base';
+        let pauseAfterMs = 0;
+
+        if (charClass === 'lineBreak') {
+            // Newline has pre-wait so line drop is costly and intentional.
+            currentTimeMs += tunedCadence.newlinePauseMs;
+            const isSecondNewline = i > 0 && renderChars[i - 1] === '\n';
+            if (isSecondNewline) {
+                const paragraphPause = getParagraphExtraAfterSecondNewline(
+                    i,
+                    markerPauseByCharIndex,
+                    tunedCadence
+                );
+                pauseReason = paragraphPause.pauseReason;
+                pauseAfterMs = paragraphPause.pauseAfterMs;
+            } else {
+                pauseReason = 'lineBreak';
+                pauseAfterMs = 0;
+            }
+        } else {
+            const pause = getPauseForChar(
+                char,
+                i,
+                renderChars,
+                markerPauseByCharIndex,
+                tunedCadence
+            );
+            pauseReason = pause.pauseReason;
+            pauseAfterMs = pause.pauseAfterMs;
+        }
 
         const event: TimelineEvent = {
             charIndex: i,

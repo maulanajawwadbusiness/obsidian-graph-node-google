@@ -1,5 +1,6 @@
-import React, { useEffect } from 'react';
-import { ONBOARDING_MANIFESTO_MS } from '../config/env';
+import React from 'react';
+import { DEFAULT_CADENCE } from '../config/onboardingCadence';
+import { useTypedTimeline } from '../hooks/useTypedTimeline';
 import { MANIFESTO_TEXT } from './welcome2ManifestoText';
 import { buildWelcome2Timeline } from './welcome2Timeline';
 
@@ -10,18 +11,12 @@ type Welcome2Props = {
 };
 
 export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) => {
-    const manifestoRenderText = React.useMemo(
-        () => buildWelcome2Timeline(MANIFESTO_TEXT).renderText,
+    void onNext;
+    const builtTimeline = React.useMemo(
+        () => buildWelcome2Timeline(MANIFESTO_TEXT, DEFAULT_CADENCE),
         []
     );
-
-    useEffect(() => {
-        const timer = setTimeout(() => {
-            onNext();
-        }, ONBOARDING_MANIFESTO_MS);
-
-        return () => clearTimeout(timer);
-    }, [onNext]);
+    const { visibleText } = useTypedTimeline(builtTimeline);
 
     return (
         <div style={ROOT_STYLE}>
@@ -31,7 +26,8 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
                     className="welcome2-typable-text"
                     style={TEXT_STYLE}
                 >
-                    {manifestoRenderText}
+                    <span>{visibleText}</span>
+                    <span style={CURSOR_STYLE}>|</span>
                 </div>
 
                 <div style={BUTTON_ROW_STYLE}>
@@ -71,8 +67,14 @@ const TEXT_STYLE: React.CSSProperties = {
     fontSize: '18px',
     lineHeight: 1.8,
     color: '#b9bcc5',
-    whiteSpace: 'pre-line',
+    whiteSpace: 'pre-wrap',
     fontFamily: 'var(--font-ui)',
+};
+
+const CURSOR_STYLE: React.CSSProperties = {
+    color: '#63abff',
+    animation: 'blink 1s step-end infinite',
+    fontFamily: 'monospace',
 };
 
 const BUTTON_ROW_STYLE: React.CSSProperties = {

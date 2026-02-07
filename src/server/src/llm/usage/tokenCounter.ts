@@ -16,7 +16,10 @@ const LOGICAL_MODEL_ENCODING_MAP: Record<LogicalModel, string> = {
 
 async function getEncodingModule(): Promise<EncodingModule> {
   if (!encodingModulePromise) {
-    encodingModulePromise = import("@dqbd/tiktoken") as unknown as Promise<EncodingModule>;
+    const dynamicImport = new Function("moduleName", "return import(moduleName);") as (
+      moduleName: string
+    ) => Promise<unknown>;
+    encodingModulePromise = dynamicImport("@dqbd/tiktoken") as Promise<EncodingModule>;
   }
   return encodingModulePromise;
 }

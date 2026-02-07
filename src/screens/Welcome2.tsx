@@ -12,11 +12,14 @@ type Welcome2Props = {
 };
 
 const DEBUG_WELCOME2_CURSOR = false;
+const DEBUG_WELCOME2_INPUT_GUARD = false;
 const CURSOR_PAUSE_THRESHOLD_MS = 130;
 const CURSOR_HOLD_FAST_WINDOW_MS = 680;
+const BLOCKED_SCROLL_KEYS = new Set([' ', 'PageDown', 'PageUp', 'ArrowDown', 'ArrowUp']);
 
 export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) => {
     void onNext;
+    const rootRef = React.useRef<HTMLDivElement | null>(null);
     const builtTimeline = React.useMemo(
         () => buildWelcome2Timeline(MANIFESTO_TEXT, DEFAULT_CADENCE),
         []
@@ -62,8 +65,49 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
         console.log('[Welcome2Type] cursorMode=%s phase=%s elapsedMs=%d visibleCharCount=%d', cursorMode, phase, elapsedMs, visibleCharCount);
     }, [cursorMode, elapsedMs, phase, visibleCharCount]);
 
+    React.useEffect(() => {
+        if (!rootRef.current) return;
+        rootRef.current.focus({ preventScroll: true });
+    }, []);
+
+    React.useEffect(() => {
+        const root = rootRef.current;
+        if (!root) return;
+
+        const onWheel = (event: WheelEvent) => {
+            event.preventDefault();
+            if (DEBUG_WELCOME2_INPUT_GUARD) {
+                console.log('[Welcome2Type] wheel prevented');
+            }
+        };
+
+        root.addEventListener('wheel', onWheel, { passive: false });
+        return () => {
+            root.removeEventListener('wheel', onWheel);
+        };
+    }, []);
+
+    const handleKeyDown = React.useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
+        if (!BLOCKED_SCROLL_KEYS.has(event.key)) return;
+        event.preventDefault();
+        if (DEBUG_WELCOME2_INPUT_GUARD) {
+            console.log('[Welcome2Type] key prevented=%s', event.key);
+        }
+    }, []);
+
+    const handlePointerDown = React.useCallback(() => {
+        if (!rootRef.current) return;
+        rootRef.current.focus({ preventScroll: true });
+    }, []);
+
     return (
-        <div style={ROOT_STYLE}>
+        <div
+            ref={rootRef}
+            style={ROOT_STYLE}
+            tabIndex={0}
+            onKeyDown={handleKeyDown}
+            onPointerDown={handlePointerDown}
+        >
             <div style={CONTENT_STYLE}>
                 <div
                     id="welcome2-manifesto-text"

@@ -7,6 +7,8 @@ import { BalanceBadge } from '../components/BalanceBadge';
 import { ShortageWarning } from '../components/ShortageWarning';
 import { MoneyNoticeStack } from '../components/MoneyNoticeStack';
 import { FullscreenButton } from '../components/FullscreenButton';
+import { useFirstUserGesture } from '../hooks/useFirstUserGesture';
+import { useFullscreen } from '../hooks/useFullscreen';
 
 const Graph = React.lazy(() =>
     import('../playground/GraphPhysicsPlayground').then((mod) => ({
@@ -17,6 +19,9 @@ const Graph = React.lazy(() =>
 type Screen = 'welcome1' | 'welcome2' | 'prompt' | 'graph';
 const STORAGE_KEY = 'arnvoid_screen';
 const PERSIST_SCREEN = false;
+const DEBUG_ONBOARDING_GESTURE = false;
+const DEBUG_ONBOARDING_SCROLL_GUARD = false;
+const ONBOARDING_GESTURE_PREVENT_KEYS = [' ', 'Space'];
 
 function getInitialScreen(): Screen {
     if (!ONBOARDING_ENABLED) return 'graph';
@@ -31,8 +36,10 @@ function getInitialScreen(): Screen {
 
 export const AppShell: React.FC = () => {
     const [screen, setScreen] = React.useState<Screen>(() => getInitialScreen());
+    const { isFullscreen } = useFullscreen();
     const showMoneyUi = screen === 'prompt' || screen === 'graph';
     const showOnboardingFullscreenButton = screen === 'welcome1' || screen === 'welcome2' || screen === 'prompt';
+    const onboardingActive = screen === 'welcome1' || screen === 'welcome2' || screen === 'prompt';
 
     const moneyUi = showMoneyUi ? (
         <>
@@ -51,6 +58,45 @@ export const AppShell: React.FC = () => {
         if (typeof window === 'undefined') return;
         sessionStorage.setItem(STORAGE_KEY, screen);
     }, [screen]);
+
+    React.useEffect(() => {
+        if (!ONBOARDING_ENABLED || !onboardingActive) return;
+        if (typeof window === 'undefined') return;
+
+        const onWheel = (event: WheelEvent) => {
+            event.preventDefault();
+            if (DEBUG_ONBOARDING_SCROLL_GUARD) {
+                console.log('[OnboardingGesture] wheel prevented');
+            }
+        };
+
+        window.addEventListener('wheel', onWheel, { passive: false, capture: true });
+        return () => {
+            window.removeEventListener('wheel', onWheel, true);
+        };
+    }, [onboardingActive]);
+
+    useFirstUserGesture(
+        async () => {
+            if (!ONBOARDING_ENABLED || !onboardingActive) return;
+            if (isFullscreen) return;
+            if (typeof document === 'undefined') return;
+            try {
+                await document.documentElement.requestFullscreen();
+                if (DEBUG_ONBOARDING_GESTURE) {
+                    console.log('[OnboardingGesture] fullscreen retry succeeded');
+                }
+            } catch {
+                if (DEBUG_ONBOARDING_GESTURE) {
+                    console.log('[OnboardingGesture] fullscreen retry blocked');
+                }
+            }
+        },
+        {
+            enabled: ONBOARDING_ENABLED && onboardingActive,
+            preventDefaultKeys: ONBOARDING_GESTURE_PREVENT_KEYS,
+        }
+    );
 
     if (screen === 'graph') {
         return (

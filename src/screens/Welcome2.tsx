@@ -17,15 +17,23 @@ const CURSOR_PAUSE_THRESHOLD_MS = 130;
 const CURSOR_HOLD_FAST_WINDOW_MS = 680;
 const BLOCKED_SCROLL_KEYS = new Set([' ', 'PageDown', 'PageUp', 'ArrowDown', 'ArrowUp']);
 const INTERACTIVE_SELECTOR = 'button, input, textarea, select, a[href], [role=\"button\"], [contenteditable=\"true\"]';
+const DEBUG_WELCOME2_TYPE = false;
 
 export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) => {
     void onNext;
+    const debugTypeMetrics = React.useMemo(() => {
+        if (typeof window === 'undefined') return DEBUG_WELCOME2_TYPE;
+        const params = new URLSearchParams(window.location.search);
+        return DEBUG_WELCOME2_TYPE || params.get('debugType') === '1';
+    }, []);
     const rootRef = React.useRef<HTMLDivElement | null>(null);
     const builtTimeline = React.useMemo(
         () => buildWelcome2Timeline(MANIFESTO_TEXT, DEFAULT_CADENCE),
         [MANIFESTO_TEXT, DEFAULT_CADENCE]
     );
-    const { visibleText, visibleCharCount, phase, elapsedMs } = useTypedTimeline(builtTimeline);
+    const { visibleText, visibleCharCount, phase, elapsedMs } = useTypedTimeline(builtTimeline, {
+        debugTypeMetrics,
+    });
     const lastAdvanceRef = React.useRef(0);
     const prevVisibleCountRef = React.useRef(visibleCharCount);
     const holdStartRef = React.useRef<number | null>(null);

@@ -1,5 +1,6 @@
 import React from 'react';
 import type { BuiltTimeline, TimelineEvent } from '../screens/welcome2Timeline';
+import { avg, clamp, nowMs, quantiles } from '../utils/typingMetrics';
 
 export type TypedTimelinePhase = 'typing' | 'hold' | 'done';
 
@@ -20,6 +21,10 @@ type InternalState = {
     visibleCharCount: number;
     elapsedMs: number;
     phase: TypedTimelinePhase;
+};
+
+type UseTypedTimelineOptions = {
+    debugTypeMetrics?: boolean;
 };
 
 function getLastCharTimeMs(events: TimelineEvent[]): number {
@@ -61,25 +66,110 @@ export function getVisibleCharCountAtElapsed(events: TimelineEvent[], elapsedMs:
     return lastVisibleIndex + 1;
 }
 
-export function useTypedTimeline(built: BuiltTimeline): TypedTimelineState {
+export function useTypedTimeline(
+    built: BuiltTimeline,
+    options: UseTypedTimelineOptions = {}
+): TypedTimelineState {
     const [state, setState] = React.useState<InternalState>(() => getInitialState(built));
+    const debugTypeMetrics = options.debugTypeMetrics ?? DEBUG_WELCOME2_TYPE;
 
     React.useEffect(() => {
         let rafId = 0;
         let isActive = true;
-        const startTimeMs = performance.now();
+        const startTimeMs = nowMs();
         const lastCharTimeMs = getLastCharTimeMs(built.events);
         let lastDebugBucket = -1;
+        let lastNowMs: number | null = null;
+        let guardViolationLogged = false;
+        let summaryLogged = false;
+        let prevVisibleCharCount = getInitialState(built).visibleCharCount;
+        let holdAtMs: number | null = null;
+        let doneAtMs: number | null = null;
+
+        const frameDtMs: number[] = [];
+        const latenessMs: number[] = [];
+
+        const emitSummary = (reason: 'done' | 'cleanup' | 'guard-stop') => {
+            if (!debugTypeMetrics) return;
+            if (summaryLogged) return;
+            summaryLogged = true;
+
+            const dtStats = quantiles(frameDtMs);
+            const latenessStats = quantiles(latenessMs);
+            console.log(
+                '[Welcome2Type] summary reason=%s chars=%d totalMs=%d',
+                reason,
+                built.renderText.length,
+                built.totalMs
+            );
+            console.log(
+                '[Welcome2Type] frameDtMs avg=%.2f p95=%.2f max=%.2f',
+                avg(frameDtMs),
+                dtStats.p95,
+                dtStats.max
+            );
+            console.log(
+                '[Welcome2Type] charLatenessMs count=%d p50=%.2f p95=%.2f max=%.2f',
+                latenessMs.length,
+                latenessStats.p50,
+                latenessStats.p95,
+                latenessStats.max
+            );
+            console.log(
+                '[Welcome2Type] phaseTimes holdAtMs=%s doneAtMs=%s',
+                holdAtMs === null ? 'n/a' : String(holdAtMs),
+                doneAtMs === null ? 'n/a' : String(doneAtMs)
+            );
+        };
 
         setState(getInitialState(built));
 
         const onFrame = (nowMs: number) => {
             if (!isActive) return;
 
+            if (lastNowMs !== null) {
+                const dt = clamp(nowMs - lastNowMs, 0, 1000);
+                frameDtMs.push(dt);
+            }
+            lastNowMs = nowMs;
+
             const elapsedMs = Math.max(0, Math.round(nowMs - startTimeMs));
             const visibleCharCount = getVisibleCharCountAtElapsed(built.events, elapsedMs);
             const phase = getPhase(elapsedMs, lastCharTimeMs, built.totalMs);
 
+            const maxVisible = built.renderText.length;
+            if (visibleCharCount < prevVisibleCharCount || visibleCharCount > maxVisible) {
+                if (!guardViolationLogged) {
+                    guardViolationLogged = true;
+                    console.log(
+                        '[Welcome2Type] guard violation visibleCharCount=%d prev=%d max=%d',
+                        visibleCharCount,
+                        prevVisibleCharCount,
+                        maxVisible
+                    );
+                }
+                emitSummary('guard-stop');
+                isActive = false;
+                cancelAnimationFrame(rafId);
+                return;
+            }
+
+            if (visibleCharCount > prevVisibleCharCount) {
+                for (let count = prevVisibleCharCount + 1; count <= visibleCharCount; count += 1) {
+                    const eventIndex = count - 1;
+                    const expectedMs = built.events[eventIndex]?.tMs ?? elapsedMs;
+                    latenessMs.push(elapsedMs - expectedMs);
+                }
+            }
+
+            if (phase === 'hold' && holdAtMs === null) {
+                holdAtMs = elapsedMs;
+            }
+            if (phase === 'done' && doneAtMs === null) {
+                doneAtMs = elapsedMs;
+            }
+
+            prevVisibleCharCount = visibleCharCount;
             setState((prev) => {
                 const visibleChanged = prev.visibleCharCount !== visibleCharCount;
                 const phaseChanged = prev.phase !== phase;
@@ -94,7 +184,7 @@ export function useTypedTimeline(built: BuiltTimeline): TypedTimelineState {
                 return { elapsedMs, visibleCharCount, phase };
             });
 
-            if (DEBUG_WELCOME2_TYPE) {
+            if (debugTypeMetrics) {
                 const bucket = Math.floor(elapsedMs / DEBUG_LOG_INTERVAL_MS);
                 if (bucket !== lastDebugBucket) {
                     lastDebugBucket = bucket;
@@ -102,7 +192,9 @@ export function useTypedTimeline(built: BuiltTimeline): TypedTimelineState {
                 }
             }
 
-            if (phase !== 'done') {
+            if (phase === 'done') {
+                emitSummary('done');
+            } else {
                 rafId = requestAnimationFrame(onFrame);
             }
         };
@@ -112,8 +204,9 @@ export function useTypedTimeline(built: BuiltTimeline): TypedTimelineState {
         return () => {
             isActive = false;
             cancelAnimationFrame(rafId);
+            emitSummary('cleanup');
         };
-    }, [built]);
+    }, [built, debugTypeMetrics]);
 
     const visibleText = React.useMemo(
         () => built.renderText.slice(0, state.visibleCharCount),

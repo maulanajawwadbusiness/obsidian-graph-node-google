@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import { useFullscreen } from '../hooks/useFullscreen';
 import { ONBOARDING_SPLASH_MS } from '../config/env';
+import { TypingCursor } from '../components/TypingCursor';
 
 type Welcome1Props = {
     onNext: () => void;
@@ -50,7 +51,13 @@ export const Welcome1: React.FC<Welcome1Props> = ({ onNext, onSkip }) => {
                     >
                         {SUBTITLE_TEXT}
                     </span>
-                    {showCursor ? <span style={CURSOR_STYLE}>|</span> : null}
+                    {showCursor ? (
+                        <TypingCursor
+                            mode="normal"
+                            heightEm={1}
+                            style={CURSOR_STYLE}
+                        />
+                    ) : null}
                 </div>
             </div>
         </div>
@@ -104,9 +111,8 @@ const SUBTITLE_TEXT_STYLE: React.CSSProperties = {
 
 const CURSOR_STYLE: React.CSSProperties = {
     position: 'absolute',
-    right: '-14.5px',
-    fontSize: '27px',
-    color: '#63abff',
-    animation: 'blink 1s step-end infinite',
-    fontFamily: 'monospace',
+    right: '-12px',
+    top: '50%',
+    transform: 'translateY(-50%)',
+    height: '0.95em',
 };

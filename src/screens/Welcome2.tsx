@@ -1,5 +1,6 @@
 import React from 'react';
 import { DEFAULT_CADENCE } from '../config/onboardingCadence';
+import { TypingCursor, type TypingCursorMode } from '../components/TypingCursor';
 import { useTypedTimeline } from '../hooks/useTypedTimeline';
 import { MANIFESTO_TEXT } from './welcome2ManifestoText';
 import { buildWelcome2Timeline } from './welcome2Timeline';
@@ -10,13 +11,56 @@ type Welcome2Props = {
     onBack: () => void;
 };
 
+const DEBUG_WELCOME2_CURSOR = false;
+const CURSOR_PAUSE_THRESHOLD_MS = 130;
+const CURSOR_HOLD_FAST_WINDOW_MS = 680;
+
 export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) => {
     void onNext;
     const builtTimeline = React.useMemo(
         () => buildWelcome2Timeline(MANIFESTO_TEXT, DEFAULT_CADENCE),
         []
     );
-    const { visibleText } = useTypedTimeline(builtTimeline);
+    const { visibleText, visibleCharCount, phase, elapsedMs } = useTypedTimeline(builtTimeline);
+    const lastAdvanceRef = React.useRef(0);
+    const prevVisibleCountRef = React.useRef(visibleCharCount);
+    const holdStartRef = React.useRef<number | null>(null);
+    const prevCursorModeRef = React.useRef<TypingCursorMode>('typing');
+
+    React.useEffect(() => {
+        if (visibleCharCount === prevVisibleCountRef.current) return;
+        prevVisibleCountRef.current = visibleCharCount;
+        lastAdvanceRef.current = elapsedMs;
+    }, [elapsedMs, visibleCharCount]);
+
+    React.useEffect(() => {
+        if (phase !== 'hold') {
+            holdStartRef.current = null;
+            return;
+        }
+        if (holdStartRef.current === null) {
+            holdStartRef.current = elapsedMs;
+        }
+    }, [elapsedMs, phase]);
+
+    let cursorMode: TypingCursorMode = 'typing';
+    if (phase === 'typing') {
+        const paused = elapsedMs - lastAdvanceRef.current > CURSOR_PAUSE_THRESHOLD_MS;
+        cursorMode = paused ? 'pause' : 'typing';
+    } else if (phase === 'hold') {
+        const holdStartMs = holdStartRef.current ?? elapsedMs;
+        const holdElapsedMs = elapsedMs - holdStartMs;
+        cursorMode = holdElapsedMs < CURSOR_HOLD_FAST_WINDOW_MS ? 'holdFast' : 'normal';
+    } else {
+        cursorMode = 'normal';
+    }
+
+    React.useEffect(() => {
+        if (!DEBUG_WELCOME2_CURSOR) return;
+        if (prevCursorModeRef.current === cursorMode) return;
+        prevCursorModeRef.current = cursorMode;
+        console.log('[Welcome2Type] cursorMode=%s phase=%s elapsedMs=%d visibleCharCount=%d', cursorMode, phase, elapsedMs, visibleCharCount);
+    }, [cursorMode, elapsedMs, phase, visibleCharCount]);
 
     return (
         <div style={ROOT_STYLE}>
@@ -27,7 +71,7 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
                     style={TEXT_STYLE}
                 >
                     <span>{visibleText}</span>
-                    <span style={CURSOR_STYLE}>|</span>
+                    <TypingCursor mode={cursorMode} heightEm={1.8} style={CURSOR_STYLE} />
                 </div>
 
                 <div style={BUTTON_ROW_STYLE}>
@@ -72,9 +116,7 @@ const TEXT_STYLE: React.CSSProperties = {
 };
 
 const CURSOR_STYLE: React.CSSProperties = {
-    color: '#63abff',
-    animation: 'blink 1s step-end infinite',
-    fontFamily: 'monospace',
+    marginLeft: '4px',
 };
 
 const BUTTON_ROW_STYLE: React.CSSProperties = {

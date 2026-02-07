@@ -13,6 +13,19 @@ Use pure ASCII characters in code, comments, logs, and documentation. Avoid Unic
 
 The application layers, ordered by z-index (lowest to highest):
 
+0.  **Onboarding Shell (Pre-Graph Startup Flow)**
+    *   Active only before `screen === 'graph'` in `src/screens/AppShell.tsx`.
+    *   Flow state machine: `welcome1 -> welcome2 -> prompt -> graph`.
+    *   Env gate: `ONBOARDING_ENABLED` (`src/config/env.ts`):
+        *   `false` or not set: app starts directly in `graph`.
+        *   `true` or `1`: app starts in `welcome1`.
+    *   Persistence is currently disabled (`PERSIST_SCREEN = false`), so refresh resets onboarding to `welcome1` when onboarding is enabled.
+    *   Graph isolation contract: `GraphPhysicsPlayground` is lazy-loaded and mounted only when `screen === 'graph'`. This keeps physics/rendering inactive during onboarding screens.
+    *   Global overlays that remain mounted during onboarding and graph:
+        *   `BalanceBadge`
+        *   `ShortageWarning`
+        *   `MoneyNoticeStack`
+
 1.  **The Canvas (Graph substrate)**
     *   **Rule**: Never under-reacts. If a panel or overlay is active, the canvas underneath MUST NOT receive pointer/wheel events.
     *   Owned by: `PhysicsEngine`.
@@ -39,6 +52,39 @@ The application layers, ordered by z-index (lowest to highest):
 6.  **Analysis Overlay (`AnalysisOverlay`)**
     *   **Highest Layer**. Dims the screen during AI parsing/analysis.
     *   **Shielding Rule**: Blocks all pointer, wheel, and touch events to prevent graph disturbance during critical AI operations.
+
+## 2.1 Onboarding Screens (Purpose and Role)
+
+The onboarding screens live in `src/screens/` and are orchestrated by `AppShell`.
+
+### A. `Welcome1` (`src/screens/Welcome1.tsx`)
+*   **Purpose**: Fast brand/splash introduction before the manifesto and prompt screen.
+*   **Behavior**:
+    *   Auto-advances using `ONBOARDING_SPLASH_MS` (default 4500ms, min 500ms).
+    *   Tries to enter fullscreen on mount via `useFullscreen().enterFullscreen()`. If browser blocks it, it logs warning and continues.
+    *   Shows `FullscreenButton` so user can manually enter fullscreen.
+*   **Role in flow**: Entry screen. `onNext` goes to `welcome2`.
+
+### B. `Welcome2` (`src/screens/Welcome2.tsx`)
+*   **Purpose**: Manifesto/motivation copy before user reaches the prompt/auth gate.
+*   **Behavior**:
+    *   Auto-advances using `ONBOARDING_MANIFESTO_MS` (default 6000ms, min 500ms).
+    *   Exposes `Back` (to `welcome1`) and `Skip` (to `graph`) actions.
+*   **Role in flow**: Transitional explanation screen before `prompt`.
+
+### C. `EnterPrompt` (`src/screens/EnterPrompt.tsx`)
+*   **Purpose**: Prompt-stage shell that combines:
+    *   `PromptCard` (headline, placeholder input, fullscreen button, payment panel).
+    *   `LoginOverlay` auth gate.
+*   **Behavior**:
+    *   Reads auth state from `useAuth()`.
+    *   Shows `LoginOverlay` while user is not authenticated and overlay is not manually hidden.
+    *   `LoginOverlay` blocks pointer/wheel interaction and locks page scroll when open.
+    *   Continue is enabled only when `/me` auth state resolves to a signed-in user.
+*   **Role in flow**:
+    *   `onEnter` moves to `graph` (authenticated continue path).
+    *   `onSkip` can also move to `graph` (bypass path).
+    *   `onBack` returns to `welcome2`.
 
 ## 3. Physics Architecture And Contract
 The graph is driven by a **Hybrid Solver** (`src/physics/`) prioritizing "Visual Dignity" over pure simulation accuracy.

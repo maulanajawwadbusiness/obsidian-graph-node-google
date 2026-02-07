@@ -1,5 +1,4 @@
 import React, { useEffect } from 'react';
-import { FullscreenButton } from '../components/FullscreenButton';
 import { useFullscreen } from '../hooks/useFullscreen';
 import { ONBOARDING_SPLASH_MS } from '../config/env';
 
@@ -40,8 +39,6 @@ export const Welcome1: React.FC<Welcome1Props> = ({ onNext, onSkip }) => {
 
     return (
         <div style={ROOT_STYLE}>
-            <FullscreenButton />
-
             <div style={CONTENT_STYLE}>
                 <div style={TITLE_STYLE}>Arnvoid</div>
 

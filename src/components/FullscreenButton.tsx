@@ -40,7 +40,7 @@ export const FullscreenButton: React.FC<FullscreenButtonProps> = ({ className, s
                 alt={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
                 style={{
                     ...ICON_STYLE,
-                    opacity: isHovered ? 0.8 : 0.5,
+                    opacity: isHovered ? 0.6 : 0.3,
                 }}
             />
         </button>
@@ -56,7 +56,7 @@ const BUTTON_STYLE: React.CSSProperties = {
     padding: '8px',
     borderRadius: '8px',
     border: 'none',
-    background: 'rgba(15, 17, 21, 0.8)',
+    background: 'transparent',
     cursor: 'pointer',
     display: 'flex',
     alignItems: 'center',
@@ -69,6 +69,6 @@ const ICON_STYLE: React.CSSProperties = {
     width: '24px',
     height: '24px',
     objectFit: 'contain',
-    opacity: 0.5,
+    opacity: 0.3,
     transition: 'opacity 0.2s ease',
 };

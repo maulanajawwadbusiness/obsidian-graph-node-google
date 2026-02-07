@@ -2,6 +2,7 @@ import React from 'react';
 import { LoginOverlay } from '../auth/LoginOverlay';
 import { useAuth } from '../auth/AuthProvider';
 import { PromptCard } from '../components/PromptCard';
+import { PaymentGopayPanel } from '../components/PaymentGopayPanel';
 
 type EnterPromptProps = {
     onEnter: () => void;
@@ -22,6 +23,7 @@ export const EnterPrompt: React.FC<EnterPromptProps> = ({ onEnter, onBack, onSki
             </div>
 
             <PromptCard lang="id" />
+            <PaymentGopayPanel />
 
             <LoginOverlay
                 open={!user && !isOverlayHidden}

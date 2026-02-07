@@ -320,9 +320,9 @@ export const PaymentGopayPanel: React.FC<PaymentPanelProps> = ({ onPaid }) => {
 };
 
 const LAUNCH_BUTTON_STYLE: React.CSSProperties = {
-    position: 'absolute',
+    position: 'fixed',
     top: '24px',
-    right: '200px',
+    right: '124px',
     padding: '6px 12px',
     borderRadius: '10px',
     border: '1px solid #2b2f3a',
@@ -331,11 +331,11 @@ const LAUNCH_BUTTON_STYLE: React.CSSProperties = {
     fontSize: '12px',
     fontFamily: 'var(--font-ui)',
     cursor: 'pointer',
-    zIndex: 100,
+    zIndex: 1900,
 };
 
 const PANEL_STYLE: React.CSSProperties = {
-    position: 'absolute',
+    position: 'fixed',
     top: '72px',
     right: '24px',
     width: '280px',
@@ -346,7 +346,7 @@ const PANEL_STYLE: React.CSSProperties = {
     display: 'flex',
     flexDirection: 'column',
     gap: '12px',
-    zIndex: 100,
+    zIndex: 1900,
 };
 
 const PANEL_HEADER_STYLE: React.CSSProperties = {

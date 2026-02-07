@@ -6,6 +6,7 @@ import { EnterPrompt } from './EnterPrompt';
 import { BalanceBadge } from '../components/BalanceBadge';
 import { ShortageWarning } from '../components/ShortageWarning';
 import { MoneyNoticeStack } from '../components/MoneyNoticeStack';
+import { FullscreenButton } from '../components/FullscreenButton';
 
 const Graph = React.lazy(() =>
     import('../playground/GraphPhysicsPlayground').then((mod) => ({
@@ -30,6 +31,21 @@ function getInitialScreen(): Screen {
 
 export const AppShell: React.FC = () => {
     const [screen, setScreen] = React.useState<Screen>(() => getInitialScreen());
+    const showMoneyUi = screen === 'prompt' || screen === 'graph';
+    const showOnboardingFullscreenButton = screen === 'welcome1' || screen === 'welcome2' || screen === 'prompt';
+
+    const moneyUi = showMoneyUi ? (
+        <>
+            <BalanceBadge />
+            <ShortageWarning />
+            <MoneyNoticeStack />
+        </>
+    ) : null;
+
+    const onboardingFullscreenButton = showOnboardingFullscreenButton ? (
+        <FullscreenButton style={ONBOARDING_FULLSCREEN_BUTTON_STYLE} />
+    ) : null;
+
     React.useEffect(() => {
         if (!ONBOARDING_ENABLED || !PERSIST_SCREEN) return;
         if (typeof window === 'undefined') return;
@@ -42,9 +58,7 @@ export const AppShell: React.FC = () => {
                 <Suspense fallback={<div style={FALLBACK_STYLE}>Loading graph...</div>}>
                     <Graph />
                 </Suspense>
-                <BalanceBadge />
-                <ShortageWarning />
-                <MoneyNoticeStack />
+                {moneyUi}
             </div>
         );
     }
@@ -56,9 +70,8 @@ export const AppShell: React.FC = () => {
                     onNext={() => setScreen('welcome2')}
                     onSkip={() => setScreen('graph')}
                 />
-                <BalanceBadge />
-                <ShortageWarning />
-                <MoneyNoticeStack />
+                {onboardingFullscreenButton}
+                {moneyUi}
             </div>
         );
     }
@@ -71,9 +84,8 @@ export const AppShell: React.FC = () => {
                     onNext={() => setScreen('prompt')}
                     onSkip={() => setScreen('graph')}
                 />
-                <BalanceBadge />
-                <ShortageWarning />
-                <MoneyNoticeStack />
+                {onboardingFullscreenButton}
+                {moneyUi}
             </div>
         );
     }
@@ -85,9 +97,8 @@ export const AppShell: React.FC = () => {
                 onEnter={() => setScreen('graph')}
                 onSkip={() => setScreen('graph')}
             />
-            <BalanceBadge />
-            <ShortageWarning />
-            <MoneyNoticeStack />
+            {onboardingFullscreenButton}
+            {moneyUi}
         </div>
     );
 };
@@ -106,4 +117,11 @@ const SHELL_STYLE: React.CSSProperties = {
     position: 'relative',
     width: '100%',
     minHeight: '100vh',
+};
+
+const ONBOARDING_FULLSCREEN_BUTTON_STYLE: React.CSSProperties = {
+    position: 'fixed',
+    top: '24px',
+    right: '24px',
+    zIndex: 2100
 };

@@ -14,6 +14,7 @@ export type TypedTimelineState = {
 
 const DEBUG_WELCOME2_TYPE = false;
 const DEBUG_LOG_INTERVAL_MS = 500;
+const ELAPSED_PUBLISH_INTERVAL_MS = 100;
 
 type InternalState = {
     visibleCharCount: number;
@@ -80,10 +81,13 @@ export function useTypedTimeline(built: BuiltTimeline): TypedTimelineState {
             const phase = getPhase(elapsedMs, lastCharTimeMs, built.totalMs);
 
             setState((prev) => {
+                const visibleChanged = prev.visibleCharCount !== visibleCharCount;
+                const phaseChanged = prev.phase !== phase;
+                const elapsedDue = elapsedMs - prev.elapsedMs >= ELAPSED_PUBLISH_INTERVAL_MS;
                 if (
-                    prev.elapsedMs === elapsedMs &&
-                    prev.visibleCharCount === visibleCharCount &&
-                    prev.phase === phase
+                    !visibleChanged &&
+                    !phaseChanged &&
+                    !elapsedDue
                 ) {
                     return prev;
                 }

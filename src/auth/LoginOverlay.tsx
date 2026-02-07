@@ -39,7 +39,7 @@ export const LoginOverlay: React.FC<LoginOverlayProps> = ({
         >
             <div style={CARD_STYLE} onPointerDown={(e) => e.stopPropagation()}>
                 <div style={TITLE_STYLE}>Sign In</div>
-                <div style={SUBTEXT_STYLE}>Sign in to continue</div>
+                <div style={SUBTEXT_STYLE}>You'll be able to use a smart knowledge interface.</div>
 
                 {loading && (
                     <div style={STATUS_STYLE}>Checking session...</div>

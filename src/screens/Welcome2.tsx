@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import { ONBOARDING_MANIFESTO_MS } from '../config/env';
 import { MANIFESTO_TEXT } from './welcome2ManifestoText';
+import { buildWelcome2Timeline } from './welcome2Timeline';
 
 type Welcome2Props = {
     onNext: () => void;
@@ -9,6 +10,11 @@ type Welcome2Props = {
 };
 
 export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) => {
+    const manifestoRenderText = React.useMemo(
+        () => buildWelcome2Timeline(MANIFESTO_TEXT).renderText,
+        []
+    );
+
     useEffect(() => {
         const timer = setTimeout(() => {
             onNext();
@@ -25,7 +31,7 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
                     className="welcome2-typable-text"
                     style={TEXT_STYLE}
                 >
-                    {MANIFESTO_TEXT}
+                    {manifestoRenderText}
                 </div>
 
                 <div style={BUTTON_ROW_STYLE}>

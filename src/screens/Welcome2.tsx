@@ -16,6 +16,7 @@ const DEBUG_WELCOME2_INPUT_GUARD = false;
 const CURSOR_PAUSE_THRESHOLD_MS = 130;
 const CURSOR_HOLD_FAST_WINDOW_MS = 680;
 const BLOCKED_SCROLL_KEYS = new Set([' ', 'PageDown', 'PageUp', 'ArrowDown', 'ArrowUp']);
+const INTERACTIVE_SELECTOR = 'button, input, textarea, select, a[href], [role=\"button\"], [contenteditable=\"true\"]';
 
 export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) => {
     void onNext;
@@ -89,6 +90,10 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
 
     const handleKeyDown = React.useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
         if (!BLOCKED_SCROLL_KEYS.has(event.key)) return;
+        const target = event.target;
+        if (target instanceof HTMLElement && target.closest(INTERACTIVE_SELECTOR)) {
+            return;
+        }
         event.preventDefault();
         if (DEBUG_WELCOME2_INPUT_GUARD) {
             console.log('[Welcome2Type] key prevented=%s', event.key);

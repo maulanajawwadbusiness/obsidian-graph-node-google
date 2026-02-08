@@ -39,6 +39,8 @@ export class FullscreenController {
         if (this.isFullscreenState) return;
 
         try {
+            // EXPLICIT ONLY: call from explicit user controls (fullscreen icon or consent button),
+            // never from generic background/global gesture handlers.
             await document.documentElement.requestFullscreen();
         } catch (e) {
             console.warn('[fullscreen] Failed to enter fullscreen:', e);

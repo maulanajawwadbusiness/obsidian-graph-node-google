@@ -47,6 +47,8 @@ The Canvas (Graph) is the substrate. Panels (Chat, Docs) and the Loading Screen 
 5.  **Verify**: Manual verification is required.
 6.  **Docs**: Update `docs/*.md` to reflect new truth.
 7.  **Commit**: Use compact, descriptive messages (`feat(chat): ...`).
+    *   **Staging Rule**: When preparing a commit, stage all current untracked files by default to avoid conflict drift.
+    *   **ENV Exception**: Do NOT stage any untracked file if its path or filename contains `env`.
     *   **Auth Work**: Update `docs/report_2026_02_05_auth_session_postgres.md` when touching auth, session, or CORS behavior.
 
 ## 4. CRITICAL WARNINGS

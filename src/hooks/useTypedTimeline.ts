@@ -14,6 +14,7 @@ export type TypedTimelineState = {
 };
 
 const DEBUG_WELCOME2_TYPE = false;
+const DEBUG_WELCOME2_FLICKER = false;
 const DEBUG_LOG_INTERVAL_MS = 500;
 const ELAPSED_PUBLISH_INTERVAL_MS = 100;
 
@@ -85,6 +86,7 @@ export function useTypedTimeline(
         let prevVisibleCharCount = getInitialState(built).visibleCharCount;
         let holdAtMs: number | null = null;
         let doneAtMs: number | null = null;
+        let pendingNewlineIndex: number | null = null;
 
         const frameDtMs: number[] = [];
         const latenessMs: number[] = [];
@@ -157,8 +159,34 @@ export function useTypedTimeline(
             if (visibleCharCount > prevVisibleCharCount) {
                 for (let count = prevVisibleCharCount + 1; count <= visibleCharCount; count += 1) {
                     const eventIndex = count - 1;
-                    const expectedMs = built.events[eventIndex]?.tMs ?? elapsedMs;
+                    const event = built.events[eventIndex];
+                    const expectedMs = event?.tMs ?? elapsedMs;
                     latenessMs.push(elapsedMs - expectedMs);
+                    if (debugTypeMetrics && DEBUG_WELCOME2_FLICKER && event?.char === '\n') {
+                        console.log(
+                            '[Welcome2TypeFlicker] newline charIndex=%d elapsedMs=%d expectedMs=%d',
+                            event.charIndex,
+                            elapsedMs,
+                            expectedMs
+                        );
+                        pendingNewlineIndex = eventIndex;
+                        continue;
+                    }
+                    if (
+                        debugTypeMetrics &&
+                        DEBUG_WELCOME2_FLICKER &&
+                        pendingNewlineIndex !== null &&
+                        eventIndex > pendingNewlineIndex
+                    ) {
+                        console.log(
+                            '[Welcome2TypeFlicker] next-after-newline charIndex=%d char=%s elapsedMs=%d expectedMs=%d',
+                            event?.charIndex ?? eventIndex,
+                            JSON.stringify(event?.char ?? ''),
+                            elapsedMs,
+                            expectedMs
+                        );
+                        pendingNewlineIndex = null;
+                    }
                 }
             }
 

@@ -36,8 +36,8 @@ type MarkerParse = {
 };
 
 const DEBUG_WELCOME2_TIMELINE = false;
-const NEWLINE_PRE_FRACTION = 0.7;
-const NEWLINE_POST_FRACTION = 0.3;
+const NEWLINE_POST_MIN_MS = 40;
+const NEWLINE_POST_MAX_FRACTION = 0.2;
 
 function clampMs(value: number): number {
     if (!Number.isFinite(value)) return 0;
@@ -46,12 +46,12 @@ function clampMs(value: number): number {
 
 function splitNewlinePause(newlinePauseMs: number): { preWaitMs: number; postWaitMs: number } {
     const totalMs = clampMs(newlinePauseMs);
-    const preWaitMs = clampMs(totalMs * NEWLINE_PRE_FRACTION);
-    const postWaitMs = clampMs(totalMs * NEWLINE_POST_FRACTION);
-    const remainderMs = Math.max(0, totalMs - (preWaitMs + postWaitMs));
+    const postFromFractionMs = Math.floor(totalMs * NEWLINE_POST_MAX_FRACTION);
+    const postWaitMs = Math.min(NEWLINE_POST_MIN_MS, postFromFractionMs);
+    const preWaitMs = Math.max(0, totalMs - postWaitMs);
     return {
         preWaitMs,
-        postWaitMs: postWaitMs + remainderMs,
+        postWaitMs,
     };
 }
 

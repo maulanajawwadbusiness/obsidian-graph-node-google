@@ -170,10 +170,17 @@ const TEXT_STYLE: React.CSSProperties = {
     color: '#b9bcc5',
     whiteSpace: 'pre-wrap',
     fontFamily: 'var(--font-ui)',
+    textRendering: 'auto',
+    fontKerning: 'none',
+    fontVariantLigatures: 'none',
+    fontFeatureSettings: '"kern" 0, "liga" 0, "calt" 0',
 };
 
 const CURSOR_STYLE: React.CSSProperties = {
     marginLeft: '4px',
+    width: 0,
+    borderLeft: '2px solid #63abff',
+    background: 'transparent',
 };
 
 const BUTTON_ROW_STYLE: React.CSSProperties = {

@@ -68,9 +68,31 @@ The onboarding screens live in `src/screens/` and are orchestrated by `AppShell`
 ### B. `Welcome2` (`src/screens/Welcome2.tsx`)
 *   **Purpose**: Manifesto/motivation copy before user reaches the prompt/auth gate.
 *   **Behavior**:
-    *   Auto-advances using `ONBOARDING_MANIFESTO_MS` (default 6000ms, min 500ms).
+    *   Renders timeline-driven typed manifesto text (deterministic elapsed-time model).
+    *   Source text uses embedded `{p=###}` markers and is stripped to render-safe text in the timeline builder.
+    *   Cadence is centralized in `src/config/onboardingCadence.ts` and includes punctuation, newline, paragraph, and semantic pauses.
+    *   Semantic cadence is applied as distributed pauses around word ends and sentence landings (not tick-per-char jitter).
+    *   Cursor uses shared `TypingCursor` component with phase-driven mode mapping.
+    *   No fixed auto-advance timer is authoritative for typed completion; timing truth comes from `BuiltTimeline.totalMs`.
     *   Exposes `Back` (to `welcome1`) and `Skip` (to `graph`) actions.
 *   **Role in flow**: Transitional explanation screen before `prompt`.
+
+## 2.2 Welcome2 Typing Dataflow (Current)
+Current end-to-end flow for manifesto typing:
+
+`MANIFESTO_TEXT -> buildWelcome2Timeline(rawText, cadence) -> BuiltTimeline(events, renderText, totalMs) -> useTypedTimeline(rAF + elapsed) -> visibleText + TypingCursor`
+
+Core files:
+- `src/screens/welcome2ManifestoText.ts`
+- `src/config/onboardingCadence.ts`
+- `src/screens/welcome2Timeline.ts`
+- `src/hooks/useTypedTimeline.ts`
+- `src/components/TypingCursor.tsx`
+- `src/screens/Welcome2.tsx`
+
+Debug toggles:
+- `?debugType=1` for runtime typing metrics summary.
+- `?debugCadence=1` for semantic/cadence proof logs during timeline build.
 
 ### C. `EnterPrompt` (`src/screens/EnterPrompt.tsx`)
 *   **Purpose**: Prompt-stage shell that combines:

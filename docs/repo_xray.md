@@ -212,3 +212,27 @@ Reports:
 - docs/report_2026_02_07_moneyux_step1_balance_anchor.md
 - docs/report_2026_02_07_moneyux_step4_shortage_warning.md
 - docs/report_2026_02_07_moneyux_step7_failure_states.md
+
+## 12. Onboarding Typing Stack (Welcome2)
+
+Key files:
+- `src/screens/welcome2ManifestoText.ts` (authored manifesto with `{p=###}` markers)
+- `src/config/onboardingCadence.ts` (single source of cadence and semantic tuning)
+- `src/screens/welcome2Timeline.ts` (deterministic timeline builder)
+- `src/hooks/useTypedTimeline.ts` (rAF elapsed-time reveal hook)
+- `src/components/TypingCursor.tsx` (shared needle cursor)
+- `src/screens/Welcome2.tsx` (screen wiring + input guards)
+
+Runtime contract:
+1. Markers are parsed and stripped before render.
+2. Timeline event times are deterministic for same text + same cadence.
+3. Visibility is derived from elapsed time against event timestamps (binary search), not per-frame increments.
+4. Cadence stack includes punctuation, newline, paragraph, marker, and semantic pauses.
+5. Semantic layer currently uses distributed boundary pauses (word-end and sentence-landing transitions).
+
+Debug entry points:
+- `?debugType=1`: typing metrics summary logs.
+- `?debugCadence=1`: cadence/semantic proof logs (resolved values, heavy-word matches, timing sample).
+
+Known active workstream:
+- Visual perception stability for typed text (phase/slip/jarring reports) is tracked in `docs/FUTURE_TODO.md` under `Welcome2 Typing Visual Stability (Chars Phase In/Out)`.

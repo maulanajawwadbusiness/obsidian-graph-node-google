@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { GoogleLogin } from "@react-oauth/google";
 import { useAuth } from "../auth/AuthProvider";
+import { t } from "../i18n/t";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL;
 const SHOW_LOGIN_DEBUG_ERRORS =
@@ -15,7 +16,7 @@ export function GoogleLoginButton() {
       id="google-login-area"
       style={{ display: "grid", gap: 8, justifyItems: "center" }}
     >
-      {loading ? <div>Checking session...</div> : null}
+      {loading ? <div>{t("onboarding.enterprompt.login.status_checking")}</div> : null}
 
       {!loading && user ? (
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -27,7 +28,7 @@ export function GoogleLoginButton() {
             />
           ) : null}
           <div>
-            Signed in as {user.name || user.email || "unknown"}
+            {t("onboarding.enterprompt.login.google.signed_in_as")} {user.name || user.email || t("onboarding.enterprompt.login.user_unknown")}
           </div>
           <button
             onClick={() => void logout()}
@@ -42,7 +43,7 @@ export function GoogleLoginButton() {
               cursor: "pointer"
             }}
           >
-            Logout
+            {t("onboarding.enterprompt.login.google.button_logout")}
           </button>
         </div>
       ) : null}
@@ -58,14 +59,14 @@ export function GoogleLoginButton() {
             onSuccess={async (cred) => {
               try {
                 if (!API_BASE || !API_BASE.trim()) {
-                  setStatus("VITE_API_BASE_URL is missing");
+                  setStatus(t("onboarding.enterprompt.login.google.status_missing_api_base"));
                   return;
                 }
 
-                setStatus("Got Google token... sending to backend...");
+                setStatus(t("onboarding.enterprompt.login.google.status_got_token"));
                 const idToken = cred.credential;
                 if (!idToken) {
-                  setStatus("No credential from Google");
+                  setStatus(t("onboarding.enterprompt.login.google.status_no_credential"));
                   return;
                 }
 
@@ -78,18 +79,18 @@ export function GoogleLoginButton() {
 
                 const data = await r.json().catch(() => null);
                 if (!r.ok || !data?.ok) {
-                  setStatus(`Backend rejected status=${r.status}`);
+                  setStatus(t("onboarding.enterprompt.login.google.status_backend_rejected", { status: r.status }));
                   return;
                 }
 
-                setStatus("Ok: logged in");
+                setStatus(t("onboarding.enterprompt.login.google.status_ok_logged_in"));
                 await refreshMe();
               } catch (e) {
-                setStatus(`Error: ${String(e)}`);
+                setStatus(t("onboarding.enterprompt.login.google.status_error", { error: String(e) }));
               }
             }}
             onError={() => {
-              setStatus("Google login failed");
+              setStatus(t("onboarding.enterprompt.login.google.status_failed"));
             }}
           />
         </div>

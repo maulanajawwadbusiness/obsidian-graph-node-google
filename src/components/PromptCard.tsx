@@ -1,50 +1,22 @@
 import React from 'react';
+import { t } from '../i18n/t';
 
-type PromptCardProps = {
-    lang?: 'id' | 'en';
-};
-
-const PROMPT_TEXTS = {
-    id: {
-        headlinePrefix: 'Telusuri kesulitan di dalam ',
-        headlineSuffix: 'mu di sini',
-        placeholder: `Tempel atau unggah dokumenmu untuk mulai melakukan analisis dua dimensi di sini`,
-    },
-    en: {
-        headlinePrefix: 'Explore difficulties in your ',
-        headlineSuffix: ' here',
-        placeholder: `Transform your knowledge into a two-dimensional interface
-(Upload your paper or paste your paper text here)`,
-    },
-};
-
-export const PromptCard: React.FC<PromptCardProps> = ({ lang = 'id' }) => {
-    const [dynamicWord] = React.useState('paper');
-
-    const texts = PROMPT_TEXTS[lang];
+export const PromptCard: React.FC = () => {
 
     return (
         <div style={CARD_STYLE}>
             <div style={CARD_INNER_STYLE}>
                 <div style={GRAPH_PREVIEW_PLACEHOLDER_STYLE}>
-                    <div style={PLACEHOLDER_LABEL_STYLE}>Sample graph preview</div>
+                    <div style={PLACEHOLDER_LABEL_STYLE}>{t('onboarding.enterprompt.graph_preview_placeholder')}</div>
                 </div>
 
                 <div style={HEADLINE_STYLE}>
-                    {texts.headlinePrefix}
-                    <span
-                        id="prompt-dynamic-word"
-                        className="prompt-typable-word"
-                        style={DYNAMIC_WORD_STYLE}
-                    >
-                        {dynamicWord}
-                    </span>
-                    {texts.headlineSuffix}
+                    {t('onboarding.enterprompt.heading')}
                 </div>
 
                 <div style={INPUT_PILL_STYLE}>
                     <textarea
-                        placeholder={texts.placeholder}
+                        placeholder={t('onboarding.enterprompt.input_placeholder')}
                         style={INPUT_STYLE}
                         rows={3}
                         readOnly
@@ -85,11 +57,6 @@ const HEADLINE_STYLE: React.CSSProperties = {
     textAlign: 'center',
     color: '#e7e7e7',
     fontFamily: 'var(--font-ui)',
-};
-
-const DYNAMIC_WORD_STYLE: React.CSSProperties = {
-    color: '#63abff',
-    position: 'relative',
 };
 
 const GRAPH_PREVIEW_PLACEHOLDER_STYLE: React.CSSProperties = {

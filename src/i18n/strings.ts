@@ -76,6 +76,30 @@ Jika kita ingin memproses pengetahuan secara intuitif, kurasa kita perlu mencipt
 Medium yang cocok dengan pikiran kita. Yang selaras dengan saraf alami di dalam pikiran kita. {p=900}
 
 Kupikir ini waktunya untuk kita memikirkan medium informasi yang berbeda di sini.`,
+
+        // Onboarding EnterPrompt
+        "onboarding.enterprompt.sidebar_label": "Sidebar",
+        "onboarding.enterprompt.graph_preview_placeholder": "Pratinjau graf contoh",
+        "onboarding.enterprompt.heading": "Telusuri kesulitan di dalam papermu di sini",
+        "onboarding.enterprompt.input_placeholder": "Tempel atau unggah dokumenmu untuk mulai melakukan analisis di sini",
+        "onboarding.enterprompt.login.title": "Masuk",
+        "onboarding.enterprompt.login.desc": "Kamu akan bisa menggunakan antarmuka pengetahuan cerdas Arnvoid.",
+        "onboarding.enterprompt.login.status_checking": "Memeriksa sesi...",
+        "onboarding.enterprompt.login.signed_in_label": "Sudah masuk",
+        "onboarding.enterprompt.login.user_unknown": "tidak diketahui",
+        "onboarding.enterprompt.login.button_hide": "Sembunyikan",
+        "onboarding.enterprompt.login.button_back": "Kembali",
+        "onboarding.enterprompt.login.button_continue": "Lanjutkan",
+        "onboarding.enterprompt.login.button_skip": "Lewati",
+        "onboarding.enterprompt.login.google.signed_in_as": "Masuk sebagai",
+        "onboarding.enterprompt.login.google.button_logout": "Keluar",
+        "onboarding.enterprompt.login.google.status_missing_api_base": "VITE_API_BASE_URL belum diatur",
+        "onboarding.enterprompt.login.google.status_got_token": "Token Google diterima, mengirim ke backend...",
+        "onboarding.enterprompt.login.google.status_no_credential": "Tidak ada kredensial dari Google",
+        "onboarding.enterprompt.login.google.status_backend_rejected": "Backend menolak status={status}",
+        "onboarding.enterprompt.login.google.status_ok_logged_in": "Berhasil masuk",
+        "onboarding.enterprompt.login.google.status_error": "Error: {error}",
+        "onboarding.enterprompt.login.google.status_failed": "Login Google gagal",
     },
     en: {
         // Node Popup
@@ -134,7 +158,7 @@ Kupikir ini waktunya untuk kita memikirkan medium informasi yang berbeda di sini
 
         // Onboarding Welcome1
         "onboarding.welcome1.brand_title_line1": "Arnvoid",
-        "onboarding.welcome1.brand_title_line2": "Two-Dimension Knowledge Interface",
+        "onboarding.welcome1.brand_title_line2": "2 Dimensional Knowledge Interface",
         "onboarding.welcome1.fullscreen_prompt.title": "Activate interface in full-screen mode?",
         "onboarding.welcome1.fullscreen_prompt.desc": "Full-screen keeps the onboarding view stable and immersive.",
         "onboarding.welcome1.fullscreen_prompt.cta_yes": "Yes, activate",
@@ -149,5 +173,29 @@ If we want to process information intuitively, i think we need to create a new f
 One that fit our mind well. One that fit natural nerve in our thought.{p=900}
 
 I think it is time for us to think a different medium for ourselves.`,
+
+        // Onboarding EnterPrompt
+        "onboarding.enterprompt.sidebar_label": "Sidebar",
+        "onboarding.enterprompt.graph_preview_placeholder": "Sample graph preview",
+        "onboarding.enterprompt.heading": "Trace difficulties in your paper here",
+        "onboarding.enterprompt.input_placeholder": "Paste or upload your document to begin analysis here",
+        "onboarding.enterprompt.login.title": "Sign In",
+        "onboarding.enterprompt.login.desc": "You'll be able to use Arnvoid's smart knowledge interface.",
+        "onboarding.enterprompt.login.status_checking": "Checking session...",
+        "onboarding.enterprompt.login.signed_in_label": "Signed in",
+        "onboarding.enterprompt.login.user_unknown": "unknown",
+        "onboarding.enterprompt.login.button_hide": "Hide",
+        "onboarding.enterprompt.login.button_back": "Back",
+        "onboarding.enterprompt.login.button_continue": "Continue",
+        "onboarding.enterprompt.login.button_skip": "Skip",
+        "onboarding.enterprompt.login.google.signed_in_as": "Signed in as",
+        "onboarding.enterprompt.login.google.button_logout": "Logout",
+        "onboarding.enterprompt.login.google.status_missing_api_base": "VITE_API_BASE_URL is missing",
+        "onboarding.enterprompt.login.google.status_got_token": "Got Google token, sending to backend...",
+        "onboarding.enterprompt.login.google.status_no_credential": "No credential from Google",
+        "onboarding.enterprompt.login.google.status_backend_rejected": "Backend rejected status={status}",
+        "onboarding.enterprompt.login.google.status_ok_logged_in": "Ok: logged in",
+        "onboarding.enterprompt.login.google.status_error": "Error: {error}",
+        "onboarding.enterprompt.login.google.status_failed": "Google login failed",
     }
 } as const;

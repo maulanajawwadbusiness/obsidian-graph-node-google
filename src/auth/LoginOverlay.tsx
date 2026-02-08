@@ -2,6 +2,7 @@ import React from 'react';
 import { useAuth } from './AuthProvider';
 import { GoogleLoginButton } from '../components/GoogleLoginButton';
 import { SHOW_ONBOARDING_AUX_BUTTONS } from '../config/onboardingUiFlags';
+import { t } from '../i18n/t';
 
 const SHOW_LOGIN_DEBUG_ERRORS =
     import.meta.env.VITE_SHOW_LOGIN_DEBUG_ERRORS === '1' || !import.meta.env.DEV;
@@ -42,11 +43,11 @@ export const LoginOverlay: React.FC<LoginOverlayProps> = ({
             onWheel={(e) => e.stopPropagation()}
         >
             <div style={CARD_STYLE} onPointerDown={(e) => e.stopPropagation()}>
-                <div style={TITLE_STYLE}>Sign In</div>
-                <div style={SUBTEXT_STYLE}>You'll be able to use Arnvoid's smart knowledge interface.</div>
+                <div style={TITLE_STYLE}>{t('onboarding.enterprompt.login.title')}</div>
+                <div style={SUBTEXT_STYLE}>{t('onboarding.enterprompt.login.desc')}</div>
 
                 {loading && (
-                    <div style={STATUS_STYLE}>Checking session...</div>
+                    <div style={STATUS_STYLE}>{t('onboarding.enterprompt.login.status_checking')}</div>
                 )}
 
                 {!loading && !user && (
@@ -63,8 +64,8 @@ export const LoginOverlay: React.FC<LoginOverlayProps> = ({
                             />
                         ) : null}
                         <div style={SIGNED_IN_TEXT_STYLE}>
-                            <div style={SIGNED_IN_LABEL_STYLE}>Signed in</div>
-                            <div>{user.name || user.email || 'unknown'}</div>
+                            <div style={SIGNED_IN_LABEL_STYLE}>{t('onboarding.enterprompt.login.signed_in_label')}</div>
+                            <div>{user.name || user.email || t('onboarding.enterprompt.login.user_unknown')}</div>
                         </div>
                     </div>
                 )}
@@ -80,7 +81,7 @@ export const LoginOverlay: React.FC<LoginOverlayProps> = ({
                             style={SECONDARY_BUTTON_STYLE}
                             onClick={onHide}
                         >
-                            Hide
+                            {t('onboarding.enterprompt.login.button_hide')}
                         </button>
                     )}
                     {SHOW_ONBOARDING_AUX_BUTTONS && onBack && (
@@ -89,7 +90,7 @@ export const LoginOverlay: React.FC<LoginOverlayProps> = ({
                             style={SECONDARY_BUTTON_STYLE}
                             onClick={onBack}
                         >
-                            Back
+                            {t('onboarding.enterprompt.login.button_back')}
                         </button>
                     )}
                     <button
@@ -98,7 +99,7 @@ export const LoginOverlay: React.FC<LoginOverlayProps> = ({
                         aria-disabled={true}
                         tabIndex={-1}
                     >
-                        Continue
+                        {t('onboarding.enterprompt.login.button_continue')}
                     </button>
                     {SHOW_ONBOARDING_AUX_BUTTONS && onSkip && (
                         <button
@@ -106,7 +107,7 @@ export const LoginOverlay: React.FC<LoginOverlayProps> = ({
                             style={SECONDARY_BUTTON_STYLE}
                             onClick={onSkip}
                         >
-                            Skip
+                            {t('onboarding.enterprompt.login.button_skip')}
                         </button>
                     )}
                 </div>

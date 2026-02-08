@@ -1,6 +1,7 @@
 import React from 'react';
 import { useAuth } from './AuthProvider';
 import { GoogleLoginButton } from '../components/GoogleLoginButton';
+import { SHOW_ONBOARDING_AUX_BUTTONS } from '../config/onboardingUiFlags';
 
 type LoginOverlayProps = {
     open: boolean;
@@ -70,7 +71,7 @@ export const LoginOverlay: React.FC<LoginOverlayProps> = ({
                 )}
 
                 <div style={BUTTON_ROW_STYLE}>
-                    {onHide && (
+                    {SHOW_ONBOARDING_AUX_BUTTONS && onHide && (
                         <button
                             type="button"
                             style={SECONDARY_BUTTON_STYLE}
@@ -79,7 +80,7 @@ export const LoginOverlay: React.FC<LoginOverlayProps> = ({
                             Hide
                         </button>
                     )}
-                    {onBack && (
+                    {SHOW_ONBOARDING_AUX_BUTTONS && onBack && (
                         <button
                             type="button"
                             style={SECONDARY_BUTTON_STYLE}
@@ -96,7 +97,7 @@ export const LoginOverlay: React.FC<LoginOverlayProps> = ({
                     >
                         Continue
                     </button>
-                    {onSkip && (
+                    {SHOW_ONBOARDING_AUX_BUTTONS && onSkip && (
                         <button
                             type="button"
                             style={SECONDARY_BUTTON_STYLE}

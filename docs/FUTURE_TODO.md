@@ -44,3 +44,4 @@
 18. Add a minimal visual-stability debug mode to log font family in use, computed text rendering props, and first wrap boundary index for reproducible bug reports.
 19. Capture a reproducible matrix: browser, OS, GPU acceleration on/off, DPR, zoom, and font availability for each reported jarring case.
 20. Define acceptance criteria for "solid text": no perceived character slip, no overlap illusion, no wrap jitter, and stable readability during full manifesto playback.
+21. Replace the failed blank-screen preload gate experiment in Welcome1 with a true mount-stability gate. The previous attempt showed text slipping in front of the blank surface and continuous layout changes. Future fix must guarantee no partial text paint before reveal, no live reflow during reveal, and no visual jump at first frame.

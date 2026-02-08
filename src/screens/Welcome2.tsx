@@ -1,5 +1,7 @@
 import React from 'react';
 import { DEFAULT_CADENCE } from '../config/onboardingCadence';
+import { SHOW_ONBOARDING_AUX_BUTTONS } from '../config/onboardingUiFlags';
+import continueArrowIcon from '../assets/arrow.png';
 import { TypingCursor, type TypingCursorMode } from '../components/TypingCursor';
 import { useTypedTimeline } from '../hooks/useTypedTimeline';
 import { MANIFESTO_TEXT } from './welcome2ManifestoText';
@@ -16,12 +18,18 @@ const DEBUG_WELCOME2_INPUT_GUARD = false;
 const CURSOR_PAUSE_THRESHOLD_MS = 130;
 const CURSOR_HOLD_FAST_WINDOW_MS = 680;
 const SHOW_WELCOME2_FOCUS_RING = false;
+const CONTINUE_ARROW_REVEAL_DELAY_MS = 1000;
+const CONTINUE_ARROW_FADE_MS = 200;
+const CONTINUE_ARROW_IDLE_OPACITY = 0.3;
+const CONTINUE_ARROW_HOVER_OPACITY = 0.6;
+const CONTINUE_ARROW_MARGIN_TOP_PX = 18;
+const CONTINUE_ARROW_OFFSET_X_PX = 0;
+const CONTINUE_ARROW_WIDTH_PX = 74;
 const BLOCKED_SCROLL_KEYS = new Set([' ', 'PageDown', 'PageUp', 'ArrowDown', 'ArrowUp']);
 const INTERACTIVE_SELECTOR = 'button, input, textarea, select, a[href], [role=\"button\"], [contenteditable=\"true\"]';
 const DEBUG_WELCOME2_TYPE = false;
 
 export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) => {
-    void onNext;
     const debugTypeMetrics = React.useMemo(() => {
         if (typeof window === 'undefined') return DEBUG_WELCOME2_TYPE;
         const params = new URLSearchParams(window.location.search);
@@ -35,6 +43,11 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
     const { visibleText, visibleCharCount, phase, elapsedMs } = useTypedTimeline(builtTimeline, {
         debugTypeMetrics,
     });
+    const lastTypedCharMs = React.useMemo(() => {
+        if (builtTimeline.events.length === 0) return 0;
+        return builtTimeline.events[builtTimeline.events.length - 1].tMs;
+    }, [builtTimeline.events]);
+    const [isContinueHovered, setIsContinueHovered] = React.useState(false);
     const lastAdvanceRef = React.useRef(0);
     const prevVisibleCountRef = React.useRef(visibleCharCount);
     const holdStartRef = React.useRef<number | null>(null);
@@ -114,6 +127,12 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
         rootRef.current.focus({ preventScroll: true });
     }, []);
 
+    const isContinueVisible = builtTimeline.events.length > 0
+        && elapsedMs >= lastTypedCharMs + CONTINUE_ARROW_REVEAL_DELAY_MS;
+    const continueOpacity = isContinueVisible
+        ? (isContinueHovered ? CONTINUE_ARROW_HOVER_OPACITY : CONTINUE_ARROW_IDLE_OPACITY)
+        : 0;
+
     return (
         <div
             ref={rootRef}
@@ -131,15 +150,44 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
                     <span>{visibleText}</span>
                     <TypingCursor mode={cursorMode} heightEm={0.95} style={CURSOR_STYLE} />
                 </div>
+                <button
+                    type="button"
+                    onClick={onNext}
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onMouseEnter={() => setIsContinueHovered(true)}
+                    onMouseLeave={() => setIsContinueHovered(false)}
+                    onFocus={() => setIsContinueHovered(true)}
+                    onBlur={() => setIsContinueHovered(false)}
+                    style={{
+                        ...CONTINUE_ARROW_BUTTON_STYLE,
+                        marginTop: `${CONTINUE_ARROW_MARGIN_TOP_PX}px`,
+                        transform: `translateX(${CONTINUE_ARROW_OFFSET_X_PX}px)`,
+                        opacity: continueOpacity,
+                        pointerEvents: isContinueVisible ? 'auto' : 'none',
+                    }}
+                    aria-label="Continue to next screen"
+                >
+                    <img
+                        src={continueArrowIcon}
+                        alt=""
+                        aria-hidden="true"
+                        style={{
+                            ...CONTINUE_ARROW_IMAGE_STYLE,
+                            width: `${CONTINUE_ARROW_WIDTH_PX}px`,
+                        }}
+                    />
+                </button>
 
-                <div style={BUTTON_ROW_STYLE}>
-                    <button type="button" style={BUTTON_STYLE} onClick={onBack}>
-                        Back
-                    </button>
-                    <button type="button" style={BUTTON_STYLE} onClick={onSkip}>
-                        Skip
-                    </button>
-                </div>
+                {SHOW_ONBOARDING_AUX_BUTTONS ? (
+                    <div style={BUTTON_ROW_STYLE}>
+                        <button type="button" style={BUTTON_STYLE} onClick={onBack}>
+                            Back
+                        </button>
+                        <button type="button" style={BUTTON_STYLE} onClick={onSkip}>
+                            Skip
+                        </button>
+                    </div>
+                ) : null}
             </div>
         </div>
     );
@@ -197,4 +245,22 @@ const BUTTON_STYLE: React.CSSProperties = {
     cursor: 'pointer',
     fontSize: '14px',
     fontFamily: 'var(--font-ui)',
+};
+
+const CONTINUE_ARROW_BUTTON_STYLE: React.CSSProperties = {
+    alignSelf: 'flex-start',
+    border: 'none',
+    background: 'transparent',
+    padding: 0,
+    cursor: 'pointer',
+    transition: `opacity ${CONTINUE_ARROW_FADE_MS}ms ease`,
+    outline: 'none',
+};
+
+const CONTINUE_ARROW_IMAGE_STYLE: React.CSSProperties = {
+    display: 'block',
+    height: 'auto',
+    userSelect: 'none',
+    WebkitUserDrag: 'none',
+    pointerEvents: 'none',
 };

@@ -12,10 +12,10 @@ export type CadenceConfig = {
     semantic?: {
         heavyWords: string[];
         heavyWordMinLength: number;
-        heavyWordTailChars: number;
-        heavyWordMaxMultiplier: number;
+        wordEndPauseMs: number;
+        heavyWordEndExtraPauseMs: number;
+        sentenceLandingExtraPauseMs: number;
         landingTailChars: number;
-        landingMaxMultiplier: number;
     };
 };
 
@@ -55,10 +55,10 @@ const NORMAL_SEMANTIC_CADENCE: NonNullable<CadenceConfig['semantic']> = {
         'medium',
     ],
     heavyWordMinLength: 8,
-    heavyWordTailChars: 3,
-    heavyWordMaxMultiplier: 1.5,
+    wordEndPauseMs: 18,
+    heavyWordEndExtraPauseMs: 90,
+    sentenceLandingExtraPauseMs: 120,
     landingTailChars: 3,
-    landingMaxMultiplier: 1.4,
 };
 
 const NORMAL_CADENCE: CadenceConfig = {

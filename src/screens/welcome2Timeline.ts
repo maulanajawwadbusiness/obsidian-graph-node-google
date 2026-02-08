@@ -35,12 +35,21 @@ type MarkerParse = {
     malformed: boolean;
 };
 
-type EmphasisMeta = {
-    heavyDistanceFromEnd?: number;
-    landingRank?: number;
+type WordSpan = {
+    word: string;
+    startIndex: number;
+    endIndex: number;
+    isHeavy: boolean;
+};
+
+type EmphasisAnalysis = {
+    wordEndIsHeavyByIndex: Map<number, boolean>;
+    landingAnchorIndices: Set<number>;
+    heavyMatches: WordSpan[];
 };
 
 const DEBUG_WELCOME2_TIMELINE = false;
+const MIN_LETTER_DIGIT_DELAY_MS = 20;
 const NEWLINE_POST_MIN_MS = 40;
 const NEWLINE_POST_MAX_FRACTION = 0.2;
 const NEWLINE_PREWAIT_MULTIPLIER = 2.5;
@@ -67,44 +76,21 @@ function isWordChar(char: string): boolean {
     return /[A-Za-z0-9]/.test(char);
 }
 
-function mergeEmphasisMeta(result: Map<number, EmphasisMeta>, index: number, next: EmphasisMeta): void {
-    const prev = result.get(index);
-    if (!prev) {
-        result.set(index, next);
-        return;
-    }
-
-    const merged: EmphasisMeta = {
-        heavyDistanceFromEnd: prev.heavyDistanceFromEnd,
-        landingRank: prev.landingRank,
-    };
-
-    if (typeof next.heavyDistanceFromEnd === 'number') {
-        if (
-            typeof merged.heavyDistanceFromEnd !== 'number' ||
-            next.heavyDistanceFromEnd < merged.heavyDistanceFromEnd
-        ) {
-            merged.heavyDistanceFromEnd = next.heavyDistanceFromEnd;
-        }
-    }
-
-    if (typeof next.landingRank === 'number') {
-        if (typeof merged.landingRank !== 'number' || next.landingRank < merged.landingRank) {
-            merged.landingRank = next.landingRank;
-        }
-    }
-
-    result.set(index, merged);
-}
-
 function analyzeEmphasis(
     renderText: string,
     semantic: CadenceConfig['semantic'] | undefined
-): Map<number, EmphasisMeta> {
-    const result = new Map<number, EmphasisMeta>();
-    if (!semantic) return result;
+): EmphasisAnalysis {
+    const wordEndIsHeavyByIndex = new Map<number, boolean>();
+    const landingAnchorIndices = new Set<number>();
+    const heavyMatches: WordSpan[] = [];
+    if (!semantic) {
+        return {
+            wordEndIsHeavyByIndex,
+            landingAnchorIndices,
+            heavyMatches,
+        };
+    }
 
-    const heavyWordTailChars = Math.max(0, Math.floor(semantic.heavyWordTailChars));
     const landingTailChars = Math.max(0, Math.floor(semantic.landingTailChars));
     const heavyWordMinLength = Math.max(1, Math.floor(semantic.heavyWordMinLength));
     const heavySet = new Set((semantic.heavyWords ?? []).map((word) => word.toLowerCase()));
@@ -120,14 +106,17 @@ function analyzeEmphasis(
         if (wordStart >= 0) {
             const wordEnd = i - 1;
             const wordLength = wordEnd - wordStart + 1;
-            const wordLower = renderText.slice(wordStart, wordEnd + 1).toLowerCase();
+            const word = renderText.slice(wordStart, wordEnd + 1);
+            const wordLower = word.toLowerCase();
             const isHeavy = wordLength >= heavyWordMinLength || heavySet.has(wordLower);
-            if (isHeavy && heavyWordTailChars > 0) {
-                const tailCount = Math.min(heavyWordTailChars, wordLength);
-                for (let distance = 0; distance < tailCount; distance += 1) {
-                    const index = wordEnd - distance;
-                    mergeEmphasisMeta(result, index, { heavyDistanceFromEnd: distance });
-                }
+            wordEndIsHeavyByIndex.set(wordEnd, isHeavy);
+            if (isHeavy) {
+                heavyMatches.push({
+                    word,
+                    startIndex: wordStart,
+                    endIndex: wordEnd,
+                    isHeavy,
+                });
             }
             wordStart = -1;
         }
@@ -143,7 +132,9 @@ function analyzeEmphasis(
             while (cursor >= 0 && landingRank < landingTailChars) {
                 const candidate = renderText[cursor];
                 if (candidate !== ' ' && candidate !== '\n') {
-                    mergeEmphasisMeta(result, cursor, { landingRank });
+                    if (landingRank === 0) {
+                        landingAnchorIndices.add(cursor);
+                    }
                     landingRank += 1;
                 }
                 cursor -= 1;
@@ -151,33 +142,17 @@ function analyzeEmphasis(
         }
     }
 
-    return result;
+    return {
+        wordEndIsHeavyByIndex,
+        landingAnchorIndices,
+        heavyMatches,
+    };
 }
 
-function getSemanticMultiplier(
-    meta: EmphasisMeta | undefined,
-    semantic: CadenceConfig['semantic'] | undefined
-): number {
-    if (!meta || !semantic) return 1.0;
-
-    let multiplier = 1.0;
-
-    if (typeof meta.heavyDistanceFromEnd === 'number') {
-        if (meta.heavyDistanceFromEnd === 0) multiplier *= 1.5;
-        else if (meta.heavyDistanceFromEnd === 1) multiplier *= 1.3;
-        else if (meta.heavyDistanceFromEnd === 2) multiplier *= 1.15;
-    }
-
-    if (typeof meta.landingRank === 'number') {
-        if (meta.landingRank === 0) multiplier *= 1.4;
-        else if (meta.landingRank === 1) multiplier *= 1.2;
-        else if (meta.landingRank === 2) multiplier *= 1.1;
-    }
-
-    const maxHeavy = semantic.heavyWordMaxMultiplier || 1.5;
-    const maxLanding = semantic.landingMaxMultiplier || 1.4;
-    const globalMax = Math.min(maxHeavy * maxLanding, 1.9);
-    return Math.min(multiplier, globalMax);
+function isDebugCadenceEnabled(): boolean {
+    if (typeof window === 'undefined') return false;
+    const params = new URLSearchParams(window.location.search);
+    return params.get('debugCadence') === '1';
 }
 
 function parsePauseMarkerAt(rawText: string, startIndex: number, fallbackMs: number): MarkerParse | null {
@@ -323,8 +298,9 @@ export function buildWelcome2Timeline(rawText: string, cadence: CadenceConfig = 
     }
 
     const renderText = renderChars.join('');
-    const emphasisByCharIndex = analyzeEmphasis(renderText, tunedCadence.semantic);
+    const emphasis = analyzeEmphasis(renderText, tunedCadence.semantic);
     const events: TimelineEvent[] = [];
+    const charDeltaByIndex: number[] = new Array(renderChars.length).fill(0);
     let currentTimeMs = 0;
 
     for (let i = 0; i < renderChars.length; i += 1) {
@@ -340,9 +316,10 @@ export function buildWelcome2Timeline(rawText: string, cadence: CadenceConfig = 
             if (!hasSecondNewline) {
                 // Single newline: split wait around the drop.
                 currentTimeMs += singleNewlineSplit.preWaitMs;
+                const eventTimeMs = clampMs(currentTimeMs);
                 events.push({
                     charIndex: i,
-                    tMs: clampMs(currentTimeMs),
+                    tMs: eventTimeMs,
                     char: '\n',
                     class: 'lineBreak',
                     pauseReason: 'lineBreak',
@@ -350,6 +327,7 @@ export function buildWelcome2Timeline(rawText: string, cadence: CadenceConfig = 
                 });
                 currentTimeMs += singleNewlineSplit.postWaitMs;
                 currentTimeMs = clampMs(currentTimeMs);
+                charDeltaByIndex[i] = Math.max(0, currentTimeMs - eventTimeMs);
                 continue;
             }
 
@@ -357,15 +335,18 @@ export function buildWelcome2Timeline(rawText: string, cadence: CadenceConfig = 
             // split wait -> newline1 -> split wait, split wait -> newline2 -> split wait,
             // then paragraph semantic hold.
             currentTimeMs += doubleNewlineSplit.preWaitMs;
+            const newline1TimeMs = clampMs(currentTimeMs);
             events.push({
                 charIndex: i,
-                tMs: clampMs(currentTimeMs),
+                tMs: newline1TimeMs,
                 char: '\n',
                 class: 'lineBreak',
                 pauseReason: 'lineBreak',
                 pauseAfterMs: 0,
             });
             currentTimeMs += doubleNewlineSplit.postWaitMs;
+            const afterNewline1Ms = clampMs(currentTimeMs);
+            charDeltaByIndex[i] = Math.max(0, afterNewline1Ms - newline1TimeMs);
 
             currentTimeMs += doubleNewlineSplit.preWaitMs;
             const paragraphPause = getParagraphPauseAfterDoubleNewline(
@@ -374,9 +355,10 @@ export function buildWelcome2Timeline(rawText: string, cadence: CadenceConfig = 
                 markerPauseByCharIndex,
                 tunedCadence
             );
+            const newline2TimeMs = clampMs(currentTimeMs);
             events.push({
                 charIndex: i + 1,
-                tMs: clampMs(currentTimeMs),
+                tMs: newline2TimeMs,
                 char: '\n',
                 class: 'lineBreak',
                 pauseReason: paragraphPause.pauseReason,
@@ -386,6 +368,7 @@ export function buildWelcome2Timeline(rawText: string, cadence: CadenceConfig = 
 
             currentTimeMs += paragraphPause.pauseAfterMs;
             currentTimeMs = clampMs(currentTimeMs);
+            charDeltaByIndex[i + 1] = Math.max(0, currentTimeMs - newline2TimeMs);
             i += 1;
             continue;
         }
@@ -403,19 +386,93 @@ export function buildWelcome2Timeline(rawText: string, cadence: CadenceConfig = 
             char,
             class: charClass,
             pauseReason: pause.pauseReason,
-            pauseAfterMs: clampMs(pause.pauseAfterMs),
+            pauseAfterMs: 0,
         };
+        let semanticPauseAfterMs = 0;
+        const semantic = tunedCadence.semantic;
+        if (semantic) {
+            const isWordEnd = isWordChar(char) && (i + 1 >= renderChars.length || !isWordChar(renderChars[i + 1]));
+            if (isWordEnd) {
+                semanticPauseAfterMs += clampMs(semantic.wordEndPauseMs);
+                if (emphasis.wordEndIsHeavyByIndex.get(i)) {
+                    semanticPauseAfterMs += clampMs(semantic.heavyWordEndExtraPauseMs);
+                }
+            }
+            if (emphasis.landingAnchorIndices.has(i)) {
+                semanticPauseAfterMs += clampMs(semantic.sentenceLandingExtraPauseMs);
+            }
+        }
+        event.pauseAfterMs = clampMs(pause.pauseAfterMs + semanticPauseAfterMs);
         events.push(event);
 
         let charDelayMs = getCostBetweenChars(charClass, tunedCadence);
         if (charClass === 'letter' || charClass === 'digit') {
-            const semanticMultiplier = getSemanticMultiplier(emphasisByCharIndex.get(i), tunedCadence.semantic);
-            charDelayMs = clampMs(charDelayMs * semanticMultiplier);
+            charDelayMs = Math.max(MIN_LETTER_DIGIT_DELAY_MS, clampMs(charDelayMs));
         }
 
+        const eventTimeMs = event.tMs;
         currentTimeMs += charDelayMs;
         currentTimeMs += event.pauseAfterMs;
         currentTimeMs = clampMs(currentTimeMs);
+        charDeltaByIndex[i] = Math.max(0, currentTimeMs - eventTimeMs);
+    }
+
+    if (isDebugCadenceEnabled()) {
+        const semantic = tunedCadence.semantic;
+        console.log(
+            '[Welcome2Cadence] cadence base=%d space=%d comma=%d period=%d question=%d newline=%d paragraph=%d markerDefault=%d endHold=%d',
+            tunedCadence.baseCharMs,
+            tunedCadence.spaceMs,
+            tunedCadence.commaPauseMs,
+            tunedCadence.periodPauseMs,
+            tunedCadence.questionPauseMs,
+            tunedCadence.newlinePauseMs,
+            tunedCadence.paragraphPauseMs,
+            tunedCadence.markerPauseDefaultMs,
+            tunedCadence.endHoldMs
+        );
+        if (semantic) {
+            console.log(
+                '[Welcome2Cadence] semantic heavyWordMinLength=%d wordEndPauseMs=%d heavyWordEndExtraPauseMs=%d landingTailChars=%d sentenceLandingExtraPauseMs=%d heavyWords=%s',
+                semantic.heavyWordMinLength,
+                semantic.wordEndPauseMs,
+                semantic.heavyWordEndExtraPauseMs,
+                semantic.landingTailChars,
+                semantic.sentenceLandingExtraPauseMs,
+                JSON.stringify(semantic.heavyWords)
+            );
+        } else {
+            console.log('[Welcome2Cadence] semantic disabled');
+        }
+
+        console.log('[Welcome2Cadence] heavy matches count=%d', emphasis.heavyMatches.length);
+        const heavySamples = emphasis.heavyMatches.slice(0, 3);
+        heavySamples.forEach((sample, sampleIndex) => {
+            console.log(
+                '[Welcome2Cadence] heavy sample %d word=%s start=%d end=%d',
+                sampleIndex + 1,
+                sample.word,
+                sample.startIndex,
+                sample.endIndex
+            );
+        });
+
+        if (emphasis.heavyMatches.length > 0) {
+            const firstHeavy = emphasis.heavyMatches[0];
+            const from = Math.max(0, firstHeavy.startIndex - 6);
+            const to = Math.min(renderChars.length - 1, firstHeavy.endIndex + 5);
+            const timingSample: Array<{ charIndex: number; char: string; deltaMs: number }> = [];
+            for (let idx = from; idx <= to; idx += 1) {
+                timingSample.push({
+                    charIndex: idx,
+                    char: renderChars[idx],
+                    deltaMs: charDeltaByIndex[idx] ?? 0,
+                });
+            }
+            console.log('[Welcome2Cadence] timing sample around first heavy word:', timingSample);
+        } else {
+            console.log('[Welcome2Cadence] timing sample skipped no heavy words detected');
+        }
     }
 
     return {

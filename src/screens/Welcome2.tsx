@@ -17,7 +17,7 @@ const DEBUG_WELCOME2_INPUT_GUARD = false;
 const CURSOR_PAUSE_THRESHOLD_MS = 130;
 const CURSOR_HOLD_FAST_WINDOW_MS = 680;
 const SHOW_WELCOME2_FOCUS_RING = false;
-const WELCOME2_AUTO_ADVANCE_DELAY_MS = 1000;
+const WELCOME2_AUTO_ADVANCE_DELAY_MS = 2000*4;
 const BLOCKED_SCROLL_KEYS = new Set([' ', 'PageDown', 'PageUp', 'ArrowDown', 'ArrowUp']);
 const INTERACTIVE_SELECTOR = 'button, input, textarea, select, a[href], [role=\"button\"], [contenteditable=\"true\"]';
 const DEBUG_WELCOME2_TYPE = false;
@@ -41,6 +41,7 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
         return builtTimeline.events[builtTimeline.events.length - 1].tMs;
     }, [builtTimeline.events]);
     const autoAdvanceTriggeredRef = React.useRef(false);
+    const autoAdvanceTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
     const lastAdvanceRef = React.useRef(0);
     const prevVisibleCountRef = React.useRef(visibleCharCount);
     const holdStartRef = React.useRef<number | null>(null);
@@ -122,12 +123,28 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
 
     React.useEffect(() => {
         if (autoAdvanceTriggeredRef.current) return;
+        if (autoAdvanceTimeoutRef.current !== null) return;
         if (builtTimeline.events.length === 0) return;
+        if (phase === 'typing') return;
+
         const autoAdvanceAtMs = lastTypedCharMs + WELCOME2_AUTO_ADVANCE_DELAY_MS;
-        if (elapsedMs < autoAdvanceAtMs) return;
-        autoAdvanceTriggeredRef.current = true;
-        onNext();
-    }, [builtTimeline.events.length, elapsedMs, lastTypedCharMs, onNext]);
+        const remainingMs = Math.max(0, autoAdvanceAtMs - elapsedMs);
+        autoAdvanceTimeoutRef.current = setTimeout(() => {
+            autoAdvanceTimeoutRef.current = null;
+            if (autoAdvanceTriggeredRef.current) return;
+            autoAdvanceTriggeredRef.current = true;
+            onNext();
+        }, remainingMs);
+    }, [builtTimeline.events.length, elapsedMs, lastTypedCharMs, onNext, phase]);
+
+    React.useEffect(() => {
+        return () => {
+            if (autoAdvanceTimeoutRef.current !== null) {
+                clearTimeout(autoAdvanceTimeoutRef.current);
+                autoAdvanceTimeoutRef.current = null;
+            }
+        };
+    }, []);
 
     return (
         <div

@@ -58,6 +58,24 @@ export const STRINGS = {
         // AI Strings
         "ai.seedPromptNew": "Ceritakan lebih lanjut tentang \"{label}\"",
         "ai.seedPromptContinue": "Dalam konteks \"{label}\", melanjutkan...",
+
+        // Onboarding Welcome1
+        "onboarding.welcome1.brand_title_line1": "Arnvoid",
+        "onboarding.welcome1.brand_title_line2": "Antarmuka Pengetahuan Dua Dimensi",
+        "onboarding.welcome1.fullscreen_prompt.title": "Aktifkan antarmuka dalam mode layar penuh?",
+        "onboarding.welcome1.fullscreen_prompt.desc": "Layar penuh menjaga tampilan onboarding tetap stabil dan imersif.",
+        "onboarding.welcome1.fullscreen_prompt.cta_yes": "Ya, aktifkan",
+        "onboarding.welcome1.fullscreen_prompt.cta_no": "Tidak, tetap di layar ini",
+
+        // Onboarding Welcome2
+        "onboarding.welcome2.manifesto": `Untukku, aku sering merasa lelah ketika membaca paper di jam 2 malam. {p=260}
+Menurutku teks itu bukanlah bentuk pengetahuan paling intuitif. {p=900}
+
+Kita sudah membaca teks selama 50 tahun di hidup kita.
+Jika kita ingin memproses pengetahuan secara intuitif, kurasa kita perlu menciptakan bentuk medium informasi yang baru untuk diri kita sendiri.
+Medium yang cocok dengan pikiran kita. Yang selaras dengan saraf alami di dalam pikiran kita. {p=900}
+
+Kupikir ini waktunya untuk kita memikirkan medium informasi yang berbeda di sini.`,
     },
     en: {
         // Node Popup
@@ -113,5 +131,23 @@ export const STRINGS = {
         // AI Strings
         "ai.seedPromptNew": "Tell me more about \"{label}\"",
         "ai.seedPromptContinue": "In context of \"{label}\", continuing...",
+
+        // Onboarding Welcome1
+        "onboarding.welcome1.brand_title_line1": "Arnvoid",
+        "onboarding.welcome1.brand_title_line2": "Two-Dimension Knowledge Interface",
+        "onboarding.welcome1.fullscreen_prompt.title": "Activate interface in full-screen mode?",
+        "onboarding.welcome1.fullscreen_prompt.desc": "Full-screen keeps the onboarding view stable and immersive.",
+        "onboarding.welcome1.fullscreen_prompt.cta_yes": "Yes, activate",
+        "onboarding.welcome1.fullscreen_prompt.cta_no": "No, stay in this screen",
+
+        // Onboarding Welcome2
+        "onboarding.welcome2.manifesto": `For me, i often feel tired reading paper at 2 am.{p=260}
+I think text is not the most intuitive form of knowledge.{p=900}
+
+We have been reading text for more than 50 years.
+If we want to process information intuitively, i think we need to create a new form of information medium for ourselves.
+One that fit our mind well. One that fit natural nerve in our thought.{p=900}
+
+I think it is time for us to think a different medium for ourselves.`,
     }
 } as const;

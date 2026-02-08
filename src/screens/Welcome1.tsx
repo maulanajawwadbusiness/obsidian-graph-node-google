@@ -3,6 +3,7 @@ import { useFullscreen } from '../hooks/useFullscreen';
 import { ONBOARDING_SPLASH_MS } from '../config/env';
 import { SHOW_WELCOME1_FULLSCREEN_PROMPT } from '../config/onboardingUiFlags';
 import { TypingCursor } from '../components/TypingCursor';
+import { t } from '../i18n/t';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Responsive hook for screen width detection
@@ -32,7 +33,8 @@ export const Welcome1: React.FC<Welcome1Props> = ({ onNext, onSkip, onOverlayOpe
     const { enterFullscreen, isFullscreen } = useFullscreen();
     const isWideScreen = useIsWideScreen();
 
-    const SUBTITLE_TEXT = 'Antarmuka Pengetahuan Dua Dimensi';
+    const TITLE_LINE_1 = t('onboarding.welcome1.brand_title_line1');
+    const TITLE_LINE_2 = t('onboarding.welcome1.brand_title_line2');
     const CURSOR_DELAY_MS = 500;
     const [hasFullscreenDecision, setHasFullscreenDecision] = React.useState(false);
     const [isFullscreenPromptOpen, setIsFullscreenPromptOpen] = React.useState(
@@ -102,7 +104,7 @@ export const Welcome1: React.FC<Welcome1Props> = ({ onNext, onSkip, onOverlayOpe
     return (
         <div style={ROOT_STYLE}>
             <div style={CONTENT_STYLE}>
-                <div style={TITLE_STYLE}>Arnvoid</div>
+                <div style={TITLE_STYLE}>{TITLE_LINE_1}</div>
 
                 <div style={SUBTITLE_WRAPPER_STYLE}>
                     <span
@@ -110,7 +112,7 @@ export const Welcome1: React.FC<Welcome1Props> = ({ onNext, onSkip, onOverlayOpe
                         className="welcome1-typable-text"
                         style={SUBTITLE_TEXT_STYLE}
                     >
-                        {SUBTITLE_TEXT}
+                        {TITLE_LINE_2}
                     </span>
                     {showCursor ? (
                         <TypingCursor
@@ -124,9 +126,9 @@ export const Welcome1: React.FC<Welcome1Props> = ({ onNext, onSkip, onOverlayOpe
             {SHOW_WELCOME1_FULLSCREEN_PROMPT && isFullscreenPromptOpen ? (
                 <div style={FULLSCREEN_PROMPT_BACKDROP_STYLE} onPointerDown={(e) => e.stopPropagation()}>
                     <div style={cardStyle} onPointerDown={(e) => e.stopPropagation()}>
-                        <div style={FULLSCREEN_PROMPT_TITLE_STYLE}>Activate interface in full-screen mode?</div>
+                        <div style={FULLSCREEN_PROMPT_TITLE_STYLE}>{t('onboarding.welcome1.fullscreen_prompt.title')}</div>
                         <div style={FULLSCREEN_PROMPT_TEXT_STYLE}>
-                            Full-screen keeps the onboarding view stable and immersive.
+                            {t('onboarding.welcome1.fullscreen_prompt.desc')}
                         </div>
                         <div style={FULLSCREEN_PROMPT_BUTTON_ROW_STYLE}>
                             <button
@@ -135,7 +137,7 @@ export const Welcome1: React.FC<Welcome1Props> = ({ onNext, onSkip, onOverlayOpe
                                 onPointerDown={(e) => e.stopPropagation()}
                                 onClick={handleActivateFullscreen}
                             >
-                                Yes, activate
+                                {t('onboarding.welcome1.fullscreen_prompt.cta_yes')}
                             </button>
                             <button
                                 type="button"
@@ -143,7 +145,7 @@ export const Welcome1: React.FC<Welcome1Props> = ({ onNext, onSkip, onOverlayOpe
                                 onPointerDown={(e) => e.stopPropagation()}
                                 onClick={handleStayWindowed}
                             >
-                                No, stay in same screen
+                                {t('onboarding.welcome1.fullscreen_prompt.cta_no')}
                             </button>
                         </div>
                     </div>

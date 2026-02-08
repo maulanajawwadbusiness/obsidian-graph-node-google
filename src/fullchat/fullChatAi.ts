@@ -8,6 +8,7 @@ import { ensureSufficientBalance } from '../money/ensureSufficientBalance';
 import { estimateIdrCost } from '../money/estimateCost';
 import { showShortage } from '../money/shortageStore';
 import { pushMoneyNotice } from '../money/moneyNotices';
+import { shouldSuppressMoneyNoticeForNetworkFailure } from '../money/moneyNoticePolicy';
 
 // =============================================================================
 // TYPES
@@ -181,12 +182,15 @@ async function* realResponseGenerator(
         // If network error, we probably want to show it or fallback.
         // Lets fallback to mock for robustness per "just works" rule.
         console.warn('[FullChatAI] error_fallback_to_mock');
-        pushMoneyNotice({
-            kind: 'deduction',
-            status: 'warning',
-            title: 'Koneksi terputus',
-            message: 'Saldo akan tersinkron otomatis. Saldo saat ini mungkin belum berubah.'
-        });
+        const suppressNotice = shouldSuppressMoneyNoticeForNetworkFailure({ error: err });
+        if (!suppressNotice) {
+            pushMoneyNotice({
+                kind: 'deduction',
+                status: 'warning',
+                title: 'Koneksi terputus',
+                message: 'Saldo akan tersinkron otomatis. Saldo saat ini mungkin belum berubah.'
+            });
+        }
         yield* mockResponseGenerator(context);
     } finally {
         void refreshBalance();

@@ -65,7 +65,7 @@ const SIDEBAR_STYLE: React.CSSProperties = {
     bottom: 0,
     width: '35px',
     background: '#06060A',
-    borderRight: '1px solid #1e2330',
+    borderRight: '1px solid rgba(255, 255, 255, 0.06)',
     display: 'flex',
     flexDirection: 'column',
     zIndex: 50,
@@ -80,8 +80,8 @@ const SIDEBAR_CONTENT_STYLE: React.CSSProperties = {
 };
 
 const SIDEBAR_LABEL_STYLE: React.CSSProperties = {
-    fontSize: '14px',
-    color: '#5a6070',
+    fontSize: '11px',
+    color: 'rgba(255, 255, 255, 0.15)',
     fontFamily: 'var(--font-ui)',
     textTransform: 'uppercase',
     letterSpacing: '0.5px',

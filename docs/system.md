@@ -61,8 +61,9 @@ The onboarding screens live in `src/screens/` and are orchestrated by `AppShell`
 *   **Purpose**: Fast brand/splash introduction before the manifesto and prompt screen.
 *   **Behavior**:
     *   Auto-advances using `ONBOARDING_SPLASH_MS` (default 4500ms, min 500ms).
-    *   Tries to enter fullscreen on mount via `useFullscreen().enterFullscreen()`. If browser blocks it, it logs warning and continues.
-    *   Shows `FullscreenButton` so user can manually enter fullscreen.
+    *   Shows fullscreen consent prompt with explicit action buttons. Fullscreen entry is explicit-only (`Yes, activate`).
+    *   Shows `FullscreenButton` so user can manually enter/exit fullscreen when overlays are not active.
+    *   The consent prompt backdrop is fixed full-viewport and blocks underlying onboarding chrome input.
 *   **Role in flow**: Entry screen. `onNext` goes to `welcome2`.
 
 ### B. `Welcome2` (`src/screens/Welcome2.tsx`)
@@ -102,11 +103,23 @@ Debug toggles:
     *   Reads auth state from `useAuth()`.
     *   Shows `LoginOverlay` while user is not authenticated and overlay is not manually hidden.
     *   `LoginOverlay` blocks pointer/wheel interaction and locks page scroll when open.
-    *   Continue is enabled only when `/me` auth state resolves to a signed-in user.
+    *   Continue button in LoginOverlay is a non-functional formal control (no click handler). Auth flow proceeds via session state update after sign-in.
+    *   Login debug/error text is hidden by default in dev and visible by default in prod. Dev override: `VITE_SHOW_LOGIN_DEBUG_ERRORS=1`.
 *   **Role in flow**:
     *   `onEnter` moves to `graph` (authenticated continue path).
     *   `onSkip` can also move to `graph` (bypass path).
     *   `onBack` returns to `welcome2`.
+
+## 2.3 Onboarding Fullscreen Safety (Current)
+Current fullscreen rules in onboarding:
+
+1. Fullscreen is explicit-only:
+   - Allowed from fullscreen consent button in Welcome1.
+   - Allowed from dedicated fullscreen icon button.
+2. Generic background click/keydown in onboarding must never call fullscreen.
+3. Overlay precedence:
+   - Welcome1 prompt overlay and EnterPrompt LoginOverlay are top-layer blockers.
+   - While these overlays are open, fullscreen icon input is blocked.
 
 ## 3. Physics Architecture And Contract
 The graph is driven by a **Hybrid Solver** (`src/physics/`) prioritizing "Visual Dignity" over pure simulation accuracy.

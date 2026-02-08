@@ -170,6 +170,10 @@ const TEXT_STYLE: React.CSSProperties = {
     color: '#b9bcc5',
     whiteSpace: 'pre-wrap',
     fontFamily: 'var(--font-ui)',
+    fontVariantLigatures: 'none',
+    fontKerning: 'none',
+    fontFeatureSettings: '"kern" 0, "liga" 0, "clig" 0, "calt" 0',
+    textRendering: 'auto',
 };
 
 const CURSOR_STYLE: React.CSSProperties = {

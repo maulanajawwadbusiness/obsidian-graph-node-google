@@ -38,6 +38,8 @@ type MarkerParse = {
 const DEBUG_WELCOME2_TIMELINE = false;
 const NEWLINE_POST_MIN_MS = 40;
 const NEWLINE_POST_MAX_FRACTION = 0.2;
+const NEWLINE_PREWAIT_MULTIPLIER = 2.5;
+const DOUBLE_NEWLINE_MECHANICAL_MULTIPLIER = 1.5;
 
 function clampMs(value: number): number {
     if (!Number.isFinite(value)) return 0;
@@ -48,7 +50,8 @@ function splitNewlinePause(newlinePauseMs: number): { preWaitMs: number; postWai
     const totalMs = clampMs(newlinePauseMs);
     const postFromFractionMs = Math.floor(totalMs * NEWLINE_POST_MAX_FRACTION);
     const postWaitMs = Math.min(NEWLINE_POST_MIN_MS, postFromFractionMs);
-    const preWaitMs = Math.max(0, totalMs - postWaitMs);
+    const basePreWaitMs = Math.max(0, totalMs - postWaitMs);
+    const preWaitMs = clampMs(basePreWaitMs * NEWLINE_PREWAIT_MULTIPLIER);
     return {
         preWaitMs,
         postWaitMs,
@@ -207,11 +210,13 @@ export function buildWelcome2Timeline(rawText: string, cadence: CadenceConfig = 
 
         if (charClass === 'lineBreak') {
             const hasSecondNewline = i + 1 < renderChars.length && renderChars[i + 1] === '\n';
-            const newlineSplit = splitNewlinePause(tunedCadence.newlinePauseMs);
+            const singleNewlineSplit = splitNewlinePause(tunedCadence.newlinePauseMs);
+            const doubleNewlineTotalPauseMs = Math.floor(tunedCadence.newlinePauseMs * DOUBLE_NEWLINE_MECHANICAL_MULTIPLIER);
+            const doubleNewlineSplit = splitNewlinePause(doubleNewlineTotalPauseMs);
 
             if (!hasSecondNewline) {
                 // Single newline: split wait around the drop.
-                currentTimeMs += newlineSplit.preWaitMs;
+                currentTimeMs += singleNewlineSplit.preWaitMs;
                 events.push({
                     charIndex: i,
                     tMs: clampMs(currentTimeMs),
@@ -220,7 +225,7 @@ export function buildWelcome2Timeline(rawText: string, cadence: CadenceConfig = 
                     pauseReason: 'lineBreak',
                     pauseAfterMs: 0,
                 });
-                currentTimeMs += newlineSplit.postWaitMs;
+                currentTimeMs += singleNewlineSplit.postWaitMs;
                 currentTimeMs = clampMs(currentTimeMs);
                 continue;
             }
@@ -228,7 +233,7 @@ export function buildWelcome2Timeline(rawText: string, cadence: CadenceConfig = 
             // Double newline cluster:
             // split wait -> newline1 -> split wait, split wait -> newline2 -> split wait,
             // then paragraph semantic hold.
-            currentTimeMs += newlineSplit.preWaitMs;
+            currentTimeMs += doubleNewlineSplit.preWaitMs;
             events.push({
                 charIndex: i,
                 tMs: clampMs(currentTimeMs),
@@ -237,9 +242,9 @@ export function buildWelcome2Timeline(rawText: string, cadence: CadenceConfig = 
                 pauseReason: 'lineBreak',
                 pauseAfterMs: 0,
             });
-            currentTimeMs += newlineSplit.postWaitMs;
+            currentTimeMs += doubleNewlineSplit.postWaitMs;
 
-            currentTimeMs += newlineSplit.preWaitMs;
+            currentTimeMs += doubleNewlineSplit.preWaitMs;
             const paragraphPause = getParagraphPauseAfterDoubleNewline(
                 i,
                 renderChars,
@@ -254,7 +259,7 @@ export function buildWelcome2Timeline(rawText: string, cadence: CadenceConfig = 
                 pauseReason: paragraphPause.pauseReason,
                 pauseAfterMs: clampMs(paragraphPause.pauseAfterMs),
             });
-            currentTimeMs += newlineSplit.postWaitMs;
+            currentTimeMs += doubleNewlineSplit.postWaitMs;
 
             currentTimeMs += paragraphPause.pauseAfterMs;
             currentTimeMs = clampMs(currentTimeMs);

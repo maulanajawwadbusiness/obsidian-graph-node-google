@@ -36,10 +36,23 @@ type MarkerParse = {
 };
 
 const DEBUG_WELCOME2_TIMELINE = false;
+const NEWLINE_PRE_FRACTION = 0.7;
+const NEWLINE_POST_FRACTION = 0.3;
 
 function clampMs(value: number): number {
     if (!Number.isFinite(value)) return 0;
     return Math.max(0, Math.round(value));
+}
+
+function splitNewlinePause(newlinePauseMs: number): { preWaitMs: number; postWaitMs: number } {
+    const totalMs = clampMs(newlinePauseMs);
+    const preWaitMs = clampMs(totalMs * NEWLINE_PRE_FRACTION);
+    const postWaitMs = clampMs(totalMs * NEWLINE_POST_FRACTION);
+    const remainderMs = Math.max(0, totalMs - (preWaitMs + postWaitMs));
+    return {
+        preWaitMs,
+        postWaitMs: postWaitMs + remainderMs,
+    };
 }
 
 function parsePauseMarkerAt(rawText: string, startIndex: number, fallbackMs: number): MarkerParse | null {
@@ -194,10 +207,11 @@ export function buildWelcome2Timeline(rawText: string, cadence: CadenceConfig = 
 
         if (charClass === 'lineBreak') {
             const hasSecondNewline = i + 1 < renderChars.length && renderChars[i + 1] === '\n';
+            const newlineSplit = splitNewlinePause(tunedCadence.newlinePauseMs);
 
             if (!hasSecondNewline) {
-                // Single newline: wait before drop, then emit newline immediately.
-                currentTimeMs += tunedCadence.newlinePauseMs;
+                // Single newline: split wait around the drop.
+                currentTimeMs += newlineSplit.preWaitMs;
                 events.push({
                     charIndex: i,
                     tMs: clampMs(currentTimeMs),
@@ -206,13 +220,15 @@ export function buildWelcome2Timeline(rawText: string, cadence: CadenceConfig = 
                     pauseReason: 'lineBreak',
                     pauseAfterMs: 0,
                 });
+                currentTimeMs += newlineSplit.postWaitMs;
                 currentTimeMs = clampMs(currentTimeMs);
                 continue;
             }
 
             // Double newline cluster:
-            // wait -> newline1, wait -> newline2, then paragraph semantic hold.
-            currentTimeMs += tunedCadence.newlinePauseMs;
+            // split wait -> newline1 -> split wait, split wait -> newline2 -> split wait,
+            // then paragraph semantic hold.
+            currentTimeMs += newlineSplit.preWaitMs;
             events.push({
                 charIndex: i,
                 tMs: clampMs(currentTimeMs),
@@ -221,8 +237,9 @@ export function buildWelcome2Timeline(rawText: string, cadence: CadenceConfig = 
                 pauseReason: 'lineBreak',
                 pauseAfterMs: 0,
             });
+            currentTimeMs += newlineSplit.postWaitMs;
 
-            currentTimeMs += tunedCadence.newlinePauseMs;
+            currentTimeMs += newlineSplit.preWaitMs;
             const paragraphPause = getParagraphPauseAfterDoubleNewline(
                 i,
                 renderChars,
@@ -237,6 +254,7 @@ export function buildWelcome2Timeline(rawText: string, cadence: CadenceConfig = 
                 pauseReason: paragraphPause.pauseReason,
                 pauseAfterMs: clampMs(paragraphPause.pauseAfterMs),
             });
+            currentTimeMs += newlineSplit.postWaitMs;
 
             currentTimeMs += paragraphPause.pauseAfterMs;
             currentTimeMs = clampMs(currentTimeMs);

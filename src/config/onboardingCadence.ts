@@ -55,9 +55,9 @@ const NORMAL_SEMANTIC_CADENCE: NonNullable<CadenceConfig['semantic']> = {
         'medium',
     ],
     heavyWordMinLength: 8,
-    wordEndPauseMs: 18,
-    heavyWordEndExtraPauseMs: 90,
-    sentenceLandingExtraPauseMs: 120,
+    wordEndPauseMs: 36,
+    heavyWordEndExtraPauseMs: 180,
+    sentenceLandingExtraPauseMs: 240,
     landingTailChars: 3,
 };
 

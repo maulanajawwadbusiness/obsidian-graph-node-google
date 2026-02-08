@@ -3,6 +3,9 @@ import { useAuth } from './AuthProvider';
 import { GoogleLoginButton } from '../components/GoogleLoginButton';
 import { SHOW_ONBOARDING_AUX_BUTTONS } from '../config/onboardingUiFlags';
 
+const SHOW_LOGIN_DEBUG_ERRORS =
+    import.meta.env.VITE_SHOW_LOGIN_DEBUG_ERRORS === '1' || !import.meta.env.DEV;
+
 type LoginOverlayProps = {
     open: boolean;
     mode?: 'prompt';
@@ -66,7 +69,7 @@ export const LoginOverlay: React.FC<LoginOverlayProps> = ({
                     </div>
                 )}
 
-                {error && (
+                {SHOW_LOGIN_DEBUG_ERRORS && error && (
                     <div style={ERROR_STYLE}>{error}</div>
                 )}
 

@@ -3,7 +3,6 @@ import { createPaymentGopayQris, getPaymentStatus, type PaymentAction } from '..
 import { refreshBalance } from '../store/balanceStore';
 import { subscribeTopupOpen } from '../money/topupEvents';
 import { pushMoneyNotice } from '../money/moneyNotices';
-import { shouldSuppressMoneyNoticeForNetworkFailure } from '../money/moneyNoticePolicy';
 
 const DEFAULT_AMOUNT = 1000;
 const POLL_FAST_MS = 1000;
@@ -154,22 +153,6 @@ export const PaymentGopayPanel: React.FC<PaymentPanelProps> = ({ onPaid }) => {
             if (!result.ok || !result.data || typeof result.data !== 'object') {
                 setError(result.error || 'Payment request failed');
                 setPhase('failed');
-                const suppressNotice = shouldSuppressMoneyNoticeForNetworkFailure({
-                    status: result.status,
-                    error: result.error,
-                    contentType: result.contentType
-                });
-                if (!suppressNotice) {
-                    pushMoneyNotice({
-                        kind: 'payment',
-                        status: 'error',
-                        title: 'Gagal memulai pembayaran',
-                        message: 'Koneksi bermasalah. Saldo tidak berubah.',
-                        ctas: [
-                            { label: 'Coba lagi', onClick: () => handleCreate() }
-                        ]
-                    });
-                }
                 return;
             }
             const data = result.data as {
@@ -193,18 +176,6 @@ export const PaymentGopayPanel: React.FC<PaymentPanelProps> = ({ onPaid }) => {
         } catch (e) {
             setError(`Payment request failed: ${String(e)}`);
             setPhase('failed');
-            const suppressNotice = shouldSuppressMoneyNoticeForNetworkFailure({ error: e });
-            if (!suppressNotice) {
-                pushMoneyNotice({
-                    kind: 'payment',
-                    status: 'error',
-                    title: 'Gagal memulai pembayaran',
-                    message: 'Koneksi bermasalah. Saldo tidak berubah.',
-                    ctas: [
-                        { label: 'Coba lagi', onClick: () => handleCreate() }
-                    ]
-                });
-            }
         } finally {
             setIsBusy(false);
         }

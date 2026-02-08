@@ -11,19 +11,25 @@ Date: 2026-02-08
   - CTA: `Cek ulang saldo`
 
 ## What Was Removed/Changed
-1. Added shared policy helper:
-   - `src/money/moneyNoticePolicy.ts`
-   - `shouldSuppressMoneyNoticeForNetworkFailure(...)`
-2. Updated `BalanceBadge`:
+1. Updated `BalanceBadge`:
    - `src/components/BalanceBadge.tsx`
-   - For `status === 'error'`, money notice emission is now suppressed when offline or backend unreachable.
+   - For `status === 'error'`, money notice emission was removed.
    - This removes the reported popup in offline/unreachable scenarios.
-3. Updated payment network-failure notices:
+2. Updated payment network-failure notices:
    - `src/components/PaymentGopayPanel.tsx`
-   - Suppressed money notice emission on payment create network failures (both non-ok response and thrown fetch errors) when offline/unreachable.
-4. Updated AI chat network-failure notice:
+   - Removed money notice emission on payment create network failures (both non-ok response and thrown fetch errors).
+3. Updated AI chat network-failure notice:
    - `src/fullchat/fullChatAi.ts`
-   - Suppressed fallback money notice (`Koneksi terputus`) when offline/unreachable.
+   - Removed fallback money notice (`Koneksi terputus`) on network failure.
+4. Removed now-unused suppression helper:
+   - deleted `src/money/moneyNoticePolicy.ts`
+
+## Round 2 Final Trace Cleanup
+- Re-ran trace for:
+  - `Koneksi bermasalah. Saldo tidak berubah.`
+  - `Koneksi terputus`
+  - `shouldSuppressMoneyNoticeForNetworkFailure`
+- Result: no runtime source traces remain in `src/` for these offline-network money notice paths.
 
 ## Expected Behavior After Patch
 - If Wi-Fi is off or backend is unreachable, no money/balance notice popup is emitted for those network failures.

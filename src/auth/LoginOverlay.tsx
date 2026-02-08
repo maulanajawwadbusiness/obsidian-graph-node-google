@@ -119,7 +119,7 @@ const BACKDROP_STYLE: React.CSSProperties = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    zIndex: 2000,
+    zIndex: 3000,
     pointerEvents: 'auto',
 };
 

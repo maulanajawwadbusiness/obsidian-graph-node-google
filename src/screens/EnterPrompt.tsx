@@ -8,11 +8,23 @@ type EnterPromptProps = {
     onEnter: () => void;
     onBack: () => void;
     onSkip: () => void;
+    onOverlayOpenChange?: (open: boolean) => void;
 };
 
-export const EnterPrompt: React.FC<EnterPromptProps> = ({ onEnter, onBack, onSkip }) => {
+export const EnterPrompt: React.FC<EnterPromptProps> = ({ onEnter, onBack, onSkip, onOverlayOpenChange }) => {
     const { user } = useAuth();
     const [isOverlayHidden, setIsOverlayHidden] = React.useState(false);
+    const loginOverlayOpen = !user && !isOverlayHidden;
+
+    React.useEffect(() => {
+        onOverlayOpenChange?.(loginOverlayOpen);
+    }, [loginOverlayOpen, onOverlayOpenChange]);
+
+    React.useEffect(() => {
+        return () => {
+            onOverlayOpenChange?.(false);
+        };
+    }, [onOverlayOpenChange]);
 
     return (
         <div style={ROOT_STYLE}>
@@ -26,7 +38,7 @@ export const EnterPrompt: React.FC<EnterPromptProps> = ({ onEnter, onBack, onSki
             <PaymentGopayPanel />
 
             <LoginOverlay
-                open={!user && !isOverlayHidden}
+                open={loginOverlayOpen}
                 onContinue={onEnter}
                 onBack={onBack}
                 onSkip={onSkip}

@@ -6,17 +6,19 @@ import fullscreenCloseIcon from '../assets/fullscreen_close_icon.png';
 type FullscreenButtonProps = {
     className?: string;
     style?: React.CSSProperties;
+    blocked?: boolean;
 };
 
-export const FullscreenButton: React.FC<FullscreenButtonProps> = ({ className, style }) => {
+export const FullscreenButton: React.FC<FullscreenButtonProps> = ({ className, style, blocked = false }) => {
     const { isFullscreen, toggleFullscreen } = useFullscreen();
     const [isHovered, setIsHovered] = React.useState(false);
 
     const handleClick = React.useCallback(() => {
+        if (blocked) return;
         toggleFullscreen().catch((e: unknown) => {
             console.warn('[fullscreen] Toggle failed:', e);
         });
-    }, [toggleFullscreen]);
+    }, [blocked, toggleFullscreen]);
 
     return (
         <button
@@ -25,6 +27,7 @@ export const FullscreenButton: React.FC<FullscreenButtonProps> = ({ className, s
             style={{
                 ...BUTTON_STYLE,
                 ...style,
+                pointerEvents: blocked ? 'none' : 'auto',
             }}
             onMouseEnter={() => setIsHovered(true)}
             onMouseLeave={() => setIsHovered(false)}
@@ -34,6 +37,7 @@ export const FullscreenButton: React.FC<FullscreenButtonProps> = ({ className, s
             }}
             onPointerDown={(e) => e.stopPropagation()}
             aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+            aria-disabled={blocked}
         >
             <img
                 src={isFullscreen ? fullscreenCloseIcon : fullscreenOpenIcon}

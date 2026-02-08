@@ -1,17 +1,36 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useFullscreen } from '../hooks/useFullscreen';
 import { ONBOARDING_SPLASH_MS } from '../config/env';
 import { SHOW_WELCOME1_FULLSCREEN_PROMPT } from '../config/onboardingUiFlags';
 import { TypingCursor } from '../components/TypingCursor';
 
+// ═══════════════════════════════════════════════════════════════════════════
+// Responsive hook for screen width detection
+// ═══════════════════════════════════════════════════════════════════════════
+const WIDE_SCREEN_BREAKPOINT = 768; // px - screens wider than this use large card
+
+function useIsWideScreen(): boolean {
+    const [isWide, setIsWide] = useState(() => window.innerWidth > WIDE_SCREEN_BREAKPOINT);
+
+    useEffect(() => {
+        const handleResize = () => setIsWide(window.innerWidth > WIDE_SCREEN_BREAKPOINT);
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
+
+    return isWide;
+}
+
 type Welcome1Props = {
     onNext: () => void;
     onSkip: () => void;
+    onOverlayOpenChange?: (open: boolean) => void;
 };
 
-export const Welcome1: React.FC<Welcome1Props> = ({ onNext, onSkip }) => {
+export const Welcome1: React.FC<Welcome1Props> = ({ onNext, onSkip, onOverlayOpenChange }) => {
     void onSkip;
     const { enterFullscreen, isFullscreen } = useFullscreen();
+    const isWideScreen = useIsWideScreen();
 
     const SUBTITLE_TEXT = 'Antarmuka Pengetahuan Dua Dimensi';
     const CURSOR_DELAY_MS = 500;
@@ -20,6 +39,10 @@ export const Welcome1: React.FC<Welcome1Props> = ({ onNext, onSkip }) => {
         SHOW_WELCOME1_FULLSCREEN_PROMPT && !isFullscreen
     );
     const [showCursor, setShowCursor] = React.useState(false);
+
+    // Responsive card width
+    const cardBaseWidth = isWideScreen ? 180 * 3 : 180;
+    const cardStyle = useMemo(() => getCardStyle(cardBaseWidth), [cardBaseWidth]);
 
     useEffect(() => {
         if (!hasFullscreenDecision) return;
@@ -49,6 +72,16 @@ export const Welcome1: React.FC<Welcome1Props> = ({ onNext, onSkip }) => {
 
         return () => clearTimeout(timer);
     }, []);
+
+    useEffect(() => {
+        onOverlayOpenChange?.(SHOW_WELCOME1_FULLSCREEN_PROMPT && isFullscreenPromptOpen);
+    }, [isFullscreenPromptOpen, onOverlayOpenChange]);
+
+    useEffect(() => {
+        return () => {
+            onOverlayOpenChange?.(false);
+        };
+    }, [onOverlayOpenChange]);
 
     const handleActivateFullscreen = React.useCallback(() => {
         enterFullscreen()
@@ -90,7 +123,7 @@ export const Welcome1: React.FC<Welcome1Props> = ({ onNext, onSkip }) => {
             </div>
             {SHOW_WELCOME1_FULLSCREEN_PROMPT && isFullscreenPromptOpen ? (
                 <div style={FULLSCREEN_PROMPT_BACKDROP_STYLE} onPointerDown={(e) => e.stopPropagation()}>
-                    <div style={FULLSCREEN_PROMPT_CARD_STYLE} onPointerDown={(e) => e.stopPropagation()}>
+                    <div style={cardStyle} onPointerDown={(e) => e.stopPropagation()}>
                         <div style={FULLSCREEN_PROMPT_TITLE_STYLE}>Activate interface in full-screen mode?</div>
                         <div style={FULLSCREEN_PROMPT_TEXT_STYLE}>
                             Full-screen keeps the onboarding view stable and immersive.
@@ -173,76 +206,97 @@ const CURSOR_STYLE: React.CSSProperties = {
 };
 
 const FULLSCREEN_PROMPT_BACKDROP_STYLE: React.CSSProperties = {
-    position: 'absolute',
+    position: 'fixed',
     inset: 0,
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
     background: 'rgba(3, 4, 8, 0.58)',
-    zIndex: 20,
+    zIndex: 3000,
+    pointerEvents: 'auto',
 };
 
-const FULLSCREEN_PROMPT_BASE_FONT_SIZE_PX = 14;
-const FULLSCREEN_PROMPT_UNIFIED_FONT_SIZE_PX = FULLSCREEN_PROMPT_BASE_FONT_SIZE_PX * 1.2;
-const FULLSCREEN_PROMPT_BUTTON_FONT_SIZE_PX = FULLSCREEN_PROMPT_UNIFIED_FONT_SIZE_PX * 0.9;
-const FULLSCREEN_PROMPT_CARD_PADDING_PX = 24;
-const FULLSCREEN_PROMPT_BUTTON_TO_TEXT_GAP_PX = 14;
+// ═══════════════════════════════════════════════════════════════════════════
+// TUNING KNOBS - Adjust these to fine-tune the card appearance
+// ═══════════════════════════════════════════════════════════════════════════
+const CARD_SCALE = 1.2;           // Scale entire card (1.0 = base size)
+const CONTENT_SCALE = 0.9;        // Scale inner elements (1.0 = normal, 0.8 = 20% smaller)
+const CARD_PADDING_H = 35;        // Horizontal padding in px (left/right)
+const CARD_PADDING_V = 72;        // Vertical padding in px (top/bottom)
+// CARD_BASE_WIDTH is now responsive: 540 on wide screens, 180 on narrow (set in component)
+const CARD_RADIUS = 12;           // Card corner radius in px
+const BUTTON_RADIUS = 8;          // Button corner radius in px
+const BUTTON_PADDING_V = 9;       // Button vertical padding in px
+const BUTTON_PADDING_H = 20;      // Button horizontal padding in px
+const BUTTON_FONT_SIZE = 12;      // Button font size in px
+// --- Spacing tuning ---
+const TITLE_DESC_GAP = 12;        // Gap between title and description in px
+const BUTTON_GAP = 16;            // Gap between buttons in px
+// ═══════════════════════════════════════════════════════════════════════════
 
-const FULLSCREEN_PROMPT_CARD_STYLE: React.CSSProperties = {
-    width: 'min(560px, calc(100vw - 48px))',
-    background: '#06060A',
-    border: '1px solid rgba(120, 145, 189, 0.34)',
-    borderRadius: '14px',
-    padding: `${FULLSCREEN_PROMPT_CARD_PADDING_PX}px`,
-    boxShadow: '0 18px 52px rgba(0, 0, 0, 0.62), inset 0 0 0 1px rgba(99, 171, 255, 0.08)',
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    gap: '12px',
-    color: '#ffffff',
-    textAlign: 'center',
-    fontFamily: 'var(--font-ui)',
-};
+function getCardStyle(cardBaseWidth: number): React.CSSProperties {
+    return {
+        width: `min(${cardBaseWidth * CARD_SCALE}px, calc(100vw - 48px))`,
+        background: '#06060A',
+        border: '1px solid rgba(255, 255, 255, 0.08)',
+        borderRadius: `${CARD_RADIUS * CARD_SCALE}px`,
+        padding: `${CARD_PADDING_V * CARD_SCALE}px ${CARD_PADDING_H * CARD_SCALE}px`,
+        boxShadow: '0 24px 64px rgba(0, 0, 0, 0.7)',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        color: '#ffffff',
+        textAlign: 'center',
+        fontFamily: 'var(--font-ui)',
+    };
+}
 
 const FULLSCREEN_PROMPT_TITLE_STYLE: React.CSSProperties = {
-    fontSize: `${FULLSCREEN_PROMPT_UNIFIED_FONT_SIZE_PX}px`,
-    fontWeight: 500,
+    fontSize: `${15 * CARD_SCALE * CONTENT_SCALE}px`,
+    fontWeight: 600,
+    letterSpacing: `${0.5 * CARD_SCALE * CONTENT_SCALE}px`,
     lineHeight: 1.45,
-    color: '#ffffff',
+    color: '#e7e7e7',
 };
 
 const FULLSCREEN_PROMPT_TEXT_STYLE: React.CSSProperties = {
-    fontSize: `${FULLSCREEN_PROMPT_UNIFIED_FONT_SIZE_PX}px`,
+    fontSize: `${13 * CARD_SCALE * CONTENT_SCALE}px`,
     lineHeight: 1.55,
-    color: '#ffffff',
+    marginTop: `${TITLE_DESC_GAP * CARD_SCALE * CONTENT_SCALE}px`,
+    color: 'rgba(255, 255, 255, 0.55)',
 };
 
 const FULLSCREEN_PROMPT_BUTTON_ROW_STYLE: React.CSSProperties = {
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
-    gap: '10px',
-    marginTop: `${FULLSCREEN_PROMPT_BUTTON_TO_TEXT_GAP_PX}px`,
+    gap: `${BUTTON_GAP * CARD_SCALE * CONTENT_SCALE}px`,
+    marginTop: 'auto',
+    paddingTop: `${24 * CARD_SCALE * CONTENT_SCALE}px`,
+    width: '100%',
 };
 
 const FULLSCREEN_PROMPT_PRIMARY_BUTTON_STYLE: React.CSSProperties = {
-    padding: '10px 16px',
-    borderRadius: '9px',
-    border: '1px solid rgba(109, 166, 255, 0.58)',
-    background: 'rgba(29, 64, 124, 0.55)',
+    width: '100%',
+    padding: `${BUTTON_PADDING_V * CARD_SCALE * CONTENT_SCALE}px ${BUTTON_PADDING_H * CARD_SCALE * CONTENT_SCALE}px`,
+    borderRadius: `${BUTTON_RADIUS * CARD_SCALE * CONTENT_SCALE}px`,
+    border: '1px solid #63acffff',
+    background: 'transparent',
     color: '#ffffff',
-    fontSize: `${FULLSCREEN_PROMPT_BUTTON_FONT_SIZE_PX}px`,
+    fontSize: `${BUTTON_FONT_SIZE * CARD_SCALE * CONTENT_SCALE}px`,
     fontFamily: 'var(--font-ui)',
     cursor: 'pointer',
 };
 
 const FULLSCREEN_PROMPT_SECONDARY_BUTTON_STYLE: React.CSSProperties = {
-    padding: '10px 16px',
-    borderRadius: '9px',
-    border: '1px solid rgba(122, 137, 170, 0.44)',
-    background: 'rgba(21, 28, 45, 0.55)',
-    color: '#ffffff',
-    fontSize: `${FULLSCREEN_PROMPT_BUTTON_FONT_SIZE_PX}px`,
+    width: '100%',
+    padding: `${BUTTON_PADDING_V * CARD_SCALE * CONTENT_SCALE}px ${BUTTON_PADDING_H * CARD_SCALE * CONTENT_SCALE}px`,
+    borderRadius: `${BUTTON_RADIUS * CARD_SCALE * CONTENT_SCALE}px`,
+    border: '1px solid rgba(255, 255, 255, 0.1)',
+    background: 'transparent',
+    color: 'rgba(255, 255, 255, 0.7)',
+    fontSize: `${BUTTON_FONT_SIZE * CARD_SCALE * CONTENT_SCALE}px`,
     fontFamily: 'var(--font-ui)',
     cursor: 'pointer',
 };

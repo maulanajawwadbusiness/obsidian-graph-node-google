@@ -36,10 +36,13 @@ function getInitialScreen(): Screen {
 
 export const AppShell: React.FC = () => {
     const [screen, setScreen] = React.useState<Screen>(() => getInitialScreen());
+    const [welcome1OverlayOpen, setWelcome1OverlayOpen] = React.useState(false);
+    const [enterPromptOverlayOpen, setEnterPromptOverlayOpen] = React.useState(false);
     const { isFullscreen } = useFullscreen();
     const showMoneyUi = screen === 'prompt' || screen === 'graph';
     const showOnboardingFullscreenButton = screen === 'welcome1' || screen === 'welcome2' || screen === 'prompt';
     const onboardingActive = screen === 'welcome1' || screen === 'welcome2' || screen === 'prompt';
+    const isOnboardingOverlayOpen = welcome1OverlayOpen || enterPromptOverlayOpen;
 
     const moneyUi = showMoneyUi ? (
         <>
@@ -50,7 +53,10 @@ export const AppShell: React.FC = () => {
     ) : null;
 
     const onboardingFullscreenButton = showOnboardingFullscreenButton ? (
-        <FullscreenButton style={ONBOARDING_FULLSCREEN_BUTTON_STYLE} />
+        <FullscreenButton
+            style={ONBOARDING_FULLSCREEN_BUTTON_STYLE}
+            blocked={isOnboardingOverlayOpen}
+        />
     ) : null;
 
     React.useEffect(() => {
@@ -115,6 +121,7 @@ export const AppShell: React.FC = () => {
                 <Welcome1
                     onNext={() => setScreen('welcome2')}
                     onSkip={() => setScreen('graph')}
+                    onOverlayOpenChange={setWelcome1OverlayOpen}
                 />
                 {onboardingFullscreenButton}
                 {moneyUi}
@@ -142,6 +149,7 @@ export const AppShell: React.FC = () => {
                 onBack={() => setScreen('welcome2')}
                 onEnter={() => setScreen('graph')}
                 onSkip={() => setScreen('graph')}
+                onOverlayOpenChange={setEnterPromptOverlayOpen}
             />
             {onboardingFullscreenButton}
             {moneyUi}
@@ -169,5 +177,5 @@ const ONBOARDING_FULLSCREEN_BUTTON_STYLE: React.CSSProperties = {
     position: 'fixed',
     top: '24px',
     right: '24px',
-    zIndex: 2100
+    zIndex: 1200
 };

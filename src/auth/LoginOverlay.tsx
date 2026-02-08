@@ -95,8 +95,6 @@ export const LoginOverlay: React.FC<LoginOverlayProps> = ({
                     <button
                         type="button"
                         style={PRIMARY_BUTTON_STYLE}
-                        onClick={onContinue}
-                        disabled
                         aria-disabled={true}
                         tabIndex={-1}
                     >
@@ -143,7 +141,7 @@ const CARD_STYLE: React.CSSProperties = {
 };
 
 const TITLE_STYLE: React.CSSProperties = {
-    fontSize: '22px',
+    fontSize: '20px',
     fontWeight: 700,
 };
 
@@ -198,6 +196,8 @@ const BUTTON_ROW_STYLE: React.CSSProperties = {
     justifyContent: 'center',
     gap: '10px',
     flexWrap: 'wrap',
+    marginTop: '6px',
+    marginBottom: '6px',
 };
 
 const PRIMARY_BUTTON_STYLE: React.CSSProperties = {
@@ -205,10 +205,10 @@ const PRIMARY_BUTTON_STYLE: React.CSSProperties = {
     borderRadius: '8px',
     border: '1px solid rgba(255, 255, 255, 0.12)',
     background: '#06060A',
-    color: 'rgba(242, 242, 242, 0.46)',
-    cursor: 'default',
-    opacity: 0.7,
-    pointerEvents: 'none',
+    color: '#f2f2f2',
+    cursor: 'pointer',
+    opacity: 1,
+    pointerEvents: 'auto',
     fontSize: '14px',
 };
 

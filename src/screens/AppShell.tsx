@@ -18,6 +18,7 @@ type Screen = 'welcome1' | 'welcome2' | 'prompt' | 'graph';
 const STORAGE_KEY = 'arnvoid_screen';
 const PERSIST_SCREEN = false;
 const DEBUG_ONBOARDING_SCROLL_GUARD = false;
+const WELCOME1_FONT_TIMEOUT_MS = 1500;
 
 function getInitialScreen(): Screen {
     if (!ONBOARDING_ENABLED) return 'graph';
@@ -34,6 +35,7 @@ export const AppShell: React.FC = () => {
     const [screen, setScreen] = React.useState<Screen>(() => getInitialScreen());
     const [welcome1OverlayOpen, setWelcome1OverlayOpen] = React.useState(false);
     const [enterPromptOverlayOpen, setEnterPromptOverlayOpen] = React.useState(false);
+    const [welcome1FontGateDone, setWelcome1FontGateDone] = React.useState(false);
     const showMoneyUi = screen === 'prompt' || screen === 'graph';
     const showOnboardingFullscreenButton = screen === 'welcome1' || screen === 'welcome2' || screen === 'prompt';
     const onboardingActive = screen === 'welcome1' || screen === 'welcome2' || screen === 'prompt';
@@ -77,6 +79,65 @@ export const AppShell: React.FC = () => {
         };
     }, [onboardingActive]);
 
+    React.useEffect(() => {
+        if (screen !== 'welcome1') return;
+        if (welcome1FontGateDone) return;
+        const startMs = performance.now();
+        const shouldLog = import.meta.env.DEV;
+        if (shouldLog) {
+            console.log('[OnboardingFont] font_check_start');
+        }
+
+        let settled = false;
+        let disposed = false;
+        let timeoutId: number | null = null;
+
+        const settle = (timedOut: boolean) => {
+            if (settled || disposed) return;
+            settled = true;
+            if (timeoutId !== null) {
+                window.clearTimeout(timeoutId);
+            }
+
+            if (shouldLog) {
+                const elapsedMs = Math.round(performance.now() - startMs);
+                if (timedOut) {
+                    console.log('[OnboardingFont] font_timeout_ms=1500 proceed');
+                } else {
+                    console.log('[OnboardingFont] font_ready_ms=%d', elapsedMs);
+                }
+            }
+            setWelcome1FontGateDone(true);
+        };
+
+        if (typeof document === 'undefined' || !document.fonts || typeof document.fonts.load !== 'function') {
+            settle(false);
+            return () => {
+                disposed = true;
+            };
+        }
+
+        timeoutId = window.setTimeout(() => {
+            settle(true);
+        }, WELCOME1_FONT_TIMEOUT_MS);
+
+        void document.fonts
+            .load('16px "Quicksand"')
+            .then(() => {
+                settle(false);
+            })
+            .catch(() => {
+                settle(true);
+            });
+
+        return () => {
+            disposed = true;
+            if (timeoutId !== null) {
+                window.clearTimeout(timeoutId);
+            }
+        };
+    }, [screen, welcome1FontGateDone]);
+
     if (screen === 'graph') {
         return (
             <div style={SHELL_STYLE}>
@@ -89,6 +150,9 @@ export const AppShell: React.FC = () => {
     }
 
     if (screen === 'welcome1') {
+        if (!welcome1FontGateDone) {
+            return <div style={WELCOME1_FONT_GATE_BLANK_STYLE} />;
+        }
         return (
             <div style={SHELL_STYLE}>
                 <Welcome1
@@ -151,4 +215,10 @@ const ONBOARDING_FULLSCREEN_BUTTON_STYLE: React.CSSProperties = {
     top: '24px',
     right: '24px',
     zIndex: 1200
+};
+
+const WELCOME1_FONT_GATE_BLANK_STYLE: React.CSSProperties = {
+    minHeight: '100vh',
+    width: '100%',
+    background: '#06060A',
 };

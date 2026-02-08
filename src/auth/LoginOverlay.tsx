@@ -17,7 +17,7 @@ type LoginOverlayProps = {
 
 export const LoginOverlay: React.FC<LoginOverlayProps> = ({
     open,
-    onContinue,
+    onContinue: _onContinue,
     onBack,
     onSkip,
     onHide,

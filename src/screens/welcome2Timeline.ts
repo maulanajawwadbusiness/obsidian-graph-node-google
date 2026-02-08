@@ -44,7 +44,7 @@ type WordSpan = {
 
 type EmphasisAnalysis = {
     wordEndIsHeavyByIndex: Map<number, boolean>;
-    landingAnchorIndices: Set<number>;
+    landingTailByPunctuationIndex: Map<number, number[]>;
     heavyMatches: WordSpan[];
 };
 
@@ -81,12 +81,12 @@ function analyzeEmphasis(
     semantic: CadenceConfig['semantic'] | undefined
 ): EmphasisAnalysis {
     const wordEndIsHeavyByIndex = new Map<number, boolean>();
-    const landingAnchorIndices = new Set<number>();
+    const landingTailByPunctuationIndex = new Map<number, number[]>();
     const heavyMatches: WordSpan[] = [];
     if (!semantic) {
         return {
             wordEndIsHeavyByIndex,
-            landingAnchorIndices,
+            landingTailByPunctuationIndex,
             heavyMatches,
         };
     }
@@ -129,24 +129,58 @@ function analyzeEmphasis(
 
             let cursor = i - 1;
             let landingRank = 0;
+            const indices: number[] = [];
             while (cursor >= 0 && landingRank < landingTailChars) {
                 const candidate = renderText[cursor];
                 if (candidate !== ' ' && candidate !== '\n') {
-                    if (landingRank === 0) {
-                        landingAnchorIndices.add(cursor);
-                    }
+                    indices.push(cursor);
                     landingRank += 1;
                 }
                 cursor -= 1;
+            }
+            if (indices.length > 0) {
+                landingTailByPunctuationIndex.set(i, indices);
             }
         }
     }
 
     return {
         wordEndIsHeavyByIndex,
-        landingAnchorIndices,
+        landingTailByPunctuationIndex,
         heavyMatches,
     };
+}
+
+function distributePause(totalMs: number, ratios: number[]): number[] {
+    const clampedTotal = clampMs(totalMs);
+    if (clampedTotal <= 0 || ratios.length === 0) {
+        return ratios.map(() => 0);
+    }
+
+    const normalizedRatios = ratios.map((value) => Math.max(0, value));
+    const ratioSum = normalizedRatios.reduce((acc, value) => acc + value, 0);
+    if (ratioSum <= 0) {
+        const even = Math.floor(clampedTotal / ratios.length);
+        const out = ratios.map(() => even);
+        out[ratios.length - 1] += clampedTotal - even * ratios.length;
+        return out;
+    }
+
+    const raw = normalizedRatios.map((value) => (clampedTotal * value) / ratioSum);
+    const floored = raw.map((value) => Math.floor(value));
+    let remainder = clampedTotal - floored.reduce((acc, value) => acc + value, 0);
+
+    const priority = raw
+        .map((value, idx) => ({ idx, frac: value - floored[idx] }))
+        .sort((a, b) => b.frac - a.frac);
+    let cursor = 0;
+    while (remainder > 0 && priority.length > 0) {
+        floored[priority[cursor].idx] += 1;
+        remainder -= 1;
+        cursor = (cursor + 1) % priority.length;
+    }
+
+    return floored;
 }
 
 function isDebugCadenceEnabled(): boolean {
@@ -301,7 +335,62 @@ export function buildWelcome2Timeline(rawText: string, cadence: CadenceConfig = 
     const emphasis = analyzeEmphasis(renderText, tunedCadence.semantic);
     const events: TimelineEvent[] = [];
     const charDeltaByIndex: number[] = new Array(renderChars.length).fill(0);
+    const semanticPauseByIndex: number[] = new Array(renderChars.length).fill(0);
     let currentTimeMs = 0;
+
+    if (tunedCadence.semantic) {
+        const semantic = tunedCadence.semantic;
+
+        for (let i = 0; i < renderChars.length; i += 1) {
+            const char = renderChars[i];
+            if (!isWordChar(char)) continue;
+            const isWordEnd = i + 1 >= renderChars.length || !isWordChar(renderChars[i + 1]);
+            if (!isWordEnd) continue;
+
+            const prevIndex = i - 1;
+            const prevIsWordChar = prevIndex >= 0 && isWordChar(renderChars[prevIndex]);
+            const wordEndPause = clampMs(semantic.wordEndPauseMs);
+            if (prevIsWordChar) {
+                const [prevShare, endShare] = distributePause(wordEndPause, [0.15, 0.85]);
+                semanticPauseByIndex[prevIndex] += prevShare;
+                semanticPauseByIndex[i] += endShare;
+            } else {
+                semanticPauseByIndex[i] += wordEndPause;
+            }
+
+            if (emphasis.wordEndIsHeavyByIndex.get(i)) {
+                const heavyPause = clampMs(semantic.heavyWordEndExtraPauseMs);
+                if (prevIsWordChar) {
+                    const [prevShare, endShare] = distributePause(heavyPause, [0.15, 0.85]);
+                    semanticPauseByIndex[prevIndex] += prevShare;
+                    semanticPauseByIndex[i] += endShare;
+                } else {
+                    semanticPauseByIndex[i] += heavyPause;
+                }
+            }
+        }
+
+        const landingPause = clampMs(semantic.sentenceLandingExtraPauseMs);
+        if (landingPause > 0) {
+            for (const indices of emphasis.landingTailByPunctuationIndex.values()) {
+                if (indices.length === 0) continue;
+                if (indices.length >= 3) {
+                    const [farShare, midShare, nearShare] = distributePause(landingPause, [0.2, 0.3, 0.5]);
+                    semanticPauseByIndex[indices[2]] += farShare;
+                    semanticPauseByIndex[indices[1]] += midShare;
+                    semanticPauseByIndex[indices[0]] += nearShare;
+                    continue;
+                }
+                if (indices.length === 2) {
+                    const [farShare, nearShare] = distributePause(landingPause, [0.4, 0.6]);
+                    semanticPauseByIndex[indices[1]] += farShare;
+                    semanticPauseByIndex[indices[0]] += nearShare;
+                    continue;
+                }
+                semanticPauseByIndex[indices[0]] += landingPause;
+            }
+        }
+    }
 
     for (let i = 0; i < renderChars.length; i += 1) {
         const char = renderChars[i];
@@ -389,19 +478,7 @@ export function buildWelcome2Timeline(rawText: string, cadence: CadenceConfig = 
             pauseAfterMs: 0,
         };
         let semanticPauseAfterMs = 0;
-        const semantic = tunedCadence.semantic;
-        if (semantic) {
-            const isWordEnd = isWordChar(char) && (i + 1 >= renderChars.length || !isWordChar(renderChars[i + 1]));
-            if (isWordEnd) {
-                semanticPauseAfterMs += clampMs(semantic.wordEndPauseMs);
-                if (emphasis.wordEndIsHeavyByIndex.get(i)) {
-                    semanticPauseAfterMs += clampMs(semantic.heavyWordEndExtraPauseMs);
-                }
-            }
-            if (emphasis.landingAnchorIndices.has(i)) {
-                semanticPauseAfterMs += clampMs(semantic.sentenceLandingExtraPauseMs);
-            }
-        }
+        semanticPauseAfterMs += semanticPauseByIndex[i] ?? 0;
         event.pauseAfterMs = clampMs(pause.pauseAfterMs + semanticPauseAfterMs);
         events.push(event);
 

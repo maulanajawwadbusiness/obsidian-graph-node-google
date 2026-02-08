@@ -93,7 +93,9 @@ export const LoginOverlay: React.FC<LoginOverlayProps> = ({
                         type="button"
                         style={PRIMARY_BUTTON_STYLE}
                         onClick={onContinue}
-                        disabled={!user}
+                        disabled
+                        aria-disabled={true}
+                        tabIndex={-1}
                     >
                         Continue
                     </button>
@@ -126,7 +128,7 @@ const BACKDROP_STYLE: React.CSSProperties = {
 const CARD_STYLE: React.CSSProperties = {
     width: '100%',
     maxWidth: '420px',
-    background: '#0f1115',
+    background: '#06060A',
     border: '1px solid #242a36',
     borderRadius: '12px',
     padding: '24px',
@@ -198,10 +200,12 @@ const BUTTON_ROW_STYLE: React.CSSProperties = {
 const PRIMARY_BUTTON_STYLE: React.CSSProperties = {
     padding: '10px 16px',
     borderRadius: '8px',
-    border: '1px solid #2b2f3a',
-    background: '#1f2430',
-    color: '#f2f2f2',
-    cursor: 'pointer',
+    border: '1px solid rgba(255, 255, 255, 0.12)',
+    background: '#06060A',
+    color: 'rgba(242, 242, 242, 0.46)',
+    cursor: 'default',
+    opacity: 0.7,
+    pointerEvents: 'none',
     fontSize: '14px',
 };
 

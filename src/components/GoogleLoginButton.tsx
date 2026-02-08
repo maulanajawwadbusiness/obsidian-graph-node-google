@@ -3,6 +3,8 @@ import { GoogleLogin } from "@react-oauth/google";
 import { useAuth } from "../auth/AuthProvider";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL;
+const SHOW_LOGIN_DEBUG_ERRORS =
+  import.meta.env.VITE_SHOW_LOGIN_DEBUG_ERRORS === "1" || !import.meta.env.DEV;
 
 export function GoogleLoginButton() {
   const [status, setStatus] = useState<string>("");
@@ -93,7 +95,7 @@ export function GoogleLoginButton() {
         </div>
       ) : null}
 
-      {status ? (
+      {SHOW_LOGIN_DEBUG_ERRORS && status ? (
         <div style={{ whiteSpace: "pre-wrap", fontFamily: "monospace" }}>
           {status}
         </div>

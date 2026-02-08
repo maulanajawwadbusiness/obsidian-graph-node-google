@@ -10,7 +10,7 @@ type TypingCursorProps = {
 };
 
 function getAnimationByMode(mode: TypingCursorMode): string {
-    if (mode === 'typing') return 'cursorNeedleTyping 2.2s ease-in-out infinite';
+    if (mode === 'typing') return 'none';
     if (mode === 'pause') return 'cursorNeedlePause 1.05s step-end infinite';
     if (mode === 'holdFast') return 'cursorNeedleHoldFast 0.34s step-end infinite';
     return 'cursorNeedleNormal 0.85s step-end infinite';

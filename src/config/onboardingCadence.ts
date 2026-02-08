@@ -9,6 +9,14 @@ export type CadenceConfig = {
     markerPauseDefaultMs: number;
     endHoldMs: number;
     speedMultiplier: number;
+    semantic?: {
+        heavyWords: string[];
+        heavyWordMinLength: number;
+        heavyWordTailChars: number;
+        heavyWordMaxMultiplier: number;
+        landingTailChars: number;
+        landingMaxMultiplier: number;
+    };
 };
 
 export type CadencePresetName = 'fast' | 'normal' | 'slow';
@@ -28,13 +36,35 @@ function scaleCadence(
         markerPauseDefaultMs: Math.max(0, Math.round(cfg.markerPauseDefaultMs * factor)),
         endHoldMs: Math.max(0, Math.round(cfg.endHoldMs * factor)),
         speedMultiplier: 1.0,
+        semantic: cfg.semantic
+            ? {
+                ...cfg.semantic,
+                heavyWords: [...cfg.semantic.heavyWords],
+            }
+            : undefined,
     };
 }
+
+const NORMAL_SEMANTIC_CADENCE: NonNullable<CadenceConfig['semantic']> = {
+    heavyWords: [
+        'intuitive',
+        'knowledge',
+        'process',
+        'information',
+        'intuitively',
+        'medium',
+    ],
+    heavyWordMinLength: 8,
+    heavyWordTailChars: 3,
+    heavyWordMaxMultiplier: 1.5,
+    landingTailChars: 3,
+    landingMaxMultiplier: 1.4,
+};
 
 const NORMAL_CADENCE: CadenceConfig = {
     baseCharMs: 42,
     spaceMs: 14,
-    commaPauseMs: 220,
+    commaPauseMs: 220*2,
     periodPauseMs: 480,
     questionPauseMs: 520,
     newlinePauseMs: 420,
@@ -42,6 +72,7 @@ const NORMAL_CADENCE: CadenceConfig = {
     markerPauseDefaultMs: 450,
     endHoldMs: 900,
     speedMultiplier: 1.0,
+    semantic: NORMAL_SEMANTIC_CADENCE,
 };
 
 export const CADENCE_PRESETS: Record<CadencePresetName, CadenceConfig> = {
@@ -77,5 +108,11 @@ export function applySpeed(cfg: CadenceConfig, multiplier: number): CadenceConfi
         markerPauseDefaultMs: scaleMs(cfg.markerPauseDefaultMs, resolvedMultiplier),
         endHoldMs: scaleMs(cfg.endHoldMs, resolvedMultiplier),
         speedMultiplier: resolvedMultiplier,
+        semantic: cfg.semantic
+            ? {
+                ...cfg.semantic,
+                heavyWords: [...cfg.semantic.heavyWords],
+            }
+            : undefined,
     };
 }

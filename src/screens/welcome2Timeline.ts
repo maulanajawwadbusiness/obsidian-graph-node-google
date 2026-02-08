@@ -35,6 +35,11 @@ type MarkerParse = {
     malformed: boolean;
 };
 
+type EmphasisMeta = {
+    heavyDistanceFromEnd?: number;
+    landingRank?: number;
+};
+
 const DEBUG_WELCOME2_TIMELINE = false;
 const NEWLINE_POST_MIN_MS = 40;
 const NEWLINE_POST_MAX_FRACTION = 0.2;
@@ -56,6 +61,123 @@ function splitNewlinePause(newlinePauseMs: number): { preWaitMs: number; postWai
         preWaitMs,
         postWaitMs,
     };
+}
+
+function isWordChar(char: string): boolean {
+    return /[A-Za-z0-9]/.test(char);
+}
+
+function mergeEmphasisMeta(result: Map<number, EmphasisMeta>, index: number, next: EmphasisMeta): void {
+    const prev = result.get(index);
+    if (!prev) {
+        result.set(index, next);
+        return;
+    }
+
+    const merged: EmphasisMeta = {
+        heavyDistanceFromEnd: prev.heavyDistanceFromEnd,
+        landingRank: prev.landingRank,
+    };
+
+    if (typeof next.heavyDistanceFromEnd === 'number') {
+        if (
+            typeof merged.heavyDistanceFromEnd !== 'number' ||
+            next.heavyDistanceFromEnd < merged.heavyDistanceFromEnd
+        ) {
+            merged.heavyDistanceFromEnd = next.heavyDistanceFromEnd;
+        }
+    }
+
+    if (typeof next.landingRank === 'number') {
+        if (typeof merged.landingRank !== 'number' || next.landingRank < merged.landingRank) {
+            merged.landingRank = next.landingRank;
+        }
+    }
+
+    result.set(index, merged);
+}
+
+function analyzeEmphasis(
+    renderText: string,
+    semantic: CadenceConfig['semantic'] | undefined
+): Map<number, EmphasisMeta> {
+    const result = new Map<number, EmphasisMeta>();
+    if (!semantic) return result;
+
+    const heavyWordTailChars = Math.max(0, Math.floor(semantic.heavyWordTailChars));
+    const landingTailChars = Math.max(0, Math.floor(semantic.landingTailChars));
+    const heavyWordMinLength = Math.max(1, Math.floor(semantic.heavyWordMinLength));
+    const heavySet = new Set((semantic.heavyWords ?? []).map((word) => word.toLowerCase()));
+
+    let wordStart = -1;
+    for (let i = 0; i <= renderText.length; i += 1) {
+        const char = i < renderText.length ? renderText[i] : '';
+        if (i < renderText.length && isWordChar(char)) {
+            if (wordStart < 0) wordStart = i;
+            continue;
+        }
+
+        if (wordStart >= 0) {
+            const wordEnd = i - 1;
+            const wordLength = wordEnd - wordStart + 1;
+            const wordLower = renderText.slice(wordStart, wordEnd + 1).toLowerCase();
+            const isHeavy = wordLength >= heavyWordMinLength || heavySet.has(wordLower);
+            if (isHeavy && heavyWordTailChars > 0) {
+                const tailCount = Math.min(heavyWordTailChars, wordLength);
+                for (let distance = 0; distance < tailCount; distance += 1) {
+                    const index = wordEnd - distance;
+                    mergeEmphasisMeta(result, index, { heavyDistanceFromEnd: distance });
+                }
+            }
+            wordStart = -1;
+        }
+    }
+
+    if (landingTailChars > 0) {
+        for (let i = 0; i < renderText.length; i += 1) {
+            const char = renderText[i];
+            if (char !== '.' && char !== '?') continue;
+
+            let cursor = i - 1;
+            let landingRank = 0;
+            while (cursor >= 0 && landingRank < landingTailChars) {
+                const candidate = renderText[cursor];
+                if (candidate !== ' ' && candidate !== '\n') {
+                    mergeEmphasisMeta(result, cursor, { landingRank });
+                    landingRank += 1;
+                }
+                cursor -= 1;
+            }
+        }
+    }
+
+    return result;
+}
+
+function getSemanticMultiplier(
+    meta: EmphasisMeta | undefined,
+    semantic: CadenceConfig['semantic'] | undefined
+): number {
+    if (!meta || !semantic) return 1.0;
+
+    let multiplier = 1.0;
+
+    if (typeof meta.heavyDistanceFromEnd === 'number') {
+        if (meta.heavyDistanceFromEnd === 0) multiplier *= 1.5;
+        else if (meta.heavyDistanceFromEnd === 1) multiplier *= 1.3;
+        else if (meta.heavyDistanceFromEnd === 2) multiplier *= 1.15;
+    }
+
+    if (typeof meta.landingRank === 'number') {
+        if (meta.landingRank === 0) multiplier *= 1.4;
+        else if (meta.landingRank === 1) multiplier *= 1.2;
+        else if (meta.landingRank === 2) multiplier *= 1.1;
+    }
+
+    const maxHeavy = semantic.heavyWordMaxMultiplier || 1.5;
+    const maxLanding = semantic.landingMaxMultiplier || 1.4;
+    const globalMax = Math.min(maxHeavy * maxLanding, 1.9);
+    return Math.min(multiplier, globalMax);
 }
 
 function parsePauseMarkerAt(rawText: string, startIndex: number, fallbackMs: number): MarkerParse | null {
@@ -201,6 +323,7 @@ export function buildWelcome2Timeline(rawText: string, cadence: CadenceConfig = 
     }
 
     const renderText = renderChars.join('');
+    const emphasisByCharIndex = analyzeEmphasis(renderText, tunedCadence.semantic);
     const events: TimelineEvent[] = [];
     let currentTimeMs = 0;
 
@@ -284,7 +407,13 @@ export function buildWelcome2Timeline(rawText: string, cadence: CadenceConfig = 
         };
         events.push(event);
 
-        currentTimeMs += getCostBetweenChars(charClass, tunedCadence);
+        let charDelayMs = getCostBetweenChars(charClass, tunedCadence);
+        if (charClass === 'letter' || charClass === 'digit') {
+            const semanticMultiplier = getSemanticMultiplier(emphasisByCharIndex.get(i), tunedCadence.semantic);
+            charDelayMs = clampMs(charDelayMs * semanticMultiplier);
+        }
+
+        currentTimeMs += charDelayMs;
         currentTimeMs += event.pauseAfterMs;
         currentTimeMs = clampMs(currentTimeMs);
     }

@@ -5,4 +5,4 @@ We have been reading text for more than 50 years.
 If we want to process information intuitively, i think we need to create a new form of information medium for ourselves.
 One that fit our mind well. One that fit natural nerve in our thought.{p=900}
 
-I think it is time for us to think differently.`;
+I think it is time for us to think a different medium for ourselves.`;

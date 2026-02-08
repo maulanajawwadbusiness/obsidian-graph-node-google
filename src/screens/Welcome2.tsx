@@ -128,7 +128,7 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
                     style={TEXT_STYLE}
                 >
                     <span>{visibleText}</span>
-                    <TypingCursor mode={cursorMode} heightEm={1.8} style={CURSOR_STYLE} />
+                    <TypingCursor mode={cursorMode} heightEm={0.95} style={CURSOR_STYLE} />
                 </div>
 
                 <div style={BUTTON_ROW_STYLE}>

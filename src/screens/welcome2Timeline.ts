@@ -120,7 +120,6 @@ function getCostBetweenChars(charClass: TimelineCharClass, cadence: CadenceConfi
 function getPauseForChar(
     char: string,
     charIndex: number,
-    renderChars: string[],
     markerPauseByCharIndex: Array<number | undefined>,
     cadence: CadenceConfig
 ): { pauseReason: PauseReason; pauseAfterMs: number } {
@@ -148,25 +147,32 @@ function getPauseForChar(
     return { pauseReason: 'base', pauseAfterMs: 0 };
 }
 
-function getParagraphExtraAfterSecondNewline(
-    charIndex: number,
+function findLastPrintableIndexBefore(renderChars: string[], index: number): number {
+    for (let i = index - 1; i >= 0; i -= 1) {
+        if (renderChars[i] !== '\n') {
+            return i;
+        }
+    }
+    return -1;
+}
+
+function getParagraphPauseAfterDoubleNewline(
+    firstNewlineIndex: number,
+    renderChars: string[],
     markerPauseByCharIndex: Array<number | undefined>,
     cadence: CadenceConfig
 ): { pauseReason: PauseReason; pauseAfterMs: number } {
-    const preParagraphIndex = charIndex - 2;
-    const markerPause = preParagraphIndex >= 0 ? markerPauseByCharIndex[preParagraphIndex] : undefined;
-    const paragraphPause = cadence.paragraphPauseMs;
+    const lastPrintableIndex = findLastPrintableIndexBefore(renderChars, firstNewlineIndex);
+    const markerPauseMs = lastPrintableIndex >= 0 ? (markerPauseByCharIndex[lastPrintableIndex] ?? 0) : 0;
+    const effectiveParagraphPauseMs = Math.max(markerPauseMs, cadence.paragraphPauseMs);
 
-    if (markerPause === undefined) {
-        return { pauseReason: 'paragraph', pauseAfterMs: paragraphPause };
-    }
-
-    // Marker before paragraph break owns the main breath; newline2 adds only the remainder.
-    const extra = Math.max(0, paragraphPause - markerPause);
-    if (extra <= 0) {
+    // Marker pause already happened on the prior printable char.
+    // Attach only the remainder after newline2 to avoid semantic double-stack.
+    const paragraphExtraAfterNewline2 = Math.max(0, effectiveParagraphPauseMs - markerPauseMs);
+    if (paragraphExtraAfterNewline2 <= 0) {
         return { pauseReason: 'lineBreak', pauseAfterMs: 0 };
     }
-    return { pauseReason: 'paragraph', pauseAfterMs: extra };
+    return { pauseReason: 'paragraph', pauseAfterMs: paragraphExtraAfterNewline2 };
 }
 
 export function buildWelcome2Timeline(rawText: string, cadence: CadenceConfig = DEFAULT_CADENCE): BuiltTimeline {
@@ -185,44 +191,73 @@ export function buildWelcome2Timeline(rawText: string, cadence: CadenceConfig = 
     for (let i = 0; i < renderChars.length; i += 1) {
         const char = renderChars[i];
         const charClass = classifyChar(char);
-        let pauseReason: PauseReason = 'base';
-        let pauseAfterMs = 0;
 
         if (charClass === 'lineBreak') {
-            // Newline has pre-wait so line drop is costly and intentional.
-            currentTimeMs += tunedCadence.newlinePauseMs;
-            const isSecondNewline = i > 0 && renderChars[i - 1] === '\n';
-            if (isSecondNewline) {
-                const paragraphPause = getParagraphExtraAfterSecondNewline(
-                    i,
-                    markerPauseByCharIndex,
-                    tunedCadence
-                );
-                pauseReason = paragraphPause.pauseReason;
-                pauseAfterMs = paragraphPause.pauseAfterMs;
-            } else {
-                pauseReason = 'lineBreak';
-                pauseAfterMs = 0;
+            const hasSecondNewline = i + 1 < renderChars.length && renderChars[i + 1] === '\n';
+
+            if (!hasSecondNewline) {
+                // Single newline: wait before drop, then emit newline immediately.
+                currentTimeMs += tunedCadence.newlinePauseMs;
+                events.push({
+                    charIndex: i,
+                    tMs: clampMs(currentTimeMs),
+                    char: '\n',
+                    class: 'lineBreak',
+                    pauseReason: 'lineBreak',
+                    pauseAfterMs: 0,
+                });
+                currentTimeMs = clampMs(currentTimeMs);
+                continue;
             }
-        } else {
-            const pause = getPauseForChar(
-                char,
+
+            // Double newline cluster:
+            // wait -> newline1, wait -> newline2, then paragraph semantic hold.
+            currentTimeMs += tunedCadence.newlinePauseMs;
+            events.push({
+                charIndex: i,
+                tMs: clampMs(currentTimeMs),
+                char: '\n',
+                class: 'lineBreak',
+                pauseReason: 'lineBreak',
+                pauseAfterMs: 0,
+            });
+
+            currentTimeMs += tunedCadence.newlinePauseMs;
+            const paragraphPause = getParagraphPauseAfterDoubleNewline(
                 i,
                 renderChars,
                 markerPauseByCharIndex,
                 tunedCadence
             );
-            pauseReason = pause.pauseReason;
-            pauseAfterMs = pause.pauseAfterMs;
+            events.push({
+                charIndex: i + 1,
+                tMs: clampMs(currentTimeMs),
+                char: '\n',
+                class: 'lineBreak',
+                pauseReason: paragraphPause.pauseReason,
+                pauseAfterMs: clampMs(paragraphPause.pauseAfterMs),
+            });
+
+            currentTimeMs += paragraphPause.pauseAfterMs;
+            currentTimeMs = clampMs(currentTimeMs);
+            i += 1;
+            continue;
         }
+
+        const pause = getPauseForChar(
+            char,
+            i,
+            markerPauseByCharIndex,
+            tunedCadence
+        );
 
         const event: TimelineEvent = {
             charIndex: i,
             tMs: clampMs(currentTimeMs),
             char,
             class: charClass,
-            pauseReason,
-            pauseAfterMs: clampMs(pauseAfterMs),
+            pauseReason: pause.pauseReason,
+            pauseAfterMs: clampMs(pause.pauseAfterMs),
         };
         events.push(event);
 

@@ -54,7 +54,7 @@ export const Welcome1: React.FC<Welcome1Props> = ({ onNext, onSkip }) => {
                     {showCursor ? (
                         <TypingCursor
                             mode="normal"
-                            heightEm={1}
+                            heightEm={1.8}
                             style={CURSOR_STYLE}
                         />
                     ) : null}
@@ -114,5 +114,4 @@ const CURSOR_STYLE: React.CSSProperties = {
     right: '-12px',
     top: '50%',
     transform: 'translateY(-50%)',
-    height: '0.95em',
 };

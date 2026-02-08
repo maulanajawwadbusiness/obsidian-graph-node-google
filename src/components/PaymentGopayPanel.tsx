@@ -204,12 +204,6 @@ export const PaymentGopayPanel: React.FC<PaymentPanelProps> = ({ onPaid }) => {
                     onClick={() => {
                         setIsOpen(false);
                         setPhase('cancelled');
-                        pushMoneyNotice({
-                            kind: 'payment',
-                            status: 'warning',
-                            title: 'Pembayaran dibatalkan',
-                            message: 'Saldo tidak berubah.'
-                        });
                     }}
                     onPointerDown={(e) => e.stopPropagation()}
                 >

@@ -21,10 +21,10 @@ The application layers, ordered by z-index (lowest to highest):
         *   `true` or `1`: app starts in `welcome1`.
     *   Persistence is currently disabled (`PERSIST_SCREEN = false`), so refresh resets onboarding to `welcome1` when onboarding is enabled.
     *   Graph isolation contract: `GraphPhysicsPlayground` is lazy-loaded and mounted only when `screen === 'graph'`. This keeps physics/rendering inactive during onboarding screens.
-    *   Global overlays that remain mounted during onboarding and graph:
-        *   `BalanceBadge`
+    *   Money overlays mount only on `prompt` and `graph` screens:
         *   `ShortageWarning`
         *   `MoneyNoticeStack`
+        *   `BalanceBadge` on `graph` by default, and on `prompt` only when enabled by UI flags.
 
 1.  **The Canvas (Graph substrate)**
     *   **Rule**: Never under-reacts. If a panel or overlay is active, the canvas underneath MUST NOT receive pointer/wheel events.
@@ -97,10 +97,12 @@ Debug toggles:
 
 ### C. `EnterPrompt` (`src/screens/EnterPrompt.tsx`)
 *   **Purpose**: Prompt-stage shell that combines:
-    *   `PromptCard` (headline, placeholder input, fullscreen button, payment panel).
+    *   `PromptCard` (headline, placeholder input, fullscreen button).
+    *   Optional `PaymentGopayPanel` (top-right launcher/panel).
     *   `LoginOverlay` auth gate.
 *   **Behavior**:
     *   Reads auth state from `useAuth()`.
+    *   Payment panel visibility is controlled by `SHOW_ENTERPROMPT_PAYMENT_PANEL` in `src/config/onboardingUiFlags.ts`.
     *   Shows `LoginOverlay` while user is not authenticated and overlay is not manually hidden.
     *   `LoginOverlay` blocks pointer/wheel interaction and locks page scroll when open.
     *   Continue button in LoginOverlay is a non-functional formal control (no click handler). Auth flow proceeds via session state update after sign-in.
@@ -351,7 +353,9 @@ Frontend:
 - UI default: Quicksand (via CSS vars)
 - Titles: Segoe UI -> Public Sans -> system
 ## Money UX (Frontend)
-- Always-visible rupiah balance anchor in the app shell.
+- Rupiah balance anchor (`BalanceBadge`) is always visible on `graph`.
+- On `prompt`, balance anchor visibility is controlled by `SHOW_ENTERPROMPT_BALANCE_BADGE` in `src/config/onboardingUiFlags.ts`.
 - Shortage warning gate for paid actions with topup CTA.
 - Money notices for payment/balance/deduction outcomes.
+- Offline or backend-unreachable network failures do not emit balance/payment/chat money notices.
 - Reports: docs/report_2026_02_07_moneyux_final.md and step reports.

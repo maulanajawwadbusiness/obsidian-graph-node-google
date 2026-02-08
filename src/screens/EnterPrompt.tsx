@@ -3,6 +3,8 @@ import { LoginOverlay } from '../auth/LoginOverlay';
 import { useAuth } from '../auth/AuthProvider';
 import { PromptCard } from '../components/PromptCard';
 import { PaymentGopayPanel } from '../components/PaymentGopayPanel';
+import { SHOW_ENTERPROMPT_PAYMENT_PANEL } from '../config/onboardingUiFlags';
+import { t } from '../i18n/t';
 
 type EnterPromptProps = {
     onEnter: () => void;
@@ -30,12 +32,12 @@ export const EnterPrompt: React.FC<EnterPromptProps> = ({ onEnter, onBack, onSki
         <div style={ROOT_STYLE}>
             <div style={SIDEBAR_STYLE}>
                 <div style={SIDEBAR_CONTENT_STYLE}>
-                    <div style={SIDEBAR_LABEL_STYLE}>Sidebar</div>
+                    <div style={SIDEBAR_LABEL_STYLE}>{t('onboarding.enterprompt.sidebar_label')}</div>
                 </div>
             </div>
 
-            <PromptCard lang="id" />
-            <PaymentGopayPanel />
+            <PromptCard />
+            {SHOW_ENTERPROMPT_PAYMENT_PANEL ? <PaymentGopayPanel /> : null}
 
             <LoginOverlay
                 open={loginOverlayOpen}

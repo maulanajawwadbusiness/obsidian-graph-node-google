@@ -1,5 +1,6 @@
 import React, { Suspense } from 'react';
-import { ONBOARDING_ENABLED } from '../config/env';
+import { ONBOARDING_ENABLED, ONBOARDING_START_SCREEN } from '../config/env';
+import { SHOW_ENTERPROMPT_BALANCE_BADGE } from '../config/onboardingUiFlags';
 import { Welcome1 } from './Welcome1';
 import { Welcome2 } from './Welcome2';
 import { EnterPrompt } from './EnterPrompt';
@@ -22,6 +23,7 @@ const WELCOME1_FONT_TIMEOUT_MS = 1500;
 
 function getInitialScreen(): Screen {
     if (!ONBOARDING_ENABLED) return 'graph';
+    if (import.meta.env.DEV && ONBOARDING_START_SCREEN === 'prompt') return 'prompt';
     if (PERSIST_SCREEN && typeof window !== 'undefined') {
         const stored = sessionStorage.getItem(STORAGE_KEY) as Screen | null;
         if (stored === 'welcome1' || stored === 'welcome2' || stored === 'prompt' || stored === 'graph') {
@@ -37,13 +39,14 @@ export const AppShell: React.FC = () => {
     const [enterPromptOverlayOpen, setEnterPromptOverlayOpen] = React.useState(false);
     const [welcome1FontGateDone, setWelcome1FontGateDone] = React.useState(false);
     const showMoneyUi = screen === 'prompt' || screen === 'graph';
+    const showBalanceBadge = screen === 'graph' || (screen === 'prompt' && SHOW_ENTERPROMPT_BALANCE_BADGE);
     const showOnboardingFullscreenButton = screen === 'welcome1' || screen === 'welcome2' || screen === 'prompt';
     const onboardingActive = screen === 'welcome1' || screen === 'welcome2' || screen === 'prompt';
     const isOnboardingOverlayOpen = welcome1OverlayOpen || enterPromptOverlayOpen;
 
     const moneyUi = showMoneyUi ? (
         <>
-            <BalanceBadge />
+            {showBalanceBadge ? <BalanceBadge /> : null}
             <ShortageWarning />
             <MoneyNoticeStack />
         </>

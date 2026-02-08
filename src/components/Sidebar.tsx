@@ -54,6 +54,8 @@ const NAME_OFFSET_LEFT = -13;
 const CLOSE_ICON_OFFSET_LEFT = -10;
 const ICON_OPACITY_DEFAULT = 1.0;
 const ICON_OPACITY_HOVER = 1.0;
+const HOVER_ACCENT_COLOR = '#63abff';
+const DEFAULT_ICON_COLOR = '#ffffff';
 
 type SidebarProps = {
     isExpanded: boolean;
@@ -66,7 +68,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isExpanded, onToggle }) => {
     const [searchHover, setSearchHover] = React.useState(false);
     const [moreHover, setMoreHover] = React.useState(false);
     const [closeHover, setCloseHover] = React.useState(false);
-    const [avatarHover, setAvatarHover] = React.useState(false);
+    const [hoveredInterfaceId, setHoveredInterfaceId] = React.useState<string | null>(null);
 
     const sidebarStyle: React.CSSProperties = {
         ...SIDEBAR_BASE_STYLE,
@@ -88,14 +90,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ isExpanded, onToggle }) => {
                         onClick={!isExpanded ? onToggle : undefined}
                         title={!isExpanded ? 'Open sidebar' : undefined}
                     >
-                        <img
+                        <MaskIcon
                             src={!isExpanded && logoHover ? sidebarIcon : circleIcon}
-                            alt="Logo"
-                            style={{
-                                width: `${LOGO_SIZE}px`,
-                                height: `${LOGO_SIZE}px`,
-                                opacity: logoHover ? ICON_OPACITY_HOVER : ICON_OPACITY_DEFAULT,
-                            }}
+                            size={LOGO_SIZE}
+                            color={logoHover ? HOVER_ACCENT_COLOR : DEFAULT_ICON_COLOR}
+                            opacity={logoHover ? ICON_OPACITY_HOVER : ICON_OPACITY_DEFAULT}
                         />
                     </button>
                     {isExpanded && (
@@ -158,7 +157,16 @@ export const Sidebar: React.FC<SidebarProps> = ({ isExpanded, onToggle }) => {
                         <div style={SECTION_HEADER_STYLE}>Your Interfaces</div>
                         <div style={INTERFACES_LIST_STYLE}>
                             {MOCK_INTERFACES.map((item) => (
-                                <button key={item.id} type="button" style={INTERFACE_ITEM_STYLE}>
+                                <button
+                                    key={item.id}
+                                    type="button"
+                                    style={{
+                                        ...INTERFACE_ITEM_STYLE,
+                                        color: hoveredInterfaceId === item.id ? HOVER_ACCENT_COLOR : INTERFACE_ITEM_STYLE.color,
+                                    }}
+                                    onMouseEnter={() => setHoveredInterfaceId(item.id)}
+                                    onMouseLeave={() => setHoveredInterfaceId(null)}
+                                >
                                     {item.name}
                                 </button>
                             ))}
@@ -169,12 +177,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isExpanded, onToggle }) => {
 
             {/* Bottom Section - User Avatar */}
             <div style={BOTTOM_SECTION_STYLE}>
-                <button
-                    type="button"
-                    style={ICON_BUTTON_STYLE}
-                    onMouseEnter={() => setAvatarHover(true)}
-                    onMouseLeave={() => setAvatarHover(false)}
-                >
+                <button type="button" style={ICON_BUTTON_STYLE}>
                     <div
                         style={{
                             ...AVATAR_STYLE,
@@ -216,17 +219,53 @@ const NavItem: React.FC<NavItemProps> = ({
         onMouseEnter={onMouseEnter}
         onMouseLeave={onMouseLeave}
     >
-        <img
+        <MaskIcon
             src={icon}
-            alt={label}
-            style={{
-                width: `${ICON_SIZE}px`,
-                height: `${ICON_SIZE}px`,
-                opacity: isHovered ? ICON_OPACITY_HOVER : ICON_OPACITY_DEFAULT,
-            }}
+            size={ICON_SIZE}
+            color={isHovered ? HOVER_ACCENT_COLOR : DEFAULT_ICON_COLOR}
+            opacity={isHovered ? ICON_OPACITY_HOVER : ICON_OPACITY_DEFAULT}
         />
-        {isExpanded && <span style={{ ...NAV_LABEL_STYLE, opacity: 1 }}>{label}</span>}
+        {isExpanded && (
+            <span
+                style={{
+                    ...NAV_LABEL_STYLE,
+                    color: isHovered ? HOVER_ACCENT_COLOR : NAV_LABEL_STYLE.color,
+                    opacity: 1,
+                }}
+            >
+                {label}
+            </span>
+        )}
     </button>
+);
+
+type MaskIconProps = {
+    src: string;
+    size: number;
+    color: string;
+    opacity?: number;
+};
+
+const MaskIcon: React.FC<MaskIconProps> = ({ src, size, color, opacity = 1 }) => (
+    <span
+        aria-hidden="true"
+        style={{
+            width: `${size}px`,
+            height: `${size}px`,
+            display: 'inline-block',
+            flexShrink: 0,
+            backgroundColor: color,
+            opacity,
+            WebkitMaskImage: `url(${src})`,
+            maskImage: `url(${src})`,
+            WebkitMaskRepeat: 'no-repeat',
+            maskRepeat: 'no-repeat',
+            WebkitMaskPosition: 'center',
+            maskPosition: 'center',
+            WebkitMaskSize: 'contain',
+            maskSize: 'contain',
+        }}
+    />
 );
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -300,7 +339,7 @@ const INTERFACES_SECTION_STYLE: React.CSSProperties = {
 };
 
 const SECTION_HEADER_STYLE: React.CSSProperties = {
-    fontSize: `${FONT_SIZE_NAV}px`,
+    fontSize: `${FONT_SIZE_SECTION_HEADER}px`,
     color: 'rgba(255, 255, 255, 0.4)',
     fontFamily: 'var(--font-ui)',
     letterSpacing: '0.5px',

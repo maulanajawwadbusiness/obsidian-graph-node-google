@@ -15,6 +15,7 @@ const DEBUG_WELCOME2_CURSOR = false;
 const DEBUG_WELCOME2_INPUT_GUARD = false;
 const CURSOR_PAUSE_THRESHOLD_MS = 130;
 const CURSOR_HOLD_FAST_WINDOW_MS = 680;
+const SHOW_WELCOME2_FOCUS_RING = false;
 const BLOCKED_SCROLL_KEYS = new Set([' ', 'PageDown', 'PageUp', 'ArrowDown', 'ArrowUp']);
 const INTERACTIVE_SELECTOR = 'button, input, textarea, select, a[href], [role=\"button\"], [contenteditable=\"true\"]';
 const DEBUG_WELCOME2_TYPE = false;
@@ -154,6 +155,7 @@ const ROOT_STYLE: React.CSSProperties = {
     background: '#06060A',
     color: '#e7e7e7',
     boxSizing: 'border-box',
+    outline: SHOW_WELCOME2_FOCUS_RING ? undefined : 'none',
 };
 
 const CONTENT_STYLE: React.CSSProperties = {

@@ -1,6 +1,10 @@
 import { getBalanceState, refreshBalance } from '../store/balanceStore';
 import { showShortage, type ShortageContext } from './shortageStore';
 
+function isDevBalanceBypassEnabled(): boolean {
+    return import.meta.env.DEV && import.meta.env.VITE_DEV_BYPASS_BALANCE === '1';
+}
+
 async function waitForBalance(timeoutMs: number): Promise<number | null> {
     const start = Date.now();
     while (Date.now() - start < timeoutMs) {
@@ -21,6 +25,10 @@ export async function ensureSufficientBalance(params: {
     context: ShortageContext;
     timeoutMs?: number;
 }): Promise<boolean> {
+    if (isDevBalanceBypassEnabled()) {
+        return true;
+    }
+
     const timeoutMs = params.timeoutMs ?? 1200;
     let { balanceIdr } = getBalanceState();
 

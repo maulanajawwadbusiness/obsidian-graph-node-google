@@ -108,6 +108,10 @@ function isProd() {
   return Boolean(process.env.K_SERVICE) || process.env.NODE_ENV === "production";
 }
 
+function isDevBalanceBypassEnabled() {
+  return !isProd() && process.env.DEV_BYPASS_BALANCE === "1";
+}
+
 function resolveCookieOptions() {
   const sameSite = normalizeSameSite(COOKIE_SAMESITE);
   const secure = isProd();
@@ -974,49 +978,58 @@ app.post("/api/llm/paper-analyze", requireAuth, async (req, res) => {
       outputTokens: 0,
       fxRate
     });
-    const balanceSnapshot = await getBalance(userId);
-    if (balanceSnapshot.balance_idr < estimated.idrCostRounded) {
-      const shortfall = estimated.idrCostRounded - balanceSnapshot.balance_idr;
-      auditInputTokens = inputTokensEstimate;
-      auditOutputTokens = 0;
-      auditTotalTokens = inputTokensEstimate;
-      auditUsageSource = "estimate_wordcount";
-      auditProviderUsagePresent = false;
+    const bypassBalance = isDevBalanceBypassEnabled();
+    if (!bypassBalance) {
+      const balanceSnapshot = await getBalance(userId);
+      if (balanceSnapshot.balance_idr < estimated.idrCostRounded) {
+        const shortfall = estimated.idrCostRounded - balanceSnapshot.balance_idr;
+        auditInputTokens = inputTokensEstimate;
+        auditOutputTokens = 0;
+        auditTotalTokens = inputTokensEstimate;
+        auditUsageSource = "estimate_wordcount";
+        auditProviderUsagePresent = false;
+        auditCostIdr = 0;
+        auditBalanceBefore = balanceSnapshot.balance_idr;
+        auditBalanceAfter = balanceSnapshot.balance_idr;
+        auditChargeStatus = "failed";
+        auditChargeError = "insufficient_rupiah";
+        auditHttpStatus = 402;
+        auditTerminationReason = "insufficient_rupiah";
+        await writeAudit();
+        res.setHeader("X-Request-Id", requestId);
+        res.setHeader("X-Request-Id", requestId);
+        res.setHeader("X-Request-Id", requestId);
+        res.status(402).json({
+          ok: false,
+          code: "insufficient_rupiah",
+          request_id: requestId,
+          needed_idr: estimated.idrCostRounded,
+          balance_idr: balanceSnapshot.balance_idr,
+          shortfall_idr: shortfall
+        });
+        logLlmRequest({
+          request_id: requestId,
+          endpoint: "/api/llm/paper-analyze",
+          user_id: userId,
+          model: validation.model,
+          provider_model_id: providerModelId,
+          input_chars: validation.text.length,
+          output_chars: 0,
+          duration_ms: Date.now() - startedAt,
+          status_code: 402,
+          termination_reason: "insufficient_rupiah",
+          rupiah_cost: estimated.idrCostRounded,
+          rupiah_balance_before: balanceSnapshot.balance_idr,
+          rupiah_balance_after: balanceSnapshot.balance_idr
+        });
+        return;
+      }
+    } else {
+      auditChargeStatus = "bypassed_dev";
+      auditChargeError = null;
       auditCostIdr = 0;
-      auditBalanceBefore = balanceSnapshot.balance_idr;
-      auditBalanceAfter = balanceSnapshot.balance_idr;
-      auditChargeStatus = "failed";
-      auditChargeError = "insufficient_rupiah";
-      auditHttpStatus = 402;
-      auditTerminationReason = "insufficient_rupiah";
-      await writeAudit();
-      res.setHeader("X-Request-Id", requestId);
-      res.setHeader("X-Request-Id", requestId);
-      res.setHeader("X-Request-Id", requestId);
-      res.status(402).json({
-        ok: false,
-        code: "insufficient_rupiah",
-        request_id: requestId,
-        needed_idr: estimated.idrCostRounded,
-        balance_idr: balanceSnapshot.balance_idr,
-        shortfall_idr: shortfall
-      });
-      logLlmRequest({
-        request_id: requestId,
-        endpoint: "/api/llm/paper-analyze",
-        user_id: userId,
-        model: validation.model,
-        provider_model_id: providerModelId,
-        input_chars: validation.text.length,
-        output_chars: 0,
-        duration_ms: Date.now() - startedAt,
-        status_code: 402,
-        termination_reason: "insufficient_rupiah",
-        rupiah_cost: estimated.idrCostRounded,
-        rupiah_balance_before: balanceSnapshot.balance_idr,
-        rupiah_balance_after: balanceSnapshot.balance_idr
-      });
-      return;
+      auditBalanceBefore = null;
+      auditBalanceAfter = null;
     }
 
     const analyzeSchema = buildAnalyzeJsonSchema(validation.nodeCount);
@@ -1218,62 +1231,69 @@ app.post("/api/llm/paper-analyze", requireAuth, async (req, res) => {
       outputTokens: usageRecord.output_tokens,
       fxRate
     });
-    const chargeResult = await chargeForLlm({
-      userId,
-      requestId,
-      amountIdr: pricing.idrCostRounded,
-      meta: { model: validation.model, totalTokens: pricing.totalTokens }
-    });
-    if (chargeResult.ok === false) {
-      const chargeError = chargeResult;
-      const shortfall = pricing.idrCostRounded - chargeError.balance_idr;
+    if (bypassBalance) {
+      rupiahCost = 0;
+      rupiahBefore = null;
+      rupiahAfter = null;
       auditCostIdr = 0;
-      auditBalanceBefore = chargeError.balance_idr;
-      auditBalanceAfter = chargeError.balance_idr;
-      auditChargeStatus = "failed";
-      auditChargeError = "insufficient_rupiah";
-      auditHttpStatus = 402;
-      auditTerminationReason = "insufficient_rupiah";
-      await writeAudit();
-      res.setHeader("X-Request-Id", requestId);
-      res.setHeader("X-Request-Id", requestId);
-      res.status(402).json({
-        ok: false,
-        code: "insufficient_rupiah",
-        request_id: requestId,
-        needed_idr: pricing.idrCostRounded,
-        balance_idr: chargeError.balance_idr,
-        shortfall_idr: shortfall
+      auditBalanceBefore = null;
+      auditBalanceAfter = null;
+      auditChargeStatus = "bypassed_dev";
+      auditChargeError = null;
+    } else {
+      const chargeResult = await chargeForLlm({
+        userId,
+        requestId,
+        amountIdr: pricing.idrCostRounded,
+        meta: { model: validation.model, totalTokens: pricing.totalTokens }
       });
-      logLlmRequest({
-        request_id: requestId,
-        endpoint: "/api/llm/paper-analyze",
-        user_id: userId,
-        model: validation.model,
-        provider_model_id: providerModelId,
-        input_chars: validation.text.length,
-        output_chars: outputTextLength,
-        duration_ms: Date.now() - startedAt,
-        status_code: 402,
-        termination_reason: "insufficient_rupiah",
-        rupiah_cost: pricing.idrCostRounded,
-        rupiah_balance_before: chargeError.balance_idr,
-        rupiah_balance_after: chargeError.balance_idr
-      });
-      return;
-    }
+      if (chargeResult.ok === false) {
+        const chargeError = chargeResult;
+        const shortfall = pricing.idrCostRounded - chargeError.balance_idr;
+        auditCostIdr = 0;
+        auditBalanceBefore = chargeError.balance_idr;
+        auditBalanceAfter = chargeError.balance_idr;
+        auditChargeStatus = "failed";
+        auditChargeError = "insufficient_rupiah";
+        auditHttpStatus = 402;
+        auditTerminationReason = "insufficient_rupiah";
+        await writeAudit();
+        res.setHeader("X-Request-Id", requestId);
+        res.setHeader("X-Request-Id", requestId);
+        res.status(402).json({
+          ok: false,
+          code: "insufficient_rupiah",
+          request_id: requestId,
+          needed_idr: pricing.idrCostRounded,
+          balance_idr: chargeError.balance_idr,
+          shortfall_idr: shortfall
+        });
+        logLlmRequest({
+          request_id: requestId,
+          endpoint: "/api/llm/paper-analyze",
+          user_id: userId,
+          model: validation.model,
+          provider_model_id: providerModelId,
+          input_chars: validation.text.length,
+          output_chars: outputTextLength,
+          duration_ms: Date.now() - startedAt,
+          status_code: 402,
+          termination_reason: "insufficient_rupiah",
+          rupiah_cost: pricing.idrCostRounded,
+          rupiah_balance_before: chargeError.balance_idr,
+          rupiah_balance_after: chargeError.balance_idr
+        });
+        return;
+      }
 
-    rupiahCost = pricing.idrCostRounded;
-    rupiahBefore = chargeResult.balance_before;
-    rupiahAfter = chargeResult.balance_after;
-    auditCostIdr = pricing.idrCostRounded;
-    auditBalanceBefore = chargeResult.balance_before;
-    auditBalanceAfter = chargeResult.balance_after;
-    auditChargeStatus = "charged";
-    auditCostIdr = pricing.idrCostRounded;
-    auditBalanceBefore = chargeResult.balance_before;
-    auditBalanceAfter = chargeResult.balance_after;
-    auditChargeStatus = "charged";
+      rupiahCost = pricing.idrCostRounded;
+      rupiahBefore = chargeResult.balance_before;
+      rupiahAfter = chargeResult.balance_after;
+      auditCostIdr = pricing.idrCostRounded;
+      auditBalanceBefore = chargeResult.balance_before;
+      auditBalanceAfter = chargeResult.balance_after;
+      auditChargeStatus = "charged";
+    }
 
     if (provider.name === "openai") {
       const eligible = router.policyMeta.cohort_selected && router.policyMeta.reason === "free_ok";
@@ -1656,46 +1676,55 @@ app.post("/api/llm/prefill", requireAuth, async (req, res) => {
       outputTokens: 0,
       fxRate
     });
-    const balanceSnapshot = await getBalance(userId);
-    if (balanceSnapshot.balance_idr < estimated.idrCostRounded) {
-      const shortfall = estimated.idrCostRounded - balanceSnapshot.balance_idr;
-      auditInputTokens = inputTokensEstimate;
-      auditOutputTokens = 0;
-      auditTotalTokens = inputTokensEstimate;
-      auditUsageSource = "estimate_wordcount";
-      auditProviderUsagePresent = false;
+    const bypassBalance = isDevBalanceBypassEnabled();
+    if (!bypassBalance) {
+      const balanceSnapshot = await getBalance(userId);
+      if (balanceSnapshot.balance_idr < estimated.idrCostRounded) {
+        const shortfall = estimated.idrCostRounded - balanceSnapshot.balance_idr;
+        auditInputTokens = inputTokensEstimate;
+        auditOutputTokens = 0;
+        auditTotalTokens = inputTokensEstimate;
+        auditUsageSource = "estimate_wordcount";
+        auditProviderUsagePresent = false;
+        auditCostIdr = 0;
+        auditBalanceBefore = balanceSnapshot.balance_idr;
+        auditBalanceAfter = balanceSnapshot.balance_idr;
+        auditChargeStatus = "failed";
+        auditChargeError = "insufficient_rupiah";
+        auditHttpStatus = 402;
+        auditTerminationReason = "insufficient_rupiah";
+        await writeAudit();
+        res.status(402).json({
+          ok: false,
+          code: "insufficient_rupiah",
+          request_id: requestId,
+          needed_idr: estimated.idrCostRounded,
+          balance_idr: balanceSnapshot.balance_idr,
+          shortfall_idr: shortfall
+        });
+        logLlmRequest({
+          request_id: requestId,
+          endpoint: "/api/llm/prefill",
+          user_id: userId,
+          model: validation.model,
+          provider_model_id: providerModelId,
+          input_chars: validation.nodeLabel.length,
+          output_chars: 0,
+          duration_ms: Date.now() - startedAt,
+          status_code: 402,
+          termination_reason: "insufficient_rupiah",
+          rupiah_cost: estimated.idrCostRounded,
+          rupiah_balance_before: balanceSnapshot.balance_idr,
+          rupiah_balance_after: balanceSnapshot.balance_idr
+        });
+        return;
+      }
+    } else {
+      auditChargeStatus = "bypassed_dev";
+      auditChargeError = null;
       auditCostIdr = 0;
-      auditBalanceBefore = balanceSnapshot.balance_idr;
-      auditBalanceAfter = balanceSnapshot.balance_idr;
-      auditChargeStatus = "failed";
-      auditChargeError = "insufficient_rupiah";
-      auditHttpStatus = 402;
-      auditTerminationReason = "insufficient_rupiah";
-      await writeAudit();
-      res.status(402).json({
-        ok: false,
-        code: "insufficient_rupiah",
-        request_id: requestId,
-        needed_idr: estimated.idrCostRounded,
-        balance_idr: balanceSnapshot.balance_idr,
-        shortfall_idr: shortfall
-      });
-      logLlmRequest({
-        request_id: requestId,
-        endpoint: "/api/llm/prefill",
-        user_id: userId,
-        model: validation.model,
-        provider_model_id: providerModelId,
-        input_chars: validation.nodeLabel.length,
-        output_chars: 0,
-        duration_ms: Date.now() - startedAt,
-        status_code: 402,
-        termination_reason: "insufficient_rupiah",
-        rupiah_cost: estimated.idrCostRounded,
-        rupiah_balance_before: balanceSnapshot.balance_idr,
-        rupiah_balance_after: balanceSnapshot.balance_idr
-      });
-      return;
+      auditBalanceBefore = null;
+      auditBalanceAfter = null;
     }
 
     const result = await provider.generateText({
@@ -1756,52 +1785,63 @@ app.post("/api/llm/prefill", requireAuth, async (req, res) => {
       outputTokens: usageRecord.output_tokens,
       fxRate
     });
-    const chargeResult = await chargeForLlm({
-      userId,
-      requestId,
-      amountIdr: pricing.idrCostRounded,
-      meta: { model: validation.model, totalTokens: pricing.totalTokens }
-    });
-    if (chargeResult.ok === false) {
-      const chargeError = chargeResult;
-      const shortfall = pricing.idrCostRounded - chargeError.balance_idr;
+    if (bypassBalance) {
+      rupiahCost = 0;
+      rupiahBefore = null;
+      rupiahAfter = null;
       auditCostIdr = 0;
-      auditBalanceBefore = chargeError.balance_idr;
-      auditBalanceAfter = chargeError.balance_idr;
-      auditChargeStatus = "failed";
-      auditChargeError = "insufficient_rupiah";
-      auditHttpStatus = 402;
-      auditTerminationReason = "insufficient_rupiah";
-      await writeAudit();
-      res.status(402).json({
-        ok: false,
-        code: "insufficient_rupiah",
-        request_id: requestId,
-        needed_idr: pricing.idrCostRounded,
-        balance_idr: chargeError.balance_idr,
-        shortfall_idr: shortfall
+      auditBalanceBefore = null;
+      auditBalanceAfter = null;
+      auditChargeStatus = "bypassed_dev";
+      auditChargeError = null;
+    } else {
+      const chargeResult = await chargeForLlm({
+        userId,
+        requestId,
+        amountIdr: pricing.idrCostRounded,
+        meta: { model: validation.model, totalTokens: pricing.totalTokens }
       });
-      logLlmRequest({
-        request_id: requestId,
-        endpoint: "/api/llm/prefill",
-        user_id: userId,
-        model: validation.model,
-        provider_model_id: providerModelId,
-        input_chars: validation.nodeLabel.length,
-        output_chars: result.text.length,
-        duration_ms: Date.now() - startedAt,
-        status_code: 402,
-        termination_reason: "insufficient_rupiah",
-        rupiah_cost: pricing.idrCostRounded,
-        rupiah_balance_before: chargeError.balance_idr,
-        rupiah_balance_after: chargeError.balance_idr
-      });
-      return;
-    }
+      if (chargeResult.ok === false) {
+        const chargeError = chargeResult;
+        const shortfall = pricing.idrCostRounded - chargeError.balance_idr;
+        auditCostIdr = 0;
+        auditBalanceBefore = chargeError.balance_idr;
+        auditBalanceAfter = chargeError.balance_idr;
+        auditChargeStatus = "failed";
+        auditChargeError = "insufficient_rupiah";
+        auditHttpStatus = 402;
+        auditTerminationReason = "insufficient_rupiah";
+        await writeAudit();
+        res.status(402).json({
+          ok: false,
+          code: "insufficient_rupiah",
+          request_id: requestId,
+          needed_idr: pricing.idrCostRounded,
+          balance_idr: chargeError.balance_idr,
+          shortfall_idr: shortfall
+        });
+        logLlmRequest({
+          request_id: requestId,
+          endpoint: "/api/llm/prefill",
+          user_id: userId,
+          model: validation.model,
+          provider_model_id: providerModelId,
+          input_chars: validation.nodeLabel.length,
+          output_chars: result.text.length,
+          duration_ms: Date.now() - startedAt,
+          status_code: 402,
+          termination_reason: "insufficient_rupiah",
+          rupiah_cost: pricing.idrCostRounded,
+          rupiah_balance_before: chargeError.balance_idr,
+          rupiah_balance_after: chargeError.balance_idr
+        });
+        return;
+      }
 
-    rupiahCost = pricing.idrCostRounded;
-    rupiahBefore = chargeResult.balance_before;
-    rupiahAfter = chargeResult.balance_after;
+      rupiahCost = pricing.idrCostRounded;
+      rupiahBefore = chargeResult.balance_before;
+      rupiahAfter = chargeResult.balance_after;
+    }
 
     if (provider.name === "openai") {
       const eligible = router.policyMeta.cohort_selected && router.policyMeta.reason === "free_ok";
@@ -2024,6 +2064,7 @@ app.post("/api/llm/chat", requireAuth, async (req, res) => {
   let firstTokenAt: number | null = null;
   let terminationReason = "success";
   let chatInput = "";
+  let bypassBalance = isDevBalanceBypassEnabled();
   let usageTracker: ReturnType<typeof initUsageTracker> | null = null;
   let stream: { providerUsagePromise?: Promise<ProviderUsage | null> } | null = null;
   req.on("close", () => {
@@ -2065,48 +2106,56 @@ app.post("/api/llm/chat", requireAuth, async (req, res) => {
       outputTokens: 0,
       fxRate
     });
-    const balanceSnapshot = await getBalance(userId);
-    if (balanceSnapshot.balance_idr < estimated.idrCostRounded) {
-      const shortfall = estimated.idrCostRounded - balanceSnapshot.balance_idr;
-      auditInputTokens = inputTokensEstimate;
-      auditOutputTokens = 0;
-      auditTotalTokens = inputTokensEstimate;
-      auditUsageSource = "estimate_wordcount";
-      auditProviderUsagePresent = false;
+    if (!bypassBalance) {
+      const balanceSnapshot = await getBalance(userId);
+      if (balanceSnapshot.balance_idr < estimated.idrCostRounded) {
+        const shortfall = estimated.idrCostRounded - balanceSnapshot.balance_idr;
+        auditInputTokens = inputTokensEstimate;
+        auditOutputTokens = 0;
+        auditTotalTokens = inputTokensEstimate;
+        auditUsageSource = "estimate_wordcount";
+        auditProviderUsagePresent = false;
+        auditCostIdr = 0;
+        auditBalanceBefore = balanceSnapshot.balance_idr;
+        auditBalanceAfter = balanceSnapshot.balance_idr;
+        auditChargeStatus = "failed";
+        auditChargeError = "insufficient_rupiah";
+        auditHttpStatus = 402;
+        auditTerminationReason = "insufficient_rupiah";
+        await writeAudit();
+        res.status(402).json({
+          ok: false,
+          code: "insufficient_rupiah",
+          request_id: requestId,
+          needed_idr: estimated.idrCostRounded,
+          balance_idr: balanceSnapshot.balance_idr,
+          shortfall_idr: shortfall
+        });
+        logLlmRequest({
+          request_id: requestId,
+          endpoint: "/api/llm/chat",
+          user_id: userId,
+          model: validation.model,
+          provider_model_id: providerModelId,
+          input_chars: validation.userPrompt.length,
+          output_chars: 0,
+          duration_ms: Date.now() - startedAt,
+          status_code: 402,
+          termination_reason: "insufficient_rupiah",
+          rupiah_cost: estimated.idrCostRounded,
+          rupiah_balance_before: balanceSnapshot.balance_idr,
+          rupiah_balance_after: balanceSnapshot.balance_idr
+        });
+        statusCode = 402;
+        terminationReason = "insufficient_rupiah";
+        return;
+      }
+    } else {
+      auditChargeStatus = "bypassed_dev";
+      auditChargeError = null;
       auditCostIdr = 0;
-      auditBalanceBefore = balanceSnapshot.balance_idr;
-      auditBalanceAfter = balanceSnapshot.balance_idr;
-      auditChargeStatus = "failed";
-      auditChargeError = "insufficient_rupiah";
-      auditHttpStatus = 402;
-      auditTerminationReason = "insufficient_rupiah";
-      await writeAudit();
-      res.status(402).json({
-        ok: false,
-        code: "insufficient_rupiah",
-        request_id: requestId,
-        needed_idr: estimated.idrCostRounded,
-        balance_idr: balanceSnapshot.balance_idr,
-        shortfall_idr: shortfall
-      });
-      logLlmRequest({
-        request_id: requestId,
-        endpoint: "/api/llm/chat",
-        user_id: userId,
-        model: validation.model,
-        provider_model_id: providerModelId,
-        input_chars: validation.userPrompt.length,
-        output_chars: 0,
-        duration_ms: Date.now() - startedAt,
-        status_code: 402,
-        termination_reason: "insufficient_rupiah",
-        rupiah_cost: estimated.idrCostRounded,
-        rupiah_balance_before: balanceSnapshot.balance_idr,
-        rupiah_balance_after: balanceSnapshot.balance_idr
-      });
-      statusCode = 402;
-      terminationReason = "insufficient_rupiah";
-      return;
+      auditBalanceBefore = null;
+      auditBalanceAfter = null;
     }
 
     stream = provider.generateTextStream({
@@ -2199,28 +2248,39 @@ app.post("/api/llm/chat", requireAuth, async (req, res) => {
       outputTokens: usageRecord.output_tokens,
       fxRate
     });
-    const chargeResult = await chargeForLlm({
-      userId,
-      requestId,
-      amountIdr: pricing.idrCostRounded,
-      meta: { model: validation.model, totalTokens: pricing.totalTokens }
-    });
-    if (chargeResult.ok === true) {
-      rupiahCost = pricing.idrCostRounded;
-      rupiahBefore = chargeResult.balance_before;
-      rupiahAfter = chargeResult.balance_after;
-      auditCostIdr = pricing.idrCostRounded;
-      auditBalanceBefore = chargeResult.balance_before;
-      auditBalanceAfter = chargeResult.balance_after;
-      auditChargeStatus = "charged";
-    } else {
-      const chargeError = chargeResult;
-      terminationReason = "insufficient_rupiah";
+    if (bypassBalance) {
+      rupiahCost = 0;
+      rupiahBefore = null;
+      rupiahAfter = null;
       auditCostIdr = 0;
-      auditBalanceBefore = chargeError.balance_idr;
-      auditBalanceAfter = chargeError.balance_idr;
-      auditChargeStatus = "failed";
-      auditChargeError = "insufficient_rupiah";
+      auditBalanceBefore = null;
+      auditBalanceAfter = null;
+      auditChargeStatus = "bypassed_dev";
+      auditChargeError = null;
+    } else {
+      const chargeResult = await chargeForLlm({
+        userId,
+        requestId,
+        amountIdr: pricing.idrCostRounded,
+        meta: { model: validation.model, totalTokens: pricing.totalTokens }
+      });
+      if (chargeResult.ok === true) {
+        rupiahCost = pricing.idrCostRounded;
+        rupiahBefore = chargeResult.balance_before;
+        rupiahAfter = chargeResult.balance_after;
+        auditCostIdr = pricing.idrCostRounded;
+        auditBalanceBefore = chargeResult.balance_before;
+        auditBalanceAfter = chargeResult.balance_after;
+        auditChargeStatus = "charged";
+      } else {
+        const chargeError = chargeResult;
+        terminationReason = "insufficient_rupiah";
+        auditCostIdr = 0;
+        auditBalanceBefore = chargeError.balance_idr;
+        auditBalanceAfter = chargeError.balance_idr;
+        auditChargeStatus = "failed";
+        auditChargeError = "insufficient_rupiah";
+      }
     }
 
     if (providerName === "openai" && policyMeta) {

@@ -54,6 +54,8 @@ const NAME_OFFSET_LEFT = -13;
 const CLOSE_ICON_OFFSET_LEFT = -10;
 const ICON_OPACITY_DEFAULT = 1.0;
 const ICON_OPACITY_HOVER = 1.0;
+const COLLAPSED_AVATAR_HOVER_PADDING = 0;
+const COLLAPSED_AVATAR_BUTTON_PADDING = 4.5;
 const HOVER_ACCENT_COLOR = '#63abff';
 const DEFAULT_ICON_COLOR = '#ffffff';
 
@@ -69,6 +71,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isExpanded, onToggle }) => {
     const [moreHover, setMoreHover] = React.useState(false);
     const [closeHover, setCloseHover] = React.useState(false);
     const [hoveredInterfaceId, setHoveredInterfaceId] = React.useState<string | null>(null);
+    const [avatarRowHover, setAvatarRowHover] = React.useState(false);
 
     const sidebarStyle: React.CSSProperties = {
         ...SIDEBAR_BASE_STYLE,
@@ -106,14 +109,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ isExpanded, onToggle }) => {
                             onClick={onToggle}
                             title="Close sidebar"
                         >
-                            <img
+                            <MaskIcon
                                 src={sidebarIcon}
-                                alt="Close"
-                                style={{
-                                    width: `${ICON_SIZE}px`,
-                                    height: `${ICON_SIZE}px`,
-                                    opacity: closeHover ? ICON_OPACITY_HOVER : ICON_OPACITY_DEFAULT,
-                                }}
+                                size={ICON_SIZE}
+                                color={closeHover ? HOVER_ACCENT_COLOR : DEFAULT_ICON_COLOR}
+                                opacity={closeHover ? ICON_OPACITY_HOVER : ICON_OPACITY_DEFAULT}
                             />
                         </button>
                     )}
@@ -176,18 +176,42 @@ export const Sidebar: React.FC<SidebarProps> = ({ isExpanded, onToggle }) => {
             </div>
 
             {/* Bottom Section - User Avatar */}
-            <div style={BOTTOM_SECTION_STYLE}>
-                <button type="button" style={ICON_BUTTON_STYLE}>
-                    <div
+            <div
+                style={{
+                    ...BOTTOM_SECTION_STYLE,
+                    justifyContent: isExpanded ? 'flex-start' : 'center',
+                    padding: isExpanded ? BOTTOM_SECTION_STYLE.padding : '12px 0',
+                }}
+            >
+                <div
+                    style={{
+                        ...PROFILE_ROW_STYLE,
+                        width: isExpanded ? PROFILE_ROW_STYLE.width : 'auto',
+                        margin: isExpanded ? undefined : '0 auto',
+                        padding: isExpanded ? PROFILE_ROW_STYLE.padding : `${COLLAPSED_AVATAR_HOVER_PADDING}px`,
+                        backgroundColor: avatarRowHover ? 'rgba(255, 255, 255, 0.14)' : 'transparent',
+                    }}
+                    onMouseEnter={() => setAvatarRowHover(true)}
+                    onMouseLeave={() => setAvatarRowHover(false)}
+                >
+                    <button
+                        type="button"
                         style={{
-                            ...AVATAR_STYLE,
-                            opacity: 1,
+                            ...ICON_BUTTON_STYLE,
+                            padding: isExpanded ? ICON_BUTTON_STYLE.padding : `${COLLAPSED_AVATAR_BUTTON_PADDING}px`,
                         }}
                     >
-                        BA
-                    </div>
-                </button>
-                {isExpanded && <span style={AVATAR_NAME_STYLE}>Your Name</span>}
+                        <div
+                            style={{
+                                ...AVATAR_STYLE,
+                                opacity: 1,
+                            }}
+                        >
+                            BA
+                        </div>
+                    </button>
+                    {isExpanded && <span style={AVATAR_NAME_STYLE}>Your Name</span>}
+                </div>
             </div>
         </aside>
     );
@@ -372,10 +396,19 @@ const INTERFACE_ITEM_STYLE: React.CSSProperties = {
 const BOTTOM_SECTION_STYLE: React.CSSProperties = {
     display: 'flex',
     alignItems: 'center',
-    gap: '12px',
     padding: '12px 8px',
     paddingLeft: `${8 + ACCOUNT_OFFSET_LEFT}px`,
     borderTop: '1px solid rgba(255, 255, 255, 0.1)',
+};
+
+const PROFILE_ROW_STYLE: React.CSSProperties = {
+    width: '100%',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '12px',
+    borderRadius: '10px',
+    padding: '2px',
+    transition: 'background-color 120ms ease',
 };
 
 const AVATAR_STYLE: React.CSSProperties = {

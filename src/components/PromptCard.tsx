@@ -134,7 +134,7 @@ const INPUT_PILL_STYLE: React.CSSProperties = {
     maxWidth: '600px',
     padding: '16px 20px',
     borderRadius: '12px',
-    background: 'rgba(255, 255, 255, 0.045)',
+    background: 'rgba(255, 255, 255, 0.05)',
     boxSizing: 'border-box',
     display: 'flex',
     flexDirection: 'column',

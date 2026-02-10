@@ -349,6 +349,7 @@ export const AppShell: React.FC = () => {
             </div>
             {pendingDeleteId ? (
                 <div
+                    data-delete-backdrop="1"
                     style={DELETE_CONFIRM_BACKDROP_STYLE}
                     onPointerDown={(e) => e.stopPropagation()}
                     onPointerUp={(e) => e.stopPropagation()}
@@ -360,6 +361,7 @@ export const AppShell: React.FC = () => {
                     onWheel={(e) => e.stopPropagation()}
                 >
                     <div
+                        data-delete-modal="1"
                         style={DELETE_CONFIRM_CARD_STYLE}
                         onPointerDown={(e) => e.stopPropagation()}
                         onPointerUp={(e) => e.stopPropagation()}
@@ -380,6 +382,8 @@ export const AppShell: React.FC = () => {
                                 style={DELETE_CONFIRM_CANCEL_STYLE}
                                 onPointerDown={(e) => e.stopPropagation()}
                                 onPointerUp={(e) => e.stopPropagation()}
+                                onWheelCapture={(e) => e.stopPropagation()}
+                                onWheel={(e) => e.stopPropagation()}
                                 onClick={(e) => {
                                     e.stopPropagation();
                                     closeDeleteConfirm();
@@ -392,6 +396,8 @@ export const AppShell: React.FC = () => {
                                 style={DELETE_CONFIRM_PRIMARY_STYLE}
                                 onPointerDown={(e) => e.stopPropagation()}
                                 onPointerUp={(e) => e.stopPropagation()}
+                                onWheelCapture={(e) => e.stopPropagation()}
+                                onWheel={(e) => e.stopPropagation()}
                                 onClick={(e) => {
                                     e.stopPropagation();
                                     confirmDelete();

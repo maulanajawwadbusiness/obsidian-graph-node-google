@@ -39,7 +39,7 @@ export interface PopupActions {
     openPopup: (nodeId: string, geometry: AnchorGeometry, content?: { title: string; summary: string }) => void;
     closePopup: () => void;
     switchToNode: (nodeId: string, geometry: AnchorGeometry) => void;
-    sendMessage: (text: string) => void;
+    sendMessage: (text: string, source?: 'node-popup' | 'mini-chat') => void;
     closeChatbar: () => void;
     setPopupRect: (rect: PopupRect | null) => void;
 }

@@ -1,4 +1,4 @@
-import { createContext, useContext, useReducer, ReactNode, useRef, useEffect } from 'react';
+import { createContext, useContext, useReducer, ReactNode, useRef, useEffect, useState } from 'react';
 import type { DocumentState, DocumentStatus, ParsedDocument } from '../document/types';
 import { WorkerClient } from '../document/workerClient';
 
@@ -69,6 +69,7 @@ function documentReducer(state: DocumentState, action: DocumentAction): Document
 // Context value type
 interface DocumentContextValue {
     state: DocumentState;
+    isWorkerReady: boolean;
     setStatus: (status: DocumentStatus) => void;
     setDocument: (document: ParsedDocument) => void;
     setError: (error: string) => void;
@@ -86,13 +87,18 @@ const DocumentContext = createContext<DocumentContextValue | null>(null);
 // Provider
 export function DocumentProvider({ children }: { children: ReactNode }) {
     const [state, dispatch] = useReducer(documentReducer, initialState);
+    const [isWorkerReady, setIsWorkerReady] = useState(false);
     const workerClientRef = useRef<WorkerClient | null>(null);
 
     // Initialize worker on mount
     useEffect(() => {
+        setIsWorkerReady(false);
         workerClientRef.current = new WorkerClient();
+        setIsWorkerReady(true);
         return () => {
             workerClientRef.current?.terminate();
+            workerClientRef.current = null;
+            setIsWorkerReady(false);
         };
     }, []);
 
@@ -123,6 +129,7 @@ export function DocumentProvider({ children }: { children: ReactNode }) {
 
     const contextValue: DocumentContextValue = {
         state,
+        isWorkerReady,
         setStatus: (status) => dispatch({ type: 'SET_STATUS', status }),
         setDocument: (document) => dispatch({ type: 'SET_DOCUMENT', document }),
         setError: (error) => dispatch({ type: 'SET_ERROR', error }),

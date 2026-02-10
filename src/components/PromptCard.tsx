@@ -3,12 +3,39 @@ import { t } from '../i18n/t';
 import plusIcon from '../assets/plus_icon.png';
 import sendIcon from '../assets/send_icon_white.png';
 import clipIcon from '../assets/clip_icon.png';
+import fileMiniIcon from '../assets/file_mini_icon.png';
 
-export const PromptCard: React.FC = () => {
+// Toggle: true = block submit when text is empty, false = allow empty submit path.
+const HARD_BLOCK_EMPTY_TEXT_SUBMIT = false;
+
+type PromptCardProps = {
+    value?: string;
+    onChange?: (text: string) => void;
+    onSubmit?: (text: string) => void;
+    disabled?: boolean;
+    attachedFiles?: File[];
+    canSubmitWithoutText?: boolean;
+    onRemoveFile?: (index: number) => void;
+};
+
+export const PromptCard: React.FC<PromptCardProps> = ({
+    value = '',
+    onChange = () => { },
+    onSubmit = () => { },
+    disabled = false,
+    attachedFiles = [],
+    canSubmitWithoutText = false,
+    onRemoveFile = () => { },
+}) => {
     const [plusHover, setPlusHover] = React.useState(false);
     const [sendHover, setSendHover] = React.useState(false);
     const [showUploadPopup, setShowUploadPopup] = React.useState(false);
+    const [inputText, setInputText] = React.useState(value);
     const popupRef = React.useRef<HTMLDivElement>(null);
+
+    React.useEffect(() => {
+        setInputText(value);
+    }, [value]);
 
     React.useEffect(() => {
         const handleClickOutside = (e: MouseEvent) => {
@@ -22,6 +49,31 @@ export const PromptCard: React.FC = () => {
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, [showUploadPopup]);
 
+    const handleSubmit = React.useCallback(() => {
+        if (disabled) return;
+        const trimmed = inputText.trim();
+        if (trimmed.length > 0) {
+            onSubmit(trimmed);
+            return;
+        }
+        if (HARD_BLOCK_EMPTY_TEXT_SUBMIT) return;
+        if (!canSubmitWithoutText) return;
+        onSubmit('');
+    }, [canSubmitWithoutText, disabled, inputText, onSubmit]);
+
+    const handleInputChange = React.useCallback((nextText: string) => {
+        setInputText(nextText);
+        onChange(nextText);
+    }, [onChange]);
+
+    const handleInputKeyDown = React.useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+        if (e.nativeEvent.isComposing) return;
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            handleSubmit();
+        }
+    }, [handleSubmit]);
+
     return (
         <div style={CARD_STYLE}>
             <div style={CARD_INNER_STYLE}>
@@ -34,11 +86,34 @@ export const PromptCard: React.FC = () => {
                 </div>
 
                 <div style={INPUT_PILL_STYLE}>
+                    {attachedFiles.length > 0 && (
+                        <>
+                            <div style={FILE_CHIPS_ROW_STYLE}>
+                                {attachedFiles.map((file, index) => (
+                                    <div key={`${file.name}-${index}`} style={FILE_CHIP_STYLE}>
+                                        <img src={fileMiniIcon} alt="" style={FILE_CHIP_ICON_STYLE} />
+                                        <span style={FILE_CHIP_NAME_STYLE}>{file.name}</span>
+                                        <button
+                                            type="button"
+                                            style={FILE_CHIP_DISMISS_STYLE}
+                                            onClick={() => onRemoveFile(index)}
+                                            title="Remove file"
+                                        >
+                                            ×
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                        </>
+                    )}
                     <textarea
                         placeholder={t('onboarding.enterprompt.input_placeholder')}
                         style={INPUT_STYLE}
                         rows={6}
-                        readOnly
+                        value={inputText}
+                        onChange={(e) => handleInputChange(e.target.value)}
+                        onKeyDown={handleInputKeyDown}
+                        disabled={disabled}
                     />
                     <div style={ICON_ROW_STYLE}>
                         <div style={{ position: 'relative' }}>
@@ -49,6 +124,7 @@ export const PromptCard: React.FC = () => {
                                 onMouseLeave={() => setPlusHover(false)}
                                 onClick={() => setShowUploadPopup(!showUploadPopup)}
                                 title="Upload Document"
+                                disabled={disabled}
                             >
                                 <img src={plusIcon} alt="Add" style={{ ...PLUS_ICON_STYLE, opacity: plusHover ? 1 : 0.6 }} />
                             </button>
@@ -66,6 +142,8 @@ export const PromptCard: React.FC = () => {
                             style={ICON_BUTTON_STYLE}
                             onMouseEnter={() => setSendHover(true)}
                             onMouseLeave={() => setSendHover(false)}
+                            onClick={handleSubmit}
+                            disabled={disabled}
                         >
                             <img src={sendIcon} alt="Send" style={{ ...SEND_ICON_STYLE, opacity: sendHover ? 0.8 : 0.4 }} />
                         </button>
@@ -217,4 +295,51 @@ const CLIP_ICON_STYLE: React.CSSProperties = {
     width: `${16 * POPUP_SCALE}px`,
     height: `${16 * POPUP_SCALE}px`,
     opacity: 0.7,
+};
+
+// File chips styles - "whisper chip" ghost styling
+const FILE_CHIPS_ROW_STYLE: React.CSSProperties = {
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: '8px',
+    width: '100%',
+};
+
+const FILE_CHIP_STYLE: React.CSSProperties = {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+    padding: '6px 10px',
+    background: 'transparent',
+    border: '1px solid rgba(255, 255, 255, 0.08)',
+    borderRadius: '6px',
+    animation: 'fadeIn 0.2s ease',
+};
+
+const FILE_CHIP_ICON_STYLE: React.CSSProperties = {
+    width: '14px',
+    height: '14px',
+    opacity: 0.5,
+};
+
+const FILE_CHIP_NAME_STYLE: React.CSSProperties = {
+    fontSize: '12px',
+    fontFamily: 'var(--font-ui)',
+    color: 'rgba(255, 255, 255, 0.55)',
+    maxWidth: '150px',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+};
+
+const FILE_CHIP_DISMISS_STYLE: React.CSSProperties = {
+    background: 'transparent',
+    border: 'none',
+    padding: 0,
+    marginLeft: '2px',
+    fontSize: '14px',
+    color: 'rgba(255, 255, 255, 0.3)',
+    cursor: 'pointer',
+    lineHeight: 1,
+    transition: 'color 0.15s ease',
 };

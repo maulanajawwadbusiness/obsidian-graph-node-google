@@ -89,7 +89,7 @@ Note: Counts are estimated post-modularization.
 18. src/server/src/llm/usage/usageTracker.ts - LLM usage tracker and tokenizer fallback
 19. src/server/src/llm/audit/llmAudit.ts - LLM audit persistence
 20. src/components/PaymentGopayPanel.tsx - QRIS payment UI panel
-21. src/components/PromptCard.tsx - EnterPrompt main card (renders payment panel)
+21. src/components/PromptCard.tsx - EnterPrompt main card (input, attachments, submit control)
 
 ## 3. Core Runtime Loops
 
@@ -166,7 +166,7 @@ Note:
 ## 8. Payments (GoPay QRIS)
 Frontend:
 - `src/components/PaymentGopayPanel.tsx` for QRIS UI and polling.
-- `src/components/PromptCard.tsx` renders the payment panel.
+- `src/screens/EnterPrompt.tsx` hosts `PromptCard` and conditionally mounts `PaymentGopayPanel`.
 - `src/api.ts` includes `createPaymentGopayQris` and `getPaymentStatus` helpers.
 
 Backend:
@@ -236,3 +236,14 @@ Debug entry points:
 
 Known active workstream:
 - Visual perception stability for typed text (phase/slip/jarring reports) is tracked in `docs/FUTURE_TODO.md` under `Welcome2 Typing Visual Stability (Chars Phase In/Out)`.
+
+## 13. EnterPrompt Pending Analysis Flow (Text and File)
+
+Current onboarding submit payload in `AppShell` supports:
+- `kind: 'text'` with raw prompt text
+- `kind: 'file'` with a `File` object from EnterPrompt attachment/drop
+
+Consume path:
+1. EnterPrompt submits text or attached file intent.
+2. AppShell stores `pendingAnalysisPayload` and transitions to graph.
+3. Graph consumes once (pre-clear), parses file via `documentContext.parseFile(file)` for file payloads, then runs analyzer mapping path.

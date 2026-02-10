@@ -17,9 +17,10 @@ function contextLabel(context: 'analysis' | 'chat' | 'prefill') {
 }
 
 export const ShortageWarning: React.FC = () => {
-    const { open, balanceIdr, requiredIdr, shortfallIdr, context } = useShortageStore();
+    const { open, balanceIdr, requiredIdr, shortfallIdr, context, surface } = useShortageStore();
 
     if (!open) return null;
+    if (context === 'chat' && (surface === 'node-popup' || surface === 'mini-chat')) return null;
 
     return (
         <div style={BACKDROP_STYLE} onPointerDown={(e) => e.stopPropagation()}>

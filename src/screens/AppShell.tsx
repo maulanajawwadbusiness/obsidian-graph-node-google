@@ -1,6 +1,5 @@
 import React, { Suspense } from 'react';
-import { ONBOARDING_ENABLED, ONBOARDING_START_SCREEN } from '../config/env';
-import { SHOW_ENTERPROMPT_BALANCE_BADGE } from '../config/onboardingUiFlags';
+import { ONBOARDING_ENABLED, ONBOARDING_START_SCREEN, ONBOARDING_START_SCREEN_RAW } from '../config/env';
 import { Welcome1 } from './Welcome1';
 import { Welcome2 } from './Welcome2';
 import { EnterPrompt } from './EnterPrompt';
@@ -8,6 +7,7 @@ import { BalanceBadge } from '../components/BalanceBadge';
 import { ShortageWarning } from '../components/ShortageWarning';
 import { MoneyNoticeStack } from '../components/MoneyNoticeStack';
 import { FullscreenButton } from '../components/FullscreenButton';
+import { Sidebar } from '../components/Sidebar';
 
 const Graph = React.lazy(() =>
     import('../playground/GraphPhysicsPlayground').then((mod) => ({
@@ -16,14 +16,38 @@ const Graph = React.lazy(() =>
 );
 
 type Screen = 'welcome1' | 'welcome2' | 'prompt' | 'graph';
+type PendingAnalysisPayload =
+    | { kind: 'text'; text: string; createdAt: number }
+    | { kind: 'file'; file: File; createdAt: number }
+    | null;
+type GraphPendingAnalysisProps = {
+    pendingAnalysisPayload: PendingAnalysisPayload;
+    onPendingAnalysisConsumed: () => void;
+    onLoadingStateChange?: (isLoading: boolean) => void;
+    documentViewerToggleToken?: number;
+};
 const STORAGE_KEY = 'arnvoid_screen';
 const PERSIST_SCREEN = false;
 const DEBUG_ONBOARDING_SCROLL_GUARD = false;
 const WELCOME1_FONT_TIMEOUT_MS = 1500;
+let hasWarnedInvalidStartScreen = false;
+
+function warnInvalidOnboardingStartScreenOnce() {
+    if (!import.meta.env.DEV) return;
+    if (hasWarnedInvalidStartScreen) return;
+    if (ONBOARDING_START_SCREEN_RAW.trim() === '') return;
+    if (ONBOARDING_START_SCREEN !== null) return;
+    hasWarnedInvalidStartScreen = true;
+    console.warn(
+        '[OnboardingStart] invalid VITE_ONBOARDING_START_SCREEN="%s". Allowed: screen1|screen2|screen3|screen4|welcome1|welcome2|prompt|graph',
+        ONBOARDING_START_SCREEN_RAW
+    );
+}
 
 function getInitialScreen(): Screen {
     if (!ONBOARDING_ENABLED) return 'graph';
-    if (import.meta.env.DEV && ONBOARDING_START_SCREEN === 'prompt') return 'prompt';
+    if (import.meta.env.DEV && ONBOARDING_START_SCREEN !== null) return ONBOARDING_START_SCREEN;
+    warnInvalidOnboardingStartScreenOnce();
     if (PERSIST_SCREEN && typeof window !== 'undefined') {
         const stored = sessionStorage.getItem(STORAGE_KEY) as Screen | null;
         if (stored === 'welcome1' || stored === 'welcome2' || stored === 'prompt' || stored === 'graph') {
@@ -35,14 +59,29 @@ function getInitialScreen(): Screen {
 
 export const AppShell: React.FC = () => {
     const [screen, setScreen] = React.useState<Screen>(() => getInitialScreen());
+    const [pendingAnalysis, setPendingAnalysis] = React.useState<PendingAnalysisPayload>(null);
+    const [graphIsLoading, setGraphIsLoading] = React.useState(false);
+    const [documentViewerToggleToken, setDocumentViewerToggleToken] = React.useState(0);
+    const [isSidebarExpanded, setIsSidebarExpanded] = React.useState(false);
     const [welcome1OverlayOpen, setWelcome1OverlayOpen] = React.useState(false);
     const [enterPromptOverlayOpen, setEnterPromptOverlayOpen] = React.useState(false);
     const [welcome1FontGateDone, setWelcome1FontGateDone] = React.useState(false);
+    const GraphWithPending = Graph as React.ComponentType<GraphPendingAnalysisProps>;
     const showMoneyUi = screen === 'prompt' || screen === 'graph';
-    const showBalanceBadge = screen === 'graph' || (screen === 'prompt' && SHOW_ENTERPROMPT_BALANCE_BADGE);
+    const showBalanceBadge = false;
+    const showPersistentSidebar = screen === 'prompt' || screen === 'graph';
+    const sidebarDisabled = screen === 'graph' && graphIsLoading;
     const showOnboardingFullscreenButton = screen === 'welcome1' || screen === 'welcome2' || screen === 'prompt';
     const onboardingActive = screen === 'welcome1' || screen === 'welcome2' || screen === 'prompt';
     const isOnboardingOverlayOpen = welcome1OverlayOpen || enterPromptOverlayOpen;
+    const onboardingFullscreenButtonStyle: React.CSSProperties = screen === 'prompt'
+        ? {
+            ...ONBOARDING_FULLSCREEN_BUTTON_STYLE,
+            width: '30px',
+            height: '30px',
+            padding: '6px',
+        }
+        : ONBOARDING_FULLSCREEN_BUTTON_STYLE;
 
     const moneyUi = showMoneyUi ? (
         <>
@@ -54,7 +93,7 @@ export const AppShell: React.FC = () => {
 
     const onboardingFullscreenButton = showOnboardingFullscreenButton ? (
         <FullscreenButton
-            style={ONBOARDING_FULLSCREEN_BUTTON_STYLE}
+            style={onboardingFullscreenButtonStyle}
             blocked={isOnboardingOverlayOpen}
         />
     ) : null;
@@ -141,58 +180,79 @@ export const AppShell: React.FC = () => {
         };
     }, [screen, welcome1FontGateDone]);
 
-    if (screen === 'graph') {
-        return (
-            <div style={SHELL_STYLE}>
-                <Suspense fallback={<div style={FALLBACK_STYLE}>Loading graph...</div>}>
-                    <Graph />
-                </Suspense>
-                {moneyUi}
-            </div>
-        );
-    }
-
     if (screen === 'welcome1') {
         if (!welcome1FontGateDone) {
             return <div style={WELCOME1_FONT_GATE_BLANK_STYLE} />;
         }
-        return (
-            <div style={SHELL_STYLE}>
+    }
+
+    const screenContent = screen === 'graph'
+        ? (
+            <Suspense fallback={<div style={FALLBACK_STYLE}>Loading graph...</div>}>
+                <GraphWithPending
+                    pendingAnalysisPayload={pendingAnalysis}
+                    onPendingAnalysisConsumed={() => setPendingAnalysis(null)}
+                    onLoadingStateChange={(v) => setGraphIsLoading(v)}
+                    documentViewerToggleToken={documentViewerToggleToken}
+                />
+            </Suspense>
+        )
+        : screen === 'welcome1'
+            ? (
                 <Welcome1
                     onNext={() => setScreen('welcome2')}
                     onSkip={() => setScreen('graph')}
                     onOverlayOpenChange={setWelcome1OverlayOpen}
                 />
-                {onboardingFullscreenButton}
-                {moneyUi}
-            </div>
-        );
-    }
-
-    if (screen === 'welcome2') {
-        return (
-            <div style={SHELL_STYLE}>
-                <Welcome2
-                    onBack={() => setScreen('welcome1')}
-                    onNext={() => setScreen('prompt')}
-                    onSkip={() => setScreen('graph')}
-                />
-                {onboardingFullscreenButton}
-                {moneyUi}
-            </div>
-        );
-    }
+            )
+            : screen === 'welcome2'
+                ? (
+                    <Welcome2
+                        onBack={() => setScreen('welcome1')}
+                        onNext={() => setScreen('prompt')}
+                        onSkip={() => setScreen('graph')}
+                    />
+                )
+                : (
+                    <EnterPrompt
+                        onBack={() => setScreen('welcome2')}
+                        onEnter={() => setScreen('graph')}
+                        onSkip={() => setScreen('graph')}
+                        onOverlayOpenChange={setEnterPromptOverlayOpen}
+                        onSubmitPromptText={(text) => {
+                            setPendingAnalysis({ kind: 'text', text, createdAt: Date.now() });
+                            console.log(`[appshell] pending_analysis_set kind=text len=${text.length}`);
+                        }}
+                        onSubmitPromptFile={(file) => {
+                            setPendingAnalysis({ kind: 'file', file, createdAt: Date.now() });
+                            console.log('[appshell] pending_analysis_set kind=file name=%s size=%d', file.name, file.size);
+                        }}
+                    />
+                );
 
     return (
-        <div style={SHELL_STYLE}>
-            <EnterPrompt
-                onBack={() => setScreen('welcome2')}
-                onEnter={() => setScreen('graph')}
-                onSkip={() => setScreen('graph')}
-                onOverlayOpenChange={setEnterPromptOverlayOpen}
-            />
-            {onboardingFullscreenButton}
-            {moneyUi}
+        <div style={SHELL_STYLE} data-graph-loading={graphIsLoading ? '1' : '0'}>
+            {showPersistentSidebar ? (
+                <Sidebar
+                    isExpanded={isSidebarExpanded}
+                    onToggle={() => setIsSidebarExpanded((prev) => !prev)}
+                    disabled={sidebarDisabled}
+                    showDocumentViewerButton={screen === 'graph'}
+                    onToggleDocumentViewer={() => setDocumentViewerToggleToken((prev) => prev + 1)}
+                />
+            ) : null}
+            <div
+                style={{
+                    ...NON_SIDEBAR_LAYER_STYLE,
+                    ...(isSidebarExpanded ? NON_SIDEBAR_DIMMED_STYLE : null),
+                }}
+            >
+                <div data-main-screen-root="1" style={MAIN_SCREEN_CONTAINER_STYLE}>
+                    {screenContent}
+                </div>
+                {onboardingFullscreenButton}
+                {moneyUi}
+            </div>
         </div>
     );
 };
@@ -211,6 +271,21 @@ const SHELL_STYLE: React.CSSProperties = {
     position: 'relative',
     width: '100%',
     minHeight: '100vh',
+};
+
+const MAIN_SCREEN_CONTAINER_STYLE: React.CSSProperties = {
+    position: 'relative',
+    width: '100%',
+    minHeight: '100vh',
+};
+
+const NON_SIDEBAR_LAYER_STYLE: React.CSSProperties = {
+    width: '100%',
+    minHeight: '100vh',
+};
+
+const NON_SIDEBAR_DIMMED_STYLE: React.CSSProperties = {
+    filter: 'brightness(0.8)',
 };
 
 const ONBOARDING_FULLSCREEN_BUTTON_STYLE: React.CSSProperties = {

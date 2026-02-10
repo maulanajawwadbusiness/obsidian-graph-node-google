@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { SendButton } from '../components/SendButton';
 import { usePopup } from './PopupStore';
 import { useFullChat } from '../fullchat';
+import { ChatShortageNotif } from './ChatShortageNotif';
 import handoffIcon from '../assets/handoff_minichat.png';
 import type { PopupRect } from './popupTypes';
 import { t } from '../i18n/t';
@@ -384,6 +385,7 @@ export const MiniChatbar: React.FC<MiniChatbarProps> = ({ messages, onSend, onCl
     };
 
     return (
+        <>
         <div
             ref={chatbarRef}
             data-font="ui"
@@ -493,5 +495,7 @@ export const MiniChatbar: React.FC<MiniChatbarProps> = ({ messages, onSend, onCl
                 <SendButton onClick={handleSend} disabled={!inputText.trim()} />
             </div>
         </div>
+        <ChatShortageNotif surface="mini-chat" anchorRef={chatbarRef} zIndex={1004} />
+        </>
     );
 };

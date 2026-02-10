@@ -45,3 +45,4 @@
 19. Capture a reproducible matrix: browser, OS, GPU acceleration on/off, DPR, zoom, and font availability for each reported jarring case.
 20. Define acceptance criteria for "solid text": no perceived character slip, no overlap illusion, no wrap jitter, and stable readability during full manifesto playback.
 21. Replace the failed blank-screen preload gate experiment in Welcome1 with a true mount-stability gate. The previous attempt showed text slipping in front of the blank surface and continuous layout changes. Future fix must guarantee no partial text paint before reveal, no live reflow during reveal, and no visual jump at first frame.
+22. Sidebar layout decoupling: move ACCOUNT_OFFSET_LEFT off BOTTOM_SECTION_STYLE so avatar alignment can shift independently without moving the document viewer icon or other bottom-section elements.

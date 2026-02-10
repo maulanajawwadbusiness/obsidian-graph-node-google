@@ -19,6 +19,10 @@ The application layers, ordered by z-index (lowest to highest):
     *   Env gate: `ONBOARDING_ENABLED` (`src/config/env.ts`):
         *   `false` or not set: app starts directly in `graph`.
         *   `true` or `1`: app starts in `welcome1`.
+    *   Dev start override: `VITE_ONBOARDING_START_SCREEN` (`src/config/env.ts`):
+        *   Canonical values: `welcome1`, `welcome2`, `prompt`, `graph`.
+        *   Legacy aliases: `screen1`, `screen2`, `screen3`, `screen4`.
+        *   Applies in DEV only. Invalid values fall back to `welcome1` and emit a single DEV warning.
     *   Persistence is currently disabled (`PERSIST_SCREEN = false`), so refresh resets onboarding to `welcome1` when onboarding is enabled.
     *   Graph isolation contract: `GraphPhysicsPlayground` is lazy-loaded and mounted only when `screen === 'graph'`. This keeps physics/rendering inactive during onboarding screens.
     *   Money overlays mount only on `prompt` and `graph` screens:
@@ -97,14 +101,15 @@ Debug toggles:
 
 ### C. `EnterPrompt` (`src/screens/EnterPrompt.tsx`)
 *   **Purpose**: Prompt-stage shell that combines:
-    *   `PromptCard` (headline, placeholder input, fullscreen button).
+    *   `PromptCard` (headline, input, attachments, send control).
+    *   `FullscreenButton` (rendered by `AppShell` as onboarding chrome).
     *   Optional `PaymentGopayPanel` (top-right launcher/panel).
     *   `LoginOverlay` auth gate.
 *   **Behavior**:
     *   Reads auth state from `useAuth()`.
     *   Payment panel visibility is controlled by `SHOW_ENTERPROMPT_PAYMENT_PANEL` in `src/config/onboardingUiFlags.ts`.
-    *   Shows `LoginOverlay` while user is not authenticated and overlay is not manually hidden.
-    *   `LoginOverlay` blocks pointer/wheel interaction and locks page scroll when open.
+    *   `LoginOverlay` is currently feature-gated off in EnterPrompt (`LOGIN_OVERLAY_ENABLED = false`).
+    *   When enabled, `LoginOverlay` blocks pointer/wheel interaction and locks page scroll while open.
     *   Continue button in LoginOverlay is a non-functional formal control (no click handler). Auth flow proceeds via session state update after sign-in.
     *   Login debug/error text is hidden by default in dev and visible by default in prod. Dev override: `VITE_SHOW_LOGIN_DEBUG_ERRORS=1`.
 *   **Role in flow**:
@@ -120,7 +125,8 @@ Current fullscreen rules in onboarding:
    - Allowed from dedicated fullscreen icon button.
 2. Generic background click/keydown in onboarding must never call fullscreen.
 3. Overlay precedence:
-   - Welcome1 prompt overlay and EnterPrompt LoginOverlay are top-layer blockers.
+   - Welcome1 prompt overlay is a top-layer blocker.
+   - EnterPrompt LoginOverlay is also a blocker only when the overlay feature is enabled and open.
    - While these overlays are open, fullscreen icon input is blocked.
 
 ## 3. Physics Architecture And Contract
@@ -258,6 +264,7 @@ Arnvoid uses a unified AI layer (`src/ai/`) that abstracts provider details behi
 
 ### C. Paper Analyzer Output (Directed Map)
 *   **Prompt + Schema**: `src/ai/paperAnalyzer.ts` now requires both points and directed links.
+*   **Single Prompt Truth Source**: Analyzer prompt instructions are centralized in `src/server/src/llm/analyze/prompt.ts` and reused by backend analyze plus frontend DEV direct analyze.
 *   **Output Fields**:
     *   `main_points`: indexed points (0..N-1), each with title and explanation.
     *   `links`: directed edges using `from_index` and `to_index`.

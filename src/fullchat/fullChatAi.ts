@@ -59,11 +59,12 @@ async function* realResponseGenerator(
     context: AiContext,
     signal?: AbortSignal
 ): AsyncGenerator<string, void, unknown> {
+    const shortageSurface = context.shortageSurface ?? 'global';
 
     try {
         const systemPrompt = buildSystemPrompt(context);
         const estimatedCost = estimateIdrCost('chat', `${systemPrompt}\n${userPrompt}`);
-        const okToProceed = await ensureSufficientBalance({ requiredIdr: estimatedCost, context: 'chat' });
+        const okToProceed = await ensureSufficientBalance({ requiredIdr: estimatedCost, context: 'chat', surface: shortageSurface });
         if (!okToProceed) {
             return;
         }
@@ -112,7 +113,8 @@ async function* realResponseGenerator(
                         balanceIdr: balanceForChat,
                         requiredIdr: projectedCost,
                         shortfallIdr: shortfall,
-                        context: 'chat'
+                        context: 'chat',
+                        surface: shortageSurface,
                     });
                     controller.abort();
                     break;
@@ -143,7 +145,8 @@ async function* realResponseGenerator(
                 balanceIdr: balance,
                 requiredIdr: needed,
                 shortfallIdr: shortfall,
-                context: 'chat'
+                context: 'chat',
+                surface: shortageSurface,
             });
             pushMoneyNotice({
                 kind: 'deduction',

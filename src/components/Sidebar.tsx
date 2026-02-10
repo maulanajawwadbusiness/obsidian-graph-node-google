@@ -4,6 +4,7 @@ import sidebarIcon from '../assets/sidebar_icon.png';
 import homeIcon from '../assets/home_icon.png';
 import searchIcon from '../assets/search_icon.png';
 import threeDotIcon from '../assets/3_dot_icon.png';
+import documentIcon from '../assets/document_icon.png';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Mock Data
@@ -46,8 +47,6 @@ const HOME_OFFSET_TOP = -1;
 const SEARCH_OFFSET_TOP = -7.5;
 // More (3-dot) icon vertical offset: negative = up, positive = down (in px)
 const MORE_OFFSET_TOP = -9.5;
-// Account section horizontal offset: negative = left, positive = right (in px)
-const ACCOUNT_OFFSET_LEFT = -8;
 // Your Name text horizontal offset: negative = left, positive = right (in px)
 const NAME_OFFSET_LEFT = -13;
 // Close icon (expanded state) horizontal offset: negative = left, positive = right (in px)
@@ -62,13 +61,23 @@ const DEFAULT_ICON_COLOR = '#ffffff';
 type SidebarProps = {
     isExpanded: boolean;
     onToggle: () => void;
+    disabled?: boolean;
+    onToggleDocumentViewer?: () => void;
+    showDocumentViewerButton?: boolean;
 };
 
-export const Sidebar: React.FC<SidebarProps> = ({ isExpanded, onToggle }) => {
+export const Sidebar: React.FC<SidebarProps> = ({
+    isExpanded,
+    onToggle,
+    disabled = false,
+    onToggleDocumentViewer,
+    showDocumentViewerButton = false,
+}) => {
     const [logoHover, setLogoHover] = React.useState(false);
     const [homeHover, setHomeHover] = React.useState(false);
     const [searchHover, setSearchHover] = React.useState(false);
     const [moreHover, setMoreHover] = React.useState(false);
+    const [documentHover, setDocumentHover] = React.useState(false);
     const [closeHover, setCloseHover] = React.useState(false);
     const [hoveredInterfaceId, setHoveredInterfaceId] = React.useState<string | null>(null);
     const [avatarRowHover, setAvatarRowHover] = React.useState(false);
@@ -77,10 +86,17 @@ export const Sidebar: React.FC<SidebarProps> = ({ isExpanded, onToggle }) => {
         ...SIDEBAR_BASE_STYLE,
         width: isExpanded ? EXPANDED_WIDTH : COLLAPSED_WIDTH,
         minWidth: isExpanded ? MIN_EXPANDED_WIDTH : COLLAPSED_WIDTH,
+        pointerEvents: disabled ? 'none' : 'auto',
     };
 
     return (
-        <aside style={sidebarStyle}>
+        <aside
+            data-sidebar-root="1"
+            style={sidebarStyle}
+            onPointerDown={(e) => e.stopPropagation()}
+            onWheelCapture={(e) => e.stopPropagation()}
+            onWheel={(e) => e.stopPropagation()}
+        >
             {/* Top Section */}
             <div style={TOP_SECTION_STYLE}>
                 {/* Logo / Toggle Row */}
@@ -151,66 +167,101 @@ export const Sidebar: React.FC<SidebarProps> = ({ isExpanded, onToggle }) => {
                     />
                 </div>
 
-                {/* Your Interfaces Section (expanded only) */}
-                {isExpanded && (
-                    <div style={INTERFACES_SECTION_STYLE}>
-                        <div style={SECTION_HEADER_STYLE}>Your Interfaces</div>
-                        <div style={INTERFACES_LIST_STYLE}>
-                            {MOCK_INTERFACES.map((item) => (
-                                <button
-                                    key={item.id}
-                                    type="button"
-                                    style={{
-                                        ...INTERFACE_ITEM_STYLE,
-                                        color: hoveredInterfaceId === item.id ? HOVER_ACCENT_COLOR : INTERFACE_ITEM_STYLE.color,
-                                    }}
-                                    onMouseEnter={() => setHoveredInterfaceId(item.id)}
-                                    onMouseLeave={() => setHoveredInterfaceId(null)}
-                                >
-                                    {item.name}
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-                )}
             </div>
+
+            {/* Your Interfaces Section (expanded only, isolated scroll area) */}
+            {isExpanded && (
+                <div style={INTERFACES_SECTION_STYLE}>
+                    <div style={SECTION_HEADER_STYLE}>Your Interfaces</div>
+                    <div style={INTERFACES_LIST_STYLE}>
+                        {MOCK_INTERFACES.map((item) => (
+                            <button
+                                key={item.id}
+                                type="button"
+                                style={{
+                                    ...INTERFACE_ITEM_STYLE,
+                                    color: hoveredInterfaceId === item.id ? HOVER_ACCENT_COLOR : INTERFACE_ITEM_STYLE.color,
+                                }}
+                                onMouseEnter={() => setHoveredInterfaceId(item.id)}
+                                onMouseLeave={() => setHoveredInterfaceId(null)}
+                            >
+                                {item.name}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+            )}
 
             {/* Bottom Section - User Avatar */}
             <div
                 style={{
                     ...BOTTOM_SECTION_STYLE,
-                    justifyContent: isExpanded ? 'flex-start' : 'center',
-                    padding: isExpanded ? BOTTOM_SECTION_STYLE.padding : '12px 0',
+                    alignItems: isExpanded ? 'stretch' : 'center',
                 }}
             >
-                <div
-                    style={{
-                        ...PROFILE_ROW_STYLE,
-                        width: isExpanded ? PROFILE_ROW_STYLE.width : 'auto',
-                        margin: isExpanded ? undefined : '0 auto',
-                        padding: isExpanded ? PROFILE_ROW_STYLE.padding : `${COLLAPSED_AVATAR_HOVER_PADDING}px`,
-                        backgroundColor: avatarRowHover ? 'rgba(255, 255, 255, 0.14)' : 'transparent',
-                    }}
-                    onMouseEnter={() => setAvatarRowHover(true)}
-                    onMouseLeave={() => setAvatarRowHover(false)}
-                >
+                {showDocumentViewerButton ? (
                     <button
                         type="button"
                         style={{
-                            ...ICON_BUTTON_STYLE,
-                            padding: isExpanded ? ICON_BUTTON_STYLE.padding : `${COLLAPSED_AVATAR_BUTTON_PADDING}px`,
+                            ...NAV_ITEM_STYLE,
+                            justifyContent: 'flex-start',
+                            alignSelf: 'stretch',
+                            marginBottom: '8px',
                         }}
+                        onClick={onToggleDocumentViewer}
+                        onPointerDown={(e) => e.stopPropagation()}
+                        onMouseEnter={() => setDocumentHover(true)}
+                        onMouseLeave={() => setDocumentHover(false)}
+                        title="Open document viewer"
                     >
-                        <div
+                        <MaskIcon
+                            src={documentIcon}
+                            size={ICON_SIZE}
+                            color={documentHover ? HOVER_ACCENT_COLOR : DEFAULT_ICON_COLOR}
+                            opacity={documentHover ? ICON_OPACITY_HOVER : ICON_OPACITY_DEFAULT}
+                        />
+                        {isExpanded && (
+                            <span
+                                style={{
+                                    ...NAV_LABEL_STYLE,
+                                    color: documentHover ? HOVER_ACCENT_COLOR : NAV_LABEL_STYLE.color,
+                                }}
+                            >
+                                Document Viewer
+                            </span>
+                        )}
+                    </button>
+                ) : null}
+                <div style={AVATAR_SECTION_STYLE}>
+                    <div
+                        style={{
+                            ...PROFILE_ROW_STYLE,
+                            width: isExpanded ? PROFILE_ROW_STYLE.width : 'auto',
+                            margin: isExpanded ? undefined : '0 auto',
+                            padding: isExpanded ? PROFILE_ROW_STYLE.padding : `${COLLAPSED_AVATAR_HOVER_PADDING}px`,
+                            backgroundColor: avatarRowHover ? 'rgba(255, 255, 255, 0.14)' : 'transparent',
+                        }}
+                        onMouseEnter={() => setAvatarRowHover(true)}
+                        onMouseLeave={() => setAvatarRowHover(false)}
+                    >
+                        <button
+                            type="button"
                             style={{
-                                ...AVATAR_STYLE,
-                                opacity: 1,
+                                ...ICON_BUTTON_STYLE,
+                                padding: isExpanded ? ICON_BUTTON_STYLE.padding : `${COLLAPSED_AVATAR_BUTTON_PADDING}px`,
                             }}
                         >
-                            BA
-                        </div>
-                    </button>
-                    {isExpanded && <span style={AVATAR_NAME_STYLE}>Your Name</span>}
+                            <div
+                                style={{
+                                    ...AVATAR_STYLE,
+                                    opacity: 1,
+                                }}
+                            >
+                                BA
+                            </div>
+                        </button>
+                        {isExpanded && <span style={AVATAR_NAME_STYLE}>Your Name</span>}
+                    </div>
                 </div>
             </div>
         </aside>
@@ -300,7 +351,7 @@ const SIDEBAR_BASE_STYLE: React.CSSProperties = {
     left: 0,
     top: 0,
     bottom: 0,
-    background: '#111115',
+    background: '#06060A',
     borderRight: '1px solid rgba(255, 255, 255, 0.1)',
     display: 'flex',
     flexDirection: 'column',
@@ -313,8 +364,6 @@ const TOP_SECTION_STYLE: React.CSSProperties = {
     flexDirection: 'column',
     padding: `12px ${8 + ICON_OFFSET_LEFT}px 12px ${8 - ICON_OFFSET_LEFT}px`,
     gap: '4px',
-    flex: 1,
-    overflow: 'hidden',
 };
 
 const LOGO_ROW_STYLE: React.CSSProperties = {
@@ -356,7 +405,8 @@ const NAV_LABEL_STYLE: React.CSSProperties = {
 const INTERFACES_SECTION_STYLE: React.CSSProperties = {
     display: 'flex',
     flexDirection: 'column',
-    marginTop: '16px',
+    padding: `0 ${8 + ICON_OFFSET_LEFT}px 0 ${8 - ICON_OFFSET_LEFT}px`,
+    marginTop: '12px',
     flex: 1,
     minHeight: 0,
     overflow: 'hidden',
@@ -395,10 +445,16 @@ const INTERFACE_ITEM_STYLE: React.CSSProperties = {
 
 const BOTTOM_SECTION_STYLE: React.CSSProperties = {
     display: 'flex',
-    alignItems: 'center',
-    padding: '12px 8px',
-    paddingLeft: `${8 + ACCOUNT_OFFSET_LEFT}px`,
+    flexDirection: 'column',
+    flexShrink: 0,
+    marginTop: 'auto',
+    padding: `12px ${8 + ICON_OFFSET_LEFT}px 12px ${8 - ICON_OFFSET_LEFT}px`,
+};
+
+const AVATAR_SECTION_STYLE: React.CSSProperties = {
+    width: '100%',
     borderTop: '1px solid rgba(255, 255, 255, 0.1)',
+    paddingTop: '8px',
 };
 
 const PROFILE_ROW_STYLE: React.CSSProperties = {

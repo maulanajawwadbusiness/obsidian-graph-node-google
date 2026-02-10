@@ -32,7 +32,7 @@ export const PopupPortal: React.FC<PopupPortalProps> = ({ trackNode, engineRef }
             {chatbarOpen && (
                 <MiniChatbar
                     messages={messages}
-                    onSend={sendMessage}
+                    onSend={(text) => sendMessage(text, 'mini-chat')}
                     onClose={closeChatbar}
                 />
             )}

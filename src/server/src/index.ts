@@ -7,6 +7,7 @@ import { getUsdToIdr } from "./fx/fxService";
 import { midtransRequest } from "./midtrans/client";
 import { buildAnalyzeJsonSchema, validateAnalyzeJson } from "./llm/analyze/schema";
 import { runOpenrouterAnalyze } from "./llm/analyze/openrouterAnalyze";
+import { buildStructuredAnalyzeInput } from "./llm/analyze/prompt";
 import { recordTokenSpend } from "./llm/freePoolAccounting";
 import { type LlmError } from "./llm/llmClient";
 import { LLM_LIMITS } from "./llm/limits";
@@ -961,13 +962,18 @@ app.post("/api/llm/paper-analyze", requireAuth, async (req, res) => {
       console.log("[llm] analyze forced_provider=openai reason=analyze_requires_strict_json");
     }
 
+    const analyzeInput = buildStructuredAnalyzeInput({
+      text: validation.text,
+      nodeCount: validation.nodeCount,
+      lang: validation.lang
+    });
     const usageTracker = initUsageTracker({
       provider: provider.name,
       logical_model: validation.model,
       provider_model_id: providerModelId,
       request_id: requestId
     });
-    usageTracker.recordInputText(validation.text);
+    usageTracker.recordInputText(analyzeInput);
     const inputTokensEstimate = usageTracker.getInputTokensEstimate();
     const fx = await getUsdToIdr();
     fxRate = fx.rate;
@@ -1042,7 +1048,8 @@ app.post("/api/llm/paper-analyze", requireAuth, async (req, res) => {
         provider,
         model: validation.model,
         input: validation.text,
-        nodeCount: validation.nodeCount
+        nodeCount: validation.nodeCount,
+        lang: validation.lang
       });
 
       if (openrouterResult.ok === false) {
@@ -1128,7 +1135,7 @@ app.post("/api/llm/paper-analyze", requireAuth, async (req, res) => {
     } else {
       const result = await provider.generateStructuredJson({
         model: validation.model,
-        input: validation.text,
+        input: analyzeInput,
         schema: analyzeSchema
       });
 

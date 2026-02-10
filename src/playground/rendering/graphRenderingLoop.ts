@@ -281,6 +281,7 @@ export const startGraphRenderLoop = (deps: GraphRenderLoopDeps) => {
     const perfSample = createPerfSample();
     const overloadState = createOverloadState();
     const trackMetrics = createMetricsTracker(setMetrics, () => renderDebugRef.current);
+    let firstFrameLogged = false;
 
     ensureSeededGraph(engine, config, seed, spawnCount);
     engine.updateBounds(canvas.width, canvas.height);
@@ -307,6 +308,10 @@ export const startGraphRenderLoop = (deps: GraphRenderLoopDeps) => {
         }
 
         const now = performance.now();
+        if (!firstFrameLogged) {
+            console.log('[RenderLoop] first_frame');
+            firstFrameLogged = true;
+        }
         const schedulerResult = runPhysicsScheduler(engine, schedulerState, overloadState, perfSample);
 
         if (engine.config.debugPerf) {

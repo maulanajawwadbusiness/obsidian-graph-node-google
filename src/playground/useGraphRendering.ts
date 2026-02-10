@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import type { Dispatch, RefObject, SetStateAction } from 'react';
+import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import { PhysicsEngine } from '../physics/engine';
 import { ForceConfig } from '../physics/types';
 import { SkinMode } from '../visual/theme';
@@ -23,9 +23,10 @@ import type {
 import { RenderScratch } from './rendering/renderScratch';
 
 type UseGraphRenderingProps = {
-    canvasRef: RefObject<HTMLCanvasElement>;
+    canvasRef: MutableRefObject<HTMLCanvasElement | null>;
+    canvasReady: boolean;
     config: ForceConfig;
-    engineRef: RefObject<PhysicsEngine>;
+    engineRef: MutableRefObject<PhysicsEngine>;
     seed: number;
     setMetrics: Dispatch<SetStateAction<PlaygroundMetrics>>;
     spawnCount: number;
@@ -43,6 +44,7 @@ type UseGraphRenderingProps = {
 
 export const useGraphRendering = ({
     canvasRef,
+    canvasReady,
     config,
     engineRef,
     seed,
@@ -140,13 +142,20 @@ export const useGraphRendering = ({
 
     useEffect(() => {
         const canvas = canvasRef.current;
-        if (!canvas) return;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) return;
-
         const engine = engineRef.current;
-        if (!engine) return;
 
+        if (!canvasReady || !canvas || !engine) {
+            console.log(`[RenderLoop] skipped missing ${!canvas ? 'canvas' : 'engine'}`);
+            return;
+        }
+
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+            console.log('[RenderLoop] skipped missing 2d context');
+            return;
+        }
+
+        console.log(`[RenderLoop] start canvas=${canvas.clientWidth}x${canvas.clientHeight}`);
         const stopLoop = startGraphRenderLoop({
             canvas,
             ctx,
@@ -172,8 +181,11 @@ export const useGraphRendering = ({
             renderScratch: renderScratchRef.current,
         });
 
-        return stopLoop;
-    }, [startGraphRenderLoop]);
+        return () => {
+            console.log('[RenderLoop] stop');
+            stopLoop();
+        };
+    }, [canvasReady, config, seed, spawnCount, setMetrics]);
 
     const handleDragStart = (nodeId: string, clientX: number, clientY: number) => {
         const engine = engineRef.current;

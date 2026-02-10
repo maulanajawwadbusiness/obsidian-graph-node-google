@@ -102,3 +102,80 @@ Expected submit behavior if not logged in:
 - `PERSIST_SCREEN = false` at `src/screens/AppShell.tsx:20`: refresh drops onboarding state and any in-memory pending payload.
 - Auth-disabled overlay in EnterPrompt: submit can happen while logged out unless explicitly gated.
 - Existing stale-doc check in `applyAnalysisToNodes` depends on `getCurrentDocId`; for pending-text path, pass a real mutable current-doc source, not a constant closure.
+
+## Step 1 Update (UI Only): PromptCard Input + Submit
+- `PromptCard` now exposes props for parent control:
+  - `value?: string`
+  - `onChange?: (text: string) => void`
+  - `onSubmit?: (text: string) => void`
+  - `disabled?: boolean`
+- `PromptCard` keeps a local `inputText` state synchronized from `value` and forwards edits through `onChange`.
+- Submit triggers:
+  - Send button click calls `onSubmit(currentText)`.
+  - Keyboard rule: `Enter` submits, `Shift+Enter` inserts newline.
+- This is UI-only and does not wire analyzer, graph handoff, routing, auth, or balance flow yet.
+
+## Step 2 Update (UI Hand-off Capture Only)
+- `EnterPrompt` now owns `promptText` state and renders `PromptCard` as a controlled input (`value` + `onChange`).
+- `EnterPrompt` now handles submit with `onSubmit` from `PromptCard`.
+- Current submit behavior is intentionally minimal:
+  - store submitted text in temporary local ref for later handoff wiring
+  - log submit length with `[enterprompt] submitted_text_len=...`
+  - call `onEnter()` to advance screen flow
+- This step does not call analyzer or API and is not end-to-end yet.
+
+## Step 3 Update (Pending Payload Pass-through)
+- Pending payload state now lives in `AppShell` as:
+  - `{ kind: 'text', text, createdAt } | null`
+- `EnterPrompt` now writes submitted text upward via a new optional prop callback:
+  - `onSubmitPromptText?: (text: string) => void`
+- `AppShell` stores pending payload on submit and logs:
+  - `[appshell] pending_analysis_set kind=text len=...`
+- `GraphPhysicsPlayground` now receives pass-through props from `AppShell`:
+  - `pendingAnalysisPayload`
+  - `onPendingAnalysisConsumed`
+- In this step, graph does not consume or clear the payload yet; this is handoff wiring only.
+
+## Step 4 Update (Graph One-Shot Consume + Analysis)
+- Consumption effect now lives in `GraphPhysicsPlaygroundInternal` in `src/playground/GraphPhysicsPlayground.tsx`.
+- Engine/doc ready condition used before running:
+  - payload exists and `kind === 'text'`
+  - one-shot guard is still false
+  - AI activity is not currently active
+  - engine exists and has spawned nodes (`engine.nodes.size > 0`)
+- One-shot guarantee:
+  - `hasConsumedPendingRef` blocks duplicate effect runs (including strict-mode re-run)
+  - payload is cleared before async analysis starts via `onPendingAnalysisConsumed()`
+- Analysis path used is unchanged truth path:
+  - `applyAnalysisToNodes(engine, text, docId, getCurrentDocId, setAIActivity, setAIError, setInferredTitle)`
+  - this drives `setTopology` and engine rewiring in existing node binding code.
+- Minimal logs:
+  - `[graph] consuming_pending_analysis kind=text len=...`
+  - `[graph] pending_analysis_done ok=true/false`
+
+## Step 5 Update (Synthetic Document Parity)
+- On pending text consume, graph now creates a synthetic `ParsedDocument` and sets it in document store before analysis.
+- Synthetic fields included:
+  - `id`: `pasted-${createdAt}`
+  - `fileName`: `${inferredTitle}.txt`
+  - `mimeType`: `text/plain`
+  - `sourceType`: `txt`
+  - `text`: full pasted raw text
+  - `warnings`: `[]`
+  - `meta.wordCount` and `meta.charCount`
+- Title inference:
+  - pick first non-empty line from pasted text
+  - normalize whitespace and cap at 80 chars
+  - fallback: `Pasted Document`
+- `docId` used for `setDocument` matches `docId` passed into `applyAnalysisToNodes`, preserving stale-run checks.
+- File upload path is unchanged; this synthetic path only runs for pending payload kind `text`.
+
+## Step 6 Update (Auth + Error Behavior)
+- Chosen policy: Option A (allow submit and navigate to graph, then analysis runs and uses existing error surface on failure).
+- Reason: this matches current app auth pattern where submit and graph entry are not blocked in EnterPrompt, and analysis failures are surfaced through existing AI error state.
+- Error mapping location:
+  - in `GraphPhysicsPlayground` pending-consume effect, we now pass a wrapped `setAIError` callback into `applyAnalysisToNodes`.
+  - when mapped message indicates auth/login requirement, graph logs:
+    - `[graph] analyze_failed status=401 (auth)`
+  - UI still uses existing `setAIError` + `LoadingScreen` flow.
+- No new panels, toasts, or modal components were added.

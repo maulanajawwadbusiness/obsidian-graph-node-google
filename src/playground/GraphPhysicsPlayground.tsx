@@ -6,7 +6,6 @@ import { DEFAULT_PHYSICS_CONFIG } from '../physics/config';
 import { DRAG_ENABLED, SkinMode, getTheme } from '../visual/theme';
 import { CanvasOverlays } from './components/CanvasOverlays';
 import { SidebarControls } from './components/SidebarControls';
-import { TextPreviewButton } from './components/TextPreviewButton';
 import { HalfLeftWindow } from './components/HalfLeftWindow';
 import { AIActivityGlyph } from './components/AIActivityGlyph';
 import { CONTAINER_STYLE, MAIN_STYLE, SHOW_THEME_TOGGLE, SHOW_MAP_TITLE, SHOW_BRAND_LABEL } from './graphPlaygroundStyles';
@@ -15,6 +14,7 @@ import { useGraphRendering } from './useGraphRendering';
 import { generateRandomGraph } from './graphRandom';
 import { DocumentProvider, useDocument } from '../store/documentStore';
 import { applyFirstWordsToNodes, applyAnalysisToNodes } from '../document/nodeBinding';
+import type { ParsedDocument } from '../document/types';
 import { MapTitleBlock } from './components/MapTitleBlock';
 import { BrandLabel } from './components/BrandLabel';
 import { PopupProvider, usePopup } from '../popup/PopupStore';
@@ -40,11 +40,45 @@ if (import.meta.env.DEV) {
     import('../graph/devKGHelpers');
 }
 
+type PendingAnalysisPayload =
+    | { kind: 'text'; text: string; createdAt: number }
+    | { kind: 'file'; file: File; createdAt: number }
+    | null;
+
+type GraphPhysicsPlaygroundProps = {
+    pendingAnalysisPayload: PendingAnalysisPayload;
+    onPendingAnalysisConsumed: () => void;
+    onLoadingStateChange?: (isLoading: boolean) => void;
+    documentViewerToggleToken?: number;
+};
+
+function inferTitleFromPastedText(text: string): string {
+    const firstLine = text
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .find((line) => line.length > 0);
+    if (!firstLine) return 'Pasted Document';
+    const normalized = firstLine.replace(/\s+/g, ' ');
+    return normalized.length > 80 ? normalized.slice(0, 80).trim() : normalized;
+}
+
+function countWords(text: string): number {
+    const trimmed = text.trim();
+    if (!trimmed) return 0;
+    return trimmed.split(/\s+/).length;
+}
+
 // -----------------------------------------------------------------------------
 // Main Component (Internal)
 // -----------------------------------------------------------------------------
-const GraphPhysicsPlaygroundInternal: React.FC = () => {
-    const canvasRef = useRef<HTMLCanvasElement>(null);
+const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
+    pendingAnalysisPayload,
+    onPendingAnalysisConsumed,
+    onLoadingStateChange,
+    documentViewerToggleToken,
+}) => {
+    const canvasRef = useRef<HTMLCanvasElement | null>(null);
+    const [canvasReady, setCanvasReady] = useState(false);
     // Run 3: Lazy Init engine to prevent double-construction on render
     const engineRef = useRef<PhysicsEngine>(null!); // forcing non-null assertion as we init immediately
     if (!engineRef.current) {
@@ -58,11 +92,8 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
     const popupContext = usePopup();
     const fullChatContext = useFullChat();
     const fullChatOpen = fullChatContext.isOpen;
-
-    const aiErrorMessage = documentContext.state.aiErrorMessage;
-    if (documentContext.state.aiActivity || aiErrorMessage) {
-        return <LoadingScreen errorMessage={aiErrorMessage || null} />;
-    }
+    const hasConsumedPendingRef = useRef(false);
+    const currentPendingDocIdRef = useRef<string | null>(null);
 
     // State for React UI
     const [config, setConfig] = useState<ForceConfig>(DEFAULT_PHYSICS_CONFIG);
@@ -135,6 +166,7 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
         handleDragEnd
     } = useGraphRendering({
         canvasRef,
+        canvasReady,
         config: effectiveConfig, // Use adaptive config
         engineRef,
         seed,
@@ -151,6 +183,11 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
         markerIntensity,
         forceShowRestMarkers
     });
+
+    const setCanvasEl = React.useCallback((el: HTMLCanvasElement | null) => {
+        canvasRef.current = el;
+        setCanvasReady(Boolean(el));
+    }, []);
 
     // 2. Sync Engine Config when effective config changes
     useEffect(() => {
@@ -541,6 +578,162 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
         spawnGraph(4, 1337);
     }, []);
 
+    useEffect(() => {
+        if (!pendingAnalysisPayload) return;
+        if (hasConsumedPendingRef.current) return;
+        if (documentContext.state.aiActivity) return;
+        if (!engineRef.current || engineRef.current.nodes.size === 0) return;
+
+        const setAIErrorWithAuthLog = (message: string | null) => {
+            if (message && message.includes('Please log in')) {
+                console.log('[graph] analyze_failed status=401 (auth)');
+            }
+            documentContext.setAIError(message);
+        };
+
+        if (pendingAnalysisPayload.kind === 'text') {
+            hasConsumedPendingRef.current = true;
+            const text = pendingAnalysisPayload.text;
+            const createdAt = pendingAnalysisPayload.createdAt;
+            const docId = `pasted-${createdAt}`;
+            const inferredTitle = inferTitleFromPastedText(text);
+            const syntheticDocument: ParsedDocument = {
+                id: docId,
+                fileName: `${inferredTitle}.txt`,
+                mimeType: 'text/plain',
+                sourceType: 'txt',
+                text,
+                warnings: [],
+                meta: {
+                    wordCount: countWords(text),
+                    charCount: text.length
+                }
+            };
+            currentPendingDocIdRef.current = docId;
+
+            console.log(`[graph] consuming_pending_analysis kind=text len=${text.length}`);
+            onPendingAnalysisConsumed();
+            documentContext.setDocument(syntheticDocument);
+            documentContext.setInferredTitle(inferredTitle);
+
+            void (async () => {
+                let ok = true;
+                try {
+                    await applyAnalysisToNodes(
+                        engineRef.current,
+                        text,
+                        docId,
+                        () => currentPendingDocIdRef.current,
+                        documentContext.setAIActivity,
+                        setAIErrorWithAuthLog,
+                        documentContext.setInferredTitle
+                    );
+                } catch (error) {
+                    ok = false;
+                    console.error('[graph] pending analysis failed', error);
+                    setAIErrorWithAuthLog('We could not reach the server, so analysis did not run. Your graph is unchanged.');
+                } finally {
+                    console.log(`[graph] pending_analysis_done ok=${ok}`);
+                }
+            })();
+            return;
+        }
+
+        if (pendingAnalysisPayload.kind !== 'file') return;
+        if (!documentContext.isWorkerReady) return;
+
+        hasConsumedPendingRef.current = true;
+        const file = pendingAnalysisPayload.file;
+        console.log(`[graph] consuming_pending_analysis kind=file name=${file.name} size=${file.size}`);
+        onPendingAnalysisConsumed();
+
+        void (async () => {
+            let ok = true;
+            let parsed: ParsedDocument | null = null;
+            try {
+                setLastDroppedFile(file);
+                parsed = await documentContext.parseFile(file);
+            } catch (error) {
+                ok = false;
+                console.error('[graph] pending_file_parse_failed', error);
+                documentContext.setAIError('Could not parse file. Please try another file.');
+                documentContext.setAIActivity(false);
+                console.log(`[graph] pending_analysis_done ok=${ok}`);
+                return;
+            }
+
+            if (!parsed) {
+                ok = false;
+                console.log('[graph] pending_file_parse_failed reason=no_document');
+                documentContext.setAIError('Could not parse file. Please try another file.');
+                documentContext.setAIActivity(false);
+                console.log(`[graph] pending_analysis_done ok=${ok}`);
+                return;
+            }
+
+            const parsedText = parsed.text?.trim() ?? '';
+            if (parsedText.length === 0) {
+                ok = false;
+                console.log('[graph] pending_file_empty_text');
+                documentContext.setAIError('Could not extract text from file (scanned PDF or empty).');
+                documentContext.setAIActivity(false);
+                console.log(`[graph] pending_analysis_done ok=${ok}`);
+                return;
+            }
+
+            const docId = parsed.id || `dropped-${pendingAnalysisPayload.createdAt}`;
+            currentPendingDocIdRef.current = docId;
+            documentContext.setDocument(parsed);
+            applyFirstWordsToNodes(engineRef.current, parsed);
+
+            try {
+                await applyAnalysisToNodes(
+                    engineRef.current,
+                    parsed.text,
+                    docId,
+                    () => currentPendingDocIdRef.current,
+                    documentContext.setAIActivity,
+                    setAIErrorWithAuthLog,
+                    documentContext.setInferredTitle
+                );
+            } catch (error) {
+                ok = false;
+                console.error('[graph] pending_file_analyze_failed', error);
+                const message = error instanceof Error ? error.message : String(error);
+                const lower = message.toLowerCase();
+                if (
+                    lower.includes('401') ||
+                    lower.includes('403') ||
+                    lower.includes('unauthorized') ||
+                    lower.includes('forbidden') ||
+                    lower.includes('please log in')
+                ) {
+                    documentContext.setAIError('You are not logged in. Please log in and try again.');
+                } else if (
+                    lower.includes('failed to fetch') ||
+                    lower.includes('network') ||
+                    lower.includes('timeout')
+                ) {
+                    documentContext.setAIError('We could not reach the server, so analysis did not run. Your graph is unchanged.');
+                } else {
+                    documentContext.setAIError('Analysis failed. Please try again.');
+                }
+            } finally {
+                documentContext.setAIActivity(false);
+                console.log(`[graph] pending_analysis_done ok=${ok}`);
+            }
+        })();
+    }, [
+        pendingAnalysisPayload,
+        onPendingAnalysisConsumed,
+        documentContext.state.aiActivity,
+        documentContext.isWorkerReady,
+        documentContext.setAIActivity,
+        documentContext.setDocument,
+        documentContext.setAIError,
+        documentContext.setInferredTitle
+    ]);
+
     const handleSpawn = () => {
         // Generate new random seed for each spawn
         const newSeed = Date.now();
@@ -669,6 +862,37 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
         clearHover('viewer toggle', -1, 'unknown');
         documentContext.togglePreview();
     };
+    const lastDocumentViewerToggleTokenRef = useRef<number | undefined>(documentViewerToggleToken);
+
+    useEffect(() => {
+        if (documentViewerToggleToken === undefined) return;
+        if (lastDocumentViewerToggleTokenRef.current === undefined) {
+            lastDocumentViewerToggleTokenRef.current = documentViewerToggleToken;
+            return;
+        }
+        if (documentViewerToggleToken === lastDocumentViewerToggleTokenRef.current) return;
+        lastDocumentViewerToggleTokenRef.current = documentViewerToggleToken;
+        toggleViewer();
+    }, [documentViewerToggleToken]);
+
+    const aiErrorMessage = documentContext.state.aiErrorMessage;
+    const isGraphLoading = documentContext.state.aiActivity || Boolean(aiErrorMessage);
+    const wasLoadingRef = useRef(false);
+
+    useEffect(() => {
+        if (wasLoadingRef.current && !isGraphLoading) {
+            console.log('[Graph] loading_exit_remount_canvas');
+        }
+        wasLoadingRef.current = isGraphLoading;
+    }, [isGraphLoading]);
+
+    useEffect(() => {
+        onLoadingStateChange?.(isGraphLoading);
+    }, [isGraphLoading, onLoadingStateChange]);
+
+    if (isGraphLoading) {
+        return <LoadingScreen errorMessage={aiErrorMessage || null} />;
+    }
 
     return (
         <div style={{ ...CONTAINER_STYLE, background: activeTheme.background }}>
@@ -693,7 +917,7 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
                 onDrop={handleDrop}
             >
                 <SessionExpiryBanner />
-                <canvas ref={canvasRef} style={{ width: '100%', height: '100%', background: activeTheme.background }} />
+                <canvas ref={setCanvasEl} style={{ width: '100%', height: '100%', background: activeTheme.background }} />
                 <CanvasOverlays
                     config={config}
                     onConfigChange={handleConfigChange}
@@ -731,7 +955,6 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
                     hudDragTargetId={hudDragTargetId}
                     hudScores={hudScores}
                 />
-                <TextPreviewButton onToggle={toggleViewer} />
                 {showTestBackend && <TestBackend />}
                 <AIActivityGlyph />
                 {SHOW_MAP_TITLE && <MapTitleBlock />}
@@ -839,11 +1062,21 @@ const GraphPhysicsPlaygroundInternal: React.FC = () => {
 }; // close GraphPhysicsPlaygroundInternal
 
 // Wrapper with DocumentProvider, PopupProvider, and FullChatProvider
-export const GraphPhysicsPlayground: React.FC = () => (
+export const GraphPhysicsPlayground: React.FC<GraphPhysicsPlaygroundProps> = ({
+    pendingAnalysisPayload,
+    onPendingAnalysisConsumed,
+    onLoadingStateChange,
+    documentViewerToggleToken
+}) => (
     <DocumentProvider>
         <PopupProvider>
             <FullChatProvider>
-                <GraphPhysicsPlaygroundInternal />
+                <GraphPhysicsPlaygroundInternal
+                    pendingAnalysisPayload={pendingAnalysisPayload}
+                    onPendingAnalysisConsumed={onPendingAnalysisConsumed}
+                    onLoadingStateChange={onLoadingStateChange}
+                    documentViewerToggleToken={documentViewerToggleToken}
+                />
             </FullChatProvider>
         </PopupProvider>
     </DocumentProvider>

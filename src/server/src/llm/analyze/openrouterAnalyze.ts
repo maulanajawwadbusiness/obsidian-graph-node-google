@@ -2,6 +2,7 @@ import type { LlmProvider } from "../providers/types";
 import type { LlmError } from "../llmClient";
 import type { LogicalModel } from "../models/logicalModels";
 import { buildAnalyzeJsonSchema, validateAnalyzeJson, type AnalyzeValidationResult } from "./schema";
+import { buildOpenrouterAnalyzePrompt, type AnalyzePromptLang } from "./prompt";
 
 type OpenrouterAnalyzeOk = {
   ok: true;
@@ -17,26 +18,6 @@ type OpenrouterAnalyzeErr = {
 };
 
 type OpenrouterAnalyzeResult = OpenrouterAnalyzeOk | OpenrouterAnalyzeErr;
-
-function buildPrompt(schema: object, input: string, errors?: string[]): string {
-  const header = [
-    "Return ONLY valid JSON that matches the provided JSON Schema.",
-    "Do not include backticks or markdown.",
-    "If you are unsure, return an empty JSON object {}."
-  ];
-  if (errors && errors.length > 0) {
-    header.push("You returned invalid JSON.");
-    header.push(`Validation errors: ${errors.join("; ")}`);
-  }
-  const body = [
-    "JSON Schema:",
-    JSON.stringify(schema),
-    "",
-    "Input:",
-    input
-  ];
-  return [...header, "", ...body].join("\n");
-}
 
 function tryParseJson(text: string): unknown | null {
   const trimmed = text.trim();
@@ -66,9 +47,15 @@ export async function runOpenrouterAnalyze(opts: {
   model: LogicalModel;
   input: string;
   nodeCount: number;
+  lang?: AnalyzePromptLang;
 }): Promise<OpenrouterAnalyzeResult> {
   const schema = buildAnalyzeJsonSchema(opts.nodeCount);
-  const firstPrompt = buildPrompt(schema, opts.input);
+  const firstPrompt = buildOpenrouterAnalyzePrompt({
+    schema,
+    text: opts.input,
+    nodeCount: opts.nodeCount,
+    lang: opts.lang
+  });
   const first = await opts.provider.generateText({
     model: opts.model,
     input: firstPrompt
@@ -91,7 +78,13 @@ export async function runOpenrouterAnalyze(opts: {
   if (firstValidation.ok === false) {
     retryErrors = firstValidation.errors;
   }
-  const retryPrompt = buildPrompt(schema, opts.input, retryErrors);
+  const retryPrompt = buildOpenrouterAnalyzePrompt({
+    schema,
+    text: opts.input,
+    nodeCount: opts.nodeCount,
+    lang: opts.lang,
+    validationErrors: retryErrors
+  });
   const retry = await opts.provider.generateText({
     model: opts.model,
     input: retryPrompt

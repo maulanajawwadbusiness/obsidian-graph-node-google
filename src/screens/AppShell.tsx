@@ -204,6 +204,12 @@ export const AppShell: React.FC = () => {
 
     React.useEffect(() => {
         if (!isSearchInterfacesOpen) return;
+        if (!sidebarDisabled) return;
+        closeSearchInterfaces();
+    }, [closeSearchInterfaces, isSearchInterfacesOpen, sidebarDisabled]);
+
+    React.useEffect(() => {
+        if (!isSearchInterfacesOpen) return;
         const id = window.requestAnimationFrame(() => {
             searchInputRef.current?.focus();
             searchInputRef.current?.select();
@@ -495,6 +501,7 @@ export const AppShell: React.FC = () => {
                         refreshSavedInterfaces();
                     }}
                     onDeleteInterface={(id) => {
+                        if (isSearchInterfacesOpen) return;
                         if (sidebarDisabled) return;
                         const record = savedInterfaces.find((item) => item.id === id);
                         if (!record) return;

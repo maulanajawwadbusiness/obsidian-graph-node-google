@@ -256,3 +256,15 @@ Source alignment:
 - No-results copy updated to calm two-line message:
   - "No interfaces found."
   - "Try a different keyword."
+
+## 14) Step 8 Stacking + Disabled Rules (2026-02-10)
+
+- Modal stacking ladder remains explicit and clean:
+  - delete confirm (`zIndex: 3200`) above search overlay (`zIndex: 3100`) above sidebar/graph.
+- Mutual exclusion hardened:
+  - search already closes when delete confirm opens (`pendingDeleteId` gate effect).
+  - search open requests while delete confirm is active remain ignored in `openSearchInterfaces`.
+- Disabled-state hardening added:
+  - if `sidebarDisabled` flips true while search is open (graph loading), search closes immediately.
+  - delete actions are now ignored while search overlay is open, preventing hidden/overlapped modal transitions.
+- No new global listeners added; shielding remains local and non-leaky.

@@ -28,6 +28,7 @@ type GraphPendingAnalysisProps = {
     documentViewerToggleToken?: number;
     pendingLoadInterface?: SavedInterfaceRecordV1 | null;
     onPendingLoadInterfaceConsumed?: () => void;
+    onInterfaceSaved?: () => void;
 };
 const STORAGE_KEY = 'arnvoid_screen';
 const PERSIST_SCREEN = false;
@@ -227,6 +228,7 @@ export const AppShell: React.FC = () => {
                     documentViewerToggleToken={documentViewerToggleToken}
                     pendingLoadInterface={pendingLoadInterface}
                     onPendingLoadInterfaceConsumed={() => setPendingLoadInterface(null)}
+                    onInterfaceSaved={() => refreshSavedInterfaces()}
                 />
             </Suspense>
         )

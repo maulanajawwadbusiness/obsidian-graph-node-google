@@ -57,6 +57,7 @@ type GraphPhysicsPlaygroundProps = {
     documentViewerToggleToken?: number;
     pendingLoadInterface?: SavedInterfaceRecordV1 | null;
     onPendingLoadInterfaceConsumed?: () => void;
+    onInterfaceSaved?: () => void;
 };
 
 function inferTitleFromPastedText(text: string): string {
@@ -85,6 +86,7 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
     documentViewerToggleToken,
     pendingLoadInterface = null,
     onPendingLoadInterfaceConsumed,
+    onInterfaceSaved,
 }) => {
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
     const [canvasReady, setCanvasReady] = useState(false);
@@ -111,6 +113,7 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
     const lastPendingLoadIdRef = useRef<string | null>(null);
     const currentPendingDocIdRef = useRef<string | null>(null);
     const lastLayoutPatchedDocIdRef = useRef<string | null>(null);
+    const lastInterfaceSavedNotifyKeyRef = useRef<string | null>(null);
 
     // State for React UI
     const [config, setConfig] = useState<ForceConfig>(DEFAULT_PHYSICS_CONFIG);
@@ -628,6 +631,22 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
         }
     }, [hoverStateRef]);
 
+    const notifyInterfaceSaved = React.useCallback((docId: string, runToken: number) => {
+        if (!docId) return;
+        const notifyKey = `${docId}::${runToken}`;
+        if (lastInterfaceSavedNotifyKeyRef.current === notifyKey) {
+            if (import.meta.env.DEV) {
+                console.log('[graph] interface_saved_notify_skipped docId=%s reason=already_notified', docId);
+            }
+            return;
+        }
+        lastInterfaceSavedNotifyKeyRef.current = notifyKey;
+        if (import.meta.env.DEV) {
+            console.log('[graph] interface_saved_notify docId=%s', docId);
+        }
+        onInterfaceSaved?.();
+    }, [onInterfaceSaved]);
+
     useEffect(() => {
         if (pendingLoadInterface) {
             pendingRestoreAtInitRef.current = true;
@@ -870,6 +889,7 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
                         documentContext.setInferredTitle
                     );
                     captureAndPatchSavedLayout(docId);
+                    notifyInterfaceSaved(docId, createdAt);
                 } catch (error) {
                     ok = false;
                     console.error('[graph] pending analysis failed', error);
@@ -939,6 +959,7 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
                     documentContext.setInferredTitle
                 );
                 captureAndPatchSavedLayout(docId);
+                notifyInterfaceSaved(docId, pendingAnalysisPayload.createdAt);
             } catch (error) {
                 ok = false;
                 console.error('[graph] pending_file_analyze_failed', error);
@@ -976,7 +997,8 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
         documentContext.setDocument,
         documentContext.setAIError,
         documentContext.setInferredTitle,
-        captureAndPatchSavedLayout
+        captureAndPatchSavedLayout,
+        notifyInterfaceSaved
     ]);
 
     const handleSpawn = () => {
@@ -1313,7 +1335,8 @@ export const GraphPhysicsPlayground: React.FC<GraphPhysicsPlaygroundProps> = ({
     onLoadingStateChange,
     documentViewerToggleToken,
     pendingLoadInterface,
-    onPendingLoadInterfaceConsumed
+    onPendingLoadInterfaceConsumed,
+    onInterfaceSaved
 }) => (
     <DocumentProvider>
         <PopupProvider>
@@ -1325,6 +1348,7 @@ export const GraphPhysicsPlayground: React.FC<GraphPhysicsPlaygroundProps> = ({
                     documentViewerToggleToken={documentViewerToggleToken}
                     pendingLoadInterface={pendingLoadInterface}
                     onPendingLoadInterfaceConsumed={onPendingLoadInterfaceConsumed}
+                    onInterfaceSaved={onInterfaceSaved}
                 />
             </FullChatProvider>
         </PopupProvider>

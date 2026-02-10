@@ -53,8 +53,6 @@ const NAME_OFFSET_LEFT = -13;
 const CLOSE_ICON_OFFSET_LEFT = -10;
 const ICON_OPACITY_DEFAULT = 1.0;
 const ICON_OPACITY_HOVER = 1.0;
-const COLLAPSED_AVATAR_HOVER_PADDING = 0;
-const COLLAPSED_AVATAR_BUTTON_PADDING = 4.5;
 const HOVER_ACCENT_COLOR = '#63abff';
 const DEFAULT_ICON_COLOR = '#ffffff';
 
@@ -87,6 +85,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
         width: isExpanded ? EXPANDED_WIDTH : COLLAPSED_WIDTH,
         minWidth: isExpanded ? MIN_EXPANDED_WIDTH : COLLAPSED_WIDTH,
         pointerEvents: disabled ? 'none' : 'auto',
+    };
+    const bottomSectionStyle: React.CSSProperties = {
+        ...BOTTOM_SECTION_STYLE,
+        alignItems: isExpanded ? 'stretch' : 'center',
+        ...(isExpanded
+            ? {}
+            : {
+                paddingLeft: '0px',
+                paddingRight: '0px',
+            }),
     };
 
     return (
@@ -194,10 +202,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
             {/* Bottom Section - User Avatar */}
             <div
-                style={{
-                    ...BOTTOM_SECTION_STYLE,
-                    alignItems: isExpanded ? 'stretch' : 'center',
-                }}
+                style={bottomSectionStyle}
             >
                 {showDocumentViewerButton ? (
                     <button
@@ -236,9 +241,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     <div
                         style={{
                             ...PROFILE_ROW_STYLE,
-                            width: isExpanded ? PROFILE_ROW_STYLE.width : 'auto',
-                            margin: isExpanded ? undefined : '0 auto',
-                            padding: isExpanded ? PROFILE_ROW_STYLE.padding : `${COLLAPSED_AVATAR_HOVER_PADDING}px`,
+                            width: isExpanded ? PROFILE_ROW_STYLE.width : 'fit-content',
+                            margin: isExpanded ? undefined : '0',
                             backgroundColor: avatarRowHover ? 'rgba(255, 255, 255, 0.14)' : 'transparent',
                         }}
                         onMouseEnter={() => setAvatarRowHover(true)}
@@ -248,7 +252,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
                             type="button"
                             style={{
                                 ...ICON_BUTTON_STYLE,
-                                padding: isExpanded ? ICON_BUTTON_STYLE.padding : `${COLLAPSED_AVATAR_BUTTON_PADDING}px`,
+                                padding: '0',
+                                width: '32px',
+                                height: '32px',
+                                lineHeight: 0,
                             }}
                         >
                             <div
@@ -455,6 +462,8 @@ const AVATAR_SECTION_STYLE: React.CSSProperties = {
     width: '100%',
     borderTop: '1px solid rgba(255, 255, 255, 0.1)',
     paddingTop: '8px',
+    display: 'flex',
+    justifyContent: 'center',
 };
 
 const PROFILE_ROW_STYLE: React.CSSProperties = {
@@ -463,7 +472,8 @@ const PROFILE_ROW_STYLE: React.CSSProperties = {
     alignItems: 'center',
     gap: '12px',
     borderRadius: '10px',
-    padding: '2px',
+    height: '36px',
+    padding: '0',
     transition: 'background-color 120ms ease',
 };
 
@@ -484,6 +494,7 @@ const AVATAR_STYLE: React.CSSProperties = {
 const AVATAR_NAME_STYLE: React.CSSProperties = {
     color: '#e7e7e7',
     fontSize: `${FONT_SIZE_NAV}px`,
+    lineHeight: 1,
     fontFamily: 'var(--font-ui)',
     opacity: 1,
     marginLeft: `${NAME_OFFSET_LEFT}px`,

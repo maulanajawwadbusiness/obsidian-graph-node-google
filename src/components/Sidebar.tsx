@@ -316,6 +316,47 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 </div>
             )}
 
+            {openRowMenuId !== null && rowMenuPosition !== null ? (
+                <div
+                    style={{
+                        ...ROW_MENU_POPUP_STYLE,
+                        left: `${rowMenuPosition.left}px`,
+                        top: `${rowMenuPosition.top}px`,
+                        transformOrigin: menuPlacement === 'up' ? 'bottom left' : 'top left',
+                    }}
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onClick={(e) => e.stopPropagation()}
+                    onWheelCapture={(e) => e.stopPropagation()}
+                    onWheel={(e) => e.stopPropagation()}
+                >
+                    {menuItemPreview.map((menuItem) => (
+                        <button
+                            key={menuItem.key}
+                            type="button"
+                            style={ROW_MENU_ITEM_STYLE}
+                            onPointerDown={(e) => e.stopPropagation()}
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                if (import.meta.env.DEV) {
+                                    console.log('[sidebar] menu_%s_clicked id=%s', menuItem.key, openRowMenuId);
+                                }
+                                closeRowMenu();
+                            }}
+                        >
+                            <img
+                                src={menuItem.icon}
+                                alt=""
+                                aria-hidden="true"
+                                style={ROW_MENU_ITEM_ICON_STYLE}
+                            />
+                            <span style={{ ...ROW_MENU_ITEM_LABEL_STYLE, color: menuItem.color }}>
+                                {menuItem.label}
+                            </span>
+                        </button>
+                    ))}
+                </div>
+            ) : null}
+
             {/* Bottom Section - User Avatar */}
             <div
                 style={bottomSectionStyle}
@@ -606,6 +647,46 @@ const ROW_ELLIPSIS_BUTTON_STYLE: React.CSSProperties = {
     cursor: 'pointer',
     transition: 'opacity 140ms ease',
     borderRadius: '4px',
+};
+
+const ROW_MENU_POPUP_STYLE: React.CSSProperties = {
+    position: 'fixed',
+    width: '168px',
+    padding: '6px',
+    borderRadius: '10px',
+    border: '1px solid rgba(255, 255, 255, 0.1)',
+    background: 'rgba(22, 24, 30, 0.98)',
+    boxShadow: '0 14px 28px rgba(0, 0, 0, 0.45)',
+    zIndex: 1400,
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '2px',
+};
+
+const ROW_MENU_ITEM_STYLE: React.CSSProperties = {
+    width: '100%',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+    padding: '8px 10px',
+    border: 'none',
+    borderRadius: '8px',
+    background: 'transparent',
+    textAlign: 'left',
+    cursor: 'pointer',
+};
+
+const ROW_MENU_ITEM_ICON_STYLE: React.CSSProperties = {
+    width: '14px',
+    height: '14px',
+    objectFit: 'contain',
+    flexShrink: 0,
+};
+
+const ROW_MENU_ITEM_LABEL_STYLE: React.CSSProperties = {
+    fontFamily: 'var(--font-ui)',
+    fontSize: `${FONT_SIZE_NAV}px`,
+    lineHeight: 1.2,
 };
 
 const INTERFACE_EMPTY_STATE_STYLE: React.CSSProperties = {

@@ -194,3 +194,26 @@ Behavior guarantees:
 Restore logging added:
 - `[graph] analysisMeta_applied id=... nodesApplied=... missing=...`
 - `[graph] analysisMeta_missing_fallback nodeId=...`
+
+## Step 3 Implemented (Legacy Records Compatibility)
+
+Implemented files:
+- `src/store/savedInterfacesStore.ts`
+- `src/playground/GraphPhysicsPlayground.tsx`
+
+Legacy behavior expectations now:
+- Records without `analysisMeta` continue to load and restore.
+- Node popup still shows a sane fallback summary when analyzer summary is unavailable.
+- No crash and no blank/confusing restore path for old sessions.
+
+What changed:
+- `loadSavedInterfaces()` now sanitizes malformed `analysisMeta` instead of rejecting whole records.
+  - Invalid `analysisMeta` is dropped from that record only.
+  - Log added: `[savedInterfaces] analysisMeta_invalid_dropped id=...`
+- Restore path now emits one legacy log per restore when analysisMeta is unavailable:
+  - `[graph] analysisMeta_legacy_record id=... reason=no_analysisMeta`
+- Removed per-node fallback log spam from restore; fallback semantics remain unchanged.
+
+User-visible result for legacy records:
+- Popup content may show fallback text (expected), but restore remains stable and readable.
+- Newer records with valid `analysisMeta` still use real analyzer summaries.

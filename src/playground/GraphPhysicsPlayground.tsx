@@ -731,6 +731,9 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
             const analysisNodesById = rec.analysisMeta?.version === 1
                 ? rec.analysisMeta.nodesById
                 : undefined;
+            if (!analysisNodesById) {
+                console.log('[graph] analysisMeta_legacy_record id=%s reason=no_analysisMeta', rec.id);
+            }
             const savedLayout = rec.layout?.nodeWorld;
             const hasSavedLayoutMap = Boolean(savedLayout && Object.keys(savedLayout).length > 0);
             const hasSavedCamera = Boolean(
@@ -771,7 +774,6 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
                     analysisMetaAppliedCount += 1;
                 } else if (!topoSummary) {
                     analysisMetaFallbackCount += 1;
-                    console.log('[graph] analysisMeta_missing_fallback nodeId=%s', spec.id);
                 }
                 const fallbackX = Math.cos(angle) * radius;
                 const fallbackY = Math.sin(angle) * radius;

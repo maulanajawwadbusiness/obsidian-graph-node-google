@@ -145,8 +145,22 @@ function isSavedInterfaceRecordV1(value: unknown): value is SavedInterfaceRecord
     return true;
 }
 
-function isSavedInterfaceRecordV1Array(value: unknown): value is SavedInterfaceRecordV1[] {
-    return Array.isArray(value) && value.every(isSavedInterfaceRecordV1);
+function sanitizeSavedInterfaceRecord(value: unknown): SavedInterfaceRecordV1 | null {
+    if (!isObject(value)) return null;
+    const analysisMetaRaw = value.analysisMeta;
+    const normalized: Record<string, unknown> = {
+        ...value,
+        analysisMeta: undefined,
+    };
+    if (analysisMetaRaw !== undefined) {
+        if (isAnalysisMetaV1(analysisMetaRaw)) {
+            normalized.analysisMeta = analysisMetaRaw;
+        } else {
+            const idForLog = typeof value.id === 'string' ? value.id : 'unknown';
+            console.warn('[savedInterfaces] analysisMeta_invalid_dropped id=%s', idForLog);
+        }
+    }
+    return isSavedInterfaceRecordV1(normalized) ? normalized : null;
 }
 
 function normalizeCap(cap: number | undefined): number {
@@ -236,10 +250,17 @@ export function loadSavedInterfaces(): SavedInterfaceRecordV1[] {
 
     try {
         const parsed = JSON.parse(raw) as unknown;
-        if (!isSavedInterfaceRecordV1Array(parsed)) {
+        if (!Array.isArray(parsed)) {
             return [];
         }
-        return sortNewestFirst(parsed);
+        const sanitized: SavedInterfaceRecordV1[] = [];
+        for (const item of parsed) {
+            const normalized = sanitizeSavedInterfaceRecord(item);
+            if (normalized) {
+                sanitized.push(normalized);
+            }
+        }
+        return sortNewestFirst(sanitized);
     } catch {
         return [];
     }

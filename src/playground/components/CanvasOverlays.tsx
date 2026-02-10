@@ -13,8 +13,8 @@ import { IS_DEV } from '../rendering/debugUtils';
 import downloadDevModeIcon from '../../assets/download_dev_mode.png';
 
 // Toggle to show/hide debug controls buttons (Debug, Theme, Controls)
-const SHOW_DEBUG_CONTROLS = true;
-const SHOW_DEV_DOWNLOAD_JSON_BUTTON = false;
+const SHOW_DEBUG_CONTROLS = false;
+const SHOW_DEV_DOWNLOAD_JSON_BUTTON = true;
 
 import type { ForceConfig } from '../../physics/types';
 

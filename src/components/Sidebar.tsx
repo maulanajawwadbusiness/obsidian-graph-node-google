@@ -536,9 +536,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
                             <span
                                 style={{
                                     ...ROW_MENU_ITEM_CONTENT_STYLE,
-                                    filter: menuItem.key === 'delete' && hoveredMenuItemKey === 'delete'
-                                        ? 'brightness(1.3)'
-                                        : undefined,
+                                    opacity: menuItem.key === 'delete' && hoveredMenuItemKey === 'delete'
+                                        ? 0.5
+                                        : 1,
                                 }}
                             >
                                 <MaskIcon

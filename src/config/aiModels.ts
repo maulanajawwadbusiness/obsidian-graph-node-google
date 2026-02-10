@@ -20,7 +20,7 @@ export const AI_MODELS = {
      * Document Analysis (Paper Analyzer)
      * Requires strong reasoning and structured output support.
      */
-    ANALYZER: 'gpt-5.2',
+    ANALYZER: 'gpt-5-nano',
 
     /**
      * Label Rewriter

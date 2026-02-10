@@ -4,6 +4,9 @@ Generated for External AI Context Loading
 Target: Deep Codebase Understanding without Repo Access
 Date: 2026-02-06
 
+Update Note: 2026-02-10
+- Added local-first saved interface system and extensive Sidebar session UX hardening.
+
 ## 1. Repository Tree (Depth 4)
 Excluding: node_modules, dist, build, .git
 
@@ -247,3 +250,27 @@ Consume path:
 1. EnterPrompt submits text or attached file intent.
 2. AppShell stores `pendingAnalysisPayload` and transitions to graph.
 3. Graph consumes once (pre-clear), parses file via `documentContext.parseFile(file)` for file payloads, then runs analyzer mapping path.
+
+## 14. Saved Interfaces + Sidebar Session Actions (2026-02-10)
+
+Key files:
+- `src/store/savedInterfacesStore.ts`
+- `src/screens/AppShell.tsx`
+- `src/components/Sidebar.tsx`
+- `src/playground/GraphPhysicsPlayground.tsx`
+- `src/document/nodeBinding.ts`
+
+Current capabilities:
+1. Local persistence of saved interfaces with full knowledge payload (`parsedDocument`, `topology`, `analysisMeta`).
+2. Layout and camera persistence for restore parity.
+3. Prompt-to-graph restore navigation when selecting saved sessions from prompt screen.
+4. Inline rename with local persistence.
+5. Delete via AppShell confirm modal with immediate list refresh.
+6. Disabled-state hardening for row-menu actions while graph loading.
+
+Interaction safety:
+- Sidebar row menu and AppShell delete modal are shielded against pointer/wheel leakage to canvas.
+
+Ordering note:
+- Sidebar order is store-driven newest-first by `updatedAt`, then `createdAt`.
+- Rename was hardened to avoid reorder by not mutating `updatedAt`.

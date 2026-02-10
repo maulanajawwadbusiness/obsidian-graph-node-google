@@ -129,6 +129,35 @@ Current fullscreen rules in onboarding:
    - EnterPrompt LoginOverlay is also a blocker only when the overlay feature is enabled and open.
    - While these overlays are open, fullscreen icon input is blocked.
 
+## 2.4 Persistent Sidebar Sessions (Current)
+Saved interfaces in the left Sidebar are now local-first and AppShell-owned.
+
+Current behavior:
+- Source of truth:
+  - Store module: `src/store/savedInterfacesStore.ts`
+  - Versioned key: `arnvoid_saved_interfaces_v1`
+- Sidebar list:
+  - AppShell loads and maps saved records into Sidebar rows.
+  - Sidebar renders provided order and does not apply additional sorting.
+- Create:
+  - analysis success path persists a saved interface record with full payload.
+- Restore:
+  - selecting a saved interface sets pending restore intent and graph consumes it once.
+  - when selected from prompt screen, AppShell transitions to graph and restore runs on mount.
+- Rename:
+  - inline rename UX in Sidebar; persisted through AppShell to storage helper.
+  - rename does not reorder list (title patch does not bump `updatedAt`).
+- Delete:
+  - row menu delete opens AppShell-level centered confirm modal.
+  - confirm removes record from local storage and refreshes Sidebar immediately.
+  - if pending restore intent matches deleted id, it is cleared.
+- Disabled state:
+  - when Sidebar is disabled (graph loading), row menu actions are non-actionable.
+
+Input safety contract:
+- Sidebar root, row menu, row menu items, and delete confirm modal all stop pointer and wheel propagation.
+- Modal/backdrop interactions must never leak to canvas input handlers.
+
 ## 3. Physics Architecture And Contract
 The graph is driven by a **Hybrid Solver** (`src/physics/`) prioritizing "Visual Dignity" over pure simulation accuracy.
 

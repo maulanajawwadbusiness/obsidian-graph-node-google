@@ -201,3 +201,14 @@ Source alignment:
 - Modal stacking policy remains safe:
   - opening search is blocked while delete confirm is active.
   - if delete confirm opens while search is open, search closes.
+
+## 10) Step 4 Centering Verification (2026-02-10)
+
+- Search overlay is AppShell-level centered with fixed backdrop + flex centering.
+- Strengthened viewport safety for small screens:
+  - card width uses `min(560px, calc(100vw - 32px))`
+  - card max-height uses `calc(100vh - 64px)`
+  - card uses `overflow: hidden` so content never spills offscreen
+- Backdrop now includes explicit padding and border-box sizing to preserve centering margins consistently.
+- Results overflow remains internal to modal via `SEARCH_RESULTS_STYLE` scroll container (`overflowY: auto`, `minHeight: 0`, flex growth).
+- Shielding contract remains unchanged: pointerdown/up/click/wheel/wheelCapture stopPropagation on backdrop, card, input, results container, and result rows.

@@ -742,20 +742,23 @@ const SEARCH_OVERLAY_BACKDROP_STYLE: React.CSSProperties = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
+    padding: '16px',
+    boxSizing: 'border-box',
     background: 'rgba(6, 8, 12, 0.58)',
     zIndex: 3100,
     pointerEvents: 'auto',
 };
 
 const SEARCH_OVERLAY_CARD_STYLE: React.CSSProperties = {
-    width: '100%',
-    maxWidth: '660px',
-    margin: '0 16px',
+    width: 'min(560px, calc(100vw - 32px))',
+    maxHeight: 'calc(100vh - 64px)',
     borderRadius: '14px',
     border: '1px solid rgba(255, 255, 255, 0.14)',
     background: '#0d1118',
     boxShadow: '0 18px 56px rgba(0, 0, 0, 0.45)',
     padding: '16px',
+    boxSizing: 'border-box',
+    overflow: 'hidden',
     color: '#e7e7e7',
     display: 'flex',
     flexDirection: 'column',
@@ -778,8 +781,10 @@ const SEARCH_INPUT_STYLE: React.CSSProperties = {
 const SEARCH_RESULTS_STYLE: React.CSSProperties = {
     display: 'flex',
     flexDirection: 'column',
+    flex: '1 1 auto',
+    minHeight: 0,
     gap: '8px',
-    maxHeight: '48vh',
+    maxHeight: '52vh',
     overflowY: 'auto',
 };
 

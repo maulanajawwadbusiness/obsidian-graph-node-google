@@ -291,6 +291,9 @@ export const AppShell: React.FC = () => {
                         patchSavedInterfaceTitle(id, newTitle);
                         refreshSavedInterfaces();
                     }}
+                    onDeleteInterface={(id) => {
+                        console.log('[appshell] delete_interface_requested id=%s', id);
+                    }}
                     selectedInterfaceId={pendingLoadInterface?.id ?? undefined}
                     onSelectInterface={(id) => {
                         const record = savedInterfaces.find((item) => item.id === id);

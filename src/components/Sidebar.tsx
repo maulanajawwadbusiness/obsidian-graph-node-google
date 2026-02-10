@@ -65,6 +65,7 @@ type SidebarProps = {
     onToggle: () => void;
     onCreateNew?: () => void;
     onRenameInterface?: (id: string, newTitle: string) => void;
+    onDeleteInterface?: (id: string) => void;
     disabled?: boolean;
     onToggleDocumentViewer?: () => void;
     showDocumentViewerButton?: boolean;
@@ -78,6 +79,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     onToggle,
     onCreateNew,
     onRenameInterface,
+    onDeleteInterface,
     disabled = false,
     onToggleDocumentViewer,
     showDocumentViewerButton = false,
@@ -478,14 +480,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
                             style={ROW_MENU_ITEM_STYLE}
                             onPointerDown={(e) => e.stopPropagation()}
                             onPointerUp={(e) => e.stopPropagation()}
+                            onWheelCapture={(e) => e.stopPropagation()}
                             onWheel={(e) => e.stopPropagation()}
                             onClick={(e) => {
+                                e.preventDefault();
                                 e.stopPropagation();
                                 if (menuItem.key === 'rename' && openRowMenuId) {
                                     const current = interfaces?.find((item) => item.id === openRowMenuId);
                                     if (current) {
                                         startRename(current.id, current.title);
                                     }
+                                } else if (menuItem.key === 'delete' && openRowMenuId) {
+                                    onDeleteInterface?.(openRowMenuId);
                                 } else if (import.meta.env.DEV) {
                                     console.log('[sidebar] menu_%s_clicked id=%s', menuItem.key, openRowMenuId);
                                 }

@@ -117,6 +117,14 @@ Terminology matters. In the graph, we render "Dots", not "Nodes" (though the dat
 *   **No secret logs**: Do not log tokens, cookies, auth headers, or keys.
 *   **Docs**: Use placeholders like `<REDACTED>` only. Never include real values.
 
+### SCROLLBAR THEME CONTRACT (UI)
+*   **Rule**: Do not ship browser-default scrollbars for Arnvoid panels or overlays.
+*   **Default Theme**: Reuse the Arnvoid scrollbar CSS in `src/index.css` (base class `.arnvoid-scroll`).
+*   **Search Overlay Variant**: Keep using `.search-interfaces-scroll` theme:
+    *   track background: `#0D1118`
+    *   thumb and buttons/arrows: dark navy
+*   **Consistency**: New scrollable UI surfaces must use the shared class or an approved variant, not ad-hoc inline scrollbar styling.
+
 ## 5. Perf Doctrine (Physics)
 
 ### A. The Scheduler

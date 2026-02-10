@@ -388,6 +388,16 @@ Frontend:
 ## Fonts
 - UI default: Quicksand (via CSS vars)
 - Titles: Segoe UI -> Public Sans -> system
+
+## Scrollbar Theme (Frontend)
+- Arnvoid uses themed scrollbars. Do not use browser-default scrollbar styling on product UI surfaces.
+- Base class: `.arnvoid-scroll` in `src/index.css`.
+- Search Interfaces overlay class: `.search-interfaces-scroll` in `src/index.css`.
+- Required Search overlay palette:
+  - track background: `#0D1118`
+  - thumb/buttons: dark navy
+- New scrollable UI surfaces should adopt `.arnvoid-scroll` or a scoped variant derived from it.
+
 ## Money UX (Frontend)
 - Rupiah balance anchor (`BalanceBadge`) is always visible on `graph`.
 - On `prompt`, balance anchor visibility is controlled by `SHOW_ENTERPROMPT_BALANCE_BADGE` in `src/config/onboardingUiFlags.ts`.

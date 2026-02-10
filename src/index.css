@@ -149,6 +149,36 @@ body {
   scrollbar-color: rgba(99, 171, 255, 0.2) transparent;
 }
 
+/* Search interfaces overlay scrollbar theme */
+.search-interfaces-scroll::-webkit-scrollbar {
+  width: 12px;
+}
+
+.search-interfaces-scroll::-webkit-scrollbar-track {
+  background: #0D1118;
+}
+
+.search-interfaces-scroll::-webkit-scrollbar-thumb {
+  background-color: #17263d;
+  border-radius: 999px;
+  border: 3px solid #0D1118;
+}
+
+.search-interfaces-scroll::-webkit-scrollbar-thumb:hover {
+  background-color: #1e3150;
+}
+
+.search-interfaces-scroll::-webkit-scrollbar-button:single-button {
+  display: block;
+  height: 12px;
+  background-color: #17263d;
+}
+
+.search-interfaces-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: #17263d #0D1118;
+}
+
 /* Onboarding needle cursor animation set */
 @keyframes cursorNeedleNormal {
   0%, 49% {

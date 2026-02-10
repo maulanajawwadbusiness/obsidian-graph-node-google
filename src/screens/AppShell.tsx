@@ -683,6 +683,7 @@ export const AppShell: React.FC = () => {
                         />
                         <div
                             {...hardShieldInput}
+                            className="search-interfaces-scroll"
                             data-search-interfaces-results="1"
                             style={SEARCH_RESULTS_STYLE}
                         >

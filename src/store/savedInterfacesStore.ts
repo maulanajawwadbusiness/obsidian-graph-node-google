@@ -6,6 +6,16 @@ export const DEFAULT_SAVED_INTERFACES_CAP = 20;
 
 export type SavedInterfaceSource = 'paste' | 'file' | 'unknown';
 
+export type SavedInterfaceAnalysisNodeV1 = {
+    sourceTitle?: string;
+    sourceSummary?: string;
+};
+
+export type SavedInterfaceAnalysisMetaV1 = {
+    version: 1;
+    nodesById: Record<string, SavedInterfaceAnalysisNodeV1>;
+};
+
 export type SavedInterfaceRecordV1 = {
     id: string;
     createdAt: number;
@@ -17,7 +27,7 @@ export type SavedInterfaceRecordV1 = {
     mimeType?: string;
     parsedDocument: ParsedDocument;
     topology: Topology;
-    analysisMeta?: any;
+    analysisMeta?: SavedInterfaceAnalysisMetaV1;
     layout?: {
         nodeWorld: Record<string, { x: number; y: number }>;
     };
@@ -85,6 +95,24 @@ function isCameraSnapshot(value: unknown): value is SavedInterfaceRecordV1['came
     );
 }
 
+function isAnalysisNodeV1(value: unknown): value is SavedInterfaceAnalysisNodeV1 {
+    if (!isObject(value)) return false;
+    if (value.sourceTitle !== undefined && typeof value.sourceTitle !== 'string') return false;
+    if (value.sourceSummary !== undefined && typeof value.sourceSummary !== 'string') return false;
+    return true;
+}
+
+function isAnalysisMetaV1(value: unknown): value is SavedInterfaceAnalysisMetaV1 {
+    if (!isObject(value)) return false;
+    if (value.version !== 1) return false;
+    if (!isObject(value.nodesById)) return false;
+    for (const [key, nodeData] of Object.entries(value.nodesById)) {
+        if (typeof key !== 'string') return false;
+        if (!isAnalysisNodeV1(nodeData)) return false;
+    }
+    return true;
+}
+
 function isSavedInterfaceRecordV1(value: unknown): value is SavedInterfaceRecordV1 {
     if (!isObject(value)) return false;
 
@@ -110,6 +138,7 @@ function isSavedInterfaceRecordV1(value: unknown): value is SavedInterfaceRecord
     if (!isFiniteNumber(value.preview.linkCount)) return false;
     if (!isFiniteNumber(value.preview.charCount)) return false;
     if (!isFiniteNumber(value.preview.wordCount)) return false;
+    if (value.analysisMeta !== undefined && !isAnalysisMetaV1(value.analysisMeta)) return false;
     if (value.layout !== undefined && !isLayoutSnapshot(value.layout)) return false;
     if (value.camera !== undefined && !isCameraSnapshot(value.camera)) return false;
 

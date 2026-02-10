@@ -145,3 +145,29 @@ Choose Option B first (smallest safe fix), and only add Option A if future featu
 3. Open same node popup; body text must match original analyzer summary (not `Saved interface: ...`).
 4. Verify another node with non-empty summary also restores correctly.
 5. Confirm no analyzer request is fired during restore.
+
+## Step 1 Implemented (Option A)
+
+Implemented files:
+- `src/document/nodeBinding.ts`
+- `src/store/savedInterfacesStore.ts`
+
+What is now persisted:
+- `SavedInterfaceRecordV1.analysisMeta` is now versioned and typed:
+  - `analysisMeta.version = 1`
+  - `analysisMeta.nodesById: Record<string, { sourceTitle?: string; sourceSummary?: string }>`
+
+Where extracted from:
+- Extracted at the existing analysis-success save trigger in `applyAnalysisToNodes(...)` from authoritative runtime engine node metadata (`orderedNodes[].meta.sourceTitle/sourceSummary`) before calling `upsertSavedInterface(...)`.
+
+Backward compatibility:
+- `analysisMeta` remains optional.
+- Old records without `analysisMeta` still load.
+- Validator now accepts missing `analysisMeta`, and validates shape only when present.
+
+Behavioral notes:
+- Dedupe/order/cap logic is unchanged.
+- Full `parsedDocument.text` and `parsedDocument.meta` remain unchanged and untrimmed.
+- Added dev logs:
+  - `[savedInterfaces] analysisMeta_saved id=... nodes=... summaries=...`
+  - `[savedInterfaces] analysisMeta_save_skipped reason=...`

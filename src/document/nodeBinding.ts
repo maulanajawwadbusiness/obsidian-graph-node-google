@@ -159,6 +159,26 @@ export async function applyAnalysisToNodes(
     }
 
     const interfaceTitle = inferred || 'Untitled Interface';
+    const nodesById: Record<string, { sourceTitle?: string; sourceSummary?: string }> = {};
+    let summaryCount = 0;
+    for (const node of orderedNodes) {
+      const nodeMeta = node.meta as Record<string, unknown> | undefined;
+      if (!nodeMeta) continue;
+      const sourceTitle = typeof nodeMeta.sourceTitle === 'string' ? nodeMeta.sourceTitle : undefined;
+      const sourceSummary = typeof nodeMeta.sourceSummary === 'string' ? nodeMeta.sourceSummary : undefined;
+      if (!sourceTitle && !sourceSummary) continue;
+      nodesById[node.id] = { sourceTitle, sourceSummary };
+      if (sourceSummary) {
+        summaryCount += 1;
+      }
+    }
+    const analysisMeta = Object.keys(nodesById).length > 0
+      ? {
+        version: 1 as const,
+        nodesById
+      }
+      : undefined;
+
     const parsedDocument: ParsedDocument = {
       id: documentId,
       fileName: interfaceTitle,
@@ -202,6 +222,7 @@ export async function applyAnalysisToNodes(
       mimeType: parsedDocument.mimeType,
       parsedDocument,
       topology: finalTopology,
+      analysisMeta,
       preview,
       dedupeKey
     });
@@ -210,6 +231,13 @@ export async function applyAnalysisToNodes(
       console.log(
         `[savedInterfaces] upsert ok id=${next[0]?.id || 'unknown'} docId=${documentId} nodes=${preview.nodeCount} links=${preview.linkCount} before=${beforeCount} after=${next.length}`
       );
+      if (analysisMeta) {
+        console.log(
+          `[savedInterfaces] analysisMeta_saved id=${next[0]?.id || 'unknown'} nodes=${Object.keys(analysisMeta.nodesById).length} summaries=${summaryCount}`
+        );
+      } else {
+        console.log('[savedInterfaces] analysisMeta_save_skipped reason=no_runtime_node_meta');
+      }
     }
 
     console.log(`[AI] Applied ${points.length} analysis points`);

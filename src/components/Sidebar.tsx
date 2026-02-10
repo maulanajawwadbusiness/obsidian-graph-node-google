@@ -5,6 +5,9 @@ import createNewIcon from '../assets/create_new_icon.png';
 import searchIcon from '../assets/search_icon.png';
 import threeDotIcon from '../assets/3_dot_icon.png';
 import documentIcon from '../assets/document_icon.png';
+import verticalElipsisIcon from '../assets/vertical_elipsis_icon.png';
+import renameIcon from '../assets/rename_icon.png';
+import deleteIcon from '../assets/delete_icon.png';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Mock Data
@@ -55,6 +58,7 @@ const ICON_OPACITY_DEFAULT = 1.0;
 const ICON_OPACITY_HOVER = 1.0;
 const HOVER_ACCENT_COLOR = '#63abff';
 const DEFAULT_ICON_COLOR = '#ffffff';
+const ROW_MENU_DELETE_TEXT_COLOR = '#ff4b4e';
 
 type SidebarProps = {
     isExpanded: boolean;
@@ -86,7 +90,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
     const [documentHover, setDocumentHover] = React.useState(false);
     const [closeHover, setCloseHover] = React.useState(false);
     const [hoveredInterfaceId, setHoveredInterfaceId] = React.useState<string | null>(null);
+    const [openRowMenuId, setOpenRowMenuId] = React.useState<string | null>(null);
+    const [rowMenuAnchorRect, setRowMenuAnchorRect] = React.useState<DOMRect | null>(null);
+    const [rowMenuPosition, setRowMenuPosition] = React.useState<{ left: number; top: number } | null>(null);
+    const [menuPlacement, setMenuPlacement] = React.useState<'down' | 'up' | null>(null);
     const [avatarRowHover, setAvatarRowHover] = React.useState(false);
+    const menuItemPreview = React.useMemo(
+        () => [
+            { key: 'rename', icon: renameIcon, label: 'Rename', color: '#e7e7e7' },
+            { key: 'delete', icon: deleteIcon, label: 'Delete', color: ROW_MENU_DELETE_TEXT_COLOR },
+        ],
+        []
+    );
 
     const sidebarStyle: React.CSSProperties = {
         ...SIDEBAR_BASE_STYLE,
@@ -108,6 +123,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
     return (
         <aside
             data-sidebar-root="1"
+            data-row-menu-open={openRowMenuId ? '1' : '0'}
+            data-row-menu-anchor-ready={rowMenuAnchorRect ? '1' : '0'}
+            data-row-menu-position-ready={rowMenuPosition ? '1' : '0'}
+            data-row-menu-placement={menuPlacement ?? ''}
+            data-row-menu-item-preview-count={String(menuItemPreview.length)}
             style={sidebarStyle}
             onPointerDown={(e) => e.stopPropagation()}
             onWheelCapture={(e) => e.stopPropagation()}
@@ -197,6 +217,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                             interfaces.map((item) => {
                                 const isHovered = hoveredInterfaceId === item.id;
                                 const isSelected = selectedInterfaceId === item.id;
+                                const showRowEllipsis = isHovered || openRowMenuId === item.id;
                                 return (
                                     <button
                                         key={item.id}
@@ -212,7 +233,69 @@ export const Sidebar: React.FC<SidebarProps> = ({
                                         onClick={() => onSelectInterface?.(item.id)}
                                         title={item.subtitle}
                                     >
-                                        {item.title}
+                                        <span style={INTERFACE_ROW_CONTENT_STYLE}>
+                                            <span style={INTERFACE_TEXT_STYLE}>{item.title}</span>
+                                            <span style={INTERFACE_ROW_MENU_SLOT_STYLE}>
+                                                <span
+                                                    role="button"
+                                                    tabIndex={0}
+                                                    aria-label={`Open actions for ${item.title}`}
+                                                    title="Session actions"
+                                                    style={{
+                                                        ...ROW_ELLIPSIS_BUTTON_STYLE,
+                                                        opacity: showRowEllipsis ? 1 : 0,
+                                                    }}
+                                                    onPointerDown={(e) => e.stopPropagation()}
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        const el = e.currentTarget as HTMLSpanElement;
+                                                        const rect = el.getBoundingClientRect();
+                                                        setOpenRowMenuId(item.id);
+                                                        setRowMenuAnchorRect(rect);
+                                                        const gap = 8;
+                                                        const viewportPadding = 8;
+                                                        const menuWidth = 168;
+                                                        const menuHeight = 96;
+                                                        const maxLeft = Math.max(viewportPadding, window.innerWidth - menuWidth - viewportPadding);
+                                                        const left = Math.max(viewportPadding, Math.min(rect.right + gap, maxLeft));
+                                                        const canOpenDown = rect.bottom + gap + menuHeight <= window.innerHeight - viewportPadding;
+                                                        const top = canOpenDown
+                                                            ? rect.top
+                                                            : Math.max(viewportPadding, rect.bottom - menuHeight);
+                                                        setRowMenuPosition({ left, top });
+                                                        setMenuPlacement(canOpenDown ? 'down' : 'up');
+                                                    }}
+                                                    onKeyDown={(e) => {
+                                                        if (e.key !== 'Enter' && e.key !== ' ') return;
+                                                        e.preventDefault();
+                                                        e.stopPropagation();
+                                                        const el = e.currentTarget as HTMLSpanElement;
+                                                        const rect = el.getBoundingClientRect();
+                                                        setOpenRowMenuId(item.id);
+                                                        setRowMenuAnchorRect(rect);
+                                                        const gap = 8;
+                                                        const viewportPadding = 8;
+                                                        const menuWidth = 168;
+                                                        const menuHeight = 96;
+                                                        const maxLeft = Math.max(viewportPadding, window.innerWidth - menuWidth - viewportPadding);
+                                                        const left = Math.max(viewportPadding, Math.min(rect.right + gap, maxLeft));
+                                                        const canOpenDown = rect.bottom + gap + menuHeight <= window.innerHeight - viewportPadding;
+                                                        const top = canOpenDown
+                                                            ? rect.top
+                                                            : Math.max(viewportPadding, rect.bottom - menuHeight);
+                                                        setRowMenuPosition({ left, top });
+                                                        setMenuPlacement(canOpenDown ? 'down' : 'up');
+                                                    }}
+                                                >
+                                                    <MaskIcon
+                                                        src={verticalElipsisIcon}
+                                                        size={12}
+                                                        color={isSelected ? HOVER_ACCENT_COLOR : 'rgba(255, 255, 255, 0.75)'}
+                                                        opacity={1}
+                                                    />
+                                                </span>
+                                            </span>
+                                        </span>
                                     </button>
                                 );
                             })
@@ -473,6 +556,44 @@ const INTERFACE_ITEM_STYLE: React.CSSProperties = {
     textAlign: 'left',
     cursor: 'pointer',
     opacity: 1,
+};
+
+const INTERFACE_ROW_CONTENT_STYLE: React.CSSProperties = {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
+    gap: '8px',
+};
+
+const INTERFACE_TEXT_STYLE: React.CSSProperties = {
+    flex: 1,
+    minWidth: 0,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'normal',
+    wordBreak: 'break-word',
+};
+
+const INTERFACE_ROW_MENU_SLOT_STYLE: React.CSSProperties = {
+    width: '24px',
+    flexShrink: 0,
+    display: 'flex',
+    justifyContent: 'center',
+    alignItems: 'center',
+};
+
+const ROW_ELLIPSIS_BUTTON_STYLE: React.CSSProperties = {
+    width: '20px',
+    height: '20px',
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    border: 'none',
+    background: 'transparent',
+    cursor: 'pointer',
+    transition: 'opacity 140ms ease',
+    borderRadius: '4px',
 };
 
 const INTERFACE_EMPTY_STATE_STYLE: React.CSSProperties = {

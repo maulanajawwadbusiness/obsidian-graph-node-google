@@ -109,6 +109,45 @@ export const Sidebar: React.FC<SidebarProps> = ({
         minWidth: isExpanded ? MIN_EXPANDED_WIDTH : COLLAPSED_WIDTH,
         pointerEvents: disabled ? 'none' : 'auto',
     };
+
+    const computeRowMenuPlacement = React.useCallback((rect: DOMRect) => {
+        const gap = 8;
+        const viewportPadding = 8;
+        const menuWidth = 168;
+        const menuHeight = 96;
+        const maxLeft = Math.max(viewportPadding, window.innerWidth - menuWidth - viewportPadding);
+        const left = Math.max(viewportPadding, Math.min(rect.right + gap, maxLeft));
+        const canOpenDown = rect.bottom + gap + menuHeight <= window.innerHeight - viewportPadding;
+        const top = canOpenDown
+            ? Math.max(viewportPadding, rect.top)
+            : Math.max(viewportPadding, rect.bottom - menuHeight);
+        return {
+            left,
+            top,
+            placement: canOpenDown ? 'down' as const : 'up' as const,
+        };
+    }, []);
+
+    const closeRowMenu = React.useCallback(() => {
+        setOpenRowMenuId(null);
+        setRowMenuAnchorRect(null);
+        setRowMenuPosition(null);
+        setMenuPlacement(null);
+    }, []);
+
+    const toggleRowMenuForItem = React.useCallback((itemId: string, trigger: HTMLElement) => {
+        if (openRowMenuId === itemId) {
+            closeRowMenu();
+            return;
+        }
+        const rect = trigger.getBoundingClientRect();
+        const placement = computeRowMenuPlacement(rect);
+        setOpenRowMenuId(itemId);
+        setRowMenuAnchorRect(rect);
+        setRowMenuPosition({ left: placement.left, top: placement.top });
+        setMenuPlacement(placement.placement);
+    }, [closeRowMenu, computeRowMenuPlacement, openRowMenuId]);
+
     const bottomSectionStyle: React.CSSProperties = {
         ...BOTTOM_SECTION_STYLE,
         alignItems: isExpanded ? 'stretch' : 'center',
@@ -247,44 +286,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
                                                     }}
                                                     onPointerDown={(e) => e.stopPropagation()}
                                                     onClick={(e) => {
+                                                        e.preventDefault();
                                                         e.stopPropagation();
                                                         const el = e.currentTarget as HTMLSpanElement;
-                                                        const rect = el.getBoundingClientRect();
-                                                        setOpenRowMenuId(item.id);
-                                                        setRowMenuAnchorRect(rect);
-                                                        const gap = 8;
-                                                        const viewportPadding = 8;
-                                                        const menuWidth = 168;
-                                                        const menuHeight = 96;
-                                                        const maxLeft = Math.max(viewportPadding, window.innerWidth - menuWidth - viewportPadding);
-                                                        const left = Math.max(viewportPadding, Math.min(rect.right + gap, maxLeft));
-                                                        const canOpenDown = rect.bottom + gap + menuHeight <= window.innerHeight - viewportPadding;
-                                                        const top = canOpenDown
-                                                            ? rect.top
-                                                            : Math.max(viewportPadding, rect.bottom - menuHeight);
-                                                        setRowMenuPosition({ left, top });
-                                                        setMenuPlacement(canOpenDown ? 'down' : 'up');
+                                                        toggleRowMenuForItem(item.id, el);
                                                     }}
                                                     onKeyDown={(e) => {
                                                         if (e.key !== 'Enter' && e.key !== ' ') return;
                                                         e.preventDefault();
                                                         e.stopPropagation();
                                                         const el = e.currentTarget as HTMLSpanElement;
-                                                        const rect = el.getBoundingClientRect();
-                                                        setOpenRowMenuId(item.id);
-                                                        setRowMenuAnchorRect(rect);
-                                                        const gap = 8;
-                                                        const viewportPadding = 8;
-                                                        const menuWidth = 168;
-                                                        const menuHeight = 96;
-                                                        const maxLeft = Math.max(viewportPadding, window.innerWidth - menuWidth - viewportPadding);
-                                                        const left = Math.max(viewportPadding, Math.min(rect.right + gap, maxLeft));
-                                                        const canOpenDown = rect.bottom + gap + menuHeight <= window.innerHeight - viewportPadding;
-                                                        const top = canOpenDown
-                                                            ? rect.top
-                                                            : Math.max(viewportPadding, rect.bottom - menuHeight);
-                                                        setRowMenuPosition({ left, top });
-                                                        setMenuPlacement(canOpenDown ? 'down' : 'up');
+                                                        toggleRowMenuForItem(item.id, el);
                                                     }}
                                                 >
                                                     <MaskIcon

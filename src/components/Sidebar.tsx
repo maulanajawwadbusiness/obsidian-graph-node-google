@@ -148,6 +148,35 @@ export const Sidebar: React.FC<SidebarProps> = ({
         setMenuPlacement(placement.placement);
     }, [closeRowMenu, computeRowMenuPlacement, openRowMenuId]);
 
+    React.useEffect(() => {
+        if (!openRowMenuId) return;
+
+        const onWindowPointerDown = (event: PointerEvent) => {
+            const target = event.target as Element | null;
+            if (!target) {
+                closeRowMenu();
+                return;
+            }
+
+            if (target.closest('[data-row-menu="1"]')) return;
+            if (target.closest('[data-row-ellipsis="1"]')) return;
+
+            closeRowMenu();
+        };
+
+        const onWindowKeyDown = (event: KeyboardEvent) => {
+            if (event.key !== 'Escape') return;
+            closeRowMenu();
+        };
+
+        window.addEventListener('pointerdown', onWindowPointerDown, true);
+        window.addEventListener('keydown', onWindowKeyDown, true);
+        return () => {
+            window.removeEventListener('pointerdown', onWindowPointerDown, true);
+            window.removeEventListener('keydown', onWindowKeyDown, true);
+        };
+    }, [openRowMenuId, closeRowMenu]);
+
     const bottomSectionStyle: React.CSSProperties = {
         ...BOTTOM_SECTION_STYLE,
         alignItems: isExpanded ? 'stretch' : 'center',
@@ -278,6 +307,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                                                 <span
                                                     role="button"
                                                     tabIndex={0}
+                                                    data-row-ellipsis="1"
                                                     aria-label={`Open actions for ${item.title}`}
                                                     title="Session actions"
                                                     style={{
@@ -318,6 +348,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
             {openRowMenuId !== null && rowMenuPosition !== null ? (
                 <div
+                    data-row-menu="1"
                     style={{
                         ...ROW_MENU_POPUP_STYLE,
                         left: `${rowMenuPosition.left}px`,

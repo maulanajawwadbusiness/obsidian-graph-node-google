@@ -70,6 +70,8 @@ export const AppShell: React.FC = () => {
     const [pendingAnalysis, setPendingAnalysis] = React.useState<PendingAnalysisPayload>(null);
     const [savedInterfaces, setSavedInterfaces] = React.useState<SavedInterfaceRecordV1[]>([]);
     const [pendingLoadInterface, setPendingLoadInterface] = React.useState<SavedInterfaceRecordV1 | null>(null);
+    const [pendingDeleteId, setPendingDeleteId] = React.useState<string | null>(null);
+    const [pendingDeleteTitle, setPendingDeleteTitle] = React.useState<string | null>(null);
     const [graphIsLoading, setGraphIsLoading] = React.useState(false);
     const [documentViewerToggleToken, setDocumentViewerToggleToken] = React.useState(0);
     const [isSidebarExpanded, setIsSidebarExpanded] = React.useState(false);
@@ -114,6 +116,16 @@ export const AppShell: React.FC = () => {
     const handleInterfaceSaved = React.useCallback(() => {
         refreshSavedInterfaces();
     }, [refreshSavedInterfaces]);
+    const closeDeleteConfirm = React.useCallback(() => {
+        setPendingDeleteId(null);
+        setPendingDeleteTitle(null);
+    }, []);
+    const confirmDelete = React.useCallback(() => {
+        if (pendingDeleteId) {
+            console.log('[appshell] pending_delete_confirm id=%s', pendingDeleteId);
+        }
+        closeDeleteConfirm();
+    }, [closeDeleteConfirm, pendingDeleteId]);
 
     React.useEffect(() => {
         refreshSavedInterfaces();
@@ -292,7 +304,11 @@ export const AppShell: React.FC = () => {
                         refreshSavedInterfaces();
                     }}
                     onDeleteInterface={(id) => {
-                        console.log('[appshell] delete_interface_requested id=%s', id);
+                        const record = savedInterfaces.find((item) => item.id === id);
+                        if (!record) return;
+                        setPendingDeleteId(record.id);
+                        setPendingDeleteTitle(record.title);
+                        console.log('[appshell] pending_delete_open id=%s', id);
                     }}
                     selectedInterfaceId={pendingLoadInterface?.id ?? undefined}
                     onSelectInterface={(id) => {
@@ -318,6 +334,53 @@ export const AppShell: React.FC = () => {
                 {onboardingFullscreenButton}
                 {moneyUi}
             </div>
+            {pendingDeleteId ? (
+                <div
+                    style={DELETE_CONFIRM_BACKDROP_STYLE}
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onPointerUp={(e) => e.stopPropagation()}
+                    onClick={(e) => e.stopPropagation()}
+                    onWheelCapture={(e) => e.stopPropagation()}
+                    onWheel={(e) => e.stopPropagation()}
+                >
+                    <div
+                        style={DELETE_CONFIRM_CARD_STYLE}
+                        onPointerDown={(e) => e.stopPropagation()}
+                        onPointerUp={(e) => e.stopPropagation()}
+                        onClick={(e) => e.stopPropagation()}
+                        onWheelCapture={(e) => e.stopPropagation()}
+                        onWheel={(e) => e.stopPropagation()}
+                    >
+                        <div style={DELETE_CONFIRM_TEXT_STYLE}>
+                            Delete request queued for: {pendingDeleteTitle ?? pendingDeleteId}
+                        </div>
+                        <div style={DELETE_CONFIRM_BUTTON_ROW_STYLE}>
+                            <button
+                                type="button"
+                                style={DELETE_CONFIRM_CANCEL_STYLE}
+                                onPointerDown={(e) => e.stopPropagation()}
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    closeDeleteConfirm();
+                                }}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="button"
+                                style={DELETE_CONFIRM_PRIMARY_STYLE}
+                                onPointerDown={(e) => e.stopPropagation()}
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    confirmDelete();
+                                }}
+                            >
+                                Delete
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            ) : null}
         </div>
     );
 };
@@ -330,6 +393,59 @@ const FALLBACK_STYLE: React.CSSProperties = {
     background: '#0f1115',
     color: '#e7e7e7',
     fontSize: '14px',
+};
+
+const DELETE_CONFIRM_BACKDROP_STYLE: React.CSSProperties = {
+    position: 'fixed',
+    inset: 0,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    background: 'rgba(8, 10, 14, 0.55)',
+    zIndex: 2400,
+    pointerEvents: 'auto',
+};
+
+const DELETE_CONFIRM_CARD_STYLE: React.CSSProperties = {
+    minWidth: '320px',
+    maxWidth: '420px',
+    borderRadius: '12px',
+    border: '1px solid rgba(255, 255, 255, 0.16)',
+    background: 'rgba(15, 18, 26, 0.98)',
+    padding: '16px',
+    color: '#e7e7e7',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '14px',
+};
+
+const DELETE_CONFIRM_TEXT_STYLE: React.CSSProperties = {
+    fontSize: '14px',
+    lineHeight: 1.4,
+};
+
+const DELETE_CONFIRM_BUTTON_ROW_STYLE: React.CSSProperties = {
+    display: 'flex',
+    justifyContent: 'flex-end',
+    gap: '8px',
+};
+
+const DELETE_CONFIRM_CANCEL_STYLE: React.CSSProperties = {
+    border: '1px solid rgba(255, 255, 255, 0.22)',
+    background: 'transparent',
+    color: '#e7e7e7',
+    borderRadius: '8px',
+    padding: '8px 12px',
+    cursor: 'pointer',
+};
+
+const DELETE_CONFIRM_PRIMARY_STYLE: React.CSSProperties = {
+    border: '1px solid #a22128',
+    background: '#c63139',
+    color: '#ffffff',
+    borderRadius: '8px',
+    padding: '8px 12px',
+    cursor: 'pointer',
 };
 
 const SHELL_STYLE: React.CSSProperties = {

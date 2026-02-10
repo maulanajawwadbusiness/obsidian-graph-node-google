@@ -101,6 +101,7 @@ export const AppShell: React.FC = () => {
     const [enterPromptOverlayOpen, setEnterPromptOverlayOpen] = React.useState(false);
     const [welcome1FontGateDone, setWelcome1FontGateDone] = React.useState(false);
     const searchInputRef = React.useRef<HTMLInputElement | null>(null);
+    const didSelectThisOpenRef = React.useRef(false);
     const stopEventPropagation = React.useCallback((e: React.SyntheticEvent) => {
         e.stopPropagation();
     }, []);
@@ -172,12 +173,14 @@ export const AppShell: React.FC = () => {
     const openSearchInterfaces = React.useCallback(() => {
         if (pendingDeleteId) return;
         if (sidebarDisabled) return;
+        didSelectThisOpenRef.current = false;
         setIsSearchInterfacesOpen(true);
         setSearchInterfacesQuery('');
         setSearchHighlightedIndex(0);
         console.log('[appshell] search_open');
     }, [pendingDeleteId, setSearchInterfacesQuery, sidebarDisabled]);
     const closeSearchInterfaces = React.useCallback(() => {
+        didSelectThisOpenRef.current = false;
         setIsSearchInterfacesOpen(false);
         setSearchInterfacesQuery('');
         setSearchHighlightedIndex(0);
@@ -330,6 +333,8 @@ export const AppShell: React.FC = () => {
     }, [filteredSearchResults.length, searchHighlightedIndex]);
 
     const selectSearchResultById = React.useCallback((id: string) => {
+        if (didSelectThisOpenRef.current) return;
+        didSelectThisOpenRef.current = true;
         closeSearchInterfaces();
         selectSavedInterfaceById(id);
     }, [closeSearchInterfaces, selectSavedInterfaceById]);

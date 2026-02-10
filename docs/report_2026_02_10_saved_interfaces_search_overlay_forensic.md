@@ -268,3 +268,11 @@ Source alignment:
   - if `sidebarDisabled` flips true while search is open (graph loading), search closes immediately.
   - delete actions are now ignored while search overlay is open, preventing hidden/overlapped modal transitions.
 - No new global listeners added; shielding remains local and non-leaky.
+
+## 15) Step 9 StrictMode-Safe Effects (2026-02-10)
+
+- Search overlay uses no search-specific global window listeners.
+- Autofocus remains requestAnimationFrame-based with proper cancellation cleanup on close/unmount.
+- Added per-open idempotency guard (`didSelectThisOpenRef`) to prevent duplicate selection firing from rapid duplicate Enter/click events in dev StrictMode/event replay scenarios.
+- Guard resets on open and close, preserving normal behavior while preventing double-close/double-select.
+- Backdrop close and Escape close remain local to overlay/modal handlers; no window capture dependency for search overlay behavior.

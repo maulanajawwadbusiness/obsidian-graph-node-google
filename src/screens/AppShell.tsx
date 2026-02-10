@@ -819,6 +819,7 @@ const SEARCH_OVERLAY_BACKDROP_STYLE: React.CSSProperties = {
 const SEARCH_OVERLAY_CARD_STYLE: React.CSSProperties = {
     position: 'relative',
     width: 'min(560px, calc(100vw - 32px))',
+    height: 'min(520px, calc(100vh - 64px))',
     maxHeight: 'calc(100vh - 64px)',
     overflowX: 'hidden',
     borderRadius: '14px',
@@ -856,6 +857,7 @@ const SEARCH_CLOSE_BUTTON_STYLE: React.CSSProperties = {
 };
 
 const SEARCH_INPUT_STYLE: React.CSSProperties = {
+    flex: '0 0 auto',
     width: '100%',
     borderRadius: '10px',
     border: 'none',
@@ -875,7 +877,6 @@ const SEARCH_RESULTS_STYLE: React.CSSProperties = {
     flex: '1 1 auto',
     minHeight: 0,
     gap: '8px',
-    maxHeight: '52vh',
     overflowY: 'auto',
     overflowX: 'hidden',
 };

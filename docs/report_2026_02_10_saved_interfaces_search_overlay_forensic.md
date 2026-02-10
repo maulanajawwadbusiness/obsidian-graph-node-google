@@ -308,3 +308,15 @@ Source alignment:
   - `Recent` label
   - result titles
 - Shielding, ranking, selection, keyboard behavior, and stacking/disabled rules remain unchanged.
+
+## 18) Step 10 Stable Overlay Size Contract (2026-02-10)
+
+- Root cause: search modal card was constrained only by `maxHeight`, and the results viewport still had `maxHeight: 52vh`, so small result sets let the card collapse.
+- Fix applied in `src/screens/AppShell.tsx`:
+  - card now has fixed responsive height: `height: min(520px, calc(100vh - 64px))`
+  - card remains `display: flex`, `flexDirection: column`, and `overflow: hidden`
+  - input is explicit non-growing (`flex: 0 0 auto`)
+  - results viewport is the only scroller (`flex: 1 1 auto`, `minHeight: 0`, `overflowY: auto`, `overflowX: hidden`)
+  - removed results `maxHeight: 52vh` cap that previously caused content-driven shrink behavior
+- Outcome: modal size remains stable across 0, 1, and many results; only the results area scrolls.
+- Shielding and behavior remained unchanged: pointer and wheel guards, ranking, selection, and keyboard flow are intact.

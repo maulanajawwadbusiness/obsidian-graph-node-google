@@ -7,7 +7,8 @@ import { BalanceBadge } from '../components/BalanceBadge';
 import { ShortageWarning } from '../components/ShortageWarning';
 import { MoneyNoticeStack } from '../components/MoneyNoticeStack';
 import { FullscreenButton } from '../components/FullscreenButton';
-import { Sidebar } from '../components/Sidebar';
+import { Sidebar, type SidebarInterfaceItem } from '../components/Sidebar';
+import { loadSavedInterfaces, type SavedInterfaceRecordV1 } from '../store/savedInterfacesStore';
 
 const Graph = React.lazy(() =>
     import('../playground/GraphPhysicsPlayground').then((mod) => ({
@@ -25,6 +26,8 @@ type GraphPendingAnalysisProps = {
     onPendingAnalysisConsumed: () => void;
     onLoadingStateChange?: (isLoading: boolean) => void;
     documentViewerToggleToken?: number;
+    pendingLoadInterface?: SavedInterfaceRecordV1 | null;
+    onPendingLoadInterfaceConsumed?: () => void;
 };
 const STORAGE_KEY = 'arnvoid_screen';
 const PERSIST_SCREEN = false;
@@ -60,6 +63,8 @@ function getInitialScreen(): Screen {
 export const AppShell: React.FC = () => {
     const [screen, setScreen] = React.useState<Screen>(() => getInitialScreen());
     const [pendingAnalysis, setPendingAnalysis] = React.useState<PendingAnalysisPayload>(null);
+    const [savedInterfaces, setSavedInterfaces] = React.useState<SavedInterfaceRecordV1[]>([]);
+    const [pendingLoadInterface, setPendingLoadInterface] = React.useState<SavedInterfaceRecordV1 | null>(null);
     const [graphIsLoading, setGraphIsLoading] = React.useState(false);
     const [documentViewerToggleToken, setDocumentViewerToggleToken] = React.useState(0);
     const [isSidebarExpanded, setIsSidebarExpanded] = React.useState(false);
@@ -97,6 +102,32 @@ export const AppShell: React.FC = () => {
             blocked={isOnboardingOverlayOpen}
         />
     ) : null;
+
+    const refreshSavedInterfaces = React.useCallback(() => {
+        setSavedInterfaces(loadSavedInterfaces());
+    }, []);
+
+    React.useEffect(() => {
+        refreshSavedInterfaces();
+    }, [refreshSavedInterfaces]);
+
+    React.useEffect(() => {
+        if (screen !== 'graph') return;
+        refreshSavedInterfaces();
+    }, [screen, refreshSavedInterfaces]);
+
+    const sidebarInterfaces = React.useMemo<SidebarInterfaceItem[]>(
+        () =>
+            savedInterfaces.map((record) => ({
+                id: record.id,
+                title: record.title,
+                subtitle: new Date(record.updatedAt).toLocaleString(),
+                nodeCount: record.preview.nodeCount,
+                linkCount: record.preview.linkCount,
+                updatedAt: record.updatedAt
+            })),
+        [savedInterfaces]
+    );
 
     React.useEffect(() => {
         if (!ONBOARDING_ENABLED || !PERSIST_SCREEN) return;
@@ -194,6 +225,8 @@ export const AppShell: React.FC = () => {
                     onPendingAnalysisConsumed={() => setPendingAnalysis(null)}
                     onLoadingStateChange={(v) => setGraphIsLoading(v)}
                     documentViewerToggleToken={documentViewerToggleToken}
+                    pendingLoadInterface={pendingLoadInterface}
+                    onPendingLoadInterfaceConsumed={() => setPendingLoadInterface(null)}
                 />
             </Suspense>
         )
@@ -239,6 +272,14 @@ export const AppShell: React.FC = () => {
                     disabled={sidebarDisabled}
                     showDocumentViewerButton={screen === 'graph'}
                     onToggleDocumentViewer={() => setDocumentViewerToggleToken((prev) => prev + 1)}
+                    interfaces={sidebarInterfaces}
+                    selectedInterfaceId={pendingLoadInterface?.id ?? undefined}
+                    onSelectInterface={(id) => {
+                        const record = savedInterfaces.find((item) => item.id === id);
+                        if (!record) return;
+                        setPendingLoadInterface(record);
+                        console.log('[appshell] pending_load_interface id=%s', id);
+                    }}
                 />
             ) : null}
             <div

@@ -31,6 +31,11 @@ import { legacyToTopology } from '../graph/topologyAdapter';
 import { deriveSpringEdges } from '../graph/springDerivation';
 // RUN 6: Spring-to-physics converter import
 import { springEdgesToPhysicsLinks } from '../graph/springToPhysics';
+import {
+    loadSavedInterfaces,
+    patchSavedInterfaceLayout,
+    type SavedInterfaceRecordV1
+} from '../store/savedInterfacesStore';
 // STEP3-RUN5-V4-FIX1: Removed unused recomputeSprings import
 // RUN 8: Dev console helpers (exposes window.__topology)
 // PRE-STEP2: Only import in dev mode to prevent bundling in production
@@ -50,6 +55,8 @@ type GraphPhysicsPlaygroundProps = {
     onPendingAnalysisConsumed: () => void;
     onLoadingStateChange?: (isLoading: boolean) => void;
     documentViewerToggleToken?: number;
+    pendingLoadInterface?: SavedInterfaceRecordV1 | null;
+    onPendingLoadInterfaceConsumed?: () => void;
 };
 
 function inferTitleFromPastedText(text: string): string {
@@ -76,6 +83,8 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
     onPendingAnalysisConsumed,
     onLoadingStateChange,
     documentViewerToggleToken,
+    pendingLoadInterface = null,
+    onPendingLoadInterfaceConsumed,
 }) => {
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
     const [canvasReady, setCanvasReady] = useState(false);
@@ -93,7 +102,15 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
     const fullChatContext = useFullChat();
     const fullChatOpen = fullChatContext.isOpen;
     const hasConsumedPendingRef = useRef(false);
+    const hasInitDecisionRef = useRef(false);
+    const hasDefaultSpawnRunRef = useRef(false);
+    const hasConsumedLoadRef = useRef(false);
+    const hasRestoredSuccessfullyRef = useRef(false);
+    const pendingRestoreAtInitRef = useRef(false);
+    const isRestoringRef = useRef(false);
+    const lastPendingLoadIdRef = useRef<string | null>(null);
     const currentPendingDocIdRef = useRef<string | null>(null);
+    const lastLayoutPatchedDocIdRef = useRef<string | null>(null);
 
     // State for React UI
     const [config, setConfig] = useState<ForceConfig>(DEFAULT_PHYSICS_CONFIG);
@@ -163,7 +180,8 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
         hoverStateRef,
         updateHoverSelection,
         handleDragStart,
-        handleDragEnd
+        handleDragEnd,
+        applyCameraSnapshot
     } = useGraphRendering({
         canvasRef,
         canvasReady,
@@ -573,14 +591,237 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
         engine.resetLifecycle();
     };
 
+    const captureAndPatchSavedLayout = React.useCallback((docId: string) => {
+        if (!docId) return;
+        if (lastLayoutPatchedDocIdRef.current === docId) return;
+        const engine = engineRef.current;
+        if (!engine || engine.nodes.size === 0) return;
+
+        const target = loadSavedInterfaces().find((item) => item.docId === docId);
+        if (!target) {
+            if (import.meta.env.DEV) {
+                console.log('[savedInterfaces] layout_patch_skipped reason=no_target_id');
+            }
+            return;
+        }
+
+        const nodeWorld: Record<string, { x: number; y: number }> = {};
+        for (const node of engine.nodes.values()) {
+            nodeWorld[node.id] = { x: node.x, y: node.y };
+        }
+
+        const hoverCamera = hoverStateRef.current;
+        const panX = Number.isFinite(hoverCamera.lastSelectionPanX) ? hoverCamera.lastSelectionPanX : 0;
+        const panY = Number.isFinite(hoverCamera.lastSelectionPanY) ? hoverCamera.lastSelectionPanY : 0;
+        const zoom = Number.isFinite(hoverCamera.lastSelectionZoom) ? hoverCamera.lastSelectionZoom : 1;
+
+        patchSavedInterfaceLayout(target.id, { nodeWorld }, { panX, panY, zoom });
+        lastLayoutPatchedDocIdRef.current = docId;
+
+        if (import.meta.env.DEV) {
+            console.log(
+                '[savedInterfaces] layout_patch id=%s nodes=%d zoom=%s',
+                target.id,
+                Object.keys(nodeWorld).length,
+                zoom.toFixed(3)
+            );
+        }
+    }, [hoverStateRef]);
+
     useEffect(() => {
-        // Spawn the controlled 4-dot topology on load.
+        if (pendingLoadInterface) {
+            pendingRestoreAtInitRef.current = true;
+        }
+    }, [pendingLoadInterface]);
+
+    const runDefaultSpawnOnce = (reason: 'init' | 'restore_failed') => {
+        if (hasDefaultSpawnRunRef.current) return;
+        hasDefaultSpawnRunRef.current = true;
+
+        if (import.meta.env.DEV) {
+            if (reason === 'restore_failed') {
+                console.log('[graph] default_spawn_fallback reason=restore_failed');
+            } else {
+                console.log('[graph] default_spawn_run seed=1337');
+            }
+        }
         spawnGraph(4, 1337);
-    }, []);
+    };
+
+    useEffect(() => {
+        if (hasInitDecisionRef.current) return;
+
+        const shouldRunDefaultSpawn =
+            !pendingRestoreAtInitRef.current && !pendingLoadInterface && !hasRestoredSuccessfullyRef.current;
+        hasInitDecisionRef.current = true;
+
+        if (!shouldRunDefaultSpawn) {
+            if (import.meta.env.DEV) {
+                console.log('[graph] default_spawn_skipped reason=pending_restore');
+            }
+            return;
+        }
+
+        runDefaultSpawnOnce('init');
+    }, [pendingLoadInterface]);
+
+    useEffect(() => {
+        const nextId = pendingLoadInterface?.id ?? null;
+        if (nextId === lastPendingLoadIdRef.current) return;
+        lastPendingLoadIdRef.current = nextId;
+        hasConsumedLoadRef.current = false;
+    }, [pendingLoadInterface?.id]);
+
+    useEffect(() => {
+        if (!pendingLoadInterface) return;
+        if (hasConsumedLoadRef.current) return;
+        if (isRestoringRef.current) return;
+        if (!engineRef.current) return;
+        if (documentContext.state.aiActivity) return;
+
+        hasConsumedLoadRef.current = true;
+        isRestoringRef.current = true;
+        const rec = pendingLoadInterface;
+        console.log('[graph] consuming_pending_load_interface id=%s title=%s', rec.id, rec.title);
+        onPendingLoadInterfaceConsumed?.();
+
+        let restoredOk = false;
+        try {
+            if (!rec.topology || !Array.isArray(rec.topology.nodes) || !Array.isArray(rec.topology.links)) {
+                throw new Error('invalid_topology');
+            }
+
+            documentContext.setDocument(rec.parsedDocument);
+            documentContext.setInferredTitle(rec.title);
+            documentContext.setAIError(null);
+            setLastDroppedFile(null);
+
+            setTopology(rec.topology, engineRef.current.config, { source: 'setTopology', docId: rec.docId });
+            const finalTopology = getTopology();
+            const springs = finalTopology.springs && finalTopology.springs.length > 0
+                ? finalTopology.springs
+                : deriveSpringEdges(finalTopology, engineRef.current.config);
+            const physicsLinks = springEdgesToPhysicsLinks(springs);
+
+            const nodeCount = Math.max(1, finalTopology.nodes.length);
+            const spacing = Math.max(120, engineRef.current.config.targetSpacing * 0.6);
+            const radius = Math.max(spacing, (spacing * nodeCount) / Math.PI);
+            const fallbackTitle = rec.title || rec.parsedDocument.fileName || 'Untitled Interface';
+            const fallbackSummary = `Saved interface: ${fallbackTitle}`;
+            const fallbackDocId = rec.parsedDocument.id || rec.docId;
+            const savedLayout = rec.layout?.nodeWorld;
+            const hasSavedLayoutMap = Boolean(savedLayout && Object.keys(savedLayout).length > 0);
+            const hasSavedCamera = Boolean(
+                rec.camera &&
+                Number.isFinite(rec.camera.panX) &&
+                Number.isFinite(rec.camera.panY) &&
+                Number.isFinite(rec.camera.zoom)
+            );
+            let nodesAppliedFromLayout = 0;
+
+            const restoredNodes: PhysicsNode[] = finalTopology.nodes.map((spec, index) => {
+                const angle = (Math.PI * 2 * index) / nodeCount;
+                const roleRaw = spec.meta?.role;
+                const role = roleRaw === 'spine' || roleRaw === 'rib' || roleRaw === 'fiber'
+                    ? roleRaw
+                    : undefined;
+                const mass = role === 'spine' ? 3 : role === 'rib' ? 2 : 1;
+                const dotRadius = role === 'spine' ? 8 : role === 'rib' ? 6 : 5;
+                const specMeta = spec.meta as Record<string, unknown> | undefined;
+                const sourceTitle = typeof specMeta?.sourceTitle === 'string'
+                    ? specMeta.sourceTitle
+                    : (spec.label || fallbackTitle);
+                const sourceSummary = typeof specMeta?.sourceSummary === 'string'
+                    ? specMeta.sourceSummary
+                    : fallbackSummary;
+                const fallbackX = Math.cos(angle) * radius;
+                const fallbackY = Math.sin(angle) * radius;
+                const savedPoint = savedLayout?.[spec.id];
+                const hasSavedPoint = Boolean(
+                    hasSavedLayoutMap &&
+                    savedPoint &&
+                    Number.isFinite(savedPoint.x) &&
+                    Number.isFinite(savedPoint.y)
+                );
+                if (hasSavedPoint) {
+                    nodesAppliedFromLayout += 1;
+                }
+                return {
+                    id: spec.id,
+                    x: hasSavedPoint ? savedPoint!.x : fallbackX,
+                    y: hasSavedPoint ? savedPoint!.y : fallbackY,
+                    vx: 0,
+                    vy: 0,
+                    fx: 0,
+                    fy: 0,
+                    mass,
+                    radius: dotRadius,
+                    isFixed: false,
+                    warmth: 1.0,
+                    role,
+                    label: spec.label,
+                    meta: {
+                        docId: fallbackDocId,
+                        sourceTitle,
+                        sourceSummary
+                    }
+                };
+            });
+
+            const hasSavedLayout = hasSavedLayoutMap && nodesAppliedFromLayout > 0;
+            if (hasSavedLayout) {
+                const cameraSnapshot = hasSavedCamera ? rec.camera! : null;
+                if (cameraSnapshot) {
+                    applyCameraSnapshot(cameraSnapshot);
+                }
+                const zoomForLog = cameraSnapshot
+                    ? cameraSnapshot.zoom.toFixed(3)
+                    : 'n/a';
+                console.log(
+                    '[graph] layout_applied id=%s nodesApplied=%d zoom=%s',
+                    rec.id,
+                    nodesAppliedFromLayout,
+                    zoomForLog
+                );
+            } else {
+                console.log('[graph] layout_missing_fallback id=%s', rec.id);
+            }
+
+            engineRef.current.clear();
+            restoredNodes.forEach((n) => engineRef.current.addNode(n));
+            physicsLinks.forEach((l) => engineRef.current.addLink(l));
+            engineRef.current.resetLifecycle();
+            hasRestoredSuccessfullyRef.current = true;
+            restoredOk = true;
+
+            console.log('[graph] pending_load_interface_done ok=true id=%s', rec.id);
+        } catch (error) {
+            documentContext.setAIError('Failed to load saved interface.');
+            console.error('[graph] pending_load_interface_done ok=false id=%s', rec.id, error);
+        } finally {
+            isRestoringRef.current = false;
+            if (
+                !restoredOk &&
+                !hasRestoredSuccessfullyRef.current &&
+                engineRef.current.nodes.size === 0
+            ) {
+                runDefaultSpawnOnce('restore_failed');
+            }
+        }
+    }, [
+        pendingLoadInterface,
+        onPendingLoadInterfaceConsumed,
+        documentContext.state.aiActivity,
+        documentContext.setDocument,
+        documentContext.setInferredTitle,
+        documentContext.setAIError
+    ]);
 
     useEffect(() => {
         if (!pendingAnalysisPayload) return;
         if (hasConsumedPendingRef.current) return;
+        if (pendingLoadInterface) return;
+        if (isRestoringRef.current) return;
         if (documentContext.state.aiActivity) return;
         if (!engineRef.current || engineRef.current.nodes.size === 0) return;
 
@@ -628,6 +869,7 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
                         setAIErrorWithAuthLog,
                         documentContext.setInferredTitle
                     );
+                    captureAndPatchSavedLayout(docId);
                 } catch (error) {
                     ok = false;
                     console.error('[graph] pending analysis failed', error);
@@ -696,6 +938,7 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
                     setAIErrorWithAuthLog,
                     documentContext.setInferredTitle
                 );
+                captureAndPatchSavedLayout(docId);
             } catch (error) {
                 ok = false;
                 console.error('[graph] pending_file_analyze_failed', error);
@@ -725,13 +968,15 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
         })();
     }, [
         pendingAnalysisPayload,
+        pendingLoadInterface,
         onPendingAnalysisConsumed,
         documentContext.state.aiActivity,
         documentContext.isWorkerReady,
         documentContext.setAIActivity,
         documentContext.setDocument,
         documentContext.setAIError,
-        documentContext.setInferredTitle
+        documentContext.setInferredTitle,
+        captureAndPatchSavedLayout
     ]);
 
     const handleSpawn = () => {
@@ -1066,7 +1311,9 @@ export const GraphPhysicsPlayground: React.FC<GraphPhysicsPlaygroundProps> = ({
     pendingAnalysisPayload,
     onPendingAnalysisConsumed,
     onLoadingStateChange,
-    documentViewerToggleToken
+    documentViewerToggleToken,
+    pendingLoadInterface,
+    onPendingLoadInterfaceConsumed
 }) => (
     <DocumentProvider>
         <PopupProvider>
@@ -1076,6 +1323,8 @@ export const GraphPhysicsPlayground: React.FC<GraphPhysicsPlaygroundProps> = ({
                     onPendingAnalysisConsumed={onPendingAnalysisConsumed}
                     onLoadingStateChange={onLoadingStateChange}
                     documentViewerToggleToken={documentViewerToggleToken}
+                    pendingLoadInterface={pendingLoadInterface}
+                    onPendingLoadInterfaceConsumed={onPendingLoadInterfaceConsumed}
                 />
             </FullChatProvider>
         </PopupProvider>

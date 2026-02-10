@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import { PhysicsEngine } from '../physics/engine';
 import { ForceConfig } from '../physics/types';
@@ -217,6 +217,31 @@ export const useGraphRendering = ({
         }
     };
 
+    const applyCameraSnapshot = useCallback((snapshot: { panX: number; panY: number; zoom: number }) => {
+        if (!Number.isFinite(snapshot.panX) || !Number.isFinite(snapshot.panY) || !Number.isFinite(snapshot.zoom)) {
+            return;
+        }
+
+        const camera = cameraRef.current;
+        camera.panX = snapshot.panX;
+        camera.panY = snapshot.panY;
+        camera.zoom = snapshot.zoom;
+        camera.targetPanX = snapshot.panX;
+        camera.targetPanY = snapshot.panY;
+        camera.targetZoom = snapshot.zoom;
+
+        lastSafeCameraRef.current.panX = snapshot.panX;
+        lastSafeCameraRef.current.panY = snapshot.panY;
+        lastSafeCameraRef.current.zoom = snapshot.zoom;
+        lastSafeCameraRef.current.targetPanX = snapshot.panX;
+        lastSafeCameraRef.current.targetPanY = snapshot.panY;
+        lastSafeCameraRef.current.targetZoom = snapshot.zoom;
+
+        hoverStateRef.current.lastSelectionPanX = snapshot.panX;
+        hoverStateRef.current.lastSelectionPanY = snapshot.panY;
+        hoverStateRef.current.lastSelectionZoom = snapshot.zoom;
+    }, []);
+
     return {
         handlePointerMove,
         handlePointerEnter,
@@ -229,6 +254,7 @@ export const useGraphRendering = ({
         hoverStateRef,
         updateHoverSelection,
         handleDragStart,
-        handleDragEnd
+        handleDragEnd,
+        applyCameraSnapshot
     };
 };

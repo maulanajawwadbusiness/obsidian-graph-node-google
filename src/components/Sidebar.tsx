@@ -9,14 +9,14 @@ import documentIcon from '../assets/document_icon.png';
 // ═══════════════════════════════════════════════════════════════════════════
 // Mock Data
 // ═══════════════════════════════════════════════════════════════════════════
-const MOCK_INTERFACES = [
-    { id: '1', name: 'Interfaces 1' },
-    { id: '2', name: 'Interfaces 2' },
-    { id: '3', name: 'Interfaces 3' },
-    { id: '4', name: 'Interfaces 4' },
-    { id: '5', name: 'Interfaces 5' },
-    { id: '6', name: 'Interfaces 6' },
-];
+export type SidebarInterfaceItem = {
+    id: string;
+    title: string;
+    subtitle?: string;
+    nodeCount?: number;
+    linkCount?: number;
+    updatedAt?: number;
+};
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Design Tokens
@@ -62,6 +62,9 @@ type SidebarProps = {
     disabled?: boolean;
     onToggleDocumentViewer?: () => void;
     showDocumentViewerButton?: boolean;
+    interfaces?: SidebarInterfaceItem[];
+    selectedInterfaceId?: string;
+    onSelectInterface?: (id: string) => void;
 };
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -70,6 +73,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
     disabled = false,
     onToggleDocumentViewer,
     showDocumentViewerButton = false,
+    interfaces,
+    selectedInterfaceId,
+    onSelectInterface,
 }) => {
     const [logoHover, setLogoHover] = React.useState(false);
     const [homeHover, setHomeHover] = React.useState(false);
@@ -182,20 +188,32 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 <div style={INTERFACES_SECTION_STYLE}>
                     <div style={SECTION_HEADER_STYLE}>Your Interfaces</div>
                     <div style={INTERFACES_LIST_STYLE}>
-                        {MOCK_INTERFACES.map((item) => (
-                            <button
-                                key={item.id}
-                                type="button"
-                                style={{
-                                    ...INTERFACE_ITEM_STYLE,
-                                    color: hoveredInterfaceId === item.id ? HOVER_ACCENT_COLOR : INTERFACE_ITEM_STYLE.color,
-                                }}
-                                onMouseEnter={() => setHoveredInterfaceId(item.id)}
-                                onMouseLeave={() => setHoveredInterfaceId(null)}
-                            >
-                                {item.name}
-                            </button>
-                        ))}
+                        {!interfaces || interfaces.length === 0 ? (
+                            <div style={INTERFACE_EMPTY_STATE_STYLE}>No saved interfaces yet.</div>
+                        ) : (
+                            interfaces.map((item) => {
+                                const isHovered = hoveredInterfaceId === item.id;
+                                const isSelected = selectedInterfaceId === item.id;
+                                return (
+                                    <button
+                                        key={item.id}
+                                        type="button"
+                                        style={{
+                                            ...INTERFACE_ITEM_STYLE,
+                                            color: isHovered || isSelected ? HOVER_ACCENT_COLOR : INTERFACE_ITEM_STYLE.color,
+                                            background: isSelected ? 'rgba(99, 171, 255, 0.12)' : INTERFACE_ITEM_STYLE.background,
+                                        }}
+                                        onPointerDown={(e) => e.stopPropagation()}
+                                        onMouseEnter={() => setHoveredInterfaceId(item.id)}
+                                        onMouseLeave={() => setHoveredInterfaceId(null)}
+                                        onClick={() => onSelectInterface?.(item.id)}
+                                        title={item.subtitle}
+                                    >
+                                        {item.title}
+                                    </button>
+                                );
+                            })
+                        )}
                     </div>
                 </div>
             )}
@@ -450,6 +468,13 @@ const INTERFACE_ITEM_STYLE: React.CSSProperties = {
     opacity: 1,
 };
 
+const INTERFACE_EMPTY_STATE_STYLE: React.CSSProperties = {
+    ...INTERFACE_ITEM_STYLE,
+    color: 'rgba(255, 255, 255, 0.45)',
+    cursor: 'default',
+    pointerEvents: 'none',
+};
+
 const BOTTOM_SECTION_STYLE: React.CSSProperties = {
     display: 'flex',
     flexDirection: 'column',
@@ -499,3 +524,5 @@ const AVATAR_NAME_STYLE: React.CSSProperties = {
     opacity: 1,
     marginLeft: `${NAME_OFFSET_LEFT}px`,
 };
+
+

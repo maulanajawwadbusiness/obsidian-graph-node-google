@@ -9,6 +9,7 @@ import { setTopology, getTopology } from '../graph/topologyControl';
 import { deriveSpringEdges } from '../graph/springDerivation';
 import { springEdgesToPhysicsLinks } from '../graph/springToPhysics';
 import type { DirectedLink } from '../graph/topologyTypes';
+import { buildSavedInterfaceDedupeKey, loadSavedInterfaces, upsertSavedInterface } from '../store/savedInterfacesStore';
 
 
 export function applyFirstWordsToNodes(
@@ -34,6 +35,12 @@ export function applyFirstWordsToNodes(
 }
 
 import { analyzeDocument } from '../ai/paperAnalyzer';
+
+function countWords(text: string): number {
+  const trimmed = text.trim();
+  if (!trimmed) return 0;
+  return trimmed.split(/\s+/).length;
+}
 
 /**
  * Apply AI Analysis (5 Key Points) to nodes
@@ -149,6 +156,60 @@ export async function applyAnalysisToNodes(
     if (inferred) {
       setInferredTitle(inferred);
       console.log(`[AI] Inferred Title: "${inferred}"`);
+    }
+
+    const interfaceTitle = inferred || 'Untitled Interface';
+    const parsedDocument: ParsedDocument = {
+      id: documentId,
+      fileName: interfaceTitle,
+      mimeType: 'text/plain',
+      sourceType: 'txt',
+      text: documentText,
+      warnings: [],
+      meta: {
+        wordCount: countWords(documentText),
+        charCount: documentText.length
+      }
+    };
+
+    const preview = {
+      nodeCount: finalTopology.nodes.length,
+      linkCount: finalTopology.links.length,
+      charCount: parsedDocument.meta.charCount,
+      wordCount: parsedDocument.meta.wordCount
+    };
+    const source = documentId.startsWith('pasted-')
+      ? 'paste'
+      : documentId.startsWith('dropped-')
+        ? 'file'
+        : 'unknown';
+
+    const dedupeKey = buildSavedInterfaceDedupeKey({
+      docId: documentId,
+      title: interfaceTitle,
+      topology: finalTopology
+    });
+
+    const beforeCount = loadSavedInterfaces().length;
+    const next = upsertSavedInterface({
+      id: `iface-${Date.now()}-${documentId}`,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      title: interfaceTitle,
+      docId: documentId,
+      source,
+      fileName: parsedDocument.fileName,
+      mimeType: parsedDocument.mimeType,
+      parsedDocument,
+      topology: finalTopology,
+      preview,
+      dedupeKey
+    });
+
+    if (import.meta.env.DEV) {
+      console.log(
+        `[savedInterfaces] upsert ok id=${next[0]?.id || 'unknown'} docId=${documentId} nodes=${preview.nodeCount} links=${preview.linkCount} before=${beforeCount} after=${next.length}`
+      );
     }
 
     console.log(`[AI] Applied ${points.length} analysis points`);

@@ -8,7 +8,11 @@ import { ShortageWarning } from '../components/ShortageWarning';
 import { MoneyNoticeStack } from '../components/MoneyNoticeStack';
 import { FullscreenButton } from '../components/FullscreenButton';
 import { Sidebar, type SidebarInterfaceItem } from '../components/Sidebar';
-import { loadSavedInterfaces, type SavedInterfaceRecordV1 } from '../store/savedInterfacesStore';
+import {
+    loadSavedInterfaces,
+    patchSavedInterfaceTitle,
+    type SavedInterfaceRecordV1
+} from '../store/savedInterfacesStore';
 
 const Graph = React.lazy(() =>
     import('../playground/GraphPhysicsPlayground').then((mod) => ({
@@ -283,6 +287,10 @@ export const AppShell: React.FC = () => {
                     showDocumentViewerButton={screen === 'graph'}
                     onToggleDocumentViewer={() => setDocumentViewerToggleToken((prev) => prev + 1)}
                     interfaces={sidebarInterfaces}
+                    onRenameInterface={(id, newTitle) => {
+                        patchSavedInterfaceTitle(id, newTitle);
+                        refreshSavedInterfaces();
+                    }}
                     selectedInterfaceId={pendingLoadInterface?.id ?? undefined}
                     onSelectInterface={(id) => {
                         const record = savedInterfaces.find((item) => item.id === id);

@@ -64,6 +64,7 @@ type SidebarProps = {
     isExpanded: boolean;
     onToggle: () => void;
     onCreateNew?: () => void;
+    onRenameInterface?: (id: string, newTitle: string) => void;
     disabled?: boolean;
     onToggleDocumentViewer?: () => void;
     showDocumentViewerButton?: boolean;
@@ -76,6 +77,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     isExpanded,
     onToggle,
     onCreateNew,
+    onRenameInterface,
     disabled = false,
     onToggleDocumentViewer,
     showDocumentViewerButton = false,
@@ -376,7 +378,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
                             onWheel={(e) => e.stopPropagation()}
                             onClick={(e) => {
                                 e.stopPropagation();
-                                if (import.meta.env.DEV) {
+                                if (menuItem.key === 'rename' && openRowMenuId) {
+                                    const current = interfaces?.find((item) => item.id === openRowMenuId);
+                                    if (current) {
+                                        const nextTitle = window.prompt('Rename interface', current.title);
+                                        if (nextTitle !== null) {
+                                            onRenameInterface?.(current.id, nextTitle);
+                                        }
+                                    }
+                                } else if (import.meta.env.DEV) {
                                     console.log('[sidebar] menu_%s_clicked id=%s', menuItem.key, openRowMenuId);
                                 }
                                 closeRowMenu();

@@ -56,7 +56,9 @@ Excluding: node_modules, dist, build, .git
 |   |   |   |-- hoverController.ts     # Interaction Truth
 |   |   |   `-- ...
 |   |   |-- useGraphRendering.ts # HOOK WIRING
-|   |   `-- GraphPhysicsPlayground.tsx # ROOT CONTAINER
+|   |   |-- GraphPhysicsPlayground.tsx # Thin entry wrapper
+|   |   |-- GraphPhysicsPlaygroundShell.tsx # Playground orchestration container
+|   |   `-- modules/ # Playground seams (container + shared types)
 |   |-- popup/                 # Node Popups and MiniChat
 |   |-- server/                # Backend (Cloud Run service)
 |   |-- auth/                  # Auth state + session UI
@@ -77,7 +79,7 @@ Note: Counts are estimated post-modularization.
 3. src/playground/rendering/graphRenderingLoop.ts (600+ lines) - Render Loop
 4. src/playground/rendering/hoverController.ts (large) - Interaction/HitTest
 5. src/physics/engine/constraints.ts (370 lines) - PBD Constraints
-6. src/playground/GraphPhysicsPlayground.tsx (378 lines) - Main UI Controller
+6. src/playground/GraphPhysicsPlaygroundShell.tsx (legacy large container) - Main UI Controller
 7. src/physics/engine/engine.ts (300+ lines) - Engine State Container
 8. src/physics/engine/forcePass.ts (200 lines) - Forces
 9. src/ArnvoidDocumentViewer/ArnvoidDocumentViewer.tsx (312 lines) - Doc Viewer
@@ -86,13 +88,14 @@ Note: Counts are estimated post-modularization.
 12. src/auth/AuthProvider.tsx - Auth context + /me bootstrap
 13. src/auth/SessionExpiryBanner.tsx - Session expiry UI
 14. src/api.ts - Backend fetch helper (credentials include)
-15. src/server/src/index.ts - Auth routes, payments, LLM endpoints
-16. src/server/src/llm/llmClient.ts - Server LLM client (Responses API)
-17. src/server/src/db.ts - Cloud SQL connector + pool
-18. src/server/src/llm/usage/usageTracker.ts - LLM usage tracker and tokenizer fallback
-19. src/server/src/llm/audit/llmAudit.ts - LLM audit persistence
-20. src/components/PaymentGopayPanel.tsx - QRIS payment UI panel
-21. src/components/PromptCard.tsx - EnterPrompt main card (input, attachments, submit control)
+15. src/server/src/serverMonolith.ts - Auth routes, payments, LLM endpoints
+16. src/server/src/index.ts - Thin server composition entry
+17. src/server/src/llm/llmClient.ts - Server LLM client (Responses API)
+18. src/server/src/db.ts - Cloud SQL connector + pool
+19. src/server/src/llm/usage/usageTracker.ts - LLM usage tracker and tokenizer fallback
+20. src/server/src/llm/audit/llmAudit.ts - LLM audit persistence
+21. src/components/PaymentGopayPanel.tsx - QRIS payment UI panel
+22. src/components/PromptCard.tsx - EnterPrompt main card (input, attachments, submit control)
 
 ## 3. Core Runtime Loops
 
@@ -152,7 +155,8 @@ Key files:
 - `src/auth/SessionExpiryBanner.tsx` (expiry UI)
 - `src/components/GoogleLoginButton.tsx` (Google login entry)
 - `src/api.ts` (GET /me with `credentials: "include"`)
-- `src/server/src/index.ts` (auth routes, cookie, sessions)
+- `src/server/src/index.ts` (thin entry, imports runtime server module)
+- `src/server/src/serverMonolith.ts` (auth routes, cookie, sessions)
 - `src/server/src/db.ts` (Postgres connection)
 
 Follow the auth flow:
@@ -257,7 +261,8 @@ Key files:
 - `src/store/savedInterfacesStore.ts`
 - `src/screens/AppShell.tsx`
 - `src/components/Sidebar.tsx`
-- `src/playground/GraphPhysicsPlayground.tsx`
+- `src/playground/GraphPhysicsPlayground.tsx` (thin wrapper)
+- `src/playground/GraphPhysicsPlaygroundShell.tsx` (playground runtime orchestration)
 - `src/document/nodeBinding.ts`
 
 Current capabilities:

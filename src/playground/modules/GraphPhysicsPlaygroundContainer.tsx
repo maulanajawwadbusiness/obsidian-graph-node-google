@@ -1,0 +1,1 @@
+export { GraphPhysicsPlaygroundContainer } from '../GraphPhysicsPlaygroundShell';

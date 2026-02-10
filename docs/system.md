@@ -24,7 +24,7 @@ The application layers, ordered by z-index (lowest to highest):
         *   Legacy aliases: `screen1`, `screen2`, `screen3`, `screen4`.
         *   Applies in DEV only. Invalid values fall back to `welcome1` and emit a single DEV warning.
     *   Persistence is currently disabled (`PERSIST_SCREEN = false`), so refresh resets onboarding to `welcome1` when onboarding is enabled.
-    *   Graph isolation contract: `GraphPhysicsPlayground` is lazy-loaded and mounted only when `screen === 'graph'`. This keeps physics/rendering inactive during onboarding screens.
+    *   Graph isolation contract: `GraphPhysicsPlayground` (thin wrapper) is lazy-loaded and mounted only when `screen === 'graph'`, then delegates to `GraphPhysicsPlaygroundContainer` in `src/playground/modules/GraphPhysicsPlaygroundContainer.tsx`. This keeps physics/rendering inactive during onboarding screens.
     *   Money overlays mount only on `prompt` and `graph` screens:
         *   `ShortageWarning`
         *   `MoneyNoticeStack`

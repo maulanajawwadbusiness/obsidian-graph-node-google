@@ -291,3 +291,20 @@ Source alignment:
 - Preserved focus clarity using subtle glow/box-shadow on the input (borderless focus treatment).
 - Scroll viewport adjusted so scrollbar sits tight to right edge of modal via results container layout (`marginRight`/`paddingRight` pattern), while row padding remains internal.
 - No behavior changes applied to open/close, ranking, selection, keyboard nav, shielding, stacking, or disabled gates.
+
+## 17) Finetuning v2 (2026-02-10)
+
+- Input is now fully borderless in all states; removed blue input ring and moved focus visibility to subtle card-level glow.
+- Result rows default to dark/transparent baseline (no white-ish fill at rest); highlight/hover tint remains subtle.
+- Horizontal overflow hardened:
+  - card uses `overflowX: hidden`
+  - results scroller uses `overflowX: hidden`
+  - title keeps strict single-line ellipsis + `minWidth: 0` / `maxWidth: 100%`
+- Removed default pre-highlight in Recent mode:
+  - blue row highlight paint is now gated to non-empty query results.
+- Added display-only title truncation helper (`75` chars + `...`) while keeping original titles for logic/selection.
+- Reduced text size by ~25% for:
+  - input text
+  - `Recent` label
+  - result titles
+- Shielding, ranking, selection, keyboard behavior, and stacking/disabled rules remain unchanged.

@@ -59,6 +59,11 @@ function normalizeSearchText(raw: string): string {
     return raw.toLowerCase().replace(/\s+/g, ' ').trim();
 }
 
+function truncateDisplayTitle(raw: string, maxChars = 75): string {
+    if (raw.length <= maxChars) return raw;
+    return `${raw.slice(0, maxChars).trimEnd()}...`;
+}
+
 function warnInvalidOnboardingStartScreenOnce() {
     if (!import.meta.env.DEV) return;
     if (hasWarnedInvalidStartScreen) return;
@@ -608,7 +613,12 @@ export const AppShell: React.FC = () => {
                         {...hardShieldInput}
                         data-search-interfaces-modal="1"
                         data-search-modal="1"
-                        style={SEARCH_OVERLAY_CARD_STYLE}
+                        style={{
+                            ...SEARCH_OVERLAY_CARD_STYLE,
+                            boxShadow: searchInputFocused
+                                ? '0 0 0 1px rgba(231, 231, 231, 0.08), 0 18px 56px rgba(0, 0, 0, 0.45)'
+                                : SEARCH_OVERLAY_CARD_STYLE.boxShadow,
+                        }}
                         onKeyDown={(e) => {
                             e.stopPropagation();
                             if (e.key !== 'Escape') return;
@@ -634,12 +644,7 @@ export const AppShell: React.FC = () => {
                             autoFocus
                             value={searchInterfacesQuery}
                             placeholder="Search interfaces..."
-                            style={{
-                                ...SEARCH_INPUT_STYLE,
-                                boxShadow: searchInputFocused
-                                    ? '0 0 0 2px rgba(99, 171, 255, 0.36)'
-                                    : '0 0 0 1px rgba(99, 171, 255, 0.15)',
-                            }}
+                            style={SEARCH_INPUT_STYLE}
                             onChange={(e) => setSearchInterfacesQuery(e.target.value)}
                             onFocus={() => setSearchInputFocused(true)}
                             onBlur={() => setSearchInputFocused(false)}
@@ -691,7 +696,8 @@ export const AppShell: React.FC = () => {
                                 </div>
                             ) : (
                                 filteredSearchResults.map((item, index) => {
-                                    const isHighlighted = index === searchHighlightedIndex;
+                                    const isHighlighted = normalizeSearchText(searchInterfacesQuery).length > 0
+                                        && index === searchHighlightedIndex;
                                     return (
                                         <button
                                             {...hardShieldInput}
@@ -708,7 +714,7 @@ export const AppShell: React.FC = () => {
                                             }}
                                             onMouseEnter={() => setSearchHighlightedIndex(index)}
                                         >
-                                            <span style={SEARCH_RESULT_TITLE_STYLE}>{item.title}</span>
+                                            <span style={SEARCH_RESULT_TITLE_STYLE}>{truncateDisplayTitle(item.title)}</span>
                                         </button>
                                     );
                                 })
@@ -814,6 +820,7 @@ const SEARCH_OVERLAY_CARD_STYLE: React.CSSProperties = {
     position: 'relative',
     width: 'min(560px, calc(100vw - 32px))',
     maxHeight: 'calc(100vh - 64px)',
+    overflowX: 'hidden',
     borderRadius: '14px',
     border: 'none',
     background: '#0d1118',
@@ -855,10 +862,11 @@ const SEARCH_INPUT_STYLE: React.CSSProperties = {
     background: 'rgba(12, 15, 22, 0.95)',
     color: '#e7e7e7',
     fontFamily: 'var(--font-ui)',
-    fontSize: '14px',
+    fontSize: '10.5px',
     lineHeight: 1.4,
-    padding: '11px 40px 11px 12px',
+    padding: '9px 36px 9px 10px',
     outline: 'none',
+    WebkitTapHighlightColor: 'transparent',
 };
 
 const SEARCH_RESULTS_STYLE: React.CSSProperties = {
@@ -869,13 +877,12 @@ const SEARCH_RESULTS_STYLE: React.CSSProperties = {
     gap: '8px',
     maxHeight: '52vh',
     overflowY: 'auto',
-    marginRight: '-16px',
-    paddingRight: '16px',
+    overflowX: 'hidden',
 };
 
 const SEARCH_SECTION_LABEL_STYLE: React.CSSProperties = {
     color: 'rgba(231, 231, 231, 0.58)',
-    fontSize: '11px',
+    fontSize: '8.25px',
     lineHeight: 1.2,
     letterSpacing: '0.35px',
     textTransform: 'uppercase',
@@ -885,21 +892,24 @@ const SEARCH_SECTION_LABEL_STYLE: React.CSSProperties = {
 
 const SEARCH_RESULT_ROW_STYLE: React.CSSProperties = {
     width: '100%',
+    minWidth: 0,
     display: 'block',
-    padding: '10px 12px',
+    padding: '8px 10px',
     borderRadius: '10px',
     border: 'none',
-    background: 'rgba(255, 255, 255, 0.03)',
+    background: 'transparent',
     textAlign: 'left',
     cursor: 'pointer',
 };
 
 const SEARCH_RESULT_TITLE_STYLE: React.CSSProperties = {
     color: '#f3f7ff',
-    fontSize: '14px',
+    fontSize: '10.5px',
     lineHeight: 1.35,
     fontWeight: 600,
     fontFamily: 'var(--font-ui)',
+    minWidth: 0,
+    maxWidth: '100%',
     width: '100%',
     whiteSpace: 'nowrap',
     overflow: 'hidden',

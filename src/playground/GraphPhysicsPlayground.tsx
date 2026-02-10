@@ -94,7 +94,8 @@ type DevInterfaceExportV1 = {
 
 function sanitizeFilePart(input: string): string {
     const normalized = input.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/_+/g, '_').replace(/^_+|_+$/g, '');
-    return normalized || 'interface';
+    const capped = normalized.slice(0, 64).replace(/^_+|_+$/g, '');
+    return capped || 'interface';
 }
 
 function formatExportTimestamp(epochMs: number): string {
@@ -679,6 +680,9 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
     }, [onInterfaceSaved]);
 
     const handleDevDownloadJson = React.useCallback(() => {
+        if (!import.meta.env.DEV) {
+            return;
+        }
         const engine = engineRef.current;
         const topology = getTopology();
         if (!engine || !topology || topology.nodes.length === 0) {
@@ -730,16 +734,17 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
         const blob = new Blob([json], { type: 'application/json' });
         const href = URL.createObjectURL(blob);
         const anchor = document.createElement('a');
-        anchor.href = href;
-        anchor.download = fileName;
-        document.body.appendChild(anchor);
-        anchor.click();
-        anchor.remove();
-        URL.revokeObjectURL(href);
-
-        if (import.meta.env.DEV) {
-            console.log('[dev] download_json_ok bytes=%d filename=%s', blob.size, fileName);
+        try {
+            anchor.href = href;
+            anchor.download = fileName;
+            document.body.appendChild(anchor);
+            anchor.click();
+        } finally {
+            anchor.remove();
+            URL.revokeObjectURL(href);
         }
+
+        console.log('[dev] download_json_ok bytes=%d filename=%s', blob.size, fileName);
     }, [
         documentContext.state.activeDocument,
         documentContext.state.inferredTitle,

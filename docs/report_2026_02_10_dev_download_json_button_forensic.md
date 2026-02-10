@@ -211,3 +211,20 @@ Implemented wiring from `GraphPhysicsPlayground` to `CanvasOverlays` so the dev 
 
 Camera note:
 - Current export camera snapshot is sourced from the same hover-state cache used elsewhere in graph code. This is the available camera snapshot source in the current architecture.
+
+## Step 5 Verified (Mechanics Hardening)
+
+- Verified mechanics in `src/playground/GraphPhysicsPlayground.tsx`:
+  - `JSON.stringify(payload, null, 2)`
+  - `Blob` with `application/json`
+  - `URL.createObjectURL` and anchor download click
+- Hardened cleanup:
+  - anchor removal and `URL.revokeObjectURL` now run in `finally` so cleanup still happens if click throws.
+- Hardened filename:
+  - sanitized base now strips unsafe chars and caps to 64 chars (Windows-safe, avoids very long names).
+  - timestamp format remains `yyyy-mm-dd_hhmm` (no slash/colon).
+- Dev-only guard:
+  - callback still triggered only by dev-gated button render in `CanvasOverlays`.
+  - added early return in handler for non-dev runtime for defense-in-depth.
+- Pointer and wheel shielding unchanged:
+  - no `preventDefault` added; stopPropagation behavior remains intact.

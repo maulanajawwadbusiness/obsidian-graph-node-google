@@ -59,6 +59,7 @@ const ICON_OPACITY_HOVER = 1.0;
 const HOVER_ACCENT_COLOR = '#63abff';
 const DEFAULT_ICON_COLOR = '#ffffff';
 const ROW_MENU_DELETE_TEXT_COLOR = '#ff4b4e';
+type RowMenuItemKey = 'rename' | 'delete';
 
 type SidebarProps = {
     isExpanded: boolean;
@@ -94,6 +95,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
     const [documentHover, setDocumentHover] = React.useState(false);
     const [closeHover, setCloseHover] = React.useState(false);
     const [hoveredInterfaceId, setHoveredInterfaceId] = React.useState<string | null>(null);
+    const [hoveredEllipsisRowId, setHoveredEllipsisRowId] = React.useState<string | null>(null);
+    const [hoveredMenuItemKey, setHoveredMenuItemKey] = React.useState<RowMenuItemKey | null>(null);
     const [openRowMenuId, setOpenRowMenuId] = React.useState<string | null>(null);
     const [rowMenuAnchorRect, setRowMenuAnchorRect] = React.useState<DOMRect | null>(null);
     const [rowMenuPosition, setRowMenuPosition] = React.useState<{ left: number; top: number } | null>(null);
@@ -103,7 +106,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     const [renameOriginal, setRenameOriginal] = React.useState('');
     const [avatarRowHover, setAvatarRowHover] = React.useState(false);
     const renameInputRef = React.useRef<HTMLInputElement | null>(null);
-    const menuItemPreview = React.useMemo(
+    const menuItemPreview = React.useMemo<Array<{ key: RowMenuItemKey; icon: string; label: string; color: string }>>(
         () => [
             { key: 'rename', icon: renameIcon, label: 'Rename', color: '#e7e7e7' },
             { key: 'delete', icon: deleteIcon, label: 'Delete', color: ROW_MENU_DELETE_TEXT_COLOR },
@@ -441,6 +444,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
                                                     onPointerUp={(e) => e.stopPropagation()}
                                                     onWheelCapture={(e) => e.stopPropagation()}
                                                     onWheel={(e) => e.stopPropagation()}
+                                                    onMouseEnter={() => setHoveredEllipsisRowId(item.id)}
+                                                    onMouseLeave={() => setHoveredEllipsisRowId((curr) => (curr === item.id ? null : curr))}
                                                     onClick={(e) => {
                                                         e.preventDefault();
                                                         e.stopPropagation();
@@ -461,7 +466,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
                                                     <MaskIcon
                                                         src={verticalElipsisIcon}
                                                         size={12}
-                                                        color={isSelected ? HOVER_ACCENT_COLOR : 'rgba(255, 255, 255, 0.75)'}
+                                                        color={hoveredEllipsisRowId === item.id
+                                                            ? HOVER_ACCENT_COLOR
+                                                            : (isSelected ? HOVER_ACCENT_COLOR : 'rgba(255, 255, 255, 0.75)')}
                                                         opacity={1}
                                                     />
                                                 </button>
@@ -499,6 +506,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
                             onPointerUp={(e) => e.stopPropagation()}
                             onWheelCapture={(e) => e.stopPropagation()}
                             onWheel={(e) => e.stopPropagation()}
+                            onMouseEnter={() => setHoveredMenuItemKey(menuItem.key)}
+                            onMouseLeave={() => setHoveredMenuItemKey((curr) => (curr === menuItem.key ? null : curr))}
                             onClick={(e) => {
                                 e.preventDefault();
                                 e.stopPropagation();
@@ -517,16 +526,35 @@ export const Sidebar: React.FC<SidebarProps> = ({
                                     console.log('[sidebar] menu_%s_clicked id=%s', menuItem.key, openRowMenuId);
                                 }
                                 closeRowMenu();
+                                setHoveredMenuItemKey(null);
                             }}
                         >
-                            <img
-                                src={menuItem.icon}
-                                alt=""
-                                aria-hidden="true"
-                                style={ROW_MENU_ITEM_ICON_STYLE}
-                            />
-                            <span style={{ ...ROW_MENU_ITEM_LABEL_STYLE, color: menuItem.color }}>
-                                {menuItem.label}
+                            <span
+                                style={{
+                                    ...ROW_MENU_ITEM_CONTENT_STYLE,
+                                    filter: menuItem.key === 'delete' && hoveredMenuItemKey === 'delete'
+                                        ? 'brightness(1.3)'
+                                        : undefined,
+                                }}
+                            >
+                                <MaskIcon
+                                    src={menuItem.icon}
+                                    size={14}
+                                    color={menuItem.key === 'rename' && hoveredMenuItemKey === 'rename'
+                                        ? HOVER_ACCENT_COLOR
+                                        : menuItem.color}
+                                    opacity={1}
+                                />
+                                <span
+                                    style={{
+                                        ...ROW_MENU_ITEM_LABEL_STYLE,
+                                        color: menuItem.key === 'rename' && hoveredMenuItemKey === 'rename'
+                                            ? HOVER_ACCENT_COLOR
+                                            : menuItem.color,
+                                    }}
+                                >
+                                    {menuItem.label}
+                                </span>
                             </span>
                         </button>
                     ))}
@@ -852,11 +880,11 @@ const ROW_MENU_ITEM_STYLE: React.CSSProperties = {
     cursor: 'pointer',
 };
 
-const ROW_MENU_ITEM_ICON_STYLE: React.CSSProperties = {
-    width: '14px',
-    height: '14px',
-    objectFit: 'contain',
-    flexShrink: 0,
+const ROW_MENU_ITEM_CONTENT_STYLE: React.CSSProperties = {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '10px',
+    transition: 'filter 140ms ease',
 };
 
 const ROW_MENU_ITEM_LABEL_STYLE: React.CSSProperties = {

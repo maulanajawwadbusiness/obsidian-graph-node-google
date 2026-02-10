@@ -149,3 +149,15 @@ What changed:
 Ordering/dedupe behavior remains unchanged:
 - AppShell still refreshes by reloading from store (`loadSavedInterfaces()`), with no append/merge logic.
 - AppShell/Sidebar still do not apply local sort; store order remains source of truth (newest-first).
+
+## Step 5 Closing (Plumbing Verified)
+
+- Verified graph notify bridge remains success-only: `notifyInterfaceSaved(...)` is called only after `applyAnalysisToNodes(...)` success and `captureAndPatchSavedLayout(...)` in `src/playground/GraphPhysicsPlayground.tsx`.
+- Verified restore path does not call `notifyInterfaceSaved(...)`; restore effects only consume pending load and apply topology/layout.
+- AppShell refresh path remains pure reload from store (`setSavedInterfaces(loadSavedInterfaces())`), with no merge/append logic and no local sorting.
+- Sidebar remains props-driven renderer only; ordering still follows store output (newest-first from storage module).
+- Tightened prop plumbing by passing a stable `onInterfaceSaved` callback from AppShell (`useCallback`) to graph.
+- Kept logging unchanged for this bridge scope:
+  - `[graph] interface_saved_notify ...`
+  - `[graph] interface_saved_notify_skipped ...`
+- No new UI components, panels, toasts, or visual states were introduced in this closing pass.

@@ -107,6 +107,9 @@ export const AppShell: React.FC = () => {
     const refreshSavedInterfaces = React.useCallback(() => {
         setSavedInterfaces(loadSavedInterfaces());
     }, []);
+    const handleInterfaceSaved = React.useCallback(() => {
+        refreshSavedInterfaces();
+    }, [refreshSavedInterfaces]);
 
     React.useEffect(() => {
         refreshSavedInterfaces();
@@ -228,7 +231,7 @@ export const AppShell: React.FC = () => {
                     documentViewerToggleToken={documentViewerToggleToken}
                     pendingLoadInterface={pendingLoadInterface}
                     onPendingLoadInterfaceConsumed={() => setPendingLoadInterface(null)}
-                    onInterfaceSaved={() => refreshSavedInterfaces()}
+                    onInterfaceSaved={handleInterfaceSaved}
                 />
             </Suspense>
         )

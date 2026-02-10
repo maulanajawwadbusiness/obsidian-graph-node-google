@@ -185,3 +185,29 @@ Secrets check:
 6. Payload integrity:
 - Includes full parsed document text/meta/warnings.
 - Includes layout, camera, and analysisMeta when available.
+
+## Step 4 Implemented
+
+Implemented wiring from `GraphPhysicsPlayground` to `CanvasOverlays` so the dev download button exports the current map as JSON.
+
+- Callback bridge:
+  - `CanvasOverlays` now accepts `onDevDownloadJson?: () => void`.
+  - Graph passes `onDevDownloadJson={handleDevDownloadJson}` at `src/playground/GraphPhysicsPlayground.tsx`.
+- Export schema (versioned):
+  - `version`, `exportedAt`, `title`
+  - `parsedDocument` (full `ParsedDocument`, including full text/meta/warnings)
+  - `topology` from `getTopology()`
+  - `layout.nodeWorld` from runtime `engineRef.current.nodes`
+  - `camera` from current hover snapshot (`lastSelectionPanX/PanY/Zoom`)
+  - `analysisMeta` as `{ version: 1, nodesById }` from engine node meta (`sourceTitle/sourceSummary`) when present
+- Download path:
+  - JSON stringify with 2-space indent
+  - Blob `application/json`
+  - object URL + anchor click + revoke URL
+  - filename format: `arnvoid_<sanitized-title>_<yyyy-mm-dd_hhmm>.json`
+- Dev logs:
+  - success: `[dev] download_json_ok bytes=... filename=...`
+  - skip: `[dev] download_json_skipped reason=no_engine_or_no_topology`
+
+Camera note:
+- Current export camera snapshot is sourced from the same hover-state cache used elsewhere in graph code. This is the available camera snapshot source in the current architecture.

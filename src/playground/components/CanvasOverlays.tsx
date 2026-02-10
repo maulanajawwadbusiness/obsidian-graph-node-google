@@ -61,6 +61,7 @@ type CanvasOverlaysProps = {
         energy: number;
         degradePct: number;
     }>;
+    onDevDownloadJson?: () => void;
 };
 
 export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
@@ -97,6 +98,7 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
     hudScenarioLabel,
     hudDragTargetId,
     hudScores,
+    onDevDownloadJson,
     config,
     onConfigChange
 }) => {
@@ -207,9 +209,7 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
                     onWheel={stopPropagation}
                     onClick={(e) => {
                         stopPropagation(e);
-                        if (import.meta.env.DEV) {
-                            console.log('[dev] download_json_clicked');
-                        }
+                        onDevDownloadJson?.();
                     }}
                     aria-label="Download graph json (dev)"
                     title="Download graph json (dev)"

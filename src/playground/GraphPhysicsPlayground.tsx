@@ -76,6 +76,37 @@ function countWords(text: string): number {
     return trimmed.split(/\s+/).length;
 }
 
+type DevExportAnalysisMetaV1 = {
+    version: 1;
+    nodesById: Record<string, { sourceTitle?: string; sourceSummary?: string }>;
+};
+
+type DevInterfaceExportV1 = {
+    version: 1;
+    exportedAt: number;
+    title: string;
+    parsedDocument: ParsedDocument | null;
+    topology: ReturnType<typeof getTopology> | null;
+    layout: { nodeWorld: Record<string, { x: number; y: number }> } | null;
+    camera: { panX: number; panY: number; zoom: number } | null;
+    analysisMeta: DevExportAnalysisMetaV1 | null;
+};
+
+function sanitizeFilePart(input: string): string {
+    const normalized = input.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/_+/g, '_').replace(/^_+|_+$/g, '');
+    return normalized || 'interface';
+}
+
+function formatExportTimestamp(epochMs: number): string {
+    const dt = new Date(epochMs);
+    const year = dt.getFullYear();
+    const month = String(dt.getMonth() + 1).padStart(2, '0');
+    const day = String(dt.getDate()).padStart(2, '0');
+    const hour = String(dt.getHours()).padStart(2, '0');
+    const minute = String(dt.getMinutes()).padStart(2, '0');
+    return `${year}-${month}-${day}_${hour}${minute}`;
+}
+
 // -----------------------------------------------------------------------------
 // Main Component (Internal)
 // -----------------------------------------------------------------------------
@@ -646,6 +677,74 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
         }
         onInterfaceSaved?.();
     }, [onInterfaceSaved]);
+
+    const handleDevDownloadJson = React.useCallback(() => {
+        const engine = engineRef.current;
+        const topology = getTopology();
+        if (!engine || !topology || topology.nodes.length === 0) {
+            if (import.meta.env.DEV) {
+                console.log('[dev] download_json_skipped reason=no_engine_or_no_topology');
+            }
+            return;
+        }
+
+        const parsedDocument = documentContext.state.activeDocument ?? null;
+        const preferredTitle =
+            (documentContext.state.inferredTitle || parsedDocument?.fileName || 'interface').trim() || 'interface';
+        const exportedAt = Date.now();
+
+        const nodeWorld: Record<string, { x: number; y: number }> = {};
+        const nodesById: Record<string, { sourceTitle?: string; sourceSummary?: string }> = {};
+        for (const node of engine.nodes.values()) {
+            nodeWorld[node.id] = { x: node.x, y: node.y };
+            const sourceTitle = typeof node.meta?.sourceTitle === 'string' ? node.meta.sourceTitle : undefined;
+            const sourceSummary = typeof node.meta?.sourceSummary === 'string' ? node.meta.sourceSummary : undefined;
+            if ((sourceTitle && sourceTitle.trim().length > 0) || (sourceSummary && sourceSummary.trim().length > 0)) {
+                nodesById[node.id] = {
+                    ...(sourceTitle ? { sourceTitle } : {}),
+                    ...(sourceSummary ? { sourceSummary } : {}),
+                };
+            }
+        }
+
+        const hoverCamera = hoverStateRef.current;
+        const panX = Number.isFinite(hoverCamera.lastSelectionPanX) ? hoverCamera.lastSelectionPanX : 0;
+        const panY = Number.isFinite(hoverCamera.lastSelectionPanY) ? hoverCamera.lastSelectionPanY : 0;
+        const zoom = Number.isFinite(hoverCamera.lastSelectionZoom) ? hoverCamera.lastSelectionZoom : 1;
+
+        const payload: DevInterfaceExportV1 = {
+            version: 1,
+            exportedAt,
+            title: preferredTitle,
+            parsedDocument,
+            topology,
+            layout: { nodeWorld },
+            camera: { panX, panY, zoom },
+            analysisMeta: Object.keys(nodesById).length > 0
+                ? { version: 1, nodesById }
+                : null,
+        };
+
+        const fileName = `arnvoid_${sanitizeFilePart(preferredTitle)}_${formatExportTimestamp(exportedAt)}.json`;
+        const json = JSON.stringify(payload, null, 2);
+        const blob = new Blob([json], { type: 'application/json' });
+        const href = URL.createObjectURL(blob);
+        const anchor = document.createElement('a');
+        anchor.href = href;
+        anchor.download = fileName;
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+        URL.revokeObjectURL(href);
+
+        if (import.meta.env.DEV) {
+            console.log('[dev] download_json_ok bytes=%d filename=%s', blob.size, fileName);
+        }
+    }, [
+        documentContext.state.activeDocument,
+        documentContext.state.inferredTitle,
+        hoverStateRef,
+    ]);
 
     useEffect(() => {
         if (pendingLoadInterface) {
@@ -1249,6 +1348,7 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
                     hudScenarioLabel={hudScenarioLabel}
                     hudDragTargetId={hudDragTargetId}
                     hudScores={hudScores}
+                    onDevDownloadJson={handleDevDownloadJson}
                 />
                 {showTestBackend && <TestBackend />}
                 <AIActivityGlyph />

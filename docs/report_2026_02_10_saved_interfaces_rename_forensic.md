@@ -164,3 +164,15 @@ Minimum additional state (Sidebar):
 6. Click outside during rename behaves per chosen policy (recommended: cancel).
 7. Pointer/wheel over menu/input never leaks to canvas.
 
+## Step 1 Implemented
+
+- Added storage helper:
+  - `patchSavedInterfaceTitle(id: string, newTitle: string): SavedInterfaceRecordV1[]`
+  - file: `src/store/savedInterfacesStore.ts`
+- Behavior:
+  - loads current list, finds record by `id`, updates only `title` and `updatedAt`, persists, returns newest-first list.
+  - if `id` not found: returns unchanged list.
+- Identity safety:
+  - helper does not mutate `dedupeKey` or any other identity fields.
+- Sanitization policy:
+  - no trimming/sanitizing in store layer; UI layer will sanitize title input later.

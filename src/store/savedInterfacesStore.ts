@@ -348,3 +348,32 @@ export function patchSavedInterfaceLayout(
     saveAllSavedInterfaces(next);
     return loadSavedInterfaces();
 }
+
+export function patchSavedInterfaceTitle(
+    id: string,
+    newTitle: string
+): SavedInterfaceRecordV1[] {
+    const current = loadSavedInterfaces();
+    const index = current.findIndex((item) => item.id === id);
+    if (index < 0) {
+        if (import.meta.env.DEV) {
+            console.log('[savedInterfaces] title_patch_skipped reason=not_found');
+        }
+        return current;
+    }
+
+    const nowMs = Date.now();
+    const next = [...current];
+    const existing = next[index];
+    next[index] = {
+        ...existing,
+        title: newTitle,
+        updatedAt: nowMs,
+    };
+
+    saveAllSavedInterfaces(next);
+    if (import.meta.env.DEV) {
+        console.log('[savedInterfaces] title_patch ok id=%s', id);
+    }
+    return loadSavedInterfaces();
+}

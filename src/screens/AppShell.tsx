@@ -128,6 +128,19 @@ export const AppShell: React.FC = () => {
     }, [closeDeleteConfirm, pendingDeleteId]);
 
     React.useEffect(() => {
+        if (!pendingDeleteId) return;
+        const onKeyDown = (event: KeyboardEvent) => {
+            if (event.key !== 'Escape') return;
+            event.stopPropagation();
+            closeDeleteConfirm();
+        };
+        window.addEventListener('keydown', onKeyDown, true);
+        return () => {
+            window.removeEventListener('keydown', onKeyDown, true);
+        };
+    }, [closeDeleteConfirm, pendingDeleteId]);
+
+    React.useEffect(() => {
         refreshSavedInterfaces();
     }, [refreshSavedInterfaces]);
 
@@ -339,7 +352,10 @@ export const AppShell: React.FC = () => {
                     style={DELETE_CONFIRM_BACKDROP_STYLE}
                     onPointerDown={(e) => e.stopPropagation()}
                     onPointerUp={(e) => e.stopPropagation()}
-                    onClick={(e) => e.stopPropagation()}
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        closeDeleteConfirm();
+                    }}
                     onWheelCapture={(e) => e.stopPropagation()}
                     onWheel={(e) => e.stopPropagation()}
                 >
@@ -351,14 +367,19 @@ export const AppShell: React.FC = () => {
                         onWheelCapture={(e) => e.stopPropagation()}
                         onWheel={(e) => e.stopPropagation()}
                     >
+                        <div style={DELETE_CONFIRM_TITLE_STYLE}>
+                            Delete saved interface?
+                        </div>
                         <div style={DELETE_CONFIRM_TEXT_STYLE}>
-                            Delete request queued for: {pendingDeleteTitle ?? pendingDeleteId}
+                            This will permanently remove "{pendingDeleteTitle ?? pendingDeleteId}" from this device.
+                            This action cannot be undone.
                         </div>
                         <div style={DELETE_CONFIRM_BUTTON_ROW_STYLE}>
                             <button
                                 type="button"
                                 style={DELETE_CONFIRM_CANCEL_STYLE}
                                 onPointerDown={(e) => e.stopPropagation()}
+                                onPointerUp={(e) => e.stopPropagation()}
                                 onClick={(e) => {
                                     e.stopPropagation();
                                     closeDeleteConfirm();
@@ -370,6 +391,7 @@ export const AppShell: React.FC = () => {
                                 type="button"
                                 style={DELETE_CONFIRM_PRIMARY_STYLE}
                                 onPointerDown={(e) => e.stopPropagation()}
+                                onPointerUp={(e) => e.stopPropagation()}
                                 onClick={(e) => {
                                     e.stopPropagation();
                                     confirmDelete();
@@ -401,51 +423,64 @@ const DELETE_CONFIRM_BACKDROP_STYLE: React.CSSProperties = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    background: 'rgba(8, 10, 14, 0.55)',
-    zIndex: 2400,
+    background: 'rgba(6, 8, 12, 0.64)',
+    zIndex: 3200,
     pointerEvents: 'auto',
 };
 
 const DELETE_CONFIRM_CARD_STYLE: React.CSSProperties = {
-    minWidth: '320px',
+    width: '100%',
     maxWidth: '420px',
-    borderRadius: '12px',
-    border: '1px solid rgba(255, 255, 255, 0.16)',
-    background: 'rgba(15, 18, 26, 0.98)',
-    padding: '16px',
+    margin: '0 16px',
+    borderRadius: '14px',
+    border: '1px solid rgba(255, 255, 255, 0.14)',
+    background: '#0d1118',
+    boxShadow: '0 18px 56px rgba(0, 0, 0, 0.45)',
+    padding: '18px 18px 16px',
     color: '#e7e7e7',
     display: 'flex',
     flexDirection: 'column',
-    gap: '14px',
+    gap: '10px',
+};
+
+const DELETE_CONFIRM_TITLE_STYLE: React.CSSProperties = {
+    fontSize: '17px',
+    lineHeight: 1.25,
+    fontWeight: 700,
+    color: '#f3f7ff',
 };
 
 const DELETE_CONFIRM_TEXT_STYLE: React.CSSProperties = {
     fontSize: '14px',
-    lineHeight: 1.4,
+    lineHeight: 1.5,
+    color: 'rgba(231, 231, 231, 0.88)',
 };
 
 const DELETE_CONFIRM_BUTTON_ROW_STYLE: React.CSSProperties = {
     display: 'flex',
     justifyContent: 'flex-end',
     gap: '8px',
+    marginTop: '4px',
 };
 
 const DELETE_CONFIRM_CANCEL_STYLE: React.CSSProperties = {
-    border: '1px solid rgba(255, 255, 255, 0.22)',
-    background: 'transparent',
-    color: '#e7e7e7',
+    border: '1px solid rgba(255, 255, 255, 0.26)',
+    background: 'rgba(255, 255, 255, 0.04)',
+    color: '#f1f4fb',
     borderRadius: '8px',
-    padding: '8px 12px',
+    padding: '8px 14px',
     cursor: 'pointer',
+    fontWeight: 600,
 };
 
 const DELETE_CONFIRM_PRIMARY_STYLE: React.CSSProperties = {
-    border: '1px solid #a22128',
-    background: '#c63139',
+    border: '1px solid #ff4b4e',
+    background: '#ff4b4e',
     color: '#ffffff',
     borderRadius: '8px',
-    padding: '8px 12px',
+    padding: '8px 14px',
     cursor: 'pointer',
+    fontWeight: 700,
 };
 
 const SHELL_STYLE: React.CSSProperties = {

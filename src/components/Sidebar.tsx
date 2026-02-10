@@ -1,7 +1,7 @@
 import React from 'react';
 import circleIcon from '../assets/circle_icon.png';
 import sidebarIcon from '../assets/sidebar_icon.png';
-import homeIcon from '../assets/home_icon.png';
+import createNewIcon from '../assets/create_new_icon.png';
 import searchIcon from '../assets/search_icon.png';
 import threeDotIcon from '../assets/3_dot_icon.png';
 import documentIcon from '../assets/document_icon.png';
@@ -41,8 +41,8 @@ const FONT_SIZE_AVATAR = 10 * SIDEBAR_SCALE;
 const ICON_OFFSET_LEFT = -8.5;
 // Logo vertical offset: negative = up, positive = down (in px)
 const LOGO_OFFSET_TOP = 5;
-// Home icon vertical offset: negative = up, positive = down (in px)
-const HOME_OFFSET_TOP = -1;
+// Create New icon vertical offset: negative = up, positive = down (in px)
+const CREATE_NEW_OFFSET_TOP = -1;
 // Search icon vertical offset: negative = up, positive = down (in px)
 const SEARCH_OFFSET_TOP = -7.5;
 // More (3-dot) icon vertical offset: negative = up, positive = down (in px)
@@ -78,7 +78,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     onSelectInterface,
 }) => {
     const [logoHover, setLogoHover] = React.useState(false);
-    const [homeHover, setHomeHover] = React.useState(false);
+    const [createNewHover, setCreateNewHover] = React.useState(false);
     const [searchHover, setSearchHover] = React.useState(false);
     const [moreHover, setMoreHover] = React.useState(false);
     const [documentHover, setDocumentHover] = React.useState(false);
@@ -150,14 +150,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 </div>
 
                 {/* Nav Items */}
-                <div style={{ marginTop: `${HOME_OFFSET_TOP}px` }}>
+                <div style={{ marginTop: `${CREATE_NEW_OFFSET_TOP}px` }}>
                     <NavItem
-                        icon={homeIcon}
-                        label="Home"
+                        icon={createNewIcon}
+                        label="Create New"
                         isExpanded={isExpanded}
-                        isHovered={homeHover}
-                        onMouseEnter={() => setHomeHover(true)}
-                        onMouseLeave={() => setHomeHover(false)}
+                        isHovered={createNewHover}
+                        onMouseEnter={() => setCreateNewHover(true)}
+                        onMouseLeave={() => setCreateNewHover(false)}
                     />
                 </div>
                 <div style={{ marginTop: `${SEARCH_OFFSET_TOP}px` }}>

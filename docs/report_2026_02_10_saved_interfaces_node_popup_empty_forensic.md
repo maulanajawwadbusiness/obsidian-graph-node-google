@@ -171,3 +171,26 @@ Behavioral notes:
 - Added dev logs:
   - `[savedInterfaces] analysisMeta_saved id=... nodes=... summaries=...`
   - `[savedInterfaces] analysisMeta_save_skipped reason=...`
+
+## Step 2 Implemented
+
+Implemented file:
+- `src/playground/GraphPhysicsPlayground.tsx`
+
+Injection location:
+- In the restore consume effect (`pendingLoadInterface` path), during restored node reconstruction (around the `finalTopology.nodes.map(...)` block), before node meta is finalized.
+
+Precedence rules now enforced:
+1. `analysisMeta` (`rec.analysisMeta.version === 1`, `nodesById[nodeId]`) for `sourceSummary/sourceTitle`
+2. topology node meta (`spec.meta.sourceSummary/sourceTitle`)
+3. fallback (`Saved interface: <title>` and fallback title)
+
+Behavior guarantees:
+- Real analyzer summaries from saved `analysisMeta` are no longer overwritten by fallback.
+- Existing topology meta summaries are preserved when `analysisMeta` is absent for a node.
+- Fallback is only used when both `analysisMeta` and topology meta lack usable summary text.
+- Backward compatibility preserved for old records without `analysisMeta`.
+
+Restore logging added:
+- `[graph] analysisMeta_applied id=... nodesApplied=... missing=...`
+- `[graph] analysisMeta_missing_fallback nodeId=...`

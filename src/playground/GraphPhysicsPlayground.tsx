@@ -728,6 +728,9 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
             const fallbackTitle = rec.title || rec.parsedDocument.fileName || 'Untitled Interface';
             const fallbackSummary = `Saved interface: ${fallbackTitle}`;
             const fallbackDocId = rec.parsedDocument.id || rec.docId;
+            const analysisNodesById = rec.analysisMeta?.version === 1
+                ? rec.analysisMeta.nodesById
+                : undefined;
             const savedLayout = rec.layout?.nodeWorld;
             const hasSavedLayoutMap = Boolean(savedLayout && Object.keys(savedLayout).length > 0);
             const hasSavedCamera = Boolean(
@@ -737,6 +740,8 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
                 Number.isFinite(rec.camera.zoom)
             );
             let nodesAppliedFromLayout = 0;
+            let analysisMetaAppliedCount = 0;
+            let analysisMetaFallbackCount = 0;
 
             const restoredNodes: PhysicsNode[] = finalTopology.nodes.map((spec, index) => {
                 const angle = (Math.PI * 2 * index) / nodeCount;
@@ -747,12 +752,27 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
                 const mass = role === 'spine' ? 3 : role === 'rib' ? 2 : 1;
                 const dotRadius = role === 'spine' ? 8 : role === 'rib' ? 6 : 5;
                 const specMeta = spec.meta as Record<string, unknown> | undefined;
-                const sourceTitle = typeof specMeta?.sourceTitle === 'string'
+                const analysisMetaNode = analysisNodesById?.[spec.id];
+                const analysisTitle = typeof analysisMetaNode?.sourceTitle === 'string' && analysisMetaNode.sourceTitle.trim().length > 0
+                    ? analysisMetaNode.sourceTitle
+                    : undefined;
+                const analysisSummary = typeof analysisMetaNode?.sourceSummary === 'string' && analysisMetaNode.sourceSummary.trim().length > 0
+                    ? analysisMetaNode.sourceSummary
+                    : undefined;
+                const topoTitle = typeof specMeta?.sourceTitle === 'string' && specMeta.sourceTitle.trim().length > 0
                     ? specMeta.sourceTitle
-                    : (spec.label || fallbackTitle);
-                const sourceSummary = typeof specMeta?.sourceSummary === 'string'
+                    : undefined;
+                const topoSummary = typeof specMeta?.sourceSummary === 'string' && specMeta.sourceSummary.trim().length > 0
                     ? specMeta.sourceSummary
-                    : fallbackSummary;
+                    : undefined;
+                const sourceTitle = analysisTitle || topoTitle || spec.label || fallbackTitle;
+                const sourceSummary = analysisSummary || topoSummary || fallbackSummary;
+                if (analysisSummary) {
+                    analysisMetaAppliedCount += 1;
+                } else if (!topoSummary) {
+                    analysisMetaFallbackCount += 1;
+                    console.log('[graph] analysisMeta_missing_fallback nodeId=%s', spec.id);
+                }
                 const fallbackX = Math.cos(angle) * radius;
                 const fallbackY = Math.sin(angle) * radius;
                 const savedPoint = savedLayout?.[spec.id];
@@ -786,6 +806,12 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
                     }
                 };
             });
+            console.log(
+                '[graph] analysisMeta_applied id=%s nodesApplied=%d missing=%d',
+                rec.id,
+                analysisMetaAppliedCount,
+                analysisMetaFallbackCount
+            );
 
             const hasSavedLayout = hasSavedLayoutMap && nodesAppliedFromLayout > 0;
             if (hasSavedLayout) {

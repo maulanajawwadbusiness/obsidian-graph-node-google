@@ -71,6 +71,8 @@ export const AppShell: React.FC = () => {
     const [pendingAnalysis, setPendingAnalysis] = React.useState<PendingAnalysisPayload>(null);
     const [savedInterfaces, setSavedInterfaces] = React.useState<SavedInterfaceRecordV1[]>([]);
     const [pendingLoadInterface, setPendingLoadInterface] = React.useState<SavedInterfaceRecordV1 | null>(null);
+    const [isSearchInterfacesOpen, setIsSearchInterfacesOpen] = React.useState(false);
+    const [searchInterfacesQuery, setSearchInterfacesQueryState] = React.useState('');
     const [pendingDeleteId, setPendingDeleteId] = React.useState<string | null>(null);
     const [pendingDeleteTitle, setPendingDeleteTitle] = React.useState<string | null>(null);
     const [graphIsLoading, setGraphIsLoading] = React.useState(false);
@@ -121,6 +123,20 @@ export const AppShell: React.FC = () => {
         setPendingDeleteId(null);
         setPendingDeleteTitle(null);
     }, []);
+    const setSearchInterfacesQuery = React.useCallback((next: string) => {
+        setSearchInterfacesQueryState(next);
+    }, []);
+    const openSearchInterfaces = React.useCallback(() => {
+        if (sidebarDisabled) return;
+        setIsSearchInterfacesOpen(true);
+        setSearchInterfacesQuery('');
+        console.log('[appshell] search_open');
+    }, [setSearchInterfacesQuery, sidebarDisabled]);
+    const closeSearchInterfaces = React.useCallback(() => {
+        setIsSearchInterfacesOpen(false);
+        setSearchInterfacesQuery('');
+        console.log('[appshell] search_close');
+    }, [setSearchInterfacesQuery]);
     const confirmDelete = React.useCallback(() => {
         if (!pendingDeleteId) {
             console.log('[appshell] delete_interface_skipped reason=no_id');
@@ -133,6 +149,12 @@ export const AppShell: React.FC = () => {
         console.log('[appshell] delete_interface_ok id=%s', deletedId);
         closeDeleteConfirm();
     }, [closeDeleteConfirm, pendingDeleteId, refreshSavedInterfaces]);
+
+    React.useEffect(() => {
+        if (!isSearchInterfacesOpen) return;
+        if (!pendingDeleteId) return;
+        closeSearchInterfaces();
+    }, [closeSearchInterfaces, isSearchInterfacesOpen, pendingDeleteId]);
 
     React.useEffect(() => {
         if (!pendingDeleteId) return;
@@ -305,7 +327,12 @@ export const AppShell: React.FC = () => {
                 );
 
     return (
-        <div style={SHELL_STYLE} data-graph-loading={graphIsLoading ? '1' : '0'}>
+        <div
+            style={SHELL_STYLE}
+            data-graph-loading={graphIsLoading ? '1' : '0'}
+            data-search-interfaces-open={isSearchInterfacesOpen ? '1' : '0'}
+            data-search-interfaces-query-len={String(searchInterfacesQuery.length)}
+        >
             {showPersistentSidebar ? (
                 <Sidebar
                     isExpanded={isSidebarExpanded}
@@ -315,10 +342,7 @@ export const AppShell: React.FC = () => {
                         setPendingAnalysis(null);
                         setScreen('prompt');
                     }}
-                    onOpenSearchInterfaces={() => {
-                        if (sidebarDisabled) return;
-                        console.log('[appshell] search_interfaces_open');
-                    }}
+                    onOpenSearchInterfaces={() => openSearchInterfaces()}
                     disabled={sidebarDisabled}
                     showDocumentViewerButton={screen === 'graph'}
                     onToggleDocumentViewer={() => setDocumentViewerToggleToken((prev) => prev + 1)}

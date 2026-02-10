@@ -9,6 +9,7 @@ import { MoneyNoticeStack } from '../components/MoneyNoticeStack';
 import { FullscreenButton } from '../components/FullscreenButton';
 import { Sidebar, type SidebarInterfaceItem } from '../components/Sidebar';
 import {
+    deleteSavedInterface,
     loadSavedInterfaces,
     patchSavedInterfaceTitle,
     type SavedInterfaceRecordV1
@@ -121,11 +122,17 @@ export const AppShell: React.FC = () => {
         setPendingDeleteTitle(null);
     }, []);
     const confirmDelete = React.useCallback(() => {
-        if (pendingDeleteId) {
-            console.log('[appshell] pending_delete_confirm id=%s', pendingDeleteId);
+        if (!pendingDeleteId) {
+            console.log('[appshell] delete_interface_skipped reason=no_id');
+            return;
         }
+        const deletedId = pendingDeleteId;
+        deleteSavedInterface(deletedId);
+        refreshSavedInterfaces();
+        setPendingLoadInterface((curr) => (curr?.id === deletedId ? null : curr));
+        console.log('[appshell] delete_interface_ok id=%s', deletedId);
         closeDeleteConfirm();
-    }, [closeDeleteConfirm, pendingDeleteId]);
+    }, [closeDeleteConfirm, pendingDeleteId, refreshSavedInterfaces]);
 
     React.useEffect(() => {
         if (!pendingDeleteId) return;

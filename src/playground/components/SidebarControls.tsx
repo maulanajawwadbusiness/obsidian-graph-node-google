@@ -44,7 +44,7 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
             aria-label="Close controls"
             title="Close"
         >
-            ✕
+            x
         </button>
 
         <h3 style={{ paddingRight: '36px' }}>Physics Playground</h3>

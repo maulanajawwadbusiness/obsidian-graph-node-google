@@ -415,7 +415,7 @@ export const NodePopup: React.FC<NodePopupProps> = ({ trackNode, engineRef }) =>
                         onMouseLeave={(e) => (e.currentTarget.style.color = 'rgba(180, 190, 210, 0.7)')}
                         title={t('tooltip.close')}
                     >
-                        ×
+                        x
                     </button>
                 </div>
 

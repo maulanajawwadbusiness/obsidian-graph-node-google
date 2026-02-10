@@ -115,7 +115,7 @@ export const RotationCompass: React.FC<Props> = ({ engineRef }) => {
             }} />
 
             <div style={TEXT_STYLE}>
-                {Math.round(deg)}°
+                {Math.round(deg)} deg
             </div>
         </div>
     );

@@ -8,7 +8,7 @@ import type { AiContext } from './fullChatTypes';
  * Full Chat Store - React Context for managing full chatbar state
  * 
  * Supports:
- * - Message status transitions (sending → sent, streaming → complete)
+ * - Message status transitions (sending -> sent, streaming -> complete)
  * - Streaming updates (text grows over time)
  * - Smooth conversation flow
  */

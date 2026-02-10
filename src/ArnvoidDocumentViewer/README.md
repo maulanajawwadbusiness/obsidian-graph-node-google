@@ -1,6 +1,6 @@
-# Arnvoid Document Viewer (Drop‑in Folder)
+# Arnvoid Document Viewer (Drop-in Folder)
 
-This folder is designed to be copied into the Arnvoid repo as‑is.
+This folder is designed to be copied into the Arnvoid repo as-is.
 
 ## Hard requirement: PDF worker in `public/`
 
@@ -19,7 +19,7 @@ This folder includes the worker at:
 src/ArnvoidDocumentViewer/public/pdf.worker.min.mjs
 ```
 
-Copy it into the host’s `public/` as part of integration.
+Copy it into the host's `public/` as part of integration.
 
 ## Usage (host)
 

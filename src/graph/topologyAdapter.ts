@@ -21,7 +21,7 @@ export function nodeToSpec(node: PhysicsNode): NodeSpec {
 
 /**
  * Convert a PhysicsLink to a DirectedLink.
- * Note: PhysicsLink is currently undirected, so we choose source→target as direction.
+ * Note: PhysicsLink is currently undirected, so we choose source->target as direction.
  */
 export function linkToDirected(link: PhysicsLink): DirectedLink {
     return {

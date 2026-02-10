@@ -16,7 +16,7 @@ import { getPassStats, type DebugStats } from '../stats';
  * Properties:
  * - Preserves |v| (energy-neutral)
  * - Different hash seed than angular decoherence
- * - Smaller angles (0.3°-0.8° vs 0.5°-1.5°)
+ * - Smaller angles (0.3 deg-0.8 deg vs 0.5 deg-1.5 deg)
  * - Deterministic
  * - Self-disabling
  */
@@ -68,7 +68,7 @@ export const applyLocalPhaseDiffusion = (
             hash |= 0;
         }
 
-        // Smaller angles than angular decoherence: 0.3° to 0.8°
+        // Smaller angles than angular decoherence: 0.3 deg to 0.8 deg
         const normalizedHash = (Math.abs(hash) % 1000) / 1000;  // 0-1
         const minAngle = 0.3 * Math.PI / 180;  // 0.3 degrees
         const maxAngle = 0.8 * Math.PI / 180;  // 0.8 degrees

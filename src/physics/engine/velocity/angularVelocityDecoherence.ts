@@ -64,7 +64,7 @@ export const applyAngularVelocityDecoherence = (
             hash |= 0;
         }
 
-        // Map hash to angle: 0.5° to 1.5° (0.0087 to 0.0262 radians)
+        // Map hash to angle: 0.5 deg to 1.5 deg (0.0087 to 0.0262 radians)
         const normalizedHash = (Math.abs(hash) % 1000) / 1000;  // 0-1
         const minAngle = 0.5 * Math.PI / 180;  // 0.5 degrees
         const maxAngle = 1.5 * Math.PI / 180;  // 1.5 degrees

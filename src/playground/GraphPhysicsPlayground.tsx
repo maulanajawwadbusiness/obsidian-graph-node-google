@@ -595,7 +595,7 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
         const beforeVersion = getTopologyVersion();
         setTopology(topology, config);
         const afterVersion = getTopologyVersion();
-        console.log(`[Run7] Topology version: ${beforeVersion} → ${afterVersion} (changed: ${beforeVersion !== afterVersion})`);
+        console.log(`[Run7] Topology version: ${beforeVersion} -> ${afterVersion} (changed: ${beforeVersion !== afterVersion})`);
 
         // Get final topology with springs
         const finalTopology = getTopology();
@@ -610,7 +610,7 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
         let physicsLinks: any[] = [];
         if (!finalTopology.springs || finalTopology.springs.length === 0) {
             if (finalTopology.links.length > 0) {
-                console.warn(`[STEP3-FIX5] ⚠ Springs missing but links exist! Fallback-deriving for XPBD...`);
+                console.warn(`[STEP3-FIX5] WARN Springs missing but links exist! Fallback-deriving for XPBD...`);
                 const fallbackSprings = deriveSpringEdges(finalTopology, config);
                 physicsLinks = springEdgesToPhysicsLinks(fallbackSprings);
             }
@@ -1200,7 +1200,7 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
 
     const handleSettleScenario = () => {
         const fixedSeed = 1337 + spawnCount;
-        setHudScenarioLabel('Settle test: wait for settle → sleep, then record.');
+        setHudScenarioLabel('Settle test: wait for settle -> sleep, then record.');
         setHudDragTargetId(null);
         spawnGraph(spawnCount, fixedSeed);
     };

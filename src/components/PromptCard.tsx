@@ -99,7 +99,7 @@ export const PromptCard: React.FC<PromptCardProps> = ({
                                             onClick={() => onRemoveFile(index)}
                                             title="Remove file"
                                         >
-                                            ×
+                                            x
                                         </button>
                                     </div>
                                 ))}

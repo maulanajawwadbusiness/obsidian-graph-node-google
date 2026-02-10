@@ -64,7 +64,7 @@ body {
   border-width: 3px;
 }
 
-/* Kill arrow buttons at scrollbar ends — hardened for Chromium */
+/* Kill arrow buttons at scrollbar ends - hardened for Chromium */
 .arnvoid-scroll::-webkit-scrollbar-button {
   -webkit-appearance: none;
   display: none;

@@ -9,7 +9,7 @@ export const applyDamping = (
     if (preRollActive) {
         // Pre-roll: heavy damping (fixed per frame as pre-roll is frame-counted? No, should be time based too ideally but let's stick to main feel first)
         // Actually pre-roll is frame-counted in engine, so per-tick damping is technically consistent with "frame-based" pre-roll.
-        // But let's normalize it to 60fps baseline: 0.995^60 ≈ 0.74/s
+        // But let's normalize it to 60fps baseline: 0.995^60 ~= 0.74/s
         const preRollDamp = Math.pow(0.995, nodeDt * 60);
         node.vx *= preRollDamp;
         node.vy *= preRollDamp;

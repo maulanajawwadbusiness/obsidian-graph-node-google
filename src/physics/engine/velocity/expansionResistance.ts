@@ -60,7 +60,7 @@ export const applyExpansionResistance = (
         const denseBypassScale = denseNodeSet.has(node.id) ? (1 - denseBypass) : 1;
         if (denseBypassScale <= 0.001) continue;
 
-        // Normalize degree: (degree-1)/4 → 0..1
+        // Normalize degree: (degree-1)/4 -> 0..1
         const degNorm = Math.min((degree - 1) / 4, 1);
         // Smoothstep for gradual ramp
         const resistance = degNorm * degNorm * (3 - 2 * degNorm);

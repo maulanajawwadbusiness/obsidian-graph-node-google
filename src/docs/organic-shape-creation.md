@@ -33,8 +33,8 @@ The spine forms a diagonal line with a 2:1 X:Y ratio, establishing the primary a
 ```typescript
 side = (i % 2 === 0) ? 1 : -1;  // Flip-flop pattern
 ribOffset = {
-    x: -targetSpacing * initScale * 0.25 * side,  // ±9.4px
-    y: targetSpacing * initScale * 0.5 * side     // ±18.75px
+    x: -targetSpacing * initScale * 0.25 * side,  // +/-9.4px
+    y: targetSpacing * initScale * 0.5 * side     // +/-18.75px
 }
 // Creates "volume" perpendicular to spine
 ```
@@ -44,7 +44,7 @@ Ribs attach to random spine nodes and alternate sides, creating a 3D-like volume
 **Fibers - Random Scatter:**
 ```typescript
 fiberOffset = {
-    x: (rng.next() - 0.5) * targetSpacing * initScale * 0.67,  // ±25px
+    x: (rng.next() - 0.5) * targetSpacing * initScale * 0.67,  // +/-25px
     y: (rng.next() - 0.5) * targetSpacing * initScale * 0.67
 }
 // Fuzzy outer boundary
@@ -52,7 +52,7 @@ fiberOffset = {
 
 Fibers attach to random rib nodes with random offsets, creating the fuzzy outer layer.
 
-**Result**: Nodes start in an **elongated, diagonal cluster** (~37px × 18px), NOT a circle.
+**Result**: Nodes start in an **elongated, diagonal cluster** (~37px x 18px), NOT a circle.
 
 ---
 
@@ -72,7 +72,7 @@ roleWeight:
 ```
 
 **Direction**: Calculated from spring vectors (where links want to pull nodes)  
-**Magnitude**: Weighted by role → spine nodes fly fastest, fibers drift slower
+**Magnitude**: Weighted by role -> spine nodes fly fastest, fibers drift slower
 
 The impulse is applied once at t=0, giving each node an initial velocity based on:
 - The direction of its spring connections
@@ -111,7 +111,7 @@ Springs: ENABLED  // Pull to targetSpacing
 
 Springs activate, pulling nodes to their rest length (375px). High damping prevents bouncing and creates smooth settling.
 
-**Result**: **Snap → Freeze → Swirl → Settle**
+**Result**: **Snap -> Freeze -> Swirl -> Settle**
 
 The "swirl" is rotational momentum as springs resolve tension from the frozen positions.
 
@@ -139,7 +139,7 @@ Pulls connected nodes toward their target distance. **Varied lengths** create de
 repulsionStrength = 800
 repulsionDistanceMax = 150px
 
-Force ∝ 1/distance² (inverse square law)
+Force proportional_to 1/distance^2 (inverse square law)
 ```
 
 Pushes nearby nodes apart. Prevents overlap and creates "breathing room" between unconnected nodes.
@@ -181,10 +181,10 @@ Gentle pull toward (0,0). Prevents infinite drifting but doesn't compress the gr
 ### Shape Diagnostics Explained:
 
 ```
-Spread (R_mean): 184.10 px  ← Average node distance from center
-Irregularity (R_std): 93.32 px  ← High variance = organic
-CV (Std/Mean): 0.507  ← 50% variation = very irregular
-Aspect Ratio (W/H): 1.323  ← Elongated, not circular
+Spread (R_mean): 184.10 px  <- Average node distance from center
+Irregularity (R_std): 93.32 px  <- High variance = organic
+CV (Std/Mean): 0.507  <- 50% variation = very irregular
+Aspect Ratio (W/H): 1.323  <- Elongated, not circular
 ```
 
 **High CV (0.507)** = nodes are scattered at varied distances, not uniform radius (circle would be ~0.1)  
@@ -220,13 +220,13 @@ The 15% dampingFactor creates smooth camera motion that feels organic and non-ja
 
 ## Summary: The Recipe
 
-1. **Seed** → Deterministic randomness (same seed = same shape)
-2. **Topology** → Spine-rib-fiber hierarchy
-3. **Asymmetric Placement** → Diagonal axis, alternating ribs, scattered fibers
-4. **Weighted Impulse** → Spine flies fast, fibers drift
-5. **Time-Gated Snap** → Flight (200ms) → Freeze (100ms) → Settle
-6. **Force Balance** → Springs (structure) + Repulsion (space) + Collision (solidity)
-7. **Camera Leash** → Automatic framing
+1. **Seed** -> Deterministic randomness (same seed = same shape)
+2. **Topology** -> Spine-rib-fiber hierarchy
+3. **Asymmetric Placement** -> Diagonal axis, alternating ribs, scattered fibers
+4. **Weighted Impulse** -> Spine flies fast, fibers drift
+5. **Time-Gated Snap** -> Flight (200ms) -> Freeze (100ms) -> Settle
+6. **Force Balance** -> Springs (structure) + Repulsion (space) + Collision (solidity)
+7. **Camera Leash** -> Automatic framing
 
 **Result**: A **reproducible, organic, asymmetric** graph that snaps decisively, swirls gracefully, and settles into a structured-yet-natural shape.
 

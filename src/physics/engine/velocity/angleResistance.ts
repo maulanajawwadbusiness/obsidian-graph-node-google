@@ -80,24 +80,24 @@ export const applyAngleResistanceVelocity = (
             let localDamping = 1.0;
 
             if (theta >= ANGLE_PRETENSION) {
-                // Zone B: Pre-tension (45-60°)
+                // Zone B: Pre-tension (45-60 deg)
                 const t = (ANGLE_FREE - theta) / (ANGLE_FREE - ANGLE_PRETENSION);
                 const ease = t * t;  // Quadratic ease-in
                 resistance = ease * RESIST_PRETENSION_MAX * (1 - expansionRelief);
             } else if (theta >= ANGLE_SOFT) {
-                // Zone C: Soft constraint (30-45°)
+                // Zone C: Soft constraint (30-45 deg)
                 const t = (ANGLE_PRETENSION - theta) / (ANGLE_PRETENSION - ANGLE_SOFT);
                 const ease = t * t * (3 - 2 * t);  // Smoothstep
                 resistance = (RESIST_PRETENSION_MAX + ease * (RESIST_SOFT_MAX - RESIST_PRETENSION_MAX)) * (1 - expansionRelief);
             } else if (theta >= ANGLE_EMERGENCY) {
-                // Zone D: Emergency (20-30°)
+                // Zone D: Emergency (20-30 deg)
                 const t = (ANGLE_SOFT - theta) / (ANGLE_SOFT - ANGLE_EMERGENCY);
                 const ease = t * t * t;  // Cubic ease-in
                 const expansionScale = lerp(1.0, 0.3, expansionRelief);
                 resistance = (RESIST_SOFT_MAX + ease * (RESIST_EMERGENCY_MAX - RESIST_SOFT_MAX)) * expansionScale;
                 localDamping = lerp(0.92, 1.0, expansionRelief);
             } else {
-                // Zone E: Forbidden (<20°)
+                // Zone E: Forbidden (<20 deg)
                 const penetration = ANGLE_EMERGENCY - theta;
                 const t = Math.min(penetration / (10 * DEG_TO_RAD), 1);
                 const expansionScale = lerp(1.0, 0.5, expansionRelief);

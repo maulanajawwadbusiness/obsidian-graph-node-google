@@ -58,7 +58,7 @@ export function useAnchorGeometry(
  * 
  * Future implementation will integrate with:
  * - Physics engine for node positions
- * - Camera state for world→screen transform
+ * - Camera state for world->screen transform
  * - Hover state for radius calculations
  * 
  * For now, consumers use staticGeometry passed from popup state.

@@ -707,7 +707,7 @@ export const AppShell: React.FC = () => {
                                             style={{
                                                 ...SEARCH_RESULT_ROW_STYLE,
                                                 borderColor: isHighlighted ? 'rgba(99, 171, 255, 0.5)' : SEARCH_RESULT_ROW_STYLE.borderColor,
-                                                background: isHighlighted ? 'rgba(99, 171, 255, 0.16)' : SEARCH_RESULT_ROW_STYLE.background,
+                                                background: isHighlighted ? 'rgba(171, 210, 255, 0.11)' : SEARCH_RESULT_ROW_STYLE.background,
                                             }}
                                             onClick={(e) => {
                                                 e.stopPropagation();
@@ -839,7 +839,7 @@ const SEARCH_OVERLAY_CARD_STYLE: React.CSSProperties = {
 const SEARCH_CLOSE_BUTTON_STYLE: React.CSSProperties = {
     position: 'absolute',
     top: '12px',
-    right: '-4px',
+    right: '-6px',
     width: '24px',
     height: '24px',
     borderRadius: '6px',
@@ -855,6 +855,7 @@ const SEARCH_CLOSE_BUTTON_STYLE: React.CSSProperties = {
     justifyContent: 'center',
     padding: 0,
     fontFamily: 'var(--font-ui)',
+    opacity: 0.7,
 };
 
 const SEARCH_INPUT_STYLE: React.CSSProperties = {
@@ -878,6 +879,7 @@ const SEARCH_RESULTS_STYLE: React.CSSProperties = {
     flex: '1 1 auto',
     minHeight: 0,
     gap: '8px',
+    paddingLeft: '10px',
     marginRight: '-16px',
     paddingRight: '16px',
     paddingBottom: '10px',
@@ -891,7 +893,7 @@ const SEARCH_SECTION_LABEL_STYLE: React.CSSProperties = {
     lineHeight: 1.2,
     letterSpacing: '0.35px',
     textTransform: 'none',
-    padding: '2px 20px 0',
+    padding: '2px 10px 0',
     fontFamily: 'var(--font-ui)',
 };
 
@@ -899,7 +901,7 @@ const SEARCH_RESULT_ROW_STYLE: React.CSSProperties = {
     width: '100%',
     minWidth: 0,
     display: 'block',
-    padding: '8px 20px',
+    padding: '8px 10px',
     borderRadius: '10px',
     border: 'none',
     background: 'transparent',
@@ -928,7 +930,7 @@ const SEARCH_EMPTY_STYLE: React.CSSProperties = {
     color: 'rgba(231, 231, 231, 0.62)',
     fontSize: '13px',
     lineHeight: 1.4,
-    padding: '10px 20px',
+    padding: '10px 10px',
 };
 
 const SEARCH_EMPTY_TITLE_STYLE: React.CSSProperties = {

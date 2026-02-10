@@ -58,7 +58,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
         textarea.style.overflowY = 'hidden';
 
-        // Skip auto-sizing for empty text — maintain fixed 1-line height
+        // Skip auto-sizing for empty text - maintain fixed 1-line height
         if (!text.trim()) {
             textarea.style.height = '40px';
             return;

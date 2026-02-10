@@ -79,7 +79,7 @@ export function drawVignetteBackground(
 
 /**
  * Draw two-layer glow with energy-driven intensity and blur.
- * As nodeEnergy rises (0→1), glow brightens and expands.
+ * As nodeEnergy rises (0->1), glow brightens and expands.
  * As nodeEnergy falls, glow exhales smoothly.
  *
  * @param ctx Canvas context

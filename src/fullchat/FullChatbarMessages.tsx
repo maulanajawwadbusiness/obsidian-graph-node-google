@@ -86,7 +86,7 @@ export const FullChatbarMessages: React.FC<FullChatbarMessagesProps> = ({
                     onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
                     onMouseLeave={(e) => e.currentTarget.style.opacity = '0.9'}
                 >
-                    <span>↓</span>
+                    <span>v</span>
                     {t('fullChat.jumpToLatest')}
                 </button>
             )}

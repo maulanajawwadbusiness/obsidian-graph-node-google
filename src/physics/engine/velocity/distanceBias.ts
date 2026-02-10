@@ -40,7 +40,7 @@ export const applyDistanceBiasVelocity = (
             if (d >= D_hard && d < slopStart) {
                 // SLOP ZONE: velocity-only projection, no positional correction
                 // Strength ramps from 0 (at slopStart) to 1 (at minDist)
-                const slopT = (slopStart - d) / slop;  // 0→1 as d approaches minDist
+                const slopT = (slopStart - d) / slop;  // 0->1 as d approaches minDist
                 const slopRamp = slopT * slopT * (3 - 2 * slopT);  // smoothstep
 
                 // Exponential Velocity Removal:
@@ -85,7 +85,7 @@ export const applyDistanceBiasVelocity = (
             else if (d < D_hard) {
                 // CONTINUOUS BIAS: apply outward velocity, ramped by penetration
                 const penetration = D_hard - d;
-                const t = Math.min(penetration / D_hard, 1);  // 0→1
+                const t = Math.min(penetration / D_hard, 1);  // 0->1
                 const ramp = t * t * (3 - 2 * t);  // Smoothstep
                 const bias = ramp * biasStrength;
 

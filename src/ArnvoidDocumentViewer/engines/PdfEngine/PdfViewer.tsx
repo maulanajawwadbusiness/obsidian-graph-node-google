@@ -377,7 +377,7 @@ export default function PdfViewer({ source, scrollContainerRef }: PdfViewerProps
             disabled={pageNum <= 1 || isRendering || isLoading}
             aria-label="Previous page"
           >
-            ▲
+            ^
           </button>
           <button
             type="button"
@@ -386,7 +386,7 @@ export default function PdfViewer({ source, scrollContainerRef }: PdfViewerProps
             disabled={pageNum >= (numPages || 1) || isRendering || isLoading}
             aria-label="Next page"
           >
-            ▼
+            v
           </button>
         </div>
       </div>

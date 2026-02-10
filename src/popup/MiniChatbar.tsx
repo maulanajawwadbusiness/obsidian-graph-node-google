@@ -254,7 +254,7 @@ export const MiniChatbar: React.FC<MiniChatbarProps> = ({ messages, onSend, onCl
         });
     }, [messages]);
 
-    // RAF-throttled scroll listener using classList — avoids React re-render
+    // RAF-throttled scroll listener using classList - avoids React re-render
     useEffect(() => {
         const scroller = messagesRef.current;
         const wrapper = fadeWrapperRef.current;
@@ -268,7 +268,7 @@ export const MiniChatbar: React.FC<MiniChatbarProps> = ({ messages, onSend, onCl
             const hasTop = scrollTop > 8;
             const hasBottom = scrollTop + clientHeight < scrollHeight - 8;
 
-            // Toggle classes directly on DOM — no React state update
+            // Toggle classes directly on DOM - no React state update
             wrapper.classList.toggle('fade-top', hasTop);
             wrapper.classList.toggle('fade-bottom', hasBottom);
         };
@@ -414,7 +414,7 @@ export const MiniChatbar: React.FC<MiniChatbarProps> = ({ messages, onSend, onCl
                     onPointerDown={stopPropagation}
                     title={t('tooltip.close')}
                 >
-                    ×
+                    x
                 </button>
             </div>
 

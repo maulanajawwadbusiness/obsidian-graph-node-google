@@ -59,6 +59,7 @@ const DEFAULT_ICON_COLOR = '#ffffff';
 type SidebarProps = {
     isExpanded: boolean;
     onToggle: () => void;
+    onCreateNew?: () => void;
     disabled?: boolean;
     onToggleDocumentViewer?: () => void;
     showDocumentViewerButton?: boolean;
@@ -70,6 +71,7 @@ type SidebarProps = {
 export const Sidebar: React.FC<SidebarProps> = ({
     isExpanded,
     onToggle,
+    onCreateNew,
     disabled = false,
     onToggleDocumentViewer,
     showDocumentViewerButton = false,
@@ -158,6 +160,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         isHovered={createNewHover}
                         onMouseEnter={() => setCreateNewHover(true)}
                         onMouseLeave={() => setCreateNewHover(false)}
+                        onClick={onCreateNew}
                     />
                 </div>
                 <div style={{ marginTop: `${SEARCH_OFFSET_TOP}px` }}>
@@ -303,6 +306,7 @@ type NavItemProps = {
     isHovered: boolean;
     onMouseEnter: () => void;
     onMouseLeave: () => void;
+    onClick?: () => void;
 };
 
 const NavItem: React.FC<NavItemProps> = ({
@@ -312,12 +316,15 @@ const NavItem: React.FC<NavItemProps> = ({
     isHovered,
     onMouseEnter,
     onMouseLeave,
+    onClick,
 }) => (
     <button
         type="button"
         style={NAV_ITEM_STYLE}
+        onPointerDown={(e) => e.stopPropagation()}
         onMouseEnter={onMouseEnter}
         onMouseLeave={onMouseLeave}
+        onClick={onClick}
     >
         <MaskIcon
             src={icon}

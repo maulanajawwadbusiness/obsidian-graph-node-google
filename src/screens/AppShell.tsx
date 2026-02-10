@@ -274,6 +274,11 @@ export const AppShell: React.FC = () => {
                 <Sidebar
                     isExpanded={isSidebarExpanded}
                     onToggle={() => setIsSidebarExpanded((prev) => !prev)}
+                    onCreateNew={() => {
+                        setPendingLoadInterface(null);
+                        setPendingAnalysis(null);
+                        setScreen('prompt');
+                    }}
                     disabled={sidebarDisabled}
                     showDocumentViewerButton={screen === 'graph'}
                     onToggleDocumentViewer={() => setDocumentViewerToggleToken((prev) => prev + 1)}

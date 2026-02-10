@@ -189,3 +189,13 @@ Minimum additional state (Sidebar):
   - rename patch updates title and timestamp only; no mutation to parsed document text/meta, topology/layout/camera, analysis meta, or dedupe key.
 - Outcome:
   - no behavioral patch required for title parity in this step; docs verification only.
+
+## Rename Ordering Fix Implemented
+
+- File updated: `src/store/savedInterfacesStore.ts`.
+- `patchSavedInterfaceTitle(id, newTitle)` now mutates only `title`.
+- `updatedAt` is no longer changed during rename, so list order remains stable after `refreshSavedInterfaces()`.
+- Sort semantics are unchanged for real save/upsert events:
+  - `loadSavedInterfaces()` and `saveAllSavedInterfaces()` still sort newest-first by `updatedAt` then `createdAt`.
+- Identity and payload safety preserved:
+  - no mutation to `dedupeKey`, `parsedDocument`, `topology`, `layout`, `camera`, or `analysisMeta`.

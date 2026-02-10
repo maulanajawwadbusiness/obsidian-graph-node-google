@@ -362,13 +362,11 @@ export function patchSavedInterfaceTitle(
         return current;
     }
 
-    const nowMs = Date.now();
     const next = [...current];
     const existing = next[index];
     next[index] = {
         ...existing,
         title: newTitle,
-        updatedAt: nowMs,
     };
 
     saveAllSavedInterfaces(next);

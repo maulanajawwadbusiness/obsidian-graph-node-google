@@ -276,3 +276,18 @@ Source alignment:
 - Added per-open idempotency guard (`didSelectThisOpenRef`) to prevent duplicate selection firing from rapid duplicate Enter/click events in dev StrictMode/event replay scenarios.
 - Guard resets on open and close, preserving normal behavior while preventing double-close/double-select.
 - Backdrop close and Escape close remain local to overlay/modal handlers; no window capture dependency for search overlay behavior.
+
+## 16) UI Refinement Pass (2026-02-10)
+
+- Removed top titlebar text; overlay now starts directly with input, with close control kept as top-right icon button.
+- Input placeholder updated to: `Search interfaces...`.
+- Recent label casing kept as `Recent`.
+- Removed per-result metadata line; results are title-only rows.
+- Removed borders from search overlay surfaces:
+  - modal card
+  - input
+  - result rows
+  - close button
+- Preserved focus clarity using subtle glow/box-shadow on the input (borderless focus treatment).
+- Scroll viewport adjusted so scrollbar sits tight to right edge of modal via results container layout (`marginRight`/`paddingRight` pattern), while row padding remains internal.
+- No behavior changes applied to open/close, ranking, selection, keyboard nav, shielding, stacking, or disabled gates.

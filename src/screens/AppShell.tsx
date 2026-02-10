@@ -100,6 +100,7 @@ export const AppShell: React.FC = () => {
     const [welcome1OverlayOpen, setWelcome1OverlayOpen] = React.useState(false);
     const [enterPromptOverlayOpen, setEnterPromptOverlayOpen] = React.useState(false);
     const [welcome1FontGateDone, setWelcome1FontGateDone] = React.useState(false);
+    const [searchInputFocused, setSearchInputFocused] = React.useState(false);
     const searchInputRef = React.useRef<HTMLInputElement | null>(null);
     const didSelectThisOpenRef = React.useRef(false);
     const stopEventPropagation = React.useCallback((e: React.SyntheticEvent) => {
@@ -615,29 +616,33 @@ export const AppShell: React.FC = () => {
                             closeSearchInterfaces();
                         }}
                     >
-                        <div style={SEARCH_HEADER_ROW_STYLE}>
-                            <span style={SEARCH_HEADER_TITLE_STYLE}>Search Interfaces</span>
-                            <button
-                                {...hardShieldInput}
-                                type="button"
-                                aria-label="Close search"
-                                style={SEARCH_CLOSE_BUTTON_STYLE}
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    closeSearchInterfaces();
-                                }}
-                            >
-                                x
-                            </button>
-                        </div>
+                        <button
+                            {...hardShieldInput}
+                            type="button"
+                            aria-label="Close search"
+                            style={SEARCH_CLOSE_BUTTON_STYLE}
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                closeSearchInterfaces();
+                            }}
+                        >
+                            x
+                        </button>
                         <input
                             {...hardShieldInput}
                             ref={searchInputRef}
                             autoFocus
                             value={searchInterfacesQuery}
-                            placeholder="Search saved interfaces..."
-                            style={SEARCH_INPUT_STYLE}
+                            placeholder="Search interfaces..."
+                            style={{
+                                ...SEARCH_INPUT_STYLE,
+                                boxShadow: searchInputFocused
+                                    ? '0 0 0 2px rgba(99, 171, 255, 0.36)'
+                                    : '0 0 0 1px rgba(99, 171, 255, 0.15)',
+                            }}
                             onChange={(e) => setSearchInterfacesQuery(e.target.value)}
+                            onFocus={() => setSearchInputFocused(true)}
+                            onBlur={() => setSearchInputFocused(false)}
                             onKeyDown={(e) => {
                                 e.stopPropagation();
                                 if (e.key === 'Escape') {
@@ -704,9 +709,6 @@ export const AppShell: React.FC = () => {
                                             onMouseEnter={() => setSearchHighlightedIndex(index)}
                                         >
                                             <span style={SEARCH_RESULT_TITLE_STYLE}>{item.title}</span>
-                                            <span style={SEARCH_RESULT_META_STYLE}>
-                                                {item.nodeCount} dots | {item.linkCount} links | {item.subtitle}
-                                            </span>
                                         </button>
                                     );
                                 })
@@ -809,10 +811,11 @@ const SEARCH_OVERLAY_BACKDROP_STYLE: React.CSSProperties = {
 };
 
 const SEARCH_OVERLAY_CARD_STYLE: React.CSSProperties = {
+    position: 'relative',
     width: 'min(560px, calc(100vw - 32px))',
     maxHeight: 'calc(100vh - 64px)',
     borderRadius: '14px',
-    border: '1px solid rgba(255, 255, 255, 0.14)',
+    border: 'none',
     background: '#0d1118',
     boxShadow: '0 18px 56px rgba(0, 0, 0, 0.45)',
     padding: '16px',
@@ -824,26 +827,14 @@ const SEARCH_OVERLAY_CARD_STYLE: React.CSSProperties = {
     gap: '10px',
 };
 
-const SEARCH_HEADER_ROW_STYLE: React.CSSProperties = {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: '8px',
-};
-
-const SEARCH_HEADER_TITLE_STYLE: React.CSSProperties = {
-    color: 'rgba(231, 231, 231, 0.82)',
-    fontSize: '12px',
-    lineHeight: 1.2,
-    letterSpacing: '0.3px',
-    fontFamily: 'var(--font-ui)',
-};
-
 const SEARCH_CLOSE_BUTTON_STYLE: React.CSSProperties = {
+    position: 'absolute',
+    top: '12px',
+    right: '12px',
     width: '24px',
     height: '24px',
     borderRadius: '6px',
-    border: '1px solid rgba(255, 255, 255, 0.18)',
+    border: 'none',
     background: 'rgba(255, 255, 255, 0.04)',
     color: 'rgba(231, 231, 231, 0.86)',
     cursor: 'pointer',
@@ -860,13 +851,13 @@ const SEARCH_CLOSE_BUTTON_STYLE: React.CSSProperties = {
 const SEARCH_INPUT_STYLE: React.CSSProperties = {
     width: '100%',
     borderRadius: '10px',
-    border: '1px solid rgba(99, 171, 255, 0.45)',
+    border: 'none',
     background: 'rgba(12, 15, 22, 0.95)',
     color: '#e7e7e7',
     fontFamily: 'var(--font-ui)',
     fontSize: '14px',
     lineHeight: 1.4,
-    padding: '11px 12px',
+    padding: '11px 40px 11px 12px',
     outline: 'none',
 };
 
@@ -878,6 +869,8 @@ const SEARCH_RESULTS_STYLE: React.CSSProperties = {
     gap: '8px',
     maxHeight: '52vh',
     overflowY: 'auto',
+    marginRight: '-16px',
+    paddingRight: '16px',
 };
 
 const SEARCH_SECTION_LABEL_STYLE: React.CSSProperties = {
@@ -892,13 +885,10 @@ const SEARCH_SECTION_LABEL_STYLE: React.CSSProperties = {
 
 const SEARCH_RESULT_ROW_STYLE: React.CSSProperties = {
     width: '100%',
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'flex-start',
-    gap: '4px',
+    display: 'block',
     padding: '10px 12px',
     borderRadius: '10px',
-    border: '1px solid rgba(255, 255, 255, 0.12)',
+    border: 'none',
     background: 'rgba(255, 255, 255, 0.03)',
     textAlign: 'left',
     cursor: 'pointer',
@@ -909,17 +899,6 @@ const SEARCH_RESULT_TITLE_STYLE: React.CSSProperties = {
     fontSize: '14px',
     lineHeight: 1.35,
     fontWeight: 600,
-    fontFamily: 'var(--font-ui)',
-    width: '100%',
-    whiteSpace: 'nowrap',
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-};
-
-const SEARCH_RESULT_META_STYLE: React.CSSProperties = {
-    color: 'rgba(231, 231, 231, 0.72)',
-    fontSize: '12px',
-    lineHeight: 1.35,
     fontFamily: 'var(--font-ui)',
     width: '100%',
     whiteSpace: 'nowrap',

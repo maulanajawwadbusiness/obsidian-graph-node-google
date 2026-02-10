@@ -324,6 +324,7 @@ export const AppShell: React.FC = () => {
                         refreshSavedInterfaces();
                     }}
                     onDeleteInterface={(id) => {
+                        if (sidebarDisabled) return;
                         const record = savedInterfaces.find((item) => item.id === id);
                         if (!record) return;
                         setPendingDeleteId(record.id);

@@ -150,11 +150,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
     }, []);
 
     const startRename = React.useCallback((id: string, title: string) => {
+        if (disabled) return;
         closeRowMenu();
         setRenamingRowId(id);
         setRenameDraft(title);
         setRenameOriginal(title);
-    }, [closeRowMenu]);
+    }, [closeRowMenu, disabled]);
 
     const sanitizeRenameTitle = React.useCallback((raw: string): string => {
         const collapsed = raw.replace(/\s+/g, ' ').trim();
@@ -172,6 +173,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     }, [onRenameInterface, renameDraft, renamingRowId, sanitizeRenameTitle]);
 
     const toggleRowMenuForItem = React.useCallback((itemId: string, trigger: HTMLElement) => {
+        if (disabled) return;
         if (openRowMenuId === itemId) {
             closeRowMenu();
             return;
@@ -182,7 +184,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
         setRowMenuAnchorRect(rect);
         setRowMenuPosition({ left: placement.left, top: placement.top });
         setMenuPlacement(placement.placement);
-    }, [closeRowMenu, computeRowMenuPlacement, openRowMenuId]);
+    }, [closeRowMenu, computeRowMenuPlacement, disabled, openRowMenuId]);
+
+    React.useEffect(() => {
+        if (!disabled) return;
+        if (openRowMenuId) {
+            closeRowMenu();
+        }
+        if (renamingRowId) {
+            cancelRename();
+        }
+    }, [cancelRename, closeRowMenu, disabled, openRowMenuId, renamingRowId]);
 
     React.useEffect(() => {
         if (!openRowMenuId && !renamingRowId) return;
@@ -412,14 +424,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
                                                 <span style={INTERFACE_TEXT_STYLE}>{item.title}</span>
                                             )}
                                             <span style={INTERFACE_ROW_MENU_SLOT_STYLE}>
-                                                <span
-                                                    role="button"
-                                                    tabIndex={0}
+                                                <button
+                                                    type="button"
+                                                    disabled={disabled}
                                                     data-row-ellipsis="1"
                                                     aria-label={`Open actions for ${item.title}`}
                                                     title="Session actions"
                                                     style={{
                                                         ...ROW_ELLIPSIS_BUTTON_STYLE,
+                                                        border: 'none',
+                                                        background: 'transparent',
+                                                        cursor: disabled ? 'default' : ROW_ELLIPSIS_BUTTON_STYLE.cursor,
                                                         opacity: showRowEllipsis ? 1 : 0,
                                                     }}
                                                     onPointerDown={(e) => e.stopPropagation()}
@@ -429,7 +444,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
                                                     onClick={(e) => {
                                                         e.preventDefault();
                                                         e.stopPropagation();
-                                                        const el = e.currentTarget as HTMLSpanElement;
+                                                        if (disabled) return;
+                                                        const el = e.currentTarget as HTMLButtonElement;
                                                         if (isRenaming) return;
                                                         toggleRowMenuForItem(item.id, el);
                                                     }}
@@ -437,7 +453,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
                                                         if (e.key !== 'Enter' && e.key !== ' ') return;
                                                         e.preventDefault();
                                                         e.stopPropagation();
-                                                        const el = e.currentTarget as HTMLSpanElement;
+                                                        if (disabled) return;
+                                                        const el = e.currentTarget as HTMLButtonElement;
                                                         toggleRowMenuForItem(item.id, el);
                                                     }}
                                                 >
@@ -447,7 +464,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                                                         color={isSelected ? HOVER_ACCENT_COLOR : 'rgba(255, 255, 255, 0.75)'}
                                                         opacity={1}
                                                     />
-                                                </span>
+                                                </button>
                                             </span>
                                         </span>
                                     </button>
@@ -485,6 +502,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
                             onClick={(e) => {
                                 e.preventDefault();
                                 e.stopPropagation();
+                                if (disabled) {
+                                    closeRowMenu();
+                                    return;
+                                }
                                 if (menuItem.key === 'rename' && openRowMenuId) {
                                     const current = interfaces?.find((item) => item.id === openRowMenuId);
                                     if (current) {

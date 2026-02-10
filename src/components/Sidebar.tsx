@@ -296,6 +296,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
                                             background: isSelected ? 'rgba(99, 171, 255, 0.12)' : INTERFACE_ITEM_STYLE.background,
                                         }}
                                         onPointerDown={(e) => e.stopPropagation()}
+                                        onWheelCapture={(e) => e.stopPropagation()}
+                                        onWheel={(e) => e.stopPropagation()}
                                         onMouseEnter={() => setHoveredInterfaceId(item.id)}
                                         onMouseLeave={() => setHoveredInterfaceId(null)}
                                         onClick={() => onSelectInterface?.(item.id)}
@@ -315,6 +317,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
                                                         opacity: showRowEllipsis ? 1 : 0,
                                                     }}
                                                     onPointerDown={(e) => e.stopPropagation()}
+                                                    onPointerUp={(e) => e.stopPropagation()}
+                                                    onWheelCapture={(e) => e.stopPropagation()}
+                                                    onWheel={(e) => e.stopPropagation()}
                                                     onClick={(e) => {
                                                         e.preventDefault();
                                                         e.stopPropagation();
@@ -356,6 +361,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         transformOrigin: menuPlacement === 'up' ? 'bottom left' : 'top left',
                     }}
                     onPointerDown={(e) => e.stopPropagation()}
+                    onPointerUp={(e) => e.stopPropagation()}
                     onClick={(e) => e.stopPropagation()}
                     onWheelCapture={(e) => e.stopPropagation()}
                     onWheel={(e) => e.stopPropagation()}
@@ -366,6 +372,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
                             type="button"
                             style={ROW_MENU_ITEM_STYLE}
                             onPointerDown={(e) => e.stopPropagation()}
+                            onPointerUp={(e) => e.stopPropagation()}
+                            onWheel={(e) => e.stopPropagation()}
                             onClick={(e) => {
                                 e.stopPropagation();
                                 if (import.meta.env.DEV) {

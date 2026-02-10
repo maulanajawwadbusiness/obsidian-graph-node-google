@@ -10,9 +10,11 @@ import {
     THEME_TOGGLE_STYLE
 } from '../graphPlaygroundStyles';
 import { IS_DEV } from '../rendering/debugUtils';
+import downloadDevModeIcon from '../../assets/download_dev_mode.png';
 
 // Toggle to show/hide debug controls buttons (Debug, Theme, Controls)
 const SHOW_DEBUG_CONTROLS = true;
+const SHOW_DEV_DOWNLOAD_JSON_BUTTON = false;
 
 import type { ForceConfig } from '../../physics/types';
 
@@ -181,6 +183,46 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
                     title={sidebarOpen ? 'Hide controls' : 'Show controls'}
                 >
                     {sidebarOpen ? 'Hide Controls' : 'Controls'}
+                </button>
+            )}
+
+            {import.meta.env.DEV && SHOW_DEV_DOWNLOAD_JSON_BUTTON && (
+                <button
+                    type="button"
+                    style={{
+                        ...SIDEBAR_TOGGLE_STYLE,
+                        top: '56px',
+                        width: '32px',
+                        height: '32px',
+                        padding: '4px',
+                        background: 'transparent',
+                        border: 'none',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                    }}
+                    onPointerDown={stopPropagation}
+                    onPointerUp={stopPropagation}
+                    onWheelCapture={stopPropagation}
+                    onWheel={stopPropagation}
+                    onClick={(e) => {
+                        stopPropagation(e);
+                        if (import.meta.env.DEV) {
+                            console.log('[dev] download_json_clicked');
+                        }
+                    }}
+                    aria-label="Download graph json (dev)"
+                    title="Download graph json (dev)"
+                >
+                    <img
+                        src={downloadDevModeIcon}
+                        alt="Download graph json"
+                        style={{
+                            width: '22px',
+                            height: '22px',
+                            objectFit: 'contain',
+                        }}
+                    />
                 </button>
             )}
 

@@ -315,6 +315,10 @@ export const AppShell: React.FC = () => {
                         setPendingAnalysis(null);
                         setScreen('prompt');
                     }}
+                    onOpenSearchInterfaces={() => {
+                        if (sidebarDisabled) return;
+                        console.log('[appshell] search_interfaces_open');
+                    }}
                     disabled={sidebarDisabled}
                     showDocumentViewerButton={screen === 'graph'}
                     onToggleDocumentViewer={() => setDocumentViewerToggleToken((prev) => prev + 1)}

@@ -65,6 +65,7 @@ type SidebarProps = {
     isExpanded: boolean;
     onToggle: () => void;
     onCreateNew?: () => void;
+    onOpenSearchInterfaces?: () => void;
     onRenameInterface?: (id: string, newTitle: string) => void;
     onDeleteInterface?: (id: string) => void;
     disabled?: boolean;
@@ -79,6 +80,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     isExpanded,
     onToggle,
     onCreateNew,
+    onOpenSearchInterfaces,
     onRenameInterface,
     onDeleteInterface,
     disabled = false,
@@ -338,6 +340,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         isHovered={searchHover}
                         onMouseEnter={() => setSearchHover(true)}
                         onMouseLeave={() => setSearchHover(false)}
+                        onClick={onOpenSearchInterfaces}
+                        hardShieldInput
                     />
                 </div>
                 <div style={{ marginTop: `${MORE_OFFSET_TOP}px` }}>
@@ -647,6 +651,7 @@ type NavItemProps = {
     onMouseEnter: () => void;
     onMouseLeave: () => void;
     onClick?: () => void;
+    hardShieldInput?: boolean;
 };
 
 const NavItem: React.FC<NavItemProps> = ({
@@ -657,14 +662,23 @@ const NavItem: React.FC<NavItemProps> = ({
     onMouseEnter,
     onMouseLeave,
     onClick,
+    hardShieldInput = false,
 }) => (
     <button
         type="button"
         style={NAV_ITEM_STYLE}
         onPointerDown={(e) => e.stopPropagation()}
+        onPointerUp={hardShieldInput ? (e) => e.stopPropagation() : undefined}
+        onWheelCapture={hardShieldInput ? (e) => e.stopPropagation() : undefined}
+        onWheel={hardShieldInput ? (e) => e.stopPropagation() : undefined}
         onMouseEnter={onMouseEnter}
         onMouseLeave={onMouseLeave}
-        onClick={onClick}
+        onClick={(e) => {
+            if (hardShieldInput) {
+                e.stopPropagation();
+            }
+            onClick?.();
+        }}
     >
         <MaskIcon
             src={icon}

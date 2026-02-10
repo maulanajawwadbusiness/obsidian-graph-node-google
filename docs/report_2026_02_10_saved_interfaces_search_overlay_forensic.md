@@ -212,3 +212,18 @@ Source alignment:
 - Backdrop now includes explicit padding and border-box sizing to preserve centering margins consistently.
 - Results overflow remains internal to modal via `SEARCH_RESULTS_STYLE` scroll container (`overflowY: auto`, `minHeight: 0`, flex growth).
 - Shielding contract remains unchanged: pointerdown/up/click/wheel/wheelCapture stopPropagation on backdrop, card, input, results container, and result rows.
+
+## 11) Step 5 Shielding Hardening (2026-02-10)
+
+- Added reusable `hardShieldInput` helper in `AppShell` and applied it to all search overlay interactive surfaces:
+  - backdrop
+  - modal root
+  - input
+  - results container
+  - each result row
+- Added explicit forensic markers:
+  - `data-search-backdrop="1"`
+  - `data-search-modal="1"`
+- Kept backdrop click-close behavior while preserving stopPropagation.
+- Input keydown now handles `Escape` locally (stopPropagation + preventDefault + close) in addition to existing capture-safe fallback listener.
+- No new global listeners were introduced; no global preventDefault behavior was added.

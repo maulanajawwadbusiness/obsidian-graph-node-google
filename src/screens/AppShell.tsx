@@ -100,6 +100,19 @@ export const AppShell: React.FC = () => {
     const [enterPromptOverlayOpen, setEnterPromptOverlayOpen] = React.useState(false);
     const [welcome1FontGateDone, setWelcome1FontGateDone] = React.useState(false);
     const searchInputRef = React.useRef<HTMLInputElement | null>(null);
+    const stopEventPropagation = React.useCallback((e: React.SyntheticEvent) => {
+        e.stopPropagation();
+    }, []);
+    const hardShieldInput = React.useMemo(
+        () => ({
+            onPointerDown: stopEventPropagation,
+            onPointerUp: stopEventPropagation,
+            onClick: stopEventPropagation,
+            onWheelCapture: stopEventPropagation,
+            onWheel: stopEventPropagation,
+        }),
+        [stopEventPropagation]
+    );
     const GraphWithPending = Graph as React.ComponentType<GraphPendingAnalysisProps>;
     const showMoneyUi = screen === 'prompt' || screen === 'graph';
     const showBalanceBadge = false;
@@ -556,40 +569,36 @@ export const AppShell: React.FC = () => {
             ) : null}
             {isSearchInterfacesOpen ? (
                 <div
+                    {...hardShieldInput}
                     data-search-interfaces-backdrop="1"
+                    data-search-backdrop="1"
                     style={SEARCH_OVERLAY_BACKDROP_STYLE}
-                    onPointerDown={(e) => e.stopPropagation()}
-                    onPointerUp={(e) => e.stopPropagation()}
                     onClick={(e) => {
                         e.stopPropagation();
                         closeSearchInterfaces();
                     }}
-                    onWheelCapture={(e) => e.stopPropagation()}
-                    onWheel={(e) => e.stopPropagation()}
                 >
                     <div
+                        {...hardShieldInput}
                         data-search-interfaces-modal="1"
+                        data-search-modal="1"
                         style={SEARCH_OVERLAY_CARD_STYLE}
-                        onPointerDown={(e) => e.stopPropagation()}
-                        onPointerUp={(e) => e.stopPropagation()}
-                        onClick={(e) => e.stopPropagation()}
-                        onWheelCapture={(e) => e.stopPropagation()}
-                        onWheel={(e) => e.stopPropagation()}
                     >
                         <input
+                            {...hardShieldInput}
                             ref={searchInputRef}
                             autoFocus
                             value={searchInterfacesQuery}
                             placeholder="Search saved interfaces..."
                             style={SEARCH_INPUT_STYLE}
-                            onPointerDown={(e) => e.stopPropagation()}
-                            onPointerUp={(e) => e.stopPropagation()}
-                            onClick={(e) => e.stopPropagation()}
-                            onWheelCapture={(e) => e.stopPropagation()}
-                            onWheel={(e) => e.stopPropagation()}
                             onChange={(e) => setSearchInterfacesQuery(e.target.value)}
                             onKeyDown={(e) => {
                                 e.stopPropagation();
+                                if (e.key === 'Escape') {
+                                    e.preventDefault();
+                                    closeSearchInterfaces();
+                                    return;
+                                }
                                 if (e.key === 'Enter') {
                                     const picked = filteredSearchResults[searchHighlightedIndex] ?? filteredSearchResults[0];
                                     if (!picked) return;
@@ -612,13 +621,9 @@ export const AppShell: React.FC = () => {
                             }}
                         />
                         <div
+                            {...hardShieldInput}
                             data-search-interfaces-results="1"
                             style={SEARCH_RESULTS_STYLE}
-                            onPointerDown={(e) => e.stopPropagation()}
-                            onPointerUp={(e) => e.stopPropagation()}
-                            onClick={(e) => e.stopPropagation()}
-                            onWheelCapture={(e) => e.stopPropagation()}
-                            onWheel={(e) => e.stopPropagation()}
                         >
                             {filteredSearchResults.length === 0 ? (
                                 <div style={SEARCH_EMPTY_STYLE}>No matching interfaces.</div>
@@ -627,6 +632,7 @@ export const AppShell: React.FC = () => {
                                     const isHighlighted = index === searchHighlightedIndex;
                                     return (
                                         <button
+                                            {...hardShieldInput}
                                             key={item.id}
                                             type="button"
                                             style={{
@@ -634,14 +640,10 @@ export const AppShell: React.FC = () => {
                                                 borderColor: isHighlighted ? 'rgba(99, 171, 255, 0.5)' : SEARCH_RESULT_ROW_STYLE.borderColor,
                                                 background: isHighlighted ? 'rgba(99, 171, 255, 0.16)' : SEARCH_RESULT_ROW_STYLE.background,
                                             }}
-                                            onPointerDown={(e) => e.stopPropagation()}
-                                            onPointerUp={(e) => e.stopPropagation()}
                                             onClick={(e) => {
                                                 e.stopPropagation();
                                                 selectSearchResultById(item.id);
                                             }}
-                                            onWheelCapture={(e) => e.stopPropagation()}
-                                            onWheel={(e) => e.stopPropagation()}
                                             onMouseEnter={() => setSearchHighlightedIndex(index)}
                                         >
                                             <span style={SEARCH_RESULT_TITLE_STYLE}>{item.title}</span>

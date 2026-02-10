@@ -39,7 +39,24 @@ const STORAGE_KEY = 'arnvoid_screen';
 const PERSIST_SCREEN = false;
 const DEBUG_ONBOARDING_SCROLL_GUARD = false;
 const WELCOME1_FONT_TIMEOUT_MS = 1500;
+const SEARCH_RECENT_LIMIT = 20;
+const SEARCH_RESULT_LIMIT = 20;
 let hasWarnedInvalidStartScreen = false;
+
+type SearchInterfaceIndexItem = {
+    id: string;
+    title: string;
+    normalizedTitle: string;
+    subtitle: string;
+    updatedAt: number;
+    nodeCount: number;
+    linkCount: number;
+    docId: string;
+};
+
+function normalizeSearchText(raw: string): string {
+    return raw.toLowerCase().replace(/\s+/g, ' ').trim();
+}
 
 function warnInvalidOnboardingStartScreenOnce() {
     if (!import.meta.env.DEV) return;
@@ -73,6 +90,7 @@ export const AppShell: React.FC = () => {
     const [pendingLoadInterface, setPendingLoadInterface] = React.useState<SavedInterfaceRecordV1 | null>(null);
     const [isSearchInterfacesOpen, setIsSearchInterfacesOpen] = React.useState(false);
     const [searchInterfacesQuery, setSearchInterfacesQueryState] = React.useState('');
+    const [searchHighlightedIndex, setSearchHighlightedIndex] = React.useState(0);
     const [pendingDeleteId, setPendingDeleteId] = React.useState<string | null>(null);
     const [pendingDeleteTitle, setPendingDeleteTitle] = React.useState<string | null>(null);
     const [graphIsLoading, setGraphIsLoading] = React.useState(false);
@@ -81,6 +99,7 @@ export const AppShell: React.FC = () => {
     const [welcome1OverlayOpen, setWelcome1OverlayOpen] = React.useState(false);
     const [enterPromptOverlayOpen, setEnterPromptOverlayOpen] = React.useState(false);
     const [welcome1FontGateDone, setWelcome1FontGateDone] = React.useState(false);
+    const searchInputRef = React.useRef<HTMLInputElement | null>(null);
     const GraphWithPending = Graph as React.ComponentType<GraphPendingAnalysisProps>;
     const showMoneyUi = screen === 'prompt' || screen === 'graph';
     const showBalanceBadge = false;
@@ -125,16 +144,29 @@ export const AppShell: React.FC = () => {
     }, []);
     const setSearchInterfacesQuery = React.useCallback((next: string) => {
         setSearchInterfacesQueryState(next);
+        setSearchHighlightedIndex(0);
     }, []);
+    const selectSavedInterfaceById = React.useCallback((id: string) => {
+        const record = savedInterfaces.find((item) => item.id === id);
+        if (!record) return;
+        setPendingLoadInterface(record);
+        if (screen !== 'graph') {
+            setScreen('graph');
+        }
+        console.log('[appshell] pending_load_interface id=%s', id);
+    }, [savedInterfaces, screen]);
     const openSearchInterfaces = React.useCallback(() => {
+        if (pendingDeleteId) return;
         if (sidebarDisabled) return;
         setIsSearchInterfacesOpen(true);
         setSearchInterfacesQuery('');
+        setSearchHighlightedIndex(0);
         console.log('[appshell] search_open');
-    }, [setSearchInterfacesQuery, sidebarDisabled]);
+    }, [pendingDeleteId, setSearchInterfacesQuery, sidebarDisabled]);
     const closeSearchInterfaces = React.useCallback(() => {
         setIsSearchInterfacesOpen(false);
         setSearchInterfacesQuery('');
+        setSearchHighlightedIndex(0);
         console.log('[appshell] search_close');
     }, [setSearchInterfacesQuery]);
     const confirmDelete = React.useCallback(() => {
@@ -155,6 +187,28 @@ export const AppShell: React.FC = () => {
         if (!pendingDeleteId) return;
         closeSearchInterfaces();
     }, [closeSearchInterfaces, isSearchInterfacesOpen, pendingDeleteId]);
+
+    React.useEffect(() => {
+        if (!isSearchInterfacesOpen) return;
+        const id = window.requestAnimationFrame(() => {
+            searchInputRef.current?.focus();
+            searchInputRef.current?.select();
+        });
+        return () => window.cancelAnimationFrame(id);
+    }, [isSearchInterfacesOpen]);
+
+    React.useEffect(() => {
+        if (!isSearchInterfacesOpen) return;
+        const onKeyDown = (event: KeyboardEvent) => {
+            if (event.key !== 'Escape') return;
+            event.stopPropagation();
+            closeSearchInterfaces();
+        };
+        window.addEventListener('keydown', onKeyDown, true);
+        return () => {
+            window.removeEventListener('keydown', onKeyDown, true);
+        };
+    }, [closeSearchInterfaces, isSearchInterfacesOpen]);
 
     React.useEffect(() => {
         if (!pendingDeleteId) return;
@@ -190,6 +244,69 @@ export const AppShell: React.FC = () => {
             })),
         [savedInterfaces]
     );
+
+    const searchIndex = React.useMemo<SearchInterfaceIndexItem[]>(
+        () => savedInterfaces.map((record) => ({
+            id: record.id,
+            title: record.title,
+            normalizedTitle: normalizeSearchText(record.title),
+            subtitle: new Date(record.updatedAt).toLocaleString(),
+            updatedAt: record.updatedAt,
+            nodeCount: record.preview.nodeCount,
+            linkCount: record.preview.linkCount,
+            docId: record.docId,
+        })),
+        [savedInterfaces]
+    );
+
+    const filteredSearchResults = React.useMemo<SearchInterfaceIndexItem[]>(() => {
+        const normalizedQuery = normalizeSearchText(searchInterfacesQuery);
+        if (normalizedQuery.length === 0) {
+            return searchIndex.slice(0, SEARCH_RECENT_LIMIT);
+        }
+        const tokens = normalizedQuery.split(' ').filter((token) => token.length > 0);
+        if (tokens.length === 0) {
+            return searchIndex.slice(0, SEARCH_RECENT_LIMIT);
+        }
+        const scored: Array<{ item: SearchInterfaceIndexItem; score: number }> = [];
+        for (const item of searchIndex) {
+            let score = 0;
+            let allMatched = true;
+            if (item.normalizedTitle.startsWith(normalizedQuery)) {
+                score += 3000;
+            }
+            for (const token of tokens) {
+                const idx = item.normalizedTitle.indexOf(token);
+                if (idx < 0) {
+                    allMatched = false;
+                    break;
+                }
+                if (idx === 0) {
+                    score += 500;
+                } else {
+                    score += Math.max(1, 200 - idx);
+                }
+            }
+            if (!allMatched) continue;
+            score -= Math.abs(item.normalizedTitle.length - normalizedQuery.length);
+            scored.push({ item, score });
+        }
+        scored.sort((a, b) => {
+            if (a.score !== b.score) return b.score - a.score;
+            return b.item.updatedAt - a.item.updatedAt;
+        });
+        return scored.slice(0, SEARCH_RESULT_LIMIT).map((entry) => entry.item);
+    }, [searchIndex, searchInterfacesQuery]);
+
+    React.useEffect(() => {
+        if (searchHighlightedIndex < filteredSearchResults.length) return;
+        setSearchHighlightedIndex(filteredSearchResults.length > 0 ? filteredSearchResults.length - 1 : 0);
+    }, [filteredSearchResults.length, searchHighlightedIndex]);
+
+    const selectSearchResultById = React.useCallback((id: string) => {
+        closeSearchInterfaces();
+        selectSavedInterfaceById(id);
+    }, [closeSearchInterfaces, selectSavedInterfaceById]);
 
     React.useEffect(() => {
         if (!ONBOARDING_ENABLED || !PERSIST_SCREEN) return;
@@ -360,15 +477,7 @@ export const AppShell: React.FC = () => {
                         console.log('[appshell] pending_delete_open id=%s', id);
                     }}
                     selectedInterfaceId={pendingLoadInterface?.id ?? undefined}
-                    onSelectInterface={(id) => {
-                        const record = savedInterfaces.find((item) => item.id === id);
-                        if (!record) return;
-                        setPendingLoadInterface(record);
-                        if (screen !== 'graph') {
-                            setScreen('graph');
-                        }
-                        console.log('[appshell] pending_load_interface id=%s', id);
-                    }}
+                    onSelectInterface={(id) => selectSavedInterfaceById(id)}
                 />
             ) : null}
             <div
@@ -441,6 +550,108 @@ export const AppShell: React.FC = () => {
                             >
                                 Delete
                             </button>
+                        </div>
+                    </div>
+                </div>
+            ) : null}
+            {isSearchInterfacesOpen ? (
+                <div
+                    data-search-interfaces-backdrop="1"
+                    style={SEARCH_OVERLAY_BACKDROP_STYLE}
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onPointerUp={(e) => e.stopPropagation()}
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        closeSearchInterfaces();
+                    }}
+                    onWheelCapture={(e) => e.stopPropagation()}
+                    onWheel={(e) => e.stopPropagation()}
+                >
+                    <div
+                        data-search-interfaces-modal="1"
+                        style={SEARCH_OVERLAY_CARD_STYLE}
+                        onPointerDown={(e) => e.stopPropagation()}
+                        onPointerUp={(e) => e.stopPropagation()}
+                        onClick={(e) => e.stopPropagation()}
+                        onWheelCapture={(e) => e.stopPropagation()}
+                        onWheel={(e) => e.stopPropagation()}
+                    >
+                        <input
+                            ref={searchInputRef}
+                            autoFocus
+                            value={searchInterfacesQuery}
+                            placeholder="Search saved interfaces..."
+                            style={SEARCH_INPUT_STYLE}
+                            onPointerDown={(e) => e.stopPropagation()}
+                            onPointerUp={(e) => e.stopPropagation()}
+                            onClick={(e) => e.stopPropagation()}
+                            onWheelCapture={(e) => e.stopPropagation()}
+                            onWheel={(e) => e.stopPropagation()}
+                            onChange={(e) => setSearchInterfacesQuery(e.target.value)}
+                            onKeyDown={(e) => {
+                                e.stopPropagation();
+                                if (e.key === 'Enter') {
+                                    const picked = filteredSearchResults[searchHighlightedIndex] ?? filteredSearchResults[0];
+                                    if (!picked) return;
+                                    e.preventDefault();
+                                    selectSearchResultById(picked.id);
+                                    return;
+                                }
+                                if (e.key === 'ArrowDown') {
+                                    e.preventDefault();
+                                    setSearchHighlightedIndex((curr) => {
+                                        if (filteredSearchResults.length === 0) return 0;
+                                        return Math.min(filteredSearchResults.length - 1, curr + 1);
+                                    });
+                                    return;
+                                }
+                                if (e.key === 'ArrowUp') {
+                                    e.preventDefault();
+                                    setSearchHighlightedIndex((curr) => Math.max(0, curr - 1));
+                                }
+                            }}
+                        />
+                        <div
+                            data-search-interfaces-results="1"
+                            style={SEARCH_RESULTS_STYLE}
+                            onPointerDown={(e) => e.stopPropagation()}
+                            onPointerUp={(e) => e.stopPropagation()}
+                            onClick={(e) => e.stopPropagation()}
+                            onWheelCapture={(e) => e.stopPropagation()}
+                            onWheel={(e) => e.stopPropagation()}
+                        >
+                            {filteredSearchResults.length === 0 ? (
+                                <div style={SEARCH_EMPTY_STYLE}>No matching interfaces.</div>
+                            ) : (
+                                filteredSearchResults.map((item, index) => {
+                                    const isHighlighted = index === searchHighlightedIndex;
+                                    return (
+                                        <button
+                                            key={item.id}
+                                            type="button"
+                                            style={{
+                                                ...SEARCH_RESULT_ROW_STYLE,
+                                                borderColor: isHighlighted ? 'rgba(99, 171, 255, 0.5)' : SEARCH_RESULT_ROW_STYLE.borderColor,
+                                                background: isHighlighted ? 'rgba(99, 171, 255, 0.16)' : SEARCH_RESULT_ROW_STYLE.background,
+                                            }}
+                                            onPointerDown={(e) => e.stopPropagation()}
+                                            onPointerUp={(e) => e.stopPropagation()}
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                selectSearchResultById(item.id);
+                                            }}
+                                            onWheelCapture={(e) => e.stopPropagation()}
+                                            onWheel={(e) => e.stopPropagation()}
+                                            onMouseEnter={() => setSearchHighlightedIndex(index)}
+                                        >
+                                            <span style={SEARCH_RESULT_TITLE_STYLE}>{item.title}</span>
+                                            <span style={SEARCH_RESULT_META_STYLE}>
+                                                {item.nodeCount} dots | {item.linkCount} links | {item.subtitle}
+                                            </span>
+                                        </button>
+                                    );
+                                })
+                            )}
                         </div>
                     </div>
                 </div>
@@ -523,6 +734,89 @@ const DELETE_CONFIRM_PRIMARY_STYLE: React.CSSProperties = {
     padding: '8px 14px',
     cursor: 'pointer',
     fontWeight: 700,
+};
+
+const SEARCH_OVERLAY_BACKDROP_STYLE: React.CSSProperties = {
+    position: 'fixed',
+    inset: 0,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    background: 'rgba(6, 8, 12, 0.58)',
+    zIndex: 3100,
+    pointerEvents: 'auto',
+};
+
+const SEARCH_OVERLAY_CARD_STYLE: React.CSSProperties = {
+    width: '100%',
+    maxWidth: '660px',
+    margin: '0 16px',
+    borderRadius: '14px',
+    border: '1px solid rgba(255, 255, 255, 0.14)',
+    background: '#0d1118',
+    boxShadow: '0 18px 56px rgba(0, 0, 0, 0.45)',
+    padding: '16px',
+    color: '#e7e7e7',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '10px',
+};
+
+const SEARCH_INPUT_STYLE: React.CSSProperties = {
+    width: '100%',
+    borderRadius: '10px',
+    border: '1px solid rgba(99, 171, 255, 0.45)',
+    background: 'rgba(12, 15, 22, 0.95)',
+    color: '#e7e7e7',
+    fontFamily: 'var(--font-ui)',
+    fontSize: '14px',
+    lineHeight: 1.4,
+    padding: '11px 12px',
+    outline: 'none',
+};
+
+const SEARCH_RESULTS_STYLE: React.CSSProperties = {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '8px',
+    maxHeight: '48vh',
+    overflowY: 'auto',
+};
+
+const SEARCH_RESULT_ROW_STYLE: React.CSSProperties = {
+    width: '100%',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+    gap: '4px',
+    padding: '10px 12px',
+    borderRadius: '10px',
+    border: '1px solid rgba(255, 255, 255, 0.12)',
+    background: 'rgba(255, 255, 255, 0.03)',
+    textAlign: 'left',
+    cursor: 'pointer',
+};
+
+const SEARCH_RESULT_TITLE_STYLE: React.CSSProperties = {
+    color: '#f3f7ff',
+    fontSize: '14px',
+    lineHeight: 1.35,
+    fontWeight: 600,
+    fontFamily: 'var(--font-ui)',
+};
+
+const SEARCH_RESULT_META_STYLE: React.CSSProperties = {
+    color: 'rgba(231, 231, 231, 0.72)',
+    fontSize: '12px',
+    lineHeight: 1.35,
+    fontFamily: 'var(--font-ui)',
+};
+
+const SEARCH_EMPTY_STYLE: React.CSSProperties = {
+    color: 'rgba(231, 231, 231, 0.62)',
+    fontSize: '13px',
+    lineHeight: 1.4,
+    padding: '10px 6px',
 };
 
 const SHELL_STYLE: React.CSSProperties = {

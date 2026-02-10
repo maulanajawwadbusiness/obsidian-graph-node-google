@@ -227,3 +227,12 @@ Source alignment:
 - Kept backdrop click-close behavior while preserving stopPropagation.
 - Input keydown now handles `Escape` locally (stopPropagation + preventDefault + close) in addition to existing capture-safe fallback listener.
 - No new global listeners were introduced; no global preventDefault behavior was added.
+
+## 12) Step 6 UX Polish (2026-02-10)
+
+- Removed search-specific global Escape key listener to reduce overlapping close paths.
+- Added modal-level Escape handling so close works even when focus is not in input.
+- Added minimal header row with subtle title and icon-only close affordance (`x`) to reduce ambiguity without clutter.
+- Added small `Recent` section cue when query is empty; no-results state remains calm text only.
+- Kept existing selection flow intact: close overlay first, then call unified `selectSavedInterfaceById`.
+- Shielding contract remains fully applied through `hardShieldInput` on all interactive surfaces.

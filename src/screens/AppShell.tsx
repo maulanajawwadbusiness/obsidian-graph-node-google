@@ -211,19 +211,6 @@ export const AppShell: React.FC = () => {
     }, [isSearchInterfacesOpen]);
 
     React.useEffect(() => {
-        if (!isSearchInterfacesOpen) return;
-        const onKeyDown = (event: KeyboardEvent) => {
-            if (event.key !== 'Escape') return;
-            event.stopPropagation();
-            closeSearchInterfaces();
-        };
-        window.addEventListener('keydown', onKeyDown, true);
-        return () => {
-            window.removeEventListener('keydown', onKeyDown, true);
-        };
-    }, [closeSearchInterfaces, isSearchInterfacesOpen]);
-
-    React.useEffect(() => {
         if (!pendingDeleteId) return;
         const onKeyDown = (event: KeyboardEvent) => {
             if (event.key !== 'Escape') return;
@@ -583,7 +570,28 @@ export const AppShell: React.FC = () => {
                         data-search-interfaces-modal="1"
                         data-search-modal="1"
                         style={SEARCH_OVERLAY_CARD_STYLE}
+                        onKeyDown={(e) => {
+                            e.stopPropagation();
+                            if (e.key !== 'Escape') return;
+                            e.preventDefault();
+                            closeSearchInterfaces();
+                        }}
                     >
+                        <div style={SEARCH_HEADER_ROW_STYLE}>
+                            <span style={SEARCH_HEADER_TITLE_STYLE}>Search Interfaces</span>
+                            <button
+                                {...hardShieldInput}
+                                type="button"
+                                aria-label="Close search"
+                                style={SEARCH_CLOSE_BUTTON_STYLE}
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    closeSearchInterfaces();
+                                }}
+                            >
+                                x
+                            </button>
+                        </div>
                         <input
                             {...hardShieldInput}
                             ref={searchInputRef}
@@ -625,6 +633,9 @@ export const AppShell: React.FC = () => {
                             data-search-interfaces-results="1"
                             style={SEARCH_RESULTS_STYLE}
                         >
+                            {normalizeSearchText(searchInterfacesQuery).length === 0 ? (
+                                <div style={SEARCH_SECTION_LABEL_STYLE}>Recent</div>
+                            ) : null}
                             {filteredSearchResults.length === 0 ? (
                                 <div style={SEARCH_EMPTY_STYLE}>No matching interfaces.</div>
                             ) : (
@@ -767,6 +778,39 @@ const SEARCH_OVERLAY_CARD_STYLE: React.CSSProperties = {
     gap: '10px',
 };
 
+const SEARCH_HEADER_ROW_STYLE: React.CSSProperties = {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: '8px',
+};
+
+const SEARCH_HEADER_TITLE_STYLE: React.CSSProperties = {
+    color: 'rgba(231, 231, 231, 0.82)',
+    fontSize: '12px',
+    lineHeight: 1.2,
+    letterSpacing: '0.3px',
+    fontFamily: 'var(--font-ui)',
+};
+
+const SEARCH_CLOSE_BUTTON_STYLE: React.CSSProperties = {
+    width: '24px',
+    height: '24px',
+    borderRadius: '6px',
+    border: '1px solid rgba(255, 255, 255, 0.18)',
+    background: 'rgba(255, 255, 255, 0.04)',
+    color: 'rgba(231, 231, 231, 0.86)',
+    cursor: 'pointer',
+    lineHeight: 1,
+    fontSize: '14px',
+    fontWeight: 600,
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 0,
+    fontFamily: 'var(--font-ui)',
+};
+
 const SEARCH_INPUT_STYLE: React.CSSProperties = {
     width: '100%',
     borderRadius: '10px',
@@ -788,6 +832,16 @@ const SEARCH_RESULTS_STYLE: React.CSSProperties = {
     gap: '8px',
     maxHeight: '52vh',
     overflowY: 'auto',
+};
+
+const SEARCH_SECTION_LABEL_STYLE: React.CSSProperties = {
+    color: 'rgba(231, 231, 231, 0.58)',
+    fontSize: '11px',
+    lineHeight: 1.2,
+    letterSpacing: '0.35px',
+    textTransform: 'uppercase',
+    padding: '2px 4px 0',
+    fontFamily: 'var(--font-ui)',
 };
 
 const SEARCH_RESULT_ROW_STYLE: React.CSSProperties = {

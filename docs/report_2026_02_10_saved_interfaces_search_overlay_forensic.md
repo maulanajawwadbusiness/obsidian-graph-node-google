@@ -236,3 +236,23 @@ Source alignment:
 - Added small `Recent` section cue when query is empty; no-results state remains calm text only.
 - Kept existing selection flow intact: close overlay first, then call unified `selectSavedInterfaceById`.
 - Shielding contract remains fully applied through `hardShieldInput` on all interactive surfaces.
+
+## 13) Step 7 Results Behavior Refinement (2026-02-10)
+
+- Ranking is now deterministic with explicit bucket order:
+  1. full title startsWith query
+  2. token startsWith
+  3. substring match
+- Tie-breakers are stable across rerenders:
+  - score desc
+  - updatedAt desc
+  - sourceIndex asc fallback from savedInterfaces order
+- Recent cap reduced to 12 for cleaner empty-query list density.
+- Highlight behavior hardened:
+  - empty results -> highlightIndex = -1
+  - non-empty results -> clamped into valid bounds
+  - Enter no-ops when highlight is -1 / no result
+- Result row text now truncates with ellipsis (title + meta) to avoid layout jumps.
+- No-results copy updated to calm two-line message:
+  - "No interfaces found."
+  - "Try a different keyword."

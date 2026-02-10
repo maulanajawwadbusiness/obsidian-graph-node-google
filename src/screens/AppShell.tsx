@@ -39,12 +39,13 @@ const STORAGE_KEY = 'arnvoid_screen';
 const PERSIST_SCREEN = false;
 const DEBUG_ONBOARDING_SCROLL_GUARD = false;
 const WELCOME1_FONT_TIMEOUT_MS = 1500;
-const SEARCH_RECENT_LIMIT = 20;
+const SEARCH_RECENT_LIMIT = 12;
 const SEARCH_RESULT_LIMIT = 20;
 let hasWarnedInvalidStartScreen = false;
 
 type SearchInterfaceIndexItem = {
     id: string;
+    sourceIndex: number;
     title: string;
     normalizedTitle: string;
     subtitle: string;
@@ -246,8 +247,9 @@ export const AppShell: React.FC = () => {
     );
 
     const searchIndex = React.useMemo<SearchInterfaceIndexItem[]>(
-        () => savedInterfaces.map((record) => ({
+        () => savedInterfaces.map((record, sourceIndex) => ({
             id: record.id,
+            sourceIndex,
             title: record.title,
             normalizedTitle: normalizeSearchText(record.title),
             subtitle: new Date(record.updatedAt).toLocaleString(),
@@ -268,10 +270,11 @@ export const AppShell: React.FC = () => {
         if (tokens.length === 0) {
             return searchIndex.slice(0, SEARCH_RECENT_LIMIT);
         }
-        const scored: Array<{ item: SearchInterfaceIndexItem; score: number }> = [];
+        const scored: Array<{ item: SearchInterfaceIndexItem; score: number; bucket: number }> = [];
         for (const item of searchIndex) {
             let score = 0;
             let allMatched = true;
+            let hasTokenPrefix = false;
             if (item.normalizedTitle.startsWith(normalizedQuery)) {
                 score += 3000;
             }
@@ -282,31 +285,54 @@ export const AppShell: React.FC = () => {
                     break;
                 }
                 if (idx === 0) {
+                    hasTokenPrefix = true;
                     score += 500;
                 } else {
                     score += Math.max(1, 200 - idx);
                 }
             }
             if (!allMatched) continue;
+            const bucket = item.normalizedTitle.startsWith(normalizedQuery)
+                ? 3
+                : hasTokenPrefix
+                    ? 2
+                    : 1;
             score -= Math.abs(item.normalizedTitle.length - normalizedQuery.length);
-            scored.push({ item, score });
+            scored.push({ item, score, bucket });
         }
         scored.sort((a, b) => {
+            if (a.bucket !== b.bucket) return b.bucket - a.bucket;
             if (a.score !== b.score) return b.score - a.score;
-            return b.item.updatedAt - a.item.updatedAt;
+            if (a.item.updatedAt !== b.item.updatedAt) return b.item.updatedAt - a.item.updatedAt;
+            return a.item.sourceIndex - b.item.sourceIndex;
         });
         return scored.slice(0, SEARCH_RESULT_LIMIT).map((entry) => entry.item);
     }, [searchIndex, searchInterfacesQuery]);
 
     React.useEffect(() => {
-        if (searchHighlightedIndex < filteredSearchResults.length) return;
-        setSearchHighlightedIndex(filteredSearchResults.length > 0 ? filteredSearchResults.length - 1 : 0);
+        if (filteredSearchResults.length === 0) {
+            if (searchHighlightedIndex === -1) return;
+            setSearchHighlightedIndex(-1);
+            return;
+        }
+        const clamped = Math.min(
+            Math.max(searchHighlightedIndex, 0),
+            filteredSearchResults.length - 1
+        );
+        if (clamped === searchHighlightedIndex) return;
+        setSearchHighlightedIndex(clamped);
     }, [filteredSearchResults.length, searchHighlightedIndex]);
 
     const selectSearchResultById = React.useCallback((id: string) => {
         closeSearchInterfaces();
         selectSavedInterfaceById(id);
     }, [closeSearchInterfaces, selectSavedInterfaceById]);
+
+    React.useEffect(() => {
+        if (searchHighlightedIndex !== -1) return;
+        if (filteredSearchResults.length === 0) return;
+        setSearchHighlightedIndex(0);
+    }, [filteredSearchResults.length, searchHighlightedIndex]);
 
     React.useEffect(() => {
         if (!ONBOARDING_ENABLED || !PERSIST_SCREEN) return;
@@ -608,6 +634,7 @@ export const AppShell: React.FC = () => {
                                     return;
                                 }
                                 if (e.key === 'Enter') {
+                                    if (searchHighlightedIndex < 0) return;
                                     const picked = filteredSearchResults[searchHighlightedIndex] ?? filteredSearchResults[0];
                                     if (!picked) return;
                                     e.preventDefault();
@@ -617,14 +644,18 @@ export const AppShell: React.FC = () => {
                                 if (e.key === 'ArrowDown') {
                                     e.preventDefault();
                                     setSearchHighlightedIndex((curr) => {
-                                        if (filteredSearchResults.length === 0) return 0;
+                                        if (filteredSearchResults.length === 0) return -1;
+                                        if (curr < 0) return 0;
                                         return Math.min(filteredSearchResults.length - 1, curr + 1);
                                     });
                                     return;
                                 }
                                 if (e.key === 'ArrowUp') {
                                     e.preventDefault();
-                                    setSearchHighlightedIndex((curr) => Math.max(0, curr - 1));
+                                    setSearchHighlightedIndex((curr) => {
+                                        if (curr < 0) return -1;
+                                        return Math.max(0, curr - 1);
+                                    });
                                 }
                             }}
                         />
@@ -637,7 +668,10 @@ export const AppShell: React.FC = () => {
                                 <div style={SEARCH_SECTION_LABEL_STYLE}>Recent</div>
                             ) : null}
                             {filteredSearchResults.length === 0 ? (
-                                <div style={SEARCH_EMPTY_STYLE}>No matching interfaces.</div>
+                                <div style={SEARCH_EMPTY_STYLE}>
+                                    <span style={SEARCH_EMPTY_TITLE_STYLE}>No interfaces found.</span>
+                                    <span style={SEARCH_EMPTY_HINT_STYLE}>Try a different keyword.</span>
+                                </div>
                             ) : (
                                 filteredSearchResults.map((item, index) => {
                                     const isHighlighted = index === searchHighlightedIndex;
@@ -864,6 +898,10 @@ const SEARCH_RESULT_TITLE_STYLE: React.CSSProperties = {
     lineHeight: 1.35,
     fontWeight: 600,
     fontFamily: 'var(--font-ui)',
+    width: '100%',
+    whiteSpace: 'nowrap',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
 };
 
 const SEARCH_RESULT_META_STYLE: React.CSSProperties = {
@@ -871,13 +909,34 @@ const SEARCH_RESULT_META_STYLE: React.CSSProperties = {
     fontSize: '12px',
     lineHeight: 1.35,
     fontFamily: 'var(--font-ui)',
+    width: '100%',
+    whiteSpace: 'nowrap',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
 };
 
 const SEARCH_EMPTY_STYLE: React.CSSProperties = {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '2px',
     color: 'rgba(231, 231, 231, 0.62)',
     fontSize: '13px',
     lineHeight: 1.4,
     padding: '10px 6px',
+};
+
+const SEARCH_EMPTY_TITLE_STYLE: React.CSSProperties = {
+    color: 'rgba(231, 231, 231, 0.74)',
+    fontFamily: 'var(--font-ui)',
+    fontSize: '13px',
+    lineHeight: 1.35,
+};
+
+const SEARCH_EMPTY_HINT_STYLE: React.CSSProperties = {
+    color: 'rgba(231, 231, 231, 0.52)',
+    fontFamily: 'var(--font-ui)',
+    fontSize: '12px',
+    lineHeight: 1.35,
 };
 
 const SHELL_STYLE: React.CSSProperties = {

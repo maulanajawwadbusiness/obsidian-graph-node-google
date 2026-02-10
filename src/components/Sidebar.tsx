@@ -96,7 +96,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
     const [rowMenuAnchorRect, setRowMenuAnchorRect] = React.useState<DOMRect | null>(null);
     const [rowMenuPosition, setRowMenuPosition] = React.useState<{ left: number; top: number } | null>(null);
     const [menuPlacement, setMenuPlacement] = React.useState<'down' | 'up' | null>(null);
+    const [renamingRowId, setRenamingRowId] = React.useState<string | null>(null);
+    const [renameDraft, setRenameDraft] = React.useState('');
+    const [renameOriginal, setRenameOriginal] = React.useState('');
     const [avatarRowHover, setAvatarRowHover] = React.useState(false);
+    const renameInputRef = React.useRef<HTMLInputElement | null>(null);
     const menuItemPreview = React.useMemo(
         () => [
             { key: 'rename', icon: renameIcon, label: 'Rename', color: '#e7e7e7' },
@@ -137,6 +141,34 @@ export const Sidebar: React.FC<SidebarProps> = ({
         setMenuPlacement(null);
     }, []);
 
+    const cancelRename = React.useCallback(() => {
+        setRenamingRowId(null);
+        setRenameDraft('');
+        setRenameOriginal('');
+    }, []);
+
+    const startRename = React.useCallback((id: string, title: string) => {
+        closeRowMenu();
+        setRenamingRowId(id);
+        setRenameDraft(title);
+        setRenameOriginal(title);
+    }, [closeRowMenu]);
+
+    const sanitizeRenameTitle = React.useCallback((raw: string): string => {
+        const collapsed = raw.replace(/\s+/g, ' ').trim();
+        const capped = collapsed.slice(0, 120).trim();
+        return capped.length > 0 ? capped : 'Untitled Interface';
+    }, []);
+
+    const confirmRename = React.useCallback(() => {
+        if (!renamingRowId) return;
+        const nextTitle = sanitizeRenameTitle(renameDraft);
+        onRenameInterface?.(renamingRowId, nextTitle);
+        setRenamingRowId(null);
+        setRenameDraft('');
+        setRenameOriginal('');
+    }, [onRenameInterface, renameDraft, renamingRowId, sanitizeRenameTitle]);
+
     const toggleRowMenuForItem = React.useCallback((itemId: string, trigger: HTMLElement) => {
         if (openRowMenuId === itemId) {
             closeRowMenu();
@@ -151,24 +183,43 @@ export const Sidebar: React.FC<SidebarProps> = ({
     }, [closeRowMenu, computeRowMenuPlacement, openRowMenuId]);
 
     React.useEffect(() => {
-        if (!openRowMenuId) return;
+        if (!openRowMenuId && !renamingRowId) return;
 
         const onWindowPointerDown = (event: PointerEvent) => {
             const target = event.target as Element | null;
             if (!target) {
-                closeRowMenu();
+                if (openRowMenuId) {
+                    closeRowMenu();
+                }
+                if (renamingRowId) {
+                    cancelRename();
+                }
                 return;
             }
 
+            if (renamingRowId) {
+                if (!target.closest('[data-rename-container="1"]')) {
+                    cancelRename();
+                }
+            }
             if (target.closest('[data-row-menu="1"]')) return;
             if (target.closest('[data-row-ellipsis="1"]')) return;
 
-            closeRowMenu();
+            if (openRowMenuId) {
+                closeRowMenu();
+            }
         };
 
         const onWindowKeyDown = (event: KeyboardEvent) => {
-            if (event.key !== 'Escape') return;
-            closeRowMenu();
+            if (event.key === 'Escape') {
+                if (renamingRowId) {
+                    cancelRename();
+                    return;
+                }
+                if (openRowMenuId) {
+                    closeRowMenu();
+                }
+            }
         };
 
         window.addEventListener('pointerdown', onWindowPointerDown, true);
@@ -177,7 +228,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
             window.removeEventListener('pointerdown', onWindowPointerDown, true);
             window.removeEventListener('keydown', onWindowKeyDown, true);
         };
-    }, [openRowMenuId, closeRowMenu]);
+    }, [openRowMenuId, renamingRowId, closeRowMenu, cancelRename]);
+
+    React.useEffect(() => {
+        if (!renamingRowId) return;
+        const id = window.requestAnimationFrame(() => {
+            renameInputRef.current?.focus();
+            renameInputRef.current?.select();
+        });
+        return () => window.cancelAnimationFrame(id);
+    }, [renamingRowId]);
 
     const bottomSectionStyle: React.CSSProperties = {
         ...BOTTOM_SECTION_STYLE,
@@ -287,7 +347,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
                             interfaces.map((item) => {
                                 const isHovered = hoveredInterfaceId === item.id;
                                 const isSelected = selectedInterfaceId === item.id;
-                                const showRowEllipsis = isHovered || openRowMenuId === item.id;
+                                const isRenaming = renamingRowId === item.id;
+                                const showRowEllipsis = (isHovered || openRowMenuId === item.id) && !isRenaming;
                                 return (
                                     <button
                                         key={item.id}
@@ -302,11 +363,52 @@ export const Sidebar: React.FC<SidebarProps> = ({
                                         onWheel={(e) => e.stopPropagation()}
                                         onMouseEnter={() => setHoveredInterfaceId(item.id)}
                                         onMouseLeave={() => setHoveredInterfaceId(null)}
-                                        onClick={() => onSelectInterface?.(item.id)}
+                                        onClick={() => {
+                                            if (isRenaming) return;
+                                            onSelectInterface?.(item.id);
+                                        }}
                                         title={item.subtitle}
                                     >
                                         <span style={INTERFACE_ROW_CONTENT_STYLE}>
-                                            <span style={INTERFACE_TEXT_STYLE}>{item.title}</span>
+                                            {isRenaming ? (
+                                                <span
+                                                    data-rename-container="1"
+                                                    style={RENAME_CONTAINER_STYLE}
+                                                    onPointerDown={(e) => e.stopPropagation()}
+                                                    onPointerUp={(e) => e.stopPropagation()}
+                                                    onClick={(e) => e.stopPropagation()}
+                                                    onWheelCapture={(e) => e.stopPropagation()}
+                                                    onWheel={(e) => e.stopPropagation()}
+                                                >
+                                                    <input
+                                                        ref={renameInputRef}
+                                                        type="text"
+                                                        value={renameDraft}
+                                                        onChange={(e) => setRenameDraft(e.target.value)}
+                                                        style={RENAME_INPUT_STYLE}
+                                                        onPointerDown={(e) => e.stopPropagation()}
+                                                        onPointerUp={(e) => e.stopPropagation()}
+                                                        onClick={(e) => e.stopPropagation()}
+                                                        onWheelCapture={(e) => e.stopPropagation()}
+                                                        onWheel={(e) => e.stopPropagation()}
+                                                        onKeyDown={(e) => {
+                                                            e.stopPropagation();
+                                                            if (e.key === 'Enter') {
+                                                                e.preventDefault();
+                                                                confirmRename();
+                                                                return;
+                                                            }
+                                                            if (e.key === 'Escape') {
+                                                                e.preventDefault();
+                                                                setRenameDraft(renameOriginal);
+                                                                cancelRename();
+                                                            }
+                                                        }}
+                                                    />
+                                                </span>
+                                            ) : (
+                                                <span style={INTERFACE_TEXT_STYLE}>{item.title}</span>
+                                            )}
                                             <span style={INTERFACE_ROW_MENU_SLOT_STYLE}>
                                                 <span
                                                     role="button"
@@ -326,6 +428,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                                                         e.preventDefault();
                                                         e.stopPropagation();
                                                         const el = e.currentTarget as HTMLSpanElement;
+                                                        if (isRenaming) return;
                                                         toggleRowMenuForItem(item.id, el);
                                                     }}
                                                     onKeyDown={(e) => {
@@ -381,10 +484,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                                 if (menuItem.key === 'rename' && openRowMenuId) {
                                     const current = interfaces?.find((item) => item.id === openRowMenuId);
                                     if (current) {
-                                        const nextTitle = window.prompt('Rename interface', current.title);
-                                        if (nextTitle !== null) {
-                                            onRenameInterface?.(current.id, nextTitle);
-                                        }
+                                        startRename(current.id, current.title);
                                     }
                                 } else if (import.meta.env.DEV) {
                                     console.log('[sidebar] menu_%s_clicked id=%s', menuItem.key, openRowMenuId);
@@ -736,6 +836,27 @@ const ROW_MENU_ITEM_LABEL_STYLE: React.CSSProperties = {
     fontFamily: 'var(--font-ui)',
     fontSize: `${FONT_SIZE_NAV}px`,
     lineHeight: 1.2,
+};
+
+const RENAME_CONTAINER_STYLE: React.CSSProperties = {
+    flex: 1,
+    minWidth: 0,
+    display: 'flex',
+    alignItems: 'center',
+};
+
+const RENAME_INPUT_STYLE: React.CSSProperties = {
+    width: '100%',
+    height: '26px',
+    borderRadius: '6px',
+    border: '1px solid rgba(99, 171, 255, 0.45)',
+    background: 'rgba(12, 15, 22, 0.95)',
+    color: '#e7e7e7',
+    fontFamily: 'var(--font-ui)',
+    fontSize: `${FONT_SIZE_NAV}px`,
+    lineHeight: 1.2,
+    padding: '4px 8px',
+    outline: 'none',
 };
 
 const INTERFACE_EMPTY_STATE_STYLE: React.CSSProperties = {

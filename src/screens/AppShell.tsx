@@ -283,6 +283,9 @@ export const AppShell: React.FC = () => {
                         const record = savedInterfaces.find((item) => item.id === id);
                         if (!record) return;
                         setPendingLoadInterface(record);
+                        if (screen !== 'graph') {
+                            setScreen('graph');
+                        }
                         console.log('[appshell] pending_load_interface id=%s', id);
                     }}
                 />

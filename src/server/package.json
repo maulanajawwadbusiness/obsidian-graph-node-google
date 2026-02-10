@@ -14,6 +14,7 @@
     "db:dump:schema": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/db-dump-schema.ps1",
     "db:apply": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/db-apply.ps1",
     "migrate": "node-pg-migrate",
+    "check:auth-schema": "ts-node src/authSchemaGuard.ts",
     "test:llm-contracts": "node scripts/test-llm-contracts.mjs",
     "test:midtrans-client": "ts-node src/midtrans/client.selftest.ts",
     "test:midtrans-prod-charge": "ts-node src/midtrans/smoke.charge.prod.ts",

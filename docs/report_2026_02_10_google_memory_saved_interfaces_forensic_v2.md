@@ -430,3 +430,43 @@ A minimal, safe path is:
 
 No feature implementation was performed in this report.
 
+---
+
+## 13) Step 1 Backend Safety Gate Implemented (2026-02-10)
+
+What was added:
+- Backend auth schema verifier:
+  - `src/server/src/authSchemaGuard.ts`
+- Startup fail-fast integration:
+  - `src/server/src/serverMonolith.ts`
+- Local run script:
+  - `src/server/package.json` -> `npm run check:auth-schema`
+
+What the guard verifies:
+- required tables: `users`, `sessions`
+- required columns:
+  - `users`: `id`, `google_sub`, `email`, `name`, `picture`
+  - `sessions`: `id`, `user_id`, `expires_at`
+- compatibility checks for core types used by runtime auth path
+- FK constraint: `sessions.user_id -> users.id`
+- unique index/constraint presence:
+  - `users.google_sub`
+  - `sessions.id`
+
+How to run locally:
+1. from `src/server`, ensure DB env vars are set (`INSTANCE_CONNECTION_NAME`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`)
+2. run:
+   - `npm run check:auth-schema`
+3. normal boot now also runs the same check before listen:
+   - `npm run dev` or `npm run start`
+
+Success output shape:
+- `[auth-schema] ok ...` from CLI check
+- `[auth-schema] ready ...` on server startup before `[server] listening on ...`
+
+Failure output shape:
+- startup exits non-zero with one clear fatal line:
+  - `[auth-schema] fatal startup failure: [auth-schema] invalid (...) missing tables: ... | missing columns: ... | ...`
+
+Operational note:
+- guard logs only schema object names and DB target label, never secrets, tokens, or cookies.

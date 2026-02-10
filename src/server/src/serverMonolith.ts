@@ -5,6 +5,7 @@ import { OAuth2Client } from "google-auth-library";
 import { getPool } from "./db";
 import { getUsdToIdr } from "./fx/fxService";
 import { midtransRequest } from "./midtrans/client";
+import { assertAuthSchemaReady } from "./authSchemaGuard";
 import { buildAnalyzeJsonSchema, validateAnalyzeJson } from "./llm/analyze/schema";
 import { runOpenrouterAnalyze } from "./llm/analyze/openrouterAnalyze";
 import { buildStructuredAnalyzeInput } from "./llm/analyze/prompt";
@@ -2357,6 +2358,19 @@ app.post("/api/llm/chat", requireAuth, async (req, res) => {
   }
 });
 
-app.listen(port, () => {
-  console.log(`[server] listening on ${port}`);
-});
+async function startServer() {
+  try {
+    const schema = await assertAuthSchemaReady();
+    console.log(
+      `[auth-schema] ready db=${schema.dbTarget} tables=${schema.tables.join(",")} fk_sessions_user=${schema.hasSessionsUserFk} uq_users_google_sub=${schema.hasUsersGoogleSubUnique} uq_sessions_id=${schema.hasSessionsIdUnique}`
+    );
+    app.listen(port, () => {
+      console.log(`[server] listening on ${port}`);
+    });
+  } catch (error) {
+    console.error(`[auth-schema] fatal startup failure: ${String(error)}`);
+    process.exit(1);
+  }
+}
+
+void startServer();

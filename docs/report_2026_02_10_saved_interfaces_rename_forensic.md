@@ -176,3 +176,16 @@ Minimum additional state (Sidebar):
   - helper does not mutate `dedupeKey` or any other identity fields.
 - Sanitization policy:
   - no trimming/sanitizing in store layer; UI layer will sanitize title input later.
+
+## Step 4 Verified
+
+- Sidebar display parity is correct:
+  - AppShell maps saved records with `title: record.title` into sidebar rows in `src/screens/AppShell.tsx:131`.
+  - rename flow refreshes from storage immediately in `src/screens/AppShell.tsx:290-293`.
+- Restore parity is correct:
+  - restore path sets inferred title from saved record title via `documentContext.setInferredTitle(rec.title)` in `src/playground/GraphPhysicsPlayground.tsx:818`.
+  - fallback summary path also prefers renamed title through `fallbackTitle = rec.title || ...` in `src/playground/GraphPhysicsPlayground.tsx:832`.
+- No rename side effects on core payload:
+  - rename patch updates title and timestamp only; no mutation to parsed document text/meta, topology/layout/camera, analysis meta, or dedupe key.
+- Outcome:
+  - no behavioral patch required for title parity in this step; docs verification only.

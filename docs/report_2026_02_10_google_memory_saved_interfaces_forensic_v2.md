@@ -499,3 +499,72 @@ Constraints and indexes:
 Safety behavior:
 - migration includes a precondition guard that fails if `public.users` does not exist.
 - no change to existing `users` or `sessions` structure in this step.
+
+---
+
+## 15) Step 3 Backend API Implemented (2026-02-11)
+
+File changed:
+- `src/server/src/serverMonolith.ts`
+
+Routes (all requireAuth):
+- `GET /api/saved-interfaces`
+  - returns newest-first list, capped at 20
+  - response items include:
+    - `client_interface_id`
+    - `title`
+    - `payload_version`
+    - `payload_json` (full object, untrimmed)
+    - `created_at`, `updated_at`
+
+- `POST /api/saved-interfaces/upsert`
+  - body:
+    - `clientInterfaceId`
+    - `title`
+    - `payloadVersion`
+    - `payloadJson`
+  - validates required fields and types
+  - upserts by `(user_id, client_interface_id)`
+  - returns `{ ok: true }`
+
+- `POST /api/saved-interfaces/delete`
+  - body:
+    - `clientInterfaceId`
+  - deletes by `user_id + client_interface_id`
+  - returns `{ ok: true, deleted: boolean }`
+
+Upsert SQL (parameterized):
+```sql
+insert into saved_interfaces
+  (user_id, client_interface_id, title, payload_version, payload_json)
+values ($1, $2, $3, $4, $5)
+on conflict (user_id, client_interface_id)
+do update set
+  title = excluded.title,
+  payload_version = excluded.payload_version,
+  payload_json = excluded.payload_json,
+  updated_at = now()
+```
+
+Payload size limit:
+- constant: `MAX_SAVED_INTERFACE_PAYLOAD_BYTES`
+- default: `15 * 1024 * 1024` (15 MB)
+- behavior:
+  - oversized body for saved-interface routes returns `413`
+  - route-level payload byte check also returns `413`
+
+Parser conflict handling:
+- global JSON limit is still driven by `LLM_LIMITS.jsonBodyLimit` (`2mb`)
+- saved-interface routes now use a route-specific parser (`15mb`) and bypass global parser for that path
+
+Auth context shape used:
+- from `requireAuth`, user identity is read as `res.locals.user as AuthContext`
+- user key used for DB ownership: `user.id`
+
+Logging policy for saved-interface routes:
+- logs include only:
+  - `user_id`
+  - `client_interface_id`
+  - payload byte size
+  - operation type and row count/deleted flag
+- logs never include `payload_json` contents

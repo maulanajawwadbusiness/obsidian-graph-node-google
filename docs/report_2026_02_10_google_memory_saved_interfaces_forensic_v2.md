@@ -605,3 +605,65 @@ Error behavior:
 - helper functions throw calm errors using status + wrapper error snippet
 - unauthorized keeps a dedicated message path
 - no `payloadJson` logging
+
+---
+
+## 17) Step 5 AppShell Sync Orchestrator Implemented (2026-02-11)
+
+Files changed:
+- `src/store/savedInterfacesStore.ts`
+- `src/screens/AppShell.tsx`
+
+Store changes (namespace seam):
+- added active localStorage key support:
+  - `getSavedInterfacesStorageKey()`
+  - `setSavedInterfacesStorageKey(nextKey)`
+  - `buildSavedInterfacesStorageKeyForUser(userId)`
+- default logged-out key remains:
+  - `arnvoid_saved_interfaces_v1`
+- existing read/write paths (`loadSavedInterfaces`, `saveAllSavedInterfaces`, upsert/patch/delete) now use the active key automatically.
+- exported `parseSavedInterfaceRecord(value)` to validate remote payload_json into `SavedInterfaceRecordV1`.
+
+AppShell changes (sync brain):
+- AppShell now reads auth via `useAuth()` and derives stable namespace id from:
+  - `user.id` if present
+  - fallback `user.sub`
+- on auth-ready state change:
+  - switches local storage namespace key (user-scoped or default guest key)
+  - refreshes local list
+  - resets sync guards to avoid account bleed.
+
+Hydration and merge:
+- logged-in boot performs:
+  1) local load
+  2) remote list (`listSavedInterfaces`)
+  3) payload_json parse/validation (`parseSavedInterfaceRecord`)
+  4) merge local + remote by `record.updatedAt` (tie -> remote)
+  5) persist merged list into active local key
+  6) update AppShell state
+- invalid remote payloads are skipped safely with calm id-only logs.
+
+Remote mirroring:
+- `remoteUpsertRecord(record)` and `remoteDeleteById(id)` added in AppShell.
+- upsert payload preserves full record object (no trimming):
+  - parsedDocument.text
+  - parsedDocument.meta/warnings
+  - topology
+  - layout
+  - camera
+  - analysisMeta
+- triggers:
+  - graph save callback (`onInterfaceSaved`) after refresh and diff
+  - rename callback (local patch + refresh + remote upsert)
+  - delete confirm (local delete + refresh + remote delete)
+- logged-out mode skips remote calls fully; local behavior remains intact.
+
+StrictMode/duplication guards:
+- session-level hydration/backfill sets prevent duplicate bootstrap sync in dev strict remount cycles.
+- per-record sync stamp map prevents duplicate upsert spam for unchanged records.
+- remote sync queue serializes remote writes.
+
+Backfill:
+- one-time logged-in backfill queue after merge:
+  - upserts local records missing on remote or newer than remote
+  - capped by `REMOTE_BACKFILL_LIMIT` (10) per boot/user key.

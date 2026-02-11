@@ -3,6 +3,7 @@ import type { Topology } from '../graph/topologyTypes';
 
 export const SAVED_INTERFACES_KEY = 'arnvoid_saved_interfaces_v1';
 export const DEFAULT_SAVED_INTERFACES_CAP = 20;
+let activeSavedInterfacesKey = SAVED_INTERFACES_KEY;
 
 export type SavedInterfaceSource = 'paste' | 'file' | 'unknown';
 
@@ -163,6 +164,27 @@ function sanitizeSavedInterfaceRecord(value: unknown): SavedInterfaceRecordV1 | 
     return isSavedInterfaceRecordV1(normalized) ? normalized : null;
 }
 
+export function parseSavedInterfaceRecord(value: unknown): SavedInterfaceRecordV1 | null {
+    return sanitizeSavedInterfaceRecord(value);
+}
+
+export function getSavedInterfacesStorageKey(): string {
+    return activeSavedInterfacesKey;
+}
+
+export function setSavedInterfacesStorageKey(nextKey: string): void {
+    const normalized = typeof nextKey === 'string' ? nextKey.trim() : '';
+    if (!normalized) {
+        activeSavedInterfacesKey = SAVED_INTERFACES_KEY;
+        return;
+    }
+    activeSavedInterfacesKey = normalized;
+}
+
+export function buildSavedInterfacesStorageKeyForUser(userId: string | number): string {
+    return `${SAVED_INTERFACES_KEY}_user_${String(userId).trim()}`;
+}
+
 function normalizeCap(cap: number | undefined): number {
     if (!isFiniteNumber(cap)) return DEFAULT_SAVED_INTERFACES_CAP;
     const normalized = Math.floor(cap);
@@ -245,7 +267,7 @@ export function buildSavedInterfaceDedupeKey(input: {
 export function loadSavedInterfaces(): SavedInterfaceRecordV1[] {
     if (!canUseLocalStorage()) return [];
 
-    const raw = window.localStorage.getItem(SAVED_INTERFACES_KEY);
+    const raw = window.localStorage.getItem(activeSavedInterfacesKey);
     if (!raw) return [];
 
     try {
@@ -272,7 +294,7 @@ export function saveAllSavedInterfaces(list: SavedInterfaceRecordV1[]): void {
     const sorted = sortNewestFirst(list);
 
     try {
-        window.localStorage.setItem(SAVED_INTERFACES_KEY, JSON.stringify(sorted));
+        window.localStorage.setItem(activeSavedInterfacesKey, JSON.stringify(sorted));
     } catch {
         console.warn('[savedInterfaces] localStorage_quota_exceeded');
     }

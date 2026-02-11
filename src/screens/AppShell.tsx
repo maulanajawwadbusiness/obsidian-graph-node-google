@@ -8,10 +8,23 @@ import { ShortageWarning } from '../components/ShortageWarning';
 import { MoneyNoticeStack } from '../components/MoneyNoticeStack';
 import { FullscreenButton } from '../components/FullscreenButton';
 import { Sidebar, type SidebarInterfaceItem } from '../components/Sidebar';
+import { useAuth } from '../auth/AuthProvider';
 import {
-    deleteSavedInterface,
+    deleteSavedInterface as deleteSavedInterfaceRemote,
+    listSavedInterfaces,
+    upsertSavedInterface as upsertSavedInterfaceRemote,
+} from '../api';
+import {
+    buildSavedInterfacesStorageKeyForUser,
+    DEFAULT_SAVED_INTERFACES_CAP,
+    SAVED_INTERFACES_KEY,
+    deleteSavedInterface as deleteSavedInterfaceLocal,
+    getSavedInterfacesStorageKey,
     loadSavedInterfaces,
+    parseSavedInterfaceRecord,
     patchSavedInterfaceTitle,
+    saveAllSavedInterfaces,
+    setSavedInterfacesStorageKey,
     type SavedInterfaceRecordV1
 } from '../store/savedInterfacesStore';
 
@@ -41,6 +54,9 @@ const DEBUG_ONBOARDING_SCROLL_GUARD = false;
 const WELCOME1_FONT_TIMEOUT_MS = 1500;
 const SEARCH_RECENT_LIMIT = 12;
 const SEARCH_RESULT_LIMIT = 20;
+const REMOTE_BACKFILL_LIMIT = 10;
+const hydratedStorageKeysSession = new Set<string>();
+const backfilledStorageKeysSession = new Set<string>();
 let hasWarnedInvalidStartScreen = false;
 
 type SearchInterfaceIndexItem = {
@@ -62,6 +78,39 @@ function normalizeSearchText(raw: string): string {
 function truncateDisplayTitle(raw: string, maxChars = 75): string {
     if (raw.length <= maxChars) return raw;
     return `${raw.slice(0, maxChars).trimEnd()}...`;
+}
+
+function buildSyncStamp(record: SavedInterfaceRecordV1): string {
+    return `${record.updatedAt}|${record.title}`;
+}
+
+function resolveAuthStorageId(user: unknown): string | null {
+    if (!user || typeof user !== 'object') return null;
+    const typed = user as Record<string, unknown>;
+    const rawId = typed.id;
+    if (typeof rawId === 'string' && rawId.trim().length > 0) {
+        return `id_${rawId.trim()}`;
+    }
+    if (typeof rawId === 'number' && Number.isFinite(rawId)) {
+        return `id_${rawId}`;
+    }
+    const rawSub = typed.sub;
+    if (typeof rawSub === 'string' && rawSub.trim().length > 0) {
+        return `sub_${rawSub.trim()}`;
+    }
+    return null;
+}
+
+function sortAndCapSavedInterfaces(
+    list: SavedInterfaceRecordV1[],
+    cap = DEFAULT_SAVED_INTERFACES_CAP
+): SavedInterfaceRecordV1[] {
+    const sorted = [...list].sort((a, b) => {
+        if (a.updatedAt !== b.updatedAt) return b.updatedAt - a.updatedAt;
+        return b.createdAt - a.createdAt;
+    });
+    if (sorted.length <= cap) return sorted;
+    return sorted.slice(0, cap);
 }
 
 function warnInvalidOnboardingStartScreenOnce() {
@@ -90,6 +139,7 @@ function getInitialScreen(): Screen {
 }
 
 export const AppShell: React.FC = () => {
+    const { user, loading: authLoading } = useAuth();
     const [screen, setScreen] = React.useState<Screen>(() => getInitialScreen());
     const [pendingAnalysis, setPendingAnalysis] = React.useState<PendingAnalysisPayload>(null);
     const [savedInterfaces, setSavedInterfaces] = React.useState<SavedInterfaceRecordV1[]>([]);
@@ -108,6 +158,17 @@ export const AppShell: React.FC = () => {
     const [searchInputFocused, setSearchInputFocused] = React.useState(false);
     const searchInputRef = React.useRef<HTMLInputElement | null>(null);
     const didSelectThisOpenRef = React.useRef(false);
+    const savedInterfacesRef = React.useRef<SavedInterfaceRecordV1[]>([]);
+    const activeStorageKeyRef = React.useRef<string>(getSavedInterfacesStorageKey());
+    const hydratedStorageKeyRef = React.useRef<string | null>(null);
+    const backfilledStorageKeyRef = React.useRef<string | null>(null);
+    const lastSyncedStampByIdRef = React.useRef<Map<string, string>>(new Map());
+    const remoteSyncChainRef = React.useRef<Promise<void>>(Promise.resolve());
+    const remoteSyncEnabledRef = React.useRef(false);
+    const remoteKnownUpdatedAtByIdRef = React.useRef<Map<string, number>>(new Map());
+    const authStorageId = React.useMemo(() => resolveAuthStorageId(user), [user]);
+    const isAuthReady = !authLoading;
+    const isLoggedIn = isAuthReady && user !== null && authStorageId !== null;
     const stopEventPropagation = React.useCallback((e: React.SyntheticEvent) => {
         e.stopPropagation();
     }, []);
@@ -154,11 +215,60 @@ export const AppShell: React.FC = () => {
     ) : null;
 
     const refreshSavedInterfaces = React.useCallback(() => {
-        setSavedInterfaces(loadSavedInterfaces());
+        const next = loadSavedInterfaces();
+        savedInterfacesRef.current = next;
+        setSavedInterfaces(next);
+        return next;
     }, []);
+    const enqueueRemoteTask = React.useCallback((task: () => Promise<void>) => {
+        remoteSyncChainRef.current = remoteSyncChainRef.current
+            .then(task)
+            .catch((error) => {
+                console.warn('[savedInterfaces] remote_sync_task_failed error=%s', String(error));
+            });
+    }, []);
+    const remoteUpsertRecord = React.useCallback((record: SavedInterfaceRecordV1, reason: string) => {
+        if (!remoteSyncEnabledRef.current) return;
+        const stamp = buildSyncStamp(record);
+        if (lastSyncedStampByIdRef.current.get(record.id) === stamp) return;
+        enqueueRemoteTask(async () => {
+            if (!remoteSyncEnabledRef.current) return;
+            await upsertSavedInterfaceRemote({
+                clientInterfaceId: record.id,
+                title: record.title,
+                payloadVersion: 1,
+                payloadJson: record,
+            });
+            lastSyncedStampByIdRef.current.set(record.id, stamp);
+            remoteKnownUpdatedAtByIdRef.current.set(record.id, record.updatedAt);
+            console.log('[savedInterfaces] remote_upsert_ok id=%s reason=%s', record.id, reason);
+        });
+    }, [enqueueRemoteTask]);
+    const remoteDeleteById = React.useCallback((id: string, reason: string) => {
+        if (!remoteSyncEnabledRef.current) return;
+        enqueueRemoteTask(async () => {
+            if (!remoteSyncEnabledRef.current) return;
+            await deleteSavedInterfaceRemote(id);
+            lastSyncedStampByIdRef.current.delete(id);
+            remoteKnownUpdatedAtByIdRef.current.delete(id);
+            console.log('[savedInterfaces] remote_delete_ok id=%s reason=%s', id, reason);
+        });
+    }, [enqueueRemoteTask]);
     const handleInterfaceSaved = React.useCallback(() => {
-        refreshSavedInterfaces();
-    }, [refreshSavedInterfaces]);
+        const beforeById = new Map(savedInterfacesRef.current.map((record) => [record.id, record]));
+        const next = refreshSavedInterfaces();
+        if (!remoteSyncEnabledRef.current) return;
+        for (const record of next) {
+            const before = beforeById.get(record.id);
+            if (!before) {
+                remoteUpsertRecord(record, 'analysis_save_new');
+                continue;
+            }
+            if (before.updatedAt !== record.updatedAt || before.title !== record.title) {
+                remoteUpsertRecord(record, 'analysis_save_update');
+            }
+        }
+    }, [refreshSavedInterfaces, remoteUpsertRecord]);
     const closeDeleteConfirm = React.useCallback(() => {
         setPendingDeleteId(null);
         setPendingDeleteTitle(null);
@@ -198,12 +308,21 @@ export const AppShell: React.FC = () => {
             return;
         }
         const deletedId = pendingDeleteId;
-        deleteSavedInterface(deletedId);
+        deleteSavedInterfaceLocal(deletedId);
         refreshSavedInterfaces();
+        remoteDeleteById(deletedId, 'sidebar_delete');
         setPendingLoadInterface((curr) => (curr?.id === deletedId ? null : curr));
         console.log('[appshell] delete_interface_ok id=%s', deletedId);
         closeDeleteConfirm();
-    }, [closeDeleteConfirm, pendingDeleteId, refreshSavedInterfaces]);
+    }, [closeDeleteConfirm, pendingDeleteId, refreshSavedInterfaces, remoteDeleteById]);
+    const handleRenameInterface = React.useCallback((id: string, newTitle: string) => {
+        patchSavedInterfaceTitle(id, newTitle);
+        const next = refreshSavedInterfaces();
+        const record = next.find((item) => item.id === id);
+        if (record) {
+            remoteUpsertRecord(record, 'sidebar_rename');
+        }
+    }, [refreshSavedInterfaces, remoteUpsertRecord]);
 
     React.useEffect(() => {
         if (!isSearchInterfacesOpen) return;
@@ -240,6 +359,33 @@ export const AppShell: React.FC = () => {
     }, [closeDeleteConfirm, pendingDeleteId]);
 
     React.useEffect(() => {
+        savedInterfacesRef.current = savedInterfaces;
+    }, [savedInterfaces]);
+
+    React.useEffect(() => {
+        remoteSyncEnabledRef.current = isLoggedIn;
+    }, [isLoggedIn]);
+
+    React.useEffect(() => {
+        if (!isAuthReady) return;
+        const nextStorageKey = isLoggedIn && authStorageId
+            ? buildSavedInterfacesStorageKeyForUser(authStorageId)
+            : getSavedInterfacesStorageKey().startsWith(`${SAVED_INTERFACES_KEY}_user_`)
+                ? SAVED_INTERFACES_KEY
+                : getSavedInterfacesStorageKey();
+        if (activeStorageKeyRef.current === nextStorageKey) return;
+        setSavedInterfacesStorageKey(nextStorageKey);
+        activeStorageKeyRef.current = nextStorageKey;
+        hydratedStorageKeyRef.current = null;
+        backfilledStorageKeyRef.current = null;
+        lastSyncedStampByIdRef.current.clear();
+        remoteKnownUpdatedAtByIdRef.current.clear();
+        setPendingLoadInterface(null);
+        refreshSavedInterfaces();
+        console.log('[savedInterfaces] storage_key_switched key=%s', nextStorageKey);
+    }, [authStorageId, isAuthReady, isLoggedIn, refreshSavedInterfaces]);
+
+    React.useEffect(() => {
         refreshSavedInterfaces();
     }, [refreshSavedInterfaces]);
 
@@ -247,6 +393,86 @@ export const AppShell: React.FC = () => {
         if (screen !== 'graph') return;
         refreshSavedInterfaces();
     }, [screen, refreshSavedInterfaces]);
+
+    React.useEffect(() => {
+        if (!isAuthReady || !isLoggedIn) return;
+        const storageKey = activeStorageKeyRef.current;
+        if (!storageKey) return;
+        if (hydratedStorageKeyRef.current === storageKey || hydratedStorageKeysSession.has(storageKey)) return;
+        hydratedStorageKeyRef.current = storageKey;
+        hydratedStorageKeysSession.add(storageKey);
+
+        let cancelled = false;
+        void (async () => {
+            try {
+                const localRecords = loadSavedInterfaces();
+                const remoteItems = await listSavedInterfaces();
+                if (cancelled) return;
+
+                const remoteRecords: SavedInterfaceRecordV1[] = [];
+                const remoteById = new Map<string, SavedInterfaceRecordV1>();
+                for (const item of remoteItems) {
+                    const parsed = parseSavedInterfaceRecord(item.payloadJson);
+                    if (!parsed) {
+                        console.warn('[savedInterfaces] remote_payload_invalid_skipped id=%s', item.clientInterfaceId);
+                        continue;
+                    }
+                    remoteRecords.push(parsed);
+                    remoteById.set(parsed.id, parsed);
+                    lastSyncedStampByIdRef.current.set(parsed.id, buildSyncStamp(parsed));
+                    remoteKnownUpdatedAtByIdRef.current.set(parsed.id, parsed.updatedAt);
+                }
+
+                const mergedById = new Map<string, SavedInterfaceRecordV1>();
+                for (const localRecord of localRecords) {
+                    mergedById.set(localRecord.id, localRecord);
+                }
+                for (const remoteRecord of remoteRecords) {
+                    const existing = mergedById.get(remoteRecord.id);
+                    if (!existing) {
+                        mergedById.set(remoteRecord.id, remoteRecord);
+                        continue;
+                    }
+                    if (remoteRecord.updatedAt >= existing.updatedAt) {
+                        mergedById.set(remoteRecord.id, remoteRecord);
+                    }
+                }
+
+                const merged = sortAndCapSavedInterfaces(Array.from(mergedById.values()));
+                saveAllSavedInterfaces(merged);
+                const reloaded = loadSavedInterfaces();
+                if (cancelled) return;
+                savedInterfacesRef.current = reloaded;
+                setSavedInterfaces(reloaded);
+                console.log('[savedInterfaces] hydrate_merge_ok local=%d remote=%d merged=%d', localRecords.length, remoteRecords.length, reloaded.length);
+
+                if (backfilledStorageKeyRef.current === storageKey || backfilledStorageKeysSession.has(storageKey)) {
+                    return;
+                }
+                backfilledStorageKeyRef.current = storageKey;
+                backfilledStorageKeysSession.add(storageKey);
+
+                let queued = 0;
+                for (const record of reloaded) {
+                    if (queued >= REMOTE_BACKFILL_LIMIT) break;
+                    const remoteRecord = remoteById.get(record.id);
+                    if (!remoteRecord || record.updatedAt > remoteRecord.updatedAt) {
+                        remoteUpsertRecord(record, 'login_backfill');
+                        queued += 1;
+                    }
+                }
+                if (queued > 0) {
+                    console.log('[savedInterfaces] backfill_queued count=%d', queued);
+                }
+            } catch (error) {
+                console.warn('[savedInterfaces] hydrate_remote_failed error=%s', String(error));
+            }
+        })();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [isAuthReady, isLoggedIn, remoteUpsertRecord]);
 
     const sidebarInterfaces = React.useMemo<SidebarInterfaceItem[]>(
         () =>
@@ -507,10 +733,7 @@ export const AppShell: React.FC = () => {
                     showDocumentViewerButton={screen === 'graph'}
                     onToggleDocumentViewer={() => setDocumentViewerToggleToken((prev) => prev + 1)}
                     interfaces={sidebarInterfaces}
-                    onRenameInterface={(id, newTitle) => {
-                        patchSavedInterfaceTitle(id, newTitle);
-                        refreshSavedInterfaces();
-                    }}
+                    onRenameInterface={handleRenameInterface}
                     onDeleteInterface={(id) => {
                         if (isSearchInterfacesOpen) return;
                         if (sidebarDisabled) return;

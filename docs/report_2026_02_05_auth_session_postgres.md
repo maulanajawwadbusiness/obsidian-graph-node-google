@@ -175,3 +175,16 @@ If Cloud Run complains about base image resolution, add:
 - Token validation does not use tokeninfo.
 - isProd() is true when K_SERVICE is set or NODE_ENV is production.
 - Do not share idToken values in chat.
+
+## 2026-02-11: Auth Schema Check Timeout Hardening
+- Root cause for intermittent `npm run check:auth-schema` hangs:
+  - CLI check could leave DB pool and Cloud SQL connector open, so process stayed alive.
+  - Connector setup could wait too long in unstable network conditions.
+- Fixes applied in `src/server/src/db.ts` and `src/server/src/authSchemaGuard.ts`:
+  - Added connector setup timeout via `DB_CONNECT_TIMEOUT_MS` (default `15000` ms).
+  - Added `connectionTimeoutMillis` on the pg pool.
+  - Added `closePool()` utility to close pool and connector cleanly.
+  - `authSchemaGuard` now always calls `closePool()` in `finally`.
+- Operational result:
+  - Success path exits cleanly after logging `[auth-schema] ok ...`.
+  - Failure path exits quickly with clear error text, no long hang.

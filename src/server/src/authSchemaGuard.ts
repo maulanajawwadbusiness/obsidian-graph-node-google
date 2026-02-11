@@ -1,4 +1,4 @@
-import { getPool } from "./db";
+import { closePool, getPool } from "./db";
 
 type ColumnRow = {
   table_name: string;
@@ -202,10 +202,15 @@ async function runCliCheck() {
   } catch (error) {
     console.error(String(error));
     process.exitCode = 1;
+  } finally {
+    try {
+      await closePool();
+    } catch (error) {
+      console.error(`[auth-schema] closePool failed: ${String(error)}`);
+    }
   }
 }
 
 if (require.main === module) {
   void runCliCheck();
 }
-

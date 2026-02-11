@@ -18,6 +18,22 @@ export type PaymentAction = {
   url: string;
 };
 
+export type SavedInterfaceApiRecord = {
+  clientInterfaceId: string;
+  title: string;
+  payloadVersion: number;
+  payloadJson: any;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type SavedInterfaceUpsertInput = {
+  clientInterfaceId: string;
+  title: string;
+  payloadVersion: number;
+  payloadJson: any;
+};
+
 function resolveUrl(base: string, path: string) {
   const trimmedBase = base.replace(/\/+$/, '');
   const normalizedPath = path.startsWith('/') ? path : `/${path}`;
@@ -138,6 +154,85 @@ export async function createPaymentGopayQris(grossAmount?: number): Promise<ApiP
 
 export async function getPaymentStatus(orderId: string): Promise<ApiGetResult> {
   return apiGet(`/api/payments/${orderId}/status`);
+}
+
+function buildApiErrorMessage(op: string, result: ApiGetResult | ApiPostResult) {
+  const status = result.status || 0;
+  const detail = result.error || result.text.slice(0, 200) || 'unknown error';
+  if (status === 401) return `${op} failed: unauthorized (401)`;
+  return `${op} failed: ${status || "unknown"} ${detail}`;
+}
+
+type SavedInterfacesListResponse = {
+  ok?: boolean;
+  items?: SavedInterfacesListItem[];
+};
+
+type SavedInterfacesDeleteResponse = {
+  ok?: boolean;
+  deleted?: unknown;
+};
+
+type SavedInterfacesListItem = {
+  client_interface_id?: unknown;
+  title?: unknown;
+  payload_version?: unknown;
+  payload_json?: unknown;
+  created_at?: unknown;
+  updated_at?: unknown;
+};
+
+function toSavedInterfaceRecord(item: SavedInterfacesListItem): SavedInterfaceApiRecord {
+  return {
+    clientInterfaceId: String(item?.client_interface_id ?? ""),
+    title: String(item?.title ?? ""),
+    payloadVersion: Number(item?.payload_version ?? 0),
+    payloadJson: item?.payload_json,
+    createdAt: String(item?.created_at ?? ""),
+    updatedAt: String(item?.updated_at ?? ""),
+  };
+}
+
+export async function listSavedInterfaces(): Promise<SavedInterfaceApiRecord[]> {
+  const result = await apiGet('/api/saved-interfaces');
+  if (!result.ok) {
+    throw new Error(buildApiErrorMessage('listSavedInterfaces', result));
+  }
+
+  const data = (result.data || {}) as SavedInterfacesListResponse;
+  const rawItems = Array.isArray(data.items) ? data.items : [];
+  const items = rawItems.map(toSavedInterfaceRecord).filter((item) => item.clientInterfaceId);
+  return items;
+}
+
+export async function upsertSavedInterface(
+  input: SavedInterfaceUpsertInput
+): Promise<{ ok: true }> {
+  const result = await apiPost('/api/saved-interfaces/upsert', {
+    clientInterfaceId: input.clientInterfaceId,
+    title: input.title,
+    payloadVersion: input.payloadVersion,
+    payloadJson: input.payloadJson,
+  });
+
+  if (!result.ok) {
+    throw new Error(buildApiErrorMessage('upsertSavedInterface', result));
+  }
+
+  return { ok: true };
+}
+
+export async function deleteSavedInterface(
+  clientInterfaceId: string
+): Promise<{ ok: true; deleted?: boolean }> {
+  const result = await apiPost('/api/saved-interfaces/delete', { clientInterfaceId });
+  if (!result.ok) {
+    throw new Error(buildApiErrorMessage('deleteSavedInterface', result));
+  }
+
+  const data = (result.data || {}) as SavedInterfacesDeleteResponse;
+  const deleted = typeof data.deleted === 'boolean' ? data.deleted : undefined;
+  return deleted === undefined ? { ok: true } : { ok: true, deleted };
 }
 
 // TODO(auth): add a client helper for POST /auth/logout (credentials include) when UI is added.

@@ -568,3 +568,40 @@ Logging policy for saved-interface routes:
   - payload byte size
   - operation type and row count/deleted flag
 - logs never include `payload_json` contents
+
+---
+
+## 16) Step 4 Frontend API Helpers Implemented (2026-02-11)
+
+File changed:
+- `src/api.ts`
+
+Frontend types added:
+- `SavedInterfaceApiRecord`
+- `SavedInterfaceUpsertInput`
+
+Frontend helpers added:
+- `listSavedInterfaces(): Promise<SavedInterfaceApiRecord[]>`
+- `upsertSavedInterface(input: SavedInterfaceUpsertInput): Promise<{ ok: true }>`
+- `deleteSavedInterface(clientInterfaceId: string): Promise<{ ok: true; deleted?: boolean }>`
+
+Pattern matched:
+- uses existing `apiGet` and `apiPost` wrappers in `src/api.ts`
+- keeps same base URL resolution and response parsing style
+
+Auth/cookie detail:
+- wrappers already enforce `credentials: "include"`
+- saved-interface helpers inherit this behavior (no custom fetch path)
+
+Response mapping:
+- backend snake_case fields are mapped to frontend camelCase:
+  - `client_interface_id` -> `clientInterfaceId`
+  - `payload_version` -> `payloadVersion`
+  - `payload_json` -> `payloadJson`
+  - `created_at` -> `createdAt`
+  - `updated_at` -> `updatedAt`
+
+Error behavior:
+- helper functions throw calm errors using status + wrapper error snippet
+- unauthorized keeps a dedicated message path
+- no `payloadJson` logging

@@ -50,7 +50,11 @@ const port = Number(process.env.PORT || 8080);
 const COOKIE_NAME = process.env.SESSION_COOKIE_NAME || "arnvoid_session";
 const SESSION_TTL_MS = Number(process.env.SESSION_TTL_MS || 1000 * 60 * 60 * 24 * 7);
 const COOKIE_SAMESITE = "lax";
-const DEFAULT_DEV_ORIGINS = ["http://localhost:5173", "http://127.0.0.1:5173"];
+const DEV_PORTS = [5173, 5174, 5175, 5176, 5177, 5178];
+const DEFAULT_DEV_ORIGINS = DEV_PORTS.flatMap((port) => [
+  `http://localhost:${port}`,
+  `http://127.0.0.1:${port}`
+]);
 const DEFAULT_ALLOWED_ORIGINS = ["https://beta.arnvoid.com"];
 const SAVED_INTERFACES_LIST_LIMIT = 20;
 const MAX_SAVED_INTERFACE_PAYLOAD_BYTES = Number(

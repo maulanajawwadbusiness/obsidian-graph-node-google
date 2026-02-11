@@ -470,3 +470,32 @@ Failure output shape:
 
 Operational note:
 - guard logs only schema object names and DB target label, never secrets, tokens, or cookies.
+
+---
+
+## 14) Step 2 Saved Interfaces Table Migration Implemented (2026-02-11)
+
+Migration file:
+- `src/server/migrations/1770383000000_add_saved_interfaces.js`
+
+Table added:
+- `public.saved_interfaces`
+
+Columns:
+- `id bigserial primary key`
+- `user_id bigint not null references users(id) on delete cascade`
+- `client_interface_id text not null`
+- `title text not null`
+- `payload_version integer not null default 1`
+- `payload_json jsonb not null`
+- `created_at timestamptz not null default now()`
+- `updated_at timestamptz not null default now()`
+
+Constraints and indexes:
+- unique constraint: `saved_interfaces_user_client_unique` on `(user_id, client_interface_id)`
+- index: `saved_interfaces_user_updated_idx` on `(user_id, updated_at desc)`
+- index: `saved_interfaces_user_title_idx` on `(user_id, title)`
+
+Safety behavior:
+- migration includes a precondition guard that fails if `public.users` does not exist.
+- no change to existing `users` or `sessions` structure in this step.

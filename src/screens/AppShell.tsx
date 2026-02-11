@@ -1398,43 +1398,44 @@ const DELETE_CONFIRM_CARD_STYLE: React.CSSProperties = {
     width: '100%',
     maxWidth: '420px',
     margin: '0 16px',
-    borderRadius: '14px',
-    border: '1px solid rgba(255, 255, 255, 0.14)',
-    background: '#0d1118',
+    borderRadius: '11.9px',
+    border: 'none',
+    background: '#0D1118',
     boxShadow: '0 18px 56px rgba(0, 0, 0, 0.45)',
-    padding: '18px 18px 16px',
-    color: '#e7e7e7',
+    padding: '20px',
+    color: '#06060A',
     display: 'flex',
     flexDirection: 'column',
-    gap: '10px',
+    gap: '8.5px',
 };
 
 const DELETE_CONFIRM_TITLE_STYLE: React.CSSProperties = {
-    fontSize: '17px',
+    fontSize: '11.9px',
     lineHeight: 1.25,
     fontWeight: 700,
     color: '#f3f7ff',
 };
 
 const DELETE_CONFIRM_TEXT_STYLE: React.CSSProperties = {
-    fontSize: '14px',
+    fontSize: '11.9px',
     lineHeight: 1.5,
-    color: 'rgba(231, 231, 231, 0.88)',
+    color: 'rgba(231, 231, 231, 0.7)',
 };
 
 const DELETE_CONFIRM_BUTTON_ROW_STYLE: React.CSSProperties = {
     display: 'flex',
     justifyContent: 'flex-end',
-    gap: '8px',
-    marginTop: '4px',
+    gap: '6.8px',
+    marginTop: '3.4px',
 };
 
 const DELETE_CONFIRM_CANCEL_STYLE: React.CSSProperties = {
     border: '1px solid rgba(255, 255, 255, 0.26)',
     background: 'rgba(255, 255, 255, 0.04)',
     color: '#f1f4fb',
-    borderRadius: '8px',
-    padding: '8px 14px',
+    borderRadius: '6.8px',
+    padding: '6.8px 11.9px',
+    fontSize: '11.9px',
     cursor: 'pointer',
     fontWeight: 600,
 };
@@ -1443,8 +1444,9 @@ const DELETE_CONFIRM_PRIMARY_STYLE: React.CSSProperties = {
     border: '1px solid #ff4b4e',
     background: '#ff4b4e',
     color: '#ffffff',
-    borderRadius: '8px',
-    padding: '8px 14px',
+    borderRadius: '6.8px',
+    padding: '6.8px 11.9px',
+    fontSize: '11.9px',
     cursor: 'pointer',
     fontWeight: 700,
 };

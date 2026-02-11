@@ -43,7 +43,7 @@ const CURSOR_STYLE: React.CSSProperties = {
     background: '#63abff',
     borderRadius: '1px',
     verticalAlign: '-0.12em',
-    transform: 'translateZ(0)',
+    //transform: 'translateZ(0)',
     willChange: 'opacity',
     flexShrink: 0,
     pointerEvents: 'none',

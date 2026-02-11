@@ -22,6 +22,30 @@ function useIsWideScreen(): boolean {
     return isWide;
 }
 
+const WELCOME1_FULLSCREEN_PROMPT_SEEN_KEY = 'arnvoid_welcome1_fullscreen_prompt_seen_v1';
+
+function canUseBrowserStorage(): boolean {
+    return typeof window !== 'undefined' && typeof window.localStorage !== 'undefined';
+}
+
+function hasSeenWelcome1FullscreenPrompt(): boolean {
+    if (!canUseBrowserStorage()) return false;
+    try {
+        return window.localStorage.getItem(WELCOME1_FULLSCREEN_PROMPT_SEEN_KEY) === '1';
+    } catch {
+        return false;
+    }
+}
+
+function markWelcome1FullscreenPromptSeen(): void {
+    if (!canUseBrowserStorage()) return;
+    try {
+        window.localStorage.setItem(WELCOME1_FULLSCREEN_PROMPT_SEEN_KEY, '1');
+    } catch {
+        // Ignore storage failures. Prompt behavior falls back safely.
+    }
+}
+
 type Welcome1Props = {
     onNext: () => void;
     onSkip: () => void;
@@ -32,14 +56,17 @@ export const Welcome1: React.FC<Welcome1Props> = ({ onNext, onSkip, onOverlayOpe
     void onSkip;
     const { enterFullscreen, isFullscreen } = useFullscreen();
     const isWideScreen = useIsWideScreen();
+    const shouldShowFullscreenPrompt = React.useMemo(() => {
+        if (!SHOW_WELCOME1_FULLSCREEN_PROMPT) return false;
+        if (isFullscreen) return false;
+        return !hasSeenWelcome1FullscreenPrompt();
+    }, [isFullscreen]);
 
     const TITLE_LINE_1 = t('onboarding.welcome1.brand_title_line1');
     const TITLE_LINE_2 = t('onboarding.welcome1.brand_title_line2');
     const CURSOR_DELAY_MS = 500;
-    const [hasFullscreenDecision, setHasFullscreenDecision] = React.useState(false);
-    const [isFullscreenPromptOpen, setIsFullscreenPromptOpen] = React.useState(
-        SHOW_WELCOME1_FULLSCREEN_PROMPT && !isFullscreen
-    );
+    const [hasFullscreenDecision, setHasFullscreenDecision] = React.useState(!shouldShowFullscreenPrompt);
+    const [isFullscreenPromptOpen, setIsFullscreenPromptOpen] = React.useState(shouldShowFullscreenPrompt);
     const [showCursor, setShowCursor] = React.useState(false);
 
     // Responsive card width
@@ -86,6 +113,7 @@ export const Welcome1: React.FC<Welcome1Props> = ({ onNext, onSkip, onOverlayOpe
     }, [onOverlayOpenChange]);
 
     const handleActivateFullscreen = React.useCallback(() => {
+        markWelcome1FullscreenPromptSeen();
         enterFullscreen()
             .catch((e: unknown) => {
                 console.warn('[welcome1] Fullscreen activation blocked:', e);
@@ -97,6 +125,7 @@ export const Welcome1: React.FC<Welcome1Props> = ({ onNext, onSkip, onOverlayOpe
     }, [enterFullscreen]);
 
     const handleStayWindowed = React.useCallback(() => {
+        markWelcome1FullscreenPromptSeen();
         setIsFullscreenPromptOpen(false);
         setHasFullscreenDecision(true);
     }, []);

@@ -295,6 +295,12 @@ export const AppShell: React.FC = () => {
         });
     }, [enqueueRemoteTask]);
     const commitUpsertInterface = React.useCallback((record: SavedInterfaceRecordV1, reason: string) => {
+        if (reason.startsWith('restore_')) {
+            if (import.meta.env.DEV) {
+                console.log('[savedInterfaces] restore_write_blocked op=upsert id=%s reason=%s', record.id, reason);
+            }
+            return;
+        }
         const nowMs = Date.now();
         const current = savedInterfacesRef.current;
         const existingIndex = current.findIndex((item) => item.dedupeKey === record.dedupeKey);
@@ -329,6 +335,12 @@ export const AppShell: React.FC = () => {
         camera: SavedInterfaceRecordV1['camera'],
         reason: string
     ) => {
+        if (reason.startsWith('restore_')) {
+            if (import.meta.env.DEV) {
+                console.log('[savedInterfaces] restore_write_blocked op=layout_patch docId=%s reason=%s', docId, reason);
+            }
+            return;
+        }
         if (!docId) return;
         const current = savedInterfacesRef.current;
         const index = current.findIndex((item) => item.docId === docId);

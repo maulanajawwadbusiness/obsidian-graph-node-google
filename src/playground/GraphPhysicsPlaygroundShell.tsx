@@ -147,6 +147,7 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
     const hasRestoredSuccessfullyRef = useRef(false);
     const pendingRestoreAtInitRef = useRef(false);
     const isRestoringRef = useRef(false);
+    const isRestoreReadPathRef = useRef(false);
     const lastPendingLoadIdRef = useRef<string | null>(null);
     const currentPendingDocIdRef = useRef<string | null>(null);
     const lastLayoutPatchedDocIdRef = useRef<string | null>(null);
@@ -635,6 +636,12 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
         if (lastLayoutPatchedDocIdRef.current === docId) return;
         const engine = engineRef.current;
         if (!engine || engine.nodes.size === 0) return;
+        if (isRestoreReadPathRef.current) {
+            if (import.meta.env.DEV) {
+                console.log('[graph] restore_write_blocked callback=layout reason=read_path');
+            }
+            return;
+        }
         if (!onSavedInterfaceLayoutPatch) {
             return;
         }
@@ -787,6 +794,7 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
 
         hasConsumedLoadRef.current = true;
         isRestoringRef.current = true;
+        isRestoreReadPathRef.current = true;
         const rec = pendingLoadInterface;
         console.log('[graph] consuming_pending_load_interface id=%s title=%s', rec.id, rec.title);
         onPendingLoadInterfaceConsumed?.();
@@ -933,6 +941,7 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
             documentContext.setAIError('Failed to load saved interface.');
             console.error('[graph] pending_load_interface_done ok=false id=%s', rec.id, error);
         } finally {
+            isRestoreReadPathRef.current = false;
             isRestoringRef.current = false;
             if (
                 !restoredOk &&
@@ -1002,7 +1011,15 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
                         documentContext.setAIActivity,
                         setAIErrorWithAuthLog,
                         documentContext.setInferredTitle,
-                        (record) => onSavedInterfaceUpsert?.(record, 'analysis_save')
+                        (record) => {
+                            if (isRestoreReadPathRef.current) {
+                                if (import.meta.env.DEV) {
+                                    console.log('[graph] restore_write_blocked callback=upsert reason=read_path');
+                                }
+                                return;
+                            }
+                            onSavedInterfaceUpsert?.(record, 'analysis_save');
+                        }
                     );
                     captureAndPatchSavedLayout(docId);
                 } catch (error) {
@@ -1072,7 +1089,15 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
                     documentContext.setAIActivity,
                     setAIErrorWithAuthLog,
                     documentContext.setInferredTitle,
-                    (record) => onSavedInterfaceUpsert?.(record, 'analysis_save')
+                    (record) => {
+                        if (isRestoreReadPathRef.current) {
+                            if (import.meta.env.DEV) {
+                                console.log('[graph] restore_write_blocked callback=upsert reason=read_path');
+                            }
+                            return;
+                        }
+                        onSavedInterfaceUpsert?.(record, 'analysis_save');
+                    }
                 );
                 captureAndPatchSavedLayout(docId);
             } catch (error) {

@@ -57,6 +57,7 @@ const SEARCH_RESULT_LIMIT = 20;
 const REMOTE_BACKFILL_LIMIT = 10;
 const hydratedStorageKeysSession = new Set<string>();
 const backfilledStorageKeysSession = new Set<string>();
+let lastIdentityKeySession: string | null = null;
 let hasWarnedInvalidStartScreen = false;
 
 type SearchInterfaceIndexItem = {
@@ -405,6 +406,11 @@ export const AppShell: React.FC = () => {
         const nextStorageKey = isLoggedIn && authStorageId
             ? buildSavedInterfacesStorageKeyForUser(authStorageId)
             : SAVED_INTERFACES_KEY;
+        if (lastIdentityKeySession !== authIdentityKey) {
+            lastIdentityKeySession = authIdentityKey;
+            hydratedStorageKeysSession.delete(nextStorageKey);
+            backfilledStorageKeysSession.delete(nextStorageKey);
+        }
         if (activeStorageKeyRef.current !== nextStorageKey) {
             setSavedInterfacesStorageKey(nextStorageKey);
             activeStorageKeyRef.current = nextStorageKey;

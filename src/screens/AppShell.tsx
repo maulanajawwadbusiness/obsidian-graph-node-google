@@ -101,6 +101,12 @@ function resolveAuthStorageId(user: unknown): string | null {
     return null;
 }
 
+function parseIsoMs(value: string | null | undefined): number | null {
+    if (!value) return null;
+    const ms = Date.parse(value);
+    return Number.isFinite(ms) ? ms : null;
+}
+
 function sortAndCapSavedInterfaces(
     list: SavedInterfaceRecordV1[],
     cap = DEFAULT_SAVED_INTERFACES_CAP
@@ -159,6 +165,9 @@ export const AppShell: React.FC = () => {
     const searchInputRef = React.useRef<HTMLInputElement | null>(null);
     const didSelectThisOpenRef = React.useRef(false);
     const savedInterfacesRef = React.useRef<SavedInterfaceRecordV1[]>([]);
+    const authIdentityKeyRef = React.useRef<string>('guest');
+    const syncEpochRef = React.useRef(0);
+    const prevIdentityKeyRef = React.useRef<string | null>(null);
     const activeStorageKeyRef = React.useRef<string>(getSavedInterfacesStorageKey());
     const hydratedStorageKeyRef = React.useRef<string | null>(null);
     const backfilledStorageKeyRef = React.useRef<string | null>(null);
@@ -169,6 +178,13 @@ export const AppShell: React.FC = () => {
     const authStorageId = React.useMemo(() => resolveAuthStorageId(user), [user]);
     const isAuthReady = !authLoading;
     const isLoggedIn = isAuthReady && user !== null && authStorageId !== null;
+    const authIdentityKey = React.useMemo(() => {
+        if (!isAuthReady) return null;
+        if (isLoggedIn && authStorageId) {
+            return `user:${authStorageId}`;
+        }
+        return 'guest';
+    }, [authStorageId, isAuthReady, isLoggedIn]);
     const stopEventPropagation = React.useCallback((e: React.SyntheticEvent) => {
         e.stopPropagation();
     }, []);
@@ -229,16 +245,22 @@ export const AppShell: React.FC = () => {
     }, []);
     const remoteUpsertRecord = React.useCallback((record: SavedInterfaceRecordV1, reason: string) => {
         if (!remoteSyncEnabledRef.current) return;
+        const epochAtEnqueue = syncEpochRef.current;
+        const identityAtEnqueue = authIdentityKeyRef.current;
         const stamp = buildSyncStamp(record);
         if (lastSyncedStampByIdRef.current.get(record.id) === stamp) return;
         enqueueRemoteTask(async () => {
             if (!remoteSyncEnabledRef.current) return;
+            if (syncEpochRef.current !== epochAtEnqueue) return;
+            if (authIdentityKeyRef.current !== identityAtEnqueue) return;
             await upsertSavedInterfaceRemote({
                 clientInterfaceId: record.id,
                 title: record.title,
                 payloadVersion: 1,
                 payloadJson: record,
             });
+            if (syncEpochRef.current !== epochAtEnqueue) return;
+            if (authIdentityKeyRef.current !== identityAtEnqueue) return;
             lastSyncedStampByIdRef.current.set(record.id, stamp);
             remoteKnownUpdatedAtByIdRef.current.set(record.id, record.updatedAt);
             console.log('[savedInterfaces] remote_upsert_ok id=%s reason=%s', record.id, reason);
@@ -246,9 +268,15 @@ export const AppShell: React.FC = () => {
     }, [enqueueRemoteTask]);
     const remoteDeleteById = React.useCallback((id: string, reason: string) => {
         if (!remoteSyncEnabledRef.current) return;
+        const epochAtEnqueue = syncEpochRef.current;
+        const identityAtEnqueue = authIdentityKeyRef.current;
         enqueueRemoteTask(async () => {
             if (!remoteSyncEnabledRef.current) return;
+            if (syncEpochRef.current !== epochAtEnqueue) return;
+            if (authIdentityKeyRef.current !== identityAtEnqueue) return;
             await deleteSavedInterfaceRemote(id);
+            if (syncEpochRef.current !== epochAtEnqueue) return;
+            if (authIdentityKeyRef.current !== identityAtEnqueue) return;
             lastSyncedStampByIdRef.current.delete(id);
             remoteKnownUpdatedAtByIdRef.current.delete(id);
             console.log('[savedInterfaces] remote_delete_ok id=%s reason=%s', id, reason);
@@ -367,23 +395,36 @@ export const AppShell: React.FC = () => {
     }, [isLoggedIn]);
 
     React.useEffect(() => {
-        if (!isAuthReady) return;
+        if (!authIdentityKey) return;
+        if (prevIdentityKeyRef.current === authIdentityKey) return;
+        prevIdentityKeyRef.current = authIdentityKey;
+        authIdentityKeyRef.current = authIdentityKey;
+        syncEpochRef.current += 1;
+        remoteSyncEnabledRef.current = isLoggedIn;
+
         const nextStorageKey = isLoggedIn && authStorageId
             ? buildSavedInterfacesStorageKeyForUser(authStorageId)
-            : getSavedInterfacesStorageKey().startsWith(`${SAVED_INTERFACES_KEY}_user_`)
-                ? SAVED_INTERFACES_KEY
-                : getSavedInterfacesStorageKey();
-        if (activeStorageKeyRef.current === nextStorageKey) return;
-        setSavedInterfacesStorageKey(nextStorageKey);
-        activeStorageKeyRef.current = nextStorageKey;
+            : SAVED_INTERFACES_KEY;
+        if (activeStorageKeyRef.current !== nextStorageKey) {
+            setSavedInterfacesStorageKey(nextStorageKey);
+            activeStorageKeyRef.current = nextStorageKey;
+        }
         hydratedStorageKeyRef.current = null;
         backfilledStorageKeyRef.current = null;
+        remoteSyncChainRef.current = Promise.resolve();
         lastSyncedStampByIdRef.current.clear();
         remoteKnownUpdatedAtByIdRef.current.clear();
         setPendingLoadInterface(null);
+        setPendingAnalysis(null);
+        closeDeleteConfirm();
+        didSelectThisOpenRef.current = false;
+        setIsSearchInterfacesOpen(false);
+        setSearchInterfacesQueryState('');
+        setSearchHighlightedIndex(0);
+        setSearchInputFocused(false);
         refreshSavedInterfaces();
-        console.log('[savedInterfaces] storage_key_switched key=%s', nextStorageKey);
-    }, [authStorageId, isAuthReady, isLoggedIn, refreshSavedInterfaces]);
+        console.log('[savedInterfaces] identity_switched identity=%s key=%s', authIdentityKey, nextStorageKey);
+    }, [authIdentityKey, authStorageId, closeDeleteConfirm, isLoggedIn, refreshSavedInterfaces]);
 
     React.useEffect(() => {
         refreshSavedInterfaces();
@@ -403,19 +444,37 @@ export const AppShell: React.FC = () => {
         hydratedStorageKeysSession.add(storageKey);
 
         let cancelled = false;
+        const epochAtStart = syncEpochRef.current;
+        const identityAtStart = authIdentityKeyRef.current;
         void (async () => {
             try {
                 const localRecords = loadSavedInterfaces();
                 const remoteItems = await listSavedInterfaces();
                 if (cancelled) return;
+                if (syncEpochRef.current !== epochAtStart) return;
+                if (authIdentityKeyRef.current !== identityAtStart) return;
+                if (activeStorageKeyRef.current !== storageKey) return;
 
                 const remoteRecords: SavedInterfaceRecordV1[] = [];
                 const remoteById = new Map<string, SavedInterfaceRecordV1>();
                 for (const item of remoteItems) {
+                    // Ordering truth is payloadJson.updatedAt, not DB row updated_at.
+                    // DB upsert updates row timestamp on rename, which would reorder unexpectedly.
                     const parsed = parseSavedInterfaceRecord(item.payloadJson);
                     if (!parsed) {
                         console.warn('[savedInterfaces] remote_payload_invalid_skipped id=%s', item.clientInterfaceId);
                         continue;
+                    }
+                    if (import.meta.env.DEV) {
+                        const dbUpdatedAtMs = parseIsoMs(item.dbUpdatedAt);
+                        if (dbUpdatedAtMs !== null && Math.abs(dbUpdatedAtMs - parsed.updatedAt) > 1000) {
+                            console.log(
+                                '[savedInterfaces] db_ts_diverges_ignored id=%s db_updated_at=%d payload_updatedAt=%d',
+                                parsed.id,
+                                dbUpdatedAtMs,
+                                parsed.updatedAt
+                            );
+                        }
                     }
                     remoteRecords.push(parsed);
                     remoteById.set(parsed.id, parsed);
@@ -442,6 +501,9 @@ export const AppShell: React.FC = () => {
                 saveAllSavedInterfaces(merged);
                 const reloaded = loadSavedInterfaces();
                 if (cancelled) return;
+                if (syncEpochRef.current !== epochAtStart) return;
+                if (authIdentityKeyRef.current !== identityAtStart) return;
+                if (activeStorageKeyRef.current !== storageKey) return;
                 savedInterfacesRef.current = reloaded;
                 setSavedInterfaces(reloaded);
                 console.log('[savedInterfaces] hydrate_merge_ok local=%d remote=%d merged=%d', localRecords.length, remoteRecords.length, reloaded.length);

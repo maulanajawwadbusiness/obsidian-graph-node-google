@@ -18,11 +18,9 @@ import {
     buildSavedInterfacesStorageKeyForUser,
     DEFAULT_SAVED_INTERFACES_CAP,
     SAVED_INTERFACES_KEY,
-    deleteSavedInterface as deleteSavedInterfaceLocal,
     getSavedInterfacesStorageKey,
     loadSavedInterfaces,
     parseSavedInterfaceRecord,
-    patchSavedInterfaceTitle,
     saveAllSavedInterfaces,
     setSavedInterfacesStorageKey,
     type SavedInterfaceRecordV1
@@ -46,7 +44,13 @@ type GraphPendingAnalysisProps = {
     documentViewerToggleToken?: number;
     pendingLoadInterface?: SavedInterfaceRecordV1 | null;
     onPendingLoadInterfaceConsumed?: () => void;
-    onInterfaceSaved?: () => void;
+    onSavedInterfaceUpsert?: (record: SavedInterfaceRecordV1, reason: string) => void;
+    onSavedInterfaceLayoutPatch?: (
+        docId: string,
+        layout: SavedInterfaceRecordV1['layout'],
+        camera: SavedInterfaceRecordV1['camera'],
+        reason: string
+    ) => void;
 };
 const STORAGE_KEY = 'arnvoid_screen';
 const PERSIST_SCREEN = false;
@@ -231,6 +235,13 @@ export const AppShell: React.FC = () => {
         />
     ) : null;
 
+    const applySavedInterfacesState = React.useCallback((next: SavedInterfaceRecordV1[]) => {
+        const normalized = sortAndCapSavedInterfaces(next);
+        savedInterfacesRef.current = normalized;
+        setSavedInterfaces(normalized);
+        saveAllSavedInterfaces(normalized);
+        return normalized;
+    }, []);
     const refreshSavedInterfaces = React.useCallback(() => {
         const next = loadSavedInterfaces();
         savedInterfacesRef.current = next;
@@ -283,21 +294,90 @@ export const AppShell: React.FC = () => {
             console.log('[savedInterfaces] remote_delete_ok id=%s reason=%s', id, reason);
         });
     }, [enqueueRemoteTask]);
-    const handleInterfaceSaved = React.useCallback(() => {
-        const beforeById = new Map(savedInterfacesRef.current.map((record) => [record.id, record]));
-        const next = refreshSavedInterfaces();
-        if (!remoteSyncEnabledRef.current) return;
-        for (const record of next) {
-            const before = beforeById.get(record.id);
-            if (!before) {
-                remoteUpsertRecord(record, 'analysis_save_new');
-                continue;
-            }
-            if (before.updatedAt !== record.updatedAt || before.title !== record.title) {
-                remoteUpsertRecord(record, 'analysis_save_update');
-            }
+    const commitUpsertInterface = React.useCallback((record: SavedInterfaceRecordV1, reason: string) => {
+        const nowMs = Date.now();
+        const current = savedInterfacesRef.current;
+        const existingIndex = current.findIndex((item) => item.dedupeKey === record.dedupeKey);
+        let committed: SavedInterfaceRecordV1;
+        let next: SavedInterfaceRecordV1[];
+        if (existingIndex >= 0) {
+            const existing = current[existingIndex];
+            committed = {
+                ...record,
+                id: existing.id,
+                createdAt: existing.createdAt,
+                updatedAt: nowMs,
+            };
+            next = [
+                committed,
+                ...current.filter((_, index) => index !== existingIndex),
+            ];
+        } else {
+            committed = {
+                ...record,
+                createdAt: Number.isFinite(record.createdAt) ? record.createdAt : nowMs,
+                updatedAt: nowMs,
+            };
+            next = [committed, ...current];
         }
-    }, [refreshSavedInterfaces, remoteUpsertRecord]);
+        applySavedInterfacesState(next);
+        remoteUpsertRecord(committed, reason);
+    }, [applySavedInterfacesState, remoteUpsertRecord]);
+    const commitPatchLayoutByDocId = React.useCallback((
+        docId: string,
+        layout: SavedInterfaceRecordV1['layout'],
+        camera: SavedInterfaceRecordV1['camera'],
+        reason: string
+    ) => {
+        if (!docId) return;
+        const current = savedInterfacesRef.current;
+        const index = current.findIndex((item) => item.docId === docId);
+        if (index < 0) {
+            if (import.meta.env.DEV) {
+                console.log('[savedInterfaces] layout_patch_skipped reason=no_target_docId');
+            }
+            return;
+        }
+        const next = [...current];
+        const existing = next[index];
+        const committed: SavedInterfaceRecordV1 = {
+            ...existing,
+            layout,
+            camera: camera ?? existing.camera,
+        };
+        next[index] = committed;
+        applySavedInterfacesState(next);
+        remoteUpsertRecord(committed, reason);
+    }, [applySavedInterfacesState, remoteUpsertRecord]);
+    const commitDeleteInterface = React.useCallback((id: string, reason: string) => {
+        const current = savedInterfacesRef.current;
+        const next = current.filter((item) => item.id !== id);
+        applySavedInterfacesState(next);
+        setPendingLoadInterface((curr) => (curr?.id === id ? null : curr));
+        remoteDeleteById(id, reason);
+    }, [applySavedInterfacesState, remoteDeleteById]);
+    const commitRenameInterface = React.useCallback((id: string, newTitle: string, reason: string) => {
+        const current = savedInterfacesRef.current;
+        const index = current.findIndex((item) => item.id === id);
+        if (index < 0) {
+            if (import.meta.env.DEV) {
+                console.log('[savedInterfaces] title_patch_skipped reason=not_found');
+            }
+            return;
+        }
+        const next = [...current];
+        const existing = next[index];
+        const committed: SavedInterfaceRecordV1 = {
+            ...existing,
+            title: newTitle,
+        };
+        next[index] = committed;
+        applySavedInterfacesState(next);
+        remoteUpsertRecord(committed, reason);
+    }, [applySavedInterfacesState, remoteUpsertRecord]);
+    const commitHydrateMerge = React.useCallback((merged: SavedInterfaceRecordV1[]) => {
+        return applySavedInterfacesState(merged);
+    }, [applySavedInterfacesState]);
     const closeDeleteConfirm = React.useCallback(() => {
         setPendingDeleteId(null);
         setPendingDeleteTitle(null);
@@ -337,21 +417,13 @@ export const AppShell: React.FC = () => {
             return;
         }
         const deletedId = pendingDeleteId;
-        deleteSavedInterfaceLocal(deletedId);
-        refreshSavedInterfaces();
-        remoteDeleteById(deletedId, 'sidebar_delete');
-        setPendingLoadInterface((curr) => (curr?.id === deletedId ? null : curr));
+        commitDeleteInterface(deletedId, 'sidebar_delete');
         console.log('[appshell] delete_interface_ok id=%s', deletedId);
         closeDeleteConfirm();
-    }, [closeDeleteConfirm, pendingDeleteId, refreshSavedInterfaces, remoteDeleteById]);
+    }, [closeDeleteConfirm, commitDeleteInterface, pendingDeleteId]);
     const handleRenameInterface = React.useCallback((id: string, newTitle: string) => {
-        patchSavedInterfaceTitle(id, newTitle);
-        const next = refreshSavedInterfaces();
-        const record = next.find((item) => item.id === id);
-        if (record) {
-            remoteUpsertRecord(record, 'sidebar_rename');
-        }
-    }, [refreshSavedInterfaces, remoteUpsertRecord]);
+        commitRenameInterface(id, newTitle, 'sidebar_rename');
+    }, [commitRenameInterface]);
 
     React.useEffect(() => {
         if (!isSearchInterfacesOpen) return;
@@ -437,11 +509,6 @@ export const AppShell: React.FC = () => {
     }, [refreshSavedInterfaces]);
 
     React.useEffect(() => {
-        if (screen !== 'graph') return;
-        refreshSavedInterfaces();
-    }, [screen, refreshSavedInterfaces]);
-
-    React.useEffect(() => {
         if (!isAuthReady || !isLoggedIn) return;
         const storageKey = activeStorageKeyRef.current;
         if (!storageKey) return;
@@ -504,14 +571,11 @@ export const AppShell: React.FC = () => {
                 }
 
                 const merged = sortAndCapSavedInterfaces(Array.from(mergedById.values()));
-                saveAllSavedInterfaces(merged);
-                const reloaded = loadSavedInterfaces();
+                const reloaded = commitHydrateMerge(merged);
                 if (cancelled) return;
                 if (syncEpochRef.current !== epochAtStart) return;
                 if (authIdentityKeyRef.current !== identityAtStart) return;
                 if (activeStorageKeyRef.current !== storageKey) return;
-                savedInterfacesRef.current = reloaded;
-                setSavedInterfaces(reloaded);
                 console.log('[savedInterfaces] hydrate_merge_ok local=%d remote=%d merged=%d', localRecords.length, remoteRecords.length, reloaded.length);
 
                 if (backfilledStorageKeyRef.current === storageKey || backfilledStorageKeysSession.has(storageKey)) {
@@ -540,7 +604,7 @@ export const AppShell: React.FC = () => {
         return () => {
             cancelled = true;
         };
-    }, [isAuthReady, isLoggedIn, remoteUpsertRecord]);
+    }, [commitHydrateMerge, isAuthReady, isLoggedIn, remoteUpsertRecord]);
 
     const sidebarInterfaces = React.useMemo<SidebarInterfaceItem[]>(
         () =>
@@ -743,7 +807,10 @@ export const AppShell: React.FC = () => {
                     documentViewerToggleToken={documentViewerToggleToken}
                     pendingLoadInterface={pendingLoadInterface}
                     onPendingLoadInterfaceConsumed={() => setPendingLoadInterface(null)}
-                    onInterfaceSaved={handleInterfaceSaved}
+                    onSavedInterfaceUpsert={(record, reason) => commitUpsertInterface(record, reason)}
+                    onSavedInterfaceLayoutPatch={(docId, layout, camera, reason) =>
+                        commitPatchLayoutByDocId(docId, layout, camera, reason)
+                    }
                 />
             </Suspense>
         )

@@ -32,8 +32,6 @@ import { deriveSpringEdges } from '../graph/springDerivation';
 // RUN 6: Spring-to-physics converter import
 import { springEdgesToPhysicsLinks } from '../graph/springToPhysics';
 import {
-    loadSavedInterfaces,
-    patchSavedInterfaceLayout,
     type SavedInterfaceRecordV1
 } from '../store/savedInterfacesStore';
 // STEP3-RUN5-V4-FIX1: Removed unused recomputeSprings import
@@ -57,7 +55,13 @@ export type GraphPhysicsPlaygroundProps = {
     documentViewerToggleToken?: number;
     pendingLoadInterface?: SavedInterfaceRecordV1 | null;
     onPendingLoadInterfaceConsumed?: () => void;
-    onInterfaceSaved?: () => void;
+    onSavedInterfaceUpsert?: (record: SavedInterfaceRecordV1, reason: string) => void;
+    onSavedInterfaceLayoutPatch?: (
+        docId: string,
+        layout: SavedInterfaceRecordV1['layout'],
+        camera: SavedInterfaceRecordV1['camera'],
+        reason: string
+    ) => void;
 };
 
 function inferTitleFromPastedText(text: string): string {
@@ -118,7 +122,8 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
     documentViewerToggleToken,
     pendingLoadInterface = null,
     onPendingLoadInterfaceConsumed,
-    onInterfaceSaved,
+    onSavedInterfaceUpsert,
+    onSavedInterfaceLayoutPatch,
 }) => {
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
     const [canvasReady, setCanvasReady] = useState(false);
@@ -145,7 +150,6 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
     const lastPendingLoadIdRef = useRef<string | null>(null);
     const currentPendingDocIdRef = useRef<string | null>(null);
     const lastLayoutPatchedDocIdRef = useRef<string | null>(null);
-    const lastInterfaceSavedNotifyKeyRef = useRef<string | null>(null);
 
     // State for React UI
     const [config, setConfig] = useState<ForceConfig>(DEFAULT_PHYSICS_CONFIG);
@@ -631,12 +635,7 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
         if (lastLayoutPatchedDocIdRef.current === docId) return;
         const engine = engineRef.current;
         if (!engine || engine.nodes.size === 0) return;
-
-        const target = loadSavedInterfaces().find((item) => item.docId === docId);
-        if (!target) {
-            if (import.meta.env.DEV) {
-                console.log('[savedInterfaces] layout_patch_skipped reason=no_target_id');
-            }
+        if (!onSavedInterfaceLayoutPatch) {
             return;
         }
 
@@ -650,34 +649,18 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
         const panY = Number.isFinite(hoverCamera.lastSelectionPanY) ? hoverCamera.lastSelectionPanY : 0;
         const zoom = Number.isFinite(hoverCamera.lastSelectionZoom) ? hoverCamera.lastSelectionZoom : 1;
 
-        patchSavedInterfaceLayout(target.id, { nodeWorld }, { panX, panY, zoom });
+        onSavedInterfaceLayoutPatch(docId, { nodeWorld }, { panX, panY, zoom }, 'analysis_layout_patch');
         lastLayoutPatchedDocIdRef.current = docId;
 
         if (import.meta.env.DEV) {
             console.log(
                 '[savedInterfaces] layout_patch id=%s nodes=%d zoom=%s',
-                target.id,
+                docId,
                 Object.keys(nodeWorld).length,
                 zoom.toFixed(3)
             );
         }
-    }, [hoverStateRef]);
-
-    const notifyInterfaceSaved = React.useCallback((docId: string, runToken: number) => {
-        if (!docId) return;
-        const notifyKey = `${docId}::${runToken}`;
-        if (lastInterfaceSavedNotifyKeyRef.current === notifyKey) {
-            if (import.meta.env.DEV) {
-                console.log('[graph] interface_saved_notify_skipped docId=%s reason=already_notified', docId);
-            }
-            return;
-        }
-        lastInterfaceSavedNotifyKeyRef.current = notifyKey;
-        if (import.meta.env.DEV) {
-            console.log('[graph] interface_saved_notify docId=%s', docId);
-        }
-        onInterfaceSaved?.();
-    }, [onInterfaceSaved]);
+    }, [hoverStateRef, onSavedInterfaceLayoutPatch]);
 
     const handleDevDownloadJson = React.useCallback(() => {
         if (!import.meta.env.DEV) {
@@ -1018,10 +1001,10 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
                         () => currentPendingDocIdRef.current,
                         documentContext.setAIActivity,
                         setAIErrorWithAuthLog,
-                        documentContext.setInferredTitle
+                        documentContext.setInferredTitle,
+                        (record) => onSavedInterfaceUpsert?.(record, 'analysis_save')
                     );
                     captureAndPatchSavedLayout(docId);
-                    notifyInterfaceSaved(docId, createdAt);
                 } catch (error) {
                     ok = false;
                     console.error('[graph] pending analysis failed', error);
@@ -1088,10 +1071,10 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
                     () => currentPendingDocIdRef.current,
                     documentContext.setAIActivity,
                     setAIErrorWithAuthLog,
-                    documentContext.setInferredTitle
+                    documentContext.setInferredTitle,
+                    (record) => onSavedInterfaceUpsert?.(record, 'analysis_save')
                 );
                 captureAndPatchSavedLayout(docId);
-                notifyInterfaceSaved(docId, pendingAnalysisPayload.createdAt);
             } catch (error) {
                 ok = false;
                 console.error('[graph] pending_file_analyze_failed', error);
@@ -1130,7 +1113,7 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
         documentContext.setAIError,
         documentContext.setInferredTitle,
         captureAndPatchSavedLayout,
-        notifyInterfaceSaved
+        onSavedInterfaceUpsert
     ]);
 
     const handleSpawn = () => {
@@ -1469,7 +1452,8 @@ export const GraphPhysicsPlaygroundContainer: React.FC<GraphPhysicsPlaygroundPro
     documentViewerToggleToken,
     pendingLoadInterface,
     onPendingLoadInterfaceConsumed,
-    onInterfaceSaved
+    onSavedInterfaceUpsert,
+    onSavedInterfaceLayoutPatch
 }) => (
     <DocumentProvider>
         <PopupProvider>
@@ -1481,7 +1465,8 @@ export const GraphPhysicsPlaygroundContainer: React.FC<GraphPhysicsPlaygroundPro
                     documentViewerToggleToken={documentViewerToggleToken}
                     pendingLoadInterface={pendingLoadInterface}
                     onPendingLoadInterfaceConsumed={onPendingLoadInterfaceConsumed}
-                    onInterfaceSaved={onInterfaceSaved}
+                    onSavedInterfaceUpsert={onSavedInterfaceUpsert}
+                    onSavedInterfaceLayoutPatch={onSavedInterfaceLayoutPatch}
                 />
             </FullChatProvider>
         </PopupProvider>

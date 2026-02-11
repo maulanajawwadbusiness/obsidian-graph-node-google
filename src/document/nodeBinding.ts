@@ -9,7 +9,7 @@ import { setTopology, getTopology } from '../graph/topologyControl';
 import { deriveSpringEdges } from '../graph/springDerivation';
 import { springEdgesToPhysicsLinks } from '../graph/springToPhysics';
 import type { DirectedLink } from '../graph/topologyTypes';
-import { buildSavedInterfaceDedupeKey, loadSavedInterfaces, upsertSavedInterface } from '../store/savedInterfacesStore';
+import { buildSavedInterfaceDedupeKey, type SavedInterfaceRecordV1 } from '../store/savedInterfacesStore';
 
 
 export function applyFirstWordsToNodes(
@@ -53,7 +53,8 @@ export async function applyAnalysisToNodes(
   getCurrentDocId: () => string | null,
   setAIActivity: (active: boolean) => void,
   setAIError: (error: string | null) => void,
-  setInferredTitle: (title: string | null) => void
+  setInferredTitle: (title: string | null) => void,
+  onSavedInterfaceReady?: (record: SavedInterfaceRecordV1) => void
 ): Promise<void> {
   console.log(`[AI] Starting paper analysis for doc ${documentId.slice(0, 8)}...`);
 
@@ -210,8 +211,7 @@ export async function applyAnalysisToNodes(
       topology: finalTopology
     });
 
-    const beforeCount = loadSavedInterfaces().length;
-    const next = upsertSavedInterface({
+    const savedRecord: SavedInterfaceRecordV1 = {
       id: `iface-${Date.now()}-${documentId}`,
       createdAt: Date.now(),
       updatedAt: Date.now(),
@@ -225,15 +225,16 @@ export async function applyAnalysisToNodes(
       analysisMeta,
       preview,
       dedupeKey
-    });
+    };
+    onSavedInterfaceReady?.(savedRecord);
 
     if (import.meta.env.DEV) {
       console.log(
-        `[savedInterfaces] upsert ok id=${next[0]?.id || 'unknown'} docId=${documentId} nodes=${preview.nodeCount} links=${preview.linkCount} before=${beforeCount} after=${next.length}`
+        `[savedInterfaces] upsert_ready id=${savedRecord.id} docId=${documentId} nodes=${preview.nodeCount} links=${preview.linkCount}`
       );
       if (analysisMeta) {
         console.log(
-          `[savedInterfaces] analysisMeta_saved id=${next[0]?.id || 'unknown'} nodes=${Object.keys(analysisMeta.nodesById).length} summaries=${summaryCount}`
+          `[savedInterfaces] analysisMeta_saved id=${savedRecord.id} nodes=${Object.keys(analysisMeta.nodesById).length} summaries=${summaryCount}`
         );
       } else {
         console.log('[savedInterfaces] analysisMeta_save_skipped reason=no_runtime_node_meta');

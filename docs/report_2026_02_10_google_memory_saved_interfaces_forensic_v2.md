@@ -598,8 +598,11 @@ Response mapping:
   - `client_interface_id` -> `clientInterfaceId`
   - `payload_version` -> `payloadVersion`
   - `payload_json` -> `payloadJson`
-  - `created_at` -> `createdAt`
-  - `updated_at` -> `updatedAt`
+  - `created_at` -> `dbCreatedAt`
+  - `updated_at` -> `dbUpdatedAt`
+- hardening:
+  - `dbCreatedAt/dbUpdatedAt` are marked as DB row timestamps only.
+  - merge/order truth remains `payloadJson.updatedAt` to avoid rename-based reorder drift.
 
 Error behavior:
 - helper functions throw calm errors using status + wrapper error snippet
@@ -667,3 +670,45 @@ Backfill:
 - one-time logged-in backfill queue after merge:
   - upserts local records missing on remote or newer than remote
   - capped by `REMOTE_BACKFILL_LIMIT` (10) per boot/user key.
+
+---
+
+## 18) Step 6 Account Isolation Hardening (2026-02-11)
+
+File changed:
+- `src/screens/AppShell.tsx`
+
+Issue addressed:
+- prevent guest<->user and userA<->userB bleed when auth identity changes during hydrate/backfill/remote mirror.
+- prevent stale async results from previous identity from mutating current identity state.
+
+Identity barrier:
+- added identity refs:
+  - `authIdentityKeyRef`
+  - `syncEpochRef`
+  - `prevIdentityKeyRef`
+- canonical runtime identity key:
+  - logged-in: `user:<resolved-id>`
+  - logged-out: `guest`
+- on identity change:
+  - increments `syncEpochRef`
+  - resets sync refs/maps/queue state
+  - switches storage key deterministically:
+    - user -> `arnvoid_saved_interfaces_v1_user_<id>`
+    - guest -> `arnvoid_saved_interfaces_v1`
+  - clears cross-screen intents/state:
+    - `pendingLoadInterface`
+    - `pendingAnalysis`
+    - delete modal pending state
+    - search overlay open/query/highlight/focus state
+  - immediately reloads saved interfaces from the new key.
+
+Late-response guard:
+- remote upsert/delete tasks now capture `epoch + identity` at enqueue and re-check before and after await.
+- hydrate (`listSavedInterfaces`) now captures `epoch + identity + storageKey` and ignores results if any snapshot diverges before applying merged state.
+
+Ordering contract unchanged:
+- ordering still uses payload record timestamps (`payloadJson.updatedAt` / parsed record `updatedAt`), not DB row `updated_at`.
+
+Verification:
+- root build passes (`npm run build`).

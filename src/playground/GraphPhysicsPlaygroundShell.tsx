@@ -55,6 +55,7 @@ export type GraphPhysicsPlaygroundProps = {
     documentViewerToggleToken?: number;
     pendingLoadInterface?: SavedInterfaceRecordV1 | null;
     onPendingLoadInterfaceConsumed?: () => void;
+    onRestoreReadPathChange?: (active: boolean) => void;
     onSavedInterfaceUpsert?: (record: SavedInterfaceRecordV1, reason: string) => void;
     onSavedInterfaceLayoutPatch?: (
         docId: string,
@@ -122,6 +123,7 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
     documentViewerToggleToken,
     pendingLoadInterface = null,
     onPendingLoadInterfaceConsumed,
+    onRestoreReadPathChange,
     onSavedInterfaceUpsert,
     onSavedInterfaceLayoutPatch,
 }) => {
@@ -173,6 +175,12 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
     });
     const [spawnCount, setSpawnCount] = useState(4);
     const [seed, setSeed] = useState(Date.now()); // Seed for deterministic generation
+
+    useEffect(() => {
+        return () => {
+            onRestoreReadPathChange?.(false);
+        };
+    }, [onRestoreReadPathChange]);
 
     // FIX: Adaptive Scale (Temp)
     // Reduce edge length for small graphs (<8 nodes)
@@ -795,6 +803,7 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
         hasConsumedLoadRef.current = true;
         isRestoringRef.current = true;
         isRestoreReadPathRef.current = true;
+        onRestoreReadPathChange?.(true);
         const rec = pendingLoadInterface;
         console.log('[graph] consuming_pending_load_interface id=%s title=%s', rec.id, rec.title);
         onPendingLoadInterfaceConsumed?.();
@@ -942,6 +951,7 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
             console.error('[graph] pending_load_interface_done ok=false id=%s', rec.id, error);
         } finally {
             isRestoreReadPathRef.current = false;
+            onRestoreReadPathChange?.(false);
             isRestoringRef.current = false;
             if (
                 !restoredOk &&
@@ -954,6 +964,7 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
     }, [
         pendingLoadInterface,
         onPendingLoadInterfaceConsumed,
+        onRestoreReadPathChange,
         documentContext.state.aiActivity,
         documentContext.setDocument,
         documentContext.setInferredTitle,
@@ -1477,6 +1488,7 @@ export const GraphPhysicsPlaygroundContainer: React.FC<GraphPhysicsPlaygroundPro
     documentViewerToggleToken,
     pendingLoadInterface,
     onPendingLoadInterfaceConsumed,
+    onRestoreReadPathChange,
     onSavedInterfaceUpsert,
     onSavedInterfaceLayoutPatch
 }) => (
@@ -1490,6 +1502,7 @@ export const GraphPhysicsPlaygroundContainer: React.FC<GraphPhysicsPlaygroundPro
                     documentViewerToggleToken={documentViewerToggleToken}
                     pendingLoadInterface={pendingLoadInterface}
                     onPendingLoadInterfaceConsumed={onPendingLoadInterfaceConsumed}
+                    onRestoreReadPathChange={onRestoreReadPathChange}
                     onSavedInterfaceUpsert={onSavedInterfaceUpsert}
                     onSavedInterfaceLayoutPatch={onSavedInterfaceLayoutPatch}
                 />

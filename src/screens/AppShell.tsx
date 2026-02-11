@@ -44,6 +44,7 @@ type GraphPendingAnalysisProps = {
     documentViewerToggleToken?: number;
     pendingLoadInterface?: SavedInterfaceRecordV1 | null;
     onPendingLoadInterfaceConsumed?: () => void;
+    onRestoreReadPathChange?: (active: boolean) => void;
     onSavedInterfaceUpsert?: (record: SavedInterfaceRecordV1, reason: string) => void;
     onSavedInterfaceLayoutPatch?: (
         docId: string,
@@ -170,6 +171,7 @@ export const AppShell: React.FC = () => {
     const searchInputRef = React.useRef<HTMLInputElement | null>(null);
     const didSelectThisOpenRef = React.useRef(false);
     const savedInterfacesRef = React.useRef<SavedInterfaceRecordV1[]>([]);
+    const restoreReadPathActiveRef = React.useRef(false);
     const authIdentityKeyRef = React.useRef<string>('guest');
     const syncEpochRef = React.useRef(0);
     const prevIdentityKeyRef = React.useRef<string | null>(null);
@@ -295,6 +297,12 @@ export const AppShell: React.FC = () => {
         });
     }, [enqueueRemoteTask]);
     const commitUpsertInterface = React.useCallback((record: SavedInterfaceRecordV1, reason: string) => {
+        if (restoreReadPathActiveRef.current) {
+            if (import.meta.env.DEV) {
+                console.log('[savedInterfaces] restore_write_blocked op=upsert id=%s reason=%s', record.id, reason);
+            }
+            return;
+        }
         if (reason.startsWith('restore_')) {
             if (import.meta.env.DEV) {
                 console.log('[savedInterfaces] restore_write_blocked op=upsert id=%s reason=%s', record.id, reason);
@@ -335,6 +343,12 @@ export const AppShell: React.FC = () => {
         camera: SavedInterfaceRecordV1['camera'],
         reason: string
     ) => {
+        if (restoreReadPathActiveRef.current) {
+            if (import.meta.env.DEV) {
+                console.log('[savedInterfaces] restore_write_blocked op=layout_patch docId=%s reason=%s', docId, reason);
+            }
+            return;
+        }
         if (reason.startsWith('restore_')) {
             if (import.meta.env.DEV) {
                 console.log('[savedInterfaces] restore_write_blocked op=layout_patch docId=%s reason=%s', docId, reason);
@@ -819,6 +833,9 @@ export const AppShell: React.FC = () => {
                     documentViewerToggleToken={documentViewerToggleToken}
                     pendingLoadInterface={pendingLoadInterface}
                     onPendingLoadInterfaceConsumed={() => setPendingLoadInterface(null)}
+                    onRestoreReadPathChange={(active) => {
+                        restoreReadPathActiveRef.current = active;
+                    }}
                     onSavedInterfaceUpsert={(record, reason) => commitUpsertInterface(record, reason)}
                     onSavedInterfaceLayoutPatch={(docId, layout, camera, reason) =>
                         commitPatchLayoutByDocId(docId, layout, camera, reason)

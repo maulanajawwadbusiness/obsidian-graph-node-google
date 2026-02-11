@@ -135,7 +135,9 @@ Saved interfaces in the left Sidebar are now local-first and AppShell-owned.
 Current behavior:
 - Source of truth:
   - Store module: `src/store/savedInterfacesStore.ts`
-  - Versioned key: `arnvoid_saved_interfaces_v1`
+  - Versioned key: `arnvoid_saved_interfaces_v1` (guest/offline default)
+  - Auth namespace key: `arnvoid_saved_interfaces_v1_user_<user>`
+  - Active key is selected by AppShell based on auth state.
 - Sidebar list:
   - AppShell loads and maps saved records into Sidebar rows.
   - Sidebar renders provided order and does not apply additional sorting.
@@ -151,12 +153,89 @@ Current behavior:
   - row menu delete opens AppShell-level centered confirm modal.
   - confirm removes record from local storage and refreshes Sidebar immediately.
   - if pending restore intent matches deleted id, it is cleared.
+- Search:
+  - Sidebar "Search Interfaces" opens centered AppShell overlay.
+  - Filter is in-memory from AppShell `savedInterfaces` (no localStorage reads per keystroke).
+  - Overlay is shielded so pointer and wheel never leak to canvas.
 - Disabled state:
   - when Sidebar is disabled (graph loading), row menu actions are non-actionable.
+
+Saved interface payload contract (full, non-trimmed):
+- Record shape: `SavedInterfaceRecordV1` in `src/store/savedInterfacesStore.ts`
+- Must preserve:
+  - `parsedDocument` including full `text`, `sourceType`, `fileName`, `meta`, and parser warnings/errors if present
+  - full `topology`
+  - `layout.nodeWorld` + `layout.camera`
+  - `analysisMeta.nodesById` summaries (`sourceTitle`, `sourceSummary`)
+  - payload timestamps (`createdAt`, `updatedAt`)
+- Ordering truth:
+  - Sidebar order is based on payload `updatedAt` (then `createdAt`) from the saved record.
+  - DB row `updated_at` is metadata only and must not be used for UI ordering.
+  - Rename and layout patch paths are hardened to avoid unintended reorder.
+
+Remote memory (account-backed):
+- Backend table: `public.saved_interfaces` (Postgres), keyed by authenticated `user_id`.
+- Migration: `src/server/migrations/1770383000000_add_saved_interfaces.js`
+- Schema summary:
+  - `id` bigserial PK
+  - `user_id` bigint FK -> `users(id)` ON DELETE CASCADE
+  - `client_interface_id` text not null
+  - `title` text not null
+  - `payload_version` integer not null default 1
+  - `payload_json` jsonb not null
+  - `created_at`, `updated_at` timestamptz defaults
+- Constraints and indexes:
+  - unique `(user_id, client_interface_id)`
+  - index `(user_id, updated_at desc)`
+  - index `(user_id, title)`
+- API routes (requireAuth):
+  - `GET /api/saved-interfaces`
+  - `POST /api/saved-interfaces/upsert`
+  - `POST /api/saved-interfaces/delete`
+- Payload size limit:
+  - server guard constant `MAX_SAVED_INTERFACE_PAYLOAD_BYTES` (default 15 MB) in `src/server/src/serverMonolith.ts`
+- AppShell sync role:
+  - Hydrates remote + local on auth-ready, merges, and persists into active local namespace.
+  - Mirrors local save/rename/delete events to backend as best-effort background sync.
+  - Logged-out mode skips remote calls completely.
+
+Unified write contract (current truth):
+- AppShell is the write owner for saved interface mutations.
+- Commit surfaces in `src/screens/AppShell.tsx`:
+  - `commitUpsertInterface`
+  - `commitPatchLayoutByDocId`
+  - `commitRenameInterface`
+  - `commitDeleteInterface`
+  - `commitHydrateMerge`
+- Graph and node-binding emit callbacks to AppShell; they do not directly mutate saved interface storage anymore.
+
+Remote failure behavior (current truth):
+- Remote sync uses a persistent per-identity outbox in AppShell.
+- Local state + localStorage are UX truth; remote is mirror-only.
+- Outbox localStorage namespace:
+  - `arnvoid_saved_interfaces_v1_remote_outbox_<identityKey>`
+- Retry policy:
+  - retryable: network/timeout, 5xx, 429
+  - 401: pause then retry window; local remains unaffected
+  - 413/non-retryable: drop outbox item; local remains unaffected
+  - `payload_missing`: non-retryable (prevents infinite retry loop)
+- Outbox is namespaced by identity key to prevent cross-account bleed.
+- Restore-active phase blocks remote drain.
+
+Ordering contract (critical):
+- Ordering truth is `record.updatedAt` inside saved payload (`payload_json`), not DB row `updated_at`.
+- Reason: backend upsert sets row `updated_at=now()` and would reorder on rename if used for sort.
+- Frontend API fields for row timestamps are DB-scoped (`dbCreatedAt`, `dbUpdatedAt`) and must not drive list ordering.
 
 Input safety contract:
 - Sidebar root, row menu, row menu items, and delete confirm modal all stop pointer and wheel propagation.
 - Modal/backdrop interactions must never leak to canvas input handlers.
+
+Restore purity contract:
+- Restore path is read-only.
+- Restore applies saved `parsedDocument`, `topology`, `layout`, `camera`, and `analysisMeta`.
+- Restore must not enqueue save/upsert/delete/layout-patch side effects.
+- Structural restore-active guards exist in graph shell and AppShell commit layer.
 
 ## 3. Physics Architecture And Contract
 The graph is driven by a **Hybrid Solver** (`src/physics/`) prioritizing "Visual Dignity" over pure simulation accuracy.
@@ -384,6 +463,16 @@ Frontend:
 - Cookie name: `arnvoid_session`
 - `/me` is the only source of truth for user state.
 - All backend calls must include `credentials: "include"`.
+- Frontend route base is `VITE_API_BASE_URL`:
+  - auth calls are `${VITE_API_BASE_URL}/auth/google`, `${VITE_API_BASE_URL}/auth/logout`, and `${VITE_API_BASE_URL}/me`.
+  - `/api/*` pathing is only true when `VITE_API_BASE_URL=/api` (for example behind Vercel rewrite).
+- Backend runtime route ownership:
+  - route logic lives in `src/server/src/serverMonolith.ts`.
+  - `src/server/src/index.ts` is a thin entry that imports `serverMonolith`.
+- `/me` payload contract:
+  - returns `sub`, `email`, `name`, `picture` for signed-in state.
+  - does not currently return DB numeric `id` in the `/me` response body.
+  - frontend identity logic must support `sub` fallback for namespacing and sync isolation.
 
 ## Fonts
 - UI default: Quicksand (via CSS vars)

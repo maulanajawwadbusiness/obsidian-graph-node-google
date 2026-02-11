@@ -7,6 +7,16 @@ Date: 2026-02-06
 Update Note: 2026-02-10
 - Added local-first saved interface system and extensive Sidebar session UX hardening.
 
+Update Note: 2026-02-11
+- Added backend `saved_interfaces` schema and requireAuth CRUD API for account-backed memory.
+- Added AppShell sync orchestration for local + remote saved interface merge/mirror.
+- Added auth-aware localStorage namespace keys to prevent cross-account session bleed.
+- Locked ordering contract to payload `updatedAt` (DB row timestamps are metadata only).
+- Added unified AppShell write contract for saved interfaces (single writer seam).
+- Added restore-read-only hardening (no save/sync side effects during restore).
+- Added per-identity persistent remote outbox with retry/backoff for mirror resilience.
+- Added remote outbox non-retryable guard for `payload_missing` to prevent infinite retries.
+
 ## 1. Repository Tree (Depth 4)
 Excluding: node_modules, dist, build, .git
 
@@ -170,6 +180,76 @@ Follow the auth flow:
 Note:
 - `src/auth/useAuth.ts` was replaced by `AuthProvider.tsx`.
 
+## 7.1 Saved Interfaces Sync Map (Current)
+
+Primary files:
+- `src/screens/AppShell.tsx` (sync brain, unified commit paths, outbox)
+- `src/store/savedInterfacesStore.ts` (local storage schema + namespace helpers)
+- `src/playground/GraphPhysicsPlaygroundShell.tsx` (restore pipeline + callback emitters)
+- `src/document/nodeBinding.ts` (analysis record creation, callback emission)
+- `src/api.ts` (saved-interfaces API helpers)
+- `src/server/src/serverMonolith.ts` (requireAuth CRUD API)
+- `src/server/migrations/1770383000000_add_saved_interfaces.js` (DB table)
+
+Current write ownership:
+1. Graph analysis/layout and Sidebar actions emit into AppShell commit surfaces.
+2. AppShell commits update in-memory list + persist local immediately.
+3. Authenticated mode enqueues remote mirror operations into per-identity outbox.
+4. Outbox drains asynchronously with retry policy.
+5. Restore path is read-only and must not emit write commits.
+
+Identity isolation:
+- local saved key: guest vs `arnvoid_saved_interfaces_v1_user_<id>`
+- outbox key: `arnvoid_saved_interfaces_v1_remote_outbox_<identityKey>`
+- epoch + identity guards block stale async apply after identity switches.
+
+Restore contract:
+- restore is read-only and must not enqueue remote or local write-side effects.
+
+Ordering contract:
+- sidebar ordering uses payload `record.updatedAt` only.
+- DB `updated_at` is metadata and must not drive UI ordering.
+
+Payload and API contract:
+- full payload is mirrored (`parsedDocument.text`, full meta/warnings, topology, layout/camera, analysisMeta)
+- requireAuth backend routes:
+  - `GET /api/saved-interfaces`
+  - `POST /api/saved-interfaces/upsert`
+  - `POST /api/saved-interfaces/delete`
+- backend payload guard:
+  - `MAX_SAVED_INTERFACE_PAYLOAD_BYTES` default 15 MB
+
+Search overlay contract:
+- centered AppShell overlay opened from Sidebar Search row
+- in-memory search over AppShell saved list (no localStorage reads while typing)
+- strict pointer/wheel shielding to prevent canvas input leaks
+
+## 7.2 Saved Interfaces Call Graph (Step 7-9)
+
+Write path (single writer):
+1. Graph/nodeBinding/sidebar intent
+2. AppShell commit surface (`commitUpsertInterface`, `commitPatchLayoutByDocId`, `commitRenameInterface`, `commitDeleteInterface`, `commitHydrateMerge`)
+3. immediate in-memory list update
+4. immediate localStorage persist (active identity key)
+5. optional outbox enqueue (authenticated only)
+6. async outbox drain (retry/backoff, identity/epoch guarded)
+
+Restore path (read-only):
+1. Sidebar select -> `pendingLoadInterface`
+2. Graph shell restore apply (`parsedDocument`, `topology`, `layout`, `camera`, `analysisMeta`)
+3. restore-active guards block local commit and remote outbox drains
+
+## 7.3 Saved Interfaces DB Reference
+
+- migration file: `src/server/migrations/1770383000000_add_saved_interfaces.js`
+- table: `public.saved_interfaces`
+- key constraints:
+  - FK `user_id -> users(id)` with `ON DELETE CASCADE`
+  - unique `(user_id, client_interface_id)`
+- indexes:
+  - `(user_id, updated_at desc)`
+  - `(user_id, title)`
+
 ## 8. Payments (GoPay QRIS)
 Frontend:
 - `src/components/PaymentGopayPanel.tsx` for QRIS UI and polling.
@@ -272,6 +352,11 @@ Current capabilities:
 4. Inline rename with local persistence.
 5. Delete via AppShell confirm modal with immediate list refresh.
 6. Disabled-state hardening for row-menu actions while graph loading.
+7. Backend account memory (Postgres `saved_interfaces`) with requireAuth list/upsert/delete API.
+8. AppShell hydration merge (local + remote) and best-effort background mirror on save/rename/delete.
+9. Auth namespace storage keying to isolate local cache per user and prevent account bleed.
+10. Search overlay for instant saved-session lookup with strict input shielding.
+11. Restore-purity and outbox resilience hardening (step 8 and step 9).
 
 Interaction safety:
 - Sidebar row menu and AppShell delete modal are shielded against pointer/wheel leakage to canvas.
@@ -279,3 +364,13 @@ Interaction safety:
 Ordering note:
 - Sidebar order is store-driven newest-first by `updatedAt`, then `createdAt`.
 - Rename was hardened to avoid reorder by not mutating `updatedAt`.
+- Remote ordering truth is payload `record.updatedAt` from `payload_json`.
+- DB row timestamps (`created_at`, `updated_at`) are exposed as metadata and must not drive merge/sort.
+
+Forensic report pointers:
+- `docs/report_2026_02_10_google_memory_saved_interfaces_forensic_v2.md`
+- `docs/report_2026_02_11_saved_interfaces_sync_brain_step5.md`
+- `docs/report_2026_02_11_saved_interfaces_unified_write_contract_step7.md`
+- `docs/report_2026_02_11_preserve_restore_pipeline_step8.md`
+- `docs/report_2026_02_11_remote_failure_saved_interfaces_step9.md`
+- `docs/report_2026_02_11_google_saved_sessions_steps_1_9_unified.md`

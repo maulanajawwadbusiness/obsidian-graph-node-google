@@ -180,7 +180,7 @@ export interface ForceConfig {
   // Harmonic Net (Uniform Link Lengths)
   // ---------------------------------------------------------------------------
   linkRestLength: number;  // Uniform rest length for all springs (px)
-  springDeadZone: number;  // Fraction of rest length where force is minimal (0.15 = ±15%)
+  springDeadZone: number;  // Fraction of rest length where force is minimal (0.15 = +/-15%)
 
   // ---------------------------------------------------------------------------
   // Soft Spacing (Personal Space)

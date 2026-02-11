@@ -89,7 +89,7 @@ export const applyEdgeShearStagnationEscape = (
         const edgeX = dx / dist;
         const edgeY = dy / dist;
 
-        // Perpendicular direction (90° rotation)
+        // Perpendicular direction (90 deg rotation)
         const perpX = -edgeY;
         const perpY = edgeX;
 

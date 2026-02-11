@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { usePopup } from './PopupStore';
 import { ChatInput } from './ChatInput';
+import { ChatShortageNotif } from './ChatShortageNotif';
 import { t } from '../i18n/t';
 
 const stopPropagation = (e: React.SyntheticEvent) => e.stopPropagation();
@@ -414,7 +415,7 @@ export const NodePopup: React.FC<NodePopupProps> = ({ trackNode, engineRef }) =>
                         onMouseLeave={(e) => (e.currentTarget.style.color = 'rgba(180, 190, 210, 0.7)')}
                         title={t('tooltip.close')}
                     >
-                        ×
+                        x
                     </button>
                 </div>
 
@@ -428,9 +429,10 @@ export const NodePopup: React.FC<NodePopupProps> = ({ trackNode, engineRef }) =>
                         ? { transition: 'opacity 300ms ease-out 150ms' }
                         : { opacity: 0, transition: 'opacity 300ms ease-out 150ms' }
                 }>
-                    <ChatInput onSend={sendMessage} placeholder={t('nodePopup.inputPlaceholder')} />
+                    <ChatInput onSend={(text) => sendMessage(text, 'node-popup')} placeholder={t('nodePopup.inputPlaceholder')} />
                 </div>
             </div>
+            <ChatShortageNotif surface="node-popup" anchorRef={popupRef} zIndex={1003} />
         </>
     );
 };

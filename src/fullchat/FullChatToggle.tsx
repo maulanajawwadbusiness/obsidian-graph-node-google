@@ -28,12 +28,12 @@ const TOGGLE_STYLE: React.CSSProperties = {
 const ICON_STYLE: React.CSSProperties = {
     width: '64px',
     height: '64px',
-    opacity: 0.35,
+    opacity: 0.7,
     transition: 'opacity 200ms ease',
 };
 
 const ICON_STYLE_HOVER: React.CSSProperties = {
-    opacity: 0.6,
+    opacity: 1,
 };
 
 export const FullChatToggle: React.FC = () => {

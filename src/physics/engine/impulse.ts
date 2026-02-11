@@ -71,8 +71,8 @@ export const fireInitialImpulse = (engine: PhysicsEngine, timestamp: number = 0)
     // This is NOT derived from node velocities - it's the medium itself
     // KICK: Small random rotation to break symmetry
     const seed = engine.nodes.size + engine.links.length;
-    engine.globalAngularVel = (pseudoRandom(seed) - 0.5) * 0.3; // ±0.15 rad/s
+    engine.globalAngularVel = (pseudoRandom(seed) - 0.5) * 0.3; // +/-0.15 rad/s
 
     engine.hasFiredImpulse = true;
-    console.log(`[LotusLeaf] Medium initialized: ω=${engine.globalAngularVel.toFixed(4)} rad/s at t=${timestamp.toFixed(0)}`);
+    console.log(`[LotusLeaf] Medium initialized: omega=${engine.globalAngularVel.toFixed(4)} rad/s at t=${timestamp.toFixed(0)}`);
 };

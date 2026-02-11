@@ -10,9 +10,11 @@ import {
     THEME_TOGGLE_STYLE
 } from '../graphPlaygroundStyles';
 import { IS_DEV } from '../rendering/debugUtils';
+import downloadDevModeIcon from '../../assets/download_dev_mode.png';
 
 // Toggle to show/hide debug controls buttons (Debug, Theme, Controls)
-const SHOW_DEBUG_CONTROLS = true;
+const SHOW_DEBUG_CONTROLS = false;
+const SHOW_DEV_DOWNLOAD_JSON_BUTTON = true;
 
 import type { ForceConfig } from '../../physics/types';
 
@@ -59,6 +61,7 @@ type CanvasOverlaysProps = {
         energy: number;
         degradePct: number;
     }>;
+    onDevDownloadJson?: () => void;
 };
 
 export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
@@ -95,6 +98,7 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
     hudScenarioLabel,
     hudDragTargetId,
     hudScores,
+    onDevDownloadJson,
     config,
     onConfigChange
 }) => {
@@ -184,6 +188,44 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
                 </button>
             )}
 
+            {import.meta.env.DEV && SHOW_DEV_DOWNLOAD_JSON_BUTTON && (
+                <button
+                    type="button"
+                    style={{
+                        ...SIDEBAR_TOGGLE_STYLE,
+                        top: '56px',
+                        width: '32px',
+                        height: '32px',
+                        padding: '4px',
+                        background: 'transparent',
+                        border: 'none',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                    }}
+                    onPointerDown={stopPropagation}
+                    onPointerUp={stopPropagation}
+                    onWheelCapture={stopPropagation}
+                    onWheel={stopPropagation}
+                    onClick={(e) => {
+                        stopPropagation(e);
+                        onDevDownloadJson?.();
+                    }}
+                    aria-label="Download graph json (dev)"
+                    title="Download graph json (dev)"
+                >
+                    <img
+                        src={downloadDevModeIcon}
+                        alt="Download graph json"
+                        style={{
+                            width: '22px',
+                            height: '22px',
+                            objectFit: 'contain',
+                        }}
+                    />
+                </button>
+            )}
+
             {debugOpen && (
                 <div
                     style={{
@@ -224,7 +266,7 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
                                     aria-label="Close debug panel"
                                     title="Close"
                                 >
-                                    ✕
+                                    x
                                 </button>
                             </div>
                         </div>
@@ -420,7 +462,7 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
                                     Jitter(1s): {hud ? hud.jitterAvg.toFixed(4) : '0.0'}<br />
                                     PBD Corr: {hud ? hud.pbdCorrectionSum.toFixed(3) : '0.0'}<br />
                                     Conflict(5s): {hud ? hud.conflictPct5s.toFixed(1) : '0.0'}%<br />
-                                    Engy(v²): {hud ? hud.energyProxy.toFixed(4) : '0.0'}<br />
+                                    Engy(v^2): {hud ? hud.energyProxy.toFixed(4) : '0.0'}<br />
                                     {hud && SHOW_DEEP_FORENSICS && (
                                         <div style={{ marginTop: '4px', paddingTop: '4px', borderTop: '1px solid #444', color: '#faa' }}>
                                             <strong>Law Pop Diagnostics</strong><br />
@@ -451,20 +493,20 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
                                             corrMax: {(hud.xpbdSpringCorrMaxPx || 0).toFixed(3)} px<br />
                                             errAvg: {(hud.xpbdSpringErrAvgPx || 0).toFixed(3)} px<br />
                                             first: {(hud.xpbdFirstConstraintDistPx || 0).toFixed(1)} / {(hud.xpbdFirstConstraintRestPx || 0).toFixed(1)} (C={(hud.xpbdFirstConstraintErrPx || 0).toFixed(1)})<br />
-                                            pair: {hud.xpbdFirstConstraintAId || '-'} ({(hud.xpbdFirstConstraintAX || 0).toFixed(1)},{(hud.xpbdFirstConstraintAY || 0).toFixed(1)}) ↔ {hud.xpbdFirstConstraintBId || '-'} ({(hud.xpbdFirstConstraintBX || 0).toFixed(1)},{(hud.xpbdFirstConstraintBY || 0).toFixed(1)})<br />
-                                            prev: {(hud.xpbdFirstConstraintPrevDistPx || 0).toFixed(1)} ({(hud.xpbdFirstConstraintPrevAX || 0).toFixed(1)},{(hud.xpbdFirstConstraintPrevAY || 0).toFixed(1)}) ↔ ({(hud.xpbdFirstConstraintPrevBX || 0).toFixed(1)},{(hud.xpbdFirstConstraintPrevBY || 0).toFixed(1)})<br />
+                                            pair: {hud.xpbdFirstConstraintAId || '-'} ({(hud.xpbdFirstConstraintAX || 0).toFixed(1)},{(hud.xpbdFirstConstraintAY || 0).toFixed(1)}) {'<->'} {hud.xpbdFirstConstraintBId || '-'} ({(hud.xpbdFirstConstraintBX || 0).toFixed(1)},{(hud.xpbdFirstConstraintBY || 0).toFixed(1)})<br />
+                                            prev: {(hud.xpbdFirstConstraintPrevDistPx || 0).toFixed(1)} ({(hud.xpbdFirstConstraintPrevAX || 0).toFixed(1)},{(hud.xpbdFirstConstraintPrevAY || 0).toFixed(1)}) {'<->'} ({(hud.xpbdFirstConstraintPrevBX || 0).toFixed(1)},{(hud.xpbdFirstConstraintPrevBY || 0).toFixed(1)})<br />
                                             jump: {(hud.xpbdFirstJumpPx || 0).toFixed(1)} px ({hud.xpbdFirstJumpPhase || 'none'} / {hud.xpbdFirstJumpNodeId || '-'})<br />
                                             pre: {(hud.xpbdFirstPreIntegrateJumpPx || 0).toFixed(1)} px (pre / {hud.xpbdFirstPreIntegrateNodeId || '-'})<br />
                                             move: {(hud.xpbdFirstMovePx || 0).toFixed(1)} px ({hud.xpbdFirstMovePhase || 'none'} / {hud.xpbdFirstMoveNodeId || '-'})<br />
-                                            cap: {hud.xpbdFirstCapHit ? 'Y' : 'N'} | α: {(hud.xpbdFirstAlpha || 0).toExponential(2)} | wSum: {(hud.xpbdFirstWSum || 0).toFixed(2)}<br />
-                                            rest: {(hud.xpbdSpringRestMinPx || 0).toFixed(0)}-{(hud.xpbdSpringRestMaxPx || 0).toFixed(0)} (μ={(hud.xpbdSpringRestAvgPx || 0).toFixed(0)})<br />
+                                            cap: {hud.xpbdFirstCapHit ? 'Y' : 'N'} | alpha: {(hud.xpbdFirstAlpha || 0).toExponential(2)} | wSum: {(hud.xpbdFirstWSum || 0).toFixed(2)}<br />
+                                            rest: {(hud.xpbdSpringRestMinPx || 0).toFixed(0)}-{(hud.xpbdSpringRestMaxPx || 0).toFixed(0)} (mu={(hud.xpbdSpringRestAvgPx || 0).toFixed(0)})<br />
                                             iter: {hud.xpbdIterationsUsed || 1} (cfg: {hud.xpbdIterationsIdle || 1}/{hud.xpbdIterationsDrag || 1}) | maxC: {(hud.xpbdMaxAbsC || 0).toFixed(2)}px<br />
                                             solve: {(hud.xpbdSpringSolveMs || 0).toFixed(2)} ms {hud.xpbdEarlyBreaks ? `(Break: ${hud.xpbdEarlyBreaks})` : ''}<br />
                                             <span style={{ fontSize: '0.9em', color: '#888' }}>
                                                 drop: {hud.xpbdSpringSkipped}/{hud.xpbdSpringSingularity} | sync: {hud.xpbdGhostSyncs}<br />
                                                 <span title="Peak inferred velocity from solver corrections (Projection / dt)">ghost:</span> {(hud.xpbdGhostVelMax || 0).toFixed(1)}px/s (evt: {hud.xpbdGhostVelEvents})<br />
                                                 inv: {hud.xpbdInvInvalid} | inf: {hud.xpbdInvNonFinite} | 0len: {hud.xpbdInvZero}<br />
-                                                <span title="Compliance value in use (lower = stiffer)">C:</span> {(hud.xpbdComplianceUsed || 0).toFixed(6)} | <span title="Average alpha = compliance/dt² (higher = stronger correction)">α:</span> {(hud.xpbdAlphaAvg || 0).toFixed(2)}<br />
+                                                <span title="Compliance value in use (lower = stiffer)">C:</span> {(hud.xpbdComplianceUsed || 0).toFixed(6)} | <span title="Average alpha = compliance/dt^2 (higher = stronger correction)">alpha:</span> {(hud.xpbdAlphaAvg || 0).toFixed(2)}<br />
                                                 <span style={{ color: hud.xpbdDragActive ? '#00eeee' : '#666' }}>
                                                     drag: {hud.xpbdDragActive ? 'ON' : 'off'} (k={hud.xpbdDragKinematic ? '1' : '0'}, sync={hud.xpbdDragSyncs})
                                                 </span>

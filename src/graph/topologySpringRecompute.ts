@@ -31,7 +31,7 @@ export function recomputeSprings(topology: Topology, config?: ForceConfig): Topo
         const freshCount = springs.length;
         const existingCount = topology.springs.length;
         if (freshCount !== existingCount) {
-            console.warn(`[TopologySpringRecompute] ⚠ Spring count mismatch! Fresh=${freshCount}, Existing=${existingCount}`);
+            console.warn(`[TopologySpringRecompute] WARN Spring count mismatch! Fresh=${freshCount}, Existing=${existingCount}`);
             console.warn(`[TopologySpringRecompute] Springs were stale - replacing with fresh derivation`);
         }
     }

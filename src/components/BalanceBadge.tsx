@@ -25,14 +25,16 @@ export const BalanceBadge: React.FC = () => {
             lastNoticeRef.current = null;
             return;
         }
+        if (status === 'error') {
+            lastNoticeRef.current = null;
+            return;
+        }
         if (lastNoticeRef.current) return;
         const id = pushMoneyNotice({
             kind: 'balance',
-            status: status === 'unauthorized' ? 'warning' : 'error',
-            title: status === 'unauthorized' ? 'Saldo belum tersedia' : 'Saldo belum terbaca',
-            message: status === 'unauthorized'
-                ? 'Silakan login untuk melihat saldo. Saldo tidak berubah.'
-                : 'Koneksi bermasalah. Saldo tidak berubah.',
+            status: 'warning',
+            title: 'Saldo belum tersedia',
+            message: 'Silakan login untuk melihat saldo. Saldo tidak berubah.',
             ctas: [
                 {
                     label: 'Cek ulang saldo',

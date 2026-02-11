@@ -9,6 +9,7 @@ import { setTopology, getTopology } from '../graph/topologyControl';
 import { deriveSpringEdges } from '../graph/springDerivation';
 import { springEdgesToPhysicsLinks } from '../graph/springToPhysics';
 import type { DirectedLink } from '../graph/topologyTypes';
+import { buildSavedInterfaceDedupeKey, type SavedInterfaceRecordV1 } from '../store/savedInterfacesStore';
 
 
 export function applyFirstWordsToNodes(
@@ -35,6 +36,12 @@ export function applyFirstWordsToNodes(
 
 import { analyzeDocument } from '../ai/paperAnalyzer';
 
+function countWords(text: string): number {
+  const trimmed = text.trim();
+  if (!trimmed) return 0;
+  return trimmed.split(/\s+/).length;
+}
+
 /**
  * Apply AI Analysis (5 Key Points) to nodes
  * Replaces the old "3-word label" logic with a richer Title + Summary binding
@@ -46,7 +53,8 @@ export async function applyAnalysisToNodes(
   getCurrentDocId: () => string | null,
   setAIActivity: (active: boolean) => void,
   setAIError: (error: string | null) => void,
-  setInferredTitle: (title: string | null) => void
+  setInferredTitle: (title: string | null) => void,
+  onSavedInterfaceReady?: (record: SavedInterfaceRecordV1) => void
 ): Promise<void> {
   console.log(`[AI] Starting paper analysis for doc ${documentId.slice(0, 8)}...`);
 
@@ -149,6 +157,88 @@ export async function applyAnalysisToNodes(
     if (inferred) {
       setInferredTitle(inferred);
       console.log(`[AI] Inferred Title: "${inferred}"`);
+    }
+
+    const interfaceTitle = inferred || 'Untitled Interface';
+    const nodesById: Record<string, { sourceTitle?: string; sourceSummary?: string }> = {};
+    let summaryCount = 0;
+    for (const node of orderedNodes) {
+      const nodeMeta = node.meta as Record<string, unknown> | undefined;
+      if (!nodeMeta) continue;
+      const sourceTitle = typeof nodeMeta.sourceTitle === 'string' ? nodeMeta.sourceTitle : undefined;
+      const sourceSummary = typeof nodeMeta.sourceSummary === 'string' ? nodeMeta.sourceSummary : undefined;
+      if (!sourceTitle && !sourceSummary) continue;
+      nodesById[node.id] = { sourceTitle, sourceSummary };
+      if (sourceSummary) {
+        summaryCount += 1;
+      }
+    }
+    const analysisMeta = Object.keys(nodesById).length > 0
+      ? {
+        version: 1 as const,
+        nodesById
+      }
+      : undefined;
+
+    const parsedDocument: ParsedDocument = {
+      id: documentId,
+      fileName: interfaceTitle,
+      mimeType: 'text/plain',
+      sourceType: 'txt',
+      text: documentText,
+      warnings: [],
+      meta: {
+        wordCount: countWords(documentText),
+        charCount: documentText.length
+      }
+    };
+
+    const preview = {
+      nodeCount: finalTopology.nodes.length,
+      linkCount: finalTopology.links.length,
+      charCount: parsedDocument.meta.charCount,
+      wordCount: parsedDocument.meta.wordCount
+    };
+    const source = documentId.startsWith('pasted-')
+      ? 'paste'
+      : documentId.startsWith('dropped-')
+        ? 'file'
+        : 'unknown';
+
+    const dedupeKey = buildSavedInterfaceDedupeKey({
+      docId: documentId,
+      title: interfaceTitle,
+      topology: finalTopology
+    });
+
+    const savedRecord: SavedInterfaceRecordV1 = {
+      id: `iface-${Date.now()}-${documentId}`,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      title: interfaceTitle,
+      docId: documentId,
+      source,
+      fileName: parsedDocument.fileName,
+      mimeType: parsedDocument.mimeType,
+      parsedDocument,
+      topology: finalTopology,
+      analysisMeta,
+      preview,
+      dedupeKey
+    };
+    onSavedInterfaceReady?.(savedRecord);
+
+    if (import.meta.env.DEV) {
+      console.log(
+        `[savedInterfaces] upsert_ready id=${savedRecord.id} docId=${documentId} nodes=${preview.nodeCount} links=${preview.linkCount}`
+      );
+      if (analysisMeta) {
+        console.log(
+          `[savedInterfaces] analysisMeta_saved id=${savedRecord.id} nodes=${Object.keys(analysisMeta.nodesById).length} summaries=${summaryCount}`
+        );
+      } else {
+        console.log('[savedInterfaces] analysisMeta_save_skipped reason=no_runtime_node_meta');
+      }
     }
 
     console.log(`[AI] Applied ${points.length} analysis points`);

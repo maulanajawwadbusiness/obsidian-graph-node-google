@@ -14,8 +14,8 @@ const DOT_STYLE: React.CSSProperties = {
 
 export const StreamingDots: React.FC = memo(() => (
     <span style={STREAMING_DOTS_STYLE}>
-        <span style={DOT_STYLE}>·</span>
-        <span style={DOT_STYLE}>·</span>
-        <span style={DOT_STYLE}>·</span>
+        <span style={DOT_STYLE}>.</span>
+        <span style={DOT_STYLE}>.</span>
+        <span style={DOT_STYLE}>.</span>
     </span>
 ));

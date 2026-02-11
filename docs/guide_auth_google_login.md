@@ -1,25 +1,26 @@
 # Knife Guide: Google Login Feature
 
 ## 1) How It Works (Mental Model)
-- Frontend calls `/api/*` on `https://beta.arnvoid.com` (same-site).
-- Vercel rewrites `/api/*` to Cloud Run backend.
+- Frontend calls `${VITE_API_BASE_URL}/*`.
+- If `VITE_API_BASE_URL=/api`, Vercel rewrites `/api/*` to Cloud Run backend.
 - Backend verifies Google ID token, writes session to Postgres, sets `arnvoid_session` cookie.
 - Frontend bootstraps `GET /me` and stores user in React Context.
 - UI reads auth state from `AuthProvider`.
+- Runtime backend routes live in `src/server/src/serverMonolith.ts` (`src/server/src/index.ts` only imports it).
 
 ## 2) Where To Change Things Fast (Knife Points)
 - Change UI placement:
   - Move `SessionExpiryBanner` mount in `src/playground/GraphPhysicsPlayground.tsx`.
   - Move login UI by relocating `GoogleLoginButton` or its wrapper.
 - Change session duration:
-  - Backend only. Adjust session TTL logic in `src/server/src/index.ts` or DB policy.
+  - Backend only. Adjust session TTL logic in `src/server/src/serverMonolith.ts` or DB policy.
 - Change allowed origins:
   - Backend env `ALLOWED_ORIGINS` (comma-separated).
 - Change domain / move beta to prod:
   - Update Vercel rewrite and `ALLOWED_ORIGINS`.
   - Update OAuth allowed origins in Google Console.
 - Change cookie policy:
-  - Backend cookie options in `src/server/src/index.ts` (SameSite, Secure).
+  - Backend cookie options in `src/server/src/serverMonolith.ts` (SameSite, Secure).
 - Change Google client id:
   - Frontend `VITE_GOOGLE_CLIENT_ID`
   - Backend `GOOGLE_CLIENT_ID`
@@ -43,9 +44,14 @@
 - `/me` returns null unexpectedly:
   - Symptom: user missing after refresh.
   - Fix: check cookie presence, session row in DB, and expiry policy.
+- `/me` user payload field mismatch:
+  - Symptom: frontend code expects DB `id` from `/me`.
+  - Fix: current `/me` returns `sub,email,name,picture`; use `sub` fallback for identity logic.
 
 ## 4) Smoke Tests
 ### Curl (requires real idToken)
+Use host/path that matches your `VITE_API_BASE_URL` routing.
+
 1. Login:
 ```
 curl -i -X POST \
@@ -67,10 +73,10 @@ curl -i -X POST \
 
 ### Browser Checklist
 1. Open app, click Google login.
-2. Confirm Network: `POST /api/auth/google` returns `Set-Cookie`.
-3. Confirm `GET /api/me` returns `user`.
+2. Confirm Network: `POST <VITE_API_BASE_URL>/auth/google` returns `Set-Cookie`.
+3. Confirm `GET <VITE_API_BASE_URL>/me` returns `user` (`sub,email,name,picture`).
 4. Refresh page, confirm user still appears.
-5. Click logout, confirm `/api/me` returns `user: null`.
+5. Click logout, confirm `<VITE_API_BASE_URL>/me` returns `user: null`.
 
 ### DevTools Checklist
 - Application tab -> Cookies: `arnvoid_session` is present.

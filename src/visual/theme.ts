@@ -40,7 +40,7 @@ export interface ThemeConfig {
     primaryBlue: string;
     deepPurple: string;
     ringGradientSegments: number;  // 32-64 for smooth gradient
-    gradientRotationDegrees: number;  // Rotation offset: 0° = blue at right, 150° = blue top-right, purple bottom-left
+    gradientRotationDegrees: number;  // Rotation offset: 0 deg = blue at right, 150 deg = blue top-right, purple bottom-left
 
     // Fill-specific (normal mode)
     nodeFillColor: string;
@@ -310,12 +310,12 @@ export const ELEGANT_THEME: ThemeConfig = {
     occlusionColor: '#0a0a12',    // Match background
     occlusionShrinkPct: 0.10,     // Occlusion disk is 10% smaller than node outer radius (adaptive)
 
-    // Gradient ring: blue → purple
+    // Gradient ring: blue -> purple
     useGradientRing: true,
     primaryBlue: '#63abff',       // rgb(99, 171, 255) - electric blue
     deepPurple: '#4a2a6a',        // rich dark purple (visible, not dead)
     ringGradientSegments: 48,     // smooth gradient
-    gradientRotationDegrees: 170, // TUNING KNOB: rotation angle (150° = purple bottom-left)
+    gradientRotationDegrees: 170, // TUNING KNOB: rotation angle (150 deg = purple bottom-left)
 
     // Fill (for fixed nodes)
     nodeFillColor: 'rgba(99, 171, 255, 0.3)',

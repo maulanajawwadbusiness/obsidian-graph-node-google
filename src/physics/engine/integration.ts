@@ -84,7 +84,7 @@ export const integrateNodes = (
     // =====================================================================
     // INTEGRATION PRIORITY BANDS: Persistent solver asymmetry
     // During early expansion, nodes integrate in deterministic priority order
-    // Lower priority moves first EVERY frame → symmetry cannot reform
+    // Lower priority moves first EVERY frame -> symmetry cannot reform
     // =====================================================================
     const earlyExpansion = policy.earlyExpansion > 0.01;
     let integrationOrder = nodeList;
@@ -119,7 +119,7 @@ export const integrateNodes = (
         const beforeVy = node.vy;
 
         // DEGREE-BASED INERTIA: High-degree nodes feel heavier
-        // Prevents hub overshoot → no visible corrections
+        // Prevents hub overshoot -> no visible corrections
         let inertiaDeg = 0;
         for (const link of engine.links) {
             if (link.source === node.id || link.target === node.id) inertiaDeg++;

@@ -320,7 +320,7 @@ export function applyRepulsion(
                 const t = (d - effectiveMinDist) / range; // 0 at minDist, 1 at distMax
                 const tClamped = Math.max(0, Math.min(1, t));
 
-                // Hermite blend: smooth(t) = 3t² - 2t³
+                // Hermite blend: smooth(t) = 3t^2 - 2t^3
                 const smooth = tClamped * tClamped * (3 - 2 * tClamped);
 
                 // Fade from 1/minDist at boundary to 0 at distMax
@@ -555,7 +555,7 @@ export function applySprings(
         const d = Math.sqrt(dx * dx + dy * dy);
 
         // Soft spring with dead zone
-        // No force within ±deadZone of rest length (perceptual uniformness)
+        // No force within +/-deadZone of rest length (perceptual uniformness)
         const restLength = config.linkRestLength;
 
 
@@ -660,7 +660,7 @@ export function applySprings(
             // Compression ramp: stronger softening when spring is compressed
             // 1.0 at dist/rest >= 1.0, 1.5 at dist/rest <= 0.5
             const compressionRatio = Math.min(springDist / restLength, 1);
-            const compressionBoost = 1 + (1 - compressionRatio) * 0.5;  // 1.0 → 1.5
+            const compressionBoost = 1 + (1 - compressionRatio) * 0.5;  // 1.0 -> 1.5
 
             // Combined: scale from 1.0 (no softening) to 0.05 (max softening)
             const minTangent = 0.05;
@@ -752,7 +752,7 @@ export function applySprings(
             // Tangential direction (perpendicular to spring)
             const ux = dx / d;
             const uy = dy / d;
-            const tangentX = -uy;  // 90° rotation
+            const tangentX = -uy;  // 90 deg rotation
             const tangentY = ux;
 
             // Apply oscillatory tangential perturbation

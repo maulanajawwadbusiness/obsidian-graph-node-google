@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from 'react';
 
 export type ShortageContext = 'analysis' | 'chat' | 'prefill';
+export type ShortageSurface = 'global' | 'node-popup' | 'mini-chat' | 'full-chat';
 
 export type ShortageState = {
     open: boolean;
@@ -8,6 +9,8 @@ export type ShortageState = {
     requiredIdr: number;
     shortfallIdr: number;
     context: ShortageContext;
+    surface: ShortageSurface;
+    token: number;
 };
 
 const listeners = new Set<() => void>();
@@ -17,7 +20,9 @@ let state: ShortageState = {
     balanceIdr: null,
     requiredIdr: 0,
     shortfallIdr: 0,
-    context: 'analysis'
+    context: 'analysis',
+    surface: 'global',
+    token: 0,
 };
 
 function emitChange() {
@@ -36,13 +41,16 @@ export function showShortage(params: {
     requiredIdr: number;
     shortfallIdr: number;
     context: ShortageContext;
+    surface?: ShortageSurface;
 }) {
     setState({
         open: true,
         balanceIdr: params.balanceIdr,
         requiredIdr: params.requiredIdr,
         shortfallIdr: params.shortfallIdr,
-        context: params.context
+        context: params.context,
+        surface: params.surface ?? 'global',
+        token: state.token + 1,
     });
 }
 

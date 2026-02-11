@@ -60,6 +60,10 @@ Only use `task_boundary` for distinct, complex sub-tasks (~1 per 5 steps).
 ### POWERSHELL CAUTION
 Do NOT use `&&` in the terminal. It breaks the parser. Use separate commands or use `;` correctly.
 
+### BACKEND VPN RULE (NON-NEGOTIABLE)
+When running backend commands from `src/server` (for example `npm run dev`, `npm run check:auth-schema`, DB scripts), turn VPN OFF first.
+Reason: VPN can block or delay Google Cloud SQL connector setup and trigger startup timeout errors.
+
 ### ASCII ONLY
 Use pure ASCII characters in code, comments, logs, and docs. Avoid Unicode arrows, ellipses, and typographic dashes to prevent mojibake.
 
@@ -116,6 +120,14 @@ Terminology matters. In the graph, we render "Dots", not "Nodes" (though the dat
 *   **Never paste or store secrets** in repo files or logs. Always redact values.
 *   **No secret logs**: Do not log tokens, cookies, auth headers, or keys.
 *   **Docs**: Use placeholders like `<REDACTED>` only. Never include real values.
+
+### SCROLLBAR THEME CONTRACT (UI)
+*   **Rule**: Do not ship browser-default scrollbars for Arnvoid panels or overlays.
+*   **Default Theme**: Reuse the Arnvoid scrollbar CSS in `src/index.css` (base class `.arnvoid-scroll`).
+*   **Search Overlay Variant**: Keep using `.search-interfaces-scroll` theme:
+    *   track background: `#0D1118`
+    *   thumb and buttons/arrows: dark navy
+*   **Consistency**: New scrollable UI surfaces must use the shared class or an approved variant, not ad-hoc inline scrollbar styling.
 
 ## 5. Perf Doctrine (Physics)
 

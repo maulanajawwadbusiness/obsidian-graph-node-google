@@ -19,12 +19,16 @@ The application layers, ordered by z-index (lowest to highest):
     *   Env gate: `ONBOARDING_ENABLED` (`src/config/env.ts`):
         *   `false` or not set: app starts directly in `graph`.
         *   `true` or `1`: app starts in `welcome1`.
+    *   Dev start override: `VITE_ONBOARDING_START_SCREEN` (`src/config/env.ts`):
+        *   Canonical values: `welcome1`, `welcome2`, `prompt`, `graph`.
+        *   Legacy aliases: `screen1`, `screen2`, `screen3`, `screen4`.
+        *   Applies in DEV only. Invalid values fall back to `welcome1` and emit a single DEV warning.
     *   Persistence is currently disabled (`PERSIST_SCREEN = false`), so refresh resets onboarding to `welcome1` when onboarding is enabled.
-    *   Graph isolation contract: `GraphPhysicsPlayground` is lazy-loaded and mounted only when `screen === 'graph'`. This keeps physics/rendering inactive during onboarding screens.
-    *   Global overlays that remain mounted during onboarding and graph:
-        *   `BalanceBadge`
+    *   Graph isolation contract: `GraphPhysicsPlayground` (thin wrapper) is lazy-loaded and mounted only when `screen === 'graph'`, then delegates to `GraphPhysicsPlaygroundContainer` in `src/playground/modules/GraphPhysicsPlaygroundContainer.tsx`. This keeps physics/rendering inactive during onboarding screens.
+    *   Money overlays mount only on `prompt` and `graph` screens:
         *   `ShortageWarning`
         *   `MoneyNoticeStack`
+        *   `BalanceBadge` on `graph` by default, and on `prompt` only when enabled by UI flags.
 
 1.  **The Canvas (Graph substrate)**
     *   **Rule**: Never under-reacts. If a panel or overlay is active, the canvas underneath MUST NOT receive pointer/wheel events.
@@ -97,12 +101,15 @@ Debug toggles:
 
 ### C. `EnterPrompt` (`src/screens/EnterPrompt.tsx`)
 *   **Purpose**: Prompt-stage shell that combines:
-    *   `PromptCard` (headline, placeholder input, fullscreen button, payment panel).
+    *   `PromptCard` (headline, input, attachments, send control).
+    *   `FullscreenButton` (rendered by `AppShell` as onboarding chrome).
+    *   Optional `PaymentGopayPanel` (top-right launcher/panel).
     *   `LoginOverlay` auth gate.
 *   **Behavior**:
     *   Reads auth state from `useAuth()`.
-    *   Shows `LoginOverlay` while user is not authenticated and overlay is not manually hidden.
-    *   `LoginOverlay` blocks pointer/wheel interaction and locks page scroll when open.
+    *   Payment panel visibility is controlled by `SHOW_ENTERPROMPT_PAYMENT_PANEL` in `src/config/onboardingUiFlags.ts`.
+    *   `LoginOverlay` is currently feature-gated off in EnterPrompt (`LOGIN_OVERLAY_ENABLED = false`).
+    *   When enabled, `LoginOverlay` blocks pointer/wheel interaction and locks page scroll while open.
     *   Continue button in LoginOverlay is a non-functional formal control (no click handler). Auth flow proceeds via session state update after sign-in.
     *   Login debug/error text is hidden by default in dev and visible by default in prod. Dev override: `VITE_SHOW_LOGIN_DEBUG_ERRORS=1`.
 *   **Role in flow**:
@@ -118,8 +125,117 @@ Current fullscreen rules in onboarding:
    - Allowed from dedicated fullscreen icon button.
 2. Generic background click/keydown in onboarding must never call fullscreen.
 3. Overlay precedence:
-   - Welcome1 prompt overlay and EnterPrompt LoginOverlay are top-layer blockers.
+   - Welcome1 prompt overlay is a top-layer blocker.
+   - EnterPrompt LoginOverlay is also a blocker only when the overlay feature is enabled and open.
    - While these overlays are open, fullscreen icon input is blocked.
+
+## 2.4 Persistent Sidebar Sessions (Current)
+Saved interfaces in the left Sidebar are now local-first and AppShell-owned.
+
+Current behavior:
+- Source of truth:
+  - Store module: `src/store/savedInterfacesStore.ts`
+  - Versioned key: `arnvoid_saved_interfaces_v1` (guest/offline default)
+  - Auth namespace key: `arnvoid_saved_interfaces_v1_user_<user>`
+  - Active key is selected by AppShell based on auth state.
+- Sidebar list:
+  - AppShell loads and maps saved records into Sidebar rows.
+  - Sidebar renders provided order and does not apply additional sorting.
+- Create:
+  - analysis success path persists a saved interface record with full payload.
+- Restore:
+  - selecting a saved interface sets pending restore intent and graph consumes it once.
+  - when selected from prompt screen, AppShell transitions to graph and restore runs on mount.
+- Rename:
+  - inline rename UX in Sidebar; persisted through AppShell to storage helper.
+  - rename does not reorder list (title patch does not bump `updatedAt`).
+- Delete:
+  - row menu delete opens AppShell-level centered confirm modal.
+  - confirm removes record from local storage and refreshes Sidebar immediately.
+  - if pending restore intent matches deleted id, it is cleared.
+- Search:
+  - Sidebar "Search Interfaces" opens centered AppShell overlay.
+  - Filter is in-memory from AppShell `savedInterfaces` (no localStorage reads per keystroke).
+  - Overlay is shielded so pointer and wheel never leak to canvas.
+- Disabled state:
+  - when Sidebar is disabled (graph loading), row menu actions are non-actionable.
+
+Saved interface payload contract (full, non-trimmed):
+- Record shape: `SavedInterfaceRecordV1` in `src/store/savedInterfacesStore.ts`
+- Must preserve:
+  - `parsedDocument` including full `text`, `sourceType`, `fileName`, `meta`, and parser warnings/errors if present
+  - full `topology`
+  - `layout.nodeWorld` + `layout.camera`
+  - `analysisMeta.nodesById` summaries (`sourceTitle`, `sourceSummary`)
+  - payload timestamps (`createdAt`, `updatedAt`)
+- Ordering truth:
+  - Sidebar order is based on payload `updatedAt` (then `createdAt`) from the saved record.
+  - DB row `updated_at` is metadata only and must not be used for UI ordering.
+  - Rename and layout patch paths are hardened to avoid unintended reorder.
+
+Remote memory (account-backed):
+- Backend table: `public.saved_interfaces` (Postgres), keyed by authenticated `user_id`.
+- Migration: `src/server/migrations/1770383000000_add_saved_interfaces.js`
+- Schema summary:
+  - `id` bigserial PK
+  - `user_id` bigint FK -> `users(id)` ON DELETE CASCADE
+  - `client_interface_id` text not null
+  - `title` text not null
+  - `payload_version` integer not null default 1
+  - `payload_json` jsonb not null
+  - `created_at`, `updated_at` timestamptz defaults
+- Constraints and indexes:
+  - unique `(user_id, client_interface_id)`
+  - index `(user_id, updated_at desc)`
+  - index `(user_id, title)`
+- API routes (requireAuth):
+  - `GET /api/saved-interfaces`
+  - `POST /api/saved-interfaces/upsert`
+  - `POST /api/saved-interfaces/delete`
+- Payload size limit:
+  - server guard constant `MAX_SAVED_INTERFACE_PAYLOAD_BYTES` (default 15 MB) in `src/server/src/serverMonolith.ts`
+- AppShell sync role:
+  - Hydrates remote + local on auth-ready, merges, and persists into active local namespace.
+  - Mirrors local save/rename/delete events to backend as best-effort background sync.
+  - Logged-out mode skips remote calls completely.
+
+Unified write contract (current truth):
+- AppShell is the write owner for saved interface mutations.
+- Commit surfaces in `src/screens/AppShell.tsx`:
+  - `commitUpsertInterface`
+  - `commitPatchLayoutByDocId`
+  - `commitRenameInterface`
+  - `commitDeleteInterface`
+  - `commitHydrateMerge`
+- Graph and node-binding emit callbacks to AppShell; they do not directly mutate saved interface storage anymore.
+
+Remote failure behavior (current truth):
+- Remote sync uses a persistent per-identity outbox in AppShell.
+- Local state + localStorage are UX truth; remote is mirror-only.
+- Outbox localStorage namespace:
+  - `arnvoid_saved_interfaces_v1_remote_outbox_<identityKey>`
+- Retry policy:
+  - retryable: network/timeout, 5xx, 429
+  - 401: pause then retry window; local remains unaffected
+  - 413/non-retryable: drop outbox item; local remains unaffected
+  - `payload_missing`: non-retryable (prevents infinite retry loop)
+- Outbox is namespaced by identity key to prevent cross-account bleed.
+- Restore-active phase blocks remote drain.
+
+Ordering contract (critical):
+- Ordering truth is `record.updatedAt` inside saved payload (`payload_json`), not DB row `updated_at`.
+- Reason: backend upsert sets row `updated_at=now()` and would reorder on rename if used for sort.
+- Frontend API fields for row timestamps are DB-scoped (`dbCreatedAt`, `dbUpdatedAt`) and must not drive list ordering.
+
+Input safety contract:
+- Sidebar root, row menu, row menu items, and delete confirm modal all stop pointer and wheel propagation.
+- Modal/backdrop interactions must never leak to canvas input handlers.
+
+Restore purity contract:
+- Restore path is read-only.
+- Restore applies saved `parsedDocument`, `topology`, `layout`, `camera`, and `analysisMeta`.
+- Restore must not enqueue save/upsert/delete/layout-patch side effects.
+- Structural restore-active guards exist in graph shell and AppShell commit layer.
 
 ## 3. Physics Architecture And Contract
 The graph is driven by a **Hybrid Solver** (`src/physics/`) prioritizing "Visual Dignity" over pure simulation accuracy.
@@ -256,6 +372,7 @@ Arnvoid uses a unified AI layer (`src/ai/`) that abstracts provider details behi
 
 ### C. Paper Analyzer Output (Directed Map)
 *   **Prompt + Schema**: `src/ai/paperAnalyzer.ts` now requires both points and directed links.
+*   **Single Prompt Truth Source**: Analyzer prompt instructions are centralized in `src/server/src/llm/analyze/prompt.ts` and reused by backend analyze plus frontend DEV direct analyze.
 *   **Output Fields**:
     *   `main_points`: indexed points (0..N-1), each with title and explanation.
     *   `links`: directed edges using `from_index` and `to_index`.
@@ -346,12 +463,38 @@ Frontend:
 - Cookie name: `arnvoid_session`
 - `/me` is the only source of truth for user state.
 - All backend calls must include `credentials: "include"`.
+- Frontend route base is `VITE_API_BASE_URL`:
+  - auth calls are `${VITE_API_BASE_URL}/auth/google`, `${VITE_API_BASE_URL}/auth/logout`, and `${VITE_API_BASE_URL}/me`.
+  - `/api/*` pathing is only true when `VITE_API_BASE_URL=/api` (for example behind Vercel rewrite).
+- Backend runtime route ownership:
+  - route logic lives in `src/server/src/serverMonolith.ts`.
+  - `src/server/src/index.ts` is a thin entry that imports `serverMonolith`.
+- `/me` payload contract:
+  - returns `sub`, `email`, `name`, `picture` for signed-in state.
+  - does not currently return DB numeric `id` in the `/me` response body.
+  - frontend identity logic must support `sub` fallback for namespacing and sync isolation.
+
+## Backend VPN Reminder
+- Before running backend commands in `src/server` (for example `npm run dev`, `npm run check:auth-schema`, DB scripts), turn VPN OFF.
+- VPN can block or slow Cloud SQL connector setup and cause startup timeout errors.
 
 ## Fonts
 - UI default: Quicksand (via CSS vars)
 - Titles: Segoe UI -> Public Sans -> system
+
+## Scrollbar Theme (Frontend)
+- Arnvoid uses themed scrollbars. Do not use browser-default scrollbar styling on product UI surfaces.
+- Base class: `.arnvoid-scroll` in `src/index.css`.
+- Search Interfaces overlay class: `.search-interfaces-scroll` in `src/index.css`.
+- Required Search overlay palette:
+  - track background: `#0D1118`
+  - thumb/buttons: dark navy
+- New scrollable UI surfaces should adopt `.arnvoid-scroll` or a scoped variant derived from it.
+
 ## Money UX (Frontend)
-- Always-visible rupiah balance anchor in the app shell.
+- Rupiah balance anchor (`BalanceBadge`) is always visible on `graph`.
+- On `prompt`, balance anchor visibility is controlled by `SHOW_ENTERPROMPT_BALANCE_BADGE` in `src/config/onboardingUiFlags.ts`.
 - Shortage warning gate for paid actions with topup CTA.
 - Money notices for payment/balance/deduction outcomes.
+- Offline or backend-unreachable network failures do not emit balance/payment/chat money notices.
 - Reports: docs/report_2026_02_07_moneyux_final.md and step reports.

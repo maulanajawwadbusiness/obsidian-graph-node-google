@@ -1,12 +1,12 @@
-# Arnvoid Document Viewer — Zero‑Friction Integration Guide
+# Arnvoid Document Viewer - Zero-Friction Integration Guide
 
-You can treat this folder as a **drop‑in module**. Your goal: mount one React component in the left panel and make sure the PDF worker file lives in `public/`. That’s it.
+You can treat this folder as a **drop-in module**. Your goal: mount one React component in the left panel and make sure the PDF worker file lives in `public/`. That's it.
 
 ---
 
 ## 0) What this is (in one minute)
 
-This folder provides a **ready‑to‑use document viewer** that renders:
+This folder provides a **ready-to-use document viewer** that renders:
 - **PDF** via PDF.js (with text layer for highlights)
 - **DOCX** via `docx-preview`
 - **Markdown** via `react-markdown`
@@ -19,7 +19,7 @@ It already exposes the **Arnvoid adapter methods** you need:
 
 ## 1) Hard requirement (must do)
 
-**Put the worker in `public/`** so it’s served at the app root:
+**Put the worker in `public/`** so it's served at the app root:
 
 ```
 public/pdf.worker.min.mjs
@@ -39,7 +39,7 @@ This folder already includes the worker at:
 src/ArnvoidDocumentViewer/public/pdf.worker.min.mjs
 ```
 
-Copy that file into the host repo’s `public/`.
+Copy that file into the host repo's `public/`.
 
 ---
 
@@ -51,7 +51,7 @@ Copy this entire folder into the Arnvoid repo:
 src/ArnvoidDocumentViewer/
 ```
 
-Do **not** change internal imports. The folder is self‑contained.
+Do **not** change internal imports. The folder is self-contained.
 
 ---
 
@@ -82,7 +82,7 @@ import { ArnvoidDocumentViewer } from "../ArnvoidDocumentViewer";
 <ArnvoidDocumentViewer source={source} />
 ```
 
-That’s enough to see it render.
+That's enough to see it render.
 
 ---
 
@@ -130,7 +130,7 @@ All offsets are **character offsets** into the canonical text string.
 
 **Important note:** for PDFs, the text-layer DOM order may not perfectly match
 your canonical `ParsedDocument.text`, so offsets can be approximate. For exact
-PDF mapping you’d need a PDF text mapping layer (not included).
+PDF mapping you'd need a PDF text mapping layer (not included).
 
 ---
 
@@ -152,7 +152,7 @@ The viewer will handle its own padding for text engines.
 - Confirm `public/pdf.worker.min.mjs` exists.
 - Confirm it is served at `${import.meta.env.BASE_URL}pdf.worker.min.mjs`.
 
-**Highlights don’t show**
+**Highlights don't show**
 - Browser must support `CSS.highlights`.
 - Your document must render real text nodes (PDF text layer covers this).
 
@@ -167,6 +167,6 @@ The viewer will handle its own padding for text engines.
 - [ ] `public/pdf.worker.min.mjs` exists
 - [ ] `ArnvoidDocumentViewer` mounted in left panel
 - [ ] Passing `source` correctly
-- [ ] Left panel not double‑scrolling (viewer owns scroll)
+- [ ] Left panel not double-scrolling (viewer owns scroll)
 
 If all four are true, it **just works**.

@@ -5,9 +5,9 @@ import { SHOW_WELCOME1_FULLSCREEN_PROMPT } from '../config/onboardingUiFlags';
 import { TypingCursor } from '../components/TypingCursor';
 import { t } from '../i18n/t';
 
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
 // Responsive hook for screen width detection
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
 const WIDE_SCREEN_BREAKPOINT = 768; // px - screens wider than this use large card
 
 function useIsWideScreen(): boolean {
@@ -218,9 +218,9 @@ const FULLSCREEN_PROMPT_BACKDROP_STYLE: React.CSSProperties = {
     pointerEvents: 'auto',
 };
 
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
 // TUNING KNOBS - Adjust these to fine-tune the card appearance
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
 const CARD_SCALE = 1.2;           // Scale entire card (1.0 = base size)
 const CONTENT_SCALE = 0.9;        // Scale inner elements (1.0 = normal, 0.8 = 20% smaller)
 const CARD_PADDING_H = 35;        // Horizontal padding in px (left/right)
@@ -234,7 +234,7 @@ const BUTTON_FONT_SIZE = 12;      // Button font size in px
 // --- Spacing tuning ---
 const TITLE_DESC_GAP = 12;        // Gap between title and description in px
 const BUTTON_GAP = 16;            // Gap between buttons in px
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
 
 function getCardStyle(cardBaseWidth: number): React.CSSProperties {
     return {

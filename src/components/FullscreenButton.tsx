@@ -70,8 +70,8 @@ const BUTTON_STYLE: React.CSSProperties = {
 };
 
 const ICON_STYLE: React.CSSProperties = {
-    width: '24px',
-    height: '24px',
+    width: '100%',
+    height: '100%',
     objectFit: 'contain',
     opacity: 0.3,
     transition: 'opacity 0.2s ease',

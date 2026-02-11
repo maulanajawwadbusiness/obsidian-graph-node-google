@@ -32,7 +32,7 @@ import {
  * - Scrolling: breathing rhythm, maintained position
  * 
  * DARK ELEGANCE:
- * - Near-black void as base (not gray, not navy — BLACK)
+ * - Near-black void as base (not gray, not navy - BLACK)
  * - Blue is rare energy escaping from depth
  * - Mesmerizing, restrained, beautiful in its darkness
  */
@@ -742,14 +742,14 @@ export const FullChatbar: React.FC<FullChatbarProps> = ({ engineRef }) => {
                     onMouseEnter={(e) => e.currentTarget.style.color = VOID.textSoft}
                     onMouseLeave={(e) => e.currentTarget.style.color = VOID.textDim}
                 >
-                    ×
+                    x
                 </button>
             </div>
 
-            {/* Context — only when popup is open */}
+            {/* Context - only when popup is open */}
             {focusLabel && (
                 <div style={CONTEXT_BADGE_STYLE}>
-                    {/* Energy dot — the only blue accent here */}
+                    {/* Energy dot - the only blue accent here */}
                     <span style={{
                         width: '6px',
                         height: '6px',

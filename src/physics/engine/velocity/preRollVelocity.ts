@@ -65,7 +65,7 @@ export const applyPreRollVelocity = (
 
     // MICRO CARRIER DRIFT: Prevent crystallization into eigenvector directions
     // Adds shared rotational motion so separation feels like drifting water
-    // Fades out from frame 5 → 0
+    // Fades out from frame 5 -> 0
     const carrierOmega = 0.03;  // rad/frame, ~1.8 rad/s at 60fps
     const fade = engine.preRollFrames / 5;  // 1.0 at frame 5, 0.2 at frame 1
     const effectiveOmega = carrierOmega * fade;

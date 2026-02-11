@@ -67,7 +67,7 @@ export function PopupProvider({ children }: { children: ReactNode }) {
     // I will assume the import is added in a separate step or I'll use a multi-replace if strictly needed.
     // Wait, I should add the import first. I'll do that in a separate tool call to be safe.
 
-    const sendMessage = (text: string) => {
+    const sendMessage = (text: string, source: 'node-popup' | 'mini-chat' = 'node-popup') => {
         console.log('[MiniChatAI] send_start', { nodeId: state.selectedNodeId, text });
 
         // 1. Abort previous
@@ -93,6 +93,7 @@ export function PopupProvider({ children }: { children: ReactNode }) {
             documentText: null, // MiniChat focuses on Node Summary, not full doc text (optimization)
             documentTitle: state.content?.title || null,
             recentHistory: [], // could pass history if needed
+            shortageSurface: source === 'mini-chat' ? 'mini-chat' : 'node-popup',
         };
 
         // 3. Run AI Loop

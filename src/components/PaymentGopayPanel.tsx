@@ -153,15 +153,6 @@ export const PaymentGopayPanel: React.FC<PaymentPanelProps> = ({ onPaid }) => {
             if (!result.ok || !result.data || typeof result.data !== 'object') {
                 setError(result.error || 'Payment request failed');
                 setPhase('failed');
-                pushMoneyNotice({
-                    kind: 'payment',
-                    status: 'error',
-                    title: 'Gagal memulai pembayaran',
-                    message: 'Koneksi bermasalah. Saldo tidak berubah.',
-                    ctas: [
-                        { label: 'Coba lagi', onClick: () => handleCreate() }
-                    ]
-                });
                 return;
             }
             const data = result.data as {
@@ -185,15 +176,6 @@ export const PaymentGopayPanel: React.FC<PaymentPanelProps> = ({ onPaid }) => {
         } catch (e) {
             setError(`Payment request failed: ${String(e)}`);
             setPhase('failed');
-            pushMoneyNotice({
-                kind: 'payment',
-                status: 'error',
-                title: 'Gagal memulai pembayaran',
-                message: 'Koneksi bermasalah. Saldo tidak berubah.',
-                ctas: [
-                    { label: 'Coba lagi', onClick: () => handleCreate() }
-                ]
-            });
         } finally {
             setIsBusy(false);
         }
@@ -222,12 +204,6 @@ export const PaymentGopayPanel: React.FC<PaymentPanelProps> = ({ onPaid }) => {
                     onClick={() => {
                         setIsOpen(false);
                         setPhase('cancelled');
-                        pushMoneyNotice({
-                            kind: 'payment',
-                            status: 'warning',
-                            title: 'Pembayaran dibatalkan',
-                            message: 'Saldo tidak berubah.'
-                        });
                     }}
                     onPointerDown={(e) => e.stopPropagation()}
                 >

@@ -23,9 +23,9 @@ import { applyRepulsion } from '../forces';  // Mini Run 3: Force-based repulsio
 // Calculation for half-life = 0.7s:
 //   0.7 = 0.693 / (effectiveDamping * 5.0)
 //   effectiveDamping * 5.0 = 0.693 / 0.7 = 0.99
-//   effectiveDamping = 0.99 / 5.0 = 0.198 ≈ 0.20
+//   effectiveDamping = 0.99 / 5.0 = 0.198 ~= 0.20
 //
-// Chosen value: 0.20//   effectiveDamping = 0.198 ≈ 0.20
+// Chosen value: 0.20//   effectiveDamping = 0.198 ~= 0.20
 //
 // =============================================================================
 export const DEFAULT_XPBD_DAMPING = 0.20; // BALANCED preset (half-life ~0.69s)
@@ -38,7 +38,7 @@ let lastTelemetryTime = 0;
 // STEP 5/5 RUN 1: Hand-calibration presets for A/B testing
 export const XPBD_DAMPING_PRESETS = {
     SNAPPY: 0.12,    // Half-life ~1.16s (responsive, quick settle)
-    BALANCED: 0.20,  // Half-life ~0.69s (current default) ← DEFAULT_XPBD_DAMPING
+    BALANCED: 0.20,  // Half-life ~0.69s (current default) <- DEFAULT_XPBD_DAMPING
     SMOOTH: 0.32,    // Half-life ~0.43s (tighter, less overshoot)
 } as const;
 
@@ -101,7 +101,7 @@ const applyKinematicDrag = (engine: PhysicsEngineTickContext, dt: number) => {
 
             // 4. DO NOT mutate isFixed (Mini Run 7 Part 2 cleanup)
             // Solver checks draggedNodeId directly for invMass=0
-            // node.isFixed = true; // ❌ REMOVED - redundant and problematic
+            // node.isFixed = true; // X REMOVED - redundant and problematic
         }
     }
 };
@@ -116,14 +116,14 @@ const rebuildXPBDConstraints = (engine: PhysicsEngineTickContext) => {
     // Run 6: Compliance from Config
     // CRITICAL: Smaller compliance = STIFFER = larger corrections = EXPLOSION
     // Larger compliance = SOFTER = smaller corrections = STABLE
-    // Formula: alpha = compliance / dt²
-    //   - Small alpha (stiff) → deltaLambda ≈ -C/wSum (rigid, large correction)
-    //   - Large alpha (soft) → deltaLambda ≈ -C/alpha (soft, small correction)
+    // Formula: alpha = compliance / dt^2
+    //   - Small alpha (stiff) -> deltaLambda ~= -C/wSum (rigid, large correction)
+    //   - Large alpha (soft) -> deltaLambda ~= -C/alpha (soft, small correction)
     // 
     // Calibration:
-    //   0.0001 → alpha≈0.39 → TOO STIFF → EXPLOSION on drag release
-    //   0.01   → alpha≈39   → Visible ~0.2px corrections, stable
-    //   0.1    → alpha≈390  → Very soft, barely visible
+    //   0.0001 -> alpha~=0.39 -> TOO STIFF -> EXPLOSION on drag release
+    //   0.01   -> alpha~=39   -> Visible ~0.2px corrections, stable
+    //   0.1    -> alpha~=390  -> Very soft, barely visible
     const compliance = engine.config.xpbdLinkCompliance ?? 0.001;
 
     const newConstraints: any[] = [];
@@ -599,10 +599,10 @@ export const runPhysicsTickXPBD = (engine: PhysicsEngineTickContext, dtIn: numbe
     // =========================================================================
     // This is the ONLY correct location to apply forces in XPBD mode.
     // Forces MUST be written before integrateNodes reads node.fx/fy.
-    // Integration converts forces → velocity → position.
+    // Integration converts forces -> velocity -> position.
     // XPBD solver (later) corrects positions to satisfy constraints.
     //
-    // Wire order: applyRepulsion → integrateNodes → solveXPBDEdgeConstraints
+    // Wire order: applyRepulsion -> integrateNodes -> solveXPBDEdgeConstraints
     // =========================================================================
     if (engine.config.xpbdRepulsionEnabled) {
         // Mini Run 1 (A1): Log repulsion status once at startup
@@ -631,7 +631,7 @@ export const runPhysicsTickXPBD = (engine: PhysicsEngineTickContext, dtIn: numbe
         }
 
         // 3. Deterministic pairStride policy (Mini Run 5)
-        // Avoid O(N²) death while keeping law continuous
+        // Avoid O(N^2) death while keeping law continuous
         const N = nodeList.length;
         let pairStride = 1;  // Default: full coverage
 

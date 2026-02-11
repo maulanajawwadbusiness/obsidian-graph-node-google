@@ -1,3 +1,5 @@
+import type { ShortageSurface } from '../money/shortageStore';
+
 /**
  * Full Chatbar System Types
  * State and action interfaces for the right-dock chat panel
@@ -49,6 +51,7 @@ export interface AiContext {
     documentText: string | null;
     documentTitle: string | null;
     recentHistory: FullChatMessage[];
+    shortageSurface?: ShortageSurface;
 }
 
 export type FullChatContextValue = FullChatState & FullChatActions;

@@ -1,5 +1,5 @@
-import { useEffect, useRef } from 'react';
-import type { Dispatch, RefObject, SetStateAction } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
+import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import { PhysicsEngine } from '../physics/engine';
 import { ForceConfig } from '../physics/types';
 import { SkinMode } from '../visual/theme';
@@ -23,9 +23,10 @@ import type {
 import { RenderScratch } from './rendering/renderScratch';
 
 type UseGraphRenderingProps = {
-    canvasRef: RefObject<HTMLCanvasElement>;
+    canvasRef: MutableRefObject<HTMLCanvasElement | null>;
+    canvasReady: boolean;
     config: ForceConfig;
-    engineRef: RefObject<PhysicsEngine>;
+    engineRef: MutableRefObject<PhysicsEngine>;
     seed: number;
     setMetrics: Dispatch<SetStateAction<PlaygroundMetrics>>;
     spawnCount: number;
@@ -43,6 +44,7 @@ type UseGraphRenderingProps = {
 
 export const useGraphRendering = ({
     canvasRef,
+    canvasReady,
     config,
     engineRef,
     seed,
@@ -140,13 +142,20 @@ export const useGraphRendering = ({
 
     useEffect(() => {
         const canvas = canvasRef.current;
-        if (!canvas) return;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) return;
-
         const engine = engineRef.current;
-        if (!engine) return;
 
+        if (!canvasReady || !canvas || !engine) {
+            console.log(`[RenderLoop] skipped missing ${!canvas ? 'canvas' : 'engine'}`);
+            return;
+        }
+
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+            console.log('[RenderLoop] skipped missing 2d context');
+            return;
+        }
+
+        console.log(`[RenderLoop] start canvas=${canvas.clientWidth}x${canvas.clientHeight}`);
         const stopLoop = startGraphRenderLoop({
             canvas,
             ctx,
@@ -172,8 +181,11 @@ export const useGraphRendering = ({
             renderScratch: renderScratchRef.current,
         });
 
-        return stopLoop;
-    }, [startGraphRenderLoop]);
+        return () => {
+            console.log('[RenderLoop] stop');
+            stopLoop();
+        };
+    }, [canvasReady, config, seed, spawnCount, setMetrics]);
 
     const handleDragStart = (nodeId: string, clientX: number, clientY: number) => {
         const engine = engineRef.current;
@@ -205,6 +217,31 @@ export const useGraphRendering = ({
         }
     };
 
+    const applyCameraSnapshot = useCallback((snapshot: { panX: number; panY: number; zoom: number }) => {
+        if (!Number.isFinite(snapshot.panX) || !Number.isFinite(snapshot.panY) || !Number.isFinite(snapshot.zoom)) {
+            return;
+        }
+
+        const camera = cameraRef.current;
+        camera.panX = snapshot.panX;
+        camera.panY = snapshot.panY;
+        camera.zoom = snapshot.zoom;
+        camera.targetPanX = snapshot.panX;
+        camera.targetPanY = snapshot.panY;
+        camera.targetZoom = snapshot.zoom;
+
+        lastSafeCameraRef.current.panX = snapshot.panX;
+        lastSafeCameraRef.current.panY = snapshot.panY;
+        lastSafeCameraRef.current.zoom = snapshot.zoom;
+        lastSafeCameraRef.current.targetPanX = snapshot.panX;
+        lastSafeCameraRef.current.targetPanY = snapshot.panY;
+        lastSafeCameraRef.current.targetZoom = snapshot.zoom;
+
+        hoverStateRef.current.lastSelectionPanX = snapshot.panX;
+        hoverStateRef.current.lastSelectionPanY = snapshot.panY;
+        hoverStateRef.current.lastSelectionZoom = snapshot.zoom;
+    }, []);
+
     return {
         handlePointerMove,
         handlePointerEnter,
@@ -217,6 +254,7 @@ export const useGraphRendering = ({
         hoverStateRef,
         updateHoverSelection,
         handleDragStart,
-        handleDragEnd
+        handleDragEnd,
+        applyCameraSnapshot
     };
 };

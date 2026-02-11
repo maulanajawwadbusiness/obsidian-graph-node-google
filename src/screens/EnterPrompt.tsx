@@ -3,18 +3,109 @@ import { LoginOverlay } from '../auth/LoginOverlay';
 import { useAuth } from '../auth/AuthProvider';
 import { PromptCard } from '../components/PromptCard';
 import { PaymentGopayPanel } from '../components/PaymentGopayPanel';
+import { SHOW_ENTERPROMPT_PAYMENT_PANEL } from '../config/onboardingUiFlags';
+import { t } from '../i18n/t';
+import uploadOverlayIcon from '../assets/upload_overlay_icon.png';
+import errorIcon from '../assets/error_icon.png';
+
+const LOGIN_OVERLAY_ENABLED = true;
+const ACCEPTED_EXTENSIONS = ['.pdf', '.docx', '.md', '.markdown', '.txt'];
+const LEFT_RAIL_GUTTER_PX = 35;
+
+const isFileSupported = (file: File): boolean => {
+    const ext = file.name.toLowerCase().match(/\.[^.]+$/)?.[0];
+    return ext ? ACCEPTED_EXTENSIONS.includes(ext) : false;
+};
 
 type EnterPromptProps = {
     onEnter: () => void;
     onBack: () => void;
     onSkip: () => void;
     onOverlayOpenChange?: (open: boolean) => void;
+    onSubmitPromptText?: (text: string) => void;
+    onSubmitPromptFile?: (file: File) => void;
 };
 
-export const EnterPrompt: React.FC<EnterPromptProps> = ({ onEnter, onBack, onSkip, onOverlayOpenChange }) => {
-    const { user } = useAuth();
+export const EnterPrompt: React.FC<EnterPromptProps> = ({
+    onEnter,
+    onBack,
+    onSkip,
+    onOverlayOpenChange,
+    onSubmitPromptText,
+    onSubmitPromptFile
+}) => {
+    const { user, logout } = useAuth();
     const [isOverlayHidden, setIsOverlayHidden] = React.useState(false);
-    const loginOverlayOpen = !user && !isOverlayHidden;
+    const [promptText, setPromptText] = React.useState('');
+    const [attachedFiles, setAttachedFiles] = React.useState<File[]>([]);
+    const [isDragging, setIsDragging] = React.useState(false);
+    const [showUnsupportedError, setShowUnsupportedError] = React.useState(false);
+    const loginOverlayOpen = LOGIN_OVERLAY_ENABLED && !user && !isOverlayHidden;
+    const dragCounterRef = React.useRef(0);
+
+    const handlePromptSubmit = React.useCallback((submittedText: string) => {
+        const trimmed = submittedText.trim();
+        if (trimmed) {
+            onSubmitPromptText?.(trimmed);
+            console.log(`[enterprompt] submitted_text_len=${trimmed.length}`);
+            onEnter();
+            return;
+        }
+
+        const firstFile = attachedFiles[0];
+        if (!firstFile) return;
+        onSubmitPromptFile?.(firstFile);
+        if (import.meta.env.DEV) {
+            console.log(`[enterprompt] submitted_file name=${firstFile.name} size=${firstFile.size}`);
+        }
+        onEnter();
+    }, [attachedFiles, onEnter, onSubmitPromptFile, onSubmitPromptText]);
+
+    const handleRemoveFile = React.useCallback((index: number) => {
+        setAttachedFiles(prev => prev.filter((_, i) => i !== index));
+    }, []);
+
+    const handleDragEnter = React.useCallback((e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dragCounterRef.current++;
+        if (e.dataTransfer.types.includes('Files')) {
+            setIsDragging(true);
+        }
+    }, []);
+
+    const handleDragOver = React.useCallback((e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+    }, []);
+
+    const handleDragLeave = React.useCallback((e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dragCounterRef.current--;
+        if (dragCounterRef.current === 0) {
+            setIsDragging(false);
+        }
+    }, []);
+
+    const handleDrop = React.useCallback((e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dragCounterRef.current = 0;
+        setIsDragging(false);
+
+        const files = Array.from(e.dataTransfer.files);
+        const lastFile = files.length > 0 ? files[files.length - 1] : null;
+        if (!lastFile) return;
+
+        if (isFileSupported(lastFile)) {
+            setAttachedFiles([lastFile]);
+            return;
+        }
+
+        setShowUnsupportedError(true);
+        setTimeout(() => setShowUnsupportedError(false), 3000);
+    }, []);
 
     React.useEffect(() => {
         onOverlayOpenChange?.(loginOverlayOpen);
@@ -27,23 +118,70 @@ export const EnterPrompt: React.FC<EnterPromptProps> = ({ onEnter, onBack, onSki
     }, [onOverlayOpenChange]);
 
     return (
-        <div style={ROOT_STYLE}>
-            <div style={SIDEBAR_STYLE}>
-                <div style={SIDEBAR_CONTENT_STYLE}>
-                    <div style={SIDEBAR_LABEL_STYLE}>Sidebar</div>
+        <div
+            style={ROOT_STYLE}
+            onDragEnter={handleDragEnter}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+        >
+            <PromptCard
+                value={promptText}
+                onChange={setPromptText}
+                onSubmit={handlePromptSubmit}
+                attachedFiles={attachedFiles}
+                canSubmitWithoutText={attachedFiles.length > 0}
+                onRemoveFile={handleRemoveFile}
+            />
+            {SHOW_ENTERPROMPT_PAYMENT_PANEL ? <PaymentGopayPanel /> : null}
+
+            {/* Drag overlay */}
+            {isDragging && (
+                <div style={DRAG_OVERLAY_STYLE}>
+                    <div style={DRAG_OVERLAY_CONTENT_STYLE}>
+                        <img src={uploadOverlayIcon} alt="" style={DRAG_OVERLAY_ICON_STYLE} />
+                        <div style={DRAG_OVERLAY_HEADER_STYLE}>Add Document</div>
+                        <div style={DRAG_OVERLAY_DESC_STYLE}>Drop document here to begin to analyze it</div>
+                    </div>
                 </div>
-            </div>
+            )}
 
-            <PromptCard lang="id" />
-            <PaymentGopayPanel />
+            {/* Unsupported file error overlay */}
+            {showUnsupportedError && (
+                <div style={ERROR_OVERLAY_STYLE}>
+                    <div style={ERROR_OVERLAY_CONTENT_STYLE}>
+                        <img src={errorIcon} alt="" style={ERROR_OVERLAY_ICON_STYLE} />
+                        <div style={ERROR_OVERLAY_TEXT_STYLE}>
+                            Unsupported file format
+                        </div>
+                        <div style={ERROR_OVERLAY_DESC_STYLE}>
+                            We only support PDF, DOCX, MD, and TXT files.
+                        </div>
+                    </div>
+                </div>
+            )}
 
-            <LoginOverlay
+            {/* Login overlay disabled for now */}
+            {LOGIN_OVERLAY_ENABLED && <LoginOverlay
                 open={loginOverlayOpen}
                 onContinue={onEnter}
                 onBack={onBack}
                 onSkip={onSkip}
                 onHide={() => setIsOverlayHidden(true)}
-            />
+            />}
+
+            {user ? (
+                <div style={LOGOUT_CORNER_WRAP_STYLE} onPointerDown={(e) => e.stopPropagation()}>
+                    <button
+                        type="button"
+                        style={LOGOUT_CORNER_BUTTON_STYLE}
+                        onPointerDown={(e) => e.stopPropagation()}
+                        onClick={() => void logout()}
+                    >
+                        {t("onboarding.enterprompt.login.google.button_logout")}
+                    </button>
+                </div>
+            ) : null}
         </div>
     );
 };
@@ -54,33 +192,101 @@ const ROOT_STYLE: React.CSSProperties = {
     minHeight: '100vh',
     background: '#06060A',
     color: '#e7e7e7',
+    position: 'relative',
+    boxSizing: 'border-box',
+    paddingLeft: `${LEFT_RAIL_GUTTER_PX}px`,
 };
 
-const SIDEBAR_STYLE: React.CSSProperties = {
-    position: 'absolute',
-    left: 0,
-    top: 0,
-    bottom: 0,
-    width: '93px',
-    background: '#06060A',
-    borderRight: '1px solid #1e2330',
-    display: 'flex',
-    flexDirection: 'column',
-    zIndex: 50,
-};
-
-const SIDEBAR_CONTENT_STYLE: React.CSSProperties = {
-    flex: 1,
+const DRAG_OVERLAY_STYLE: React.CSSProperties = {
+    position: 'fixed',
+    inset: 0,
+    background: 'rgba(0, 0, 0, 0.85)',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: '24px',
+    zIndex: 1000,
+    pointerEvents: 'none',
 };
 
-const SIDEBAR_LABEL_STYLE: React.CSSProperties = {
-    fontSize: '14px',
-    color: '#5a6070',
+const DRAG_OVERLAY_CONTENT_STYLE: React.CSSProperties = {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: '16px',
+};
+
+const DRAG_OVERLAY_ICON_STYLE: React.CSSProperties = {
+    width: '64px',
+    height: '64px',
+    opacity: 0.7,
+};
+
+const DRAG_OVERLAY_HEADER_STYLE: React.CSSProperties = {
+    fontSize: '16px',
+    fontWeight: 600,
+    color: '#e7e7e7',
     fontFamily: 'var(--font-ui)',
-    textTransform: 'uppercase',
-    letterSpacing: '0.5px',
+};
+
+const DRAG_OVERLAY_DESC_STYLE: React.CSSProperties = {
+    fontSize: '13px',
+    color: 'rgba(255, 255, 255, 0.55)',
+    fontFamily: 'var(--font-ui)',
+};
+
+const ERROR_OVERLAY_STYLE: React.CSSProperties = {
+    position: 'fixed',
+    inset: 0,
+    background: 'rgba(0, 0, 0, 0.85)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 1000,
+};
+
+const ERROR_OVERLAY_CONTENT_STYLE: React.CSSProperties = {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: '12px',
+};
+
+// Resize knob for error overlay icon
+const ERROR_OVERLAY_ICON_SIZE = 32;
+
+const ERROR_OVERLAY_ICON_STYLE: React.CSSProperties = {
+    width: `${ERROR_OVERLAY_ICON_SIZE}px`,
+    height: `${ERROR_OVERLAY_ICON_SIZE}px`,
+};
+
+const ERROR_OVERLAY_TEXT_STYLE: React.CSSProperties = {
+    fontSize: '16px',
+    fontWeight: 600,
+    color: 'rgba(255, 100, 100, 0.9)',
+    fontFamily: 'var(--font-ui)',
+};
+
+const ERROR_OVERLAY_DESC_STYLE: React.CSSProperties = {
+    fontSize: '13px',
+    color: 'rgba(255, 255, 255, 0.55)',
+    fontFamily: 'var(--font-ui)',
+};
+
+const LOGOUT_CORNER_WRAP_STYLE: React.CSSProperties = {
+    position: 'fixed',
+    right: '20px',
+    bottom: '20px',
+    zIndex: 1100,
+    pointerEvents: 'auto',
+};
+
+const LOGOUT_CORNER_BUTTON_STYLE: React.CSSProperties = {
+    fontSize: '12px',
+    padding: '7px 12px',
+    borderRadius: '8px',
+    border: '1px solid rgba(255,255,255,0.2)',
+    background: 'rgba(255,255,255,0.08)',
+    color: '#fff',
+    cursor: 'pointer',
+    fontFamily: 'var(--font-ui)',
 };

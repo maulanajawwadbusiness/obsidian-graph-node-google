@@ -92,7 +92,7 @@ export type PhysicsHudSnapshot = {
 
     // Mini Run 6: Calibration Telemetry
     xpbdComplianceUsed?: number;  // Actual compliance value in use
-    xpbdAlphaAvg?: number;  // Average alpha (compliance/dt²) for verification
+    xpbdAlphaAvg?: number;  // Average alpha (compliance/dt^2) for verification
 
     // Mini Run 7: Drag Coupling
     xpbdDragActive?: boolean;

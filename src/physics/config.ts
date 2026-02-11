@@ -130,7 +130,7 @@ export const DEFAULT_PHYSICS_CONFIG: ForceConfig = {
     // Uniform rest length for all springs (creates harmonic net, not stressed web)
     linkRestLength: 52 * EDGE_LEN_SCALE,  // Base: 52 (Reduced 2x). Scaled by EDGE_LEN_SCALE.
     // Dead zone for soft springs (no force within this band)
-    springDeadZone: 0.15,  // ±15% of rest length
+    springDeadZone: 0.15,  // +/-15% of rest length
 
     // ---------------------------------------------------------------------------
     // ANCHOR: Soft Spacing (Personal Space)
@@ -139,7 +139,7 @@ export const DEFAULT_PHYSICS_CONFIG: ForceConfig = {
     minNodeDistance: 100,
     // Very low strength for personal space effect (spatial etiquette, not physics dominance)
     softRepulsionStrength: 5,
-    // Minimum angle between edges at a node (30 degrees = π/6)
+    // Minimum angle between edges at a node (30 degrees = pi/6)
     minEdgeAngle: Math.PI / 6,
 
     // Soft pre-zone before hard barrier

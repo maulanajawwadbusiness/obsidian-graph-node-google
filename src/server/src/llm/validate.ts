@@ -12,6 +12,7 @@ export type PaperAnalyzeInput = {
   text: string;
   nodeCount: number;
   model: LogicalModel;
+  lang?: "id" | "en";
 };
 
 export type ChatInput = {
@@ -79,7 +80,14 @@ export function validatePaperAnalyze(body: any): PaperAnalyzeInput | ValidationE
   const resolvedModel = resolveModel(body.model, DEFAULT_LOGICAL_MODELS.analyze);
   if (typeof resolvedModel !== "string") return resolvedModel;
 
-  return { text: body.text, nodeCount, model: resolvedModel };
+  let lang: "id" | "en" | undefined;
+  if (body.lang !== undefined) {
+    if (!isString(body.lang)) return invalidType("lang");
+    if (body.lang !== "id" && body.lang !== "en") return invalidType("lang");
+    lang = body.lang;
+  }
+
+  return { text: body.text, nodeCount, model: resolvedModel, lang };
 }
 
 export function validateChat(body: any): ChatInput | ValidationError {

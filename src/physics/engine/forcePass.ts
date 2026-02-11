@@ -48,7 +48,7 @@ export const applyForcePass = (
             preRollDegree.set(link.target, (preRollDegree.get(link.target) || 0) + 1);
         }
 
-        // Pre-roll fade: topology forces ramp from 0 → 1 as pre-roll ends
+        // Pre-roll fade: topology forces ramp from 0 -> 1 as pre-roll ends
         // At frame 5: fade = 0, at frame 0: fade = 1
         const topologyFade = 1 - (engine.preRollFrames / 5);
 

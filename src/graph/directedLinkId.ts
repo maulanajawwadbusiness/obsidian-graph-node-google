@@ -98,7 +98,7 @@ export function parseDirectedLinkId(
         };
     }
 
-    const legacy = id.match(/^(.+)→(.+)::(.+)::(\d+)$/);
+    const legacy = id.match(/^(.+)\u2192(.+)::(.+)::(\d+)$/);
     if (legacy) {
         return {
             from: legacy[1],

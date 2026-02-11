@@ -195,6 +195,10 @@ function parseRemoteOutbox(raw: string | null, identityKey: string): RemoteOutbo
 
 function classifyRemoteError(error: unknown): { code: string; retryable: boolean; pauseAuth: boolean } {
     const message = String(error ?? 'unknown');
+    const lower = message.toLowerCase();
+    if (lower.includes('payload_missing')) {
+        return { code: 'payload_missing', retryable: false, pauseAuth: false };
+    }
     const codeMatch = message.match(/\b(401|403|413|429|5\d\d)\b/);
     const code = codeMatch?.[1] ?? 'unknown';
     if (code === '401') {
@@ -209,7 +213,6 @@ function classifyRemoteError(error: unknown): { code: string; retryable: boolean
     if (code.startsWith('5')) {
         return { code, retryable: true, pauseAuth: false };
     }
-    const lower = message.toLowerCase();
     if (lower.includes('timeout') || lower.includes('network') || lower.includes('failed to fetch') || code === 'unknown') {
         return { code: code === 'unknown' ? 'network' : code, retryable: true, pauseAuth: false };
     }

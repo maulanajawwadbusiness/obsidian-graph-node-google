@@ -57,7 +57,7 @@ const CLOSE_ICON_OFFSET_LEFT = -10;
 const ICON_OPACITY_DEFAULT = 1.0;
 const ICON_OPACITY_HOVER = 1.0;
 const HOVER_ACCENT_COLOR = '#63abff';
-const DEFAULT_ICON_COLOR = '#ffffff';
+const DEFAULT_ICON_COLOR = '#d7f5ff';
 const ROW_MENU_DELETE_TEXT_COLOR = '#ff4b4e';
 type RowMenuItemKey = 'rename' | 'delete';
 

@@ -2,9 +2,14 @@ import { defineConfig } from 'vite'
 
 export default defineConfig({
     server: {
-        allowedHosts: [
-            '.trycloudflare.com'
-        ]
+        host: true,
+        strictPort: true,
+        port: 5173,
+        allowedHosts: true,
+        hmr: {
+            protocol: 'wss',
+            clientPort: 443
+        }
     }
 })
 

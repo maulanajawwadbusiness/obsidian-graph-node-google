@@ -60,6 +60,10 @@ Only use `task_boundary` for distinct, complex sub-tasks (~1 per 5 steps).
 ### POWERSHELL CAUTION
 Do NOT use `&&` in the terminal. It breaks the parser. Use separate commands or use `;` correctly.
 
+### BACKEND VPN RULE (NON-NEGOTIABLE)
+When running backend commands from `src/server` (for example `npm run dev`, `npm run check:auth-schema`, DB scripts), turn VPN OFF first.
+Reason: VPN can block or delay Google Cloud SQL connector setup and trigger startup timeout errors.
+
 ### ASCII ONLY
 Use pure ASCII characters in code, comments, logs, and docs. Avoid Unicode arrows, ellipses, and typographic dashes to prevent mojibake.
 

@@ -4,10 +4,11 @@ import { useAuth } from '../auth/AuthProvider';
 import { PromptCard } from '../components/PromptCard';
 import { PaymentGopayPanel } from '../components/PaymentGopayPanel';
 import { SHOW_ENTERPROMPT_PAYMENT_PANEL } from '../config/onboardingUiFlags';
+import { t } from '../i18n/t';
 import uploadOverlayIcon from '../assets/upload_overlay_icon.png';
 import errorIcon from '../assets/error_icon.png';
 
-const LOGIN_OVERLAY_ENABLED = false;
+const LOGIN_OVERLAY_ENABLED = true;
 const ACCEPTED_EXTENSIONS = ['.pdf', '.docx', '.md', '.markdown', '.txt'];
 const LEFT_RAIL_GUTTER_PX = 35;
 
@@ -33,7 +34,7 @@ export const EnterPrompt: React.FC<EnterPromptProps> = ({
     onSubmitPromptText,
     onSubmitPromptFile
 }) => {
-    const { user } = useAuth();
+    const { user, logout } = useAuth();
     const [isOverlayHidden, setIsOverlayHidden] = React.useState(false);
     const [promptText, setPromptText] = React.useState('');
     const [attachedFiles, setAttachedFiles] = React.useState<File[]>([]);
@@ -168,6 +169,19 @@ export const EnterPrompt: React.FC<EnterPromptProps> = ({
                 onSkip={onSkip}
                 onHide={() => setIsOverlayHidden(true)}
             />}
+
+            {user ? (
+                <div style={LOGOUT_CORNER_WRAP_STYLE} onPointerDown={(e) => e.stopPropagation()}>
+                    <button
+                        type="button"
+                        style={LOGOUT_CORNER_BUTTON_STYLE}
+                        onPointerDown={(e) => e.stopPropagation()}
+                        onClick={() => void logout()}
+                    >
+                        {t("onboarding.enterprompt.login.google.button_logout")}
+                    </button>
+                </div>
+            ) : null}
         </div>
     );
 };
@@ -255,5 +269,24 @@ const ERROR_OVERLAY_TEXT_STYLE: React.CSSProperties = {
 const ERROR_OVERLAY_DESC_STYLE: React.CSSProperties = {
     fontSize: '13px',
     color: 'rgba(255, 255, 255, 0.55)',
+    fontFamily: 'var(--font-ui)',
+};
+
+const LOGOUT_CORNER_WRAP_STYLE: React.CSSProperties = {
+    position: 'fixed',
+    right: '20px',
+    bottom: '20px',
+    zIndex: 1100,
+    pointerEvents: 'auto',
+};
+
+const LOGOUT_CORNER_BUTTON_STYLE: React.CSSProperties = {
+    fontSize: '12px',
+    padding: '7px 12px',
+    borderRadius: '8px',
+    border: '1px solid rgba(255,255,255,0.2)',
+    background: 'rgba(255,255,255,0.08)',
+    color: '#fff',
+    cursor: 'pointer',
     fontFamily: 'var(--font-ui)',
 };

@@ -23,8 +23,9 @@ export type SavedInterfaceApiRecord = {
   title: string;
   payloadVersion: number;
   payloadJson: any;
-  createdAt: string;
-  updatedAt: string;
+  // Database row timestamps only. Do NOT use for client ordering/merge.
+  dbCreatedAt: string;
+  dbUpdatedAt: string;
 };
 
 export type SavedInterfaceUpsertInput = {
@@ -188,8 +189,8 @@ function toSavedInterfaceRecord(item: SavedInterfacesListItem): SavedInterfaceAp
     title: String(item?.title ?? ""),
     payloadVersion: Number(item?.payload_version ?? 0),
     payloadJson: item?.payload_json,
-    createdAt: String(item?.created_at ?? ""),
-    updatedAt: String(item?.updated_at ?? ""),
+    dbCreatedAt: String(item?.created_at ?? ""),
+    dbUpdatedAt: String(item?.updated_at ?? ""),
   };
 }
 

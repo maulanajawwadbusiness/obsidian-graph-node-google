@@ -474,6 +474,10 @@ Frontend:
   - does not currently return DB numeric `id` in the `/me` response body.
   - frontend identity logic must support `sub` fallback for namespacing and sync isolation.
 
+## Backend VPN Reminder
+- Before running backend commands in `src/server` (for example `npm run dev`, `npm run check:auth-schema`, DB scripts), turn VPN OFF.
+- VPN can block or slow Cloud SQL connector setup and cause startup timeout errors.
+
 ## Fonts
 - UI default: Quicksand (via CSS vars)
 - Titles: Segoe UI -> Public Sans -> system

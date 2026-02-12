@@ -18,7 +18,7 @@ type AuthSchemaSummary = {
 
 const REQUIRED_TABLES = ["users", "sessions"] as const;
 const REQUIRED_COLUMNS: Record<(typeof REQUIRED_TABLES)[number], string[]> = {
-  users: ["id", "google_sub", "email", "name", "picture", "display_name", "username"],
+  users: ["id", "google_sub", "email", "name", "picture"],
   sessions: ["id", "user_id", "expires_at"],
 };
 

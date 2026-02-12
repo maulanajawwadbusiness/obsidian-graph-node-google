@@ -64,6 +64,7 @@ const SAVED_INTERFACE_JSON_LIMIT = process.env.SAVED_INTERFACE_JSON_LIMIT || "15
 const PROFILE_DISPLAY_NAME_MAX = 80;
 const PROFILE_USERNAME_MAX = 32;
 const PROFILE_USERNAME_REGEX = /^[A-Za-z0-9_.-]+$/;
+let profileColumnsAvailable = false;
 const allowedOrigins = (process.env.ALLOWED_ORIGINS ?? "")
   .split(",")
   .map((value) => value.trim())
@@ -140,6 +141,19 @@ function isProd() {
 
 function isDevBalanceBypassEnabled() {
   return !isProd() && process.env.DEV_BYPASS_BALANCE === "1";
+}
+
+async function detectProfileColumnsAvailability(): Promise<boolean> {
+  const pool = await getPool();
+  const result = await pool.query(
+    `select column_name
+       from information_schema.columns
+      where table_schema = 'public'
+        and table_name = 'users'
+        and column_name in ('display_name', 'username')`
+  );
+  const found = new Set((result.rows || []).map((row: any) => String(row.column_name)));
+  return found.has("display_name") && found.has("username");
 }
 
 function resolveCookieOptions() {
@@ -609,14 +623,23 @@ app.post("/auth/google", async (req, res) => {
 
   try {
     const pool = await getPool();
-    const upsertResult = await pool.query(
-      `insert into users (google_sub, email, name, picture)
-       values ($1, $2, $3, $4)
-       on conflict (google_sub)
-       do update set email = excluded.email, name = excluded.name, picture = excluded.picture
-       returning id, google_sub, email, name, picture, display_name, username`,
-      [user.sub, user.email ?? null, user.name ?? null, user.picture ?? null]
-    );
+    const upsertSql = profileColumnsAvailable
+      ? `insert into users (google_sub, email, name, picture)
+         values ($1, $2, $3, $4)
+         on conflict (google_sub)
+         do update set email = excluded.email, name = excluded.name, picture = excluded.picture
+         returning id, google_sub, email, name, picture, display_name, username`
+      : `insert into users (google_sub, email, name, picture)
+         values ($1, $2, $3, $4)
+         on conflict (google_sub)
+         do update set email = excluded.email, name = excluded.name, picture = excluded.picture
+         returning id, google_sub, email, name, picture`;
+    const upsertResult = await pool.query(upsertSql, [
+      user.sub,
+      user.email ?? null,
+      user.name ?? null,
+      user.picture ?? null
+    ]);
     userRow = upsertResult.rows[0] || null;
 
     if (!userRow) {
@@ -651,8 +674,8 @@ app.post("/auth/google", async (req, res) => {
       email: userRow.email ?? undefined,
       name: userRow.name ?? undefined,
       picture: userRow.picture ?? undefined,
-      displayName: userRow.display_name ?? undefined,
-      username: userRow.username ?? undefined
+      displayName: profileColumnsAvailable ? userRow.display_name ?? undefined : undefined,
+      username: profileColumnsAvailable ? userRow.username ?? undefined : undefined
     }
   });
 });
@@ -667,19 +690,26 @@ app.get("/me", async (req, res) => {
 
   try {
     const pool = await getPool();
-    const result = await pool.query(
-      `select sessions.expires_at as expires_at,
-              users.google_sub as google_sub,
-              users.email as email,
-              users.name as name,
-              users.picture as picture,
-              users.display_name as display_name,
-              users.username as username
-       from sessions
-       join users on users.id = sessions.user_id
-       where sessions.id = $1`,
-      [sessionId]
-    );
+    const meSql = profileColumnsAvailable
+      ? `select sessions.expires_at as expires_at,
+                users.google_sub as google_sub,
+                users.email as email,
+                users.name as name,
+                users.picture as picture,
+                users.display_name as display_name,
+                users.username as username
+           from sessions
+           join users on users.id = sessions.user_id
+          where sessions.id = $1`
+      : `select sessions.expires_at as expires_at,
+                users.google_sub as google_sub,
+                users.email as email,
+                users.name as name,
+                users.picture as picture
+           from sessions
+           join users on users.id = sessions.user_id
+          where sessions.id = $1`;
+    const result = await pool.query(meSql, [sessionId]);
 
     const row = result.rows[0];
     if (!row) {
@@ -705,8 +735,8 @@ app.get("/me", async (req, res) => {
         email: row.email ?? undefined,
         name: row.name ?? undefined,
         picture: row.picture ?? undefined,
-        displayName: row.display_name ?? undefined,
-        username: row.username ?? undefined
+        displayName: profileColumnsAvailable ? row.display_name ?? undefined : undefined,
+        username: profileColumnsAvailable ? row.username ?? undefined : undefined
       }
     });
   } catch (e) {
@@ -732,6 +762,10 @@ app.post("/auth/logout", async (req, res) => {
 });
 
 app.post("/api/profile/update", requireAuth, async (req, res) => {
+  if (!profileColumnsAvailable) {
+    res.status(503).json({ ok: false, error: "profile schema not ready; apply migration first" });
+    return;
+  }
   const user = res.locals.user as AuthContext;
   const displayNameRaw = req.body?.displayName;
   const usernameRaw = req.body?.username;
@@ -2589,9 +2623,11 @@ app.post("/api/llm/chat", requireAuth, async (req, res) => {
 async function startServer() {
   try {
     const schema = await assertAuthSchemaReady();
+    profileColumnsAvailable = await detectProfileColumnsAvailability();
     console.log(
       `[auth-schema] ready db=${schema.dbTarget} tables=${schema.tables.join(",")} fk_sessions_user=${schema.hasSessionsUserFk} uq_users_google_sub=${schema.hasUsersGoogleSubUnique} uq_sessions_id=${schema.hasSessionsIdUnique}`
     );
+    console.log(`[auth-schema] profile_columns_available=${profileColumnsAvailable}`);
     app.listen(port, () => {
       console.log(`[server] listening on ${port}`);
     });

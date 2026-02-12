@@ -50,6 +50,7 @@ type EmphasisAnalysis = {
 
 const DEBUG_WELCOME2_TIMELINE = false;
 const MIN_LETTER_DIGIT_DELAY_MS = 20;
+const MIN_REVEAL_GAP_MS = 28; // minimum allowed time gap between char i and char i+1
 const NEWLINE_POST_MIN_MS = 40;
 const NEWLINE_POST_MAX_FRACTION = 0.2;
 const NEWLINE_PREWAIT_MULTIPLIER = 2.5;
@@ -466,6 +467,11 @@ export function buildWelcome2Timeline(rawText: string, cadence: CadenceConfig = 
         let charDelayMs = getCostBetweenChars(charClass, tunedCadence);
         if (charClass === 'letter' || charClass === 'digit') {
             charDelayMs = Math.max(MIN_LETTER_DIGIT_DELAY_MS, clampMs(charDelayMs));
+        }
+        const totalGapMs = charDelayMs + event.pauseAfterMs;
+        if (totalGapMs < MIN_REVEAL_GAP_MS) {
+            const neededExtra = MIN_REVEAL_GAP_MS - totalGapMs;
+            charDelayMs += neededExtra;
         }
 
         const eventTimeMs = event.tMs;

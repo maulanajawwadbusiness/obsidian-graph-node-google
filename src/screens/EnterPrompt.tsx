@@ -87,13 +87,7 @@ export const EnterPrompt: React.FC<EnterPromptProps> = ({
         }
     }, []);
 
-    const handleDrop = React.useCallback((e: React.DragEvent) => {
-        e.preventDefault();
-        e.stopPropagation();
-        dragCounterRef.current = 0;
-        setIsDragging(false);
-
-        const files = Array.from(e.dataTransfer.files);
+    const attachFromFiles = React.useCallback((files: File[]) => {
         const lastFile = files.length > 0 ? files[files.length - 1] : null;
         if (!lastFile) return;
 
@@ -105,6 +99,14 @@ export const EnterPrompt: React.FC<EnterPromptProps> = ({
         setShowUnsupportedError(true);
         setTimeout(() => setShowUnsupportedError(false), 3000);
     }, []);
+
+    const handleDrop = React.useCallback((e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dragCounterRef.current = 0;
+        setIsDragging(false);
+        attachFromFiles(Array.from(e.dataTransfer.files));
+    }, [attachFromFiles]);
 
     React.useEffect(() => {
         onOverlayOpenChange?.(loginOverlayOpen);

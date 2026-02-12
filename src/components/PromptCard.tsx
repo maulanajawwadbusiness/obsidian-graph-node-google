@@ -32,6 +32,7 @@ export const PromptCard: React.FC<PromptCardProps> = ({
     const [plusHover, setPlusHover] = React.useState(false);
     const [sendHover, setSendHover] = React.useState(false);
     const [showUploadPopup, setShowUploadPopup] = React.useState(false);
+    const [uploadMenuHover, setUploadMenuHover] = React.useState(false);
     const [inputText, setInputText] = React.useState(value);
     const popupRef = React.useRef<HTMLDivElement>(null);
     const fileInputRef = React.useRef<HTMLInputElement | null>(null);
@@ -166,11 +167,16 @@ export const PromptCard: React.FC<PromptCardProps> = ({
                                 >
                                     <button
                                         type="button"
-                                        style={UPLOAD_POPUP_ITEM_STYLE}
+                                        style={{
+                                            ...UPLOAD_POPUP_ITEM_STYLE,
+                                            backgroundColor: uploadMenuHover ? 'rgba(215, 245, 255, 0.14)' : 'transparent',
+                                        }}
                                         onPointerDown={(e) => e.stopPropagation()}
                                         onPointerUp={(e) => e.stopPropagation()}
                                         onWheelCapture={(e) => e.stopPropagation()}
                                         onWheel={(e) => e.stopPropagation()}
+                                        onMouseEnter={() => setUploadMenuHover(true)}
+                                        onMouseLeave={() => setUploadMenuHover(false)}
                                         onClick={(e) => {
                                             e.preventDefault();
                                             e.stopPropagation();
@@ -367,6 +373,7 @@ const UPLOAD_POPUP_ITEM_STYLE: React.CSSProperties = {
     fontFamily: 'var(--font-ui)',
     textAlign: 'left',
     cursor: 'pointer',
+    transition: 'background-color 100ms ease',
 };
 
 const CLIP_ICON_STYLE: React.CSSProperties = {

@@ -155,8 +155,29 @@ export const PromptCard: React.FC<PromptCardProps> = ({
                                 />
                             </button>
                             {showUploadPopup && (
-                                <div ref={popupRef} style={UPLOAD_POPUP_STYLE}>
-                                    <button type="button" style={UPLOAD_POPUP_ITEM_STYLE}>
+                                <div
+                                    ref={popupRef}
+                                    style={UPLOAD_POPUP_STYLE}
+                                    onPointerDown={(e) => e.stopPropagation()}
+                                    onPointerUp={(e) => e.stopPropagation()}
+                                    onClick={(e) => e.stopPropagation()}
+                                    onWheelCapture={(e) => e.stopPropagation()}
+                                    onWheel={(e) => e.stopPropagation()}
+                                >
+                                    <button
+                                        type="button"
+                                        style={UPLOAD_POPUP_ITEM_STYLE}
+                                        onPointerDown={(e) => e.stopPropagation()}
+                                        onPointerUp={(e) => e.stopPropagation()}
+                                        onWheelCapture={(e) => e.stopPropagation()}
+                                        onWheel={(e) => e.stopPropagation()}
+                                        onClick={(e) => {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            setShowUploadPopup(false);
+                                            fileInputRef.current?.click();
+                                        }}
+                                    >
                                         <span
                                             aria-hidden="true"
                                             style={{

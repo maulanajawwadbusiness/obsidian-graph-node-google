@@ -133,6 +133,7 @@ export const EnterPrompt: React.FC<EnterPromptProps> = ({
                 attachedFiles={attachedFiles}
                 canSubmitWithoutText={attachedFiles.length > 0}
                 onRemoveFile={handleRemoveFile}
+                onPickFiles={(files) => attachFromFiles(files)}
             />
             {SHOW_ENTERPROMPT_PAYMENT_PANEL ? <PaymentGopayPanel /> : null}
 

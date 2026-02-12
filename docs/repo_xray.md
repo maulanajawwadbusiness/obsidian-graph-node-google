@@ -17,6 +17,11 @@ Update Note: 2026-02-11
 - Added per-identity persistent remote outbox with retry/backoff for mirror resilience.
 - Added remote outbox non-retryable guard for `payload_missing` to prevent infinite retries.
 
+Update Note: 2026-02-12
+- Added profile update endpoint + users profile columns integration (`display_name`, `username`).
+- Sidebar avatar flow now owns profile open and logout trigger path (with AppShell confirm modal).
+- Font system moved to Quicksand `woff2` multi-weight via `src/styles/fonts.css` and CSS vars.
+
 ## 1. Repository Tree (Depth 4)
 Excluding: node_modules, dist, build, .git
 
@@ -223,6 +228,47 @@ Search overlay contract:
 - centered AppShell overlay opened from Sidebar Search row
 - in-memory search over AppShell saved list (no localStorage reads while typing)
 - strict pointer/wheel shielding to prevent canvas input leaks
+
+## 7.4 Important Files and Seams (Current)
+
+Backend API seams:
+- `src/server/src/serverMonolith.ts`
+  - `GET /api/saved-interfaces`
+  - `POST /api/saved-interfaces/upsert`
+  - `POST /api/saved-interfaces/delete`
+  - `POST /api/profile/update`
+  - `GET /me` payload includes `displayName`, `username`, `picture`.
+
+Backend migrations:
+- `src/server/migrations/1770383000000_add_saved_interfaces.js`
+- `src/server/migrations/1770383500000_add_user_profile_fields.js`
+
+Frontend API helpers:
+- `src/api.ts`
+  - `listSavedInterfaces`
+  - `upsertSavedInterface`
+  - `deleteSavedInterface`
+  - `updateProfile`
+
+Frontend orchestration seams:
+- `src/screens/AppShell.tsx`
+  - sync brain + identity/epoch guards
+  - outbox enqueue/drain and retry policy
+  - single writer commit surfaces for upsert/rename/delete/layout patch
+  - profile modal + logout confirm modal ownership
+- `src/components/Sidebar.tsx`
+  - saved session row list + ellipsis menu (rename/delete)
+  - search overlay trigger wiring
+  - avatar menu wiring (profile/logout request)
+- `src/playground/GraphPhysicsPlaygroundShell.tsx`
+  - restore path application
+  - restore write guards (`restore_write_blocked`) to keep read-only restore
+
+## 7.5 Gotchas (Do Not Regress)
+
+- Do not reorder sessions on rename: rename must not bump payload `updatedAt`.
+- Do not use DB row timestamps (`created_at`, `updated_at`) for ordering or merge decisions.
+- Do not write during restore path: restore must stay read-only and block save/sync side effects.
 
 ## 7.2 Saved Interfaces Call Graph (Step 7-9)
 

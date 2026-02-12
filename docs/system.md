@@ -229,6 +229,7 @@ Ordering contract (critical):
 
 Input safety contract:
 - Sidebar root, row menu, row menu items, and delete confirm modal all stop pointer and wheel propagation.
+- Search overlay, profile modal, logout confirm modal, and delete confirm modal follow the same hard-shield pattern.
 - Modal/backdrop interactions must never leak to canvas input handlers.
 
 Restore purity contract:
@@ -236,6 +237,11 @@ Restore purity contract:
 - Restore applies saved `parsedDocument`, `topology`, `layout`, `camera`, and `analysisMeta`.
 - Restore must not enqueue save/upsert/delete/layout-patch side effects.
 - Structural restore-active guards exist in graph shell and AppShell commit layer.
+
+Critical gotchas (must not regress):
+- Do not reorder sessions on rename. Rename must not bump payload `updatedAt`.
+- Do not use DB row timestamps (`created_at`, `updated_at`) for UI ordering.
+- Do not write during restore path. Restore must remain read-only.
 
 ## 3. Physics Architecture And Contract
 The graph is driven by a **Hybrid Solver** (`src/physics/`) prioritizing "Visual Dignity" over pure simulation accuracy.
@@ -470,17 +476,30 @@ Frontend:
   - route logic lives in `src/server/src/serverMonolith.ts`.
   - `src/server/src/index.ts` is a thin entry that imports `serverMonolith`.
 - `/me` payload contract:
-  - returns `sub`, `email`, `name`, `picture` for signed-in state.
+  - returns `sub`, `email`, `name`, `picture`, `displayName`, `username` for signed-in state.
+  - `picture` is the Google profile photo URL used by Sidebar and profile UI.
   - does not currently return DB numeric `id` in the `/me` response body.
   - frontend identity logic must support `sub` fallback for namespacing and sync isolation.
+- Profile update contract:
+  - endpoint: `POST /api/profile/update` (`requireAuth`) in `src/server/src/serverMonolith.ts`.
+  - request fields: `displayName`, `username` with trim/max-length/regex validation.
+  - schema columns: `users.display_name`, `users.username` from migration `src/server/migrations/1770383500000_add_user_profile_fields.js`.
+  - UI owner: AppShell profile modal in `src/screens/AppShell.tsx` (opened from Sidebar avatar menu).
+  - save path uses `updateProfile(...)`, applies returned user fields locally, then runs `/me` refresh as reconciliation.
+- Logout UI contract:
+  - logout action is accessed from Sidebar avatar popup menu, not EnterPrompt.
+  - logout confirmation is AppShell-owned centered modal that runs the same auth logout path.
 
 ## Backend VPN Reminder
 - Before running backend commands in `src/server` (for example `npm run dev`, `npm run check:auth-schema`, DB scripts), turn VPN OFF.
 - VPN can block or slow Cloud SQL connector setup and cause startup timeout errors.
 
 ## Fonts
-- UI default: Quicksand (via CSS vars)
-- Titles: Segoe UI -> Public Sans -> system
+- Canonical entrypoint: `src/styles/fonts.css` imported once in `src/main.tsx`.
+- Quicksand is registered as `woff2` multi-weight faces (400/500/600/700).
+- Use CSS vars for global usage:
+  - `--font-ui`
+  - `--font-title`
 
 ## Scrollbar Theme (Frontend)
 - Arnvoid uses themed scrollbars. Do not use browser-default scrollbar styling on product UI surfaces.

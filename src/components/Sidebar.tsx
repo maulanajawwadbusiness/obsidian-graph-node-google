@@ -8,7 +8,6 @@ import documentIcon from '../assets/document_icon.png';
 import verticalElipsisIcon from '../assets/vertical_elipsis_icon.png';
 import renameIcon from '../assets/rename_icon.png';
 import deleteIcon from '../assets/delete_icon.png';
-import profileIcon from '../assets/profile_icon.png';
 import logoutIcon from '../assets/logout_icon.png';
 import { LAYER_SIDEBAR, LAYER_SIDEBAR_ROW_MENU } from '../ui/layers';
 
@@ -708,19 +707,22 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         }}
                     >
                         <span style={AVATAR_MENU_ITEM_CONTENT_STYLE}>
-                            <MaskIcon
-                                src={profileIcon}
-                                size={14}
-                                color={avatarMenuHoverKey === 'profile' ? HOVER_ACCENT_COLOR : '#e7e7e7'}
-                                opacity={1}
-                            />
+                            {accountImageUrl ? (
+                                <img
+                                    src={accountImageUrl}
+                                    alt="avatar"
+                                    style={AVATAR_MENU_ACCOUNT_PHOTO_STYLE}
+                                />
+                            ) : (
+                                <span style={AVATAR_MENU_ACCOUNT_FALLBACK_STYLE}>BA</span>
+                            )}
                             <span
                                 style={{
-                                    ...AVATAR_MENU_ITEM_LABEL_STYLE,
+                                    ...AVATAR_MENU_ACCOUNT_NAME_STYLE,
                                     color: avatarMenuHoverKey === 'profile' ? HOVER_ACCENT_COLOR : '#e7e7e7',
                                 }}
                             >
-                                Profile
+                                {displayAccountName}
                             </span>
                         </span>
                     </button>
@@ -1164,6 +1166,40 @@ const AVATAR_MENU_ITEM_LABEL_STYLE: React.CSSProperties = {
     fontFamily: 'var(--font-ui)',
     fontSize: `${FONT_SIZE_NAV}px`,
     lineHeight: 1.2,
+};
+
+const AVATAR_MENU_ACCOUNT_PHOTO_STYLE: React.CSSProperties = {
+    width: '20px',
+    height: '20px',
+    borderRadius: '50%',
+    objectFit: 'cover',
+    display: 'block',
+    flexShrink: 0,
+};
+
+const AVATAR_MENU_ACCOUNT_FALLBACK_STYLE: React.CSSProperties = {
+    width: '20px',
+    height: '20px',
+    borderRadius: '50%',
+    background: '#2dd4bf',
+    color: '#000',
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontFamily: 'var(--font-ui)',
+    fontSize: '9px',
+    fontWeight: 700,
+    lineHeight: 1,
+    flexShrink: 0,
+};
+
+const AVATAR_MENU_ACCOUNT_NAME_STYLE: React.CSSProperties = {
+    ...AVATAR_MENU_ITEM_LABEL_STYLE,
+    minWidth: 0,
+    flex: 1,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
 };
 
 const RENAME_CONTAINER_STYLE: React.CSSProperties = {

@@ -31,6 +31,8 @@ const POPUP_STYLE: React.CSSProperties = {
     borderRadius: '8px',
     padding: '20px',
     color: 'rgba(180, 190, 210, 0.9)',
+    fontFamily: 'var(--font-ui)',
+    fontWeight: 300,
     backdropFilter: 'blur(0px)',
     boxShadow: '0 8px 32px rgba(0, 0, 0, 0)',
     pointerEvents: 'auto',
@@ -73,6 +75,7 @@ const CLOSE_BUTTON_STYLE: React.CSSProperties = {
     border: 'none',
     color: 'rgba(180, 190, 210, 0.7)',
     fontSize: '20px',
+    fontWeight: 300,
     cursor: 'pointer',
     padding: '4px 8px',
     transition: 'color 0.2s',
@@ -82,12 +85,13 @@ const CONTENT_STYLE: React.CSSProperties = {
     flex: 1,
     overflowY: 'auto',
     fontSize: '14px',
+    fontWeight: 300,
     lineHeight: '1.6',
 };
 
 const LABEL_STYLE: React.CSSProperties = {
     fontSize: '16px',
-    fontWeight: '600',
+    fontWeight: '300',
     marginBottom: '12px',
     color: 'rgba(99, 171, 255, 0.9)',
 };

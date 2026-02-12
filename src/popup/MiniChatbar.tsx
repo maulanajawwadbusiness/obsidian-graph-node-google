@@ -38,6 +38,8 @@ const CHATBAR_STYLE: React.CSSProperties = {
     borderRadius: '8px',
     padding: '16px',
     color: 'rgba(180, 190, 210, 0.9)',
+    fontFamily: 'var(--font-ui)',
+    fontWeight: 300,
     backdropFilter: 'blur(12px)',
     boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)',
     pointerEvents: 'auto',
@@ -71,6 +73,7 @@ const MESSAGES_STYLE: React.CSSProperties = {
     flexDirection: 'column',
     gap: '12px',
     fontSize: '13px',
+    fontWeight: 300,
     lineHeight: '1.5',
     paddingLeft: '4px',      // Visual balance
     paddingRight: 'var(--scrollbar-gutter, 12px)',    // Reserve lane for scrollbar
@@ -102,6 +105,7 @@ const INPUT_FIELD_STYLE: React.CSSProperties = {
     flex: 1,
     padding: '8px 12px',
     fontSize: '13px',
+    fontWeight: 300,
     backgroundColor: 'rgba(99, 171, 255, 0.05)',
     border: 'none',
     borderRadius: '6px',
@@ -400,13 +404,14 @@ export const MiniChatbar: React.FC<MiniChatbarProps> = ({ messages, onSend, onCl
             onWheel={stopPropagation}
         >
             <div style={HEADER_STYLE}>
-                <span style={{ fontSize: '13px', fontWeight: '600' }}>{t('miniChat.header')}</span>
+                <span style={{ fontSize: '13px', fontWeight: '300' }}>{t('miniChat.header')}</span>
                 <button
                     style={{
                         background: 'transparent',
                         border: 'none',
                         color: 'rgba(180, 190, 210, 0.7)',
                         fontSize: '18px',
+                        fontWeight: 300,
                         cursor: 'pointer',
                         padding: '4px 8px',
                     }}

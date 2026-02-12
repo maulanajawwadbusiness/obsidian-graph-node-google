@@ -193,6 +193,8 @@ const ROOT_STYLE: React.CSSProperties = {
     justifyContent: 'center',
     background: '#06060A',
     color: '#e7e7e7',
+    fontFamily: 'var(--font-ui)',
+    fontWeight: 300,
     overflow: 'hidden',
 };
 
@@ -207,7 +209,7 @@ const CONTENT_STYLE: React.CSSProperties = {
 
 const TITLE_STYLE: React.CSSProperties = {
     fontSize: '27px',
-    fontWeight: 900,
+    fontWeight: 300,
     letterSpacing: '1px',
     fontFamily: 'var(--font-ui)',
     color: '#b9bcc5',
@@ -223,7 +225,7 @@ const SUBTITLE_WRAPPER_STYLE: React.CSSProperties = {
 
 const SUBTITLE_TEXT_STYLE: React.CSSProperties = {
     fontSize: '27px',
-    fontWeight: 400,
+    fontWeight: 300,
     letterSpacing: '0.3px',
     fontFamily: 'var(--font-ui)',
     color: '#b9bcc5',
@@ -280,12 +282,13 @@ function getCardStyle(cardBaseWidth: number): React.CSSProperties {
         color: '#ffffff',
         textAlign: 'center',
         fontFamily: 'var(--font-ui)',
+        fontWeight: 300,
     };
 }
 
 const FULLSCREEN_PROMPT_TITLE_STYLE: React.CSSProperties = {
     fontSize: `${15 * CARD_SCALE * CONTENT_SCALE}px`,
-    fontWeight: 600,
+    fontWeight: 300,
     letterSpacing: `${0.5 * CARD_SCALE * CONTENT_SCALE}px`,
     lineHeight: 1.45,
     color: '#e7e7e7',
@@ -293,6 +296,7 @@ const FULLSCREEN_PROMPT_TITLE_STYLE: React.CSSProperties = {
 
 const FULLSCREEN_PROMPT_TEXT_STYLE: React.CSSProperties = {
     fontSize: `${13 * CARD_SCALE * CONTENT_SCALE}px`,
+    fontWeight: 300,
     lineHeight: 1.55,
     marginTop: `${TITLE_DESC_GAP * CARD_SCALE * CONTENT_SCALE}px`,
     color: 'rgba(255, 255, 255, 0.55)',
@@ -317,6 +321,7 @@ const FULLSCREEN_PROMPT_PRIMARY_BUTTON_STYLE: React.CSSProperties = {
     color: '#ffffff',
     fontSize: `${BUTTON_FONT_SIZE * CARD_SCALE * CONTENT_SCALE}px`,
     fontFamily: 'var(--font-ui)',
+    fontWeight: 300,
     cursor: 'pointer',
 };
 
@@ -329,5 +334,6 @@ const FULLSCREEN_PROMPT_SECONDARY_BUTTON_STYLE: React.CSSProperties = {
     color: 'rgba(255, 255, 255, 0.7)',
     fontSize: `${BUTTON_FONT_SIZE * CARD_SCALE * CONTENT_SCALE}px`,
     fontFamily: 'var(--font-ui)',
+    fontWeight: 300,
     cursor: 'pointer',
 };

@@ -810,8 +810,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         data-avatar-trigger="1"
                         style={{
                             ...PROFILE_ROW_STYLE,
-                            width: isExpanded ? PROFILE_ROW_STYLE.width : 'fit-content',
+                            width: isExpanded ? 'calc(100% - 10px)' : 'fit-content',
                             margin: isExpanded ? undefined : '0',
+                            marginRight: isExpanded ? '10px' : undefined,
                             backgroundColor: avatarRowHover ? 'rgba(255, 255, 255, 0.14)' : 'transparent',
                             cursor: canOpenAvatarMenu ? 'pointer' : 'default',
                         }}
@@ -1259,7 +1260,7 @@ const PROFILE_ROW_STYLE: React.CSSProperties = {
     borderRadius: '10px',
     height: '36px',
     padding: '0',
-    transition: 'background-color 120ms ease',
+    transition: 'background-color 100ms ease',
 };
 
 const AVATAR_STYLE: React.CSSProperties = {

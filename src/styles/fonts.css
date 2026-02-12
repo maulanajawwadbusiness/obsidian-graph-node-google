@@ -31,16 +31,6 @@
   font-display: swap;
 }
 
-@font-face {
-  font-family: 'Public Sans';
-  src: url('../assets/fonts/public-sans/PublicSans-Bold.woff2') format('woff2'),
-    url('../assets/fonts/public-sans/PublicSans-Bold.woff') format('woff'),
-    url('../assets/fonts/public-sans/PublicSans-Bold.ttf') format('truetype');
-  font-weight: 700;
-  font-style: normal;
-  font-display: swap;
-}
-
 :root {
   --font-ui: 'Quicksand', system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
   --font-title: 'Quicksand', system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;

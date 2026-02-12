@@ -125,7 +125,7 @@ function analyzeEmphasis(
     if (landingTailChars > 0) {
         for (let i = 0; i < renderText.length; i += 1) {
             const char = renderText[i];
-            if (char !== '.' && char !== '?') continue;
+            if (char !== '.' && char !== '?' && char !== '!') continue;
 
             let cursor = i - 1;
             let landingRank = 0;
@@ -333,9 +333,11 @@ export function buildWelcome2Timeline(rawText: string, cadence: CadenceConfig = 
     const emphasis = analyzeEmphasis(renderText, tunedCadence.semantic);
     const events: TimelineEvent[] = [];
     const charDeltaByIndex: number[] = new Array(renderChars.length).fill(0);
+    const charDelayByIndex: number[] = new Array(renderChars.length).fill(0);
     const semanticPauseByIndex: number[] = new Array(renderChars.length).fill(0);
     let currentTimeMs = 0;
 
+    // Invariant: semantic cadence is boundary-only. Letters are mechanically timed only.
     if (tunedCadence.semantic) {
         const semantic = tunedCadence.semantic;
         const wordEndPause = clampMs(semantic.wordEndPauseMs);
@@ -467,6 +469,8 @@ export function buildWelcome2Timeline(rawText: string, cadence: CadenceConfig = 
         if (charClass === 'letter' || charClass === 'digit') {
             charDelayMs = Math.max(MIN_LETTER_DIGIT_DELAY_MS, clampMs(charDelayMs));
         }
+        // Invariant: charDelayMs is mechanical-only. Semantic timing flows via pauseAfterMs on boundaries.
+        charDelayByIndex[i] = clampMs(charDelayMs);
 
         const eventTimeMs = event.tMs;
         currentTimeMs += charDelayMs;
@@ -532,17 +536,29 @@ export function buildWelcome2Timeline(rawText: string, cadence: CadenceConfig = 
                 char: string;
                 class: TimelineCharClass;
                 deltaMs: number;
+                charDelayMs: number;
                 semanticPauseMs: number;
                 pauseReason: PauseReason;
             }> = [];
             for (let idx = from; idx <= to; idx += 1) {
                 const event = eventByCharIndex.get(idx);
+                const className = classifyChar(renderChars[idx]);
+                const semanticPauseMs = semanticPauseByIndex[idx] ?? 0;
+                if ((className === 'letter' || className === 'digit') && semanticPauseMs > 0) {
+                    console.log(
+                        '[Welcome2Cadence][Violation] semantic pause on letter/digit charIndex=%d char=%s semanticPauseMs=%d',
+                        idx,
+                        JSON.stringify(renderChars[idx]),
+                        semanticPauseMs
+                    );
+                }
                 timingSample.push({
                     charIndex: idx,
                     char: renderChars[idx],
-                    class: classifyChar(renderChars[idx]),
+                    class: className,
                     deltaMs: charDeltaByIndex[idx] ?? 0,
-                    semanticPauseMs: semanticPauseByIndex[idx] ?? 0,
+                    charDelayMs: charDelayByIndex[idx] ?? 0,
+                    semanticPauseMs,
                     pauseReason: event?.pauseReason ?? 'base',
                 });
             }
@@ -565,17 +581,29 @@ export function buildWelcome2Timeline(rawText: string, cadence: CadenceConfig = 
                 char: string;
                 class: TimelineCharClass;
                 deltaMs: number;
+                charDelayMs: number;
                 semanticPauseMs: number;
                 pauseReason: PauseReason;
             }> = [];
             for (let idx = from; idx <= to; idx += 1) {
                 const event = eventByCharIndex.get(idx);
+                const className = classifyChar(renderChars[idx]);
+                const semanticPauseMs = semanticPauseByIndex[idx] ?? 0;
+                if ((className === 'letter' || className === 'digit') && semanticPauseMs > 0) {
+                    console.log(
+                        '[Welcome2Cadence][Violation] semantic pause on letter/digit charIndex=%d char=%s semanticPauseMs=%d',
+                        idx,
+                        JSON.stringify(renderChars[idx]),
+                        semanticPauseMs
+                    );
+                }
                 punctuationSample.push({
                     charIndex: idx,
                     char: renderChars[idx],
-                    class: classifyChar(renderChars[idx]),
+                    class: className,
                     deltaMs: charDeltaByIndex[idx] ?? 0,
-                    semanticPauseMs: semanticPauseByIndex[idx] ?? 0,
+                    charDelayMs: charDelayByIndex[idx] ?? 0,
+                    semanticPauseMs,
                     pauseReason: event?.pauseReason ?? 'base',
                 });
             }

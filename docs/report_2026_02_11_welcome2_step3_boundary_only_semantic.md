@@ -29,6 +29,9 @@ Date: 2026-02-11
   - no semantic extras
 - `pauseAfterMs`:
   - mechanical pause + `semanticPauseByIndex[i]` at boundaries
+- Invariant note:
+  - semantic cadence must never be reintroduced into per-letter `charDelayMs`.
+  - all semantic intent must flow through boundary `semanticPauseByIndex` only.
 
 ## Debug Cadence Logging
 - Under `debugCadence=1`, samples now log:

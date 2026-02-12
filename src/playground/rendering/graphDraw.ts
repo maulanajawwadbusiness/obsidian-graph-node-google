@@ -15,6 +15,32 @@ const captureCanvasState = (ctx: CanvasRenderingContext2D) => ({
     filter: ctx.filter || 'none'
 });
 
+const CANVAS_FONT_FALLBACK = "'Quicksand', system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif";
+const canvasFontFamilyCache = new Map<string, string>();
+const CSS_VAR_FONT_PATTERN = /^var\((--[^)]+)\)$/;
+
+const resolveCanvasFontFamily = (fontFamily: string): string => {
+    const normalized = fontFamily.trim();
+    const cached = canvasFontFamilyCache.get(normalized);
+    if (cached) return cached;
+
+    const match = CSS_VAR_FONT_PATTERN.exec(normalized);
+    if (!match) {
+        canvasFontFamilyCache.set(normalized, normalized);
+        return normalized;
+    }
+
+    if (typeof document === 'undefined') {
+        canvasFontFamilyCache.set(normalized, CANVAS_FONT_FALLBACK);
+        return CANVAS_FONT_FALLBACK;
+    }
+
+    const cssValue = getComputedStyle(document.documentElement).getPropertyValue(match[1]).trim();
+    const resolved = cssValue.length > 0 ? cssValue : CANVAS_FONT_FALLBACK;
+    canvasFontFamilyCache.set(normalized, resolved);
+    return resolved;
+};
+
 export const drawLinks = (
     ctx: CanvasRenderingContext2D,
     engine: PhysicsEngine,
@@ -563,7 +589,8 @@ export const drawLabels = (
 
     // Batch State Setup
     ctx.globalCompositeOperation = 'source-over';
-    ctx.font = `${theme.labelFontSize}px ${theme.labelFontFamily}`;
+    const labelFontFamily = resolveCanvasFontFamily(theme.labelFontFamily);
+    ctx.font = `${theme.labelFontSize}px ${labelFontFamily}`;
     ctx.fillStyle = theme.labelColor;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';

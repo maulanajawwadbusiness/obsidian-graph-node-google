@@ -258,7 +258,7 @@ export const NORMAL_THEME: ThemeConfig = {
     // Text labels (disabled in normal mode)
     labelEnabled: false,
     labelFontSize: 11,
-    labelFontFamily: 'sans-serif',
+    labelFontFamily: 'var(--font-ui)',
     labelColor: 'rgba(255,255,255,0.7)',
     labelOffsetBasePx: 6,
     labelOffsetHoverPx: 0,
@@ -398,7 +398,7 @@ export const ELEGANT_THEME: ThemeConfig = {
     // Text labels (Obsidian-style)
     labelEnabled: true,
     labelFontSize: 11,
-    labelFontFamily: "'Quicksand', Inter, system-ui, Avenir, Helvetica, Arial, sans-serif",
+    labelFontFamily: 'var(--font-ui)',
     labelColor: '#d1f4ff',
     labelOffsetBasePx: 8,
     labelOffsetHoverPx: 4,

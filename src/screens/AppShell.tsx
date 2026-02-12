@@ -1270,7 +1270,7 @@ export const AppShell: React.FC = () => {
                     onSelectInterface={(id) => selectSavedInterfaceById(id)}
                     accountName={sidebarAccountName}
                     accountImageUrl={sidebarAccountImageUrl}
-                    onOpenProfile={openProfileOverlay}
+                    onOpenProfile={isLoggedIn ? openProfileOverlay : undefined}
                 />
             ) : null}
             <div

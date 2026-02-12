@@ -11,6 +11,7 @@ import { Sidebar, type SidebarInterfaceItem } from '../components/Sidebar';
 import { useAuth } from '../auth/AuthProvider';
 import {
     LAYER_MODAL_DELETE,
+    LAYER_MODAL_PROFILE,
     LAYER_MODAL_SEARCH,
     LAYER_ONBOARDING_FULLSCREEN_BUTTON,
 } from '../ui/layers';
@@ -267,6 +268,10 @@ export const AppShell: React.FC = () => {
     const [searchHighlightedIndex, setSearchHighlightedIndex] = React.useState(0);
     const [pendingDeleteId, setPendingDeleteId] = React.useState<string | null>(null);
     const [pendingDeleteTitle, setPendingDeleteTitle] = React.useState<string | null>(null);
+    const [isProfileOpen, setIsProfileOpen] = React.useState(false);
+    const [profileDraftDisplayName, setProfileDraftDisplayName] = React.useState('');
+    const [profileDraftUsername, setProfileDraftUsername] = React.useState('');
+    const [profileError, setProfileError] = React.useState<string | null>(null);
     const [graphIsLoading, setGraphIsLoading] = React.useState(false);
     const [documentViewerToggleToken, setDocumentViewerToggleToken] = React.useState(0);
     const [isSidebarExpanded, setIsSidebarExpanded] = React.useState(false);
@@ -693,10 +698,29 @@ export const AppShell: React.FC = () => {
     const handleRenameInterface = React.useCallback((id: string, newTitle: string) => {
         commitRenameInterface(id, newTitle, 'sidebar_rename');
     }, [commitRenameInterface]);
+    const closeProfileOverlay = React.useCallback(() => {
+        setIsProfileOpen(false);
+        setProfileError(null);
+    }, []);
     const openProfileOverlay = React.useCallback(() => {
-        if (import.meta.env.DEV) {
-            console.log('[appshell] profile_open_requested');
+        if (sidebarDisabled) return;
+        if (isSearchInterfacesOpen) {
+            closeSearchInterfaces();
         }
+        if (pendingDeleteId) {
+            closeDeleteConfirm();
+        }
+        const nextDisplayName = typeof user?.displayName === 'string' && user.displayName.trim()
+            ? user.displayName.trim()
+            : (typeof user?.name === 'string' && user.name.trim() ? user.name.trim() : '');
+        const nextUsername = typeof user?.username === 'string' && user.username.trim() ? user.username.trim() : '';
+        setProfileDraftDisplayName(nextDisplayName);
+        setProfileDraftUsername(nextUsername);
+        setProfileError(null);
+        setIsProfileOpen(true);
+    }, [closeDeleteConfirm, closeSearchInterfaces, isSearchInterfacesOpen, pendingDeleteId, sidebarDisabled, user]);
+    const onProfileSavePlaceholder = React.useCallback(() => {
+        setProfileError('Profile save is not connected yet.');
     }, []);
 
     React.useEffect(() => {
@@ -732,6 +756,19 @@ export const AppShell: React.FC = () => {
             window.removeEventListener('keydown', onKeyDown, true);
         };
     }, [closeDeleteConfirm, pendingDeleteId]);
+
+    React.useEffect(() => {
+        if (!isProfileOpen) return;
+        const onKeyDown = (event: KeyboardEvent) => {
+            if (event.key !== 'Escape') return;
+            event.stopPropagation();
+            closeProfileOverlay();
+        };
+        window.addEventListener('keydown', onKeyDown, true);
+        return () => {
+            window.removeEventListener('keydown', onKeyDown, true);
+        };
+    }, [closeProfileOverlay, isProfileOpen]);
 
     React.useEffect(() => {
         savedInterfacesRef.current = savedInterfaces;
@@ -1205,6 +1242,85 @@ export const AppShell: React.FC = () => {
                 {onboardingFullscreenButton}
                 {moneyUi}
             </div>
+            {isProfileOpen ? (
+                <div
+                    {...hardShieldInput}
+                    data-profile-backdrop="1"
+                    style={PROFILE_OVERLAY_BACKDROP_STYLE}
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        closeProfileOverlay();
+                    }}
+                >
+                    <div
+                        {...hardShieldInput}
+                        data-profile-modal="1"
+                        style={PROFILE_OVERLAY_CARD_STYLE}
+                    >
+                        <div style={PROFILE_TITLE_STYLE}>Profile</div>
+                        <div style={PROFILE_AVATAR_ROW_STYLE}>
+                            {sidebarAccountImageUrl ? (
+                                <img src={sidebarAccountImageUrl} alt="avatar" style={PROFILE_AVATAR_IMAGE_STYLE} />
+                            ) : (
+                                <div style={PROFILE_AVATAR_FALLBACK_STYLE}>BA</div>
+                            )}
+                        </div>
+                        <label style={PROFILE_FIELD_STYLE}>
+                            <span style={PROFILE_LABEL_STYLE}>Display Name</span>
+                            <input
+                                {...hardShieldInput}
+                                type="text"
+                                value={profileDraftDisplayName}
+                                onChange={(e) => {
+                                    setProfileDraftDisplayName(e.target.value);
+                                    setProfileError(null);
+                                }}
+                                placeholder="Display Name"
+                                style={PROFILE_INPUT_STYLE}
+                            />
+                        </label>
+                        <label style={PROFILE_FIELD_STYLE}>
+                            <span style={PROFILE_LABEL_STYLE}>Username</span>
+                            <input
+                                {...hardShieldInput}
+                                type="text"
+                                value={profileDraftUsername}
+                                onChange={(e) => {
+                                    setProfileDraftUsername(e.target.value);
+                                    setProfileError(null);
+                                }}
+                                placeholder="username"
+                                style={PROFILE_INPUT_STYLE}
+                            />
+                        </label>
+                        {profileError ? <div style={PROFILE_ERROR_STYLE}>{profileError}</div> : null}
+                        <div style={PROFILE_BUTTON_ROW_STYLE}>
+                            <button
+                                {...hardShieldInput}
+                                type="button"
+                                style={PROFILE_CANCEL_STYLE}
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    closeProfileOverlay();
+                                }}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                {...hardShieldInput}
+                                type="button"
+                                style={PROFILE_PRIMARY_STYLE}
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    onProfileSavePlaceholder();
+                                }}
+                            >
+                                Save
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            ) : null}
             {pendingDeleteId ? (
                 <div
                     data-delete-backdrop="1"
@@ -1405,6 +1521,132 @@ const FALLBACK_STYLE: React.CSSProperties = {
     background: '#0f1115',
     color: '#e7e7e7',
     fontSize: '14px',
+};
+
+const PROFILE_OVERLAY_BACKDROP_STYLE: React.CSSProperties = {
+    position: 'fixed',
+    inset: 0,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    background: 'rgba(6, 8, 12, 0.64)',
+    zIndex: LAYER_MODAL_PROFILE,
+    pointerEvents: 'auto',
+};
+
+const PROFILE_OVERLAY_CARD_STYLE: React.CSSProperties = {
+    width: '100%',
+    maxWidth: '440px',
+    margin: '0 16px',
+    borderRadius: '12px',
+    border: '1px solid rgba(255, 255, 255, 0.12)',
+    background: '#0D1118',
+    boxShadow: '0 18px 56px rgba(0, 0, 0, 0.45)',
+    padding: '18px',
+    color: '#f1f4fb',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '10px',
+};
+
+const PROFILE_TITLE_STYLE: React.CSSProperties = {
+    fontFamily: 'var(--font-title)',
+    fontWeight: 700,
+    fontSize: '16px',
+    lineHeight: 1.2,
+    color: '#f3f7ff',
+};
+
+const PROFILE_AVATAR_ROW_STYLE: React.CSSProperties = {
+    display: 'flex',
+    justifyContent: 'center',
+    padding: '4px 0 2px',
+};
+
+const PROFILE_AVATAR_IMAGE_STYLE: React.CSSProperties = {
+    width: '44px',
+    height: '44px',
+    borderRadius: '50%',
+    objectFit: 'cover',
+    display: 'block',
+};
+
+const PROFILE_AVATAR_FALLBACK_STYLE: React.CSSProperties = {
+    width: '44px',
+    height: '44px',
+    borderRadius: '50%',
+    background: '#2dd4bf',
+    color: '#000',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontFamily: 'var(--font-ui)',
+    fontWeight: 700,
+    fontSize: '12px',
+};
+
+const PROFILE_FIELD_STYLE: React.CSSProperties = {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '6px',
+};
+
+const PROFILE_LABEL_STYLE: React.CSSProperties = {
+    fontSize: '12px',
+    lineHeight: 1.2,
+    color: 'rgba(231, 231, 231, 0.84)',
+    fontFamily: 'var(--font-ui)',
+};
+
+const PROFILE_INPUT_STYLE: React.CSSProperties = {
+    width: '100%',
+    borderRadius: '10px',
+    border: '1px solid rgba(255, 255, 255, 0.2)',
+    background: 'rgba(12, 15, 22, 0.95)',
+    color: '#e7e7e7',
+    fontFamily: 'var(--font-ui)',
+    fontSize: '13px',
+    lineHeight: 1.4,
+    padding: '9px 10px',
+    outline: 'none',
+    boxSizing: 'border-box',
+};
+
+const PROFILE_ERROR_STYLE: React.CSSProperties = {
+    fontSize: '12px',
+    color: '#ff6b6b',
+    fontFamily: 'var(--font-ui)',
+};
+
+const PROFILE_BUTTON_ROW_STYLE: React.CSSProperties = {
+    display: 'flex',
+    justifyContent: 'flex-end',
+    gap: '8px',
+    marginTop: '2px',
+};
+
+const PROFILE_CANCEL_STYLE: React.CSSProperties = {
+    border: '1px solid rgba(255, 255, 255, 0.24)',
+    background: 'rgba(255, 255, 255, 0.04)',
+    color: '#f1f4fb',
+    borderRadius: '7px',
+    padding: '7px 12px',
+    fontSize: '12px',
+    cursor: 'pointer',
+    fontWeight: 600,
+    fontFamily: 'var(--font-ui)',
+};
+
+const PROFILE_PRIMARY_STYLE: React.CSSProperties = {
+    border: '1px solid #63abff',
+    background: '#63abff',
+    color: '#0b1220',
+    borderRadius: '7px',
+    padding: '7px 12px',
+    fontSize: '12px',
+    cursor: 'pointer',
+    fontWeight: 700,
+    fontFamily: 'var(--font-ui)',
 };
 
 const DELETE_CONFIRM_BACKDROP_STYLE: React.CSSProperties = {

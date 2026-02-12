@@ -177,7 +177,7 @@ I think it is time for us to think a different medium for ourselves.`,
         // Onboarding EnterPrompt
         "onboarding.enterprompt.sidebar_label": "Sidebar",
         "onboarding.enterprompt.graph_preview_placeholder": "Sample graph preview",
-        "onboarding.enterprompt.heading": "Trace difficulties in your paper here",
+        "onboarding.enterprompt.heading": "Delve Uncertainties in Your Paper",
         "onboarding.enterprompt.input_placeholder": "Write what you want to analyze here \n\n-----\n\nDrop or paste your document text here",
         "onboarding.enterprompt.login.title": "Sign In",
         "onboarding.enterprompt.login.desc": "You'll be able to use Arnvoid's smart knowledge interface.",

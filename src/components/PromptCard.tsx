@@ -167,10 +167,7 @@ export const PromptCard: React.FC<PromptCardProps> = ({
                                 >
                                     <button
                                         type="button"
-                                        style={{
-                                            ...UPLOAD_POPUP_ITEM_STYLE,
-                                            backgroundColor: uploadMenuHover ? 'rgba(215, 245, 255, 0.14)' : 'transparent',
-                                        }}
+                                        style={UPLOAD_POPUP_ITEM_STYLE}
                                         onPointerDown={(e) => e.stopPropagation()}
                                         onPointerUp={(e) => e.stopPropagation()}
                                         onWheelCapture={(e) => e.stopPropagation()}
@@ -187,13 +184,22 @@ export const PromptCard: React.FC<PromptCardProps> = ({
                                         <span
                                             aria-hidden="true"
                                             style={{
-                                                ...CLIP_ICON_STYLE,
-                                                backgroundColor: '#D7F5FF',
-                                                WebkitMaskImage: `url(${clipIcon})`,
-                                                maskImage: `url(${clipIcon})`
+                                                ...UPLOAD_POPUP_ITEM_HOVER_PLATE_STYLE,
+                                                backgroundColor: uploadMenuHover ? 'rgba(215, 245, 255, 0.14)' : 'transparent',
                                             }}
                                         />
-                                        <span>Upload document</span>
+                                        <span style={UPLOAD_POPUP_ITEM_CONTENT_STYLE}>
+                                            <span
+                                                aria-hidden="true"
+                                                style={{
+                                                    ...CLIP_ICON_STYLE,
+                                                    backgroundColor: '#D7F5FF',
+                                                    WebkitMaskImage: `url(${clipIcon})`,
+                                                    maskImage: `url(${clipIcon})`
+                                                }}
+                                            />
+                                            <span>Upload document</span>
+                                        </span>
                                     </button>
                                 </div>
                             )}
@@ -346,6 +352,8 @@ const SEND_ICON_STYLE: React.CSSProperties = {
 
 // Popup scale: adjust to make popup smaller/larger (1.0 = base, 0.8 = 20% smaller)
 const POPUP_SCALE = 0.85;
+const UPLOAD_POPUP_HOVER_EDGE_GAP_X_PX = 10;
+const UPLOAD_POPUP_HOVER_EDGE_GAP_Y_PX = 3;
 
 const UPLOAD_POPUP_STYLE: React.CSSProperties = {
     position: 'absolute',
@@ -358,6 +366,7 @@ const UPLOAD_POPUP_STYLE: React.CSSProperties = {
     boxShadow: '0 8px 24px rgba(0, 0, 0, 0.5)',
     minWidth: `${180 * POPUP_SCALE}px`,
     zIndex: 100,
+    overflow: 'hidden',
 };
 
 const UPLOAD_POPUP_ITEM_STYLE: React.CSSProperties = {
@@ -373,7 +382,29 @@ const UPLOAD_POPUP_ITEM_STYLE: React.CSSProperties = {
     fontFamily: 'var(--font-ui)',
     textAlign: 'left',
     cursor: 'pointer',
+    borderRadius: `${8 * POPUP_SCALE}px`,
+    position: 'relative',
+    overflow: 'hidden',
+};
+
+const UPLOAD_POPUP_ITEM_HOVER_PLATE_STYLE: React.CSSProperties = {
+    position: 'absolute',
+    top: `${UPLOAD_POPUP_HOVER_EDGE_GAP_Y_PX}px`,
+    right: `${UPLOAD_POPUP_HOVER_EDGE_GAP_X_PX}px`,
+    bottom: `${UPLOAD_POPUP_HOVER_EDGE_GAP_Y_PX}px`,
+    left: `${UPLOAD_POPUP_HOVER_EDGE_GAP_X_PX}px`,
+    borderRadius: `${8 * POPUP_SCALE}px`,
     transition: 'background-color 100ms ease',
+    pointerEvents: 'none',
+    zIndex: 0,
+};
+
+const UPLOAD_POPUP_ITEM_CONTENT_STYLE: React.CSSProperties = {
+    position: 'relative',
+    zIndex: 1,
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: `${10 * POPUP_SCALE}px`,
 };
 
 const CLIP_ICON_STYLE: React.CSSProperties = {

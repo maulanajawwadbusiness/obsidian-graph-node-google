@@ -39,11 +39,13 @@ export const FullscreenButton: React.FC<FullscreenButtonProps> = ({ className, s
             aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
             aria-disabled={blocked}
         >
-            <img
-                src={isFullscreen ? fullscreenCloseIcon : fullscreenOpenIcon}
-                alt={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+            <span
+                aria-hidden="true"
                 style={{
                     ...ICON_STYLE,
+                    backgroundColor: '#D7F5FF',
+                    WebkitMaskImage: `url(${isFullscreen ? fullscreenCloseIcon : fullscreenOpenIcon})`,
+                    maskImage: `url(${isFullscreen ? fullscreenCloseIcon : fullscreenOpenIcon})`,
                     opacity: isHovered ? 0.6 : 0.3,
                 }}
             />
@@ -72,7 +74,13 @@ const BUTTON_STYLE: React.CSSProperties = {
 const ICON_STYLE: React.CSSProperties = {
     width: '100%',
     height: '100%',
-    objectFit: 'contain',
+    display: 'inline-block',
+    WebkitMaskRepeat: 'no-repeat',
+    maskRepeat: 'no-repeat',
+    WebkitMaskPosition: 'center',
+    maskPosition: 'center',
+    WebkitMaskSize: 'contain',
+    maskSize: 'contain',
     opacity: 0.3,
     transition: 'opacity 0.2s ease',
 };

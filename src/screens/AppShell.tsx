@@ -10,6 +10,11 @@ import { FullscreenButton } from '../components/FullscreenButton';
 import { Sidebar, type SidebarInterfaceItem } from '../components/Sidebar';
 import { useAuth } from '../auth/AuthProvider';
 import {
+    LAYER_MODAL_DELETE,
+    LAYER_MODAL_SEARCH,
+    LAYER_ONBOARDING_FULLSCREEN_BUTTON,
+} from '../ui/layers';
+import {
     deleteSavedInterface as deleteSavedInterfaceRemote,
     listSavedInterfaces,
     upsertSavedInterface as upsertSavedInterfaceRemote,
@@ -314,7 +319,8 @@ export const AppShell: React.FC = () => {
     const showMoneyUi = screen === 'prompt' || screen === 'graph';
     const showBalanceBadge = false;
     const showPersistentSidebar = screen === 'prompt' || screen === 'graph';
-    const sidebarDisabled = screen === 'graph' && graphIsLoading;
+    const loginBlockingActive = screen === 'prompt' && enterPromptOverlayOpen;
+    const sidebarDisabled = (screen === 'graph' && graphIsLoading) || loginBlockingActive;
     const showOnboardingFullscreenButton = screen === 'welcome1' || screen === 'welcome2' || screen === 'prompt';
     const onboardingActive = screen === 'welcome1' || screen === 'welcome2' || screen === 'prompt';
     const isOnboardingOverlayOpen = welcome1OverlayOpen || enterPromptOverlayOpen;
@@ -1390,7 +1396,7 @@ const DELETE_CONFIRM_BACKDROP_STYLE: React.CSSProperties = {
     alignItems: 'center',
     justifyContent: 'center',
     background: 'rgba(6, 8, 12, 0.64)',
-    zIndex: 3200,
+    zIndex: LAYER_MODAL_DELETE,
     pointerEvents: 'auto',
 };
 
@@ -1460,7 +1466,7 @@ const SEARCH_OVERLAY_BACKDROP_STYLE: React.CSSProperties = {
     padding: '16px',
     boxSizing: 'border-box',
     background: 'rgba(6, 8, 12, 0.58)',
-    zIndex: 3100,
+    zIndex: LAYER_MODAL_SEARCH,
     pointerEvents: 'auto',
 };
 
@@ -1619,7 +1625,7 @@ const ONBOARDING_FULLSCREEN_BUTTON_STYLE: React.CSSProperties = {
     position: 'fixed',
     top: '24px',
     right: '24px',
-    zIndex: 1200
+    zIndex: LAYER_ONBOARDING_FULLSCREEN_BUTTON
 };
 
 const WELCOME1_FONT_GATE_BLANK_STYLE: React.CSSProperties = {

@@ -1,0 +1,6 @@
+export const LAYER_SIDEBAR = 50;
+export const LAYER_ONBOARDING_FULLSCREEN_BUTTON = 1200;
+export const LAYER_SIDEBAR_ROW_MENU = 1400;
+export const LAYER_MODAL_SEARCH = 3100;
+export const LAYER_MODAL_DELETE = 3200;
+export const LAYER_OVERLAY_LOGIN = 5000;

@@ -1,8 +1,10 @@
 import React from 'react';
+import { createPortal } from 'react-dom';
 import { useAuth } from './AuthProvider';
 import { GoogleLoginButton } from '../components/GoogleLoginButton';
 import { SHOW_ONBOARDING_AUX_BUTTONS } from '../config/onboardingUiFlags';
 import { t } from '../i18n/t';
+import { LAYER_OVERLAY_LOGIN } from '../ui/layers';
 
 const SHOW_LOGIN_DEBUG_ERRORS =
     import.meta.env.VITE_SHOW_LOGIN_DEBUG_ERRORS === '1' || !import.meta.env.DEV;
@@ -36,7 +38,7 @@ export const LoginOverlay: React.FC<LoginOverlayProps> = ({
 
     if (!open) return null;
 
-    return (
+    const overlay = (
         <div
             style={BACKDROP_STYLE}
             onPointerDown={(e) => e.stopPropagation()}
@@ -114,6 +116,11 @@ export const LoginOverlay: React.FC<LoginOverlayProps> = ({
             </div>
         </div>
     );
+
+    if (typeof document === 'undefined') {
+        return overlay;
+    }
+    return createPortal(overlay, document.body);
 };
 
 const BACKDROP_STYLE: React.CSSProperties = {
@@ -123,7 +130,7 @@ const BACKDROP_STYLE: React.CSSProperties = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    zIndex: 3000,
+    zIndex: LAYER_OVERLAY_LOGIN,
     pointerEvents: 'auto',
 };
 

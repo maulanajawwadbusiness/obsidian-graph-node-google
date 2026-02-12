@@ -8,6 +8,7 @@ import documentIcon from '../assets/document_icon.png';
 import verticalElipsisIcon from '../assets/vertical_elipsis_icon.png';
 import renameIcon from '../assets/rename_icon.png';
 import deleteIcon from '../assets/delete_icon.png';
+import { LAYER_SIDEBAR, LAYER_SIDEBAR_ROW_MENU } from '../ui/layers';
 
 // ===========================================================================
 // Mock Data
@@ -741,7 +742,7 @@ const SIDEBAR_BASE_STYLE: React.CSSProperties = {
     borderRight: '1px solid rgba(255, 255, 255, 0.1)',
     display: 'flex',
     flexDirection: 'column',
-    zIndex: 50,
+    zIndex: LAYER_SIDEBAR,
     boxSizing: 'border-box',
 };
 
@@ -875,7 +876,7 @@ const ROW_MENU_POPUP_STYLE: React.CSSProperties = {
     border: '1px solid rgba(255, 255, 255, 0.1)',
     background: 'rgba(22, 24, 30, 0.98)',
     boxShadow: '0 14px 28px rgba(0, 0, 0, 0.45)',
-    zIndex: 1400,
+    zIndex: LAYER_SIDEBAR_ROW_MENU,
     display: 'flex',
     flexDirection: 'column',
     gap: '2px',

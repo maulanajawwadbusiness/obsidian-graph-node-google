@@ -61,6 +61,7 @@ const ICON_OPACITY_HOVER = 1.0;
 const HOVER_ACCENT_COLOR = '#63abff';
 const DEFAULT_ICON_COLOR = '#d7f5ff';
 const SIDEBAR_TEXT_COLOR = '#D7F5FF';
+const ROW_MENU_DELETE_TEXT_COLOR = '#FF4B4E';
 type RowMenuItemKey = 'rename' | 'delete';
 
 type SidebarProps = {
@@ -127,7 +128,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     const menuItemPreview = React.useMemo<Array<{ key: RowMenuItemKey; icon: string; label: string; color: string }>>(
         () => [
             { key: 'rename', icon: renameIcon, label: 'Rename', color: SIDEBAR_TEXT_COLOR },
-            { key: 'delete', icon: deleteIcon, label: 'Delete', color: SIDEBAR_TEXT_COLOR },
+            { key: 'delete', icon: deleteIcon, label: 'Delete', color: ROW_MENU_DELETE_TEXT_COLOR },
         ],
         []
     );
@@ -486,7 +487,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                                         type="button"
                                         style={{
                                             ...INTERFACE_ITEM_STYLE,
-                                            color: INTERFACE_ITEM_STYLE.color,
+                                            color: isHovered || isSelected ? HOVER_ACCENT_COLOR : INTERFACE_ITEM_STYLE.color,
                                             background: isSelected ? 'rgba(99, 171, 255, 0.12)' : INTERFACE_ITEM_STYLE.background,
                                         }}
                                         onPointerDown={(e) => e.stopPropagation()}
@@ -662,7 +663,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
                                 <span
                                     style={{
                                         ...ROW_MENU_ITEM_LABEL_STYLE,
-                                        color: SIDEBAR_TEXT_COLOR,
+                                        color: menuItem.key === 'rename' && hoveredMenuItemKey === 'rename'
+                                            ? HOVER_ACCENT_COLOR
+                                            : menuItem.color,
                                     }}
                                 >
                                     {menuItem.label}
@@ -717,7 +720,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                             <span
                                 style={{
                                     ...AVATAR_MENU_ACCOUNT_NAME_STYLE,
-                                    color: SIDEBAR_TEXT_COLOR,
+                                    color: avatarMenuHoverKey === 'profile' ? HOVER_ACCENT_COLOR : SIDEBAR_TEXT_COLOR,
                                 }}
                             >
                                 {displayAccountName}
@@ -794,7 +797,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                             <span
                                 style={{
                                     ...NAV_LABEL_STYLE,
-                                    color: NAV_LABEL_STYLE.color,
+                                    color: documentHover ? HOVER_ACCENT_COLOR : NAV_LABEL_STYLE.color,
                                 }}
                             >
                                 Document Viewer
@@ -811,7 +814,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                             width: isExpanded ? 'calc(100% - 10px)' : 'fit-content',
                             margin: isExpanded ? undefined : '0',
                             marginRight: isExpanded ? '10px' : undefined,
-                            backgroundColor: avatarRowHover ? 'rgba(255, 255, 255, 0.14)' : 'transparent',
+                            backgroundColor: avatarRowHover ? 'rgba(215, 245, 255, 0.14)' : 'transparent',
                             cursor: canOpenAvatarMenu ? 'pointer' : 'default',
                         }}
                         onPointerDown={(e) => e.stopPropagation()}
@@ -916,7 +919,7 @@ const NavItem: React.FC<NavItemProps> = ({
             <span
                 style={{
                     ...NAV_LABEL_STYLE,
-                    color: NAV_LABEL_STYLE.color,
+                    color: isHovered ? HOVER_ACCENT_COLOR : NAV_LABEL_STYLE.color,
                     opacity: 1,
                 }}
             >
@@ -1026,7 +1029,7 @@ const INTERFACES_SECTION_STYLE: React.CSSProperties = {
 
 const SECTION_HEADER_STYLE: React.CSSProperties = {
     fontSize: `${FONT_SIZE_SECTION_HEADER}px`,
-    color: SIDEBAR_TEXT_COLOR,
+    color: 'rgba(215, 245, 255, 0.5)',
     fontFamily: 'var(--font-ui)',
     letterSpacing: '0.5px',
     padding: '8px 6px',

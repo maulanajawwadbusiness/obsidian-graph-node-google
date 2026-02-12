@@ -182,7 +182,7 @@ const HEADLINE_STYLE: React.CSSProperties = {
     fontWeight: 300,
     lineHeight: 1.4,
     textAlign: 'center',
-    color: '#e7e7e7',
+    color: '#D7F5FF',
     fontFamily: 'var(--font-ui)',
     marginTop: 20,
     marginBottom: -20,

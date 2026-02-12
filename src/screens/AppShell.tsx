@@ -1921,6 +1921,7 @@ const DELETE_CONFIRM_CARD_STYLE: React.CSSProperties = {
     boxShadow: '0 18px 56px rgba(0, 0, 0, 0.45)',
     padding: '20px',
     color: '#06060A',
+    fontWeight: 300,
     display: 'flex',
     flexDirection: 'column',
     gap: '8.5px',
@@ -1929,7 +1930,7 @@ const DELETE_CONFIRM_CARD_STYLE: React.CSSProperties = {
 const DELETE_CONFIRM_TITLE_STYLE: React.CSSProperties = {
     fontSize: '11.9px',
     lineHeight: 1.25,
-    fontWeight: 700,
+    fontWeight: 300,
     color: '#f3f7ff',
 };
 
@@ -1954,7 +1955,7 @@ const DELETE_CONFIRM_CANCEL_STYLE: React.CSSProperties = {
     padding: '6.8px 11.9px',
     fontSize: '11.9px',
     cursor: 'pointer',
-    fontWeight: 600,
+    fontWeight: 300,
 };
 
 const DELETE_CONFIRM_PRIMARY_STYLE: React.CSSProperties = {
@@ -1965,7 +1966,7 @@ const DELETE_CONFIRM_PRIMARY_STYLE: React.CSSProperties = {
     padding: '6.8px 11.9px',
     fontSize: '11.9px',
     cursor: 'pointer',
-    fontWeight: 700,
+    fontWeight: 300,
 };
 
 const SEARCH_OVERLAY_BACKDROP_STYLE: React.CSSProperties = {

@@ -56,7 +56,14 @@ const NEWLINE_PREWAIT_MULTIPLIER = 2.5;
 const DOUBLE_NEWLINE_MECHANICAL_MULTIPLIER = 1.5;
 const MAX_SEMANTIC_BOUNDARY_MS = 220;
 
-type SemanticBoundaryCategory = 'none' | 'normalWord' | 'heavyWord' | 'landing' | 'marker';
+type SemanticBoundaryCategory = 'none' | 'word' | 'heavyWord' | 'landing' | 'marker' | 'newline' | 'paragraph';
+
+type SemanticSourceFlags = {
+    word: boolean;
+    heavyWord: boolean;
+    landing: boolean;
+    marker: boolean;
+};
 
 function clampMs(value: number): number {
     if (!Number.isFinite(value)) return 0;
@@ -207,6 +214,156 @@ function summarizeMs(values: number[]): { count: number; min: number; p50: numbe
     };
 }
 
+function makeSemanticSourceFlags(): SemanticSourceFlags {
+    return {
+        word: false,
+        heavyWord: false,
+        landing: false,
+        marker: false,
+    };
+}
+
+function countSemanticSourceFlags(flags: SemanticSourceFlags): number {
+    let count = 0;
+    if (flags.word) count += 1;
+    if (flags.heavyWord) count += 1;
+    if (flags.landing) count += 1;
+    if (flags.marker) count += 1;
+    return count;
+}
+
+function resolveSemanticCategory(flags: SemanticSourceFlags): SemanticBoundaryCategory {
+    // Priority ladder: marker > landing > heavyWord > word > none.
+    if (flags.marker) return 'marker';
+    if (flags.landing) return 'landing';
+    if (flags.heavyWord) return 'heavyWord';
+    if (flags.word) return 'word';
+    return 'none';
+}
+
+function getSemanticPauseForCategory(
+    category: SemanticBoundaryCategory,
+    wordEndPauseMs: number,
+    heavyWordEndExtraPauseMs: number,
+    sentenceLandingExtraPauseMs: number
+): number {
+    if (category === 'marker') return 0;
+    if (category === 'landing') return sentenceLandingExtraPauseMs;
+    if (category === 'heavyWord') return wordEndPauseMs + heavyWordEndExtraPauseMs;
+    if (category === 'word') return wordEndPauseMs;
+    return 0;
+}
+
+function getDebugTextSlice(renderChars: string[], centerIndex: number, radius: number = 16): string {
+    const from = Math.max(0, centerIndex - radius);
+    const to = Math.min(renderChars.length - 1, centerIndex + radius);
+    return renderChars.slice(from, to + 1).join('');
+}
+
+function assembleSemanticBoundaryPauses(
+    renderChars: string[],
+    markerPauseByCharIndex: Array<number | undefined>,
+    nextBoundaryIndex: number[],
+    emphasis: EmphasisAnalysis,
+    semantic: CadenceConfig['semantic'] | undefined,
+    debugEnabled: boolean,
+    debugLabel: string
+): {
+    semanticPauseByIndex: number[];
+    semanticCategoryByIndex: SemanticBoundaryCategory[];
+    semanticSourceFlagsByIndex: SemanticSourceFlags[];
+} {
+    const semanticPauseByIndex: number[] = new Array(renderChars.length).fill(0);
+    const semanticCategoryByIndex: SemanticBoundaryCategory[] = new Array(renderChars.length).fill('none');
+    const semanticSourceFlagsByIndex: SemanticSourceFlags[] = new Array(renderChars.length)
+        .fill(null)
+        .map(() => makeSemanticSourceFlags());
+
+    if (!semantic) {
+        return {
+            semanticPauseByIndex,
+            semanticCategoryByIndex,
+            semanticSourceFlagsByIndex,
+        };
+    }
+
+    const wordEndPauseMs = clampMs(semantic.wordEndPauseMs);
+    const heavyWordEndExtraPauseMs = clampMs(semantic.heavyWordEndExtraPauseMs);
+    const sentenceLandingExtraPauseMs = clampMs(semantic.sentenceLandingExtraPauseMs);
+    const boundaryIndices = new Set<number>();
+
+    for (let i = 0; i < renderChars.length; i += 1) {
+        const char = renderChars[i];
+        if (!isWordChar(char)) continue;
+        const isWordEnd = i + 1 >= renderChars.length || !isWordChar(renderChars[i + 1]);
+        if (!isWordEnd) continue;
+
+        const boundaryIndex = nextBoundaryIndex[i];
+        const finalBoundaryIndex = boundaryIndex >= 0 ? boundaryIndex : renderChars.length - 1;
+        if (finalBoundaryIndex < 0) continue;
+
+        const flags = semanticSourceFlagsByIndex[finalBoundaryIndex];
+        flags.word = true;
+        if (emphasis.wordEndIsHeavyByIndex.get(i) === true) {
+            flags.heavyWord = true;
+        }
+        boundaryIndices.add(finalBoundaryIndex);
+    }
+
+    if (sentenceLandingExtraPauseMs > 0) {
+        for (const punctuationIndex of emphasis.landingTailByPunctuationIndex.keys()) {
+            if (punctuationIndex < 0 || punctuationIndex >= renderChars.length) continue;
+            semanticSourceFlagsByIndex[punctuationIndex].landing = true;
+            boundaryIndices.add(punctuationIndex);
+        }
+    }
+
+    for (let i = 0; i < markerPauseByCharIndex.length; i += 1) {
+        if (markerPauseByCharIndex[i] === undefined) continue;
+        semanticSourceFlagsByIndex[i].marker = true;
+        boundaryIndices.add(i);
+    }
+
+    for (const boundaryIndex of boundaryIndices.values()) {
+        const flags = semanticSourceFlagsByIndex[boundaryIndex];
+        const sourceCount = countSemanticSourceFlags(flags);
+        const category = resolveSemanticCategory(flags);
+        const semanticPauseMs = Math.min(
+            clampMs(
+                getSemanticPauseForCategory(
+                    category,
+                    wordEndPauseMs,
+                    heavyWordEndExtraPauseMs,
+                    sentenceLandingExtraPauseMs
+                )
+            ),
+            MAX_SEMANTIC_BOUNDARY_MS
+        );
+
+        semanticCategoryByIndex[boundaryIndex] = category;
+        semanticPauseByIndex[boundaryIndex] = semanticPauseMs;
+
+        if (debugEnabled && sourceCount > 1) {
+            console.log(
+                '[Welcome2Cadence][SemanticConflict] label=%s index=%d char=%s flags=%o resolvedCategory=%s semanticPauseMs=%d textSlice=%s',
+                debugLabel,
+                boundaryIndex,
+                JSON.stringify(renderChars[boundaryIndex] ?? ''),
+                flags,
+                category,
+                semanticPauseMs,
+                JSON.stringify(getDebugTextSlice(renderChars, boundaryIndex))
+            );
+        }
+    }
+
+    return {
+        semanticPauseByIndex,
+        semanticCategoryByIndex,
+        semanticSourceFlagsByIndex,
+    };
+}
+
 function parsePauseMarkerAt(rawText: string, startIndex: number, fallbackMs: number): MarkerParse | null {
     if (rawText[startIndex] !== '{') return null;
     const endIndex = rawText.indexOf('}', startIndex + 1);
@@ -343,6 +500,7 @@ function getParagraphPauseAfterDoubleNewline(
 
 export function buildWelcome2Timeline(rawText: string, cadence: CadenceConfig = DEFAULT_CADENCE): BuiltTimeline {
     const tunedCadence = applySpeed(cadence, 1.0);
+    const debugCadenceEnabled = isDebugCadenceEnabled();
     const markerDefaultMs = clampMs(tunedCadence.markerPauseDefaultMs);
     const { renderChars, markerPauseByCharIndex, malformedMarkerFound } = buildRenderAndMarkerMap(rawText, markerDefaultMs);
     const nextBoundaryIndex = buildNextBoundaryIndex(renderChars);
@@ -356,76 +514,23 @@ export function buildWelcome2Timeline(rawText: string, cadence: CadenceConfig = 
     const events: TimelineEvent[] = [];
     const charDeltaByIndex: number[] = new Array(renderChars.length).fill(0);
     const charDelayByIndex: number[] = new Array(renderChars.length).fill(0);
-    const semanticPauseByIndex: number[] = new Array(renderChars.length).fill(0);
-    const semanticCategoryByIndex: SemanticBoundaryCategory[] = new Array(renderChars.length).fill('none');
+    const semanticAssembly = assembleSemanticBoundaryPauses(
+        renderChars,
+        markerPauseByCharIndex,
+        nextBoundaryIndex,
+        emphasis,
+        tunedCadence.semantic,
+        debugCadenceEnabled,
+        'manifesto'
+    );
+    const semanticPauseByIndex = semanticAssembly.semanticPauseByIndex;
+    const semanticCategoryByIndex = semanticAssembly.semanticCategoryByIndex;
+    const semanticSourceFlagsByIndex = semanticAssembly.semanticSourceFlagsByIndex;
     const expectedLetterDelay = Math.max(MIN_LETTER_DIGIT_DELAY_MS, clampMs(tunedCadence.baseCharMs));
     const expectedSpaceDelay = clampMs(tunedCadence.spaceMs);
     const expectedPunctDelay = clampMs(tunedCadence.baseCharMs);
     let currentTimeMs = 0;
-
     // Invariant: semantic cadence is boundary-only. Letters are mechanically timed only.
-    if (tunedCadence.semantic) {
-        const semantic = tunedCadence.semantic;
-        const wordEndPause = clampMs(semantic.wordEndPauseMs);
-        const heavyExtraPause = clampMs(semantic.heavyWordEndExtraPauseMs);
-        const landingPause = clampMs(semantic.sentenceLandingExtraPauseMs);
-        const boundaryWordIsHeavyByIndex = new Map<number, boolean>();
-        const boundaryIndices = new Set<number>();
-
-        for (let i = 0; i < renderChars.length; i += 1) {
-            const char = renderChars[i];
-            if (!isWordChar(char)) continue;
-            const isWordEnd = i + 1 >= renderChars.length || !isWordChar(renderChars[i + 1]);
-            if (!isWordEnd) continue;
-
-            const endIndex = i;
-            const boundaryIndex = nextBoundaryIndex[endIndex];
-            const finalBoundaryIndex = boundaryIndex >= 0 ? boundaryIndex : renderChars.length - 1;
-
-            if (finalBoundaryIndex < 0) {
-                continue;
-            }
-            const isHeavy = emphasis.wordEndIsHeavyByIndex.get(endIndex) === true;
-            const prevIsHeavy = boundaryWordIsHeavyByIndex.get(finalBoundaryIndex) === true;
-            boundaryWordIsHeavyByIndex.set(finalBoundaryIndex, prevIsHeavy || isHeavy);
-            boundaryIndices.add(finalBoundaryIndex);
-        }
-
-        if (landingPause > 0) {
-            for (const punctuationIndex of emphasis.landingTailByPunctuationIndex.keys()) {
-                if (punctuationIndex < 0 || punctuationIndex >= renderChars.length) continue;
-                boundaryIndices.add(punctuationIndex);
-            }
-        }
-
-        for (const boundaryIndex of boundaryIndices.values()) {
-            const hasMarkerPause = markerPauseByCharIndex[boundaryIndex] !== undefined;
-            const isLandingBoundary = landingPause > 0 && emphasis.landingTailByPunctuationIndex.has(boundaryIndex);
-            const isHeavyBoundary = boundaryWordIsHeavyByIndex.get(boundaryIndex) === true;
-
-            let category: SemanticBoundaryCategory = 'none';
-            let semanticMs = 0;
-
-            // Priority: marker > landing > heavy word > normal word.
-            if (hasMarkerPause) {
-                category = 'marker';
-                semanticMs = 0;
-            } else if (isLandingBoundary) {
-                category = 'landing';
-                semanticMs = landingPause;
-            } else if (isHeavyBoundary) {
-                category = 'heavyWord';
-                semanticMs = wordEndPause + heavyExtraPause;
-            } else {
-                category = 'normalWord';
-                semanticMs = wordEndPause;
-            }
-
-            semanticMs = Math.min(clampMs(semanticMs), MAX_SEMANTIC_BOUNDARY_MS);
-            semanticPauseByIndex[boundaryIndex] = semanticMs;
-            semanticCategoryByIndex[boundaryIndex] = category;
-        }
-    }
 
     for (let i = 0; i < renderChars.length; i += 1) {
         const char = renderChars[i];
@@ -449,6 +554,9 @@ export function buildWelcome2Timeline(rawText: string, cadence: CadenceConfig = 
                     pauseReason: 'lineBreak',
                     pauseAfterMs: 0,
                 });
+                if (semanticCategoryByIndex[i] === 'none') {
+                    semanticCategoryByIndex[i] = 'newline';
+                }
                 currentTimeMs += singleNewlineSplit.postWaitMs;
                 currentTimeMs = clampMs(currentTimeMs);
                 charDeltaByIndex[i] = Math.max(0, currentTimeMs - eventTimeMs);
@@ -468,6 +576,9 @@ export function buildWelcome2Timeline(rawText: string, cadence: CadenceConfig = 
                 pauseReason: 'lineBreak',
                 pauseAfterMs: 0,
             });
+            if (semanticCategoryByIndex[i] === 'none') {
+                semanticCategoryByIndex[i] = 'newline';
+            }
             currentTimeMs += doubleNewlineSplit.postWaitMs;
             const afterNewline1Ms = clampMs(currentTimeMs);
             charDeltaByIndex[i] = Math.max(0, afterNewline1Ms - newline1TimeMs);
@@ -488,6 +599,9 @@ export function buildWelcome2Timeline(rawText: string, cadence: CadenceConfig = 
                 pauseReason: paragraphPause.pauseReason,
                 pauseAfterMs: clampMs(paragraphPause.pauseAfterMs),
             });
+            if (semanticCategoryByIndex[i + 1] === 'none') {
+                semanticCategoryByIndex[i + 1] = 'paragraph';
+            }
             currentTimeMs += doubleNewlineSplit.postWaitMs;
 
             currentTimeMs += paragraphPause.pauseAfterMs;
@@ -535,7 +649,37 @@ export function buildWelcome2Timeline(rawText: string, cadence: CadenceConfig = 
         charDeltaByIndex[i] = Math.max(0, currentTimeMs - eventTimeMs);
     }
 
-    if (isDebugCadenceEnabled()) {
+    for (let i = 0; i < renderChars.length; i += 1) {
+        const semanticPauseMs = semanticPauseByIndex[i] ?? 0;
+        if (semanticPauseMs > MAX_SEMANTIC_BOUNDARY_MS) {
+            console.log(
+                '[Welcome2Cadence][Violation] semantic pause exceeded clamp index=%d semanticPauseMs=%d max=%d',
+                i,
+                semanticPauseMs,
+                MAX_SEMANTIC_BOUNDARY_MS
+            );
+        }
+        const flags = semanticSourceFlagsByIndex[i];
+        const sourceCount = countSemanticSourceFlags(flags);
+        if (debugCadenceEnabled && sourceCount > 1) {
+            console.log(
+                '[Welcome2Cadence][Violation] multiple semantic sources index=%d char=%s flags=%o resolvedCategory=%s',
+                i,
+                JSON.stringify(renderChars[i] ?? ''),
+                flags,
+                semanticCategoryByIndex[i] ?? 'none'
+            );
+        }
+        if ((semanticCategoryByIndex[i] ?? 'none') === 'marker' && semanticPauseMs !== 0) {
+            console.log(
+                '[Welcome2Cadence][Violation] marker boundary must suppress semantic index=%d semanticPauseMs=%d',
+                i,
+                semanticPauseMs
+            );
+        }
+    }
+
+    if (debugCadenceEnabled) {
         const semantic = tunedCadence.semantic;
         console.log(
             '[Welcome2Cadence] cadence base=%d space=%d comma=%d period=%d question=%d newline=%d paragraph=%d markerDefault=%d endHold=%d',
@@ -692,18 +836,35 @@ export function buildWelcome2Timeline(rawText: string, cadence: CadenceConfig = 
             console.log('[Welcome2Cadence] punctuation sample skipped no sentence punctuation found');
         }
 
-        const normalWordBoundarySemantic: number[] = [];
+        const wordBoundarySemantic: number[] = [];
         const heavyWordBoundarySemantic: number[] = [];
         const landingBoundarySemantic: number[] = [];
         const punctuationTotalPauseNoMarker: number[] = [];
         const letterDigitCharDelays: number[] = [];
+        const categoryToSemanticValues = new Map<SemanticBoundaryCategory, number[]>();
+        const categories: SemanticBoundaryCategory[] = [
+            'none',
+            'word',
+            'heavyWord',
+            'landing',
+            'marker',
+            'newline',
+            'paragraph',
+        ];
+        categories.forEach((category) => {
+            categoryToSemanticValues.set(category, []);
+        });
 
         events.forEach((event) => {
             const semanticMs = semanticPauseByIndex[event.charIndex] ?? 0;
             const semanticCategory = semanticCategoryByIndex[event.charIndex] ?? 'none';
-            if (semanticCategory === 'normalWord') normalWordBoundarySemantic.push(semanticMs);
+            if (semanticCategory === 'word') wordBoundarySemantic.push(semanticMs);
             if (semanticCategory === 'heavyWord') heavyWordBoundarySemantic.push(semanticMs);
             if (semanticCategory === 'landing') landingBoundarySemantic.push(semanticMs);
+            const list = categoryToSemanticValues.get(semanticCategory);
+            if (list) {
+                list.push(semanticMs);
+            }
             if (event.class === 'letter' || event.class === 'digit') {
                 letterDigitCharDelays.push(charDelayByIndex[event.charIndex] ?? 0);
             }
@@ -716,7 +877,7 @@ export function buildWelcome2Timeline(rawText: string, cadence: CadenceConfig = 
             }
         });
 
-        console.log('[Welcome2Cadence] boundary stats normalWord=%o', summarizeMs(normalWordBoundarySemantic));
+        console.log('[Welcome2Cadence] boundary stats word=%o', summarizeMs(wordBoundarySemantic));
         console.log('[Welcome2Cadence] boundary stats heavyWord=%o', summarizeMs(heavyWordBoundarySemantic));
         console.log('[Welcome2Cadence] boundary stats landing=%o', summarizeMs(landingBoundarySemantic));
         console.log('[Welcome2Cadence] punctuation total pause (no marker)=%o', summarizeMs(punctuationTotalPauseNoMarker));
@@ -725,6 +886,74 @@ export function buildWelcome2Timeline(rawText: string, cadence: CadenceConfig = 
             expectedLetterDelay,
             summarizeMs(letterDigitCharDelays)
         );
+
+        categories.forEach((category) => {
+            const stats = summarizeMs(categoryToSemanticValues.get(category) ?? []);
+            console.log('[Welcome2Cadence] semantic category stats category=%s stats=%o', category, stats);
+        });
+
+        const syntheticScenarios = [
+            { label: 'heavyBeforePunct', text: 'this is very INTUITIVE.' },
+            { label: 'heavyBeforePunctWithMarker', text: 'this is very INTUITIVE.{p=260}' },
+            { label: 'landingOnly', text: 'this is simple.' },
+            { label: 'backToBackHeavy', text: 'INTUITIVE KNOWLEDGE MEDIUM.' },
+            { label: 'paragraphBreak', text: 'first line.\n\nsecond line.' },
+        ];
+        syntheticScenarios.forEach((scenario) => {
+            const markerDefault = clampMs(tunedCadence.markerPauseDefaultMs);
+            const built = buildRenderAndMarkerMap(scenario.text, markerDefault);
+            const scenarioRenderText = built.renderChars.join('');
+            const scenarioEmphasis = analyzeEmphasis(scenarioRenderText, tunedCadence.semantic);
+            const scenarioNextBoundary = buildNextBoundaryIndex(built.renderChars);
+            const scenarioAssembly = assembleSemanticBoundaryPauses(
+                built.renderChars,
+                built.markerPauseByCharIndex,
+                scenarioNextBoundary,
+                scenarioEmphasis,
+                tunedCadence.semantic,
+                true,
+                scenario.label
+            );
+
+            const boundaryRows: Array<{
+                index: number;
+                char: string;
+                class: TimelineCharClass;
+                semanticPauseMs: number;
+                semanticCategory: SemanticBoundaryCategory;
+                sourceCount: number;
+                flags: SemanticSourceFlags;
+            }> = [];
+            for (let idx = 0; idx < built.renderChars.length; idx += 1) {
+                const charClass = classifyChar(built.renderChars[idx]);
+                const semanticPauseMs = scenarioAssembly.semanticPauseByIndex[idx] ?? 0;
+                const semanticCategory = scenarioAssembly.semanticCategoryByIndex[idx] ?? 'none';
+                const flags = scenarioAssembly.semanticSourceFlagsByIndex[idx];
+                const sourceCount = countSemanticSourceFlags(flags);
+                if ((charClass === 'letter' || charClass === 'digit') && semanticPauseMs > 0) {
+                    console.log(
+                        '[Welcome2Cadence][Violation] scenario=%s semantic pause on letter/digit index=%d char=%s semanticPauseMs=%d',
+                        scenario.label,
+                        idx,
+                        JSON.stringify(built.renderChars[idx]),
+                        semanticPauseMs
+                    );
+                }
+                if (isBoundaryChar(built.renderChars[idx]) || built.markerPauseByCharIndex[idx] !== undefined) {
+                    boundaryRows.push({
+                        index: idx,
+                        char: built.renderChars[idx],
+                        class: charClass,
+                        semanticPauseMs,
+                        semanticCategory,
+                        sourceCount,
+                        flags,
+                    });
+                }
+            }
+
+            console.log('[Welcome2Cadence] synthetic scenario=%s boundary rows=%o', scenario.label, boundaryRows);
+        });
     }
 
     return {

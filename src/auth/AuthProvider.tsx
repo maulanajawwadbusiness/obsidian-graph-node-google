@@ -11,10 +11,13 @@ import {
 import { apiGet } from "../api";
 
 export type User = {
-  id: number;
+  id?: number | string;
+  sub?: string;
   email?: string;
   name?: string;
   picture?: string;
+  displayName?: string;
+  username?: string;
   [key: string]: unknown;
 };
 

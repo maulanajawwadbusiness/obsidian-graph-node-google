@@ -18,6 +18,7 @@ import {
 import {
     deleteSavedInterface as deleteSavedInterfaceRemote,
     listSavedInterfaces,
+    updateProfile,
     upsertSavedInterface as upsertSavedInterfaceRemote,
 } from '../api';
 import {
@@ -70,6 +71,9 @@ const REMOTE_OUTBOX_KEY_PREFIX = `${SAVED_INTERFACES_KEY}_remote_outbox`;
 const REMOTE_RETRY_BASE_MS = 30_000;
 const REMOTE_RETRY_MAX_MS = 5 * 60_000;
 const REMOTE_OUTBOX_PAUSE_401_MS = 60_000;
+const PROFILE_DISPLAY_NAME_MAX = 80;
+const PROFILE_USERNAME_MAX = 32;
+const PROFILE_USERNAME_REGEX = /^[A-Za-z0-9_.-]+$/;
 const hydratedStorageKeysSession = new Set<string>();
 const backfilledStorageKeysSession = new Set<string>();
 let lastIdentityKeySession: string | null = null;
@@ -258,7 +262,7 @@ function getInitialScreen(): Screen {
 }
 
 export const AppShell: React.FC = () => {
-    const { user, loading: authLoading } = useAuth();
+    const { user, loading: authLoading, refreshMe } = useAuth();
     const [screen, setScreen] = React.useState<Screen>(() => getInitialScreen());
     const [pendingAnalysis, setPendingAnalysis] = React.useState<PendingAnalysisPayload>(null);
     const [savedInterfaces, setSavedInterfaces] = React.useState<SavedInterfaceRecordV1[]>([]);
@@ -272,6 +276,7 @@ export const AppShell: React.FC = () => {
     const [profileDraftDisplayName, setProfileDraftDisplayName] = React.useState('');
     const [profileDraftUsername, setProfileDraftUsername] = React.useState('');
     const [profileError, setProfileError] = React.useState<string | null>(null);
+    const [profileSaving, setProfileSaving] = React.useState(false);
     const [graphIsLoading, setGraphIsLoading] = React.useState(false);
     const [documentViewerToggleToken, setDocumentViewerToggleToken] = React.useState(0);
     const [isSidebarExpanded, setIsSidebarExpanded] = React.useState(false);
@@ -302,6 +307,7 @@ export const AppShell: React.FC = () => {
     const isLoggedIn = isAuthReady && user !== null && authStorageId !== null;
     const sidebarAccountName = React.useMemo(() => {
         if (!user) return undefined;
+        if (typeof user.displayName === 'string' && user.displayName.trim()) return user.displayName.trim();
         if (typeof user.name === 'string' && user.name.trim()) return user.name.trim();
         if (typeof user.email === 'string' && user.email.trim()) return user.email.trim();
         return undefined;
@@ -699,10 +705,12 @@ export const AppShell: React.FC = () => {
         commitRenameInterface(id, newTitle, 'sidebar_rename');
     }, [commitRenameInterface]);
     const closeProfileOverlay = React.useCallback(() => {
+        if (profileSaving) return;
         setIsProfileOpen(false);
         setProfileError(null);
-    }, []);
+    }, [profileSaving]);
     const openProfileOverlay = React.useCallback(() => {
+        if (!isLoggedIn || !user) return;
         if (sidebarDisabled) return;
         if (isSearchInterfacesOpen) {
             closeSearchInterfaces();
@@ -718,10 +726,40 @@ export const AppShell: React.FC = () => {
         setProfileDraftUsername(nextUsername);
         setProfileError(null);
         setIsProfileOpen(true);
-    }, [closeDeleteConfirm, closeSearchInterfaces, isSearchInterfacesOpen, pendingDeleteId, sidebarDisabled, user]);
-    const onProfileSavePlaceholder = React.useCallback(() => {
-        setProfileError('Profile save is not connected yet.');
-    }, []);
+    }, [closeDeleteConfirm, closeSearchInterfaces, isLoggedIn, isSearchInterfacesOpen, pendingDeleteId, sidebarDisabled, user]);
+    const onProfileSave = React.useCallback(async () => {
+        if (profileSaving) return;
+        const displayName = profileDraftDisplayName.replace(/\s+/g, ' ').trim();
+        const username = profileDraftUsername.trim();
+
+        if (displayName.length > PROFILE_DISPLAY_NAME_MAX) {
+            setProfileError(`Display Name max length is ${PROFILE_DISPLAY_NAME_MAX}.`);
+            return;
+        }
+        if (username.length > PROFILE_USERNAME_MAX) {
+            setProfileError(`Username max length is ${PROFILE_USERNAME_MAX}.`);
+            return;
+        }
+        if (username.length > 0 && !PROFILE_USERNAME_REGEX.test(username)) {
+            setProfileError('Username may only contain letters, numbers, dot, underscore, and dash.');
+            return;
+        }
+
+        setProfileSaving(true);
+        setProfileError(null);
+        try {
+            await updateProfile({ displayName, username });
+            await refreshMe();
+            setIsProfileOpen(false);
+        } catch (error) {
+            setProfileError('Failed to save profile. Please try again.');
+            if (import.meta.env.DEV) {
+                console.warn('[appshell] profile_save_failed error=%s', String(error));
+            }
+        } finally {
+            setProfileSaving(false);
+        }
+    }, [profileDraftDisplayName, profileDraftUsername, profileSaving, refreshMe]);
 
     React.useEffect(() => {
         if (!isSearchInterfacesOpen) return;
@@ -1271,6 +1309,7 @@ export const AppShell: React.FC = () => {
                                 {...hardShieldInput}
                                 type="text"
                                 value={profileDraftDisplayName}
+                                disabled={profileSaving}
                                 onChange={(e) => {
                                     setProfileDraftDisplayName(e.target.value);
                                     setProfileError(null);
@@ -1285,6 +1324,7 @@ export const AppShell: React.FC = () => {
                                 {...hardShieldInput}
                                 type="text"
                                 value={profileDraftUsername}
+                                disabled={profileSaving}
                                 onChange={(e) => {
                                     setProfileDraftUsername(e.target.value);
                                     setProfileError(null);
@@ -1299,6 +1339,7 @@ export const AppShell: React.FC = () => {
                                 {...hardShieldInput}
                                 type="button"
                                 style={PROFILE_CANCEL_STYLE}
+                                disabled={profileSaving}
                                 onClick={(e) => {
                                     e.stopPropagation();
                                     closeProfileOverlay();
@@ -1309,13 +1350,17 @@ export const AppShell: React.FC = () => {
                             <button
                                 {...hardShieldInput}
                                 type="button"
-                                style={PROFILE_PRIMARY_STYLE}
+                                style={{
+                                    ...PROFILE_PRIMARY_STYLE,
+                                    opacity: profileSaving ? 0.75 : 1,
+                                }}
+                                disabled={profileSaving}
                                 onClick={(e) => {
                                     e.stopPropagation();
-                                    onProfileSavePlaceholder();
+                                    void onProfileSave();
                                 }}
                             >
-                                Save
+                                {profileSaving ? 'Saving...' : 'Save'}
                             </button>
                         </div>
                     </div>

@@ -16,6 +16,7 @@ type PromptCardProps = {
     attachedFiles?: File[];
     canSubmitWithoutText?: boolean;
     onRemoveFile?: (index: number) => void;
+    onPickFiles?: (files: File[]) => void;
 };
 
 export const PromptCard: React.FC<PromptCardProps> = ({
@@ -26,12 +27,14 @@ export const PromptCard: React.FC<PromptCardProps> = ({
     attachedFiles = [],
     canSubmitWithoutText = false,
     onRemoveFile = () => { },
+    onPickFiles = () => { },
 }) => {
     const [plusHover, setPlusHover] = React.useState(false);
     const [sendHover, setSendHover] = React.useState(false);
     const [showUploadPopup, setShowUploadPopup] = React.useState(false);
     const [inputText, setInputText] = React.useState(value);
     const popupRef = React.useRef<HTMLDivElement>(null);
+    const fileInputRef = React.useRef<HTMLInputElement | null>(null);
 
     React.useEffect(() => {
         setInputText(value);
@@ -86,6 +89,20 @@ export const PromptCard: React.FC<PromptCardProps> = ({
                 </div>
 
                 <div style={INPUT_PILL_STYLE}>
+                    <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept=".pdf,.docx,.md,.markdown,.txt"
+                        multiple={true}
+                        style={{ display: 'none' }}
+                        onChange={(e) => {
+                            const files = e.target.files ? Array.from(e.target.files) : [];
+                            if (files.length > 0) {
+                                onPickFiles(files);
+                            }
+                            e.currentTarget.value = '';
+                        }}
+                    />
                     {attachedFiles.length > 0 && (
                         <>
                             <div style={FILE_CHIPS_ROW_STYLE}>
@@ -126,12 +143,29 @@ export const PromptCard: React.FC<PromptCardProps> = ({
                                 title="Upload Document"
                                 disabled={disabled}
                             >
-                                <img src={plusIcon} alt="Add" style={{ ...PLUS_ICON_STYLE, opacity: plusHover ? 1 : 0.6 }} />
+                                <span
+                                    aria-hidden="true"
+                                    style={{
+                                        ...PLUS_ICON_STYLE,
+                                        backgroundColor: '#D7F5FF',
+                                        WebkitMaskImage: `url(${plusIcon})`,
+                                        maskImage: `url(${plusIcon})`,
+                                        opacity: plusHover ? 1 : 0.6
+                                    }}
+                                />
                             </button>
                             {showUploadPopup && (
                                 <div ref={popupRef} style={UPLOAD_POPUP_STYLE}>
                                     <button type="button" style={UPLOAD_POPUP_ITEM_STYLE}>
-                                        <img src={clipIcon} alt="" style={CLIP_ICON_STYLE} />
+                                        <span
+                                            aria-hidden="true"
+                                            style={{
+                                                ...CLIP_ICON_STYLE,
+                                                backgroundColor: '#D7F5FF',
+                                                WebkitMaskImage: `url(${clipIcon})`,
+                                                maskImage: `url(${clipIcon})`
+                                            }}
+                                        />
                                         <span>Upload document</span>
                                     </button>
                                 </div>
@@ -145,7 +179,16 @@ export const PromptCard: React.FC<PromptCardProps> = ({
                             onClick={handleSubmit}
                             disabled={disabled}
                         >
-                            <img src={sendIcon} alt="Send" style={{ ...SEND_ICON_STYLE, opacity: sendHover ? 0.8 : 0.4 }} />
+                            <span
+                                aria-hidden="true"
+                                style={{
+                                    ...SEND_ICON_STYLE,
+                                    backgroundColor: '#D7F5FF',
+                                    WebkitMaskImage: `url(${sendIcon})`,
+                                    maskImage: `url(${sendIcon})`,
+                                    opacity: sendHover ? 0.8 : 0.4
+                                }}
+                            />
                         </button>
                     </div>
                 </div>
@@ -251,12 +294,26 @@ const ICON_BUTTON_STYLE: React.CSSProperties = {
 const PLUS_ICON_STYLE: React.CSSProperties = {
     width: '15px',
     height: '15px',
+    display: 'inline-block',
+    WebkitMaskRepeat: 'no-repeat',
+    maskRepeat: 'no-repeat',
+    WebkitMaskPosition: 'center',
+    maskPosition: 'center',
+    WebkitMaskSize: 'contain',
+    maskSize: 'contain',
     opacity: 0.6,
 };
 
 const SEND_ICON_STYLE: React.CSSProperties = {
     width: '28px',
     height: '28px',
+    display: 'inline-block',
+    WebkitMaskRepeat: 'no-repeat',
+    maskRepeat: 'no-repeat',
+    WebkitMaskPosition: 'center',
+    maskPosition: 'center',
+    WebkitMaskSize: 'contain',
+    maskSize: 'contain',
     opacity: 0.4,
 };
 
@@ -284,7 +341,7 @@ const UPLOAD_POPUP_ITEM_STYLE: React.CSSProperties = {
     padding: `${10 * POPUP_SCALE}px ${16 * POPUP_SCALE}px`,
     background: 'transparent',
     border: 'none',
-    color: '#e7e7e7',
+    color: '#b9d0d8',
     fontSize: `${14 * POPUP_SCALE}px`,
     fontFamily: 'var(--font-ui)',
     textAlign: 'left',
@@ -294,6 +351,13 @@ const UPLOAD_POPUP_ITEM_STYLE: React.CSSProperties = {
 const CLIP_ICON_STYLE: React.CSSProperties = {
     width: `${16 * POPUP_SCALE}px`,
     height: `${16 * POPUP_SCALE}px`,
+    display: 'inline-block',
+    WebkitMaskRepeat: 'no-repeat',
+    maskRepeat: 'no-repeat',
+    WebkitMaskPosition: 'center',
+    maskPosition: 'center',
+    WebkitMaskSize: 'contain',
+    maskSize: 'contain',
     opacity: 0.7,
 };
 

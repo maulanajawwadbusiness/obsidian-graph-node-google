@@ -262,7 +262,7 @@ function getInitialScreen(): Screen {
 }
 
 export const AppShell: React.FC = () => {
-    const { user, loading: authLoading, refreshMe } = useAuth();
+    const { user, loading: authLoading, refreshMe, applyUserPatch } = useAuth();
     const [screen, setScreen] = React.useState<Screen>(() => getInitialScreen());
     const [pendingAnalysis, setPendingAnalysis] = React.useState<PendingAnalysisPayload>(null);
     const [savedInterfaces, setSavedInterfaces] = React.useState<SavedInterfaceRecordV1[]>([]);
@@ -748,9 +748,14 @@ export const AppShell: React.FC = () => {
         setProfileSaving(true);
         setProfileError(null);
         try {
-            await updateProfile({ displayName, username });
-            await refreshMe();
+            const updatedUser = await updateProfile({ displayName, username });
+            applyUserPatch(updatedUser);
             setIsProfileOpen(false);
+            void refreshMe().catch((error) => {
+                if (import.meta.env.DEV) {
+                    console.warn('[appshell] profile_refresh_after_save_failed error=%s', String(error));
+                }
+            });
         } catch (error) {
             setProfileError('Failed to save profile. Please try again.');
             if (import.meta.env.DEV) {
@@ -759,7 +764,7 @@ export const AppShell: React.FC = () => {
         } finally {
             setProfileSaving(false);
         }
-    }, [profileDraftDisplayName, profileDraftUsername, profileSaving, refreshMe]);
+    }, [applyUserPatch, profileDraftDisplayName, profileDraftUsername, profileSaving, refreshMe]);
 
     React.useEffect(() => {
         if (!isSearchInterfacesOpen) return;

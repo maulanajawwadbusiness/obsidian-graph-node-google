@@ -61,6 +61,9 @@ const MAX_SAVED_INTERFACE_PAYLOAD_BYTES = Number(
   process.env.MAX_SAVED_INTERFACE_PAYLOAD_BYTES || 15 * 1024 * 1024
 );
 const SAVED_INTERFACE_JSON_LIMIT = process.env.SAVED_INTERFACE_JSON_LIMIT || "15mb";
+const PROFILE_DISPLAY_NAME_MAX = 80;
+const PROFILE_USERNAME_MAX = 32;
+const PROFILE_USERNAME_REGEX = /^[A-Za-z0-9_.-]+$/;
 const allowedOrigins = (process.env.ALLOWED_ORIGINS ?? "")
   .split(",")
   .map((value) => value.trim())
@@ -600,6 +603,8 @@ app.post("/auth/google", async (req, res) => {
     email: string | null;
     name: string | null;
     picture: string | null;
+    display_name: string | null;
+    username: string | null;
   } | null = null;
 
   try {
@@ -609,7 +614,7 @@ app.post("/auth/google", async (req, res) => {
        values ($1, $2, $3, $4)
        on conflict (google_sub)
        do update set email = excluded.email, name = excluded.name, picture = excluded.picture
-       returning id, google_sub, email, name, picture`,
+       returning id, google_sub, email, name, picture, display_name, username`,
       [user.sub, user.email ?? null, user.name ?? null, user.picture ?? null]
     );
     userRow = upsertResult.rows[0] || null;
@@ -645,7 +650,9 @@ app.post("/auth/google", async (req, res) => {
       sub: userRow.google_sub,
       email: userRow.email ?? undefined,
       name: userRow.name ?? undefined,
-      picture: userRow.picture ?? undefined
+      picture: userRow.picture ?? undefined,
+      displayName: userRow.display_name ?? undefined,
+      username: userRow.username ?? undefined
     }
   });
 });
@@ -665,7 +672,9 @@ app.get("/me", async (req, res) => {
               users.google_sub as google_sub,
               users.email as email,
               users.name as name,
-              users.picture as picture
+              users.picture as picture,
+              users.display_name as display_name,
+              users.username as username
        from sessions
        join users on users.id = sessions.user_id
        where sessions.id = $1`,
@@ -695,7 +704,9 @@ app.get("/me", async (req, res) => {
         sub: row.google_sub,
         email: row.email ?? undefined,
         name: row.name ?? undefined,
-        picture: row.picture ?? undefined
+        picture: row.picture ?? undefined,
+        displayName: row.display_name ?? undefined,
+        username: row.username ?? undefined
       }
     });
   } catch (e) {
@@ -718,6 +729,74 @@ app.post("/auth/logout", async (req, res) => {
 
   clearSessionCookie(res);
   res.json({ ok: true });
+});
+
+app.post("/api/profile/update", requireAuth, async (req, res) => {
+  const user = res.locals.user as AuthContext;
+  const displayNameRaw = req.body?.displayName;
+  const usernameRaw = req.body?.username;
+
+  if (typeof displayNameRaw !== "string" || typeof usernameRaw !== "string") {
+    res.status(400).json({ ok: false, error: "displayName and username are required" });
+    return;
+  }
+
+  const displayNameTrimmed = displayNameRaw.replace(/\s+/g, " ").trim();
+  if (displayNameTrimmed.length > PROFILE_DISPLAY_NAME_MAX) {
+    res.status(400).json({
+      ok: false,
+      error: `displayName max length is ${PROFILE_DISPLAY_NAME_MAX}`
+    });
+    return;
+  }
+  const displayName = displayNameTrimmed.length > 0 ? displayNameTrimmed : null;
+
+  const usernameTrimmed = usernameRaw.trim();
+  if (usernameTrimmed.length > PROFILE_USERNAME_MAX) {
+    res.status(400).json({
+      ok: false,
+      error: `username max length is ${PROFILE_USERNAME_MAX}`
+    });
+    return;
+  }
+  if (usernameTrimmed.length > 0 && !PROFILE_USERNAME_REGEX.test(usernameTrimmed)) {
+    res.status(400).json({
+      ok: false,
+      error: "username may only contain letters, numbers, dot, underscore, and dash"
+    });
+    return;
+  }
+  const username = usernameTrimmed.length > 0 ? usernameTrimmed : null;
+
+  try {
+    const pool = await getPool();
+    const result = await pool.query(
+      `update users
+          set display_name = $2,
+              username = $3
+        where id = $1
+      returning google_sub, email, name, picture, display_name, username`,
+      [user.id, displayName, username]
+    );
+    const row = result.rows[0];
+    if (!row) {
+      res.status(404).json({ ok: false, error: "user not found" });
+      return;
+    }
+    res.json({
+      ok: true,
+      user: {
+        sub: row.google_sub,
+        email: row.email ?? undefined,
+        name: row.name ?? undefined,
+        picture: row.picture ?? undefined,
+        displayName: row.display_name ?? undefined,
+        username: row.username ?? undefined
+      }
+    });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: "failed to update profile" });
+  }
 });
 
 app.get("/api/saved-interfaces", requireAuth, async (_req, res) => {

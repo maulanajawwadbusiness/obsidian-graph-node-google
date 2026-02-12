@@ -295,6 +295,16 @@ export const AppShell: React.FC = () => {
     const authStorageId = React.useMemo(() => resolveAuthStorageId(user), [user]);
     const isAuthReady = !authLoading;
     const isLoggedIn = isAuthReady && user !== null && authStorageId !== null;
+    const sidebarAccountName = React.useMemo(() => {
+        if (!user) return undefined;
+        if (typeof user.name === 'string' && user.name.trim()) return user.name.trim();
+        if (typeof user.email === 'string' && user.email.trim()) return user.email.trim();
+        return undefined;
+    }, [user]);
+    const sidebarAccountImageUrl = React.useMemo(() => {
+        if (!user) return undefined;
+        return typeof user.picture === 'string' && user.picture.trim() ? user.picture : undefined;
+    }, [user]);
     const authIdentityKey = React.useMemo(() => {
         if (!isAuthReady) return null;
         if (isLoggedIn && authStorageId) {
@@ -1173,6 +1183,8 @@ export const AppShell: React.FC = () => {
                     }}
                     selectedInterfaceId={pendingLoadInterface?.id ?? undefined}
                     onSelectInterface={(id) => selectSavedInterfaceById(id)}
+                    accountName={sidebarAccountName}
+                    accountImageUrl={sidebarAccountImageUrl}
                 />
             ) : null}
             <div

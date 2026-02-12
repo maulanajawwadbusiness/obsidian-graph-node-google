@@ -75,6 +75,8 @@ type SidebarProps = {
     interfaces?: SidebarInterfaceItem[];
     selectedInterfaceId?: string;
     onSelectInterface?: (id: string) => void;
+    accountName?: string;
+    accountImageUrl?: string;
 };
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -90,6 +92,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
     interfaces,
     selectedInterfaceId,
     onSelectInterface,
+    accountName,
+    accountImageUrl,
 }) => {
     const [logoHover, setLogoHover] = React.useState(false);
     const [createNewHover, setCreateNewHover] = React.useState(false);
@@ -116,6 +120,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         ],
         []
     );
+    const displayAccountName = accountName && accountName.trim() ? accountName.trim() : 'Your Name';
 
     const sidebarStyle: React.CSSProperties = {
         ...SIDEBAR_BASE_STYLE,
@@ -623,17 +628,26 @@ export const Sidebar: React.FC<SidebarProps> = ({
                                 height: '32px',
                                 lineHeight: 0,
                             }}
+                            onPointerDown={(e) => e.stopPropagation()}
                         >
-                            <div
-                                style={{
-                                    ...AVATAR_STYLE,
-                                    opacity: 1,
-                                }}
-                            >
-                                BA
-                            </div>
+                            {accountImageUrl ? (
+                                <img
+                                    src={accountImageUrl}
+                                    alt="avatar"
+                                    style={AVATAR_IMAGE_STYLE}
+                                />
+                            ) : (
+                                <div
+                                    style={{
+                                        ...AVATAR_STYLE,
+                                        opacity: 1,
+                                    }}
+                                >
+                                    BA
+                                </div>
+                            )}
                         </button>
-                        {isExpanded && <span style={AVATAR_NAME_STYLE}>Your Name</span>}
+                        {isExpanded && <span style={AVATAR_NAME_STYLE}>{displayAccountName}</span>}
                     </div>
                 </div>
             </div>
@@ -975,6 +989,14 @@ const AVATAR_STYLE: React.CSSProperties = {
     fontWeight: 600,
     color: '#000',
     fontFamily: 'var(--font-ui)',
+};
+
+const AVATAR_IMAGE_STYLE: React.CSSProperties = {
+    width: `${AVATAR_SIZE}px`,
+    height: `${AVATAR_SIZE}px`,
+    borderRadius: '50%',
+    objectFit: 'cover',
+    display: 'block',
 };
 
 const AVATAR_NAME_STYLE: React.CSSProperties = {

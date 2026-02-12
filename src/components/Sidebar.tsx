@@ -8,6 +8,8 @@ import documentIcon from '../assets/document_icon.png';
 import verticalElipsisIcon from '../assets/vertical_elipsis_icon.png';
 import renameIcon from '../assets/rename_icon.png';
 import deleteIcon from '../assets/delete_icon.png';
+import profileIcon from '../assets/profile_icon.png';
+import logoutIcon from '../assets/logout_icon.png';
 import { LAYER_SIDEBAR, LAYER_SIDEBAR_ROW_MENU } from '../ui/layers';
 
 // ===========================================================================
@@ -78,6 +80,7 @@ type SidebarProps = {
     accountName?: string;
     accountImageUrl?: string;
     onOpenProfile?: () => void;
+    onRequestLogout?: () => void;
 };
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -96,6 +99,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     accountName,
     accountImageUrl,
     onOpenProfile,
+    onRequestLogout,
 }) => {
     const [logoHover, setLogoHover] = React.useState(false);
     const [createNewHover, setCreateNewHover] = React.useState(false);
@@ -114,7 +118,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
     const [renameDraft, setRenameDraft] = React.useState('');
     const [renameOriginal, setRenameOriginal] = React.useState('');
     const [avatarRowHover, setAvatarRowHover] = React.useState(false);
+    const [isAvatarMenuOpen, setIsAvatarMenuOpen] = React.useState(false);
+    const [avatarMenuAnchorRect, setAvatarMenuAnchorRect] = React.useState<DOMRect | null>(null);
+    const [avatarMenuPosition, setAvatarMenuPosition] = React.useState<{ left: number; top: number } | null>(null);
+    const [avatarMenuPlacement, setAvatarMenuPlacement] = React.useState<'up' | 'down' | null>(null);
+    const [avatarMenuHoverKey, setAvatarMenuHoverKey] = React.useState<'profile' | 'logout' | null>(null);
     const renameInputRef = React.useRef<HTMLInputElement | null>(null);
+    const avatarTriggerRef = React.useRef<HTMLDivElement | null>(null);
     const menuItemPreview = React.useMemo<Array<{ key: RowMenuItemKey; icon: string; label: string; color: string }>>(
         () => [
             { key: 'rename', icon: renameIcon, label: 'Rename', color: '#e7e7e7' },
@@ -123,6 +133,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         []
     );
     const displayAccountName = accountName && accountName.trim() ? accountName.trim() : 'Your Name';
+    const canOpenAvatarMenu = Boolean(onOpenProfile || onRequestLogout);
 
     const sidebarStyle: React.CSSProperties = {
         ...SIDEBAR_BASE_STYLE,
@@ -155,6 +166,52 @@ export const Sidebar: React.FC<SidebarProps> = ({
         setRowMenuPosition(null);
         setMenuPlacement(null);
     }, []);
+
+    const computeAvatarMenuPlacement = React.useCallback((rect: DOMRect) => {
+        const gap = 8;
+        const viewportPadding = 8;
+        const menuWidth = 184;
+        const menuHeight = 90;
+        const preferredLeft = rect.left;
+        const maxLeft = Math.max(viewportPadding, window.innerWidth - menuWidth - viewportPadding);
+        const left = Math.max(viewportPadding, Math.min(preferredLeft, maxLeft));
+        const canOpenUp = rect.top - gap - menuHeight >= viewportPadding;
+        const top = canOpenUp
+            ? rect.top - gap - menuHeight
+            : Math.min(window.innerHeight - menuHeight - viewportPadding, rect.bottom + gap);
+        return {
+            left,
+            top,
+            placement: canOpenUp ? 'up' as const : 'down' as const,
+        };
+    }, []);
+
+    const closeAvatarMenu = React.useCallback(() => {
+        setIsAvatarMenuOpen(false);
+        setAvatarMenuAnchorRect(null);
+        setAvatarMenuPosition(null);
+        setAvatarMenuPlacement(null);
+        setAvatarMenuHoverKey(null);
+    }, []);
+
+    const openAvatarMenuFromTrigger = React.useCallback((trigger: HTMLElement) => {
+        if (disabled) return;
+        if (!canOpenAvatarMenu) return;
+        const rect = trigger.getBoundingClientRect();
+        const placement = computeAvatarMenuPlacement(rect);
+        setAvatarMenuAnchorRect(rect);
+        setAvatarMenuPosition({ left: placement.left, top: placement.top });
+        setAvatarMenuPlacement(placement.placement);
+        setIsAvatarMenuOpen(true);
+    }, [canOpenAvatarMenu, computeAvatarMenuPlacement, disabled]);
+
+    const toggleAvatarMenuFromTrigger = React.useCallback((trigger: HTMLElement) => {
+        if (isAvatarMenuOpen) {
+            closeAvatarMenu();
+            return;
+        }
+        openAvatarMenuFromTrigger(trigger);
+    }, [closeAvatarMenu, isAvatarMenuOpen, openAvatarMenuFromTrigger]);
 
     const cancelRename = React.useCallback(() => {
         setRenamingRowId(null);
@@ -207,7 +264,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
         if (renamingRowId) {
             cancelRename();
         }
-    }, [cancelRename, closeRowMenu, disabled, openRowMenuId, renamingRowId]);
+        if (isAvatarMenuOpen) {
+            closeAvatarMenu();
+        }
+    }, [cancelRename, closeAvatarMenu, closeRowMenu, disabled, isAvatarMenuOpen, openRowMenuId, renamingRowId]);
 
     React.useEffect(() => {
         if (!openRowMenuId && !renamingRowId) return;
@@ -265,6 +325,49 @@ export const Sidebar: React.FC<SidebarProps> = ({
         });
         return () => window.cancelAnimationFrame(id);
     }, [renamingRowId]);
+
+    React.useEffect(() => {
+        if (!isAvatarMenuOpen || !avatarMenuAnchorRect) return;
+        const update = () => {
+            if (!avatarMenuAnchorRect) return;
+            const placement = computeAvatarMenuPlacement(avatarMenuAnchorRect);
+            setAvatarMenuPosition({ left: placement.left, top: placement.top });
+            setAvatarMenuPlacement(placement.placement);
+        };
+        window.addEventListener('resize', update);
+        window.addEventListener('scroll', update, true);
+        return () => {
+            window.removeEventListener('resize', update);
+            window.removeEventListener('scroll', update, true);
+        };
+    }, [avatarMenuAnchorRect, computeAvatarMenuPlacement, isAvatarMenuOpen]);
+
+    React.useEffect(() => {
+        if (!isAvatarMenuOpen) return;
+
+        const onWindowPointerDown = (event: PointerEvent) => {
+            const target = event.target as Element | null;
+            if (!target) {
+                closeAvatarMenu();
+                return;
+            }
+            if (target.closest('[data-avatar-menu="1"]')) return;
+            if (target.closest('[data-avatar-trigger="1"]')) return;
+            closeAvatarMenu();
+        };
+
+        const onWindowKeyDown = (event: KeyboardEvent) => {
+            if (event.key !== 'Escape') return;
+            closeAvatarMenu();
+        };
+
+        window.addEventListener('pointerdown', onWindowPointerDown, true);
+        window.addEventListener('keydown', onWindowKeyDown, true);
+        return () => {
+            window.removeEventListener('pointerdown', onWindowPointerDown, true);
+            window.removeEventListener('keydown', onWindowKeyDown, true);
+        };
+    }, [closeAvatarMenu, isAvatarMenuOpen]);
 
     const bottomSectionStyle: React.CSSProperties = {
         ...BOTTOM_SECTION_STYLE,
@@ -573,6 +676,90 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 </div>
             ) : null}
 
+            {isAvatarMenuOpen && avatarMenuPosition ? (
+                <div
+                    data-avatar-menu="1"
+                    style={{
+                        ...AVATAR_MENU_POPUP_STYLE,
+                        left: `${avatarMenuPosition.left}px`,
+                        top: `${avatarMenuPosition.top}px`,
+                        transformOrigin: avatarMenuPlacement === 'down' ? 'top left' : 'bottom left',
+                    }}
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onPointerUp={(e) => e.stopPropagation()}
+                    onClick={(e) => e.stopPropagation()}
+                    onWheelCapture={(e) => e.stopPropagation()}
+                    onWheel={(e) => e.stopPropagation()}
+                >
+                    <button
+                        type="button"
+                        style={AVATAR_MENU_ITEM_STYLE}
+                        onPointerDown={(e) => e.stopPropagation()}
+                        onPointerUp={(e) => e.stopPropagation()}
+                        onWheelCapture={(e) => e.stopPropagation()}
+                        onWheel={(e) => e.stopPropagation()}
+                        onMouseEnter={() => setAvatarMenuHoverKey('profile')}
+                        onMouseLeave={() => setAvatarMenuHoverKey((curr) => (curr === 'profile' ? null : curr))}
+                        onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            closeAvatarMenu();
+                            onOpenProfile?.();
+                        }}
+                    >
+                        <span style={AVATAR_MENU_ITEM_CONTENT_STYLE}>
+                            <MaskIcon
+                                src={profileIcon}
+                                size={14}
+                                color={avatarMenuHoverKey === 'profile' ? HOVER_ACCENT_COLOR : '#e7e7e7'}
+                                opacity={1}
+                            />
+                            <span
+                                style={{
+                                    ...AVATAR_MENU_ITEM_LABEL_STYLE,
+                                    color: avatarMenuHoverKey === 'profile' ? HOVER_ACCENT_COLOR : '#e7e7e7',
+                                }}
+                            >
+                                Profile
+                            </span>
+                        </span>
+                    </button>
+                    <button
+                        type="button"
+                        style={AVATAR_MENU_ITEM_STYLE}
+                        onPointerDown={(e) => e.stopPropagation()}
+                        onPointerUp={(e) => e.stopPropagation()}
+                        onWheelCapture={(e) => e.stopPropagation()}
+                        onWheel={(e) => e.stopPropagation()}
+                        onMouseEnter={() => setAvatarMenuHoverKey('logout')}
+                        onMouseLeave={() => setAvatarMenuHoverKey((curr) => (curr === 'logout' ? null : curr))}
+                        onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            closeAvatarMenu();
+                            onRequestLogout?.();
+                        }}
+                    >
+                        <span style={AVATAR_MENU_ITEM_CONTENT_STYLE}>
+                            <MaskIcon
+                                src={logoutIcon}
+                                size={14}
+                                color={avatarMenuHoverKey === 'logout' ? '#ff7b7d' : '#ff4b4e'}
+                                opacity={1}
+                            />
+                            <span
+                                style={{
+                                    ...AVATAR_MENU_ITEM_LABEL_STYLE,
+                                    color: avatarMenuHoverKey === 'logout' ? '#ff7b7d' : '#ff4b4e',
+                                }}
+                            >
+                                Log Out
+                            </span>
+                        </span>
+                    </button>
+                </div>
+            ) : null}
+
             {/* Bottom Section - User Avatar */}
             <div
                 style={bottomSectionStyle}
@@ -612,12 +799,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 ) : null}
                 <div style={AVATAR_SECTION_STYLE}>
                     <div
+                        ref={avatarTriggerRef}
+                        data-avatar-trigger="1"
                         style={{
                             ...PROFILE_ROW_STYLE,
                             width: isExpanded ? PROFILE_ROW_STYLE.width : 'fit-content',
                             margin: isExpanded ? undefined : '0',
                             backgroundColor: avatarRowHover ? 'rgba(255, 255, 255, 0.14)' : 'transparent',
-                            cursor: onOpenProfile ? 'pointer' : 'default',
+                            cursor: canOpenAvatarMenu ? 'pointer' : 'default',
                         }}
                         onPointerDown={(e) => e.stopPropagation()}
                         onPointerUp={(e) => e.stopPropagation()}
@@ -625,7 +814,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         onWheel={(e) => e.stopPropagation()}
                         onClick={(e) => {
                             e.stopPropagation();
-                            onOpenProfile?.();
+                            if (!canOpenAvatarMenu) return;
+                            const target = e.currentTarget as HTMLDivElement;
+                            toggleAvatarMenuFromTrigger(target);
                         }}
                         onMouseEnter={() => setAvatarRowHover(true)}
                         onMouseLeave={() => setAvatarRowHover(false)}
@@ -640,6 +831,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
                                 lineHeight: 0,
                             }}
                             onPointerDown={(e) => e.stopPropagation()}
+                            onPointerUp={(e) => e.stopPropagation()}
+                            onWheelCapture={(e) => e.stopPropagation()}
+                            onWheel={(e) => e.stopPropagation()}
                         >
                             {accountImageUrl ? (
                                 <img
@@ -928,6 +1122,45 @@ const ROW_MENU_ITEM_CONTENT_STYLE: React.CSSProperties = {
 };
 
 const ROW_MENU_ITEM_LABEL_STYLE: React.CSSProperties = {
+    fontFamily: 'var(--font-ui)',
+    fontSize: `${FONT_SIZE_NAV}px`,
+    lineHeight: 1.2,
+};
+
+const AVATAR_MENU_POPUP_STYLE: React.CSSProperties = {
+    position: 'fixed',
+    width: '184px',
+    padding: '6px',
+    borderRadius: '10px',
+    border: '1px solid rgba(255, 255, 255, 0.1)',
+    background: 'rgba(22, 24, 30, 0.98)',
+    boxShadow: '0 14px 28px rgba(0, 0, 0, 0.45)',
+    zIndex: LAYER_SIDEBAR_ROW_MENU,
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '2px',
+};
+
+const AVATAR_MENU_ITEM_STYLE: React.CSSProperties = {
+    width: '100%',
+    display: 'flex',
+    alignItems: 'center',
+    padding: '8px 10px',
+    border: 'none',
+    borderRadius: '8px',
+    background: 'transparent',
+    textAlign: 'left',
+    cursor: 'pointer',
+};
+
+const AVATAR_MENU_ITEM_CONTENT_STYLE: React.CSSProperties = {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '10px',
+    transition: 'filter 140ms ease',
+};
+
+const AVATAR_MENU_ITEM_LABEL_STYLE: React.CSSProperties = {
     fontFamily: 'var(--font-ui)',
     fontSize: `${FONT_SIZE_NAV}px`,
     lineHeight: 1.2,

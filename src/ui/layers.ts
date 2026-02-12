@@ -4,4 +4,5 @@ export const LAYER_SIDEBAR_ROW_MENU = 1400;
 export const LAYER_MODAL_SEARCH = 3100;
 export const LAYER_MODAL_DELETE = 3200;
 export const LAYER_MODAL_PROFILE = 3300;
+export const LAYER_MODAL_LOGOUT_CONFIRM = 3400;
 export const LAYER_OVERLAY_LOGIN = 5000;

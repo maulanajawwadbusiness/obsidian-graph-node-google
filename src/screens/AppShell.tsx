@@ -11,6 +11,7 @@ import { Sidebar, type SidebarInterfaceItem } from '../components/Sidebar';
 import { useAuth } from '../auth/AuthProvider';
 import {
     LAYER_MODAL_DELETE,
+    LAYER_MODAL_LOGOUT_CONFIRM,
     LAYER_MODAL_PROFILE,
     LAYER_MODAL_SEARCH,
     LAYER_ONBOARDING_FULLSCREEN_BUTTON,
@@ -262,7 +263,7 @@ function getInitialScreen(): Screen {
 }
 
 export const AppShell: React.FC = () => {
-    const { user, loading: authLoading, refreshMe, applyUserPatch } = useAuth();
+    const { user, loading: authLoading, refreshMe, applyUserPatch, logout } = useAuth();
     const [screen, setScreen] = React.useState<Screen>(() => getInitialScreen());
     const [pendingAnalysis, setPendingAnalysis] = React.useState<PendingAnalysisPayload>(null);
     const [savedInterfaces, setSavedInterfaces] = React.useState<SavedInterfaceRecordV1[]>([]);
@@ -272,6 +273,9 @@ export const AppShell: React.FC = () => {
     const [searchHighlightedIndex, setSearchHighlightedIndex] = React.useState(0);
     const [pendingDeleteId, setPendingDeleteId] = React.useState<string | null>(null);
     const [pendingDeleteTitle, setPendingDeleteTitle] = React.useState<string | null>(null);
+    const [isLogoutConfirmOpen, setIsLogoutConfirmOpen] = React.useState(false);
+    const [logoutConfirmBusy, setLogoutConfirmBusy] = React.useState(false);
+    const [logoutConfirmError, setLogoutConfirmError] = React.useState<string | null>(null);
     const [isProfileOpen, setIsProfileOpen] = React.useState(false);
     const [profileDraftDisplayName, setProfileDraftDisplayName] = React.useState('');
     const [profileDraftUsername, setProfileDraftUsername] = React.useState('');
@@ -709,6 +713,52 @@ export const AppShell: React.FC = () => {
         setIsProfileOpen(false);
         setProfileError(null);
     }, [profileSaving]);
+    const closeLogoutConfirm = React.useCallback(() => {
+        if (logoutConfirmBusy) return;
+        setIsLogoutConfirmOpen(false);
+        setLogoutConfirmError(null);
+    }, [logoutConfirmBusy]);
+    const openLogoutConfirm = React.useCallback(() => {
+        if (!isLoggedIn) return;
+        if (sidebarDisabled) return;
+        if (isSearchInterfacesOpen) {
+            closeSearchInterfaces();
+        }
+        if (pendingDeleteId) {
+            closeDeleteConfirm();
+        }
+        if (isProfileOpen) {
+            closeProfileOverlay();
+        }
+        setLogoutConfirmError(null);
+        setIsLogoutConfirmOpen(true);
+    }, [
+        closeDeleteConfirm,
+        closeProfileOverlay,
+        closeSearchInterfaces,
+        isLoggedIn,
+        isProfileOpen,
+        isSearchInterfacesOpen,
+        pendingDeleteId,
+        sidebarDisabled
+    ]);
+    const confirmLogout = React.useCallback(async () => {
+        if (logoutConfirmBusy) return;
+        setLogoutConfirmBusy(true);
+        setLogoutConfirmError(null);
+        try {
+            await logout();
+            setIsLogoutConfirmOpen(false);
+            setLogoutConfirmError(null);
+        } catch (error) {
+            setLogoutConfirmError('Failed to log out. Please try again.');
+            if (import.meta.env.DEV) {
+                console.warn('[appshell] logout_confirm_failed error=%s', String(error));
+            }
+        } finally {
+            setLogoutConfirmBusy(false);
+        }
+    }, [logout, logoutConfirmBusy]);
     const openProfileOverlay = React.useCallback(() => {
         if (!isLoggedIn || !user) return;
         if (sidebarDisabled) return;
@@ -812,6 +862,19 @@ export const AppShell: React.FC = () => {
             window.removeEventListener('keydown', onKeyDown, true);
         };
     }, [closeProfileOverlay, isProfileOpen]);
+
+    React.useEffect(() => {
+        if (!isLogoutConfirmOpen) return;
+        const onKeyDown = (event: KeyboardEvent) => {
+            if (event.key !== 'Escape') return;
+            event.stopPropagation();
+            closeLogoutConfirm();
+        };
+        window.addEventListener('keydown', onKeyDown, true);
+        return () => {
+            window.removeEventListener('keydown', onKeyDown, true);
+        };
+    }, [closeLogoutConfirm, isLogoutConfirmOpen]);
 
     React.useEffect(() => {
         savedInterfacesRef.current = savedInterfaces;
@@ -1271,6 +1334,7 @@ export const AppShell: React.FC = () => {
                     accountName={sidebarAccountName}
                     accountImageUrl={sidebarAccountImageUrl}
                     onOpenProfile={isLoggedIn ? openProfileOverlay : undefined}
+                    onRequestLogout={isLoggedIn ? openLogoutConfirm : undefined}
                 />
             ) : null}
             <div
@@ -1327,6 +1391,7 @@ export const AppShell: React.FC = () => {
                             <span style={PROFILE_LABEL_STYLE}>Username</span>
                             <input
                                 {...hardShieldInput}
+                                className="profile-username-input"
                                 type="text"
                                 value={profileDraftUsername}
                                 disabled={profileSaving}
@@ -1334,7 +1399,7 @@ export const AppShell: React.FC = () => {
                                     setProfileDraftUsername(e.target.value);
                                     setProfileError(null);
                                 }}
-                                placeholder="username"
+                                placeholder="Username"
                                 style={PROFILE_INPUT_STYLE}
                             />
                         </label>
@@ -1366,6 +1431,58 @@ export const AppShell: React.FC = () => {
                                 }}
                             >
                                 {profileSaving ? 'Saving...' : 'Save'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            ) : null}
+            {isLogoutConfirmOpen ? (
+                <div
+                    {...hardShieldInput}
+                    data-logout-confirm-backdrop="1"
+                    style={LOGOUT_CONFIRM_BACKDROP_STYLE}
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        closeLogoutConfirm();
+                    }}
+                >
+                    <div
+                        {...hardShieldInput}
+                        data-logout-confirm-modal="1"
+                        style={LOGOUT_CONFIRM_CARD_STYLE}
+                    >
+                        <div style={LOGOUT_CONFIRM_TITLE_STYLE}>Log out?</div>
+                        <div style={LOGOUT_CONFIRM_TEXT_STYLE}>
+                            You will be signed out from this account on this device.
+                        </div>
+                        {logoutConfirmError ? <div style={LOGOUT_CONFIRM_ERROR_STYLE}>{logoutConfirmError}</div> : null}
+                        <div style={LOGOUT_CONFIRM_BUTTON_ROW_STYLE}>
+                            <button
+                                {...hardShieldInput}
+                                type="button"
+                                style={LOGOUT_CONFIRM_CANCEL_STYLE}
+                                disabled={logoutConfirmBusy}
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    closeLogoutConfirm();
+                                }}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                {...hardShieldInput}
+                                type="button"
+                                style={{
+                                    ...LOGOUT_CONFIRM_PRIMARY_STYLE,
+                                    opacity: logoutConfirmBusy ? 0.75 : 1,
+                                }}
+                                disabled={logoutConfirmBusy}
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    void confirmLogout();
+                                }}
+                            >
+                                {logoutConfirmBusy ? 'Logging out...' : 'Log Out'}
                             </button>
                         </div>
                     </div>
@@ -1586,13 +1703,13 @@ const PROFILE_OVERLAY_BACKDROP_STYLE: React.CSSProperties = {
 
 const PROFILE_OVERLAY_CARD_STYLE: React.CSSProperties = {
     width: '100%',
-    maxWidth: '440px',
+    maxWidth: '300px',
     margin: '0 16px',
     borderRadius: '12px',
     border: '1px solid rgba(255, 255, 255, 0.12)',
     background: '#0D1118',
     boxShadow: '0 18px 56px rgba(0, 0, 0, 0.45)',
-    padding: '18px',
+    padding: '20px',
     color: '#f1f4fb',
     display: 'flex',
     flexDirection: 'column',
@@ -1600,7 +1717,7 @@ const PROFILE_OVERLAY_CARD_STYLE: React.CSSProperties = {
 };
 
 const PROFILE_TITLE_STYLE: React.CSSProperties = {
-    fontFamily: 'var(--font-title)',
+    fontFamily: 'var(--font-ui)',
     fontWeight: 700,
     fontSize: '16px',
     lineHeight: 1.2,
@@ -1614,16 +1731,16 @@ const PROFILE_AVATAR_ROW_STYLE: React.CSSProperties = {
 };
 
 const PROFILE_AVATAR_IMAGE_STYLE: React.CSSProperties = {
-    width: '44px',
-    height: '44px',
+    width: '65px',
+    height: '65px',
     borderRadius: '50%',
     objectFit: 'cover',
     display: 'block',
 };
 
 const PROFILE_AVATAR_FALLBACK_STYLE: React.CSSProperties = {
-    width: '44px',
-    height: '44px',
+    width: '65px',
+    height: '65px',
     borderRadius: '50%',
     background: '#2dd4bf',
     color: '#000',
@@ -1644,7 +1761,7 @@ const PROFILE_FIELD_STYLE: React.CSSProperties = {
 const PROFILE_LABEL_STYLE: React.CSSProperties = {
     fontSize: '12px',
     lineHeight: 1.2,
-    color: 'rgba(231, 231, 231, 0.84)',
+    color: '#ffffff',
     fontFamily: 'var(--font-ui)',
 };
 
@@ -1653,7 +1770,7 @@ const PROFILE_INPUT_STYLE: React.CSSProperties = {
     borderRadius: '10px',
     border: '1px solid rgba(255, 255, 255, 0.2)',
     background: 'rgba(12, 15, 22, 0.95)',
-    color: '#e7e7e7',
+    color: '#ffffff',
     fontFamily: 'var(--font-ui)',
     fontSize: '13px',
     lineHeight: 1.4,
@@ -1691,6 +1808,85 @@ const PROFILE_PRIMARY_STYLE: React.CSSProperties = {
     border: '1px solid #63abff',
     background: '#63abff',
     color: '#0b1220',
+    borderRadius: '7px',
+    padding: '7px 12px',
+    fontSize: '12px',
+    cursor: 'pointer',
+    fontWeight: 700,
+    fontFamily: 'var(--font-ui)',
+};
+
+const LOGOUT_CONFIRM_BACKDROP_STYLE: React.CSSProperties = {
+    position: 'fixed',
+    inset: 0,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    background: 'rgba(6, 8, 12, 0.64)',
+    zIndex: LAYER_MODAL_LOGOUT_CONFIRM,
+    pointerEvents: 'auto',
+};
+
+const LOGOUT_CONFIRM_CARD_STYLE: React.CSSProperties = {
+    width: '100%',
+    maxWidth: '360px',
+    margin: '0 16px',
+    borderRadius: '12px',
+    border: '1px solid rgba(255, 255, 255, 0.12)',
+    background: '#0D1118',
+    boxShadow: '0 18px 56px rgba(0, 0, 0, 0.45)',
+    padding: '18px',
+    color: '#f1f4fb',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '10px',
+};
+
+const LOGOUT_CONFIRM_TITLE_STYLE: React.CSSProperties = {
+    fontFamily: 'var(--font-title)',
+    fontWeight: 700,
+    fontSize: '16px',
+    lineHeight: 1.2,
+    color: '#f3f7ff',
+};
+
+const LOGOUT_CONFIRM_TEXT_STYLE: React.CSSProperties = {
+    fontFamily: 'var(--font-ui)',
+    fontSize: '12px',
+    lineHeight: 1.5,
+    color: 'rgba(231, 231, 231, 0.74)',
+};
+
+const LOGOUT_CONFIRM_ERROR_STYLE: React.CSSProperties = {
+    fontFamily: 'var(--font-ui)',
+    fontSize: '12px',
+    lineHeight: 1.4,
+    color: '#ff6b6b',
+};
+
+const LOGOUT_CONFIRM_BUTTON_ROW_STYLE: React.CSSProperties = {
+    display: 'flex',
+    justifyContent: 'flex-end',
+    gap: '8px',
+    marginTop: '2px',
+};
+
+const LOGOUT_CONFIRM_CANCEL_STYLE: React.CSSProperties = {
+    border: '1px solid rgba(255, 255, 255, 0.24)',
+    background: 'rgba(255, 255, 255, 0.04)',
+    color: '#f1f4fb',
+    borderRadius: '7px',
+    padding: '7px 12px',
+    fontSize: '12px',
+    cursor: 'pointer',
+    fontWeight: 600,
+    fontFamily: 'var(--font-ui)',
+};
+
+const LOGOUT_CONFIRM_PRIMARY_STYLE: React.CSSProperties = {
+    border: '1px solid #ff4b4e',
+    background: '#ff4b4e',
+    color: '#ffffff',
     borderRadius: '7px',
     padding: '7px 12px',
     fontSize: '12px',

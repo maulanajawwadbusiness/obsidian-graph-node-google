@@ -215,3 +215,8 @@ body {
     opacity: 0.85;
   }
 }
+
+.profile-username-input::placeholder {
+  color: rgba(255, 255, 255, 0.5);
+  opacity: 1;
+}

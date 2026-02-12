@@ -179,7 +179,7 @@ const CARD_INNER_STYLE: React.CSSProperties = {
 
 const HEADLINE_STYLE: React.CSSProperties = {
     fontSize: '18px',
-    fontWeight: 600,
+    fontWeight: 300,
     lineHeight: 1.4,
     textAlign: 'center',
     color: '#e7e7e7',

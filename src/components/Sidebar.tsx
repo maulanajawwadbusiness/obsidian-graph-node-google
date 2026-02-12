@@ -742,17 +742,22 @@ export const Sidebar: React.FC<SidebarProps> = ({
                             onRequestLogout?.();
                         }}
                     >
-                        <span style={AVATAR_MENU_ITEM_CONTENT_STYLE}>
+                        <span
+                            style={{
+                                ...AVATAR_MENU_ITEM_CONTENT_STYLE,
+                                opacity: avatarMenuHoverKey === 'logout' ? 0.5 : 1,
+                            }}
+                        >
                             <MaskIcon
                                 src={logoutIcon}
                                 size={14}
-                                color={avatarMenuHoverKey === 'logout' ? '#ff7b7d' : '#ff4b4e'}
+                                color="#ff4b4e"
                                 opacity={1}
                             />
                             <span
                                 style={{
                                     ...AVATAR_MENU_ITEM_LABEL_STYLE,
-                                    color: avatarMenuHoverKey === 'logout' ? '#ff7b7d' : '#ff4b4e',
+                                    color: '#ff4b4e',
                                 }}
                             >
                                 Log Out

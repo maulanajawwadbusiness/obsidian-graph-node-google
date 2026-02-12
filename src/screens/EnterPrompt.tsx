@@ -179,6 +179,8 @@ const ROOT_STYLE: React.CSSProperties = {
     minHeight: '100vh',
     background: '#06060A',
     color: '#e7e7e7',
+    fontWeight: 300,
+    fontFamily: 'var(--font-ui)',
     position: 'relative',
     boxSizing: 'border-box',
     paddingLeft: `${LEFT_RAIL_GUTTER_PX}px`,
@@ -210,13 +212,14 @@ const DRAG_OVERLAY_ICON_STYLE: React.CSSProperties = {
 
 const DRAG_OVERLAY_HEADER_STYLE: React.CSSProperties = {
     fontSize: '16px',
-    fontWeight: 600,
+    fontWeight: 300,
     color: '#e7e7e7',
     fontFamily: 'var(--font-ui)',
 };
 
 const DRAG_OVERLAY_DESC_STYLE: React.CSSProperties = {
     fontSize: '13px',
+    fontWeight: 300,
     color: 'rgba(255, 255, 255, 0.55)',
     fontFamily: 'var(--font-ui)',
 };
@@ -248,13 +251,14 @@ const ERROR_OVERLAY_ICON_STYLE: React.CSSProperties = {
 
 const ERROR_OVERLAY_TEXT_STYLE: React.CSSProperties = {
     fontSize: '16px',
-    fontWeight: 600,
+    fontWeight: 300,
     color: 'rgba(255, 100, 100, 0.9)',
     fontFamily: 'var(--font-ui)',
 };
 
 const ERROR_OVERLAY_DESC_STYLE: React.CSSProperties = {
     fontSize: '13px',
+    fontWeight: 300,
     color: 'rgba(255, 255, 255, 0.55)',
     fontFamily: 'var(--font-ui)',
 };

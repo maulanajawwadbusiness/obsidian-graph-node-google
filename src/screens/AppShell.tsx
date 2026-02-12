@@ -1718,7 +1718,7 @@ const PROFILE_OVERLAY_CARD_STYLE: React.CSSProperties = {
 
 const PROFILE_TITLE_STYLE: React.CSSProperties = {
     fontFamily: 'var(--font-ui)',
-    fontWeight: 700,
+    fontWeight: 300,
     fontSize: '16px',
     lineHeight: 1.2,
     color: '#f3f7ff',
@@ -1748,7 +1748,7 @@ const PROFILE_AVATAR_FALLBACK_STYLE: React.CSSProperties = {
     alignItems: 'center',
     justifyContent: 'center',
     fontFamily: 'var(--font-ui)',
-    fontWeight: 700,
+    fontWeight: 300,
     fontSize: '12px',
 };
 
@@ -1763,6 +1763,7 @@ const PROFILE_LABEL_STYLE: React.CSSProperties = {
     lineHeight: 1.2,
     color: '#ffffff',
     fontFamily: 'var(--font-ui)',
+    fontWeight: 300,
 };
 
 const PROFILE_INPUT_STYLE: React.CSSProperties = {
@@ -1772,6 +1773,7 @@ const PROFILE_INPUT_STYLE: React.CSSProperties = {
     background: 'rgba(12, 15, 22, 0.95)',
     color: '#ffffff',
     fontFamily: 'var(--font-ui)',
+    fontWeight: 300,
     fontSize: '13px',
     lineHeight: 1.4,
     padding: '9px 10px',
@@ -1783,6 +1785,7 @@ const PROFILE_ERROR_STYLE: React.CSSProperties = {
     fontSize: '12px',
     color: '#ff6b6b',
     fontFamily: 'var(--font-ui)',
+    fontWeight: 300,
 };
 
 const PROFILE_BUTTON_ROW_STYLE: React.CSSProperties = {
@@ -1800,7 +1803,7 @@ const PROFILE_CANCEL_STYLE: React.CSSProperties = {
     padding: '7px 12px',
     fontSize: '12px',
     cursor: 'pointer',
-    fontWeight: 600,
+    fontWeight: 300,
     fontFamily: 'var(--font-ui)',
 };
 
@@ -1812,7 +1815,7 @@ const PROFILE_PRIMARY_STYLE: React.CSSProperties = {
     padding: '7px 12px',
     fontSize: '12px',
     cursor: 'pointer',
-    fontWeight: 700,
+    fontWeight: 300,
     fontFamily: 'var(--font-ui)',
 };
 
@@ -1843,8 +1846,8 @@ const LOGOUT_CONFIRM_CARD_STYLE: React.CSSProperties = {
 };
 
 const LOGOUT_CONFIRM_TITLE_STYLE: React.CSSProperties = {
-    fontFamily: 'var(--font-title)',
-    fontWeight: 700,
+    fontFamily: 'var(--font-ui)',
+    fontWeight: 300,
     fontSize: '16px',
     lineHeight: 1.2,
     color: '#f3f7ff',
@@ -1852,6 +1855,7 @@ const LOGOUT_CONFIRM_TITLE_STYLE: React.CSSProperties = {
 
 const LOGOUT_CONFIRM_TEXT_STYLE: React.CSSProperties = {
     fontFamily: 'var(--font-ui)',
+    fontWeight: 300,
     fontSize: '12px',
     lineHeight: 1.5,
     color: 'rgba(231, 231, 231, 0.74)',
@@ -1859,6 +1863,7 @@ const LOGOUT_CONFIRM_TEXT_STYLE: React.CSSProperties = {
 
 const LOGOUT_CONFIRM_ERROR_STYLE: React.CSSProperties = {
     fontFamily: 'var(--font-ui)',
+    fontWeight: 300,
     fontSize: '12px',
     lineHeight: 1.4,
     color: '#ff6b6b',
@@ -1879,7 +1884,7 @@ const LOGOUT_CONFIRM_CANCEL_STYLE: React.CSSProperties = {
     padding: '7px 12px',
     fontSize: '12px',
     cursor: 'pointer',
-    fontWeight: 600,
+    fontWeight: 300,
     fontFamily: 'var(--font-ui)',
 };
 
@@ -1891,7 +1896,7 @@ const LOGOUT_CONFIRM_PRIMARY_STYLE: React.CSSProperties = {
     padding: '7px 12px',
     fontSize: '12px',
     cursor: 'pointer',
-    fontWeight: 700,
+    fontWeight: 300,
     fontFamily: 'var(--font-ui)',
 };
 
@@ -2008,7 +2013,7 @@ const SEARCH_CLOSE_BUTTON_STYLE: React.CSSProperties = {
     cursor: 'pointer',
     lineHeight: 1,
     fontSize: '14px',
-    fontWeight: 600,
+    fontWeight: 300,
     display: 'inline-flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -2025,6 +2030,7 @@ const SEARCH_INPUT_STYLE: React.CSSProperties = {
     background: 'rgba(12, 15, 22, 0.95)',
     color: '#e7e7e7',
     fontFamily: 'var(--font-ui)',
+    fontWeight: 300,
     fontSize: '10.5px',
     lineHeight: 1.4,
     padding: '9px 36px 9px 20px',
@@ -2054,6 +2060,7 @@ const SEARCH_SECTION_LABEL_STYLE: React.CSSProperties = {
     textTransform: 'none',
     padding: '2px 10px 0',
     fontFamily: 'var(--font-ui)',
+    fontWeight: 300,
 };
 
 const SEARCH_RESULT_ROW_STYLE: React.CSSProperties = {
@@ -2072,7 +2079,7 @@ const SEARCH_RESULT_TITLE_STYLE: React.CSSProperties = {
     color: '#f3f7ff',
     fontSize: '10.5px',
     lineHeight: 1.35,
-    fontWeight: 600,
+    fontWeight: 300,
     fontFamily: 'var(--font-ui)',
     minWidth: 0,
     maxWidth: '100%',
@@ -2090,11 +2097,14 @@ const SEARCH_EMPTY_STYLE: React.CSSProperties = {
     fontSize: '13px',
     lineHeight: 1.4,
     padding: '10px 10px',
+    fontFamily: 'var(--font-ui)',
+    fontWeight: 300,
 };
 
 const SEARCH_EMPTY_TITLE_STYLE: React.CSSProperties = {
     color: 'rgba(231, 231, 231, 0.74)',
     fontFamily: 'var(--font-ui)',
+    fontWeight: 300,
     fontSize: '13px',
     lineHeight: 1.35,
 };
@@ -2102,6 +2112,7 @@ const SEARCH_EMPTY_TITLE_STYLE: React.CSSProperties = {
 const SEARCH_EMPTY_HINT_STYLE: React.CSSProperties = {
     color: 'rgba(231, 231, 231, 0.52)',
     fontFamily: 'var(--font-ui)',
+    fontWeight: 300,
     fontSize: '12px',
     lineHeight: 1.35,
 };

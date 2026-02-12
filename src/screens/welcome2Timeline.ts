@@ -54,9 +54,6 @@ const NEWLINE_POST_MIN_MS = 40;
 const NEWLINE_POST_MAX_FRACTION = 0.2;
 const NEWLINE_PREWAIT_MULTIPLIER = 2.5;
 const DOUBLE_NEWLINE_MECHANICAL_MULTIPLIER = 1.5;
-const HEAVY_ENVELOPE_FRACTION = 0.5;
-const MAX_ENVELOPE_CHARS = 3;
-const MAX_EXTRA_PER_CHAR_MS = 18;
 
 function clampMs(value: number): number {
     if (!Number.isFinite(value)) return 0;
@@ -181,49 +178,6 @@ function buildNextBoundaryIndex(renderChars: string[]): number[] {
     }
 
     return nextBoundaryIndex;
-}
-
-function applyHeavyWordEnvelope(
-    extraDelayByIndex: number[],
-    renderChars: string[],
-    wordEndIndex: number,
-    envelopeBudgetMs: number
-): void {
-    const budgetMs = clampMs(envelopeBudgetMs);
-    if (budgetMs <= 0) return;
-
-    const indices: number[] = [];
-    let cursor = wordEndIndex;
-    while (cursor >= 0 && indices.length < MAX_ENVELOPE_CHARS) {
-        const c = renderChars[cursor];
-        if (isWordChar(c)) {
-            indices.unshift(cursor);
-            cursor -= 1;
-            continue;
-        }
-        if (indices.length > 0) break;
-        cursor -= 1;
-    }
-    if (indices.length === 0) return;
-
-    let weights: number[];
-    if (indices.length === 3) weights = [1, 2, 3];
-    else if (indices.length === 2) weights = [1, 2];
-    else weights = [1];
-
-    const weightSum = weights.reduce((acc, w) => acc + w, 0) || 1;
-    let remainingBudget = budgetMs;
-    for (let i = 0; i < indices.length; i += 1) {
-        const idx = indices[i];
-        const share = Math.floor((budgetMs * weights[i]) / weightSum);
-        if (share <= 0) continue;
-
-        const capped = Math.min(share, MAX_EXTRA_PER_CHAR_MS, remainingBudget);
-        if (capped <= 0) continue;
-        extraDelayByIndex[idx] += capped;
-        remainingBudget -= capped;
-        if (remainingBudget <= 0) break;
-    }
 }
 
 function isDebugCadenceEnabled(): boolean {
@@ -380,7 +334,6 @@ export function buildWelcome2Timeline(rawText: string, cadence: CadenceConfig = 
     const events: TimelineEvent[] = [];
     const charDeltaByIndex: number[] = new Array(renderChars.length).fill(0);
     const semanticPauseByIndex: number[] = new Array(renderChars.length).fill(0);
-    const extraDelayByIndex: number[] = new Array(renderChars.length).fill(0);
     let currentTimeMs = 0;
 
     if (tunedCadence.semantic) {
@@ -407,10 +360,7 @@ export function buildWelcome2Timeline(rawText: string, cadence: CadenceConfig = 
 
             const isHeavy = emphasis.wordEndIsHeavyByIndex.get(endIndex) === true;
             if (isHeavy && heavyExtraPause > 0) {
-                const envelopeBudgetMs = clampMs(heavyExtraPause * HEAVY_ENVELOPE_FRACTION);
-                const boundaryHeavyBudgetMs = Math.max(0, heavyExtraPause - envelopeBudgetMs);
-                semanticPauseByIndex[finalBoundaryIndex] += boundaryHeavyBudgetMs;
-                applyHeavyWordEnvelope(extraDelayByIndex, renderChars, endIndex, envelopeBudgetMs);
+                semanticPauseByIndex[finalBoundaryIndex] += heavyExtraPause;
             }
         }
 
@@ -517,8 +467,6 @@ export function buildWelcome2Timeline(rawText: string, cadence: CadenceConfig = 
         if (charClass === 'letter' || charClass === 'digit') {
             charDelayMs = Math.max(MIN_LETTER_DIGIT_DELAY_MS, clampMs(charDelayMs));
         }
-        const extra = extraDelayByIndex[i] ?? 0;
-        charDelayMs += extra;
 
         const eventTimeMs = event.tMs;
         currentTimeMs += charDelayMs;
@@ -573,28 +521,67 @@ export function buildWelcome2Timeline(rawText: string, cadence: CadenceConfig = 
                 const direct = nextBoundaryIndex[firstHeavy.endIndex];
                 return direct >= 0 ? direct : Math.max(0, renderChars.length - 1);
             })();
-            const from = Math.max(0, firstHeavy.startIndex - 3);
-            const to = Math.min(renderChars.length - 1, boundaryIndex + 2);
+            const from = Math.max(0, firstHeavy.startIndex - 18);
+            const to = Math.min(renderChars.length - 1, boundaryIndex + 18);
+            const eventByCharIndex = new Map<number, TimelineEvent>();
+            events.forEach((event) => {
+                eventByCharIndex.set(event.charIndex, event);
+            });
             const timingSample: Array<{
                 charIndex: number;
                 char: string;
+                class: TimelineCharClass;
                 deltaMs: number;
-                extraDelayMs: number;
                 semanticPauseMs: number;
+                pauseReason: PauseReason;
             }> = [];
             for (let idx = from; idx <= to; idx += 1) {
+                const event = eventByCharIndex.get(idx);
                 timingSample.push({
                     charIndex: idx,
                     char: renderChars[idx],
+                    class: classifyChar(renderChars[idx]),
                     deltaMs: charDeltaByIndex[idx] ?? 0,
-                    extraDelayMs: extraDelayByIndex[idx] ?? 0,
                     semanticPauseMs: semanticPauseByIndex[idx] ?? 0,
+                    pauseReason: event?.pauseReason ?? 'base',
                 });
             }
             console.log('[Welcome2Cadence] timing sample around first heavy word:', timingSample);
             console.log('[Welcome2Cadence] first heavy boundaryIndex=%d boundaryChar=%s', boundaryIndex, renderChars[boundaryIndex] ?? '');
         } else {
             console.log('[Welcome2Cadence] timing sample skipped no heavy words detected');
+        }
+
+        const firstSentencePunctuationIndex = renderChars.findIndex((char) => char === '.' || char === '?' || char === '!');
+        if (firstSentencePunctuationIndex >= 0) {
+            const from = Math.max(0, firstSentencePunctuationIndex - 18);
+            const to = Math.min(renderChars.length - 1, firstSentencePunctuationIndex + 18);
+            const eventByCharIndex = new Map<number, TimelineEvent>();
+            events.forEach((event) => {
+                eventByCharIndex.set(event.charIndex, event);
+            });
+            const punctuationSample: Array<{
+                charIndex: number;
+                char: string;
+                class: TimelineCharClass;
+                deltaMs: number;
+                semanticPauseMs: number;
+                pauseReason: PauseReason;
+            }> = [];
+            for (let idx = from; idx <= to; idx += 1) {
+                const event = eventByCharIndex.get(idx);
+                punctuationSample.push({
+                    charIndex: idx,
+                    char: renderChars[idx],
+                    class: classifyChar(renderChars[idx]),
+                    deltaMs: charDeltaByIndex[idx] ?? 0,
+                    semanticPauseMs: semanticPauseByIndex[idx] ?? 0,
+                    pauseReason: event?.pauseReason ?? 'base',
+                });
+            }
+            console.log('[Welcome2Cadence] timing sample around first sentence punctuation:', punctuationSample);
+        } else {
+            console.log('[Welcome2Cadence] punctuation sample skipped no sentence punctuation found');
         }
     }
 

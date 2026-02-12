@@ -60,7 +60,7 @@ const ICON_OPACITY_DEFAULT = 1.0;
 const ICON_OPACITY_HOVER = 1.0;
 const HOVER_ACCENT_COLOR = '#63abff';
 const DEFAULT_ICON_COLOR = '#d7f5ff';
-const ROW_MENU_DELETE_TEXT_COLOR = '#ff4b4e';
+const SIDEBAR_TEXT_COLOR = '#D7F5FF';
 type RowMenuItemKey = 'rename' | 'delete';
 
 type SidebarProps = {
@@ -126,8 +126,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
     const avatarTriggerRef = React.useRef<HTMLDivElement | null>(null);
     const menuItemPreview = React.useMemo<Array<{ key: RowMenuItemKey; icon: string; label: string; color: string }>>(
         () => [
-            { key: 'rename', icon: renameIcon, label: 'Rename', color: '#e7e7e7' },
-            { key: 'delete', icon: deleteIcon, label: 'Delete', color: ROW_MENU_DELETE_TEXT_COLOR },
+            { key: 'rename', icon: renameIcon, label: 'Rename', color: SIDEBAR_TEXT_COLOR },
+            { key: 'delete', icon: deleteIcon, label: 'Delete', color: SIDEBAR_TEXT_COLOR },
         ],
         []
     );
@@ -486,7 +486,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                                         type="button"
                                         style={{
                                             ...INTERFACE_ITEM_STYLE,
-                                            color: isHovered || isSelected ? HOVER_ACCENT_COLOR : INTERFACE_ITEM_STYLE.color,
+                                            color: INTERFACE_ITEM_STYLE.color,
                                             background: isSelected ? 'rgba(99, 171, 255, 0.12)' : INTERFACE_ITEM_STYLE.background,
                                         }}
                                         onPointerDown={(e) => e.stopPropagation()}
@@ -662,9 +662,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                                 <span
                                     style={{
                                         ...ROW_MENU_ITEM_LABEL_STYLE,
-                                        color: menuItem.key === 'rename' && hoveredMenuItemKey === 'rename'
-                                            ? HOVER_ACCENT_COLOR
-                                            : menuItem.color,
+                                        color: SIDEBAR_TEXT_COLOR,
                                     }}
                                 >
                                     {menuItem.label}
@@ -719,7 +717,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                             <span
                                 style={{
                                     ...AVATAR_MENU_ACCOUNT_NAME_STYLE,
-                                    color: avatarMenuHoverKey === 'profile' ? HOVER_ACCENT_COLOR : '#e7e7e7',
+                                    color: SIDEBAR_TEXT_COLOR,
                                 }}
                             >
                                 {displayAccountName}
@@ -757,7 +755,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                             <span
                                 style={{
                                     ...AVATAR_MENU_ITEM_LABEL_STYLE,
-                                    color: '#ff4b4e',
+                                    color: SIDEBAR_TEXT_COLOR,
                                 }}
                             >
                                 Log Out
@@ -796,7 +794,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                             <span
                                 style={{
                                     ...NAV_LABEL_STYLE,
-                                    color: documentHover ? HOVER_ACCENT_COLOR : NAV_LABEL_STYLE.color,
+                                    color: NAV_LABEL_STYLE.color,
                                 }}
                             >
                                 Document Viewer
@@ -918,7 +916,7 @@ const NavItem: React.FC<NavItemProps> = ({
             <span
                 style={{
                     ...NAV_LABEL_STYLE,
-                    color: isHovered ? HOVER_ACCENT_COLOR : NAV_LABEL_STYLE.color,
+                    color: NAV_LABEL_STYLE.color,
                     opacity: 1,
                 }}
             >
@@ -1010,7 +1008,7 @@ const NAV_ITEM_STYLE: React.CSSProperties = {
 };
 
 const NAV_LABEL_STYLE: React.CSSProperties = {
-    color: '#e7e7e7',
+    color: SIDEBAR_TEXT_COLOR,
     fontSize: `${FONT_SIZE_NAV}px`,
     fontFamily: 'var(--font-ui)',
     whiteSpace: 'nowrap',
@@ -1028,7 +1026,7 @@ const INTERFACES_SECTION_STYLE: React.CSSProperties = {
 
 const SECTION_HEADER_STYLE: React.CSSProperties = {
     fontSize: `${FONT_SIZE_SECTION_HEADER}px`,
-    color: 'rgba(255, 255, 255, 0.4)',
+    color: SIDEBAR_TEXT_COLOR,
     fontFamily: 'var(--font-ui)',
     letterSpacing: '0.5px',
     padding: '8px 6px',
@@ -1049,7 +1047,7 @@ const INTERFACE_ITEM_STYLE: React.CSSProperties = {
     padding: '8px 6px',
     background: 'transparent',
     border: 'none',
-    color: '#e7e7e7',
+    color: SIDEBAR_TEXT_COLOR,
     fontSize: `${FONT_SIZE_NAV}px`,
     fontFamily: 'var(--font-ui)',
     textAlign: 'left',
@@ -1133,6 +1131,7 @@ const ROW_MENU_ITEM_LABEL_STYLE: React.CSSProperties = {
     fontFamily: 'var(--font-ui)',
     fontSize: `${FONT_SIZE_NAV}px`,
     lineHeight: 1.2,
+    color: SIDEBAR_TEXT_COLOR,
 };
 
 const AVATAR_MENU_POPUP_STYLE: React.CSSProperties = {
@@ -1172,6 +1171,7 @@ const AVATAR_MENU_ITEM_LABEL_STYLE: React.CSSProperties = {
     fontFamily: 'var(--font-ui)',
     fontSize: `${FONT_SIZE_NAV}px`,
     lineHeight: 1.2,
+    color: SIDEBAR_TEXT_COLOR,
 };
 
 const AVATAR_MENU_ACCOUNT_PHOTO_STYLE: React.CSSProperties = {
@@ -1188,7 +1188,7 @@ const AVATAR_MENU_ACCOUNT_FALLBACK_STYLE: React.CSSProperties = {
     height: '20px',
     borderRadius: '50%',
     background: '#2dd4bf',
-    color: '#000',
+    color: SIDEBAR_TEXT_COLOR,
     display: 'inline-flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -1221,7 +1221,7 @@ const RENAME_INPUT_STYLE: React.CSSProperties = {
     borderRadius: '6px',
     border: '1px solid rgba(99, 171, 255, 0.45)',
     background: 'rgba(12, 15, 22, 0.95)',
-    color: '#e7e7e7',
+    color: SIDEBAR_TEXT_COLOR,
     fontFamily: 'var(--font-ui)',
     fontSize: `${FONT_SIZE_NAV}px`,
     lineHeight: 1.2,
@@ -1231,7 +1231,7 @@ const RENAME_INPUT_STYLE: React.CSSProperties = {
 
 const INTERFACE_EMPTY_STATE_STYLE: React.CSSProperties = {
     ...INTERFACE_ITEM_STYLE,
-    color: 'rgba(255, 255, 255, 0.45)',
+    color: SIDEBAR_TEXT_COLOR,
     cursor: 'default',
     pointerEvents: 'none',
 };
@@ -1273,7 +1273,7 @@ const AVATAR_STYLE: React.CSSProperties = {
     justifyContent: 'center',
     fontSize: `${FONT_SIZE_AVATAR}px`,
     fontWeight: 600,
-    color: '#000',
+    color: SIDEBAR_TEXT_COLOR,
     fontFamily: 'var(--font-ui)',
 };
 
@@ -1286,7 +1286,7 @@ const AVATAR_IMAGE_STYLE: React.CSSProperties = {
 };
 
 const AVATAR_NAME_STYLE: React.CSSProperties = {
-    color: '#e7e7e7',
+    color: SIDEBAR_TEXT_COLOR,
     fontSize: `${FONT_SIZE_NAV}px`,
     lineHeight: 1,
     fontFamily: 'var(--font-ui)',

@@ -693,6 +693,11 @@ export const AppShell: React.FC = () => {
     const handleRenameInterface = React.useCallback((id: string, newTitle: string) => {
         commitRenameInterface(id, newTitle, 'sidebar_rename');
     }, [commitRenameInterface]);
+    const openProfileOverlay = React.useCallback(() => {
+        if (import.meta.env.DEV) {
+            console.log('[appshell] profile_open_requested');
+        }
+    }, []);
 
     React.useEffect(() => {
         if (!isSearchInterfacesOpen) return;
@@ -1185,6 +1190,7 @@ export const AppShell: React.FC = () => {
                     onSelectInterface={(id) => selectSavedInterfaceById(id)}
                     accountName={sidebarAccountName}
                     accountImageUrl={sidebarAccountImageUrl}
+                    onOpenProfile={openProfileOverlay}
                 />
             ) : null}
             <div

@@ -77,6 +77,7 @@ type SidebarProps = {
     onSelectInterface?: (id: string) => void;
     accountName?: string;
     accountImageUrl?: string;
+    onOpenProfile?: () => void;
 };
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -94,6 +95,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     onSelectInterface,
     accountName,
     accountImageUrl,
+    onOpenProfile,
 }) => {
     const [logoHover, setLogoHover] = React.useState(false);
     const [createNewHover, setCreateNewHover] = React.useState(false);
@@ -615,6 +617,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
                             width: isExpanded ? PROFILE_ROW_STYLE.width : 'fit-content',
                             margin: isExpanded ? undefined : '0',
                             backgroundColor: avatarRowHover ? 'rgba(255, 255, 255, 0.14)' : 'transparent',
+                            cursor: onOpenProfile ? 'pointer' : 'default',
+                        }}
+                        onPointerDown={(e) => e.stopPropagation()}
+                        onPointerUp={(e) => e.stopPropagation()}
+                        onWheelCapture={(e) => e.stopPropagation()}
+                        onWheel={(e) => e.stopPropagation()}
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            onOpenProfile?.();
                         }}
                         onMouseEnter={() => setAvatarRowHover(true)}
                         onMouseLeave={() => setAvatarRowHover(false)}

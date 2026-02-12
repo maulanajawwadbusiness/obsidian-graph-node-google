@@ -176,6 +176,26 @@ If Cloud Run complains about base image resolution, add:
 - isProd() is true when K_SERVICE is set or NODE_ENV is production.
 - Do not share idToken values in chat.
 
+## 2026-02-12: Profile Fields and Update Endpoint
+- Added persistent user profile fields in `users`:
+  - `display_name` (text, nullable)
+  - `username` (text, nullable)
+- Added endpoint:
+  - `POST /api/profile/update` (auth required)
+  - request body: `{ displayName: string, username: string }`
+  - validations:
+    - `displayName` trimmed and whitespace-collapsed, max 80 chars
+    - `username` trimmed, max 32 chars, allowed chars `[A-Za-z0-9_.-]`
+    - empty string clears field to `null`
+- `/me` payload now includes:
+  - `displayName`
+  - `username`
+- `/auth/google` response payload now also includes:
+  - `displayName`
+  - `username`
+- Auth source-of-truth rule remains unchanged:
+  - frontend user state still comes from `/me`.
+
 ## 2026-02-11: Auth Schema Check Timeout Hardening
 - Root cause for intermittent `npm run check:auth-schema` hangs:
   - CLI check could leave DB pool and Cloud SQL connector open, so process stayed alive.

@@ -279,6 +279,7 @@ export function classifyChar(char: string): TimelineCharClass {
 function getCostBetweenChars(charClass: TimelineCharClass, cadence: CadenceConfig): number {
     if (charClass === 'space') return cadence.spaceMs;
     if (charClass === 'lineBreak') return 0;
+    // Letters, digits, and punctuation share one stable base cadence bucket.
     return cadence.baseCharMs;
 }
 
@@ -357,6 +358,9 @@ export function buildWelcome2Timeline(rawText: string, cadence: CadenceConfig = 
     const charDelayByIndex: number[] = new Array(renderChars.length).fill(0);
     const semanticPauseByIndex: number[] = new Array(renderChars.length).fill(0);
     const semanticCategoryByIndex: SemanticBoundaryCategory[] = new Array(renderChars.length).fill('none');
+    const expectedLetterDelay = Math.max(MIN_LETTER_DIGIT_DELAY_MS, clampMs(tunedCadence.baseCharMs));
+    const expectedSpaceDelay = clampMs(tunedCadence.spaceMs);
+    const expectedPunctDelay = clampMs(tunedCadence.baseCharMs);
     let currentTimeMs = 0;
 
     // Invariant: semantic cadence is boundary-only. Letters are mechanically timed only.
@@ -513,9 +517,13 @@ export function buildWelcome2Timeline(rawText: string, cadence: CadenceConfig = 
         event.pauseAfterMs = clampMs(pause.pauseAfterMs + semanticPauseAfterMs);
         events.push(event);
 
-        let charDelayMs = getCostBetweenChars(charClass, tunedCadence);
+        let charDelayMs = expectedPunctDelay;
         if (charClass === 'letter' || charClass === 'digit') {
-            charDelayMs = Math.max(MIN_LETTER_DIGIT_DELAY_MS, clampMs(charDelayMs));
+            charDelayMs = expectedLetterDelay;
+        } else if (charClass === 'space') {
+            charDelayMs = expectedSpaceDelay;
+        } else {
+            charDelayMs = clampMs(getCostBetweenChars(charClass, tunedCadence));
         }
         // Invariant: charDelayMs is mechanical-only. Semantic timing flows via pauseAfterMs on boundaries.
         charDelayByIndex[i] = clampMs(charDelayMs);
@@ -601,12 +609,22 @@ export function buildWelcome2Timeline(rawText: string, cadence: CadenceConfig = 
                         semanticPauseMs
                     );
                 }
+                const charDelayMs = charDelayByIndex[idx] ?? 0;
+                if ((className === 'letter' || className === 'digit') && charDelayMs !== expectedLetterDelay) {
+                    console.log(
+                        '[Welcome2Cadence] VIOLATION letter charDelayMs=%d expected=%d at index=%d char=%s',
+                        charDelayMs,
+                        expectedLetterDelay,
+                        idx,
+                        JSON.stringify(renderChars[idx])
+                    );
+                }
                 timingSample.push({
                     charIndex: idx,
                     char: renderChars[idx],
                     class: className,
                     deltaMs: charDeltaByIndex[idx] ?? 0,
-                    charDelayMs: charDelayByIndex[idx] ?? 0,
+                    charDelayMs,
                     semanticPauseMs,
                     pauseReason: event?.pauseReason ?? 'base',
                     semanticCategory: semanticCategoryByIndex[idx] ?? 'none',
@@ -648,12 +666,22 @@ export function buildWelcome2Timeline(rawText: string, cadence: CadenceConfig = 
                         semanticPauseMs
                     );
                 }
+                const charDelayMs = charDelayByIndex[idx] ?? 0;
+                if ((className === 'letter' || className === 'digit') && charDelayMs !== expectedLetterDelay) {
+                    console.log(
+                        '[Welcome2Cadence] VIOLATION letter charDelayMs=%d expected=%d at index=%d char=%s',
+                        charDelayMs,
+                        expectedLetterDelay,
+                        idx,
+                        JSON.stringify(renderChars[idx])
+                    );
+                }
                 punctuationSample.push({
                     charIndex: idx,
                     char: renderChars[idx],
                     class: className,
                     deltaMs: charDeltaByIndex[idx] ?? 0,
-                    charDelayMs: charDelayByIndex[idx] ?? 0,
+                    charDelayMs,
                     semanticPauseMs,
                     pauseReason: event?.pauseReason ?? 'base',
                     semanticCategory: semanticCategoryByIndex[idx] ?? 'none',
@@ -668,6 +696,7 @@ export function buildWelcome2Timeline(rawText: string, cadence: CadenceConfig = 
         const heavyWordBoundarySemantic: number[] = [];
         const landingBoundarySemantic: number[] = [];
         const punctuationTotalPauseNoMarker: number[] = [];
+        const letterDigitCharDelays: number[] = [];
 
         events.forEach((event) => {
             const semanticMs = semanticPauseByIndex[event.charIndex] ?? 0;
@@ -675,6 +704,9 @@ export function buildWelcome2Timeline(rawText: string, cadence: CadenceConfig = 
             if (semanticCategory === 'normalWord') normalWordBoundarySemantic.push(semanticMs);
             if (semanticCategory === 'heavyWord') heavyWordBoundarySemantic.push(semanticMs);
             if (semanticCategory === 'landing') landingBoundarySemantic.push(semanticMs);
+            if (event.class === 'letter' || event.class === 'digit') {
+                letterDigitCharDelays.push(charDelayByIndex[event.charIndex] ?? 0);
+            }
             if (
                 event.class === 'punct' &&
                 (event.char === '.' || event.char === '?' || event.char === '!') &&
@@ -688,6 +720,11 @@ export function buildWelcome2Timeline(rawText: string, cadence: CadenceConfig = 
         console.log('[Welcome2Cadence] boundary stats heavyWord=%o', summarizeMs(heavyWordBoundarySemantic));
         console.log('[Welcome2Cadence] boundary stats landing=%o', summarizeMs(landingBoundarySemantic));
         console.log('[Welcome2Cadence] punctuation total pause (no marker)=%o', summarizeMs(punctuationTotalPauseNoMarker));
+        console.log(
+            '[Welcome2Cadence] letter/digit charDelay expected=%d stats=%o',
+            expectedLetterDelay,
+            summarizeMs(letterDigitCharDelays)
+        );
     }
 
     return {

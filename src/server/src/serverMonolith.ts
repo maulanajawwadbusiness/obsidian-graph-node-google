@@ -938,6 +938,53 @@ app.post("/api/profile/update", requireAuth, async (req, res) => {
   }
 });
 
+app.post("/api/feedback", requireAuth, async (req, res) => {
+  const user = res.locals.user as AuthContext;
+  const category = normalizeFeedbackCategory(req.body?.category);
+  const message = normalizeFeedbackMessage(req.body?.message);
+  const context = normalizeFeedbackContext(req.body?.context);
+
+  if (category === null) {
+    res.status(400).json({ ok: false, error: `category max length is ${FEEDBACK_CATEGORY_MAX_CHARS}` });
+    return;
+  }
+  if (message === null) {
+    res.status(400).json({ ok: false, error: `message is required and max length is ${FEEDBACK_MESSAGE_MAX_CHARS}` });
+    return;
+  }
+  if (context === null) {
+    res.status(400).json({ ok: false, error: "context must be an object and within size limit" });
+    return;
+  }
+
+  try {
+    const pool = await getPool();
+    const serializedContext = JSON.stringify(context.value);
+    const result = await pool.query(
+      `insert into feedback_messages (user_id, category, message, context_json, status)
+       values ($1, $2, $3, $4::jsonb, 'new')
+       returning id`,
+      [user.id, category, message, serializedContext]
+    );
+    const id = Number(result.rows[0]?.id);
+    if (!Number.isFinite(id) || id <= 0) {
+      res.status(500).json({ ok: false, error: "failed to submit feedback" });
+      return;
+    }
+    console.log(
+      "[feedback] submit ok user=%s id=%s cat=%s len=%s ctxBytes=%s",
+      user.id,
+      id,
+      category,
+      message.length,
+      context.bytes
+    );
+    res.json({ ok: true, id });
+  } catch {
+    res.status(500).json({ ok: false, error: "failed to submit feedback" });
+  }
+});
+
 app.get("/api/saved-interfaces", requireAuth, async (_req, res) => {
   const user = res.locals.user as AuthContext;
   try {

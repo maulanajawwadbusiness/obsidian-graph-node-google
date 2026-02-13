@@ -18,7 +18,9 @@ import {
     LAYER_ONBOARDING_FULLSCREEN_BUTTON,
 } from '../ui/layers';
 import {
+    type FeedbackAdminItem,
     submitFeedback,
+    listFeedbackAdmin,
     deleteSavedInterface as deleteSavedInterfaceRemote,
     listSavedInterfaces,
     updateProfile,
@@ -79,6 +81,7 @@ const PROFILE_USERNAME_MAX = 32;
 const PROFILE_USERNAME_REGEX = /^[A-Za-z0-9_.-]+$/;
 const FEEDBACK_MESSAGE_MAX_CHARS = 8000;
 const FEEDBACK_SUCCESS_CLOSE_DELAY_MS = 320;
+const FEEDBACK_ADMIN_PAGE_LIMIT = 50;
 const hydratedStorageKeysSession = new Set<string>();
 const backfilledStorageKeysSession = new Set<string>();
 let lastIdentityKeySession: string | null = null;
@@ -280,6 +283,13 @@ export const AppShell: React.FC = () => {
     const [isFeedbackSubmitting, setIsFeedbackSubmitting] = React.useState(false);
     const [feedbackSubmitError, setFeedbackSubmitError] = React.useState<string | null>(null);
     const [feedbackSubmitOk, setFeedbackSubmitOk] = React.useState(false);
+    const [isFeedbackAdmin, setIsFeedbackAdmin] = React.useState(false);
+    const [adminLoadState, setAdminLoadState] = React.useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
+    const [adminError, setAdminError] = React.useState<string | null>(null);
+    const [adminItems, setAdminItems] = React.useState<FeedbackAdminItem[]>([]);
+    const [adminSelectedId, setAdminSelectedId] = React.useState<number | null>(null);
+    const [adminCursorBeforeId, setAdminCursorBeforeId] = React.useState<number | null>(null);
+    const [adminHasMore, setAdminHasMore] = React.useState(false);
     const [pendingDeleteId, setPendingDeleteId] = React.useState<string | null>(null);
     const [pendingDeleteTitle, setPendingDeleteTitle] = React.useState<string | null>(null);
     const [isLogoutConfirmOpen, setIsLogoutConfirmOpen] = React.useState(false);
@@ -314,6 +324,8 @@ export const AppShell: React.FC = () => {
     const remoteOutboxStorageKeyRef = React.useRef<string>('');
     const remoteOutboxDrainTimerRef = React.useRef<number | null>(null);
     const feedbackAutoCloseTimerRef = React.useRef<number | null>(null);
+    const feedbackAdminFetchEpochRef = React.useRef(0);
+    const feedbackAdminFetchRequestedEpochRef = React.useRef<number | null>(null);
     const remoteOutboxDrainingRef = React.useRef(false);
     const remoteOutboxPausedUntilRef = React.useRef<number>(0);
     const authStorageId = React.useMemo(() => resolveAuthStorageId(user), [user]);
@@ -777,6 +789,10 @@ export const AppShell: React.FC = () => {
     const canSubmitFeedback = !isFeedbackSubmitting
         && feedbackDraftMessage.trim().length > 0
         && feedbackDraftMessage.trim().length <= FEEDBACK_MESSAGE_MAX_CHARS;
+    const isAdminFetchForbidden = React.useCallback((error: unknown): boolean => {
+        const text = String(error ?? '');
+        return text.includes('403') || text.includes('401');
+    }, []);
     const closeProfileOverlay = React.useCallback(() => {
         if (profileSaving) return;
         setIsProfileOpen(false);
@@ -992,6 +1008,53 @@ export const AppShell: React.FC = () => {
     }, [closeFeedbackModal, isFeedbackOpen, sidebarDisabled]);
 
     React.useEffect(() => {
+        if (!isFeedbackOpen || !isLoggedIn) return;
+        feedbackAdminFetchEpochRef.current += 1;
+        const openEpoch = feedbackAdminFetchEpochRef.current;
+        if (feedbackAdminFetchRequestedEpochRef.current === openEpoch) return;
+        feedbackAdminFetchRequestedEpochRef.current = openEpoch;
+        let active = true;
+        setAdminLoadState('loading');
+        setAdminError(null);
+        void listFeedbackAdmin({ limit: FEEDBACK_ADMIN_PAGE_LIMIT })
+            .then((result) => {
+                if (!active) return;
+                if (feedbackAdminFetchEpochRef.current !== openEpoch) return;
+                const items = Array.isArray(result.items) ? result.items : [];
+                setIsFeedbackAdmin(true);
+                setAdminLoadState('ready');
+                setAdminItems(items);
+                const firstItem = items[0] ?? null;
+                setAdminSelectedId(firstItem ? firstItem.id : null);
+                const nextCursor = typeof result.nextCursor === 'number' && Number.isFinite(result.nextCursor)
+                    ? result.nextCursor
+                    : null;
+                setAdminCursorBeforeId(nextCursor);
+                setAdminHasMore(nextCursor !== null);
+            })
+            .catch((error) => {
+                if (!active) return;
+                if (feedbackAdminFetchEpochRef.current !== openEpoch) return;
+                if (isAdminFetchForbidden(error)) {
+                    setIsFeedbackAdmin(false);
+                    setAdminLoadState('idle');
+                    setAdminError(null);
+                    setAdminItems([]);
+                    setAdminSelectedId(null);
+                    setAdminCursorBeforeId(null);
+                    setAdminHasMore(false);
+                    return;
+                }
+                setIsFeedbackAdmin(false);
+                setAdminLoadState('error');
+                setAdminError('Failed to load admin inbox.');
+            });
+        return () => {
+            active = false;
+        };
+    }, [isAdminFetchForbidden, isFeedbackOpen, isLoggedIn]);
+
+    React.useEffect(() => {
         if (!isFeedbackOpen) return;
         const onKeyDown = (event: KeyboardEvent) => {
             if (event.key !== 'Escape') return;
@@ -1035,6 +1098,17 @@ export const AppShell: React.FC = () => {
             scheduleRemoteOutboxDrain(-1);
         };
     }, [scheduleRemoteOutboxDrain]);
+    React.useEffect(() => {
+        if (isFeedbackOpen) return;
+        feedbackAdminFetchRequestedEpochRef.current = null;
+        setAdminLoadState('idle');
+        setAdminError(null);
+        setAdminItems([]);
+        setAdminSelectedId(null);
+        setAdminCursorBeforeId(null);
+        setAdminHasMore(false);
+    }, [isFeedbackOpen]);
+
     React.useEffect(() => {
         return () => {
             if (feedbackAutoCloseTimerRef.current !== null) {
@@ -1643,6 +1717,13 @@ export const AppShell: React.FC = () => {
                         data-feedback-submitting={isFeedbackSubmitting ? '1' : undefined}
                         data-feedback-submit-error={feedbackSubmitError ? '1' : undefined}
                         data-feedback-submit-ok={feedbackSubmitOk ? '1' : undefined}
+                        data-feedback-admin={isFeedbackAdmin ? '1' : undefined}
+                        data-feedback-admin-state={adminLoadState}
+                        data-feedback-admin-error={adminError ? '1' : undefined}
+                        data-feedback-admin-items={String(adminItems.length)}
+                        data-feedback-admin-selected={adminSelectedId === null ? 'none' : String(adminSelectedId)}
+                        data-feedback-admin-cursor={adminCursorBeforeId === null ? 'none' : String(adminCursorBeforeId)}
+                        data-feedback-admin-has-more={adminHasMore ? '1' : '0'}
                         style={FEEDBACK_OVERLAY_CARD_STYLE}
                     >
                         <div {...hardShieldInput} style={FEEDBACK_TITLE_STYLE}>Suggestion and Feedback</div>

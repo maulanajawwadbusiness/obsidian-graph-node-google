@@ -18,7 +18,8 @@
     "test:llm-contracts": "node scripts/test-llm-contracts.mjs",
     "test:midtrans-client": "ts-node src/midtrans/client.selftest.ts",
     "test:midtrans-prod-charge": "ts-node src/midtrans/smoke.charge.prod.ts",
-    "test:midtrans-prod-gopayqris": "ts-node src/midtrans/smoke.gopayqris.prod.ts"
+    "test:midtrans-prod-gopayqris": "ts-node src/midtrans/smoke.gopayqris.prod.ts",
+    "check:line-cap": "node scripts/check-ts-line-cap.mjs"
   },
   "keywords": [],
   "author": "",

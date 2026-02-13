@@ -777,6 +777,15 @@ export const AppShell: React.FC = () => {
         setProfileError(null);
         setIsProfileOpen(true);
     }, [closeDeleteConfirm, closeSearchInterfaces, isLoggedIn, isSearchInterfacesOpen, pendingDeleteId, sidebarDisabled, user]);
+    const openFeedbackModal = React.useCallback(() => {
+        if (sidebarDisabled) {
+            if (import.meta.env.DEV) {
+                console.log('[appshell] feedback_open_blocked reason=sidebar_disabled');
+            }
+            return;
+        }
+        console.log('[appshell] feedback_open_requested');
+    }, [sidebarDisabled]);
     const onProfileSave = React.useCallback(async () => {
         if (profileSaving) return;
         const displayName = profileDraftDisplayName.replace(/\s+/g, ' ').trim();
@@ -1335,6 +1344,7 @@ export const AppShell: React.FC = () => {
                     accountImageUrl={sidebarAccountImageUrl}
                     onOpenProfile={isLoggedIn ? openProfileOverlay : undefined}
                     onRequestLogout={isLoggedIn ? openLogoutConfirm : undefined}
+                    onOpenFeedback={isLoggedIn ? openFeedbackModal : undefined}
                 />
             ) : null}
             <div

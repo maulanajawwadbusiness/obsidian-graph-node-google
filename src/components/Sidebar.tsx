@@ -108,6 +108,7 @@ type SidebarProps = {
     accountImageUrl?: string;
     onOpenProfile?: () => void;
     onRequestLogout?: () => void;
+    onOpenFeedback?: () => void;
 };
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -127,6 +128,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     accountImageUrl,
     onOpenProfile,
     onRequestLogout,
+    onOpenFeedback,
 }) => {
     const [logoHover, setLogoHover] = React.useState(false);
     const [createNewHover, setCreateNewHover] = React.useState(false);
@@ -156,9 +158,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
     const [moreMenuPosition, setMoreMenuPosition] = React.useState<{ left: number; top: number } | null>(null);
     const [moreMenuPlacement, setMoreMenuPlacement] = React.useState<'up' | 'down' | null>(null);
     const [moreMenuHoverKey, setMoreMenuHoverKey] = React.useState<MoreMenuItemKey | null>(null);
+    const [moreMenuMeasuredWidth, setMoreMenuMeasuredWidth] = React.useState<number | null>(null);
     const renameInputRef = React.useRef<HTMLInputElement | null>(null);
     const avatarTriggerRef = React.useRef<HTMLDivElement | null>(null);
     const moreTriggerRef = React.useRef<HTMLButtonElement | null>(null);
+    const moreMenuRef = React.useRef<HTMLDivElement | null>(null);
     const menuItemPreview = React.useMemo<Array<{ key: RowMenuItemKey; icon: string; label: string; color: string }>>(
         () => [
             { key: 'rename', icon: renameIcon, label: 'Rename', color: SIDEBAR_TEXT_COLOR },
@@ -231,7 +235,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     const computeMoreMenuPlacement = React.useCallback((rect: DOMRect) => {
         const gap = 8;
         const viewportPadding = 8;
-        const menuWidth = 208;
+        const menuWidth = moreMenuMeasuredWidth ?? 208;
         const menuHeight = 88;
         const preferredLeft = rect.left;
         const maxLeft = Math.max(viewportPadding, window.innerWidth - menuWidth - viewportPadding);
@@ -245,7 +249,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             top,
             placement: canOpenDown ? 'down' as const : 'up' as const,
         };
-    }, []);
+    }, [moreMenuMeasuredWidth]);
 
     const closeMoreMenu = React.useCallback(() => {
         setIsMoreMenuOpen(false);
@@ -253,6 +257,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         setMoreMenuPosition(null);
         setMoreMenuPlacement(null);
         setMoreMenuHoverKey(null);
+        setMoreMenuMeasuredWidth(null);
     }, []);
 
     const toggleMoreMenuFromTrigger = React.useCallback((trigger: HTMLElement) => {
@@ -439,6 +444,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
             window.removeEventListener('scroll', update, true);
         };
     }, [computeMoreMenuPlacement, isMoreMenuOpen, moreMenuAnchorRect]);
+
+    React.useEffect(() => {
+        if (!isMoreMenuOpen) return;
+        const id = window.requestAnimationFrame(() => {
+            const el = moreMenuRef.current;
+            if (!el) return;
+            const nextWidth = Math.ceil(el.getBoundingClientRect().width);
+            if (!Number.isFinite(nextWidth) || nextWidth <= 0) return;
+            setMoreMenuMeasuredWidth((curr) => (curr === nextWidth ? curr : nextWidth));
+        });
+        return () => window.cancelAnimationFrame(id);
+    }, [isMoreMenuOpen, moreMenuHoverKey]);
 
     React.useEffect(() => {
         if (!isAvatarMenuOpen) return;
@@ -982,6 +999,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
             {isMoreMenuOpen && moreMenuPosition ? (
                 <div
+                    ref={moreMenuRef}
                     data-more-menu="1"
                     style={{
                         ...MORE_MENU_POPUP_STYLE,
@@ -1004,8 +1022,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                             e.preventDefault();
                             e.stopPropagation();
                             closeMoreMenu();
-                            // TODO: implement Suggestion and Feedback UI flow.
-                            console.log('[sidebar] suggestion_feedback_clicked');
+                            onOpenFeedback?.();
                         }}
                         onWheelCapture={(e) => e.stopPropagation()}
                         onWheel={(e) => e.stopPropagation()}
@@ -1522,7 +1539,8 @@ const AVATAR_MENU_ACCOUNT_NAME_STYLE: React.CSSProperties = {
 
 const MORE_MENU_POPUP_STYLE: React.CSSProperties = {
     position: 'fixed',
-    width: '208px',
+    width: 'max-content',
+    maxWidth: 'calc(100vw - 16px)',
     padding: '6px',
     borderRadius: '10px',
     border: '1px solid rgba(255, 255, 255, 0.1)',

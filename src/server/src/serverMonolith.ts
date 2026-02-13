@@ -112,8 +112,12 @@ function requireFeedbackAdminOrSendForbidden(res: express.Response): AuthContext
     sendAdminForbidden(res);
     return null;
   }
-  return auth;
+  return auth ?? null;
 }
+
+// Keep a hard reference so root TypeScript build validates this seam before routes land.
+const FEEDBACK_ADMIN_GUARD_SEAM = requireFeedbackAdminOrSendForbidden;
+void FEEDBACK_ADMIN_GUARD_SEAM;
 
 const savedInterfacesJsonParser = express.json({ limit: SAVED_INTERFACE_JSON_LIMIT });
 const globalJsonParser = express.json({ limit: LLM_LIMITS.jsonBodyLimit });

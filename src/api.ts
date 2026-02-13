@@ -417,9 +417,14 @@ export async function listFeedbackAdmin(input?: ListFeedbackAdminInput): Promise
     throw new Error("listFeedbackAdmin failed: invalid response");
   }
 
-  const items = data.items
-    .map((raw) => toFeedbackAdminItem(raw))
-    .filter((item): item is FeedbackAdminItem => item !== null);
+  const items: FeedbackAdminItem[] = [];
+  for (let index = 0; index < data.items.length; index += 1) {
+    const parsed = toFeedbackAdminItem(data.items[index]);
+    if (!parsed) {
+      throw new Error(`listFeedbackAdmin failed: invalid item at index ${index}`);
+    }
+    items.push(parsed);
+  }
   const nextCursor = toOptionalFiniteNumber(data.nextCursor);
 
   return {

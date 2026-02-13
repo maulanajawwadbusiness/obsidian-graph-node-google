@@ -87,7 +87,7 @@ curl -i -X POST "$API_BASE/api/feedback" \
 
 ### Admin list feedback
 ```bash
-curl -i "$API_BASE/api/feedback?limit=50&beforeId=0" \
+curl -i "$API_BASE/api/feedback?limit=50&beforeId=123" \
   -b cookie.txt
 ```
 

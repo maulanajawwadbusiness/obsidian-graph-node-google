@@ -819,6 +819,8 @@ export const AppShell: React.FC = () => {
     const adminRefreshInbox = React.useCallback(async (input: { mode: 'hard' | 'soft' }) => {
         if (!isFeedbackOpenRef.current) return;
         if (!isFeedbackAdmin) return;
+        if (adminLoadingMore) return;
+        if (adminRefreshState === 'loading') return;
         if (adminRefreshInFlightRef.current) return;
         const openSession = feedbackOpenSessionRef.current;
         adminRefreshInFlightRef.current = true;
@@ -892,7 +894,7 @@ export const AppShell: React.FC = () => {
         } finally {
             adminRefreshInFlightRef.current = false;
         }
-    }, [adminStatusPendingById, isAdminFetchForbidden, isFeedbackAdmin]);
+    }, [adminLoadingMore, adminRefreshState, adminStatusPendingById, isAdminFetchForbidden, isFeedbackAdmin]);
     const scheduleAdminSoftRefresh = React.useCallback(() => {
         if (adminSoftRefreshTimerRef.current !== null) {
             window.clearTimeout(adminSoftRefreshTimerRef.current);
@@ -907,6 +909,7 @@ export const AppShell: React.FC = () => {
         if (!isFeedbackOpen) return;
         if (!isFeedbackAdmin) return;
         if (adminLoadingMore) return;
+        if (adminRefreshInFlightRef.current) return;
         if (!adminHasMore) return;
         if (adminCursorBeforeId === null) return;
         const openSession = feedbackOpenSessionRef.current;

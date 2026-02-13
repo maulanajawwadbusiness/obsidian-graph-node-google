@@ -222,6 +222,25 @@ type SubmitFeedbackResponse = {
   id?: unknown;
 };
 
+type FeedbackAdminItemRaw = {
+  id?: unknown;
+  userId?: unknown;
+  user_id?: unknown;
+  category?: unknown;
+  message?: unknown;
+  context?: unknown;
+  context_json?: unknown;
+  status?: unknown;
+  createdAt?: unknown;
+  created_at?: unknown;
+};
+
+type ListFeedbackAdminResponse = {
+  ok?: boolean;
+  items?: FeedbackAdminItemRaw[];
+  nextCursor?: unknown;
+};
+
 type SavedInterfacesListItem = {
   client_interface_id?: unknown;
   title?: unknown;
@@ -290,6 +309,41 @@ function toOptionalString(value: unknown): string | undefined {
   return trimmed ? trimmed : undefined;
 }
 
+function toOptionalFiniteNumber(value: unknown): number | undefined {
+  if (typeof value !== "number" || !Number.isFinite(value)) return undefined;
+  return value;
+}
+
+function toFeedbackStatus(value: unknown): FeedbackStatus {
+  if (value === "new" || value === "triaged" || value === "done") return value;
+  return "new";
+}
+
+function toFeedbackAdminItem(raw: FeedbackAdminItemRaw): FeedbackAdminItem | null {
+  const id = Number(raw.id);
+  const userId = Number(raw.userId ?? raw.user_id);
+  if (!Number.isFinite(id) || !Number.isFinite(userId)) return null;
+
+  const category = typeof raw.category === "string" ? raw.category : "";
+  const message = typeof raw.message === "string" ? raw.message : "";
+  const contextValue = raw.context ?? raw.context_json;
+  const context = contextValue && typeof contextValue === "object" && !Array.isArray(contextValue)
+    ? contextValue as Record<string, unknown>
+    : {};
+  const createdAtValue = raw.createdAt ?? raw.created_at;
+  const createdAt = typeof createdAtValue === "string" ? createdAtValue : "";
+
+  return {
+    id,
+    userId,
+    category,
+    message,
+    context,
+    status: toFeedbackStatus(raw.status),
+    createdAt,
+  };
+}
+
 export async function updateProfile(input: {
   displayName: string;
   username: string;
@@ -334,6 +388,39 @@ export async function submitFeedback(input: SubmitFeedbackInput): Promise<Submit
   return {
     ok: true,
     id: data.id,
+  };
+}
+
+export async function listFeedbackAdmin(input?: ListFeedbackAdminInput): Promise<ListFeedbackAdminResult> {
+  const params = new URLSearchParams();
+  if (typeof input?.limit === "number" && Number.isFinite(input.limit)) {
+    params.set("limit", String(input.limit));
+  }
+  if (typeof input?.beforeId === "number" && Number.isFinite(input.beforeId)) {
+    params.set("beforeId", String(input.beforeId));
+  }
+  const query = params.toString();
+  const path = query ? `/api/feedback?${query}` : "/api/feedback";
+
+  const result = await apiGet(path);
+  if (!result.ok) {
+    throw new Error(buildApiErrorMessage("listFeedbackAdmin", result));
+  }
+
+  const data = (result.data || {}) as ListFeedbackAdminResponse;
+  if (!data.ok || !Array.isArray(data.items)) {
+    throw new Error("listFeedbackAdmin failed: invalid response");
+  }
+
+  const items = data.items
+    .map((raw) => toFeedbackAdminItem(raw))
+    .filter((item): item is FeedbackAdminItem => item !== null);
+  const nextCursor = toOptionalFiniteNumber(data.nextCursor);
+
+  return {
+    ok: true,
+    items,
+    ...(nextCursor !== undefined ? { nextCursor } : {}),
   };
 }
 

@@ -329,6 +329,9 @@ export const AppShell: React.FC = () => {
     const remoteOutboxStorageKeyRef = React.useRef<string>('');
     const remoteOutboxDrainTimerRef = React.useRef<number | null>(null);
     const feedbackAutoCloseTimerRef = React.useRef<number | null>(null);
+    const feedbackOpenSessionRef = React.useRef(0);
+    const wasFeedbackOpenRef = React.useRef(false);
+    const isFeedbackOpenRef = React.useRef(false);
     const feedbackAdminFetchEpochRef = React.useRef(0);
     const feedbackAdminFetchRequestedEpochRef = React.useRef<number | null>(null);
     const remoteOutboxDrainingRef = React.useRef(false);
@@ -808,6 +811,7 @@ export const AppShell: React.FC = () => {
         if (adminLoadingMore) return;
         if (!adminHasMore) return;
         if (adminCursorBeforeId === null) return;
+        const openSession = feedbackOpenSessionRef.current;
         setAdminLoadingMore(true);
         setAdminError(null);
         try {
@@ -815,6 +819,8 @@ export const AppShell: React.FC = () => {
                 limit: FEEDBACK_ADMIN_PAGE_LIMIT,
                 beforeId: adminCursorBeforeId,
             });
+            if (!isFeedbackOpenRef.current) return;
+            if (feedbackOpenSessionRef.current !== openSession) return;
             const incoming = Array.isArray(result.items) ? result.items : [];
             setAdminItems((curr) => {
                 if (incoming.length === 0) return curr;
@@ -1079,18 +1085,33 @@ export const AppShell: React.FC = () => {
     }, [closeFeedbackModal, isFeedbackOpen, sidebarDisabled]);
 
     React.useEffect(() => {
+        isFeedbackOpenRef.current = isFeedbackOpen;
+    }, [isFeedbackOpen]);
+
+    React.useEffect(() => {
+        if (isFeedbackOpen && !wasFeedbackOpenRef.current) {
+            feedbackOpenSessionRef.current += 1;
+            feedbackAdminFetchRequestedEpochRef.current = null;
+        }
+        wasFeedbackOpenRef.current = isFeedbackOpen;
+    }, [isFeedbackOpen]);
+
+    React.useEffect(() => {
         if (!isFeedbackOpen || !isLoggedIn) return;
-        feedbackAdminFetchEpochRef.current += 1;
-        const openEpoch = feedbackAdminFetchEpochRef.current;
+        const openEpoch = feedbackOpenSessionRef.current;
         if (feedbackAdminFetchRequestedEpochRef.current === openEpoch) return;
         feedbackAdminFetchRequestedEpochRef.current = openEpoch;
+        feedbackAdminFetchEpochRef.current += 1;
+        const fetchEpoch = feedbackAdminFetchEpochRef.current;
         let active = true;
         setAdminLoadState('loading');
         setAdminError(null);
         void listFeedbackAdmin({ limit: FEEDBACK_ADMIN_PAGE_LIMIT })
             .then((result) => {
                 if (!active) return;
-                if (feedbackAdminFetchEpochRef.current !== openEpoch) return;
+                if (!isFeedbackOpenRef.current) return;
+                if (feedbackOpenSessionRef.current !== openEpoch) return;
+                if (feedbackAdminFetchEpochRef.current !== fetchEpoch) return;
                 const items = Array.isArray(result.items) ? result.items : [];
                 setIsFeedbackAdmin(true);
                 setAdminLoadState('ready');
@@ -1106,7 +1127,9 @@ export const AppShell: React.FC = () => {
             })
             .catch((error) => {
                 if (!active) return;
-                if (feedbackAdminFetchEpochRef.current !== openEpoch) return;
+                if (!isFeedbackOpenRef.current) return;
+                if (feedbackOpenSessionRef.current !== openEpoch) return;
+                if (feedbackAdminFetchEpochRef.current !== fetchEpoch) return;
                 if (isAdminFetchForbidden(error)) {
                     setIsFeedbackAdmin(false);
                     setAdminLoadState('idle');
@@ -1912,7 +1935,7 @@ export const AppShell: React.FC = () => {
                                             <div style={FEEDBACK_ADMIN_DETAIL_TITLE_STYLE}>Message</div>
                                             <div style={FEEDBACK_ADMIN_MESSAGE_STYLE}>{selectedAdminItem.message}</div>
                                             <div style={FEEDBACK_ADMIN_DETAIL_TITLE_STYLE}>Context</div>
-                                            <pre style={FEEDBACK_ADMIN_CONTEXT_STYLE}>
+                                            <pre {...hardShieldInput} style={FEEDBACK_ADMIN_CONTEXT_STYLE}>
                                                 {JSON.stringify(selectedAdminItem.context ?? {}, null, 2)}
                                             </pre>
                                         </div>

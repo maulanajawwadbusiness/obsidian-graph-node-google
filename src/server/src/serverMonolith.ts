@@ -22,6 +22,8 @@ import { normalizeUsage, type ProviderUsage } from "./llm/usage/providerUsage";
 import { MARKUP_MULTIPLIER, MODEL_PRICE_USD_PER_MTOKEN_COMBINED } from "./pricing/pricingConfig";
 import { estimateIdrCost } from "./pricing/pricingCalculator";
 import { applyTopupFromMidtrans, chargeForLlm, getBalance } from "./rupiah/rupiahService";
+import { isAdminEmail, parseAdminAllowlist, readAdminAllowlistRaw } from "./lib/adminAllowlist";
+import { registerFeedbackRoutes } from "./routes/feedbackRoutes";
 
 type SessionUser = {
   sub: string;
@@ -46,6 +48,12 @@ type AuthContext = {
 const app = express();
 app.set("trust proxy", 1);
 const port = Number(process.env.PORT || 8080);
+const serverEntrypoint = process.argv[1] || __filename;
+const feedbackRouteRegistry = {
+  submit: false,
+  list: false,
+  updateStatus: false,
+};
 
 const COOKIE_NAME = process.env.SESSION_COOKIE_NAME || "arnvoid_session";
 const SESSION_TTL_MS = Number(process.env.SESSION_TTL_MS || 1000 * 60 * 60 * 24 * 7);
@@ -75,35 +83,11 @@ const allowedOrigins = (process.env.ALLOWED_ORIGINS ?? "")
   .map((value) => value.trim())
   .filter(Boolean);
 
-function readAdminAllowlistRaw(): string {
-  const primary = process.env.ADMIN_EMAIL_ALLOWLIST;
-  if (typeof primary === "string" && primary.trim().length > 0) {
-    return primary;
-  }
-  const fallback = process.env.ADMIN_EMAILS;
-  if (typeof fallback === "string" && fallback.trim().length > 0) {
-    return fallback;
-  }
-  return "";
-}
-
-function parseAdminAllowlist(raw: string): Set<string> {
-  return new Set(
-    raw
-      .split(",")
-      .map((value) => value.trim().toLowerCase())
-      .filter((value) => value.length > 0)
-  );
-}
-
-const ADMIN_EMAIL_ALLOWLIST_SET = parseAdminAllowlist(readAdminAllowlistRaw());
+const ADMIN_EMAIL_ALLOWLIST_SET = parseAdminAllowlist(readAdminAllowlistRaw(process.env));
 
 function isAdminUser(auth: AuthContext | undefined | null): boolean {
   if (!auth) return false;
-  if (typeof auth.email !== "string") return false;
-  const normalized = auth.email.trim().toLowerCase();
-  if (!normalized) return false;
-  return ADMIN_EMAIL_ALLOWLIST_SET.has(normalized);
+  return isAdminEmail(ADMIN_EMAIL_ALLOWLIST_SET, auth.email);
 }
 
 function sendAdminForbidden(res: express.Response): void {
@@ -652,14 +636,14 @@ app.post("/api/payments/webhook", async (req, res) => {
 app.use(cors(corsOptions));
 app.options(/.*/, cors(corsOptions));
 
-app.get("/health", async (_req, res) => {
-  try {
-    const pool = await getPool();
-    await pool.query("SELECT 1");
-    res.json({ ok: true });
-  } catch (e) {
-    res.status(500).json({ ok: false, error: String(e) });
-  }
+app.get("/health", (_req, res) => {
+  const hasDatabaseUrl = (process.env.DATABASE_URL || "").trim().length > 0;
+  const hasConnectorEnv = (process.env.INSTANCE_CONNECTION_NAME || "").trim().length > 0;
+  res.status(200).json({
+    ok: true,
+    server: "up",
+    dbConfig: hasDatabaseUrl ? "database_url" : hasConnectorEnv ? "cloud_sql_connector" : "missing",
+  });
 });
 
 app.post("/auth/google", async (req, res) => {
@@ -938,129 +922,16 @@ app.post("/api/profile/update", requireAuth, async (req, res) => {
   }
 });
 
-app.post("/api/feedback", requireAuth, async (req, res) => {
-  const user = res.locals.user as AuthContext;
-  const category = normalizeFeedbackCategory(req.body?.category);
-  const message = normalizeFeedbackMessage(req.body?.message);
-  const context = normalizeFeedbackContext(req.body?.context);
-
-  if (category === null) {
-    res.status(400).json({ ok: false, error: `category max length is ${FEEDBACK_CATEGORY_MAX_CHARS}` });
-    return;
-  }
-  if (message === null) {
-    res.status(400).json({ ok: false, error: `message is required and max length is ${FEEDBACK_MESSAGE_MAX_CHARS}` });
-    return;
-  }
-  if (context === null) {
-    res.status(400).json({ ok: false, error: "context must be an object and within size limit" });
-    return;
-  }
-
-  try {
-    const pool = await getPool();
-    const serializedContext = JSON.stringify(context.value);
-    const result = await pool.query(
-      `insert into feedback_messages (user_id, category, message, context_json, status)
-       values ($1, $2, $3, $4::jsonb, 'new')
-       returning id`,
-      [user.id, category, message, serializedContext]
-    );
-    const id = Number(result.rows[0]?.id);
-    if (!Number.isFinite(id) || id <= 0) {
-      res.status(500).json({ ok: false, error: "failed to submit feedback" });
-      return;
-    }
-    console.log(
-      "[feedback] submit ok user=%s id=%s cat=%s len=%s ctxBytes=%s",
-      user.id,
-      id,
-      category,
-      message.length,
-      context.bytes
-    );
-    res.json({ ok: true, id });
-  } catch {
-    res.status(500).json({ ok: false, error: "failed to submit feedback" });
-  }
+const feedbackRouteRegistration = registerFeedbackRoutes(app, {
+  requireAuth,
+  getPool,
+  adminAllowlist: ADMIN_EMAIL_ALLOWLIST_SET,
+  categoryMaxChars: FEEDBACK_CATEGORY_MAX_CHARS,
+  messageMaxChars: FEEDBACK_MESSAGE_MAX_CHARS,
 });
-
-app.get("/api/feedback", requireAuth, async (req, res) => {
-  const admin = requireFeedbackAdminOrSendForbidden(res);
-  if (!admin) return;
-
-  const limit = parseFeedbackListLimit(req.query?.limit);
-  const beforeIdRaw = req.query?.beforeId;
-  const beforeId = parseFeedbackBeforeId(beforeIdRaw);
-  if (beforeId === null && beforeIdRaw !== undefined && beforeIdRaw !== null && beforeIdRaw !== "") {
-    res.status(400).json({ ok: false, error: "beforeId must be a positive integer" });
-    return;
-  }
-
-  try {
-    const pool = await getPool();
-    const result = await pool.query(
-      `select id, user_id, category, message, context_json, status, created_at
-         from feedback_messages
-        where ($2::bigint is null or id < $2)
-        order by id desc
-        limit $1`,
-      [limit, beforeId]
-    );
-
-    const items = result.rows.map((row) => ({
-      id: Number(row.id),
-      userId: Number(row.user_id),
-      category: String(row.category ?? ""),
-      message: String(row.message ?? ""),
-      context: row.context_json ?? {},
-      status: String(row.status ?? "new"),
-      createdAt: toIsoString(row.created_at),
-    }));
-    const nextCursor = items.length === limit ? items[items.length - 1]?.id : undefined;
-
-    console.log("[feedback] admin_list ok n=%s beforeId=%s", items.length, beforeId ?? "null");
-    res.json({
-      ok: true,
-      items,
-      ...(typeof nextCursor === "number" ? { nextCursor } : {}),
-    });
-  } catch {
-    res.status(500).json({ ok: false, error: "failed to list feedback" });
-  }
-});
-
-app.post("/api/feedback/update-status", requireAuth, async (req, res) => {
-  const admin = requireFeedbackAdminOrSendForbidden(res);
-  if (!admin) return;
-
-  const idRaw = req.body?.id;
-  const id = typeof idRaw === "string" ? Number(idRaw) : Number(idRaw);
-  if (!Number.isFinite(id) || !Number.isInteger(id) || id <= 0) {
-    res.status(400).json({ ok: false, error: "id must be a positive integer" });
-    return;
-  }
-  const status = normalizeFeedbackStatus(req.body?.status);
-  if (!status) {
-    res.status(400).json({ ok: false, error: "status must be one of new, triaged, done" });
-    return;
-  }
-
-  try {
-    const pool = await getPool();
-    const result = await pool.query(
-      `update feedback_messages
-          set status = $2
-        where id = $1`,
-      [id, status]
-    );
-    const updated = (result.rowCount || 0) === 1;
-    console.log("[feedback] admin_status ok id=%s status=%s updated=%s", id, status, updated);
-    res.json({ ok: true, updated });
-  } catch {
-    res.status(500).json({ ok: false, error: "failed to update feedback status" });
-  }
-});
+feedbackRouteRegistry.submit = feedbackRouteRegistration.submit;
+feedbackRouteRegistry.list = feedbackRouteRegistration.list;
+feedbackRouteRegistry.updateStatus = feedbackRouteRegistration.updateStatus;
 
 app.get("/api/saved-interfaces", requireAuth, async (_req, res) => {
   const user = res.locals.user as AuthContext;
@@ -2851,6 +2722,15 @@ app.post("/api/llm/chat", requireAuth, async (req, res) => {
 
 async function startServer() {
   const allowDevBootWithoutDb = !isProd() && process.env.ALLOW_DEV_START_WITHOUT_DB !== "0";
+  const feedbackRoutesReady =
+    feedbackRouteRegistry.submit && feedbackRouteRegistry.list && feedbackRouteRegistry.updateStatus;
+  console.log(`[server-boot] entrypoint=${serverEntrypoint} port=${port}`);
+  console.log(`[server-boot] routes registered: feedback=${feedbackRoutesReady ? "yes" : "no"}`);
+  if (!feedbackRoutesReady) {
+    console.error("[server-boot] fatal: feedback routes are not fully registered");
+    process.exit(1);
+    return;
+  }
   try {
     const schema = await assertAuthSchemaReady();
     profileColumnsAvailable = await detectProfileColumnsAvailability();
@@ -2864,12 +2744,14 @@ async function startServer() {
     });
   } catch (error) {
     if (!allowDevBootWithoutDb) {
+      console.error(`[server-boot] db bootstrap failed: mode=fatal err=${String(error)}`);
       console.error(`[auth-schema] fatal startup failure: ${String(error)}`);
       process.exit(1);
       return;
     }
 
     profileColumnsAvailable = false;
+    console.warn(`[server-boot] db bootstrap failed: mode=degraded err=${String(error)}`);
     console.warn(`[auth-schema] startup degraded mode enabled: ${String(error)}`);
     console.warn("[auth-schema] continuing boot in dev without DB readiness checks");
     console.log(`[admin] allowlist loaded count=${ADMIN_EMAIL_ALLOWLIST_SET.size}`);

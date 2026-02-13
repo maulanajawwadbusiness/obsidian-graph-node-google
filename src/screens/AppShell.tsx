@@ -860,12 +860,6 @@ export const AppShell: React.FC = () => {
                     });
                     return [...prepended, ...mergedExisting];
                 });
-                setAdminSelectedId((currSelected) => {
-                    if (currSelected === null) return incoming[0]?.id ?? null;
-                    const hasSelected = incoming.some((item) => item.id === currSelected);
-                    if (hasSelected) return currSelected;
-                    return currSelected;
-                });
             }
             setAdminCursorBeforeId(nextCursor);
             setAdminHasMore(nextCursor !== null);
@@ -1272,6 +1266,24 @@ export const AppShell: React.FC = () => {
         if (!isAdminInboxStale()) return;
         void adminRefreshInbox({ mode: 'soft' });
     }, [adminItems.length, adminLoadState, adminRefreshInbox, feedbackModalView, isAdminInboxStale, isFeedbackAdmin, isFeedbackOpen]);
+
+    React.useEffect(() => {
+        if (!isFeedbackAdmin) return;
+        if (adminItems.length === 0) {
+            if (adminSelectedId !== null) {
+                setAdminSelectedId(null);
+            }
+            return;
+        }
+        if (adminSelectedId === null) {
+            setAdminSelectedId(adminItems[0].id);
+            return;
+        }
+        const stillExists = adminItems.some((item) => item.id === adminSelectedId);
+        if (!stillExists) {
+            setAdminSelectedId(adminItems[0].id);
+        }
+    }, [adminItems, adminSelectedId, isFeedbackAdmin]);
 
     React.useEffect(() => {
         if (!isFeedbackOpen) return;

@@ -93,6 +93,18 @@ function parseAdminAllowlist(raw: string): Set<string> {
 
 const ADMIN_EMAIL_ALLOWLIST_SET = parseAdminAllowlist(readAdminAllowlistRaw());
 
+function isAdminUser(auth: AuthContext | undefined | null): boolean {
+  if (!auth) return false;
+  if (typeof auth.email !== "string") return false;
+  const normalized = auth.email.trim().toLowerCase();
+  if (!normalized) return false;
+  return ADMIN_EMAIL_ALLOWLIST_SET.has(normalized);
+}
+
+function sendAdminForbidden(res: express.Response): void {
+  res.status(403).json({ error: "forbidden" });
+}
+
 const savedInterfacesJsonParser = express.json({ limit: SAVED_INTERFACE_JSON_LIMIT });
 const globalJsonParser = express.json({ limit: LLM_LIMITS.jsonBodyLimit });
 app.use("/api/saved-interfaces", (req, res, next) => savedInterfacesJsonParser(req, res, next));

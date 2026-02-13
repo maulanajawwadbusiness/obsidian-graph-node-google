@@ -217,6 +217,11 @@ export type ListFeedbackAdminResult = {
   nextCursor?: number;
 };
 
+type SubmitFeedbackResponse = {
+  ok?: boolean;
+  id?: unknown;
+};
+
 type SavedInterfacesListItem = {
   client_interface_id?: unknown;
   title?: unknown;
@@ -307,6 +312,28 @@ export async function updateProfile(input: {
     picture: toOptionalString(data.user.picture),
     displayName: toOptionalString(data.user.displayName),
     username: toOptionalString(data.user.username),
+  };
+}
+
+export async function submitFeedback(input: SubmitFeedbackInput): Promise<SubmitFeedbackResult> {
+  const result = await apiPost("/api/feedback", {
+    category: input.category ?? "",
+    message: input.message,
+    context: input.context ?? undefined,
+  });
+
+  if (!result.ok) {
+    throw new Error(buildApiErrorMessage("submitFeedback", result));
+  }
+
+  const data = (result.data || {}) as SubmitFeedbackResponse;
+  if (!data.ok || typeof data.id !== "number" || !Number.isFinite(data.id)) {
+    throw new Error("submitFeedback failed: invalid response");
+  }
+
+  return {
+    ok: true,
+    id: data.id,
   };
 }
 

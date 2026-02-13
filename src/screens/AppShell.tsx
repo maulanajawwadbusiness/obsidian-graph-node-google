@@ -855,7 +855,7 @@ export const AppShell: React.FC = () => {
         setIsProfileOpen(true);
     }, [closeDeleteConfirm, closeFeedbackModal, closeSearchInterfaces, isFeedbackOpen, isLoggedIn, isSearchInterfacesOpen, pendingDeleteId, sidebarDisabled, user]);
     const openFeedbackModal = React.useCallback(() => {
-        if (!isLoggedIn) return;
+        if (!isLoggedIn || !user) return;
         if (sidebarDisabled) {
             if (import.meta.env.DEV) {
                 console.log('[appshell] feedback_open_blocked reason=sidebar_disabled');
@@ -883,7 +883,8 @@ export const AppShell: React.FC = () => {
         isProfileOpen,
         isSearchInterfacesOpen,
         pendingDeleteId,
-        sidebarDisabled
+        sidebarDisabled,
+        user
     ]);
     const onProfileSave = React.useCallback(async () => {
         if (profileSaving) return;
@@ -1471,7 +1472,7 @@ export const AppShell: React.FC = () => {
                     accountImageUrl={sidebarAccountImageUrl}
                     onOpenProfile={isLoggedIn ? openProfileOverlay : undefined}
                     onRequestLogout={isLoggedIn ? openLogoutConfirm : undefined}
-                    onOpenFeedback={isLoggedIn ? openFeedbackModal : undefined}
+                    onOpenFeedback={isLoggedIn && user ? openFeedbackModal : undefined}
                 />
             ) : null}
             <div

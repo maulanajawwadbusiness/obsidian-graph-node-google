@@ -42,6 +42,26 @@ exports.up = (pgm) => {
   pgm.addConstraint("feedback_messages", "feedback_messages_status_check", {
     check: "status in ('new','triaged','done')",
   });
+
+  pgm.createIndex("feedback_messages", [{ name: "created_at", sort: "desc" }], {
+    name: "feedback_messages_created_idx",
+  });
+
+  pgm.createIndex(
+    "feedback_messages",
+    ["status", { name: "created_at", sort: "desc" }],
+    {
+      name: "feedback_messages_status_created_idx",
+    }
+  );
+
+  pgm.createIndex(
+    "feedback_messages",
+    ["user_id", { name: "created_at", sort: "desc" }],
+    {
+      name: "feedback_messages_user_created_idx",
+    }
+  );
 };
 
 exports.down = (pgm) => {

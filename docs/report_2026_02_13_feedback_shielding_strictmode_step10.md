@@ -1,4 +1,4 @@
-# Feedback Overlay Listener Inventory (Step 10 Run 1)
+# Feedback Overlay Listener Inventory (Step 10)
 
 ## AppShell listener inventory
 - `window keydown (capture)`:
@@ -27,13 +27,24 @@
 - remote outbox drain timer
 - onboarding overlay timeout path
 
-## Duplicate-prevention guards
-- feedback modal open session refs (`feedbackOpenSessionRef`, `isFeedbackOpenRef`)
-- admin refresh in-flight ref (`adminRefreshInFlightRef`)
-- triage per-item pending lock (`adminStatusPendingById`)
-- outbox drain lock (`remoteOutboxDrainingRef`)
+## Shielding surfaces checklist
+- feedback backdrop + modal root
+- feedback send textarea + buttons
+- admin inbox split containers (list pane + detail pane)
+- admin list rows + refresh + load more
+- admin triage buttons + context panel
+- all modal wheel paths use stopPropagation via `hardShieldInput`
 
-## Cleanup strategy
-- listener effects remove with same handler reference in cleanup
-- modal/timer cleanup on close and unmount
-- stale async apply guarded by modal-open/session refs before state writes
+## StrictMode invariants
+- every `addEventListener` has matching cleanup with same handler reference
+- async admin updates/fetches check modal-open/session/identity refs before state apply
+- modal close, identity switch, and unmount clear refresh debounce timers
+- refresh operations use in-flight guard to prevent overlap
+- triage and submit are guarded against double actions while pending
+
+## Quick manual test script
+1. On graph screen open feedback modal and spam wheel/drag/click: graph does not move.
+2. Open and close feedback modal 20 times: no accumulating lag/leaks.
+3. In dev strictmode submit feedback once: exactly one created row.
+4. As admin triage many rows quickly: no duplicate updates and statuses stay consistent.
+5. Toggle offline/online and switch identity: no stale refresh applies into wrong session.

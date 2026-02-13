@@ -241,6 +241,11 @@ type ListFeedbackAdminResponse = {
   nextCursor?: unknown;
 };
 
+type UpdateFeedbackStatusAdminResponse = {
+  ok?: boolean;
+  updated?: unknown;
+};
+
 type SavedInterfacesListItem = {
   client_interface_id?: unknown;
   title?: unknown;
@@ -422,6 +427,27 @@ export async function listFeedbackAdmin(input?: ListFeedbackAdminInput): Promise
     items,
     ...(nextCursor !== undefined ? { nextCursor } : {}),
   };
+}
+
+export async function updateFeedbackStatusAdmin(input: {
+  id: number;
+  status: FeedbackStatus;
+}): Promise<{ ok: true; updated?: boolean }> {
+  const result = await apiPost("/api/feedback/update-status", {
+    id: input.id,
+    status: input.status,
+  });
+
+  if (!result.ok) {
+    throw new Error(buildApiErrorMessage("updateFeedbackStatusAdmin", result));
+  }
+
+  const data = (result.data || {}) as UpdateFeedbackStatusAdminResponse;
+  if (!data.ok) {
+    throw new Error("updateFeedbackStatusAdmin failed: invalid response");
+  }
+  const updated = typeof data.updated === "boolean" ? data.updated : undefined;
+  return updated === undefined ? { ok: true } : { ok: true, updated };
 }
 
 // TODO(auth): add a client helper for POST /auth/logout (credentials include) when UI is added.

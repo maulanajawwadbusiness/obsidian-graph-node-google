@@ -294,6 +294,8 @@ export const AppShell: React.FC = () => {
     const [adminHasMore, setAdminHasMore] = React.useState(false);
     const [adminLoadingMore, setAdminLoadingMore] = React.useState(false);
     const [adminStatusPendingById, setAdminStatusPendingById] = React.useState<Record<number, boolean>>({});
+    const [adminRefreshState, setAdminRefreshState] = React.useState<'idle' | 'loading' | 'error'>('idle');
+    const [adminRefreshError, setAdminRefreshError] = React.useState<string | null>(null);
     const [feedbackModalView, setFeedbackModalView] = React.useState<'inbox' | 'send'>('send');
     const [pendingDeleteId, setPendingDeleteId] = React.useState<string | null>(null);
     const [pendingDeleteTitle, setPendingDeleteTitle] = React.useState<string | null>(null);
@@ -334,6 +336,9 @@ export const AppShell: React.FC = () => {
     const isFeedbackOpenRef = React.useRef(false);
     const feedbackAdminFetchEpochRef = React.useRef(0);
     const feedbackAdminFetchRequestedEpochRef = React.useRef<number | null>(null);
+    const adminLastFetchedAtTsRef = React.useRef(0);
+    const adminRefreshInFlightRef = React.useRef(false);
+    const adminSoftRefreshTimerRef = React.useRef<number | null>(null);
     const remoteOutboxDrainingRef = React.useRef(false);
     const remoteOutboxPausedUntilRef = React.useRef<number>(0);
     const authStorageId = React.useMemo(() => resolveAuthStorageId(user), [user]);
@@ -805,6 +810,87 @@ export const AppShell: React.FC = () => {
         const text = String(error ?? '');
         return text.includes('403') || text.includes('401');
     }, []);
+    const adminRefreshInbox = React.useCallback(async (input: { mode: 'hard' | 'soft' }) => {
+        if (!isFeedbackOpenRef.current) return;
+        if (!isFeedbackAdmin) return;
+        if (adminRefreshInFlightRef.current) return;
+        const openSession = feedbackOpenSessionRef.current;
+        adminRefreshInFlightRef.current = true;
+        setAdminRefreshState('loading');
+        setAdminRefreshError(null);
+        if (input.mode === 'hard') {
+            setAdminItems([]);
+            setAdminSelectedId(null);
+            setAdminCursorBeforeId(null);
+            setAdminHasMore(false);
+        }
+        try {
+            const result = await listFeedbackAdmin({ limit: FEEDBACK_ADMIN_PAGE_LIMIT });
+            if (!isFeedbackOpenRef.current) return;
+            if (feedbackOpenSessionRef.current !== openSession) return;
+            const incoming = Array.isArray(result.items) ? result.items : [];
+            const nextCursor = typeof result.nextCursor === 'number' && Number.isFinite(result.nextCursor)
+                ? result.nextCursor
+                : null;
+            if (input.mode === 'hard') {
+                setAdminItems(incoming);
+                setAdminSelectedId(incoming[0]?.id ?? null);
+            } else {
+                setAdminItems((curr) => {
+                    if (curr.length === 0) return incoming;
+                    const incomingById = new Map<number, FeedbackAdminItem>();
+                    for (const item of incoming) incomingById.set(item.id, item);
+                    const currentById = new Set(curr.map((item) => item.id));
+                    const prepended = incoming.filter((item) => !currentById.has(item.id));
+                    const mergedExisting = curr.map((item) => {
+                        const remote = incomingById.get(item.id);
+                        if (!remote) return item;
+                        const pending = adminStatusPendingById[item.id] === true;
+                        return {
+                            ...item,
+                            ...remote,
+                            status: pending ? item.status : remote.status,
+                        };
+                    });
+                    return [...prepended, ...mergedExisting];
+                });
+                setAdminSelectedId((currSelected) => {
+                    if (currSelected === null) return incoming[0]?.id ?? null;
+                    const hasSelected = incoming.some((item) => item.id === currSelected);
+                    if (hasSelected) return currSelected;
+                    return currSelected;
+                });
+            }
+            setAdminCursorBeforeId(nextCursor);
+            setAdminHasMore(nextCursor !== null);
+            setAdminLoadState('ready');
+            setAdminRefreshState('idle');
+            setAdminRefreshError(null);
+            adminLastFetchedAtTsRef.current = Date.now();
+        } catch (error) {
+            if (!isFeedbackOpenRef.current) return;
+            if (feedbackOpenSessionRef.current !== openSession) return;
+            if (isAdminFetchForbidden(error)) {
+                setIsFeedbackAdmin(false);
+                setFeedbackModalView('send');
+                setAdminLoadState('idle');
+                setAdminItems([]);
+                setAdminSelectedId(null);
+                setAdminCursorBeforeId(null);
+                setAdminHasMore(false);
+                setAdminRefreshState('idle');
+                setAdminRefreshError(null);
+                return;
+            }
+            setAdminRefreshState('error');
+            setAdminRefreshError('Failed to refresh inbox.');
+            if (input.mode === 'hard') {
+                setAdminLoadState('error');
+            }
+        } finally {
+            adminRefreshInFlightRef.current = false;
+        }
+    }, [adminStatusPendingById, isAdminFetchForbidden, isFeedbackAdmin]);
     const loadMoreFeedbackAdmin = React.useCallback(async () => {
         if (!isFeedbackOpen) return;
         if (!isFeedbackAdmin) return;
@@ -856,7 +942,10 @@ export const AppShell: React.FC = () => {
             item.id === id ? { ...item, status: nextStatus } : item
         )));
         try {
-            await updateFeedbackStatusAdmin({ id, status: nextStatus });
+            const result = await updateFeedbackStatusAdmin({ id, status: nextStatus });
+            if (result.updated === false) {
+                throw new Error('status_update_not_applied');
+            }
         } catch {
             setAdminItems((curr) => curr.map((item) => (
                 item.id === id ? { ...item, status: previous.status } : item
@@ -1124,6 +1213,7 @@ export const AppShell: React.FC = () => {
                     : null;
                 setAdminCursorBeforeId(nextCursor);
                 setAdminHasMore(nextCursor !== null);
+                adminLastFetchedAtTsRef.current = Date.now();
             })
             .catch((error) => {
                 if (!active) return;
@@ -1206,6 +1296,9 @@ export const AppShell: React.FC = () => {
         setAdminHasMore(false);
         setAdminLoadingMore(false);
         setAdminStatusPendingById({});
+        setAdminRefreshState('idle');
+        setAdminRefreshError(null);
+        adminLastFetchedAtTsRef.current = 0;
     }, [isFeedbackOpen]);
 
     React.useEffect(() => {
@@ -1213,6 +1306,10 @@ export const AppShell: React.FC = () => {
             if (feedbackAutoCloseTimerRef.current !== null) {
                 window.clearTimeout(feedbackAutoCloseTimerRef.current);
                 feedbackAutoCloseTimerRef.current = null;
+            }
+            if (adminSoftRefreshTimerRef.current !== null) {
+                window.clearTimeout(adminSoftRefreshTimerRef.current);
+                adminSoftRefreshTimerRef.current = null;
             }
         };
     }, []);
@@ -1857,8 +1954,25 @@ export const AppShell: React.FC = () => {
                         {isFeedbackAdmin && feedbackModalView === 'inbox' ? (
                             <div {...hardShieldInput} style={FEEDBACK_ADMIN_SPLIT_STYLE}>
                                 <div {...hardShieldInput} style={FEEDBACK_ADMIN_LIST_PANE_STYLE}>
-                                    <div {...hardShieldInput} style={FEEDBACK_ADMIN_SECTION_TITLE_STYLE}>Admin Inbox</div>
-                                    <div {...hardShieldInput} style={FEEDBACK_ADMIN_LIST_SCROLL_STYLE}>
+                                    <div {...hardShieldInput} style={FEEDBACK_ADMIN_SECTION_HEADER_STYLE}>
+                                        <div {...hardShieldInput} style={FEEDBACK_ADMIN_SECTION_TITLE_STYLE}>Admin Inbox</div>
+                                        <button
+                                            {...hardShieldInput}
+                                            type="button"
+                                            disabled={adminRefreshState === 'loading'}
+                                            style={FEEDBACK_ADMIN_REFRESH_STYLE}
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                void adminRefreshInbox({ mode: 'hard' });
+                                            }}
+                                        >
+                                            {adminRefreshState === 'loading' ? 'Refreshing...' : 'Refresh'}
+                                        </button>
+                                    </div>
+                                    {adminRefreshError ? (
+                                        <div style={FEEDBACK_ERROR_STYLE}>{adminRefreshError}</div>
+                                    ) : null}
+                                    <div {...hardShieldInput} className="arnvoid-scroll" style={FEEDBACK_ADMIN_LIST_SCROLL_STYLE}>
                                         {adminLoadState === 'loading' ? (
                                             <div style={FEEDBACK_ADMIN_MUTED_STYLE}>Loading inbox...</div>
                                         ) : null}
@@ -1909,7 +2023,7 @@ export const AppShell: React.FC = () => {
                                 </div>
                                 <div {...hardShieldInput} style={FEEDBACK_ADMIN_DETAIL_PANE_STYLE}>
                                     {selectedAdminItem ? (
-                                        <div {...hardShieldInput} style={FEEDBACK_ADMIN_DETAIL_SCROLL_STYLE}>
+                                        <div {...hardShieldInput} className="arnvoid-scroll" style={FEEDBACK_ADMIN_DETAIL_SCROLL_STYLE}>
                                             <div {...hardShieldInput} style={FEEDBACK_ADMIN_STATUS_ACTION_ROW_STYLE}>
                                                 {(['new', 'triaged', 'done'] as FeedbackStatus[]).map((statusValue) => (
                                                     <button
@@ -2556,6 +2670,13 @@ const FEEDBACK_ADMIN_SECTION_TITLE_STYLE: React.CSSProperties = {
     color: 'rgba(231, 231, 231, 0.78)',
 };
 
+const FEEDBACK_ADMIN_SECTION_HEADER_STYLE: React.CSSProperties = {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: '8px',
+};
+
 const FEEDBACK_ADMIN_LIST_SCROLL_STYLE: React.CSSProperties = {
     flex: 1,
     minHeight: 0,
@@ -2686,6 +2807,18 @@ const FEEDBACK_ADMIN_LOAD_MORE_STYLE: React.CSSProperties = {
     borderRadius: '7px',
     padding: '7px 12px',
     fontSize: '12px',
+    cursor: 'pointer',
+    fontWeight: 300,
+    fontFamily: 'var(--font-ui)',
+};
+
+const FEEDBACK_ADMIN_REFRESH_STYLE: React.CSSProperties = {
+    border: '1px solid rgba(255, 255, 255, 0.22)',
+    background: 'rgba(255, 255, 255, 0.05)',
+    color: '#e7e7e7',
+    borderRadius: '7px',
+    padding: '4px 10px',
+    fontSize: '11px',
     cursor: 'pointer',
     fontWeight: 300,
     fontFamily: 'var(--font-ui)',

@@ -193,7 +193,7 @@ Remote memory (account-backed):
   - `POST /api/saved-interfaces/upsert`
   - `POST /api/saved-interfaces/delete`
 - Payload size limit:
-  - server guard constant `MAX_SAVED_INTERFACE_PAYLOAD_BYTES` (default 15 MB) in `src/server/src/serverMonolith.ts`
+  - server guard constant `MAX_SAVED_INTERFACE_PAYLOAD_BYTES` (default 15 MB) in `src/server/src/app/deps.ts`
 - AppShell sync role:
   - Hydrates remote + local on auth-ready, merges, and persists into active local namespace.
   - Mirrors local save/rename/delete events to backend as best-effort background sync.
@@ -473,15 +473,15 @@ Frontend:
   - auth calls are `${VITE_API_BASE_URL}/auth/google`, `${VITE_API_BASE_URL}/auth/logout`, and `${VITE_API_BASE_URL}/me`.
   - `/api/*` pathing is only true when `VITE_API_BASE_URL=/api` (for example behind Vercel rewrite).
 - Backend runtime route ownership:
-  - route logic lives in `src/server/src/serverMonolith.ts`.
-  - `src/server/src/index.ts` is a thin entry that imports `serverMonolith`.
+  - `src/server/src/index.ts` is boot-only (startup checks + single listen).
+  - route registration is explicit in `src/server/src/app/createApp.ts` via `registerXRoutes(app, deps)` modules under `src/server/src/routes/`.
 - `/me` payload contract:
   - returns `sub`, `email`, `name`, `picture`, `displayName`, `username` for signed-in state.
   - `picture` is the Google profile photo URL used by Sidebar and profile UI.
   - does not currently return DB numeric `id` in the `/me` response body.
   - frontend identity logic must support `sub` fallback for namespacing and sync isolation.
 - Profile update contract:
-  - endpoint: `POST /api/profile/update` (`requireAuth`) in `src/server/src/serverMonolith.ts`.
+  - endpoint: `POST /api/profile/update` (`requireAuth`) in `src/server/src/routes/profileRoutes.ts`.
   - request fields: `displayName`, `username` with trim/max-length/regex validation.
   - schema columns: `users.display_name`, `users.username` from migration `src/server/migrations/1770383500000_add_user_profile_fields.js`.
   - UI owner: AppShell profile modal in `src/screens/AppShell.tsx` (opened from Sidebar avatar menu).

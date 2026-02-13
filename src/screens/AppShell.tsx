@@ -290,6 +290,7 @@ export const AppShell: React.FC = () => {
     const [adminSelectedId, setAdminSelectedId] = React.useState<number | null>(null);
     const [adminCursorBeforeId, setAdminCursorBeforeId] = React.useState<number | null>(null);
     const [adminHasMore, setAdminHasMore] = React.useState(false);
+    const [adminLoadingMore, setAdminLoadingMore] = React.useState(false);
     const [feedbackModalView, setFeedbackModalView] = React.useState<'inbox' | 'send'>('send');
     const [pendingDeleteId, setPendingDeleteId] = React.useState<string | null>(null);
     const [pendingDeleteTitle, setPendingDeleteTitle] = React.useState<string | null>(null);
@@ -798,6 +799,42 @@ export const AppShell: React.FC = () => {
         const text = String(error ?? '');
         return text.includes('403') || text.includes('401');
     }, []);
+    const loadMoreFeedbackAdmin = React.useCallback(async () => {
+        if (!isFeedbackOpen) return;
+        if (!isFeedbackAdmin) return;
+        if (adminLoadingMore) return;
+        if (!adminHasMore) return;
+        if (adminCursorBeforeId === null) return;
+        setAdminLoadingMore(true);
+        setAdminError(null);
+        try {
+            const result = await listFeedbackAdmin({
+                limit: FEEDBACK_ADMIN_PAGE_LIMIT,
+                beforeId: adminCursorBeforeId,
+            });
+            const incoming = Array.isArray(result.items) ? result.items : [];
+            setAdminItems((curr) => {
+                if (incoming.length === 0) return curr;
+                const seen = new Set(curr.map((item) => item.id));
+                const merged = [...curr];
+                for (const item of incoming) {
+                    if (seen.has(item.id)) continue;
+                    seen.add(item.id);
+                    merged.push(item);
+                }
+                return merged;
+            });
+            const nextCursor = typeof result.nextCursor === 'number' && Number.isFinite(result.nextCursor)
+                ? result.nextCursor
+                : null;
+            setAdminCursorBeforeId(nextCursor);
+            setAdminHasMore(nextCursor !== null);
+        } catch {
+            setAdminError('Failed to load more feedback.');
+        } finally {
+            setAdminLoadingMore(false);
+        }
+    }, [adminCursorBeforeId, adminHasMore, adminLoadingMore, isFeedbackAdmin, isFeedbackOpen]);
     const closeProfileOverlay = React.useCallback(() => {
         if (profileSaving) return;
         setIsProfileOpen(false);
@@ -1115,6 +1152,7 @@ export const AppShell: React.FC = () => {
         setFeedbackModalView('send');
         setAdminCursorBeforeId(null);
         setAdminHasMore(false);
+        setAdminLoadingMore(false);
     }, [isFeedbackOpen]);
 
     React.useEffect(() => {
@@ -1778,7 +1816,16 @@ export const AppShell: React.FC = () => {
                                             <div style={FEEDBACK_ADMIN_MUTED_STYLE}>No feedback yet.</div>
                                         ) : null}
                                         {adminItems.map((item) => (
-                                            <div key={item.id} style={FEEDBACK_ADMIN_LIST_ROW_STYLE}>
+                                            <button
+                                                {...hardShieldInput}
+                                                key={item.id}
+                                                type="button"
+                                                style={item.id === adminSelectedId ? FEEDBACK_ADMIN_LIST_ROW_ACTIVE_STYLE : FEEDBACK_ADMIN_LIST_ROW_STYLE}
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setAdminSelectedId(item.id);
+                                                }}
+                                            >
                                                 <div style={FEEDBACK_ADMIN_LIST_TOP_STYLE}>
                                                     <span style={FEEDBACK_ADMIN_STATUS_BADGE_STYLE}>{item.status}</span>
                                                     {item.category ? (
@@ -1789,8 +1836,22 @@ export const AppShell: React.FC = () => {
                                                     {item.message.slice(0, 80)}
                                                 </div>
                                                 <div style={FEEDBACK_ADMIN_TIME_STYLE}>{item.createdAt}</div>
-                                            </div>
+                                            </button>
                                         ))}
+                                        {adminHasMore ? (
+                                            <button
+                                                {...hardShieldInput}
+                                                type="button"
+                                                disabled={adminLoadingMore}
+                                                style={FEEDBACK_ADMIN_LOAD_MORE_STYLE}
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    void loadMoreFeedbackAdmin();
+                                                }}
+                                            >
+                                                {adminLoadingMore ? 'Loading...' : 'Load more'}
+                                            </button>
+                                        ) : null}
                                     </div>
                                 </div>
                                 <div {...hardShieldInput} style={FEEDBACK_ADMIN_DETAIL_PANE_STYLE}>
@@ -2434,10 +2495,19 @@ const FEEDBACK_ADMIN_LIST_ROW_STYLE: React.CSSProperties = {
     border: '1px solid rgba(255, 255, 255, 0.1)',
     borderRadius: '8px',
     padding: '8px',
+    background: 'transparent',
+    textAlign: 'left',
     display: 'flex',
     flexDirection: 'column',
     gap: '5px',
     overflow: 'hidden',
+    cursor: 'pointer',
+};
+
+const FEEDBACK_ADMIN_LIST_ROW_ACTIVE_STYLE: React.CSSProperties = {
+    ...FEEDBACK_ADMIN_LIST_ROW_STYLE,
+    border: '1px solid rgba(99, 171, 255, 0.42)',
+    background: 'rgba(99, 171, 255, 0.14)',
 };
 
 const FEEDBACK_ADMIN_LIST_TOP_STYLE: React.CSSProperties = {
@@ -2532,6 +2602,18 @@ const FEEDBACK_ADMIN_MUTED_STYLE: React.CSSProperties = {
     fontSize: '12px',
     lineHeight: 1.3,
     color: 'rgba(231, 231, 231, 0.64)',
+};
+
+const FEEDBACK_ADMIN_LOAD_MORE_STYLE: React.CSSProperties = {
+    border: '1px solid rgba(255, 255, 255, 0.22)',
+    background: 'rgba(255, 255, 255, 0.05)',
+    color: '#e7e7e7',
+    borderRadius: '7px',
+    padding: '7px 12px',
+    fontSize: '12px',
+    cursor: 'pointer',
+    fontWeight: 300,
+    fontFamily: 'var(--font-ui)',
 };
 
 const FEEDBACK_COUNTER_STYLE: React.CSSProperties = {

@@ -2722,6 +2722,7 @@ const FEEDBACK_ADMIN_SPLIT_STYLE: React.CSSProperties = {
 };
 
 const FEEDBACK_ADMIN_LIST_PANE_STYLE: React.CSSProperties = {
+    minWidth: 0,
     minHeight: 0,
     border: '1px solid rgba(255, 255, 255, 0.12)',
     borderRadius: '10px',
@@ -2734,6 +2735,7 @@ const FEEDBACK_ADMIN_LIST_PANE_STYLE: React.CSSProperties = {
 };
 
 const FEEDBACK_ADMIN_DETAIL_PANE_STYLE: React.CSSProperties = {
+    minWidth: 0,
     minHeight: 0,
     border: '1px solid rgba(255, 255, 255, 0.12)',
     borderRadius: '10px',
@@ -2774,6 +2776,8 @@ const FEEDBACK_ADMIN_LIST_SCROLL_STYLE: React.CSSProperties = {
 };
 
 const FEEDBACK_ADMIN_LIST_ROW_STYLE: React.CSSProperties = {
+    minWidth: 0,
+    width: '100%',
     border: '1px solid rgba(255, 255, 255, 0.1)',
     borderRadius: '8px',
     padding: '8px',
@@ -2897,6 +2901,7 @@ const FEEDBACK_ADMIN_LOAD_MORE_STYLE: React.CSSProperties = {
     cursor: 'pointer',
     fontWeight: 300,
     fontFamily: 'var(--font-ui)',
+    overflowWrap: 'anywhere',
 };
 
 const FEEDBACK_ADMIN_REFRESH_STYLE: React.CSSProperties = {
@@ -2909,11 +2914,13 @@ const FEEDBACK_ADMIN_REFRESH_STYLE: React.CSSProperties = {
     cursor: 'pointer',
     fontWeight: 300,
     fontFamily: 'var(--font-ui)',
+    overflowWrap: 'anywhere',
 };
 
 const FEEDBACK_ADMIN_STATUS_ACTION_ROW_STYLE: React.CSSProperties = {
     display: 'flex',
     alignItems: 'center',
+    flexWrap: 'wrap',
     gap: '6px',
 };
 

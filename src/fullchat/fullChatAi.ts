@@ -8,6 +8,7 @@ import { ensureSufficientBalance } from '../money/ensureSufficientBalance';
 import { estimateIdrCost } from '../money/estimateCost';
 import { showShortage } from '../money/shortageStore';
 import { pushMoneyNotice } from '../money/moneyNotices';
+import { resolveBackendUrl } from '../utils/backendUrl';
 
 // =============================================================================
 // TYPES
@@ -224,12 +225,6 @@ function getBalanceSnapshot() {
     return getBalanceState();
 }
 
-function resolveUrl(base: string, path: string) {
-    const trimmedBase = base.replace(/\/+$/, '');
-    const normalizedPath = path.startsWith('/') ? path : `/${path}`;
-    return `${trimmedBase}${normalizedPath}`;
-}
-
 function fetchChatStream(opts: {
     model: string;
     userPrompt: string;
@@ -242,7 +237,7 @@ function fetchChatStream(opts: {
         throw new Error('missing_api_base');
     }
 
-    const url = resolveUrl(base, '/api/llm/chat');
+    const url = resolveBackendUrl(base, '/api/llm/chat');
 
     return (async function* () {
         const res = await fetch(url, {

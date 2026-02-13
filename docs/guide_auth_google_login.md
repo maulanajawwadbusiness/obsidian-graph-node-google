@@ -3,6 +3,7 @@
 ## 1) How It Works (Mental Model)
 - Frontend calls `${VITE_API_BASE_URL}/*`.
 - If `VITE_API_BASE_URL=/api`, Vercel rewrites `/api/*` to Cloud Run backend.
+- Frontend URL join now dedupes `/api` boundary, so `/api` base plus `/api/*` path does not become `/api/api/*`.
 - Backend verifies Google ID token, writes session to Postgres, sets `arnvoid_session` cookie.
 - Frontend bootstraps `GET /me` and stores user in React Context.
 - UI reads auth state from `AuthProvider`.

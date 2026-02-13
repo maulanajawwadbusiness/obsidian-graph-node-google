@@ -1,3 +1,4 @@
+import { resolveBackendUrl } from "./utils/backendUrl";
 const BASE = import.meta.env.VITE_API_BASE_URL;
 
 export type ApiGetResult = {
@@ -35,12 +36,6 @@ export type SavedInterfaceUpsertInput = {
   payloadJson: any;
 };
 
-function resolveUrl(base: string, path: string) {
-  const trimmedBase = base.replace(/\/+$/, '');
-  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
-  return `${trimmedBase}${normalizedPath}`;
-}
-
 function looksLikeHtml(text: string) {
   const head = text.slice(0, 200).toLowerCase();
   return head.includes('<!doctype') || head.includes('<html');
@@ -51,7 +46,7 @@ export async function apiGet(path: string): Promise<ApiGetResult> {
     throw new Error('VITE_API_BASE_URL is missing or empty');
   }
 
-  const url = resolveUrl(BASE, path);
+  const url = resolveBackendUrl(BASE, path);
   console.log(`[apiGet] GET ${url}`);
 
   // All backend calls must include credentials for cookie auth.
@@ -99,7 +94,7 @@ export async function apiPost(path: string, body: unknown): Promise<ApiPostResul
     throw new Error('VITE_API_BASE_URL is missing or empty');
   }
 
-  const url = resolveUrl(BASE, path);
+  const url = resolveBackendUrl(BASE, path);
   console.log(`[apiPost] POST ${url}`);
 
   const res = await fetch(url, {

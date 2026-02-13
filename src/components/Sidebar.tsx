@@ -9,6 +9,8 @@ import verticalElipsisIcon from '../assets/vertical_elipsis_icon.png';
 import renameIcon from '../assets/rename_icon.png';
 import deleteIcon from '../assets/delete_icon.png';
 import logoutIcon from '../assets/logout_icon.png';
+import suggestionFeedbackIcon from '../assets/suggestion_feedback_icon.png';
+import blogIcon from '../assets/blog_icon.png';
 import { LAYER_SIDEBAR, LAYER_SIDEBAR_ROW_MENU } from '../ui/layers';
 
 // ===========================================================================
@@ -67,6 +69,7 @@ const SIDEBAR_HOVER_TRANSITION = '250ms ease';
 const LOGO_SWAP_TRANSITION = '100ms ease';
 const CLOSE_ICON_VIEWBOX = '0 0 100 100';
 type RowMenuItemKey = 'rename' | 'delete';
+type MoreMenuItemKey = 'suggestion' | 'blog';
 
 const roundedRectArcPath = (x: number, y: number, width: number, height: number, radius: number): string => {
     const r = Math.max(0, Math.min(radius, width / 2, height / 2));
@@ -148,8 +151,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
     const [avatarMenuPosition, setAvatarMenuPosition] = React.useState<{ left: number; top: number } | null>(null);
     const [avatarMenuPlacement, setAvatarMenuPlacement] = React.useState<'up' | 'down' | null>(null);
     const [avatarMenuHoverKey, setAvatarMenuHoverKey] = React.useState<'profile' | 'logout' | null>(null);
+    const [isMoreMenuOpen, setIsMoreMenuOpen] = React.useState(false);
+    const [moreMenuAnchorRect, setMoreMenuAnchorRect] = React.useState<DOMRect | null>(null);
+    const [moreMenuPosition, setMoreMenuPosition] = React.useState<{ left: number; top: number } | null>(null);
+    const [moreMenuPlacement, setMoreMenuPlacement] = React.useState<'up' | 'down' | null>(null);
+    const [moreMenuHoverKey, setMoreMenuHoverKey] = React.useState<MoreMenuItemKey | null>(null);
     const renameInputRef = React.useRef<HTMLInputElement | null>(null);
     const avatarTriggerRef = React.useRef<HTMLDivElement | null>(null);
+    const moreTriggerRef = React.useRef<HTMLButtonElement | null>(null);
     const menuItemPreview = React.useMemo<Array<{ key: RowMenuItemKey; icon: string; label: string; color: string }>>(
         () => [
             { key: 'rename', icon: renameIcon, label: 'Rename', color: SIDEBAR_TEXT_COLOR },
@@ -219,16 +228,60 @@ export const Sidebar: React.FC<SidebarProps> = ({
         setAvatarMenuHoverKey(null);
     }, []);
 
+    const computeMoreMenuPlacement = React.useCallback((rect: DOMRect) => {
+        const gap = 8;
+        const viewportPadding = 8;
+        const menuWidth = 208;
+        const menuHeight = 88;
+        const preferredLeft = rect.left;
+        const maxLeft = Math.max(viewportPadding, window.innerWidth - menuWidth - viewportPadding);
+        const left = Math.max(viewportPadding, Math.min(preferredLeft, maxLeft));
+        const canOpenDown = rect.bottom + gap + menuHeight <= window.innerHeight - viewportPadding;
+        const top = canOpenDown
+            ? Math.max(viewportPadding, rect.bottom + gap)
+            : Math.max(viewportPadding, rect.top - gap - menuHeight);
+        return {
+            left,
+            top,
+            placement: canOpenDown ? 'down' as const : 'up' as const,
+        };
+    }, []);
+
+    const closeMoreMenu = React.useCallback(() => {
+        setIsMoreMenuOpen(false);
+        setMoreMenuAnchorRect(null);
+        setMoreMenuPosition(null);
+        setMoreMenuPlacement(null);
+        setMoreMenuHoverKey(null);
+    }, []);
+
+    const toggleMoreMenuFromTrigger = React.useCallback((trigger: HTMLElement) => {
+        if (disabled) return;
+        if (isMoreMenuOpen) {
+            closeMoreMenu();
+            return;
+        }
+        closeRowMenu();
+        closeAvatarMenu();
+        const rect = trigger.getBoundingClientRect();
+        const placement = computeMoreMenuPlacement(rect);
+        setMoreMenuAnchorRect(rect);
+        setMoreMenuPosition({ left: placement.left, top: placement.top });
+        setMoreMenuPlacement(placement.placement);
+        setIsMoreMenuOpen(true);
+    }, [closeAvatarMenu, closeMoreMenu, closeRowMenu, computeMoreMenuPlacement, disabled, isMoreMenuOpen]);
+
     const openAvatarMenuFromTrigger = React.useCallback((trigger: HTMLElement) => {
         if (disabled) return;
         if (!canOpenAvatarMenu) return;
+        closeMoreMenu();
         const rect = trigger.getBoundingClientRect();
         const placement = computeAvatarMenuPlacement(rect);
         setAvatarMenuAnchorRect(rect);
         setAvatarMenuPosition({ left: placement.left, top: placement.top });
         setAvatarMenuPlacement(placement.placement);
         setIsAvatarMenuOpen(true);
-    }, [canOpenAvatarMenu, computeAvatarMenuPlacement, disabled]);
+    }, [canOpenAvatarMenu, closeMoreMenu, computeAvatarMenuPlacement, disabled]);
 
     const toggleAvatarMenuFromTrigger = React.useCallback((trigger: HTMLElement) => {
         if (isAvatarMenuOpen) {
@@ -273,13 +326,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
             closeRowMenu();
             return;
         }
+        closeMoreMenu();
         const rect = trigger.getBoundingClientRect();
         const placement = computeRowMenuPlacement(rect);
         setOpenRowMenuId(itemId);
         setRowMenuAnchorRect(rect);
         setRowMenuPosition({ left: placement.left, top: placement.top });
         setMenuPlacement(placement.placement);
-    }, [closeRowMenu, computeRowMenuPlacement, disabled, openRowMenuId]);
+    }, [closeMoreMenu, closeRowMenu, computeRowMenuPlacement, disabled, openRowMenuId]);
 
     React.useEffect(() => {
         if (!disabled) return;
@@ -292,7 +346,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
         if (isAvatarMenuOpen) {
             closeAvatarMenu();
         }
-    }, [cancelRename, closeAvatarMenu, closeRowMenu, disabled, isAvatarMenuOpen, openRowMenuId, renamingRowId]);
+        if (isMoreMenuOpen) {
+            closeMoreMenu();
+        }
+    }, [cancelRename, closeAvatarMenu, closeMoreMenu, closeRowMenu, disabled, isAvatarMenuOpen, isMoreMenuOpen, openRowMenuId, renamingRowId]);
 
     React.useEffect(() => {
         if (!openRowMenuId && !renamingRowId) return;
@@ -368,6 +425,22 @@ export const Sidebar: React.FC<SidebarProps> = ({
     }, [avatarMenuAnchorRect, computeAvatarMenuPlacement, isAvatarMenuOpen]);
 
     React.useEffect(() => {
+        if (!isMoreMenuOpen || !moreMenuAnchorRect) return;
+        const update = () => {
+            if (!moreMenuAnchorRect) return;
+            const placement = computeMoreMenuPlacement(moreMenuAnchorRect);
+            setMoreMenuPosition({ left: placement.left, top: placement.top });
+            setMoreMenuPlacement(placement.placement);
+        };
+        window.addEventListener('resize', update);
+        window.addEventListener('scroll', update, true);
+        return () => {
+            window.removeEventListener('resize', update);
+            window.removeEventListener('scroll', update, true);
+        };
+    }, [computeMoreMenuPlacement, isMoreMenuOpen, moreMenuAnchorRect]);
+
+    React.useEffect(() => {
         if (!isAvatarMenuOpen) return;
 
         const onWindowPointerDown = (event: PointerEvent) => {
@@ -393,6 +466,33 @@ export const Sidebar: React.FC<SidebarProps> = ({
             window.removeEventListener('keydown', onWindowKeyDown, true);
         };
     }, [closeAvatarMenu, isAvatarMenuOpen]);
+
+    React.useEffect(() => {
+        if (!isMoreMenuOpen) return;
+
+        const onWindowPointerDown = (event: PointerEvent) => {
+            const target = event.target as Element | null;
+            if (!target) {
+                closeMoreMenu();
+                return;
+            }
+            if (target.closest('[data-more-menu="1"]')) return;
+            if (target.closest('[data-more-trigger="1"]')) return;
+            closeMoreMenu();
+        };
+
+        const onWindowKeyDown = (event: KeyboardEvent) => {
+            if (event.key !== 'Escape') return;
+            closeMoreMenu();
+        };
+
+        window.addEventListener('pointerdown', onWindowPointerDown, true);
+        window.addEventListener('keydown', onWindowKeyDown, true);
+        return () => {
+            window.removeEventListener('pointerdown', onWindowPointerDown, true);
+            window.removeEventListener('keydown', onWindowKeyDown, true);
+        };
+    }, [closeMoreMenu, isMoreMenuOpen]);
 
     React.useEffect(() => {
         if (isExpanded) {
@@ -561,12 +661,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 </div>
                 <div style={{ marginTop: `${MORE_OFFSET_TOP}px` }}>
                     <NavItem
+                        buttonRef={moreTriggerRef}
+                        dataMoreTrigger
                         icon={threeDotIcon}
                         label="More"
                         isExpanded={isExpanded}
                         isHovered={moreHover}
                         onMouseEnter={() => setMoreHover(true)}
                         onMouseLeave={() => setMoreHover(false)}
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            const trigger = e.currentTarget as HTMLButtonElement;
+                            toggleMoreMenuFromTrigger(trigger);
+                        }}
+                        hardShieldInput
                     />
                 </div>
 
@@ -872,6 +980,91 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 </div>
             ) : null}
 
+            {isMoreMenuOpen && moreMenuPosition ? (
+                <div
+                    data-more-menu="1"
+                    style={{
+                        ...MORE_MENU_POPUP_STYLE,
+                        left: `${moreMenuPosition.left}px`,
+                        top: `${moreMenuPosition.top}px`,
+                        transformOrigin: moreMenuPlacement === 'down' ? 'top left' : 'bottom left',
+                    }}
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onPointerUp={(e) => e.stopPropagation()}
+                    onClick={(e) => e.stopPropagation()}
+                    onWheelCapture={(e) => e.stopPropagation()}
+                    onWheel={(e) => e.stopPropagation()}
+                >
+                    <button
+                        type="button"
+                        style={MORE_MENU_ITEM_STYLE}
+                        onPointerDown={(e) => e.stopPropagation()}
+                        onPointerUp={(e) => e.stopPropagation()}
+                        onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            closeMoreMenu();
+                            // TODO: implement Suggestion and Feedback UI flow.
+                            console.log('[sidebar] suggestion_feedback_clicked');
+                        }}
+                        onWheelCapture={(e) => e.stopPropagation()}
+                        onWheel={(e) => e.stopPropagation()}
+                        onMouseEnter={() => setMoreMenuHoverKey('suggestion')}
+                        onMouseLeave={() => setMoreMenuHoverKey((curr) => (curr === 'suggestion' ? null : curr))}
+                    >
+                        <span style={MORE_MENU_ITEM_CONTENT_STYLE}>
+                            <MaskIcon
+                                src={suggestionFeedbackIcon}
+                                size={14}
+                                color={moreMenuHoverKey === 'suggestion' ? HOVER_ACCENT_COLOR : SIDEBAR_TEXT_COLOR}
+                                opacity={1}
+                            />
+                            <span
+                                style={{
+                                    ...MORE_MENU_ITEM_LABEL_STYLE,
+                                    color: moreMenuHoverKey === 'suggestion' ? HOVER_ACCENT_COLOR : SIDEBAR_TEXT_COLOR,
+                                }}
+                            >
+                                Suggestion and Feedback
+                            </span>
+                        </span>
+                    </button>
+                    <button
+                        type="button"
+                        style={MORE_MENU_ITEM_STYLE}
+                        onPointerDown={(e) => e.stopPropagation()}
+                        onPointerUp={(e) => e.stopPropagation()}
+                        onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            closeMoreMenu();
+                            window.open('https://blog.arnvoid.com', '_blank', 'noopener,noreferrer');
+                        }}
+                        onWheelCapture={(e) => e.stopPropagation()}
+                        onWheel={(e) => e.stopPropagation()}
+                        onMouseEnter={() => setMoreMenuHoverKey('blog')}
+                        onMouseLeave={() => setMoreMenuHoverKey((curr) => (curr === 'blog' ? null : curr))}
+                    >
+                        <span style={MORE_MENU_ITEM_CONTENT_STYLE}>
+                            <MaskIcon
+                                src={blogIcon}
+                                size={14}
+                                color={moreMenuHoverKey === 'blog' ? HOVER_ACCENT_COLOR : SIDEBAR_TEXT_COLOR}
+                                opacity={1}
+                            />
+                            <span
+                                style={{
+                                    ...MORE_MENU_ITEM_LABEL_STYLE,
+                                    color: moreMenuHoverKey === 'blog' ? HOVER_ACCENT_COLOR : SIDEBAR_TEXT_COLOR,
+                                }}
+                            >
+                                Arnvoid Blog
+                            </span>
+                        </span>
+                    </button>
+                </div>
+            ) : null}
+
             {/* Bottom Section - User Avatar */}
             <div
                 style={bottomSectionStyle}
@@ -983,8 +1176,10 @@ type NavItemProps = {
     isHovered: boolean;
     onMouseEnter: () => void;
     onMouseLeave: () => void;
-    onClick?: () => void;
+    onClick?: (event: React.MouseEvent<HTMLButtonElement>) => void;
     hardShieldInput?: boolean;
+    dataMoreTrigger?: boolean;
+    buttonRef?: React.Ref<HTMLButtonElement>;
 };
 
 const NavItem: React.FC<NavItemProps> = ({
@@ -996,9 +1191,13 @@ const NavItem: React.FC<NavItemProps> = ({
     onMouseLeave,
     onClick,
     hardShieldInput = false,
+    dataMoreTrigger = false,
+    buttonRef,
 }) => (
     <button
+        ref={buttonRef}
         type="button"
+        data-more-trigger={dataMoreTrigger ? '1' : undefined}
         style={NAV_ITEM_STYLE}
         onPointerDown={(e) => e.stopPropagation()}
         onPointerUp={hardShieldInput ? (e) => e.stopPropagation() : undefined}
@@ -1010,7 +1209,7 @@ const NavItem: React.FC<NavItemProps> = ({
             if (hardShieldInput) {
                 e.stopPropagation();
             }
-            onClick?.();
+            onClick?.(e);
         }}
     >
         <MaskIcon
@@ -1319,6 +1518,48 @@ const AVATAR_MENU_ACCOUNT_NAME_STYLE: React.CSSProperties = {
     overflow: 'hidden',
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
+};
+
+const MORE_MENU_POPUP_STYLE: React.CSSProperties = {
+    position: 'fixed',
+    width: '208px',
+    padding: '6px',
+    borderRadius: '10px',
+    border: '1px solid rgba(255, 255, 255, 0.1)',
+    background: 'rgba(22, 24, 30, 0.98)',
+    boxShadow: '0 14px 28px rgba(0, 0, 0, 0.45)',
+    zIndex: LAYER_SIDEBAR_ROW_MENU,
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '2px',
+};
+
+const MORE_MENU_ITEM_STYLE: React.CSSProperties = {
+    width: '100%',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+    padding: '8px 10px',
+    border: 'none',
+    borderRadius: '8px',
+    background: 'transparent',
+    textAlign: 'left',
+    cursor: 'pointer',
+};
+
+const MORE_MENU_ITEM_CONTENT_STYLE: React.CSSProperties = {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '10px',
+    transition: `filter ${SIDEBAR_HOVER_TRANSITION}`,
+};
+
+const MORE_MENU_ITEM_LABEL_STYLE: React.CSSProperties = {
+    fontFamily: 'var(--font-ui)',
+    fontSize: `${FONT_SIZE_NAV}px`,
+    lineHeight: 1.2,
+    color: SIDEBAR_TEXT_COLOR,
+    transition: `color ${SIDEBAR_HOVER_TRANSITION}`,
 };
 
 const RENAME_CONTAINER_STYLE: React.CSSProperties = {

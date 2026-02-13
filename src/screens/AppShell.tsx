@@ -719,6 +719,7 @@ export const AppShell: React.FC = () => {
         commitRenameInterface(id, newTitle, 'sidebar_rename');
     }, [commitRenameInterface]);
     const closeFeedbackModal = React.useCallback(() => {
+        if (isFeedbackSubmitting) return;
         if (feedbackAutoCloseTimerRef.current !== null) {
             window.clearTimeout(feedbackAutoCloseTimerRef.current);
             feedbackAutoCloseTimerRef.current = null;
@@ -728,7 +729,7 @@ export const AppShell: React.FC = () => {
         setFeedbackSubmitError(null);
         setFeedbackSubmitOk(false);
         setIsFeedbackSubmitting(false);
-    }, []);
+    }, [isFeedbackSubmitting]);
     const submitFeedbackDraft = React.useCallback(async () => {
         if (isFeedbackSubmitting) return;
         if (!isLoggedIn || !user) return;
@@ -773,6 +774,9 @@ export const AppShell: React.FC = () => {
             setIsFeedbackSubmitting(false);
         }
     }, [closeFeedbackModal, feedbackDraftMessage, isFeedbackSubmitting, isLoggedIn, savedInterfaces.length, screen, user]);
+    const canSubmitFeedback = !isFeedbackSubmitting
+        && feedbackDraftMessage.trim().length > 0
+        && feedbackDraftMessage.trim().length <= FEEDBACK_MESSAGE_MAX_CHARS;
     const closeProfileOverlay = React.useCallback(() => {
         if (profileSaving) return;
         setIsProfileOpen(false);
@@ -990,6 +994,7 @@ export const AppShell: React.FC = () => {
         if (!isFeedbackOpen) return;
         const onKeyDown = (event: KeyboardEvent) => {
             if (event.key !== 'Escape') return;
+            if (isFeedbackSubmitting) return;
             event.stopPropagation();
             closeFeedbackModal();
         };
@@ -997,7 +1002,7 @@ export const AppShell: React.FC = () => {
         return () => {
             window.removeEventListener('keydown', onKeyDown, true);
         };
-    }, [closeFeedbackModal, isFeedbackOpen]);
+    }, [closeFeedbackModal, isFeedbackOpen, isFeedbackSubmitting]);
 
     React.useEffect(() => {
         savedInterfacesRef.current = savedInterfaces;
@@ -1627,6 +1632,7 @@ export const AppShell: React.FC = () => {
                     style={FEEDBACK_OVERLAY_BACKDROP_STYLE}
                     onClick={(e) => {
                         e.stopPropagation();
+                        if (isFeedbackSubmitting) return;
                         closeFeedbackModal();
                     }}
                 >
@@ -1653,6 +1659,7 @@ export const AppShell: React.FC = () => {
                                 {...hardShieldInput}
                                 type="button"
                                 style={FEEDBACK_CANCEL_STYLE}
+                                disabled={isFeedbackSubmitting}
                                 onClick={(e) => {
                                     e.stopPropagation();
                                     closeFeedbackModal();
@@ -1663,14 +1670,14 @@ export const AppShell: React.FC = () => {
                             <button
                                 {...hardShieldInput}
                                 type="button"
-                                disabled
+                                disabled={!canSubmitFeedback}
                                 style={FEEDBACK_SEND_STYLE}
                                 onClick={(e) => {
                                     e.stopPropagation();
                                     void submitFeedbackDraft();
                                 }}
                             >
-                                Send
+                                {isFeedbackSubmitting ? 'Sending...' : 'Send'}
                             </button>
                         </div>
                     </div>

@@ -36,6 +36,7 @@ const ICON_SIZE = 18 * SIDEBAR_SCALE;
 // Logo size multiplier: 1.0 = base, 1.5 = 50% larger
 const LOGO_SCALE = 1.05;
 const LOGO_SIZE = 20 * SIDEBAR_SCALE * LOGO_SCALE;
+const CLOSE_ICON_SIZE_PX = Math.round(ICON_SIZE);
 // Avatar size multiplier: 1.0 = base, 0.85 = 15% smaller
 const AVATAR_SCALE = 0.85;
 const AVATAR_SIZE = 28 * SIDEBAR_SCALE * AVATAR_SCALE;
@@ -62,7 +63,30 @@ const HOVER_ACCENT_COLOR = '#63abff';
 const DEFAULT_ICON_COLOR = '#d7f5ff';
 const SIDEBAR_TEXT_COLOR = '#D7F5FF';
 const ROW_MENU_DELETE_TEXT_COLOR = '#FF4B4E';
+const SIDEBAR_HOVER_TRANSITION = '250ms ease';
+const LOGO_SWAP_TRANSITION = '100ms ease';
+const CLOSE_ICON_VIEWBOX = '0 0 100 100';
 type RowMenuItemKey = 'rename' | 'delete';
+
+const roundedRectArcPath = (x: number, y: number, width: number, height: number, radius: number): string => {
+    const r = Math.max(0, Math.min(radius, width / 2, height / 2));
+    const right = (x + width).toFixed(3);
+    const bottom = (y + height).toFixed(3);
+    const left = x.toFixed(3);
+    const top = y.toFixed(3);
+    const hStart = (x + r).toFixed(3);
+    const hEnd = (x + width - r).toFixed(3);
+    const vStart = (y + r).toFixed(3);
+    const vEnd = (y + height - r).toFixed(3);
+    const rText = r.toFixed(3);
+    return `M ${hStart} ${top} H ${hEnd} A ${rText} ${rText} 0 0 1 ${right} ${vStart} V ${vEnd} A ${rText} ${rText} 0 0 1 ${hEnd} ${bottom} H ${hStart} A ${rText} ${rText} 0 0 1 ${left} ${vEnd} V ${vStart} A ${rText} ${rText} 0 0 1 ${hStart} ${top} Z`;
+};
+
+const CLOSE_ICON_PATH_D = [
+    roundedRectArcPath(8, 12, 84, 76, 16),
+    roundedRectArcPath(17, 20, 14, 60, 7),
+    roundedRectArcPath(40, 20, 43, 60, 11),
+].join(' ');
 
 type SidebarProps = {
     isExpanded: boolean;
@@ -107,6 +131,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     const [moreHover, setMoreHover] = React.useState(false);
     const [documentHover, setDocumentHover] = React.useState(false);
     const [closeHover, setCloseHover] = React.useState(false);
+    const [closeHoverArmed, setCloseHoverArmed] = React.useState(true);
     const [hoveredInterfaceId, setHoveredInterfaceId] = React.useState<string | null>(null);
     const [hoveredEllipsisRowId, setHoveredEllipsisRowId] = React.useState<string | null>(null);
     const [hoveredMenuItemKey, setHoveredMenuItemKey] = React.useState<RowMenuItemKey | null>(null);
@@ -369,6 +394,30 @@ export const Sidebar: React.FC<SidebarProps> = ({
         };
     }, [closeAvatarMenu, isAvatarMenuOpen]);
 
+    React.useEffect(() => {
+        if (isExpanded) {
+            setCloseHover(false);
+            setCloseHoverArmed(false);
+            return;
+        }
+
+        setCloseHover(false);
+        setCloseHoverArmed(true);
+    }, [isExpanded]);
+
+    React.useEffect(() => {
+        if (!isExpanded || closeHoverArmed) return;
+
+        const onFirstPointerMove = () => {
+            setCloseHoverArmed(true);
+        };
+
+        window.addEventListener('pointermove', onFirstPointerMove, { once: true });
+        return () => {
+            window.removeEventListener('pointermove', onFirstPointerMove);
+        };
+    }, [closeHoverArmed, isExpanded]);
+
     const bottomSectionStyle: React.CSSProperties = {
         ...BOTTOM_SECTION_STYLE,
         alignItems: isExpanded ? 'stretch' : 'center',
@@ -397,6 +446,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <div style={TOP_SECTION_STYLE}>
                 {/* Logo / Toggle Row */}
                 <div style={LOGO_ROW_STYLE}>
+                    {/*
+                      Top-left logo uses layered mask crossfade so shape swap is a true 100ms fade.
+                    */}
                     <button
                         type="button"
                         style={ICON_BUTTON_STYLE}
@@ -405,28 +457,80 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         onClick={!isExpanded ? onToggle : undefined}
                         title={!isExpanded ? 'Open sidebar' : undefined}
                     >
-                        <MaskIcon
-                            src={!isExpanded && logoHover ? sidebarIcon : circleIcon}
-                            size={LOGO_SIZE}
-                            color={logoHover ? HOVER_ACCENT_COLOR : DEFAULT_ICON_COLOR}
-                            opacity={logoHover ? ICON_OPACITY_HOVER : ICON_OPACITY_DEFAULT}
-                        />
+                        <span
+                            aria-hidden="true"
+                            style={{
+                                position: 'relative',
+                                width: `${LOGO_SIZE}px`,
+                                height: `${LOGO_SIZE}px`,
+                                display: 'inline-block',
+                                pointerEvents: 'none',
+                            }}
+                        >
+                            <span
+                                style={{
+                                    position: 'absolute',
+                                    inset: 0,
+                                    display: 'inline-flex',
+                                }}
+                            >
+                                <MaskIcon
+                                    src={circleIcon}
+                                    size={LOGO_SIZE}
+                                    color={logoHover ? HOVER_ACCENT_COLOR : DEFAULT_ICON_COLOR}
+                                    opacity={!isExpanded && logoHover ? 0 : (logoHover ? ICON_OPACITY_HOVER : ICON_OPACITY_DEFAULT)}
+                                    transition={`opacity ${LOGO_SWAP_TRANSITION}, background-color ${SIDEBAR_HOVER_TRANSITION}`}
+                                />
+                            </span>
+                            <span
+                                style={{
+                                    position: 'absolute',
+                                    inset: 0,
+                                    display: 'inline-flex',
+                                }}
+                            >
+                                <MaskIcon
+                                    src={sidebarIcon}
+                                    size={LOGO_SIZE}
+                                    color={logoHover ? HOVER_ACCENT_COLOR : DEFAULT_ICON_COLOR}
+                                    opacity={!isExpanded && logoHover ? (logoHover ? ICON_OPACITY_HOVER : ICON_OPACITY_DEFAULT) : 0}
+                                    transition={`opacity ${LOGO_SWAP_TRANSITION}, background-color ${SIDEBAR_HOVER_TRANSITION}`}
+                                />
+                            </span>
+                        </span>
                     </button>
                     {isExpanded && (
                         <button
                             type="button"
                             style={{ ...ICON_BUTTON_STYLE, marginLeft: 'auto', marginRight: `${-CLOSE_ICON_OFFSET_LEFT}px` }}
-                            onMouseEnter={() => setCloseHover(true)}
+                            onMouseEnter={() => {
+                                if (!closeHoverArmed) return;
+                                setCloseHover(true);
+                            }}
                             onMouseLeave={() => setCloseHover(false)}
                             onClick={onToggle}
                             title="Close sidebar"
                         >
-                            <MaskIcon
-                                src={sidebarIcon}
-                                size={ICON_SIZE}
-                                color={closeHover ? HOVER_ACCENT_COLOR : DEFAULT_ICON_COLOR}
-                                opacity={closeHover ? ICON_OPACITY_HOVER : ICON_OPACITY_DEFAULT}
-                            />
+                            <svg
+                                aria-hidden="true"
+                                viewBox={CLOSE_ICON_VIEWBOX}
+                                style={{
+                                    width: `${CLOSE_ICON_SIZE_PX}px`,
+                                    height: `${CLOSE_ICON_SIZE_PX}px`,
+                                    display: 'block',
+                                    pointerEvents: 'none',
+                                }}
+                            >
+                                <path
+                                    d={CLOSE_ICON_PATH_D}
+                                    fill={closeHover ? HOVER_ACCENT_COLOR : DEFAULT_ICON_COLOR}
+                                    fillRule="evenodd"
+                                    style={{
+                                        opacity: closeHover ? ICON_OPACITY_HOVER : ICON_OPACITY_DEFAULT,
+                                        transition: `fill ${SIDEBAR_HOVER_TRANSITION}, opacity ${SIDEBAR_HOVER_TRANSITION}`,
+                                    }}
+                                />
+                            </svg>
                         </button>
                     )}
                 </div>
@@ -934,9 +1038,10 @@ type MaskIconProps = {
     size: number;
     color: string;
     opacity?: number;
+    transition?: string;
 };
 
-const MaskIcon: React.FC<MaskIconProps> = ({ src, size, color, opacity = 1 }) => (
+const MaskIcon: React.FC<MaskIconProps> = ({ src, size, color, opacity = 1, transition }) => (
     <span
         aria-hidden="true"
         style={{
@@ -954,6 +1059,7 @@ const MaskIcon: React.FC<MaskIconProps> = ({ src, size, color, opacity = 1 }) =>
             maskPosition: 'center',
             WebkitMaskSize: 'contain',
             maskSize: 'contain',
+            transition: transition ?? `background-color ${SIDEBAR_HOVER_TRANSITION}, opacity ${SIDEBAR_HOVER_TRANSITION}`,
         }}
     />
 );
@@ -1015,6 +1121,7 @@ const NAV_LABEL_STYLE: React.CSSProperties = {
     fontSize: `${FONT_SIZE_NAV}px`,
     fontFamily: 'var(--font-ui)',
     whiteSpace: 'nowrap',
+    transition: `color ${SIDEBAR_HOVER_TRANSITION}`,
 };
 
 const INTERFACES_SECTION_STYLE: React.CSSProperties = {
@@ -1056,6 +1163,7 @@ const INTERFACE_ITEM_STYLE: React.CSSProperties = {
     textAlign: 'left',
     cursor: 'pointer',
     opacity: 1,
+    transition: `color ${SIDEBAR_HOVER_TRANSITION}, background-color ${SIDEBAR_HOVER_TRANSITION}`,
 };
 
 const INTERFACE_ROW_CONTENT_STYLE: React.CSSProperties = {
@@ -1092,7 +1200,7 @@ const ROW_ELLIPSIS_BUTTON_STYLE: React.CSSProperties = {
     border: 'none',
     background: 'transparent',
     cursor: 'pointer',
-    transition: 'opacity 140ms ease',
+    transition: `opacity ${SIDEBAR_HOVER_TRANSITION}`,
     borderRadius: '4px',
 };
 
@@ -1127,7 +1235,7 @@ const ROW_MENU_ITEM_CONTENT_STYLE: React.CSSProperties = {
     display: 'inline-flex',
     alignItems: 'center',
     gap: '10px',
-    transition: 'filter 140ms ease',
+    transition: `filter ${SIDEBAR_HOVER_TRANSITION}`,
 };
 
 const ROW_MENU_ITEM_LABEL_STYLE: React.CSSProperties = {
@@ -1135,6 +1243,7 @@ const ROW_MENU_ITEM_LABEL_STYLE: React.CSSProperties = {
     fontSize: `${FONT_SIZE_NAV}px`,
     lineHeight: 1.2,
     color: SIDEBAR_TEXT_COLOR,
+    transition: `color ${SIDEBAR_HOVER_TRANSITION}`,
 };
 
 const AVATAR_MENU_POPUP_STYLE: React.CSSProperties = {
@@ -1167,7 +1276,7 @@ const AVATAR_MENU_ITEM_CONTENT_STYLE: React.CSSProperties = {
     display: 'inline-flex',
     alignItems: 'center',
     gap: '10px',
-    transition: 'filter 140ms ease',
+    transition: `filter ${SIDEBAR_HOVER_TRANSITION}`,
 };
 
 const AVATAR_MENU_ITEM_LABEL_STYLE: React.CSSProperties = {
@@ -1175,6 +1284,7 @@ const AVATAR_MENU_ITEM_LABEL_STYLE: React.CSSProperties = {
     fontSize: `${FONT_SIZE_NAV}px`,
     lineHeight: 1.2,
     color: SIDEBAR_TEXT_COLOR,
+    transition: `color ${SIDEBAR_HOVER_TRANSITION}`,
 };
 
 const AVATAR_MENU_ACCOUNT_PHOTO_STYLE: React.CSSProperties = {
@@ -1263,7 +1373,7 @@ const PROFILE_ROW_STYLE: React.CSSProperties = {
     borderRadius: '10px',
     height: '36px',
     padding: '0',
-    transition: 'background-color 100ms ease',
+    transition: `background-color ${SIDEBAR_HOVER_TRANSITION}`,
 };
 
 const AVATAR_STYLE: React.CSSProperties = {

@@ -85,6 +85,7 @@ const FEEDBACK_MESSAGE_MAX_CHARS = 8000;
 const FEEDBACK_SUCCESS_CLOSE_DELAY_MS = 320;
 const FEEDBACK_ADMIN_PAGE_LIMIT = 50;
 const FEEDBACK_ADMIN_SOFT_REFRESH_DEBOUNCE_MS = 600;
+const FEEDBACK_ADMIN_STALE_MS = 30_000;
 const hydratedStorageKeysSession = new Set<string>();
 const backfilledStorageKeysSession = new Set<string>();
 let lastIdentityKeySession: string | null = null;
@@ -811,6 +812,10 @@ export const AppShell: React.FC = () => {
         const text = String(error ?? '');
         return text.includes('403') || text.includes('401');
     }, []);
+    const isAdminInboxStale = React.useCallback(() => {
+        if (adminLastFetchedAtTsRef.current <= 0) return true;
+        return (Date.now() - adminLastFetchedAtTsRef.current) > FEEDBACK_ADMIN_STALE_MS;
+    }, []);
     const adminRefreshInbox = React.useCallback(async (input: { mode: 'hard' | 'soft' }) => {
         if (!isFeedbackOpenRef.current) return;
         if (!isFeedbackAdmin) return;
@@ -1200,6 +1205,9 @@ export const AppShell: React.FC = () => {
     React.useEffect(() => {
         if (!isFeedbackOpen || !isLoggedIn) return;
         const openEpoch = feedbackOpenSessionRef.current;
+        if (isFeedbackAdmin && adminItems.length > 0 && !isAdminInboxStale()) {
+            return;
+        }
         if (feedbackAdminFetchRequestedEpochRef.current === openEpoch) return;
         feedbackAdminFetchRequestedEpochRef.current = openEpoch;
         feedbackAdminFetchEpochRef.current += 1;
@@ -1250,7 +1258,20 @@ export const AppShell: React.FC = () => {
         return () => {
             active = false;
         };
-    }, [isAdminFetchForbidden, isFeedbackOpen, isLoggedIn]);
+    }, [adminItems.length, isAdminFetchForbidden, isAdminInboxStale, isFeedbackAdmin, isFeedbackOpen, isLoggedIn]);
+
+    React.useEffect(() => {
+        if (!isFeedbackOpen) return;
+        if (!isFeedbackAdmin) return;
+        if (feedbackModalView !== 'inbox') return;
+        if (adminLoadState === 'loading') return;
+        if (adminItems.length === 0) {
+            void adminRefreshInbox({ mode: 'hard' });
+            return;
+        }
+        if (!isAdminInboxStale()) return;
+        void adminRefreshInbox({ mode: 'soft' });
+    }, [adminItems.length, adminLoadState, adminRefreshInbox, feedbackModalView, isAdminInboxStale, isFeedbackAdmin, isFeedbackOpen]);
 
     React.useEffect(() => {
         if (!isFeedbackOpen) return;

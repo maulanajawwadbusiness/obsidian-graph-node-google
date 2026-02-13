@@ -8,6 +8,7 @@ import uploadOverlayIcon from '../assets/upload_overlay_icon.png';
 import errorIcon from '../assets/error_icon.png';
 
 const LOGIN_OVERLAY_ENABLED = true;
+const DEV_URL = 'https://dev.arnvoid.com';
 const ACCEPTED_EXTENSIONS = ['.pdf', '.docx', '.md', '.markdown', '.txt'];
 const LEFT_RAIL_GUTTER_PX = 35;
 
@@ -108,6 +109,12 @@ export const EnterPrompt: React.FC<EnterPromptProps> = ({
         attachFromFiles(Array.from(e.dataTransfer.files));
     }, [attachFromFiles]);
 
+    const sendHelloToDev = React.useCallback(() => {
+        const url = `${DEV_URL}/?msg=${encodeURIComponent('HELLO!')}`;
+        console.info('[enterprompt] sendHelloToDev ->', url);
+        window.open(url, '_blank', 'noopener,noreferrer');
+    }, []);
+
     React.useEffect(() => {
         onOverlayOpenChange?.(loginOverlayOpen);
     }, [loginOverlayOpen, onOverlayOpenChange]);
@@ -135,6 +142,15 @@ export const EnterPrompt: React.FC<EnterPromptProps> = ({
                 onRemoveFile={handleRemoveFile}
                 onPickFiles={(files) => attachFromFiles(files)}
             />
+            <button
+                type="button"
+                onClick={sendHelloToDev}
+                onPointerDown={(e) => e.stopPropagation()}
+                style={DEV_SEND_BUTTON_STYLE}
+                aria-label="Send hello to dev"
+            >
+                send
+            </button>
             {SHOW_ENTERPROMPT_PAYMENT_PANEL ? <PaymentGopayPanel /> : null}
 
             {/* Drag overlay */}
@@ -187,6 +203,22 @@ const ROOT_STYLE: React.CSSProperties = {
     position: 'relative',
     boxSizing: 'border-box',
     paddingLeft: `${LEFT_RAIL_GUTTER_PX}px`,
+};
+
+const DEV_SEND_BUTTON_STYLE: React.CSSProperties = {
+    position: 'absolute',
+    top: '12px',
+    right: '12px',
+    zIndex: 5,
+    padding: '6px 10px',
+    border: '1px solid rgba(255, 255, 255, 0.22)',
+    borderRadius: '8px',
+    background: 'rgba(6, 6, 10, 0.84)',
+    color: '#e7e7e7',
+    fontSize: '11px',
+    fontWeight: 600,
+    fontFamily: 'var(--font-ui)',
+    cursor: 'pointer',
 };
 
 const DRAG_OVERLAY_STYLE: React.CSSProperties = {

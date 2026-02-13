@@ -84,6 +84,7 @@ const PROFILE_USERNAME_REGEX = /^[A-Za-z0-9_.-]+$/;
 const FEEDBACK_MESSAGE_MAX_CHARS = 8000;
 const FEEDBACK_SUCCESS_CLOSE_DELAY_MS = 320;
 const FEEDBACK_ADMIN_PAGE_LIMIT = 50;
+const FEEDBACK_ADMIN_SOFT_REFRESH_DEBOUNCE_MS = 600;
 const hydratedStorageKeysSession = new Set<string>();
 const backfilledStorageKeysSession = new Set<string>();
 let lastIdentityKeySession: string | null = null;
@@ -891,6 +892,16 @@ export const AppShell: React.FC = () => {
             adminRefreshInFlightRef.current = false;
         }
     }, [adminStatusPendingById, isAdminFetchForbidden, isFeedbackAdmin]);
+    const scheduleAdminSoftRefresh = React.useCallback(() => {
+        if (adminSoftRefreshTimerRef.current !== null) {
+            window.clearTimeout(adminSoftRefreshTimerRef.current);
+            adminSoftRefreshTimerRef.current = null;
+        }
+        adminSoftRefreshTimerRef.current = window.setTimeout(() => {
+            adminSoftRefreshTimerRef.current = null;
+            void adminRefreshInbox({ mode: 'soft' });
+        }, FEEDBACK_ADMIN_SOFT_REFRESH_DEBOUNCE_MS);
+    }, [adminRefreshInbox]);
     const loadMoreFeedbackAdmin = React.useCallback(async () => {
         if (!isFeedbackOpen) return;
         if (!isFeedbackAdmin) return;
@@ -946,6 +957,7 @@ export const AppShell: React.FC = () => {
             if (result.updated === false) {
                 throw new Error('status_update_not_applied');
             }
+            scheduleAdminSoftRefresh();
         } catch {
             setAdminItems((curr) => curr.map((item) => (
                 item.id === id ? { ...item, status: previous.status } : item
@@ -958,7 +970,7 @@ export const AppShell: React.FC = () => {
                 return next;
             });
         }
-    }, [adminItems, adminStatusPendingById, isFeedbackAdmin]);
+    }, [adminItems, adminStatusPendingById, isFeedbackAdmin, scheduleAdminSoftRefresh]);
     const closeProfileOverlay = React.useCallback(() => {
         if (profileSaving) return;
         setIsProfileOpen(false);

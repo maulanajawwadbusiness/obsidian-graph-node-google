@@ -985,6 +985,51 @@ app.post("/api/feedback", requireAuth, async (req, res) => {
   }
 });
 
+app.get("/api/feedback", requireAuth, async (req, res) => {
+  const admin = requireFeedbackAdminOrSendForbidden(res);
+  if (!admin) return;
+
+  const limit = parseFeedbackListLimit(req.query?.limit);
+  const beforeIdRaw = req.query?.beforeId;
+  const beforeId = parseFeedbackBeforeId(beforeIdRaw);
+  if (beforeId === null && beforeIdRaw !== undefined && beforeIdRaw !== null && beforeIdRaw !== "") {
+    res.status(400).json({ ok: false, error: "beforeId must be a positive integer" });
+    return;
+  }
+
+  try {
+    const pool = await getPool();
+    const result = await pool.query(
+      `select id, user_id, category, message, context_json, status, created_at
+         from feedback_messages
+        where ($2::bigint is null or id < $2)
+        order by id desc
+        limit $1`,
+      [limit, beforeId]
+    );
+
+    const items = result.rows.map((row) => ({
+      id: Number(row.id),
+      userId: Number(row.user_id),
+      category: String(row.category ?? ""),
+      message: String(row.message ?? ""),
+      context: row.context_json ?? {},
+      status: String(row.status ?? "new"),
+      createdAt: toIsoString(row.created_at),
+    }));
+    const nextCursor = items.length === limit ? items[items.length - 1]?.id : undefined;
+
+    console.log("[feedback] admin_list ok n=%s beforeId=%s", items.length, beforeId ?? "null");
+    res.json({
+      ok: true,
+      items,
+      ...(typeof nextCursor === "number" ? { nextCursor } : {}),
+    });
+  } catch {
+    res.status(500).json({ ok: false, error: "failed to list feedback" });
+  }
+});
+
 app.get("/api/saved-interfaces", requireAuth, async (_req, res) => {
   const user = res.locals.user as AuthContext;
   try {

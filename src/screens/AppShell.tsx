@@ -289,7 +289,8 @@ export const AppShell: React.FC = () => {
     const [isFeedbackSubmitting, setIsFeedbackSubmitting] = React.useState(false);
     const [feedbackSubmitError, setFeedbackSubmitError] = React.useState<string | null>(null);
     const [feedbackSubmitOk, setFeedbackSubmitOk] = React.useState(false);
-    const [feedbackRouteUnavailable, setFeedbackRouteUnavailable] = React.useState(false);
+    const [feedbackSubmitRouteUnavailable, setFeedbackSubmitRouteUnavailable] = React.useState(false);
+    const [feedbackAdminRouteUnavailable, setFeedbackAdminRouteUnavailable] = React.useState(false);
     const [isFeedbackAdmin, setIsFeedbackAdmin] = React.useState(false);
     const [adminLoadState, setAdminLoadState] = React.useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
     const [adminError, setAdminError] = React.useState<string | null>(null);
@@ -763,7 +764,7 @@ export const AppShell: React.FC = () => {
     const submitFeedbackDraft = React.useCallback(async () => {
         if (isFeedbackSubmitting) return;
         if (!isLoggedIn || !user) return;
-        if (feedbackRouteUnavailable) {
+        if (feedbackSubmitRouteUnavailable) {
             setFeedbackSubmitError('Feedback is not available on this server revision yet.');
             setFeedbackSubmitOk(false);
             return;
@@ -805,7 +806,7 @@ export const AppShell: React.FC = () => {
             }, FEEDBACK_SUCCESS_CLOSE_DELAY_MS);
         } catch (error) {
             if (isFeedbackRouteUnavailableError(error)) {
-                setFeedbackRouteUnavailable(true);
+                setFeedbackSubmitRouteUnavailable(true);
                 setFeedbackSubmitError('Feedback is not available on this server revision yet.');
             } else {
                 setFeedbackSubmitError('Failed to send feedback. Please try again.');
@@ -813,9 +814,9 @@ export const AppShell: React.FC = () => {
         } finally {
             setIsFeedbackSubmitting(false);
         }
-    }, [closeFeedbackModal, feedbackDraftMessage, feedbackRouteUnavailable, isFeedbackSubmitting, isLoggedIn, savedInterfaces.length, screen, user]);
+    }, [closeFeedbackModal, feedbackDraftMessage, feedbackSubmitRouteUnavailable, isFeedbackSubmitting, isLoggedIn, savedInterfaces.length, screen, user]);
     const canSubmitFeedback = !isFeedbackSubmitting
-        && !feedbackRouteUnavailable
+        && !feedbackSubmitRouteUnavailable
         && feedbackDraftMessage.trim().length > 0
         && feedbackDraftMessage.trim().length <= FEEDBACK_MESSAGE_MAX_CHARS;
     const selectedAdminItem = React.useMemo(
@@ -829,6 +830,7 @@ export const AppShell: React.FC = () => {
     const adminRefreshInbox = React.useCallback(async (input: { mode: 'hard' | 'soft' }) => {
         if (!isFeedbackOpenRef.current) return;
         if (!isFeedbackAdmin) return;
+        if (feedbackAdminRouteUnavailable) return;
         if (adminLoadingMore) return;
         if (adminRefreshState === 'loading') return;
         if (adminRefreshInFlightRef.current) return;
@@ -900,7 +902,7 @@ export const AppShell: React.FC = () => {
                 return;
             }
             if (isFeedbackRouteUnavailableError(error)) {
-                setFeedbackRouteUnavailable(true);
+                setFeedbackAdminRouteUnavailable(true);
                 setIsFeedbackAdmin(false);
                 setFeedbackModalView('send');
                 setAdminLoadState('idle');
@@ -921,7 +923,7 @@ export const AppShell: React.FC = () => {
         } finally {
             adminRefreshInFlightRef.current = false;
         }
-    }, [adminLoadingMore, adminRefreshState, adminStatusPendingById, isFeedbackAdmin]);
+    }, [adminLoadingMore, adminRefreshState, adminStatusPendingById, feedbackAdminRouteUnavailable, isFeedbackAdmin]);
     const scheduleAdminSoftRefresh = React.useCallback(() => {
         if (adminSoftRefreshTimerRef.current !== null) {
             window.clearTimeout(adminSoftRefreshTimerRef.current);
@@ -935,6 +937,7 @@ export const AppShell: React.FC = () => {
     const loadMoreFeedbackAdmin = React.useCallback(async () => {
         if (!isFeedbackOpen) return;
         if (!isFeedbackAdmin) return;
+        if (feedbackAdminRouteUnavailable) return;
         if (adminLoadingMore) return;
         if (adminRefreshInFlightRef.current) return;
         if (!adminHasMore) return;
@@ -973,7 +976,7 @@ export const AppShell: React.FC = () => {
             if (feedbackOpenSessionRef.current !== openSession) return;
             if (authIdentityKeyRef.current !== identityAtStart) return;
             if (isFeedbackRouteUnavailableError(error)) {
-                setFeedbackRouteUnavailable(true);
+                setFeedbackAdminRouteUnavailable(true);
                 setIsFeedbackAdmin(false);
                 setFeedbackModalView('send');
                 setAdminLoadState('idle');
@@ -991,9 +994,10 @@ export const AppShell: React.FC = () => {
             if (authIdentityKeyRef.current !== identityAtStart) return;
             setAdminLoadingMore(false);
         }
-    }, [adminCursorBeforeId, adminHasMore, adminLoadingMore, isFeedbackAdmin, isFeedbackOpen]);
+    }, [adminCursorBeforeId, adminHasMore, adminLoadingMore, feedbackAdminRouteUnavailable, isFeedbackAdmin, isFeedbackOpen]);
     const updateAdminStatus = React.useCallback(async (id: number, nextStatus: FeedbackStatus) => {
         if (!isFeedbackAdmin) return;
+        if (feedbackAdminRouteUnavailable) return;
         if (adminStatusPendingById[id]) return;
         const previous = adminItems.find((item) => item.id === id);
         if (!previous) return;
@@ -1019,7 +1023,7 @@ export const AppShell: React.FC = () => {
             if (feedbackOpenSessionRef.current !== openSession) return;
             if (authIdentityKeyRef.current !== identityAtStart) return;
             if (isFeedbackRouteUnavailableError(error)) {
-                setFeedbackRouteUnavailable(true);
+                setFeedbackAdminRouteUnavailable(true);
                 setIsFeedbackAdmin(false);
                 setFeedbackModalView('send');
                 setAdminLoadState('idle');
@@ -1044,7 +1048,7 @@ export const AppShell: React.FC = () => {
                 return next;
             });
         }
-    }, [adminItems, adminStatusPendingById, isFeedbackAdmin, scheduleAdminSoftRefresh]);
+    }, [adminItems, adminStatusPendingById, feedbackAdminRouteUnavailable, isFeedbackAdmin, scheduleAdminSoftRefresh]);
     const closeProfileOverlay = React.useCallback(() => {
         if (profileSaving) return;
         setIsProfileOpen(false);
@@ -1142,6 +1146,8 @@ export const AppShell: React.FC = () => {
         if (pendingDeleteId) {
             closeDeleteConfirm();
         }
+        setFeedbackSubmitRouteUnavailable(false);
+        setFeedbackAdminRouteUnavailable(false);
         setIsFeedbackOpen(true);
     }, [
         closeDeleteConfirm,
@@ -1273,7 +1279,7 @@ export const AppShell: React.FC = () => {
 
     React.useEffect(() => {
         if (!isFeedbackOpen || !isLoggedIn) return;
-        if (feedbackRouteUnavailable) return;
+        if (feedbackAdminRouteUnavailable) return;
         const openEpoch = feedbackOpenSessionRef.current;
         if (isFeedbackAdmin && adminItems.length > 0 && !isAdminInboxStale()) {
             return;
@@ -1322,7 +1328,7 @@ export const AppShell: React.FC = () => {
                     return;
                 }
                 if (isFeedbackRouteUnavailableError(error)) {
-                    setFeedbackRouteUnavailable(true);
+                    setFeedbackAdminRouteUnavailable(true);
                     setIsFeedbackAdmin(false);
                     setAdminLoadState('idle');
                     setAdminError(null);
@@ -1340,7 +1346,7 @@ export const AppShell: React.FC = () => {
         return () => {
             active = false;
         };
-    }, [adminItems.length, feedbackRouteUnavailable, isAdminInboxStale, isFeedbackAdmin, isFeedbackOpen, isLoggedIn]);
+    }, [adminItems.length, feedbackAdminRouteUnavailable, isAdminInboxStale, isFeedbackAdmin, isFeedbackOpen, isLoggedIn]);
 
     React.useEffect(() => {
         if (!isFeedbackOpen) return;
@@ -2230,7 +2236,7 @@ export const AppShell: React.FC = () => {
                                     {feedbackSubmitError ? (
                                         <div style={FEEDBACK_ERROR_STYLE}>{feedbackSubmitError}</div>
                                     ) : null}
-                                    {!feedbackSubmitError && feedbackRouteUnavailable ? (
+                                    {!feedbackSubmitError && feedbackSubmitRouteUnavailable ? (
                                         <div style={FEEDBACK_ERROR_STYLE}>Feedback is not available on this server revision yet.</div>
                                     ) : null}
                                     {feedbackSubmitOk ? (

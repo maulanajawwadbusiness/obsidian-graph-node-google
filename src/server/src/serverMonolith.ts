@@ -2850,6 +2850,7 @@ app.post("/api/llm/chat", requireAuth, async (req, res) => {
 });
 
 async function startServer() {
+  const allowDevBootWithoutDb = !isProd() && process.env.ALLOW_DEV_START_WITHOUT_DB !== "0";
   try {
     const schema = await assertAuthSchemaReady();
     profileColumnsAvailable = await detectProfileColumnsAvailability();
@@ -2862,8 +2863,19 @@ async function startServer() {
       console.log(`[server] listening on ${port}`);
     });
   } catch (error) {
-    console.error(`[auth-schema] fatal startup failure: ${String(error)}`);
-    process.exit(1);
+    if (!allowDevBootWithoutDb) {
+      console.error(`[auth-schema] fatal startup failure: ${String(error)}`);
+      process.exit(1);
+      return;
+    }
+
+    profileColumnsAvailable = false;
+    console.warn(`[auth-schema] startup degraded mode enabled: ${String(error)}`);
+    console.warn("[auth-schema] continuing boot in dev without DB readiness checks");
+    console.log(`[admin] allowlist loaded count=${ADMIN_EMAIL_ALLOWLIST_SET.size}`);
+    app.listen(port, () => {
+      console.log(`[server] listening on ${port} (degraded mode)`);
+    });
   }
 }
 

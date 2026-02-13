@@ -19,8 +19,10 @@ import {
 } from '../ui/layers';
 import {
     type FeedbackAdminItem,
+    type FeedbackStatus,
     submitFeedback,
     listFeedbackAdmin,
+    updateFeedbackStatusAdmin,
     deleteSavedInterface as deleteSavedInterfaceRemote,
     listSavedInterfaces,
     updateProfile,
@@ -291,6 +293,7 @@ export const AppShell: React.FC = () => {
     const [adminCursorBeforeId, setAdminCursorBeforeId] = React.useState<number | null>(null);
     const [adminHasMore, setAdminHasMore] = React.useState(false);
     const [adminLoadingMore, setAdminLoadingMore] = React.useState(false);
+    const [adminStatusPendingById, setAdminStatusPendingById] = React.useState<Record<number, boolean>>({});
     const [feedbackModalView, setFeedbackModalView] = React.useState<'inbox' | 'send'>('send');
     const [pendingDeleteId, setPendingDeleteId] = React.useState<string | null>(null);
     const [pendingDeleteTitle, setPendingDeleteTitle] = React.useState<string | null>(null);
@@ -835,6 +838,32 @@ export const AppShell: React.FC = () => {
             setAdminLoadingMore(false);
         }
     }, [adminCursorBeforeId, adminHasMore, adminLoadingMore, isFeedbackAdmin, isFeedbackOpen]);
+    const updateAdminStatus = React.useCallback(async (id: number, nextStatus: FeedbackStatus) => {
+        if (!isFeedbackAdmin) return;
+        if (adminStatusPendingById[id]) return;
+        const previous = adminItems.find((item) => item.id === id);
+        if (!previous) return;
+        if (previous.status === nextStatus) return;
+        setAdminError(null);
+        setAdminStatusPendingById((curr) => ({ ...curr, [id]: true }));
+        setAdminItems((curr) => curr.map((item) => (
+            item.id === id ? { ...item, status: nextStatus } : item
+        )));
+        try {
+            await updateFeedbackStatusAdmin({ id, status: nextStatus });
+        } catch {
+            setAdminItems((curr) => curr.map((item) => (
+                item.id === id ? { ...item, status: previous.status } : item
+            )));
+            setAdminError('Failed to update status.');
+        } finally {
+            setAdminStatusPendingById((curr) => {
+                const next = { ...curr };
+                delete next[id];
+                return next;
+            });
+        }
+    }, [adminItems, adminStatusPendingById, isFeedbackAdmin]);
     const closeProfileOverlay = React.useCallback(() => {
         if (profileSaving) return;
         setIsProfileOpen(false);
@@ -1153,6 +1182,7 @@ export const AppShell: React.FC = () => {
         setAdminCursorBeforeId(null);
         setAdminHasMore(false);
         setAdminLoadingMore(false);
+        setAdminStatusPendingById({});
     }, [isFeedbackOpen]);
 
     React.useEffect(() => {
@@ -1857,6 +1887,28 @@ export const AppShell: React.FC = () => {
                                 <div {...hardShieldInput} style={FEEDBACK_ADMIN_DETAIL_PANE_STYLE}>
                                     {selectedAdminItem ? (
                                         <div {...hardShieldInput} style={FEEDBACK_ADMIN_DETAIL_SCROLL_STYLE}>
+                                            <div {...hardShieldInput} style={FEEDBACK_ADMIN_STATUS_ACTION_ROW_STYLE}>
+                                                {(['new', 'triaged', 'done'] as FeedbackStatus[]).map((statusValue) => (
+                                                    <button
+                                                        {...hardShieldInput}
+                                                        key={statusValue}
+                                                        type="button"
+                                                        disabled={adminStatusPendingById[selectedAdminItem.id] === true}
+                                                        style={selectedAdminItem.status === statusValue
+                                                            ? FEEDBACK_ADMIN_STATUS_ACTION_ACTIVE_STYLE
+                                                            : FEEDBACK_ADMIN_STATUS_ACTION_STYLE}
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            void updateAdminStatus(selectedAdminItem.id, statusValue);
+                                                        }}
+                                                    >
+                                                        {statusValue}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                            {adminError ? (
+                                                <div style={FEEDBACK_ERROR_STYLE}>{adminError}</div>
+                                            ) : null}
                                             <div style={FEEDBACK_ADMIN_DETAIL_TITLE_STYLE}>Message</div>
                                             <div style={FEEDBACK_ADMIN_MESSAGE_STYLE}>{selectedAdminItem.message}</div>
                                             <div style={FEEDBACK_ADMIN_DETAIL_TITLE_STYLE}>Context</div>
@@ -2614,6 +2666,32 @@ const FEEDBACK_ADMIN_LOAD_MORE_STYLE: React.CSSProperties = {
     cursor: 'pointer',
     fontWeight: 300,
     fontFamily: 'var(--font-ui)',
+};
+
+const FEEDBACK_ADMIN_STATUS_ACTION_ROW_STYLE: React.CSSProperties = {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+};
+
+const FEEDBACK_ADMIN_STATUS_ACTION_STYLE: React.CSSProperties = {
+    border: '1px solid rgba(255, 255, 255, 0.22)',
+    background: 'transparent',
+    color: '#e7e7e7',
+    borderRadius: '7px',
+    padding: '5px 10px',
+    fontSize: '11px',
+    cursor: 'pointer',
+    fontWeight: 300,
+    fontFamily: 'var(--font-ui)',
+    textTransform: 'capitalize',
+};
+
+const FEEDBACK_ADMIN_STATUS_ACTION_ACTIVE_STYLE: React.CSSProperties = {
+    ...FEEDBACK_ADMIN_STATUS_ACTION_STYLE,
+    border: '1px solid rgba(99, 171, 255, 0.44)',
+    background: 'rgba(99, 171, 255, 0.2)',
+    color: '#d7f5ff',
 };
 
 const FEEDBACK_COUNTER_STYLE: React.CSSProperties = {

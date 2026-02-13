@@ -2074,16 +2074,16 @@ export const AppShell: React.FC = () => {
                                                     setAdminSelectedId(item.id);
                                                 }}
                                             >
-                                                <div style={FEEDBACK_ADMIN_LIST_TOP_STYLE}>
-                                                    <span style={FEEDBACK_ADMIN_STATUS_BADGE_STYLE}>{item.status}</span>
+                                                <div {...hardShieldInput} style={FEEDBACK_ADMIN_LIST_TOP_STYLE}>
+                                                    <span {...hardShieldInput} style={FEEDBACK_ADMIN_STATUS_BADGE_STYLE}>{item.status}</span>
                                                     {item.category ? (
-                                                        <span style={FEEDBACK_ADMIN_CATEGORY_STYLE}>{item.category}</span>
+                                                        <span {...hardShieldInput} style={FEEDBACK_ADMIN_CATEGORY_STYLE}>{item.category}</span>
                                                     ) : null}
                                                 </div>
-                                                <div style={FEEDBACK_ADMIN_PREVIEW_STYLE}>
+                                                <div {...hardShieldInput} style={FEEDBACK_ADMIN_PREVIEW_STYLE}>
                                                     {item.message.slice(0, 80)}
                                                 </div>
-                                                <div style={FEEDBACK_ADMIN_TIME_STYLE}>{item.createdAt}</div>
+                                                <div {...hardShieldInput} style={FEEDBACK_ADMIN_TIME_STYLE}>{item.createdAt}</div>
                                             </button>
                                         ))}
                                         {adminHasMore ? (
@@ -2127,15 +2127,15 @@ export const AppShell: React.FC = () => {
                                             {adminError ? (
                                                 <div {...hardShieldInput} style={FEEDBACK_ERROR_STYLE}>{adminError}</div>
                                             ) : null}
-                                            <div style={FEEDBACK_ADMIN_DETAIL_TITLE_STYLE}>Message</div>
-                                            <div style={FEEDBACK_ADMIN_MESSAGE_STYLE}>{selectedAdminItem.message}</div>
-                                            <div style={FEEDBACK_ADMIN_DETAIL_TITLE_STYLE}>Context</div>
+                                            <div {...hardShieldInput} style={FEEDBACK_ADMIN_DETAIL_TITLE_STYLE}>Message</div>
+                                            <div {...hardShieldInput} style={FEEDBACK_ADMIN_MESSAGE_STYLE}>{selectedAdminItem.message}</div>
+                                            <div {...hardShieldInput} style={FEEDBACK_ADMIN_DETAIL_TITLE_STYLE}>Context</div>
                                             <pre {...hardShieldInput} style={FEEDBACK_ADMIN_CONTEXT_STYLE}>
                                                 {JSON.stringify(selectedAdminItem.context ?? {}, null, 2)}
                                             </pre>
                                         </div>
                                     ) : (
-                                        <div style={FEEDBACK_ADMIN_MUTED_STYLE}>Select an item.</div>
+                                        <div {...hardShieldInput} style={FEEDBACK_ADMIN_MUTED_STYLE}>Select an item.</div>
                                     )}
                                 </div>
                             </div>

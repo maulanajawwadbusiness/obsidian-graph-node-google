@@ -18,6 +18,7 @@ import {
     LAYER_ONBOARDING_FULLSCREEN_BUTTON,
 } from '../ui/layers';
 import {
+    submitFeedback,
     deleteSavedInterface as deleteSavedInterfaceRemote,
     listSavedInterfaces,
     updateProfile,
@@ -76,6 +77,8 @@ const REMOTE_OUTBOX_PAUSE_401_MS = 60_000;
 const PROFILE_DISPLAY_NAME_MAX = 80;
 const PROFILE_USERNAME_MAX = 32;
 const PROFILE_USERNAME_REGEX = /^[A-Za-z0-9_.-]+$/;
+const FEEDBACK_MESSAGE_MAX_CHARS = 8000;
+const FEEDBACK_SUCCESS_CLOSE_DELAY_MS = 320;
 const hydratedStorageKeysSession = new Set<string>();
 const backfilledStorageKeysSession = new Set<string>();
 let lastIdentityKeySession: string | null = null;
@@ -274,6 +277,9 @@ export const AppShell: React.FC = () => {
     const [searchHighlightedIndex, setSearchHighlightedIndex] = React.useState(0);
     const [isFeedbackOpen, setIsFeedbackOpen] = React.useState(false);
     const [feedbackDraftMessage, setFeedbackDraftMessage] = React.useState('');
+    const [isFeedbackSubmitting, setIsFeedbackSubmitting] = React.useState(false);
+    const [feedbackSubmitError, setFeedbackSubmitError] = React.useState<string | null>(null);
+    const [feedbackSubmitOk, setFeedbackSubmitOk] = React.useState(false);
     const [pendingDeleteId, setPendingDeleteId] = React.useState<string | null>(null);
     const [pendingDeleteTitle, setPendingDeleteTitle] = React.useState<string | null>(null);
     const [isLogoutConfirmOpen, setIsLogoutConfirmOpen] = React.useState(false);
@@ -307,6 +313,7 @@ export const AppShell: React.FC = () => {
     const remoteOutboxRef = React.useRef<RemoteOutboxItem[]>([]);
     const remoteOutboxStorageKeyRef = React.useRef<string>('');
     const remoteOutboxDrainTimerRef = React.useRef<number | null>(null);
+    const feedbackAutoCloseTimerRef = React.useRef<number | null>(null);
     const remoteOutboxDrainingRef = React.useRef(false);
     const remoteOutboxPausedUntilRef = React.useRef<number>(0);
     const authStorageId = React.useMemo(() => resolveAuthStorageId(user), [user]);
@@ -712,9 +719,60 @@ export const AppShell: React.FC = () => {
         commitRenameInterface(id, newTitle, 'sidebar_rename');
     }, [commitRenameInterface]);
     const closeFeedbackModal = React.useCallback(() => {
+        if (feedbackAutoCloseTimerRef.current !== null) {
+            window.clearTimeout(feedbackAutoCloseTimerRef.current);
+            feedbackAutoCloseTimerRef.current = null;
+        }
         setIsFeedbackOpen(false);
         setFeedbackDraftMessage('');
+        setFeedbackSubmitError(null);
+        setFeedbackSubmitOk(false);
+        setIsFeedbackSubmitting(false);
     }, []);
+    const submitFeedbackDraft = React.useCallback(async () => {
+        if (isFeedbackSubmitting) return;
+        if (!isLoggedIn || !user) return;
+        const message = feedbackDraftMessage.trim();
+        if (!message) {
+            setFeedbackSubmitError('Please write a message before sending.');
+            setFeedbackSubmitOk(false);
+            return;
+        }
+        if (message.length > FEEDBACK_MESSAGE_MAX_CHARS) {
+            setFeedbackSubmitError(`Message max length is ${FEEDBACK_MESSAGE_MAX_CHARS} characters.`);
+            setFeedbackSubmitOk(false);
+            return;
+        }
+        setIsFeedbackSubmitting(true);
+        setFeedbackSubmitError(null);
+        setFeedbackSubmitOk(false);
+        try {
+            const context: Record<string, unknown> = {
+                screen,
+                savedInterfacesCount: savedInterfaces.length,
+                clientSubmittedAt: new Date().toISOString(),
+            };
+            await submitFeedback({
+                category: '',
+                message,
+                context,
+            });
+            setFeedbackSubmitOk(true);
+            setFeedbackDraftMessage('');
+            if (feedbackAutoCloseTimerRef.current !== null) {
+                window.clearTimeout(feedbackAutoCloseTimerRef.current);
+                feedbackAutoCloseTimerRef.current = null;
+            }
+            feedbackAutoCloseTimerRef.current = window.setTimeout(() => {
+                feedbackAutoCloseTimerRef.current = null;
+                closeFeedbackModal();
+            }, FEEDBACK_SUCCESS_CLOSE_DELAY_MS);
+        } catch {
+            setFeedbackSubmitError('Failed to send feedback. Please try again.');
+        } finally {
+            setIsFeedbackSubmitting(false);
+        }
+    }, [closeFeedbackModal, feedbackDraftMessage, isFeedbackSubmitting, isLoggedIn, savedInterfaces.length, screen, user]);
     const closeProfileOverlay = React.useCallback(() => {
         if (profileSaving) return;
         setIsProfileOpen(false);
@@ -971,6 +1029,14 @@ export const AppShell: React.FC = () => {
             scheduleRemoteOutboxDrain(-1);
         };
     }, [scheduleRemoteOutboxDrain]);
+    React.useEffect(() => {
+        return () => {
+            if (feedbackAutoCloseTimerRef.current !== null) {
+                window.clearTimeout(feedbackAutoCloseTimerRef.current);
+                feedbackAutoCloseTimerRef.current = null;
+            }
+        };
+    }, []);
 
     React.useEffect(() => {
         if (!authIdentityKey) return;
@@ -1567,6 +1633,9 @@ export const AppShell: React.FC = () => {
                     <div
                         {...hardShieldInput}
                         data-feedback-modal="1"
+                        data-feedback-submitting={isFeedbackSubmitting ? '1' : undefined}
+                        data-feedback-submit-error={feedbackSubmitError ? '1' : undefined}
+                        data-feedback-submit-ok={feedbackSubmitOk ? '1' : undefined}
                         style={FEEDBACK_OVERLAY_CARD_STYLE}
                     >
                         <div style={FEEDBACK_TITLE_STYLE}>Suggestion and Feedback</div>
@@ -1598,6 +1667,7 @@ export const AppShell: React.FC = () => {
                                 style={FEEDBACK_SEND_STYLE}
                                 onClick={(e) => {
                                     e.stopPropagation();
+                                    void submitFeedbackDraft();
                                 }}
                             >
                                 Send

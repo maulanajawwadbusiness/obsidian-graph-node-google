@@ -105,6 +105,16 @@ function sendAdminForbidden(res: express.Response): void {
   res.status(403).json({ error: "forbidden" });
 }
 
+// Future feedback admin routes should call this guard before any DB read/update.
+function requireFeedbackAdminOrSendForbidden(res: express.Response): AuthContext | null {
+  const auth = res.locals.user as AuthContext | undefined;
+  if (!isAdminUser(auth)) {
+    sendAdminForbidden(res);
+    return null;
+  }
+  return auth;
+}
+
 const savedInterfacesJsonParser = express.json({ limit: SAVED_INTERFACE_JSON_LIMIT });
 const globalJsonParser = express.json({ limit: LLM_LIMITS.jsonBodyLimit });
 app.use("/api/saved-interfaces", (req, res, next) => savedInterfacesJsonParser(req, res, next));

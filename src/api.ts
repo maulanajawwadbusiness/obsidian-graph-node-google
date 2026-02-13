@@ -183,6 +183,40 @@ export type ProfileUser = {
   username?: string;
 };
 
+export type FeedbackStatus = "new" | "triaged" | "done";
+
+export type SubmitFeedbackInput = {
+  category?: string;
+  message: string;
+  context?: Record<string, unknown>;
+};
+
+export type SubmitFeedbackResult = {
+  ok: true;
+  id: number;
+};
+
+export type FeedbackAdminItem = {
+  id: number;
+  userId: number;
+  category: string;
+  message: string;
+  context: Record<string, unknown>;
+  status: FeedbackStatus;
+  createdAt: string;
+};
+
+export type ListFeedbackAdminInput = {
+  limit?: number;
+  beforeId?: number;
+};
+
+export type ListFeedbackAdminResult = {
+  ok: true;
+  items: FeedbackAdminItem[];
+  nextCursor?: number;
+};
+
 type SavedInterfacesListItem = {
   client_interface_id?: unknown;
   title?: unknown;

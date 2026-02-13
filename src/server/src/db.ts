@@ -6,6 +6,7 @@ const INSTANCE_CONNECTION_NAME = rawInstanceConnectionName.replace(/\s+/g, "");
 const DB_USER = process.env.DB_USER || "";
 const DB_PASSWORD = process.env.DB_PASSWORD || "";
 const DB_NAME = process.env.DB_NAME || "";
+const DATABASE_URL = process.env.DATABASE_URL || "";
 const DB_CONNECT_TIMEOUT_MS = Number(process.env.DB_CONNECT_TIMEOUT_MS || 15000);
 
 let pool: Pool | null = null;
@@ -31,8 +32,17 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): 
 
 export async function getPool(): Promise<Pool> {
   if (pool) return pool;
+  const hasDatabaseUrl = DATABASE_URL.trim().length > 0;
+  if (hasDatabaseUrl) {
+    pool = new Pool({
+      connectionString: DATABASE_URL,
+      connectionTimeoutMillis: DB_CONNECT_TIMEOUT_MS,
+    });
+    console.log("[db] using DATABASE_URL direct postgres connection");
+    return pool;
+  }
   if (!INSTANCE_CONNECTION_NAME) {
-    throw new Error("INSTANCE_CONNECTION_NAME is empty");
+    throw new Error("INSTANCE_CONNECTION_NAME is empty and DATABASE_URL is not set");
   }
   if (rawInstanceConnectionName !== INSTANCE_CONNECTION_NAME) {
     console.warn("[db] INSTANCE_CONNECTION_NAME contained whitespace; sanitized value is used");

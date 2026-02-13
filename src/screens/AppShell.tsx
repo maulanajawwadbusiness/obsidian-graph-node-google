@@ -1644,7 +1644,7 @@ export const AppShell: React.FC = () => {
                         data-feedback-submit-ok={feedbackSubmitOk ? '1' : undefined}
                         style={FEEDBACK_OVERLAY_CARD_STYLE}
                     >
-                        <div style={FEEDBACK_TITLE_STYLE}>Suggestion and Feedback</div>
+                        <div {...hardShieldInput} style={FEEDBACK_TITLE_STYLE}>Suggestion and Feedback</div>
                         <div {...hardShieldInput} style={FEEDBACK_BODY_STYLE}>
                             <textarea
                                 {...hardShieldInput}
@@ -1666,7 +1666,7 @@ export const AppShell: React.FC = () => {
                                 <div style={FEEDBACK_SUCCESS_STYLE}>sent. thanks.</div>
                             ) : null}
                         </div>
-                        <div style={FEEDBACK_BUTTON_ROW_STYLE}>
+                        <div {...hardShieldInput} style={FEEDBACK_BUTTON_ROW_STYLE}>
                             <button
                                 {...hardShieldInput}
                                 type="button"

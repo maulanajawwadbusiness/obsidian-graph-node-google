@@ -64,6 +64,11 @@ const SAVED_INTERFACE_JSON_LIMIT = process.env.SAVED_INTERFACE_JSON_LIMIT || "15
 const PROFILE_DISPLAY_NAME_MAX = 80;
 const PROFILE_USERNAME_MAX = 32;
 const PROFILE_USERNAME_REGEX = /^[A-Za-z0-9_.-]+$/;
+const FEEDBACK_MESSAGE_MAX_CHARS = 8000;
+const FEEDBACK_CATEGORY_MAX_CHARS = 64;
+const FEEDBACK_CONTEXT_MAX_BYTES = 64 * 1024;
+const FEEDBACK_LIST_DEFAULT_LIMIT = 50;
+const FEEDBACK_LIST_MAX_LIMIT = 200;
 let profileColumnsAvailable = false;
 const allowedOrigins = (process.env.ALLOWED_ORIGINS ?? "")
   .split(",")
@@ -229,6 +234,57 @@ function parseGrossAmount(value: unknown, fallbackAmount: number): number | null
   const rounded = Math.trunc(amount);
   if (rounded <= 0) return null;
   return rounded;
+}
+
+type FeedbackStatus = "new" | "triaged" | "done";
+
+function normalizeFeedbackCategory(raw: unknown): string | null {
+  if (raw === undefined || raw === null) return "";
+  if (typeof raw !== "string") return null;
+  const trimmed = raw.trim();
+  if (trimmed.length > FEEDBACK_CATEGORY_MAX_CHARS) return null;
+  return trimmed;
+}
+
+function normalizeFeedbackMessage(raw: unknown): string | null {
+  if (typeof raw !== "string") return null;
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  if (trimmed.length > FEEDBACK_MESSAGE_MAX_CHARS) return null;
+  return trimmed;
+}
+
+function normalizeFeedbackStatus(raw: unknown): FeedbackStatus | null {
+  if (raw !== "new" && raw !== "triaged" && raw !== "done") return null;
+  return raw;
+}
+
+function normalizeFeedbackContext(raw: unknown): { value: Record<string, unknown>; bytes: number } | null {
+  if (raw === undefined || raw === null) {
+    return { value: {}, bytes: 2 };
+  }
+  if (typeof raw !== "object" || Array.isArray(raw)) return null;
+  try {
+    const serialized = JSON.stringify(raw);
+    const bytes = Buffer.byteLength(serialized, "utf8");
+    if (bytes > FEEDBACK_CONTEXT_MAX_BYTES) return null;
+    return { value: raw as Record<string, unknown>, bytes };
+  } catch {
+    return null;
+  }
+}
+
+function parseFeedbackListLimit(raw: unknown): number {
+  const num = typeof raw === "string" ? Number(raw) : Number(raw);
+  if (!Number.isFinite(num) || !Number.isInteger(num)) return FEEDBACK_LIST_DEFAULT_LIMIT;
+  return Math.min(FEEDBACK_LIST_MAX_LIMIT, Math.max(1, num));
+}
+
+function parseFeedbackBeforeId(raw: unknown): number | null {
+  if (raw === undefined || raw === null || raw === "") return null;
+  const num = typeof raw === "string" ? Number(raw) : Number(raw);
+  if (!Number.isFinite(num) || !Number.isInteger(num) || num <= 0) return null;
+  return num;
 }
 
 type ApiErrorCode =

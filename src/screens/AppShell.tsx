@@ -290,6 +290,7 @@ export const AppShell: React.FC = () => {
     const [adminSelectedId, setAdminSelectedId] = React.useState<number | null>(null);
     const [adminCursorBeforeId, setAdminCursorBeforeId] = React.useState<number | null>(null);
     const [adminHasMore, setAdminHasMore] = React.useState(false);
+    const [feedbackModalView, setFeedbackModalView] = React.useState<'inbox' | 'send'>('send');
     const [pendingDeleteId, setPendingDeleteId] = React.useState<string | null>(null);
     const [pendingDeleteTitle, setPendingDeleteTitle] = React.useState<string | null>(null);
     const [isLogoutConfirmOpen, setIsLogoutConfirmOpen] = React.useState(false);
@@ -789,6 +790,10 @@ export const AppShell: React.FC = () => {
     const canSubmitFeedback = !isFeedbackSubmitting
         && feedbackDraftMessage.trim().length > 0
         && feedbackDraftMessage.trim().length <= FEEDBACK_MESSAGE_MAX_CHARS;
+    const selectedAdminItem = React.useMemo(
+        () => adminItems.find((item) => item.id === adminSelectedId) ?? null,
+        [adminItems, adminSelectedId]
+    );
     const isAdminFetchForbidden = React.useCallback((error: unknown): boolean => {
         const text = String(error ?? '');
         return text.includes('403') || text.includes('401');
@@ -1026,6 +1031,7 @@ export const AppShell: React.FC = () => {
                 setAdminItems(items);
                 const firstItem = items[0] ?? null;
                 setAdminSelectedId(firstItem ? firstItem.id : null);
+                setFeedbackModalView('inbox');
                 const nextCursor = typeof result.nextCursor === 'number' && Number.isFinite(result.nextCursor)
                     ? result.nextCursor
                     : null;
@@ -1041,6 +1047,7 @@ export const AppShell: React.FC = () => {
                     setAdminError(null);
                     setAdminItems([]);
                     setAdminSelectedId(null);
+                    setFeedbackModalView('send');
                     setAdminCursorBeforeId(null);
                     setAdminHasMore(false);
                     return;
@@ -1105,6 +1112,7 @@ export const AppShell: React.FC = () => {
         setAdminError(null);
         setAdminItems([]);
         setAdminSelectedId(null);
+        setFeedbackModalView('send');
         setAdminCursorBeforeId(null);
         setAdminHasMore(false);
     }, [isFeedbackOpen]);
@@ -1726,54 +1734,131 @@ export const AppShell: React.FC = () => {
                         data-feedback-admin-has-more={adminHasMore ? '1' : '0'}
                         style={FEEDBACK_OVERLAY_CARD_STYLE}
                     >
-                        <div {...hardShieldInput} style={FEEDBACK_TITLE_STYLE}>Suggestion and Feedback</div>
-                        <div {...hardShieldInput} style={FEEDBACK_BODY_STYLE}>
-                            <textarea
-                                {...hardShieldInput}
-                                value={feedbackDraftMessage}
-                                placeholder="Tell us what can be improved..."
-                                maxLength={FEEDBACK_MESSAGE_MAX_CHARS}
-                                onChange={(e) => setFeedbackDraftMessage(e.target.value)}
-                                style={FEEDBACK_TEXTAREA_STYLE}
-                            />
+                        <div {...hardShieldInput} style={FEEDBACK_HEADER_ROW_STYLE}>
+                            <div {...hardShieldInput} style={FEEDBACK_TITLE_STYLE}>Suggestion and Feedback</div>
+                            {isFeedbackAdmin ? (
+                                <div {...hardShieldInput} style={FEEDBACK_VIEW_TOGGLE_ROW_STYLE}>
+                                    <button
+                                        {...hardShieldInput}
+                                        type="button"
+                                        style={feedbackModalView === 'inbox' ? FEEDBACK_VIEW_TOGGLE_ACTIVE_STYLE : FEEDBACK_VIEW_TOGGLE_STYLE}
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            setFeedbackModalView('inbox');
+                                        }}
+                                    >
+                                        Inbox
+                                    </button>
+                                    <button
+                                        {...hardShieldInput}
+                                        type="button"
+                                        style={feedbackModalView === 'send' ? FEEDBACK_VIEW_TOGGLE_ACTIVE_STYLE : FEEDBACK_VIEW_TOGGLE_STYLE}
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            setFeedbackModalView('send');
+                                        }}
+                                    >
+                                        Send
+                                    </button>
+                                </div>
+                            ) : null}
                         </div>
-                        <div {...hardShieldInput} style={FEEDBACK_META_ROW_STYLE}>
-                            <div style={FEEDBACK_COUNTER_STYLE}>
-                                {feedbackDraftMessage.trim().length}/{FEEDBACK_MESSAGE_MAX_CHARS}
+                        {isFeedbackAdmin && feedbackModalView === 'inbox' ? (
+                            <div {...hardShieldInput} style={FEEDBACK_ADMIN_SPLIT_STYLE}>
+                                <div {...hardShieldInput} style={FEEDBACK_ADMIN_LIST_PANE_STYLE}>
+                                    <div {...hardShieldInput} style={FEEDBACK_ADMIN_SECTION_TITLE_STYLE}>Admin Inbox</div>
+                                    <div {...hardShieldInput} style={FEEDBACK_ADMIN_LIST_SCROLL_STYLE}>
+                                        {adminLoadState === 'loading' ? (
+                                            <div style={FEEDBACK_ADMIN_MUTED_STYLE}>Loading inbox...</div>
+                                        ) : null}
+                                        {adminLoadState === 'error' ? (
+                                            <div style={FEEDBACK_ERROR_STYLE}>{adminError ?? 'Failed to load admin inbox.'}</div>
+                                        ) : null}
+                                        {adminLoadState !== 'loading' && adminItems.length === 0 ? (
+                                            <div style={FEEDBACK_ADMIN_MUTED_STYLE}>No feedback yet.</div>
+                                        ) : null}
+                                        {adminItems.map((item) => (
+                                            <div key={item.id} style={FEEDBACK_ADMIN_LIST_ROW_STYLE}>
+                                                <div style={FEEDBACK_ADMIN_LIST_TOP_STYLE}>
+                                                    <span style={FEEDBACK_ADMIN_STATUS_BADGE_STYLE}>{item.status}</span>
+                                                    {item.category ? (
+                                                        <span style={FEEDBACK_ADMIN_CATEGORY_STYLE}>{item.category}</span>
+                                                    ) : null}
+                                                </div>
+                                                <div style={FEEDBACK_ADMIN_PREVIEW_STYLE}>
+                                                    {item.message.slice(0, 80)}
+                                                </div>
+                                                <div style={FEEDBACK_ADMIN_TIME_STYLE}>{item.createdAt}</div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                                <div {...hardShieldInput} style={FEEDBACK_ADMIN_DETAIL_PANE_STYLE}>
+                                    {selectedAdminItem ? (
+                                        <div {...hardShieldInput} style={FEEDBACK_ADMIN_DETAIL_SCROLL_STYLE}>
+                                            <div style={FEEDBACK_ADMIN_DETAIL_TITLE_STYLE}>Message</div>
+                                            <div style={FEEDBACK_ADMIN_MESSAGE_STYLE}>{selectedAdminItem.message}</div>
+                                            <div style={FEEDBACK_ADMIN_DETAIL_TITLE_STYLE}>Context</div>
+                                            <pre style={FEEDBACK_ADMIN_CONTEXT_STYLE}>
+                                                {JSON.stringify(selectedAdminItem.context ?? {}, null, 2)}
+                                            </pre>
+                                        </div>
+                                    ) : (
+                                        <div style={FEEDBACK_ADMIN_MUTED_STYLE}>Select an item.</div>
+                                    )}
+                                </div>
                             </div>
-                            {feedbackSubmitError ? (
-                                <div style={FEEDBACK_ERROR_STYLE}>{feedbackSubmitError}</div>
-                            ) : null}
-                            {feedbackSubmitOk ? (
-                                <div style={FEEDBACK_SUCCESS_STYLE}>sent. thanks.</div>
-                            ) : null}
-                        </div>
-                        <div {...hardShieldInput} style={FEEDBACK_BUTTON_ROW_STYLE}>
-                            <button
-                                {...hardShieldInput}
-                                type="button"
-                                style={FEEDBACK_CANCEL_STYLE}
-                                disabled={isFeedbackSubmitting}
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    closeFeedbackModal();
-                                }}
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                {...hardShieldInput}
-                                type="button"
-                                disabled={!canSubmitFeedback}
-                                style={FEEDBACK_SEND_STYLE}
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    void submitFeedbackDraft();
-                                }}
-                            >
-                                {isFeedbackSubmitting ? 'Sending...' : 'Send'}
-                            </button>
-                        </div>
+                        ) : (
+                            <>
+                                <div {...hardShieldInput} style={FEEDBACK_BODY_STYLE}>
+                                    <textarea
+                                        {...hardShieldInput}
+                                        value={feedbackDraftMessage}
+                                        placeholder="Tell us what can be improved..."
+                                        maxLength={FEEDBACK_MESSAGE_MAX_CHARS}
+                                        onChange={(e) => setFeedbackDraftMessage(e.target.value)}
+                                        style={FEEDBACK_TEXTAREA_STYLE}
+                                    />
+                                </div>
+                                <div {...hardShieldInput} style={FEEDBACK_META_ROW_STYLE}>
+                                    <div style={FEEDBACK_COUNTER_STYLE}>
+                                        {feedbackDraftMessage.trim().length}/{FEEDBACK_MESSAGE_MAX_CHARS}
+                                    </div>
+                                    {feedbackSubmitError ? (
+                                        <div style={FEEDBACK_ERROR_STYLE}>{feedbackSubmitError}</div>
+                                    ) : null}
+                                    {feedbackSubmitOk ? (
+                                        <div style={FEEDBACK_SUCCESS_STYLE}>sent. thanks.</div>
+                                    ) : null}
+                                </div>
+                                <div {...hardShieldInput} style={FEEDBACK_BUTTON_ROW_STYLE}>
+                                    <button
+                                        {...hardShieldInput}
+                                        type="button"
+                                        style={FEEDBACK_CANCEL_STYLE}
+                                        disabled={isFeedbackSubmitting}
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            closeFeedbackModal();
+                                        }}
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        {...hardShieldInput}
+                                        type="button"
+                                        disabled={!canSubmitFeedback}
+                                        style={FEEDBACK_SEND_STYLE}
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            void submitFeedbackDraft();
+                                        }}
+                                    >
+                                        {isFeedbackSubmitting ? 'Sending...' : 'Send'}
+                                    </button>
+                                </div>
+                            </>
+                        )}
                     </div>
                 </div>
             ) : null}
@@ -2226,6 +2311,38 @@ const FEEDBACK_TITLE_STYLE: React.CSSProperties = {
     color: '#f3f7ff',
 };
 
+const FEEDBACK_HEADER_ROW_STYLE: React.CSSProperties = {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: '8px',
+};
+
+const FEEDBACK_VIEW_TOGGLE_ROW_STYLE: React.CSSProperties = {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+};
+
+const FEEDBACK_VIEW_TOGGLE_STYLE: React.CSSProperties = {
+    border: '1px solid rgba(255, 255, 255, 0.22)',
+    background: 'transparent',
+    color: 'rgba(231, 231, 231, 0.84)',
+    borderRadius: '7px',
+    padding: '4px 10px',
+    fontSize: '11px',
+    cursor: 'pointer',
+    fontWeight: 300,
+    fontFamily: 'var(--font-ui)',
+};
+
+const FEEDBACK_VIEW_TOGGLE_ACTIVE_STYLE: React.CSSProperties = {
+    ...FEEDBACK_VIEW_TOGGLE_STYLE,
+    border: '1px solid rgba(99, 171, 255, 0.44)',
+    background: 'rgba(99, 171, 255, 0.18)',
+    color: '#d7f5ff',
+};
+
 const FEEDBACK_BODY_STYLE: React.CSSProperties = {
     flex: 1,
     minHeight: 0,
@@ -2262,6 +2379,159 @@ const FEEDBACK_META_ROW_STYLE: React.CSSProperties = {
     gap: '4px',
     minHeight: '42px',
     overflow: 'hidden',
+};
+
+const FEEDBACK_ADMIN_SPLIT_STYLE: React.CSSProperties = {
+    flex: 1,
+    minHeight: 0,
+    display: 'grid',
+    gridTemplateColumns: 'minmax(180px, 220px) 1fr',
+    gap: '10px',
+    overflow: 'hidden',
+};
+
+const FEEDBACK_ADMIN_LIST_PANE_STYLE: React.CSSProperties = {
+    minHeight: 0,
+    border: '1px solid rgba(255, 255, 255, 0.12)',
+    borderRadius: '10px',
+    padding: '8px',
+    background: 'rgba(10, 12, 18, 0.45)',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '8px',
+    overflow: 'hidden',
+};
+
+const FEEDBACK_ADMIN_DETAIL_PANE_STYLE: React.CSSProperties = {
+    minHeight: 0,
+    border: '1px solid rgba(255, 255, 255, 0.12)',
+    borderRadius: '10px',
+    padding: '8px',
+    background: 'rgba(10, 12, 18, 0.45)',
+    display: 'flex',
+    flexDirection: 'column',
+    overflow: 'hidden',
+};
+
+const FEEDBACK_ADMIN_SECTION_TITLE_STYLE: React.CSSProperties = {
+    fontFamily: 'var(--font-ui)',
+    fontSize: '12px',
+    lineHeight: 1.2,
+    color: 'rgba(231, 231, 231, 0.78)',
+};
+
+const FEEDBACK_ADMIN_LIST_SCROLL_STYLE: React.CSSProperties = {
+    flex: 1,
+    minHeight: 0,
+    overflowY: 'auto',
+    overflowX: 'hidden',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '8px',
+};
+
+const FEEDBACK_ADMIN_LIST_ROW_STYLE: React.CSSProperties = {
+    border: '1px solid rgba(255, 255, 255, 0.1)',
+    borderRadius: '8px',
+    padding: '8px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '5px',
+    overflow: 'hidden',
+};
+
+const FEEDBACK_ADMIN_LIST_TOP_STYLE: React.CSSProperties = {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+    minWidth: 0,
+};
+
+const FEEDBACK_ADMIN_STATUS_BADGE_STYLE: React.CSSProperties = {
+    fontFamily: 'var(--font-ui)',
+    fontSize: '10px',
+    lineHeight: 1.1,
+    color: '#d7f5ff',
+    border: '1px solid rgba(99, 171, 255, 0.38)',
+    borderRadius: '999px',
+    padding: '2px 7px',
+    background: 'rgba(99, 171, 255, 0.16)',
+    textTransform: 'capitalize',
+};
+
+const FEEDBACK_ADMIN_CATEGORY_STYLE: React.CSSProperties = {
+    fontFamily: 'var(--font-ui)',
+    fontSize: '10px',
+    lineHeight: 1.1,
+    color: 'rgba(231, 231, 231, 0.74)',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+};
+
+const FEEDBACK_ADMIN_PREVIEW_STYLE: React.CSSProperties = {
+    fontFamily: 'var(--font-ui)',
+    fontSize: '12px',
+    lineHeight: 1.25,
+    color: '#e7e7e7',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+};
+
+const FEEDBACK_ADMIN_TIME_STYLE: React.CSSProperties = {
+    fontFamily: 'var(--font-ui)',
+    fontSize: '10px',
+    lineHeight: 1.1,
+    color: 'rgba(231, 231, 231, 0.58)',
+};
+
+const FEEDBACK_ADMIN_DETAIL_SCROLL_STYLE: React.CSSProperties = {
+    flex: 1,
+    minHeight: 0,
+    overflowY: 'auto',
+    overflowX: 'hidden',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '8px',
+};
+
+const FEEDBACK_ADMIN_DETAIL_TITLE_STYLE: React.CSSProperties = {
+    fontFamily: 'var(--font-ui)',
+    fontSize: '12px',
+    lineHeight: 1.2,
+    color: 'rgba(231, 231, 231, 0.74)',
+};
+
+const FEEDBACK_ADMIN_MESSAGE_STYLE: React.CSSProperties = {
+    fontFamily: 'var(--font-ui)',
+    fontSize: '12px',
+    lineHeight: 1.35,
+    color: '#e7e7e7',
+    whiteSpace: 'pre-wrap',
+    overflowWrap: 'anywhere',
+};
+
+const FEEDBACK_ADMIN_CONTEXT_STYLE: React.CSSProperties = {
+    margin: 0,
+    padding: '10px',
+    borderRadius: '8px',
+    border: '1px solid rgba(255, 255, 255, 0.1)',
+    background: 'rgba(8, 10, 14, 0.7)',
+    color: '#d9e2f1',
+    fontFamily: 'Consolas, Monaco, monospace',
+    fontSize: '11px',
+    lineHeight: 1.35,
+    whiteSpace: 'pre-wrap',
+    overflowWrap: 'anywhere',
+    overflowX: 'hidden',
+};
+
+const FEEDBACK_ADMIN_MUTED_STYLE: React.CSSProperties = {
+    fontFamily: 'var(--font-ui)',
+    fontSize: '12px',
+    lineHeight: 1.3,
+    color: 'rgba(231, 231, 231, 0.64)',
 };
 
 const FEEDBACK_COUNTER_STYLE: React.CSSProperties = {

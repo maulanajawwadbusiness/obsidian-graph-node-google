@@ -2015,14 +2015,14 @@ export const AppShell: React.FC = () => {
                                         </button>
                                     </div>
                                     {adminRefreshError ? (
-                                        <div style={FEEDBACK_ERROR_STYLE}>{adminRefreshError}</div>
+                                        <div {...hardShieldInput} style={FEEDBACK_ERROR_STYLE}>{adminRefreshError}</div>
                                     ) : null}
                                     <div {...hardShieldInput} className="arnvoid-scroll" style={FEEDBACK_ADMIN_LIST_SCROLL_STYLE}>
                                         {adminLoadState === 'loading' ? (
                                             <div style={FEEDBACK_ADMIN_MUTED_STYLE}>Loading inbox...</div>
                                         ) : null}
                                         {adminLoadState === 'error' ? (
-                                            <div style={FEEDBACK_ERROR_STYLE}>{adminError ?? 'Failed to load admin inbox.'}</div>
+                                            <div {...hardShieldInput} style={FEEDBACK_ERROR_STYLE}>{adminError ?? 'Failed to load admin inbox.'}</div>
                                         ) : null}
                                         {adminLoadState !== 'loading' && adminItems.length === 0 ? (
                                             <div style={FEEDBACK_ADMIN_MUTED_STYLE}>No feedback yet.</div>
@@ -2089,7 +2089,7 @@ export const AppShell: React.FC = () => {
                                                 ))}
                                             </div>
                                             {adminError ? (
-                                                <div style={FEEDBACK_ERROR_STYLE}>{adminError}</div>
+                                                <div {...hardShieldInput} style={FEEDBACK_ERROR_STYLE}>{adminError}</div>
                                             ) : null}
                                             <div style={FEEDBACK_ADMIN_DETAIL_TITLE_STYLE}>Message</div>
                                             <div style={FEEDBACK_ADMIN_MESSAGE_STYLE}>{selectedAdminItem.message}</div>
@@ -2713,6 +2713,10 @@ const FEEDBACK_ADMIN_SECTION_TITLE_STYLE: React.CSSProperties = {
     fontSize: '12px',
     lineHeight: 1.2,
     color: 'rgba(231, 231, 231, 0.78)',
+    minWidth: 0,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
 };
 
 const FEEDBACK_ADMIN_SECTION_HEADER_STYLE: React.CSSProperties = {
@@ -2720,6 +2724,7 @@ const FEEDBACK_ADMIN_SECTION_HEADER_STYLE: React.CSSProperties = {
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: '8px',
+    minWidth: 0,
 };
 
 const FEEDBACK_ADMIN_LIST_SCROLL_STYLE: React.CSSProperties = {
@@ -2795,6 +2800,7 @@ const FEEDBACK_ADMIN_TIME_STYLE: React.CSSProperties = {
     fontSize: '10px',
     lineHeight: 1.1,
     color: 'rgba(231, 231, 231, 0.58)',
+    overflowWrap: 'anywhere',
 };
 
 const FEEDBACK_ADMIN_DETAIL_SCROLL_STYLE: React.CSSProperties = {

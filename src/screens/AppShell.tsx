@@ -1650,9 +1650,21 @@ export const AppShell: React.FC = () => {
                                 {...hardShieldInput}
                                 value={feedbackDraftMessage}
                                 placeholder="Tell us what can be improved..."
+                                maxLength={FEEDBACK_MESSAGE_MAX_CHARS}
                                 onChange={(e) => setFeedbackDraftMessage(e.target.value)}
                                 style={FEEDBACK_TEXTAREA_STYLE}
                             />
+                        </div>
+                        <div {...hardShieldInput} style={FEEDBACK_META_ROW_STYLE}>
+                            <div style={FEEDBACK_COUNTER_STYLE}>
+                                {feedbackDraftMessage.trim().length}/{FEEDBACK_MESSAGE_MAX_CHARS}
+                            </div>
+                            {feedbackSubmitError ? (
+                                <div style={FEEDBACK_ERROR_STYLE}>{feedbackSubmitError}</div>
+                            ) : null}
+                            {feedbackSubmitOk ? (
+                                <div style={FEEDBACK_SUCCESS_STYLE}>sent. thanks.</div>
+                            ) : null}
                         </div>
                         <div style={FEEDBACK_BUTTON_ROW_STYLE}>
                             <button
@@ -2142,6 +2154,8 @@ const FEEDBACK_TEXTAREA_STYLE: React.CSSProperties = {
     width: '100%',
     height: '100%',
     resize: 'none',
+    overflowX: 'hidden',
+    overflowWrap: 'anywhere',
     borderRadius: '10px',
     border: '1px solid rgba(255, 255, 255, 0.14)',
     background: 'rgba(10, 12, 18, 0.95)',
@@ -2158,6 +2172,38 @@ const FEEDBACK_BUTTON_ROW_STYLE: React.CSSProperties = {
     display: 'flex',
     justifyContent: 'flex-end',
     gap: '8px',
+};
+
+const FEEDBACK_META_ROW_STYLE: React.CSSProperties = {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '4px',
+    minHeight: '42px',
+    overflow: 'hidden',
+};
+
+const FEEDBACK_COUNTER_STYLE: React.CSSProperties = {
+    fontFamily: 'var(--font-ui)',
+    fontSize: '11px',
+    lineHeight: 1.2,
+    color: 'rgba(231, 231, 231, 0.66)',
+    textAlign: 'right',
+};
+
+const FEEDBACK_ERROR_STYLE: React.CSSProperties = {
+    fontFamily: 'var(--font-ui)',
+    fontSize: '12px',
+    lineHeight: 1.3,
+    color: '#ff7a7d',
+    overflowWrap: 'anywhere',
+};
+
+const FEEDBACK_SUCCESS_STYLE: React.CSSProperties = {
+    fontFamily: 'var(--font-ui)',
+    fontSize: '12px',
+    lineHeight: 1.3,
+    color: '#7ee3b2',
+    overflowWrap: 'anywhere',
 };
 
 const FEEDBACK_CANCEL_STYLE: React.CSSProperties = {

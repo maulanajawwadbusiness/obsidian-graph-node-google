@@ -910,6 +910,7 @@ export const AppShell: React.FC = () => {
         if (!adminHasMore) return;
         if (adminCursorBeforeId === null) return;
         const openSession = feedbackOpenSessionRef.current;
+        const identityAtStart = authIdentityKeyRef.current;
         setAdminLoadingMore(true);
         setAdminError(null);
         try {
@@ -919,6 +920,7 @@ export const AppShell: React.FC = () => {
             });
             if (!isFeedbackOpenRef.current) return;
             if (feedbackOpenSessionRef.current !== openSession) return;
+            if (authIdentityKeyRef.current !== identityAtStart) return;
             const incoming = Array.isArray(result.items) ? result.items : [];
             setAdminItems((curr) => {
                 if (incoming.length === 0) return curr;
@@ -937,8 +939,14 @@ export const AppShell: React.FC = () => {
             setAdminCursorBeforeId(nextCursor);
             setAdminHasMore(nextCursor !== null);
         } catch {
+            if (!isFeedbackOpenRef.current) return;
+            if (feedbackOpenSessionRef.current !== openSession) return;
+            if (authIdentityKeyRef.current !== identityAtStart) return;
             setAdminError('Failed to load more feedback.');
         } finally {
+            if (!isFeedbackOpenRef.current) return;
+            if (feedbackOpenSessionRef.current !== openSession) return;
+            if (authIdentityKeyRef.current !== identityAtStart) return;
             setAdminLoadingMore(false);
         }
     }, [adminCursorBeforeId, adminHasMore, adminLoadingMore, isFeedbackAdmin, isFeedbackOpen]);
@@ -948,6 +956,8 @@ export const AppShell: React.FC = () => {
         const previous = adminItems.find((item) => item.id === id);
         if (!previous) return;
         if (previous.status === nextStatus) return;
+        const openSession = feedbackOpenSessionRef.current;
+        const identityAtStart = authIdentityKeyRef.current;
         setAdminError(null);
         setAdminStatusPendingById((curr) => ({ ...curr, [id]: true }));
         setAdminItems((curr) => curr.map((item) => (
@@ -955,16 +965,25 @@ export const AppShell: React.FC = () => {
         )));
         try {
             const result = await updateFeedbackStatusAdmin({ id, status: nextStatus });
+            if (!isFeedbackOpenRef.current) return;
+            if (feedbackOpenSessionRef.current !== openSession) return;
+            if (authIdentityKeyRef.current !== identityAtStart) return;
             if (result.updated === false) {
                 throw new Error('status_update_not_applied');
             }
             scheduleAdminSoftRefresh();
         } catch {
+            if (!isFeedbackOpenRef.current) return;
+            if (feedbackOpenSessionRef.current !== openSession) return;
+            if (authIdentityKeyRef.current !== identityAtStart) return;
             setAdminItems((curr) => curr.map((item) => (
                 item.id === id ? { ...item, status: previous.status } : item
             )));
             setAdminError('Failed to update status.');
         } finally {
+            if (!isFeedbackOpenRef.current) return;
+            if (feedbackOpenSessionRef.current !== openSession) return;
+            if (authIdentityKeyRef.current !== identityAtStart) return;
             setAdminStatusPendingById((curr) => {
                 const next = { ...curr };
                 delete next[id];
@@ -1350,6 +1369,11 @@ export const AppShell: React.FC = () => {
         setAdminRefreshState('idle');
         setAdminRefreshError(null);
         adminLastFetchedAtTsRef.current = 0;
+        adminRefreshInFlightRef.current = false;
+        if (adminSoftRefreshTimerRef.current !== null) {
+            window.clearTimeout(adminSoftRefreshTimerRef.current);
+            adminSoftRefreshTimerRef.current = null;
+        }
     }, [isFeedbackOpen]);
 
     React.useEffect(() => {
@@ -1362,6 +1386,7 @@ export const AppShell: React.FC = () => {
                 window.clearTimeout(adminSoftRefreshTimerRef.current);
                 adminSoftRefreshTimerRef.current = null;
             }
+            adminRefreshInFlightRef.current = false;
         };
     }, []);
 
@@ -1406,6 +1431,11 @@ export const AppShell: React.FC = () => {
         setSearchInterfacesQueryState('');
         setSearchHighlightedIndex(0);
         setSearchInputFocused(false);
+        adminRefreshInFlightRef.current = false;
+        if (adminSoftRefreshTimerRef.current !== null) {
+            window.clearTimeout(adminSoftRefreshTimerRef.current);
+            adminSoftRefreshTimerRef.current = null;
+        }
         refreshSavedInterfaces();
         console.log('[savedInterfaces] identity_switched identity=%s key=%s', authIdentityKey, nextStorageKey);
     }, [authIdentityKey, authStorageId, closeDeleteConfirm, isLoggedIn, refreshSavedInterfaces, scheduleRemoteOutboxDrain]);

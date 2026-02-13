@@ -861,8 +861,10 @@ export const AppShell: React.FC = () => {
                     return [...prepended, ...mergedExisting];
                 });
             }
-            setAdminCursorBeforeId(nextCursor);
-            setAdminHasMore(nextCursor !== null);
+            if (input.mode === 'hard') {
+                setAdminCursorBeforeId(nextCursor);
+                setAdminHasMore(nextCursor !== null);
+            }
             setAdminLoadState('ready');
             setAdminRefreshState('idle');
             setAdminRefreshError(null);
@@ -1331,6 +1333,10 @@ export const AppShell: React.FC = () => {
     }, [scheduleRemoteOutboxDrain]);
     React.useEffect(() => {
         if (isFeedbackOpen) return;
+        if (adminSoftRefreshTimerRef.current !== null) {
+            window.clearTimeout(adminSoftRefreshTimerRef.current);
+            adminSoftRefreshTimerRef.current = null;
+        }
         feedbackAdminFetchRequestedEpochRef.current = null;
         setAdminLoadState('idle');
         setAdminError(null);

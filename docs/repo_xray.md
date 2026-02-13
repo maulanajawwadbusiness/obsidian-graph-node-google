@@ -103,14 +103,22 @@ Note: Counts are estimated post-modularization.
 12. src/auth/AuthProvider.tsx - Auth context + /me bootstrap
 13. src/auth/SessionExpiryBanner.tsx - Session expiry UI
 14. src/api.ts - Backend fetch helper (credentials include)
-15. src/server/src/serverMonolith.ts - Auth routes, payments, LLM endpoints
-16. src/server/src/index.ts - Thin server composition entry
-17. src/server/src/llm/llmClient.ts - Server LLM client (Responses API)
-18. src/server/src/db.ts - Cloud SQL connector + pool
-19. src/server/src/llm/usage/usageTracker.ts - LLM usage tracker and tokenizer fallback
-20. src/server/src/llm/audit/llmAudit.ts - LLM audit persistence
-21. src/components/PaymentGopayPanel.tsx - QRIS payment UI panel
-22. src/components/PromptCard.tsx - EnterPrompt main card (input, attachments, submit control)
+15. src/server/src/index.ts - Backend boot entry (single listen)
+16. src/server/src/app/createApp.ts - Express app wiring + explicit route registration
+17. src/server/src/middleware/requireAuth.ts - Auth middleware seam
+18. src/server/src/routes/authRoutes.ts - /auth/google, /me, /auth/logout
+19. src/server/src/routes/feedbackRoutes.ts - feedback submit/admin routes
+20. src/server/src/routes/savedInterfacesRoutes.ts - saved interface CRUD routes
+21. src/server/src/routes/profileRoutes.ts - profile update route
+22. src/server/src/routes/paymentsRoutes.ts - payment + rupiah routes
+23. src/server/src/routes/llmAnalyzePrefillRoutes.ts - paper-analyze + prefill
+24. src/server/src/routes/llmChatRoutes.ts - chat stream route
+25. src/server/src/llm/llmClient.ts - Server LLM client (Responses API)
+26. src/server/src/db.ts - Cloud SQL connector + pool
+27. src/server/src/llm/usage/usageTracker.ts - LLM usage tracker and tokenizer fallback
+28. src/server/src/llm/audit/llmAudit.ts - LLM audit persistence
+29. src/components/PaymentGopayPanel.tsx - QRIS payment UI panel
+30. src/components/PromptCard.tsx - EnterPrompt main card (input, attachments, submit control)
 
 ## 3. Core Runtime Loops
 
@@ -170,8 +178,10 @@ Key files:
 - `src/auth/SessionExpiryBanner.tsx` (expiry UI)
 - `src/components/GoogleLoginButton.tsx` (Google login entry)
 - `src/api.ts` (GET /me with `credentials: "include"`)
-- `src/server/src/index.ts` (thin entry, imports runtime server module)
-- `src/server/src/serverMonolith.ts` (auth routes, cookie, sessions)
+- `src/server/src/index.ts` (boot-only entry, startup checks, single listen)
+- `src/server/src/app/createApp.ts` (Express wiring + explicit route registration)
+- `src/server/src/routes/authRoutes.ts` (auth routes, cookie/session behavior)
+- `src/server/src/middleware/requireAuth.ts` (requireAuth middleware)
 - `src/server/src/db.ts` (Postgres connection)
 
 Follow the auth flow:
@@ -193,7 +203,7 @@ Primary files:
 - `src/playground/GraphPhysicsPlaygroundShell.tsx` (restore pipeline + callback emitters)
 - `src/document/nodeBinding.ts` (analysis record creation, callback emission)
 - `src/api.ts` (saved-interfaces API helpers)
-- `src/server/src/serverMonolith.ts` (requireAuth CRUD API)
+- `src/server/src/routes/savedInterfacesRoutes.ts` (requireAuth CRUD API)
 - `src/server/migrations/1770383000000_add_saved_interfaces.js` (DB table)
 
 Current write ownership:
@@ -232,11 +242,13 @@ Search overlay contract:
 ## 7.4 Important Files and Seams (Current)
 
 Backend API seams:
-- `src/server/src/serverMonolith.ts`
+- `src/server/src/routes/savedInterfacesRoutes.ts`
   - `GET /api/saved-interfaces`
   - `POST /api/saved-interfaces/upsert`
   - `POST /api/saved-interfaces/delete`
+- `src/server/src/routes/profileRoutes.ts`
   - `POST /api/profile/update`
+- `src/server/src/routes/authRoutes.ts`
   - `GET /me` payload includes `displayName`, `username`, `picture`.
 
 Backend migrations:

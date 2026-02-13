@@ -159,6 +159,31 @@ function buildApiErrorMessage(op: string, result: ApiGetResult | ApiPostResult) 
   return `${op} failed: ${status || "unknown"} ${detail}`;
 }
 
+function extractStatusCodeFromErrorText(text: string): number | null {
+  const match = text.match(/\b(4\d\d|5\d\d)\b/);
+  if (!match) return null;
+  const code = Number(match[1]);
+  if (!Number.isFinite(code)) return null;
+  return code;
+}
+
+export function getApiErrorStatusCode(error: unknown): number | null {
+  const text = String(error ?? "");
+  return extractStatusCodeFromErrorText(text);
+}
+
+export function isApiForbiddenOrUnauthorized(error: unknown): boolean {
+  const code = getApiErrorStatusCode(error);
+  return code === 401 || code === 403;
+}
+
+export function isFeedbackRouteUnavailableError(error: unknown): boolean {
+  const text = String(error ?? "").toLowerCase();
+  const code = extractStatusCodeFromErrorText(text);
+  if (code === 404 || code === 405 || code === 501) return true;
+  return text.includes("html response");
+}
+
 type SavedInterfacesListResponse = {
   ok?: boolean;
   items?: SavedInterfacesListItem[];

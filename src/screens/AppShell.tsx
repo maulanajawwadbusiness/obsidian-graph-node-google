@@ -20,6 +20,8 @@ import {
 import {
     type FeedbackAdminItem,
     type FeedbackStatus,
+    isApiForbiddenOrUnauthorized,
+    isFeedbackRouteUnavailableError,
     submitFeedback,
     listFeedbackAdmin,
     updateFeedbackStatusAdmin,
@@ -287,6 +289,7 @@ export const AppShell: React.FC = () => {
     const [isFeedbackSubmitting, setIsFeedbackSubmitting] = React.useState(false);
     const [feedbackSubmitError, setFeedbackSubmitError] = React.useState<string | null>(null);
     const [feedbackSubmitOk, setFeedbackSubmitOk] = React.useState(false);
+    const [feedbackRouteUnavailable, setFeedbackRouteUnavailable] = React.useState(false);
     const [isFeedbackAdmin, setIsFeedbackAdmin] = React.useState(false);
     const [adminLoadState, setAdminLoadState] = React.useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
     const [adminError, setAdminError] = React.useState<string | null>(null);
@@ -760,6 +763,11 @@ export const AppShell: React.FC = () => {
     const submitFeedbackDraft = React.useCallback(async () => {
         if (isFeedbackSubmitting) return;
         if (!isLoggedIn || !user) return;
+        if (feedbackRouteUnavailable) {
+            setFeedbackSubmitError('Feedback is not available on this server revision yet.');
+            setFeedbackSubmitOk(false);
+            return;
+        }
         const message = feedbackDraftMessage.trim();
         if (!message) {
             setFeedbackSubmitError('Please write a message before sending.');
@@ -795,23 +803,25 @@ export const AppShell: React.FC = () => {
                 feedbackAutoCloseTimerRef.current = null;
                 closeFeedbackModal();
             }, FEEDBACK_SUCCESS_CLOSE_DELAY_MS);
-        } catch {
-            setFeedbackSubmitError('Failed to send feedback. Please try again.');
+        } catch (error) {
+            if (isFeedbackRouteUnavailableError(error)) {
+                setFeedbackRouteUnavailable(true);
+                setFeedbackSubmitError('Feedback is not available on this server revision yet.');
+            } else {
+                setFeedbackSubmitError('Failed to send feedback. Please try again.');
+            }
         } finally {
             setIsFeedbackSubmitting(false);
         }
-    }, [closeFeedbackModal, feedbackDraftMessage, isFeedbackSubmitting, isLoggedIn, savedInterfaces.length, screen, user]);
+    }, [closeFeedbackModal, feedbackDraftMessage, feedbackRouteUnavailable, isFeedbackSubmitting, isLoggedIn, savedInterfaces.length, screen, user]);
     const canSubmitFeedback = !isFeedbackSubmitting
+        && !feedbackRouteUnavailable
         && feedbackDraftMessage.trim().length > 0
         && feedbackDraftMessage.trim().length <= FEEDBACK_MESSAGE_MAX_CHARS;
     const selectedAdminItem = React.useMemo(
         () => adminItems.find((item) => item.id === adminSelectedId) ?? null,
         [adminItems, adminSelectedId]
     );
-    const isAdminFetchForbidden = React.useCallback((error: unknown): boolean => {
-        const text = String(error ?? '');
-        return text.includes('403') || text.includes('401');
-    }, []);
     const isAdminInboxStale = React.useCallback(() => {
         if (adminLastFetchedAtTsRef.current <= 0) return true;
         return (Date.now() - adminLastFetchedAtTsRef.current) > FEEDBACK_ADMIN_STALE_MS;
@@ -877,10 +887,24 @@ export const AppShell: React.FC = () => {
             if (!isFeedbackOpenRef.current) return;
             if (feedbackOpenSessionRef.current !== openSession) return;
             if (authIdentityKeyRef.current !== identityAtStart) return;
-            if (isAdminFetchForbidden(error)) {
+            if (isApiForbiddenOrUnauthorized(error)) {
                 setIsFeedbackAdmin(false);
                 setFeedbackModalView('send');
                 setAdminLoadState('idle');
+                setAdminItems([]);
+                setAdminSelectedId(null);
+                setAdminCursorBeforeId(null);
+                setAdminHasMore(false);
+                setAdminRefreshState('idle');
+                setAdminRefreshError(null);
+                return;
+            }
+            if (isFeedbackRouteUnavailableError(error)) {
+                setFeedbackRouteUnavailable(true);
+                setIsFeedbackAdmin(false);
+                setFeedbackModalView('send');
+                setAdminLoadState('idle');
+                setAdminError(null);
                 setAdminItems([]);
                 setAdminSelectedId(null);
                 setAdminCursorBeforeId(null);
@@ -897,7 +921,7 @@ export const AppShell: React.FC = () => {
         } finally {
             adminRefreshInFlightRef.current = false;
         }
-    }, [adminLoadingMore, adminRefreshState, adminStatusPendingById, isAdminFetchForbidden, isFeedbackAdmin]);
+    }, [adminLoadingMore, adminRefreshState, adminStatusPendingById, isFeedbackAdmin]);
     const scheduleAdminSoftRefresh = React.useCallback(() => {
         if (adminSoftRefreshTimerRef.current !== null) {
             window.clearTimeout(adminSoftRefreshTimerRef.current);
@@ -944,10 +968,22 @@ export const AppShell: React.FC = () => {
                 : null;
             setAdminCursorBeforeId(nextCursor);
             setAdminHasMore(nextCursor !== null);
-        } catch {
+        } catch (error) {
             if (!isFeedbackOpenRef.current) return;
             if (feedbackOpenSessionRef.current !== openSession) return;
             if (authIdentityKeyRef.current !== identityAtStart) return;
+            if (isFeedbackRouteUnavailableError(error)) {
+                setFeedbackRouteUnavailable(true);
+                setIsFeedbackAdmin(false);
+                setFeedbackModalView('send');
+                setAdminLoadState('idle');
+                setAdminError(null);
+                setAdminItems([]);
+                setAdminSelectedId(null);
+                setAdminCursorBeforeId(null);
+                setAdminHasMore(false);
+                return;
+            }
             setAdminError('Failed to load more feedback.');
         } finally {
             if (!isFeedbackOpenRef.current) return;
@@ -978,10 +1014,22 @@ export const AppShell: React.FC = () => {
                 throw new Error('status_update_not_applied');
             }
             scheduleAdminSoftRefresh();
-        } catch {
+        } catch (error) {
             if (!isFeedbackOpenRef.current) return;
             if (feedbackOpenSessionRef.current !== openSession) return;
             if (authIdentityKeyRef.current !== identityAtStart) return;
+            if (isFeedbackRouteUnavailableError(error)) {
+                setFeedbackRouteUnavailable(true);
+                setIsFeedbackAdmin(false);
+                setFeedbackModalView('send');
+                setAdminLoadState('idle');
+                setAdminError(null);
+                setAdminItems([]);
+                setAdminSelectedId(null);
+                setAdminCursorBeforeId(null);
+                setAdminHasMore(false);
+                return;
+            }
             setAdminItems((curr) => curr.map((item) => (
                 item.id === id ? { ...item, status: previous.status } : item
             )));
@@ -1225,6 +1273,7 @@ export const AppShell: React.FC = () => {
 
     React.useEffect(() => {
         if (!isFeedbackOpen || !isLoggedIn) return;
+        if (feedbackRouteUnavailable) return;
         const openEpoch = feedbackOpenSessionRef.current;
         if (isFeedbackAdmin && adminItems.length > 0 && !isAdminInboxStale()) {
             return;
@@ -1261,7 +1310,19 @@ export const AppShell: React.FC = () => {
                 if (!isFeedbackOpenRef.current) return;
                 if (feedbackOpenSessionRef.current !== openEpoch) return;
                 if (feedbackAdminFetchEpochRef.current !== fetchEpoch) return;
-                if (isAdminFetchForbidden(error)) {
+                if (isApiForbiddenOrUnauthorized(error)) {
+                    setIsFeedbackAdmin(false);
+                    setAdminLoadState('idle');
+                    setAdminError(null);
+                    setAdminItems([]);
+                    setAdminSelectedId(null);
+                    setFeedbackModalView('send');
+                    setAdminCursorBeforeId(null);
+                    setAdminHasMore(false);
+                    return;
+                }
+                if (isFeedbackRouteUnavailableError(error)) {
+                    setFeedbackRouteUnavailable(true);
                     setIsFeedbackAdmin(false);
                     setAdminLoadState('idle');
                     setAdminError(null);
@@ -1279,7 +1340,7 @@ export const AppShell: React.FC = () => {
         return () => {
             active = false;
         };
-    }, [adminItems.length, isAdminFetchForbidden, isAdminInboxStale, isFeedbackAdmin, isFeedbackOpen, isLoggedIn]);
+    }, [adminItems.length, feedbackRouteUnavailable, isAdminInboxStale, isFeedbackAdmin, isFeedbackOpen, isLoggedIn]);
 
     React.useEffect(() => {
         if (!isFeedbackOpen) return;
@@ -2169,6 +2230,9 @@ export const AppShell: React.FC = () => {
                                     {feedbackSubmitError ? (
                                         <div style={FEEDBACK_ERROR_STYLE}>{feedbackSubmitError}</div>
                                     ) : null}
+                                    {!feedbackSubmitError && feedbackRouteUnavailable ? (
+                                        <div style={FEEDBACK_ERROR_STYLE}>Feedback is not available on this server revision yet.</div>
+                                    ) : null}
                                     {feedbackSubmitOk ? (
                                         <div style={FEEDBACK_SUCCESS_STYLE}>sent. thanks.</div>
                                     ) : null}
@@ -2190,7 +2254,9 @@ export const AppShell: React.FC = () => {
                                         {...hardShieldInput}
                                         type="button"
                                         disabled={!canSubmitFeedback}
-                                        style={FEEDBACK_SEND_STYLE}
+                                        style={!canSubmitFeedback
+                                            ? FEEDBACK_SEND_DISABLED_STYLE
+                                            : (isFeedbackSubmitting ? FEEDBACK_SEND_BUSY_STYLE : FEEDBACK_SEND_STYLE)}
                                         onClick={(e) => {
                                             e.stopPropagation();
                                             void submitFeedbackDraft();
@@ -2992,16 +3058,31 @@ const FEEDBACK_CANCEL_STYLE: React.CSSProperties = {
 };
 
 const FEEDBACK_SEND_STYLE: React.CSSProperties = {
-    border: '1px solid rgba(99, 171, 255, 0.4)',
-    background: 'rgba(99, 171, 255, 0.2)',
-    color: '#d7f5ff',
+    border: '1px solid rgba(124, 193, 255, 0.92)',
+    background: 'linear-gradient(180deg, rgba(112, 187, 255, 0.95) 0%, rgba(66, 146, 242, 0.95) 100%)',
+    color: '#051525',
     borderRadius: '7px',
     padding: '7px 12px',
     fontSize: '12px',
-    cursor: 'not-allowed',
-    opacity: 0.7,
-    fontWeight: 300,
+    cursor: 'pointer',
+    opacity: 1,
+    fontWeight: 600,
     fontFamily: 'var(--font-ui)',
+};
+
+const FEEDBACK_SEND_BUSY_STYLE: React.CSSProperties = {
+    ...FEEDBACK_SEND_STYLE,
+    opacity: 0.8,
+    cursor: 'progress',
+};
+
+const FEEDBACK_SEND_DISABLED_STYLE: React.CSSProperties = {
+    ...FEEDBACK_SEND_STYLE,
+    border: '1px solid rgba(99, 171, 255, 0.4)',
+    background: 'rgba(99, 171, 255, 0.22)',
+    color: '#9cb3c8',
+    cursor: 'not-allowed',
+    opacity: 0.6,
 };
 
 const DELETE_CONFIRM_BACKDROP_STYLE: React.CSSProperties = {

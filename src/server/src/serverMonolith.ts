@@ -70,6 +70,29 @@ const allowedOrigins = (process.env.ALLOWED_ORIGINS ?? "")
   .map((value) => value.trim())
   .filter(Boolean);
 
+function readAdminAllowlistRaw(): string {
+  const primary = process.env.ADMIN_EMAIL_ALLOWLIST;
+  if (typeof primary === "string" && primary.trim().length > 0) {
+    return primary;
+  }
+  const fallback = process.env.ADMIN_EMAILS;
+  if (typeof fallback === "string" && fallback.trim().length > 0) {
+    return fallback;
+  }
+  return "";
+}
+
+function parseAdminAllowlist(raw: string): Set<string> {
+  return new Set(
+    raw
+      .split(",")
+      .map((value) => value.trim().toLowerCase())
+      .filter((value) => value.length > 0)
+  );
+}
+
+const ADMIN_EMAIL_ALLOWLIST_SET = parseAdminAllowlist(readAdminAllowlistRaw());
+
 const savedInterfacesJsonParser = express.json({ limit: SAVED_INTERFACE_JSON_LIMIT });
 const globalJsonParser = express.json({ limit: LLM_LIMITS.jsonBodyLimit });
 app.use("/api/saved-interfaces", (req, res, next) => savedInterfacesJsonParser(req, res, next));
@@ -2624,6 +2647,7 @@ async function startServer() {
   try {
     const schema = await assertAuthSchemaReady();
     profileColumnsAvailable = await detectProfileColumnsAvailability();
+    console.log(`[admin] allowlist loaded count=${ADMIN_EMAIL_ALLOWLIST_SET.size}`);
     console.log(
       `[auth-schema] ready db=${schema.dbTarget} tables=${schema.tables.join(",")} fk_sessions_user=${schema.hasSessionsUserFk} uq_users_google_sub=${schema.hasUsersGoogleSubUnique} uq_sessions_id=${schema.hasSessionsIdUnique}`
     );

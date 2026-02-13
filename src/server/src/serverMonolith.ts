@@ -1030,6 +1030,38 @@ app.get("/api/feedback", requireAuth, async (req, res) => {
   }
 });
 
+app.post("/api/feedback/update-status", requireAuth, async (req, res) => {
+  const admin = requireFeedbackAdminOrSendForbidden(res);
+  if (!admin) return;
+
+  const idRaw = req.body?.id;
+  const id = typeof idRaw === "string" ? Number(idRaw) : Number(idRaw);
+  if (!Number.isFinite(id) || !Number.isInteger(id) || id <= 0) {
+    res.status(400).json({ ok: false, error: "id must be a positive integer" });
+    return;
+  }
+  const status = normalizeFeedbackStatus(req.body?.status);
+  if (!status) {
+    res.status(400).json({ ok: false, error: "status must be one of new, triaged, done" });
+    return;
+  }
+
+  try {
+    const pool = await getPool();
+    const result = await pool.query(
+      `update feedback_messages
+          set status = $2
+        where id = $1`,
+      [id, status]
+    );
+    const updated = (result.rowCount || 0) === 1;
+    console.log("[feedback] admin_status ok id=%s status=%s updated=%s", id, status, updated);
+    res.json({ ok: true, updated });
+  } catch {
+    res.status(500).json({ ok: false, error: "failed to update feedback status" });
+  }
+});
+
 app.get("/api/saved-interfaces", requireAuth, async (_req, res) => {
   const user = res.locals.user as AuthContext;
   try {

@@ -11,6 +11,7 @@ import { Sidebar, type SidebarInterfaceItem } from '../components/Sidebar';
 import { useAuth } from '../auth/AuthProvider';
 import {
     LAYER_MODAL_DELETE,
+    LAYER_MODAL_FEEDBACK,
     LAYER_MODAL_LOGOUT_CONFIRM,
     LAYER_MODAL_PROFILE,
     LAYER_MODAL_SEARCH,
@@ -271,6 +272,8 @@ export const AppShell: React.FC = () => {
     const [isSearchInterfacesOpen, setIsSearchInterfacesOpen] = React.useState(false);
     const [searchInterfacesQuery, setSearchInterfacesQueryState] = React.useState('');
     const [searchHighlightedIndex, setSearchHighlightedIndex] = React.useState(0);
+    const [isFeedbackOpen, setIsFeedbackOpen] = React.useState(false);
+    const [feedbackDraftMessage, setFeedbackDraftMessage] = React.useState('');
     const [pendingDeleteId, setPendingDeleteId] = React.useState<string | null>(null);
     const [pendingDeleteTitle, setPendingDeleteTitle] = React.useState<string | null>(null);
     const [isLogoutConfirmOpen, setIsLogoutConfirmOpen] = React.useState(false);
@@ -708,6 +711,10 @@ export const AppShell: React.FC = () => {
     const handleRenameInterface = React.useCallback((id: string, newTitle: string) => {
         commitRenameInterface(id, newTitle, 'sidebar_rename');
     }, [commitRenameInterface]);
+    const closeFeedbackModal = React.useCallback(() => {
+        setIsFeedbackOpen(false);
+        setFeedbackDraftMessage('');
+    }, []);
     const closeProfileOverlay = React.useCallback(() => {
         if (profileSaving) return;
         setIsProfileOpen(false);
@@ -721,6 +728,9 @@ export const AppShell: React.FC = () => {
     const openLogoutConfirm = React.useCallback(() => {
         if (!isLoggedIn) return;
         if (sidebarDisabled) return;
+        if (isFeedbackOpen) {
+            closeFeedbackModal();
+        }
         if (isSearchInterfacesOpen) {
             closeSearchInterfaces();
         }
@@ -734,8 +744,10 @@ export const AppShell: React.FC = () => {
         setIsLogoutConfirmOpen(true);
     }, [
         closeDeleteConfirm,
+        closeFeedbackModal,
         closeProfileOverlay,
         closeSearchInterfaces,
+        isFeedbackOpen,
         isLoggedIn,
         isProfileOpen,
         isSearchInterfacesOpen,
@@ -762,6 +774,9 @@ export const AppShell: React.FC = () => {
     const openProfileOverlay = React.useCallback(() => {
         if (!isLoggedIn || !user) return;
         if (sidebarDisabled) return;
+        if (isFeedbackOpen) {
+            closeFeedbackModal();
+        }
         if (isSearchInterfacesOpen) {
             closeSearchInterfaces();
         }
@@ -776,16 +791,38 @@ export const AppShell: React.FC = () => {
         setProfileDraftUsername(nextUsername);
         setProfileError(null);
         setIsProfileOpen(true);
-    }, [closeDeleteConfirm, closeSearchInterfaces, isLoggedIn, isSearchInterfacesOpen, pendingDeleteId, sidebarDisabled, user]);
+    }, [closeDeleteConfirm, closeFeedbackModal, closeSearchInterfaces, isFeedbackOpen, isLoggedIn, isSearchInterfacesOpen, pendingDeleteId, sidebarDisabled, user]);
     const openFeedbackModal = React.useCallback(() => {
+        if (!isLoggedIn) return;
         if (sidebarDisabled) {
             if (import.meta.env.DEV) {
                 console.log('[appshell] feedback_open_blocked reason=sidebar_disabled');
             }
             return;
         }
-        console.log('[appshell] feedback_open_requested');
-    }, [sidebarDisabled]);
+        if (isProfileOpen || isLogoutConfirmOpen) {
+            if (import.meta.env.DEV) {
+                console.log('[appshell] feedback_open_blocked reason=modal_conflict');
+            }
+            return;
+        }
+        if (isSearchInterfacesOpen) {
+            closeSearchInterfaces();
+        }
+        if (pendingDeleteId) {
+            closeDeleteConfirm();
+        }
+        setIsFeedbackOpen(true);
+    }, [
+        closeDeleteConfirm,
+        closeSearchInterfaces,
+        isLoggedIn,
+        isLogoutConfirmOpen,
+        isProfileOpen,
+        isSearchInterfacesOpen,
+        pendingDeleteId,
+        sidebarDisabled
+    ]);
     const onProfileSave = React.useCallback(async () => {
         if (profileSaving) return;
         const displayName = profileDraftDisplayName.replace(/\s+/g, ' ').trim();
@@ -884,6 +921,25 @@ export const AppShell: React.FC = () => {
             window.removeEventListener('keydown', onKeyDown, true);
         };
     }, [closeLogoutConfirm, isLogoutConfirmOpen]);
+
+    React.useEffect(() => {
+        if (!isFeedbackOpen) return;
+        if (!sidebarDisabled) return;
+        closeFeedbackModal();
+    }, [closeFeedbackModal, isFeedbackOpen, sidebarDisabled]);
+
+    React.useEffect(() => {
+        if (!isFeedbackOpen) return;
+        const onKeyDown = (event: KeyboardEvent) => {
+            if (event.key !== 'Escape') return;
+            event.stopPropagation();
+            closeFeedbackModal();
+        };
+        window.addEventListener('keydown', onKeyDown, true);
+        return () => {
+            window.removeEventListener('keydown', onKeyDown, true);
+        };
+    }, [closeFeedbackModal, isFeedbackOpen]);
 
     React.useEffect(() => {
         savedInterfacesRef.current = savedInterfaces;
@@ -1498,6 +1554,58 @@ export const AppShell: React.FC = () => {
                     </div>
                 </div>
             ) : null}
+            {isFeedbackOpen ? (
+                <div
+                    {...hardShieldInput}
+                    data-feedback-backdrop="1"
+                    style={FEEDBACK_OVERLAY_BACKDROP_STYLE}
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        closeFeedbackModal();
+                    }}
+                >
+                    <div
+                        {...hardShieldInput}
+                        data-feedback-modal="1"
+                        style={FEEDBACK_OVERLAY_CARD_STYLE}
+                    >
+                        <div style={FEEDBACK_TITLE_STYLE}>Suggestion and Feedback</div>
+                        <div {...hardShieldInput} style={FEEDBACK_BODY_STYLE}>
+                            <textarea
+                                {...hardShieldInput}
+                                value={feedbackDraftMessage}
+                                placeholder="Tell us what can be improved..."
+                                onChange={(e) => setFeedbackDraftMessage(e.target.value)}
+                                style={FEEDBACK_TEXTAREA_STYLE}
+                            />
+                        </div>
+                        <div style={FEEDBACK_BUTTON_ROW_STYLE}>
+                            <button
+                                {...hardShieldInput}
+                                type="button"
+                                style={FEEDBACK_CANCEL_STYLE}
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    closeFeedbackModal();
+                                }}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                {...hardShieldInput}
+                                type="button"
+                                disabled
+                                style={FEEDBACK_SEND_STYLE}
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                }}
+                            >
+                                Send
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            ) : null}
             {pendingDeleteId ? (
                 <div
                     data-delete-backdrop="1"
@@ -1906,6 +2014,96 @@ const LOGOUT_CONFIRM_PRIMARY_STYLE: React.CSSProperties = {
     padding: '7px 12px',
     fontSize: '12px',
     cursor: 'pointer',
+    fontWeight: 300,
+    fontFamily: 'var(--font-ui)',
+};
+
+const FEEDBACK_OVERLAY_BACKDROP_STYLE: React.CSSProperties = {
+    position: 'fixed',
+    inset: 0,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '16px',
+    boxSizing: 'border-box',
+    background: 'rgba(6, 8, 12, 0.62)',
+    zIndex: LAYER_MODAL_FEEDBACK,
+    pointerEvents: 'auto',
+};
+
+const FEEDBACK_OVERLAY_CARD_STYLE: React.CSSProperties = {
+    width: 'min(560px, calc(100vw - 32px))',
+    height: 'min(360px, calc(100vh - 64px))',
+    maxHeight: 'calc(100vh - 64px)',
+    borderRadius: '12px',
+    border: '1px solid rgba(255, 255, 255, 0.12)',
+    background: '#0d0d18',
+    boxShadow: '0 18px 56px rgba(0, 0, 0, 0.45)',
+    padding: '16px',
+    boxSizing: 'border-box',
+    color: '#f1f4fb',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '10px',
+    overflow: 'hidden',
+};
+
+const FEEDBACK_TITLE_STYLE: React.CSSProperties = {
+    fontFamily: 'var(--font-ui)',
+    fontSize: '14px',
+    lineHeight: 1.2,
+    color: '#f3f7ff',
+};
+
+const FEEDBACK_BODY_STYLE: React.CSSProperties = {
+    flex: 1,
+    minHeight: 0,
+    display: 'flex',
+};
+
+const FEEDBACK_TEXTAREA_STYLE: React.CSSProperties = {
+    width: '100%',
+    height: '100%',
+    resize: 'none',
+    borderRadius: '10px',
+    border: '1px solid rgba(255, 255, 255, 0.14)',
+    background: 'rgba(10, 12, 18, 0.95)',
+    color: '#e7e7e7',
+    fontFamily: 'var(--font-ui)',
+    fontSize: '13px',
+    lineHeight: 1.35,
+    padding: '10px 12px',
+    boxSizing: 'border-box',
+    outline: 'none',
+};
+
+const FEEDBACK_BUTTON_ROW_STYLE: React.CSSProperties = {
+    display: 'flex',
+    justifyContent: 'flex-end',
+    gap: '8px',
+};
+
+const FEEDBACK_CANCEL_STYLE: React.CSSProperties = {
+    border: '1px solid rgba(255, 255, 255, 0.22)',
+    background: 'transparent',
+    color: '#e7e7e7',
+    borderRadius: '7px',
+    padding: '7px 12px',
+    fontSize: '12px',
+    cursor: 'pointer',
+    fontWeight: 300,
+    fontFamily: 'var(--font-ui)',
+};
+
+const FEEDBACK_SEND_STYLE: React.CSSProperties = {
+    border: '1px solid rgba(99, 171, 255, 0.4)',
+    background: 'rgba(99, 171, 255, 0.2)',
+    color: '#d7f5ff',
+    borderRadius: '7px',
+    padding: '7px 12px',
+    fontSize: '12px',
+    cursor: 'not-allowed',
+    opacity: 0.7,
     fontWeight: 300,
     fontFamily: 'var(--font-ui)',
 };

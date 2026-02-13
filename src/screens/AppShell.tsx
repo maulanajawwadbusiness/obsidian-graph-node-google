@@ -823,6 +823,7 @@ export const AppShell: React.FC = () => {
         if (adminRefreshState === 'loading') return;
         if (adminRefreshInFlightRef.current) return;
         const openSession = feedbackOpenSessionRef.current;
+        const identityAtStart = authIdentityKeyRef.current;
         adminRefreshInFlightRef.current = true;
         setAdminRefreshState('loading');
         setAdminRefreshError(null);
@@ -836,6 +837,7 @@ export const AppShell: React.FC = () => {
             const result = await listFeedbackAdmin({ limit: FEEDBACK_ADMIN_PAGE_LIMIT });
             if (!isFeedbackOpenRef.current) return;
             if (feedbackOpenSessionRef.current !== openSession) return;
+            if (authIdentityKeyRef.current !== identityAtStart) return;
             const incoming = Array.isArray(result.items) ? result.items : [];
             const nextCursor = typeof result.nextCursor === 'number' && Number.isFinite(result.nextCursor)
                 ? result.nextCursor
@@ -874,6 +876,7 @@ export const AppShell: React.FC = () => {
         } catch (error) {
             if (!isFeedbackOpenRef.current) return;
             if (feedbackOpenSessionRef.current !== openSession) return;
+            if (authIdentityKeyRef.current !== identityAtStart) return;
             if (isAdminFetchForbidden(error)) {
                 setIsFeedbackAdmin(false);
                 setFeedbackModalView('send');
@@ -1434,6 +1437,11 @@ export const AppShell: React.FC = () => {
         setSearchInterfacesQueryState('');
         setSearchHighlightedIndex(0);
         setSearchInputFocused(false);
+        setAdminLoadingMore(false);
+        setAdminStatusPendingById({});
+        setAdminRefreshState('idle');
+        setAdminRefreshError(null);
+        setAdminError(null);
         adminRefreshInFlightRef.current = false;
         if (adminSoftRefreshTimerRef.current !== null) {
             window.clearTimeout(adminSoftRefreshTimerRef.current);

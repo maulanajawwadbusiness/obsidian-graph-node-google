@@ -21,9 +21,10 @@ const CURSOR_PAUSE_THRESHOLD_MS = 130;
 const CURSOR_HOLD_FAST_WINDOW_MS = 680;
 const SHOW_WELCOME2_FOCUS_RING = false;
 const WELCOME2_AUTO_ADVANCE_DELAY_MS = 2000*4;
-const STABILIZE_STAGE_A_MS = 300;
-const STABILIZE_STAGE_B_MS = 100;
-const CUT_ELLIPSIS_TOTAL_DOTS = 3;
+const STABILIZE_STAGE_A_MS = 400;
+const STABILIZE_STAGE_B_MS = 200;
+const BACKSTEP_CUT_RATIO = 0.7;
+const CUT_ELLIPSIS_TOTAL_DOTS = 0;
 const CUT_ELLIPSIS_CHARS_PER_DOT_STEP = 4;
 const SEEK_ICON_SIZE_PX = 16;
 const SEEK_ICON_COLOR = '#9db7e2';
@@ -230,7 +231,7 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
         const previousPartLen = Math.max(0, previousPartEndCore - previousPartStart);
         const cutWithinPart = previousPartLen <= 0
             ? 0
-            : Math.max(1, Math.min(Math.floor(previousPartLen * 0.8), previousPartLen));
+            : Math.max(1, Math.min(Math.floor(previousPartLen * BACKSTEP_CUT_RATIO), previousPartLen));
         const cutCharCount = previousPartLen <= 0
             ? previousPartEndCore
             : previousPartStart + cutWithinPart;

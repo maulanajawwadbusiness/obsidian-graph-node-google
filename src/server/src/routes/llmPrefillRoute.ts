@@ -143,8 +143,9 @@ app.post("/api/llm/prefill", deps.requireAuth, async (req, res) => {
       request_id: requestId,
       code: "rate_limited",
       error: "too many concurrent requests"
+    }, {
+      headers: { "Retry-After": "5" }
     });
-    res.setHeader("Retry-After", "5");
     deps.logLlmRequest({
       request_id: requestId,
       endpoint: "/api/llm/prefill",

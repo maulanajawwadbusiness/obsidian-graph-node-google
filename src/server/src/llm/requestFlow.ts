@@ -21,8 +21,18 @@ export type ApiError = {
   error: string;
 };
 
-export function sendApiError(res: express.Response, status: number, body: ApiError) {
+export function sendApiError(
+  res: express.Response,
+  status: number,
+  body: ApiError,
+  opts?: { headers?: Record<string, string> }
+) {
   res.setHeader("X-Request-Id", body.request_id);
+  if (opts?.headers) {
+    for (const [key, value] of Object.entries(opts.headers)) {
+      res.setHeader(key, value);
+    }
+  }
   res.status(status).json(body);
 }
 
@@ -132,4 +142,3 @@ export function logLlmRequest(fields: {
     validation_result: fields.validation_result ?? null
   }));
 }
-

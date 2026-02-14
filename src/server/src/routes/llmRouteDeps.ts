@@ -64,7 +64,12 @@ export type LlmRouteCommonDeps = {
   getUserId: (user: AuthContext) => string;
   acquireLlmSlot: (userId: string) => boolean;
   releaseLlmSlot: (userId: string) => void;
-  sendApiError: (res: express.Response, status: number, body: ApiError) => void;
+  sendApiError: (
+    res: express.Response,
+    status: number,
+    body: ApiError,
+    opts?: { headers?: Record<string, string> }
+  ) => void;
   isValidationError: (value: unknown) => value is ValidationError;
   logLlmRequest: (fields: LlmRequestLogFields) => void;
   mapLlmErrorToStatus: (error: LlmError) => number;
@@ -87,4 +92,3 @@ export type LlmChatRouteDeps = LlmRouteCommonDeps & {
   incRequestsStreaming: () => void;
   decRequestsStreaming: () => void;
 };
-

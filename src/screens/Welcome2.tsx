@@ -369,14 +369,8 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
                     <span>{visibleText}</span>
                     {cutEllipsisDotCount > 0 ? (
                         <span style={CUT_ELLIPSIS_SLOTS_STYLE} aria-hidden="true">
-                            {Array.from({ length: CUT_ELLIPSIS_TOTAL_DOTS }).map((_, index) => (
-                                <span
-                                    key={index}
-                                    style={{
-                                        ...CUT_ELLIPSIS_DOT_STYLE,
-                                        opacity: index < cutEllipsisDotCount ? 1 : 0,
-                                    }}
-                                >
+                            {Array.from({ length: cutEllipsisDotCount }).map((_, index) => (
+                                <span key={index} style={CUT_ELLIPSIS_DOT_STYLE}>
                                     {'.'}
                                 </span>
                             ))}
@@ -458,7 +452,6 @@ const CURSOR_STYLE: React.CSSProperties = {
 
 const CUT_ELLIPSIS_SLOTS_STYLE: React.CSSProperties = {
     display: 'inline-flex',
-    width: '1.05em',
     color: '#b9bcc5',
     pointerEvents: 'none',
 };
@@ -469,7 +462,6 @@ const CUT_ELLIPSIS_DOT_STYLE: React.CSSProperties = {
     justifyContent: 'center',
     width: '0.35em',
     flex: '0 0 0.35em',
-    transition: 'opacity 90ms linear',
 };
 
 const SEEK_BUTTON_ROW_STYLE: React.CSSProperties = {

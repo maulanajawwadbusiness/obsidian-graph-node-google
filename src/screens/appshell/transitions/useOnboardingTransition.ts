@@ -1,16 +1,13 @@
 import React from 'react';
-import {
-    ONBOARDING_SCREEN_FADE_MS,
-    TransitionScreen,
-    isOnboardingScreen,
-} from './transitionTokens';
+import { ONBOARDING_SCREEN_FADE_MS } from './transitionTokens';
+import { AppScreen, isOnboardingScreen } from '../screenFlow/screenTypes';
 
-type UseOnboardingTransitionArgs<Screen extends TransitionScreen> = {
+type UseOnboardingTransitionArgs<Screen extends AppScreen> = {
     screen: Screen;
     setScreen: (next: Screen) => void;
 };
 
-type UseOnboardingTransitionResult<Screen extends TransitionScreen> = {
+type UseOnboardingTransitionResult<Screen extends AppScreen> = {
     transitionToScreen: (next: Screen) => void;
     screenTransitionFrom: Screen | null;
     screenTransitionReady: boolean;
@@ -19,7 +16,7 @@ type UseOnboardingTransitionResult<Screen extends TransitionScreen> = {
     shouldBlockOnboardingInput: boolean;
 };
 
-export function useOnboardingTransition<Screen extends TransitionScreen>(
+export function useOnboardingTransition<Screen extends AppScreen>(
     args: UseOnboardingTransitionArgs<Screen>
 ): UseOnboardingTransitionResult<Screen> {
     const { screen, setScreen } = args;

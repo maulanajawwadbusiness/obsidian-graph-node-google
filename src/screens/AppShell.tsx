@@ -35,10 +35,10 @@ import {
 } from '../store/savedInterfacesStore';
 import {
     ONBOARDING_SCREEN_FADE_EASING,
-    isOnboardingScreen,
 } from './appshell/transitions/transitionTokens';
 import { OnboardingLayerHost } from './appshell/transitions/OnboardingLayerHost';
 import { useOnboardingTransition } from './appshell/transitions/useOnboardingTransition';
+import { isOnboardingScreen } from './appshell/screenFlow/screenTypes';
 
 const Graph = React.lazy(() =>
     import('../playground/GraphPhysicsPlayground').then((mod) => ({

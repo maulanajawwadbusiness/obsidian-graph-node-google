@@ -4,6 +4,12 @@ export type Welcome2SentenceSpans = {
     partEndSoftCharCountByIndex: number[];
 };
 
+type Welcome2PartSpan = {
+    start: number;
+    endCore: number;
+    endSoft: number;
+};
+
 function isPartTerminator(ch: string): boolean {
     return ch === '.';
 }
@@ -13,9 +19,7 @@ function isTrailingWhitespace(ch: string): boolean {
 }
 
 export function buildWelcome2SentenceSpans(renderText: string): Welcome2SentenceSpans {
-    const starts: number[] = [];
-    const coreEnds: number[] = [];
-    const softEnds: number[] = [];
+    const rawParts: Welcome2PartSpan[] = [];
     const len = renderText.length;
 
     if (len === 0) {
@@ -36,26 +40,67 @@ export function buildWelcome2SentenceSpans(renderText: string): Welcome2Sentence
         }
 
         const endCoreExclusive = i + 1;
+        if (endCoreExclusive <= start) {
+            start = endCoreExclusive;
+            i = endCoreExclusive;
+            continue;
+        }
 
         let endSoftExclusive = endCoreExclusive;
         while (endSoftExclusive < len && isTrailingWhitespace(renderText[endSoftExclusive])) {
             endSoftExclusive += 1;
         }
 
-        if (endCoreExclusive > start) {
-            starts.push(start);
-            coreEnds.push(endCoreExclusive);
-            softEnds.push(endSoftExclusive);
+        if (endSoftExclusive > start) {
+            rawParts.push({
+                start,
+                endCore: endCoreExclusive,
+                endSoft: endSoftExclusive,
+            });
         }
         start = endSoftExclusive;
         i = endSoftExclusive;
     }
 
-    if (starts.length === 0 || start < len) {
-        starts.push(start);
-        coreEnds.push(len);
-        softEnds.push(len);
+    if (start < len) {
+        rawParts.push({
+            start,
+            endCore: len,
+            endSoft: len,
+        });
     }
+
+    const parts: Welcome2PartSpan[] = [];
+    for (const part of rawParts) {
+        const isValidShape = part.start < part.endCore && part.start < part.endSoft && part.endCore <= part.endSoft;
+        if (!isValidShape) {
+            if (import.meta.env.DEV) {
+                console.warn('[welcome2 parts] invalid span', part);
+            }
+            continue;
+        }
+
+        const prev = parts[parts.length - 1];
+        const isValidChain =
+            !prev ||
+            (part.start === prev.endSoft && part.endSoft >= prev.endSoft);
+        if (!isValidChain) {
+            if (import.meta.env.DEV) {
+                console.warn('[welcome2 parts] invalid span', part);
+            }
+            continue;
+        }
+
+        parts.push(part);
+    }
+
+    if (parts.length === 0 && len > 0) {
+        parts.push({ start: 0, endCore: len, endSoft: len });
+    }
+
+    const starts = parts.map((part) => part.start);
+    const coreEnds = parts.map((part) => part.endCore);
+    const softEnds = parts.map((part) => part.endSoft);
 
     return {
         partStartCharCountByIndex: starts,

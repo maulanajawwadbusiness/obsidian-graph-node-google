@@ -17,6 +17,7 @@
     "check:auth-schema": "ts-node src/authSchemaGuard.ts",
     "test:llm-contracts": "node scripts/test-llm-contracts.mjs",
     "test:requestflow-contracts": "node scripts/test-requestflow-contracts.mjs",
+    "test:health-contracts": "node scripts/test-health-contracts.mjs",
     "test:jsonparsers-contracts": "node scripts/test-jsonparsers-contracts.mjs",
     "test:cors-contracts": "node scripts/test-cors-contracts.mjs",
     "test:startupgates-contracts": "node scripts/test-startupgates-contracts.mjs",

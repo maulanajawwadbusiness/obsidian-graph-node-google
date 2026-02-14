@@ -31,14 +31,10 @@ import { registerProfileRoutes } from "./routes/profileRoutes";
 import { registerSavedInterfacesRoutes } from "./routes/savedInterfacesRoutes";
 import { clearSessionCookie, getSessionIdFromRequest } from "./server/cookies";
 import { buildCorsOptions } from "./server/corsConfig";
+import { buildRouteDeps } from "./server/depsBuilder";
 import { loadServerEnvConfig } from "./server/envConfig";
 import { applyJsonParsers } from "./server/jsonParsers";
 import { runStartupGates } from "./server/startupGates";
-import type {
-  LlmAnalyzeRouteDeps,
-  LlmPrefillRouteDeps,
-  LlmChatRouteDeps
-} from "./routes/llmRouteDeps";
 
 type AuthContext = {
   id: string;
@@ -52,14 +48,8 @@ const serverEnv = loadServerEnvConfig();
 const port = serverEnv.port;
 
 const COOKIE_NAME = serverEnv.cookieName;
-const SESSION_TTL_MS = serverEnv.sessionTtlMs;
 const COOKIE_SAMESITE = serverEnv.cookieSameSite;
-const SAVED_INTERFACES_LIST_LIMIT = serverEnv.savedInterfacesListLimit;
-const MAX_SAVED_INTERFACE_PAYLOAD_BYTES = serverEnv.maxSavedInterfacePayloadBytes;
 const SAVED_INTERFACE_JSON_LIMIT = serverEnv.savedInterfaceJsonLimit;
-const PROFILE_DISPLAY_NAME_MAX = 80;
-const PROFILE_USERNAME_MAX = 32;
-const PROFILE_USERNAME_REGEX = /^[A-Za-z0-9_.-]+$/;
 let profileColumnsAvailable = false;
 applyJsonParsers(app, {
   savedInterfacesJsonLimit: SAVED_INTERFACE_JSON_LIMIT,
@@ -118,10 +108,6 @@ function isValidationError(value: unknown): value is ValidationError {
   return Boolean(value) && typeof value === "object" && (value as ValidationError).ok === false;
 }
 
-function isOpenrouterAnalyzeAllowed(model: string): boolean {
-  return serverEnv.isOpenrouterAnalyzeAllowed(model);
-}
-
 function sanitizeActions(value: unknown): Array<{ name: string; method: string; url: string }> {
   if (!Array.isArray(value)) return [];
   const out: Array<{ name: string; method: string; url: string }> = [];
@@ -139,8 +125,7 @@ function isPaidStatus(status: string | undefined): boolean {
   return status === "settlement" || status === "capture";
 }
 
-function verifyMidtransSignature(body: any): boolean {
-  const serverKey = process.env.MIDTRANS_SERVER_KEY;
+function verifyMidtransSignature(body: any, serverKey: string): boolean {
   if (!serverKey) return false;
   const orderId = String(body?.order_id || "");
   const statusCode = String(body?.status_code || "");
@@ -189,59 +174,6 @@ async function requireAuth(req: express.Request, res: express.Response, next: ex
   }
 }
 
-registerPaymentsWebhookRoute(app, {
-  getPool,
-  verifyMidtransSignature,
-  applyTopupFromMidtrans,
-  isPaidStatus
-});
-
-app.use(cors(corsOptions));
-app.options(/.*/, cors(corsOptions));
-
-registerHealthRoutes(app, { getPool });
-
-registerAuthRoutes(app, {
-  getPool,
-  cookieName: COOKIE_NAME,
-  cookieSameSite: COOKIE_SAMESITE,
-  cookieTtlMs: SESSION_TTL_MS,
-  isProd: isProd(),
-  getProfileColumnsAvailable: () => profileColumnsAvailable,
-  googleClientId: process.env.GOOGLE_CLIENT_ID,
-  verifyGoogleIdToken
-});
-
-registerProfileRoutes(app, {
-  getPool,
-  requireAuth,
-  getProfileColumnsAvailable: () => profileColumnsAvailable,
-  profileDisplayNameMax: PROFILE_DISPLAY_NAME_MAX,
-  profileUsernameMax: PROFILE_USERNAME_MAX,
-  profileUsernameRegex: PROFILE_USERNAME_REGEX
-});
-
-registerSavedInterfacesRoutes(app, {
-  getPool,
-  requireAuth,
-  listLimit: SAVED_INTERFACES_LIST_LIMIT,
-  maxPayloadBytes: MAX_SAVED_INTERFACE_PAYLOAD_BYTES,
-  logger: console
-});
-
-const paymentsRouteDeps = {
-  getPool,
-  requireAuth,
-  getBalance,
-  midtransRequest,
-  parseGrossAmount,
-  applyTopupFromMidtrans,
-  sanitizeActions,
-  isPaidStatus
-};
-
-registerRupiahAndPaymentsCreateRoutes(app, paymentsRouteDeps);
-
 const llmRouteCommonDeps = {
   requireAuth,
   getUserId,
@@ -260,27 +192,50 @@ const llmRouteCommonDeps = {
   decRequestsInflight: llmRuntime.decRequestsInflight
 };
 
-const llmAnalyzeRouteDeps: LlmAnalyzeRouteDeps = {
-  ...llmRouteCommonDeps,
-  isOpenrouterAnalyzeAllowed
-};
+const routeDeps = buildRouteDeps({
+  cfg: serverEnv,
+  services: {
+    getPool,
+    requireAuth,
+    verifyGoogleIdToken,
+    getBalance,
+    midtransRequest,
+    parseGrossAmount,
+    applyTopupFromMidtrans,
+    sanitizeActions,
+    isPaidStatus,
+    verifyMidtransSignature,
+    llmCommon: llmRouteCommonDeps,
+    llmStreaming: {
+      incRequestsStreaming: llmRuntime.incRequestsStreaming,
+      decRequestsStreaming: llmRuntime.decRequestsStreaming
+    },
+    logger: console
+  },
+  getProfileColumnsAvailable: () => profileColumnsAvailable
+});
 
-const llmPrefillRouteDeps: LlmPrefillRouteDeps = {
-  ...llmRouteCommonDeps
-};
+registerPaymentsWebhookRoute(app, routeDeps.paymentsWebhook);
 
-const llmChatRouteDeps: LlmChatRouteDeps = {
-  ...llmRouteCommonDeps,
-  incRequestsStreaming: llmRuntime.incRequestsStreaming,
-  decRequestsStreaming: llmRuntime.decRequestsStreaming
-};
+app.use(cors(corsOptions));
+app.options(/.*/, cors(corsOptions));
 
-registerLlmAnalyzeRoute(app, llmAnalyzeRouteDeps);
+registerHealthRoutes(app, routeDeps.health);
 
-registerPaymentsStatusRoute(app, paymentsRouteDeps);
+registerAuthRoutes(app, routeDeps.auth);
 
-registerLlmPrefillRoute(app, llmPrefillRouteDeps);
-registerLlmChatRoute(app, llmChatRouteDeps);
+registerProfileRoutes(app, routeDeps.profile);
+
+registerSavedInterfacesRoutes(app, routeDeps.savedInterfaces);
+
+registerRupiahAndPaymentsCreateRoutes(app, routeDeps.payments);
+
+registerLlmAnalyzeRoute(app, routeDeps.llmAnalyze);
+
+registerPaymentsStatusRoute(app, routeDeps.payments);
+
+registerLlmPrefillRoute(app, routeDeps.llmPrefill);
+registerLlmChatRoute(app, routeDeps.llmChat);
 
 async function startServer() {
   try {

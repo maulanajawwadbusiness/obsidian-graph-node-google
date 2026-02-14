@@ -12,6 +12,7 @@ export type TypedTimelineState = {
     isDone: boolean;
     elapsedMs: number;
     seekToMs: (ms: number) => void;
+    setClockPaused: (paused: boolean) => void;
 };
 
 const DEBUG_WELCOME2_TYPE = false;
@@ -78,6 +79,8 @@ export function useTypedTimeline(
     const offsetMsRef = React.useRef(0);
     const elapsedMsRef = React.useRef(0);
     const seekEpochRef = React.useRef(0);
+    const isClockPausedRef = React.useRef(false);
+    const pauseStartedNowMsRef = React.useRef<number | null>(null);
     const lastCharTimeMs = React.useMemo(() => getLastCharTimeMs(built.events), [built.events]);
 
     const seekToMs = React.useCallback((ms: number) => {
@@ -105,6 +108,23 @@ export function useTypedTimeline(
         });
     }, [built.events, built.totalMs, lastCharTimeMs]);
 
+    const setClockPaused = React.useCallback((paused: boolean) => {
+        const now = nowMs();
+        if (paused) {
+            if (isClockPausedRef.current) return;
+            isClockPausedRef.current = true;
+            pauseStartedNowMsRef.current = now;
+            return;
+        }
+
+        if (!isClockPausedRef.current) return;
+        const pauseStartedNowMs = pauseStartedNowMsRef.current ?? now;
+        const pausedDurationMs = Math.max(0, now - pauseStartedNowMs);
+        startTimeMsRef.current += pausedDurationMs;
+        pauseStartedNowMsRef.current = null;
+        isClockPausedRef.current = false;
+    }, []);
+
     React.useEffect(() => {
         let rafId = 0;
         let isActive = true;
@@ -112,6 +132,8 @@ export function useTypedTimeline(
         offsetMsRef.current = 0;
         elapsedMsRef.current = 0;
         seekEpochRef.current = 0;
+        isClockPausedRef.current = false;
+        pauseStartedNowMsRef.current = null;
         let lastDebugBucket = -1;
         let lastNowMs: number | null = null;
         let guardViolationLogged = false;
@@ -169,11 +191,13 @@ export function useTypedTimeline(
             }
             lastNowMs = nowMs;
 
-            const elapsedMs = clamp(
-                Math.round((nowMs - startTimeMsRef.current) + offsetMsRef.current),
-                0,
-                built.totalMs
-            );
+            const elapsedMs = isClockPausedRef.current
+                ? elapsedMsRef.current
+                : clamp(
+                    Math.round((nowMs - startTimeMsRef.current) + offsetMsRef.current),
+                    0,
+                    built.totalMs
+                );
             elapsedMsRef.current = elapsedMs;
             const visibleCharCount = getVisibleCharCountAtElapsed(built.events, elapsedMs);
             const phase = getPhase(elapsedMs, lastCharTimeMs, built.totalMs);
@@ -299,5 +323,6 @@ export function useTypedTimeline(
         isDone: state.phase === 'done',
         elapsedMs: state.elapsedMs,
         seekToMs,
+        setClockPaused,
     };
 }

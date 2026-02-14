@@ -20,7 +20,7 @@ const CURSOR_HOLD_FAST_WINDOW_MS = 680;
 const SHOW_WELCOME2_FOCUS_RING = false;
 const WELCOME2_AUTO_ADVANCE_DELAY_MS = 2000*4;
 const PART_BACKSTEP_LAND_RATIO = 0.8;
-const STABILIZE_BEFORE_BACK_MS = 50;
+const STABILIZE_BEFORE_BACK_MS = 400;
 const BLOCKED_SCROLL_KEYS = new Set([' ', 'PageDown', 'PageUp', 'ArrowDown', 'ArrowUp']);
 const INTERACTIVE_SELECTOR = 'button, input, textarea, select, a[href], [role=\"button\"], [contenteditable=\"true\"]';
 const DEBUG_WELCOME2_TYPE = false;
@@ -36,7 +36,7 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
         () => buildWelcome2Timeline(MANIFESTO_TEXT, DEFAULT_CADENCE),
         [MANIFESTO_TEXT, DEFAULT_CADENCE]
     );
-    const { visibleText, visibleCharCount, phase, elapsedMs, seekToMs } = useTypedTimeline(builtTimeline, {
+    const { visibleText, visibleCharCount, phase, elapsedMs, seekToMs, setClockPaused } = useTypedTimeline(builtTimeline, {
         debugTypeMetrics,
     });
     const sentenceSpans = React.useMemo(
@@ -146,7 +146,8 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
             backJumpTimeoutRef.current = null;
         }
         isBackJumpingRef.current = false;
-    }, []);
+        setClockPaused(false);
+    }, [setClockPaused]);
 
     const toSentenceEndTargetMs = React.useCallback((targetCharCount: number): number => {
         if (targetCharCount <= 0) return 0;
@@ -247,6 +248,7 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
 
         clearPendingBackJump();
         isBackJumpingRef.current = true;
+        setClockPaused(true);
 
         const currentPartStart = sentenceSpans.partStartCharCountByIndex[partIdx] ?? 0;
         const prevPartIdx = Math.max(0, partIdx - 1);
@@ -262,12 +264,14 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
             restartedThisPartRef.current = false;
             lastPartIdxRef.current = prevPartIdx;
             isBackJumpingRef.current = false;
+            setClockPaused(false);
         }, STABILIZE_BEFORE_BACK_MS);
     }, [
         builtTimeline.events.length,
         clearPendingBackJump,
         getPart80PercentLandCharCount,
         seekWithManualInteraction,
+        setClockPaused,
         sentenceSpans.partStartCharCountByIndex,
         toPartBoundaryAnchorMs,
         toSentenceEndTargetMs,

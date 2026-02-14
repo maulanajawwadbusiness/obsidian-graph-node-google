@@ -126,6 +126,13 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
         rootRef.current.focus({ preventScroll: true });
     }, []);
 
+    const clearAutoAdvanceTimer = React.useCallback(() => {
+        if (autoAdvanceTimeoutRef.current !== null) {
+            clearTimeout(autoAdvanceTimeoutRef.current);
+            autoAdvanceTimeoutRef.current = null;
+        }
+    }, []);
+
     const toTargetMs = React.useCallback((targetCharCount: number): number => {
         if (targetCharCount <= 0) return 0;
         const maxCount = builtTimeline.events.length;
@@ -136,14 +143,17 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
 
     const handleSeekRestartSentence = React.useCallback((event: React.MouseEvent<HTMLButtonElement>) => {
         event.stopPropagation();
+        clearAutoAdvanceTimer();
         const sentenceIdx = sentenceIndexForCharCount(
             visibleCharCount,
             sentenceSpans.sentenceEndCharCountByIndex
         );
         const targetCharCount = sentenceSpans.sentenceStartCharCountByIndex[sentenceIdx] ?? 0;
         seekToMs(toTargetMs(targetCharCount));
+        clearAutoAdvanceTimer();
         rootRef.current?.focus({ preventScroll: true });
     }, [
+        clearAutoAdvanceTimer,
         seekToMs,
         sentenceSpans.sentenceEndCharCountByIndex,
         sentenceSpans.sentenceStartCharCountByIndex,
@@ -153,6 +163,7 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
 
     const handleSeekFinishSentence = React.useCallback((event: React.MouseEvent<HTMLButtonElement>) => {
         event.stopPropagation();
+        clearAutoAdvanceTimer();
         const sentenceIdx = sentenceIndexForCharCount(
             visibleCharCount,
             sentenceSpans.sentenceEndCharCountByIndex
@@ -160,14 +171,21 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
         const targetCharCount =
             sentenceSpans.sentenceEndCharCountByIndex[sentenceIdx] ?? builtTimeline.events.length;
         seekToMs(toTargetMs(targetCharCount));
+        clearAutoAdvanceTimer();
         rootRef.current?.focus({ preventScroll: true });
     }, [
         builtTimeline.events.length,
+        clearAutoAdvanceTimer,
         seekToMs,
         sentenceSpans.sentenceEndCharCountByIndex,
         toTargetMs,
         visibleCharCount,
     ]);
+
+    React.useEffect(() => {
+        if (phase !== 'typing') return;
+        clearAutoAdvanceTimer();
+    }, [clearAutoAdvanceTimer, phase]);
 
     React.useEffect(() => {
         if (autoAdvanceTriggeredRef.current) return;
@@ -187,12 +205,9 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
 
     React.useEffect(() => {
         return () => {
-            if (autoAdvanceTimeoutRef.current !== null) {
-                clearTimeout(autoAdvanceTimeoutRef.current);
-                autoAdvanceTimeoutRef.current = null;
-            }
+            clearAutoAdvanceTimer();
         };
-    }, []);
+    }, [clearAutoAdvanceTimer]);
 
     return (
         <div

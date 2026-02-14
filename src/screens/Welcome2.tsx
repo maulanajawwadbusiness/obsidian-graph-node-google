@@ -3,6 +3,8 @@ import { DEFAULT_CADENCE } from '../config/onboardingCadence';
 import { SHOW_ONBOARDING_AUX_BUTTONS } from '../config/onboardingUiFlags';
 import { TypingCursor, type TypingCursorMode } from '../components/TypingCursor';
 import { useTypedTimeline } from '../hooks/useTypedTimeline';
+import arrowLeftIcon from '../assets/arrow_left.png';
+import arrowRightIcon from '../assets/arrow_right.png';
 import { MANIFESTO_TEXT } from './welcome2ManifestoText';
 import { buildWelcome2SentenceSpans, sentenceIndexForCharCount } from './welcome2SentenceSpans';
 import { buildWelcome2Timeline } from './welcome2Timeline';
@@ -23,6 +25,8 @@ const STABILIZE_STAGE_A_MS = 300;
 const STABILIZE_STAGE_B_MS = 100;
 const CUT_ELLIPSIS_TOTAL_DOTS = 3;
 const CUT_ELLIPSIS_CHARS_PER_DOT_STEP = 4;
+const SEEK_ICON_SIZE_PX = 16;
+const SEEK_ICON_COLOR = '#9db7e2';
 const BLOCKED_SCROLL_KEYS = new Set([' ', 'PageDown', 'PageUp', 'ArrowDown', 'ArrowUp']);
 const INTERACTIVE_SELECTOR = 'button, input, textarea, select, a[href], [role=\"button\"], [contenteditable=\"true\"]';
 const DEBUG_WELCOME2_TYPE = false;
@@ -387,16 +391,32 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
                         style={SEEK_BUTTON_STYLE}
                         onPointerDown={(event) => event.stopPropagation()}
                         onClick={handleSeekRestartSentence}
+                        aria-label="Jump backward"
                     >
-                        {'[<-]'}
+                        <span
+                            aria-hidden="true"
+                            style={{
+                                ...SEEK_ICON_STYLE,
+                                WebkitMaskImage: `url(${arrowLeftIcon})`,
+                                maskImage: `url(${arrowLeftIcon})`,
+                            }}
+                        />
                     </button>
                     <button
                         type="button"
                         style={SEEK_BUTTON_STYLE}
                         onPointerDown={(event) => event.stopPropagation()}
                         onClick={handleSeekFinishSentence}
+                        aria-label="Jump forward"
                     >
-                        {'[->]'}
+                        <span
+                            aria-hidden="true"
+                            style={{
+                                ...SEEK_ICON_STYLE,
+                                WebkitMaskImage: `url(${arrowRightIcon})`,
+                                maskImage: `url(${arrowRightIcon})`,
+                            }}
+                        />
                     </button>
                 </div>
 
@@ -483,15 +503,35 @@ const SEEK_BUTTON_ROW_STYLE: React.CSSProperties = {
 };
 
 const SEEK_BUTTON_STYLE: React.CSSProperties = {
-    padding: '6px 10px',
+    width: '38px',
+    height: '30px',
     borderRadius: '7px',
     border: '1px solid #2b2f3a',
     background: 'transparent',
-    color: '#9db7e2',
+    color: SEEK_ICON_COLOR,
     cursor: 'pointer',
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 0,
+    lineHeight: 1,
     fontSize: '12px',
     fontFamily: 'var(--font-ui)',
     letterSpacing: 0.3,
+};
+
+const SEEK_ICON_STYLE: React.CSSProperties = {
+    width: `${SEEK_ICON_SIZE_PX}px`,
+    height: `${SEEK_ICON_SIZE_PX}px`,
+    display: 'inline-block',
+    flexShrink: 0,
+    backgroundColor: SEEK_ICON_COLOR,
+    WebkitMaskRepeat: 'no-repeat',
+    maskRepeat: 'no-repeat',
+    WebkitMaskPosition: 'center',
+    maskPosition: 'center',
+    WebkitMaskSize: 'contain',
+    maskSize: 'contain',
 };
 
 const BUTTON_ROW_STYLE: React.CSSProperties = {

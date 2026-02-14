@@ -58,6 +58,7 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
     const backChainUntilRef = React.useRef(0);
     const hasManualSeekRef = React.useRef(false);
     const backStepLandingSentenceIdxRef = React.useRef<number | null>(null);
+    const backStepLandingStartCharCountRef = React.useRef<number | null>(null);
 
     React.useEffect(() => {
         if (visibleCharCount === prevVisibleCountRef.current) return;
@@ -189,6 +190,7 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
     const restartCurrentSentence = React.useCallback(() => {
         if (builtTimeline.events.length === 0) return;
         backStepLandingSentenceIdxRef.current = null;
+        backStepLandingStartCharCountRef.current = null;
         const sentenceIdx = getCurrentSentenceIdx();
         const targetCharCount = sentenceSpans.sentenceStartCharCountByIndex[sentenceIdx] ?? 0;
         seekWithManualInteraction(toSentenceStartTargetMs(targetCharCount));
@@ -206,6 +208,7 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
         const prevSentenceIdx = Math.max(0, sentenceIdx - 1);
         backStepLandingSentenceIdxRef.current = prevSentenceIdx;
         const targetCharCount = getBackStepLandCharCount(prevSentenceIdx);
+        backStepLandingStartCharCountRef.current = targetCharCount;
         seekWithManualInteraction(toSentenceEndTargetMs(targetCharCount));
     }, [
         builtTimeline.events.length,
@@ -218,6 +221,7 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
     const finishCurrentSentence = React.useCallback(() => {
         if (builtTimeline.events.length === 0) return;
         backStepLandingSentenceIdxRef.current = null;
+        backStepLandingStartCharCountRef.current = null;
         const sentenceIdx = getCurrentSentenceIdx();
         const targetCharCount =
             sentenceSpans.sentenceEndSoftCharCountByIndex[sentenceIdx] ?? builtTimeline.events.length;
@@ -235,19 +239,32 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
         visibleCharCount,
     ]);
 
-    const showBackStepEllipsis = React.useMemo(() => {
+    const backStepEllipsisText = React.useMemo(() => {
         const landingSentenceIdx = backStepLandingSentenceIdxRef.current;
-        if (landingSentenceIdx === null) return false;
+        const landingStartCharCount = backStepLandingStartCharCountRef.current;
+        if (landingSentenceIdx === null || landingStartCharCount === null) return '';
         const currentSentenceIdx = getCurrentSentenceIdx();
-        if (currentSentenceIdx !== landingSentenceIdx) return false;
+        if (currentSentenceIdx !== landingSentenceIdx) return '';
         const endCore = sentenceSpans.sentenceEndCoreCharCountByIndex[currentSentenceIdx] ?? builtTimeline.events.length;
-        return visibleCharCount < endCore;
+        if (visibleCharCount >= endCore) return '';
+        const charsSinceLanding = Math.max(0, visibleCharCount - landingStartCharCount);
+        const dotCount = Math.max(0, 3 - charsSinceLanding);
+        if (dotCount <= 0) return '';
+        return '.'.repeat(dotCount);
     }, [
         builtTimeline.events.length,
         getCurrentSentenceIdx,
         sentenceSpans.sentenceEndCoreCharCountByIndex,
         visibleCharCount,
     ]);
+
+    React.useEffect(() => {
+        if (backStepEllipsisText.length > 0) return;
+        const landingSentenceIdx = backStepLandingSentenceIdxRef.current;
+        if (landingSentenceIdx === null) return;
+        backStepLandingSentenceIdxRef.current = null;
+        backStepLandingStartCharCountRef.current = null;
+    }, [backStepEllipsisText]);
 
     const handleSeekRestartSentence = React.useCallback((event: React.MouseEvent<HTMLButtonElement>) => {
         event.stopPropagation();
@@ -331,7 +348,7 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
                     style={TEXT_STYLE}
                 >
                     <span>{visibleText}</span>
-                    {showBackStepEllipsis ? <span style={ELLIPSIS_STYLE}>...</span> : null}
+                    {backStepEllipsisText ? <span style={ELLIPSIS_STYLE}>{backStepEllipsisText}</span> : null}
                     <TypingCursor mode={cursorMode} heightEm={0.95} style={CURSOR_STYLE} />
                 </div>
 

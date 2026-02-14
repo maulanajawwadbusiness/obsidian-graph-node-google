@@ -7,6 +7,8 @@ export type ServerEnvConfig = {
   cookieName: string;
   sessionTtlMs: number;
   cookieSameSite: string;
+  googleClientId?: string;
+  midtransServerKey: string;
   devPorts: number[];
   defaultDevOrigins: string[];
   defaultAllowedOrigins: string[];
@@ -54,6 +56,8 @@ export function loadServerEnvConfig(): ServerEnvConfig {
     cookieName: process.env.SESSION_COOKIE_NAME || "arnvoid_session",
     sessionTtlMs: Number(process.env.SESSION_TTL_MS || 1000 * 60 * 60 * 24 * 7),
     cookieSameSite: COOKIE_SAMESITE,
+    googleClientId: process.env.GOOGLE_CLIENT_ID,
+    midtransServerKey: process.env.MIDTRANS_SERVER_KEY || "",
     devPorts: DEV_PORTS,
     defaultDevOrigins,
     defaultAllowedOrigins: DEFAULT_ALLOWED_ORIGINS,

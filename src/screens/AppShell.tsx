@@ -1,8 +1,5 @@
-import React, { Suspense } from 'react';
+import React from 'react';
 import { ONBOARDING_ENABLED, ONBOARDING_START_SCREEN, ONBOARDING_START_SCREEN_RAW } from '../config/env';
-import { Welcome1 } from './Welcome1';
-import { Welcome2 } from './Welcome2';
-import { EnterPrompt } from './EnterPrompt';
 import { BalanceBadge } from '../components/BalanceBadge';
 import { ShortageWarning } from '../components/ShortageWarning';
 import { MoneyNoticeStack } from '../components/MoneyNoticeStack';
@@ -46,6 +43,7 @@ import {
     getNextScreen,
     getSkipTarget,
 } from './appshell/screenFlow/screenFlowController';
+import { renderScreenContent } from './appshell/render/renderScreenContent';
 
 const Graph = React.lazy(() =>
     import('../playground/GraphPhysicsPlayground').then((mod) => ({
@@ -1258,83 +1256,28 @@ export const AppShell: React.FC = () => {
         }
     }
 
-    const renderScreenContent = (targetScreen: Screen): React.ReactNode => {
-        if (targetScreen === 'graph') {
-            return (
-                <Suspense fallback={<div style={FALLBACK_STYLE}>Loading graph...</div>}>
-                    <GraphWithPending
-                        pendingAnalysisPayload={pendingAnalysis}
-                        onPendingAnalysisConsumed={() => setPendingAnalysis(null)}
-                        onLoadingStateChange={(v) => setGraphIsLoading(v)}
-                        documentViewerToggleToken={documentViewerToggleToken}
-                        pendingLoadInterface={pendingLoadInterface}
-                        onPendingLoadInterfaceConsumed={() => setPendingLoadInterface(null)}
-                        onRestoreReadPathChange={(active) => {
-                            restoreReadPathActiveRef.current = active;
-                        }}
-                        onSavedInterfaceUpsert={(record, reason) => commitUpsertInterface(record, reason)}
-                        onSavedInterfaceLayoutPatch={(docId, layout, camera, reason) =>
-                            commitPatchLayoutByDocId(docId, layout, camera, reason)
-                        }
-                    />
-                </Suspense>
-            );
-        }
-        if (targetScreen === 'welcome1') {
-            const nextFromWelcome1 = getNextScreen('welcome1');
-            const skipTarget = getSkipTarget();
-            return (
-                <Welcome1
-                    onNext={() => {
-                        if (!nextFromWelcome1) return;
-                        transitionToScreen(nextFromWelcome1);
-                    }}
-                    onSkip={() => transitionToScreen(skipTarget)}
-                    onOverlayOpenChange={setWelcome1OverlayOpen}
-                />
-            );
-        }
-        if (targetScreen === 'welcome2') {
-            const backFromWelcome2 = getBackScreen('welcome2');
-            const nextFromWelcome2 = getNextScreen('welcome2');
-            const skipTarget = getSkipTarget();
-            return (
-                <Welcome2
-                    onBack={() => {
-                        if (!backFromWelcome2) return;
-                        transitionToScreen(backFromWelcome2);
-                    }}
-                    onNext={() => {
-                        if (!nextFromWelcome2) return;
-                        transitionToScreen(nextFromWelcome2);
-                    }}
-                    onSkip={() => transitionToScreen(skipTarget)}
-                />
-            );
-        }
-        const backFromPrompt = getBackScreen('prompt');
-        const enterFromPrompt = getNextScreen('prompt');
-        const skipTarget = getSkipTarget();
-        return (
-            <EnterPrompt
-                onBack={() => {
-                    if (!backFromPrompt) return;
-                    transitionToScreen(backFromPrompt);
-                }}
-                onEnter={() => transitionToScreen(enterFromPrompt ?? 'graph')}
-                onSkip={() => transitionToScreen(skipTarget)}
-                onOverlayOpenChange={setEnterPromptOverlayOpen}
-                onSubmitPromptText={(text) => {
-                    setPendingAnalysis({ kind: 'text', text, createdAt: Date.now() });
-                    console.log(`[appshell] pending_analysis_set kind=text len=${text.length}`);
-                }}
-                onSubmitPromptFile={(file) => {
-                    setPendingAnalysis({ kind: 'file', file, createdAt: Date.now() });
-                    console.log('[appshell] pending_analysis_set kind=file name=%s size=%d', file.name, file.size);
-                }}
-            />
-        );
-    };
+    const renderScreenContentByScreen = (targetScreen: Screen): React.ReactNode => renderScreenContent({
+        screen: targetScreen,
+        fallbackStyle: FALLBACK_STYLE,
+        GraphWithPending,
+        pendingAnalysis,
+        documentViewerToggleToken,
+        pendingLoadInterface,
+        setPendingAnalysis,
+        setGraphIsLoading,
+        setPendingLoadInterface,
+        setWelcome1OverlayOpen,
+        setEnterPromptOverlayOpen,
+        setRestoreReadPathActive: (active) => {
+            restoreReadPathActiveRef.current = active;
+        },
+        transitionToScreen,
+        commitUpsertInterface,
+        commitPatchLayoutByDocId,
+        getNextScreen,
+        getBackScreen,
+        getSkipTarget,
+    });
 
     const shouldUseOnboardingLayerHost = isOnboardingScreen(screen)
         || (isScreenTransitioning && screenTransitionFrom !== null && isOnboardingScreen(screenTransitionFrom));
@@ -1348,10 +1291,10 @@ export const AppShell: React.FC = () => {
                 isScreenTransitioning={isScreenTransitioning}
                 effectiveScreenFadeMs={effectiveScreenFadeMs}
                 fadeEasing={ONBOARDING_SCREEN_FADE_EASING}
-                renderScreenContent={renderScreenContent}
+                renderScreenContent={renderScreenContentByScreen}
             />
         )
-        : renderScreenContent(screen);
+        : renderScreenContentByScreen(screen);
 
     return (
         <div

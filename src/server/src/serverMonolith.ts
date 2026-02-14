@@ -28,6 +28,7 @@ import {
 import { buildCorsOptions } from "./server/corsConfig";
 import { loadServerEnvConfig } from "./server/envConfig";
 import { applyJsonParsers } from "./server/jsonParsers";
+import { runStartupGates } from "./server/startupGates";
 import type {
   LlmAnalyzeRouteDeps,
   LlmPrefillRouteDeps,
@@ -86,19 +87,6 @@ function isProd() {
 
 function isDevBalanceBypassEnabled() {
   return serverEnv.devBypassBalanceEnabled;
-}
-
-async function detectProfileColumnsAvailability(): Promise<boolean> {
-  const pool = await getPool();
-  const result = await pool.query(
-    `select column_name
-       from information_schema.columns
-      where table_schema = 'public'
-        and table_name = 'users'
-        and column_name in ('display_name', 'username')`
-  );
-  const found = new Set((result.rows || []).map((row: any) => String(row.column_name)));
-  return found.has("display_name") && found.has("username");
 }
 
 function parseGrossAmount(value: unknown, fallbackAmount: number): number | null {
@@ -982,12 +970,12 @@ registerLlmChatRoute(app, llmChatRouteDeps);
 
 async function startServer() {
   try {
-    const schema = await assertAuthSchemaReady();
-    profileColumnsAvailable = await detectProfileColumnsAvailability();
-    console.log(
-      `[auth-schema] ready db=${schema.dbTarget} tables=${schema.tables.join(",")} fk_sessions_user=${schema.hasSessionsUserFk} uq_users_google_sub=${schema.hasUsersGoogleSubUnique} uq_sessions_id=${schema.hasSessionsIdUnique}`
-    );
-    console.log(`[auth-schema] profile_columns_available=${profileColumnsAvailable}`);
+    const startup = await runStartupGates({
+      assertAuthSchemaReady,
+      getPool,
+      logger: console
+    });
+    profileColumnsAvailable = startup.profileColumnsAvailable;
     app.listen(port, () => {
       console.log(`[server] listening on ${port}`);
     });

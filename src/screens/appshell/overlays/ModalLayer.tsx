@@ -11,7 +11,7 @@ type ModalSearchResult = {
     title: string;
 };
 
-type ModalLayerProps = {
+export type ModalLayerProfileModel = {
     isProfileOpen: boolean;
     sidebarAccountImageUrl?: string;
     profileDraftDisplayName: string;
@@ -23,15 +23,24 @@ type ModalLayerProps = {
     setProfileError: React.Dispatch<React.SetStateAction<string | null>>;
     closeProfileOverlay: () => void;
     onProfileSave: () => void;
+};
+
+export type ModalLayerLogoutModel = {
     isLogoutConfirmOpen: boolean;
     logoutConfirmError: string | null;
     logoutConfirmBusy: boolean;
     closeLogoutConfirm: () => void;
     confirmLogout: () => void;
+};
+
+export type ModalLayerDeleteConfirmModel = {
     pendingDeleteId: string | null;
     pendingDeleteTitle: string | null;
     closeDeleteConfirm: () => void;
     confirmDelete: () => void;
+};
+
+export type ModalLayerSearchModel = {
     isSearchInterfacesOpen: boolean;
     closeSearchInterfaces: () => void;
     searchInterfacesQuery: string;
@@ -45,6 +54,13 @@ type ModalLayerProps = {
     searchInputRef: React.MutableRefObject<HTMLInputElement | null>;
 };
 
+type ModalLayerProps = {
+    profile: ModalLayerProfileModel;
+    logout: ModalLayerLogoutModel;
+    deleteConfirm: ModalLayerDeleteConfirmModel;
+    search: ModalLayerSearchModel;
+};
+
 function normalizeSearchText(raw: string): string {
     return raw.toLowerCase().replace(/\s+/g, ' ').trim();
 }
@@ -55,6 +71,12 @@ function truncateDisplayTitle(raw: string, maxChars = 75): string {
 }
 
 export function ModalLayer(props: ModalLayerProps): React.ReactElement | null {
+    const {
+        profile,
+        logout,
+        deleteConfirm,
+        search,
+    } = props;
     const {
         isProfileOpen,
         sidebarAccountImageUrl,
@@ -67,15 +89,21 @@ export function ModalLayer(props: ModalLayerProps): React.ReactElement | null {
         setProfileError,
         closeProfileOverlay,
         onProfileSave,
+    } = profile;
+    const {
         isLogoutConfirmOpen,
         logoutConfirmError,
         logoutConfirmBusy,
         closeLogoutConfirm,
         confirmLogout,
+    } = logout;
+    const {
         pendingDeleteId,
         pendingDeleteTitle,
         closeDeleteConfirm,
         confirmDelete,
+    } = deleteConfirm;
+    const {
         isSearchInterfacesOpen,
         closeSearchInterfaces,
         searchInterfacesQuery,
@@ -87,7 +115,7 @@ export function ModalLayer(props: ModalLayerProps): React.ReactElement | null {
         filteredSearchResults,
         selectSearchResultById,
         searchInputRef,
-    } = props;
+    } = search;
     const stopEventPropagation = React.useCallback((e: React.SyntheticEvent) => {
         e.stopPropagation();
     }, []);

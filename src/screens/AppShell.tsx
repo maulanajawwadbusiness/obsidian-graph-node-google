@@ -5,7 +5,6 @@ import { ShortageWarning } from '../components/ShortageWarning';
 import { MoneyNoticeStack } from '../components/MoneyNoticeStack';
 import { Sidebar, type SidebarInterfaceItem } from '../components/Sidebar';
 import { useAuth } from '../auth/AuthProvider';
-import { updateProfile } from '../api';
 import {
     DEFAULT_SAVED_INTERFACES_CAP,
     getSavedInterfacesStorageKey,
@@ -33,6 +32,8 @@ import { useOnboardingOverlayState } from './appshell/overlays/useOnboardingOver
 import { OnboardingChrome } from './appshell/overlays/OnboardingChrome';
 import { useAppShellModals } from './appshell/overlays/useAppShellModals';
 import { ModalLayer } from './appshell/overlays/ModalLayer';
+import { useProfileController } from './appshell/overlays/useProfileController';
+import { useLogoutConfirmController } from './appshell/overlays/useLogoutConfirmController';
 import { createSavedInterfacesCommitSurfaces } from './appshell/savedInterfaces/savedInterfacesCommits';
 import { useSavedInterfacesSync } from './appshell/savedInterfaces/useSavedInterfacesSync';
 
@@ -69,9 +70,6 @@ const DEBUG_ONBOARDING_SCROLL_GUARD = false;
 const WELCOME1_FONT_TIMEOUT_MS = 1500;
 const SEARCH_RECENT_LIMIT = 12;
 const SEARCH_RESULT_LIMIT = 20;
-const PROFILE_DISPLAY_NAME_MAX = 80;
-const PROFILE_USERNAME_MAX = 32;
-const PROFILE_USERNAME_REGEX = /^[A-Za-z0-9_.-]+$/;
 
 type SearchInterfaceIndexItem = {
     id: string;
@@ -131,12 +129,6 @@ export const AppShell: React.FC = () => {
     const [pendingAnalysis, setPendingAnalysis] = React.useState<PendingAnalysisPayload>(null);
     const [savedInterfaces, setSavedInterfaces] = React.useState<SavedInterfaceRecordV1[]>([]);
     const [pendingLoadInterface, setPendingLoadInterface] = React.useState<SavedInterfaceRecordV1 | null>(null);
-    const [logoutConfirmBusy, setLogoutConfirmBusy] = React.useState(false);
-    const [logoutConfirmError, setLogoutConfirmError] = React.useState<string | null>(null);
-    const [profileDraftDisplayName, setProfileDraftDisplayName] = React.useState('');
-    const [profileDraftUsername, setProfileDraftUsername] = React.useState('');
-    const [profileError, setProfileError] = React.useState<string | null>(null);
-    const [profileSaving, setProfileSaving] = React.useState(false);
     const [graphIsLoading, setGraphIsLoading] = React.useState(false);
     const [documentViewerToggleToken, setDocumentViewerToggleToken] = React.useState(0);
     const [isSidebarExpanded, setIsSidebarExpanded] = React.useState(false);
@@ -195,6 +187,33 @@ export const AppShell: React.FC = () => {
         enabled: ONBOARDING_ENABLED,
         active: onboardingActive,
         debug: DEBUG_ONBOARDING_SCROLL_GUARD,
+    });
+    const {
+        profileDraftDisplayName,
+        profileDraftUsername,
+        profileError,
+        profileSaving,
+        setProfileDraftDisplayName,
+        setProfileDraftUsername,
+        setProfileError,
+        openProfileOverlay: openProfileOverlayController,
+        closeProfileOverlay: closeProfileOverlayController,
+        onProfileSave: onProfileSaveController,
+    } = useProfileController({
+        user,
+        applyUserPatch,
+        refreshMe,
+        isDev: import.meta.env.DEV,
+    });
+    const {
+        logoutConfirmBusy,
+        logoutConfirmError,
+        openLogoutConfirm: openLogoutConfirmController,
+        closeLogoutConfirm: closeLogoutConfirmController,
+        confirmLogout: confirmLogoutController,
+    } = useLogoutConfirmController({
+        logout,
+        isDev: import.meta.env.DEV,
     });
     const {
         isSearchInterfacesOpen,
@@ -307,86 +326,23 @@ export const AppShell: React.FC = () => {
         commitRenameInterface(id, newTitle, 'sidebar_rename');
     }, [commitRenameInterface]);
     const closeProfileOverlay = React.useCallback(() => {
-        const closed = closeProfileOverlayState();
-        if (!closed) return;
-        setProfileError(null);
-    }, [closeProfileOverlayState]);
-    const closeLogoutConfirm = React.useCallback(() => {
-        const closed = closeLogoutConfirmState();
-        if (!closed) return;
-        setLogoutConfirmError(null);
-    }, [closeLogoutConfirmState]);
-    const openLogoutConfirm = React.useCallback(() => {
-        const opened = openLogoutConfirmState();
-        if (!opened) return;
-        setLogoutConfirmError(null);
-    }, [openLogoutConfirmState]);
-    const confirmLogout = React.useCallback(async () => {
-        if (logoutConfirmBusy) return;
-        setLogoutConfirmBusy(true);
-        setLogoutConfirmError(null);
-        try {
-            await logout();
-            forceCloseLogoutConfirm();
-            setLogoutConfirmError(null);
-        } catch (error) {
-            setLogoutConfirmError('Failed to log out. Please try again.');
-            if (import.meta.env.DEV) {
-                console.warn('[appshell] logout_confirm_failed error=%s', String(error));
-            }
-        } finally {
-            setLogoutConfirmBusy(false);
-        }
-    }, [forceCloseLogoutConfirm, logout, logoutConfirmBusy]);
+        closeProfileOverlayController(closeProfileOverlayState);
+    }, [closeProfileOverlayController, closeProfileOverlayState]);
     const openProfileOverlay = React.useCallback(() => {
-        const opened = openProfileOverlayState();
-        if (!opened || !user) return;
-        const nextDisplayName = typeof user?.displayName === 'string' && user.displayName.trim()
-            ? user.displayName.trim()
-            : (typeof user?.name === 'string' && user.name.trim() ? user.name.trim() : '');
-        const nextUsername = typeof user?.username === 'string' && user.username.trim() ? user.username.trim() : '';
-        setProfileDraftDisplayName(nextDisplayName);
-        setProfileDraftUsername(nextUsername);
-        setProfileError(null);
-    }, [openProfileOverlayState, user]);
+        openProfileOverlayController(openProfileOverlayState);
+    }, [openProfileOverlayController, openProfileOverlayState]);
+    const closeLogoutConfirm = React.useCallback(() => {
+        closeLogoutConfirmController(closeLogoutConfirmState);
+    }, [closeLogoutConfirmController, closeLogoutConfirmState]);
+    const openLogoutConfirm = React.useCallback(() => {
+        openLogoutConfirmController(openLogoutConfirmState);
+    }, [openLogoutConfirmController, openLogoutConfirmState]);
+    const confirmLogout = React.useCallback(async () => {
+        await confirmLogoutController(forceCloseLogoutConfirm);
+    }, [confirmLogoutController, forceCloseLogoutConfirm]);
     const onProfileSave = React.useCallback(async () => {
-        if (profileSaving) return;
-        const displayName = profileDraftDisplayName.replace(/\s+/g, ' ').trim();
-        const username = profileDraftUsername.trim();
-
-        if (displayName.length > PROFILE_DISPLAY_NAME_MAX) {
-            setProfileError(`Display Name max length is ${PROFILE_DISPLAY_NAME_MAX}.`);
-            return;
-        }
-        if (username.length > PROFILE_USERNAME_MAX) {
-            setProfileError(`Username max length is ${PROFILE_USERNAME_MAX}.`);
-            return;
-        }
-        if (username.length > 0 && !PROFILE_USERNAME_REGEX.test(username)) {
-            setProfileError('Username may only contain letters, numbers, dot, underscore, and dash.');
-            return;
-        }
-
-        setProfileSaving(true);
-        setProfileError(null);
-        try {
-            const updatedUser = await updateProfile({ displayName, username });
-            applyUserPatch(updatedUser);
-            forceCloseProfileOverlay();
-            void refreshMe().catch((error) => {
-                if (import.meta.env.DEV) {
-                    console.warn('[appshell] profile_refresh_after_save_failed error=%s', String(error));
-                }
-            });
-        } catch (error) {
-            setProfileError('Failed to save profile. Please try again.');
-            if (import.meta.env.DEV) {
-                console.warn('[appshell] profile_save_failed error=%s', String(error));
-            }
-        } finally {
-            setProfileSaving(false);
-        }
-    }, [applyUserPatch, forceCloseProfileOverlay, profileDraftDisplayName, profileDraftUsername, profileSaving, refreshMe]);
+        await onProfileSaveController(forceCloseProfileOverlay);
+    }, [forceCloseProfileOverlay, onProfileSaveController]);
 
     React.useEffect(() => {
         savedInterfacesRef.current = savedInterfaces;
@@ -598,37 +554,45 @@ export const AppShell: React.FC = () => {
                 {moneyUi}
             </div>
             <ModalLayer
-                isProfileOpen={isProfileOpen}
-                sidebarAccountImageUrl={sidebarAccountImageUrl}
-                profileDraftDisplayName={profileDraftDisplayName}
-                profileDraftUsername={profileDraftUsername}
-                profileError={profileError}
-                profileSaving={profileSaving}
-                setProfileDraftDisplayName={setProfileDraftDisplayName}
-                setProfileDraftUsername={setProfileDraftUsername}
-                setProfileError={setProfileError}
-                closeProfileOverlay={closeProfileOverlay}
-                onProfileSave={onProfileSave}
-                isLogoutConfirmOpen={isLogoutConfirmOpen}
-                logoutConfirmError={logoutConfirmError}
-                logoutConfirmBusy={logoutConfirmBusy}
-                closeLogoutConfirm={closeLogoutConfirm}
-                confirmLogout={confirmLogout}
-                pendingDeleteId={pendingDeleteId}
-                pendingDeleteTitle={pendingDeleteTitle}
-                closeDeleteConfirm={closeDeleteConfirm}
-                confirmDelete={confirmDelete}
-                isSearchInterfacesOpen={isSearchInterfacesOpen}
-                closeSearchInterfaces={closeSearchInterfaces}
-                searchInterfacesQuery={searchInterfacesQuery}
-                setSearchInterfacesQuery={setSearchInterfacesQuery}
-                searchInputFocused={searchInputFocused}
-                setSearchInputFocused={setSearchInputFocused}
-                searchHighlightedIndex={searchHighlightedIndex}
-                setSearchHighlightedIndex={setSearchHighlightedIndex}
-                filteredSearchResults={filteredSearchResults}
-                selectSearchResultById={selectSearchResultById}
-                searchInputRef={searchInputRef}
+                profile={{
+                    isProfileOpen,
+                    sidebarAccountImageUrl,
+                    profileDraftDisplayName,
+                    profileDraftUsername,
+                    profileError,
+                    profileSaving,
+                    setProfileDraftDisplayName,
+                    setProfileDraftUsername,
+                    setProfileError,
+                    closeProfileOverlay,
+                    onProfileSave,
+                }}
+                logout={{
+                    isLogoutConfirmOpen,
+                    logoutConfirmError,
+                    logoutConfirmBusy,
+                    closeLogoutConfirm,
+                    confirmLogout,
+                }}
+                deleteConfirm={{
+                    pendingDeleteId,
+                    pendingDeleteTitle,
+                    closeDeleteConfirm,
+                    confirmDelete,
+                }}
+                search={{
+                    isSearchInterfacesOpen,
+                    closeSearchInterfaces,
+                    searchInterfacesQuery,
+                    setSearchInterfacesQuery,
+                    searchInputFocused,
+                    setSearchInputFocused,
+                    searchHighlightedIndex,
+                    setSearchHighlightedIndex,
+                    filteredSearchResults,
+                    selectSearchResultById,
+                    searchInputRef,
+                }}
             />
         </div>
     );

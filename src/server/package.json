@@ -26,6 +26,7 @@
     "test:payments-create-status-contracts": "node scripts/test-payments-create-status-contracts.mjs",
     "test:payments-webhook-contracts": "node scripts/test-payments-webhook-contracts.mjs",
     "test:payments-contracts": "node scripts/test-payments-contracts.mjs",
+    "test:depsbuilder-contracts": "node scripts/test-depsbuilder-contracts.mjs",
     "test:jsonparsers-contracts": "node scripts/test-jsonparsers-contracts.mjs",
     "test:cors-contracts": "node scripts/test-cors-contracts.mjs",
     "test:startupgates-contracts": "node scripts/test-startupgates-contracts.mjs",

@@ -40,6 +40,12 @@ import { OnboardingLayerHost } from './appshell/transitions/OnboardingLayerHost'
 import { useOnboardingTransition } from './appshell/transitions/useOnboardingTransition';
 import { AppScreen, isOnboardingScreen } from './appshell/screenFlow/screenTypes';
 import { getInitialScreen } from './appshell/screenFlow/screenStart';
+import {
+    getBackScreen,
+    getCreateNewTarget,
+    getNextScreen,
+    getSkipTarget,
+} from './appshell/screenFlow/screenFlowController';
 
 const Graph = React.lazy(() =>
     import('../playground/GraphPhysicsPlayground').then((mod) => ({
@@ -1275,28 +1281,48 @@ export const AppShell: React.FC = () => {
             );
         }
         if (targetScreen === 'welcome1') {
+            const nextFromWelcome1 = getNextScreen('welcome1');
+            const skipTarget = getSkipTarget();
             return (
                 <Welcome1
-                    onNext={() => transitionToScreen('welcome2')}
-                    onSkip={() => transitionToScreen('graph')}
+                    onNext={() => {
+                        if (!nextFromWelcome1) return;
+                        transitionToScreen(nextFromWelcome1);
+                    }}
+                    onSkip={() => transitionToScreen(skipTarget)}
                     onOverlayOpenChange={setWelcome1OverlayOpen}
                 />
             );
         }
         if (targetScreen === 'welcome2') {
+            const backFromWelcome2 = getBackScreen('welcome2');
+            const nextFromWelcome2 = getNextScreen('welcome2');
+            const skipTarget = getSkipTarget();
             return (
                 <Welcome2
-                    onBack={() => transitionToScreen('welcome1')}
-                    onNext={() => transitionToScreen('prompt')}
-                    onSkip={() => transitionToScreen('graph')}
+                    onBack={() => {
+                        if (!backFromWelcome2) return;
+                        transitionToScreen(backFromWelcome2);
+                    }}
+                    onNext={() => {
+                        if (!nextFromWelcome2) return;
+                        transitionToScreen(nextFromWelcome2);
+                    }}
+                    onSkip={() => transitionToScreen(skipTarget)}
                 />
             );
         }
+        const backFromPrompt = getBackScreen('prompt');
+        const enterFromPrompt = getNextScreen('prompt');
+        const skipTarget = getSkipTarget();
         return (
             <EnterPrompt
-                onBack={() => transitionToScreen('welcome2')}
-                onEnter={() => transitionToScreen('graph')}
-                onSkip={() => transitionToScreen('graph')}
+                onBack={() => {
+                    if (!backFromPrompt) return;
+                    transitionToScreen(backFromPrompt);
+                }}
+                onEnter={() => transitionToScreen(enterFromPrompt ?? 'graph')}
+                onSkip={() => transitionToScreen(skipTarget)}
                 onOverlayOpenChange={setEnterPromptOverlayOpen}
                 onSubmitPromptText={(text) => {
                     setPendingAnalysis({ kind: 'text', text, createdAt: Date.now() });
@@ -1341,7 +1367,7 @@ export const AppShell: React.FC = () => {
                     onCreateNew={() => {
                         setPendingLoadInterface(null);
                         setPendingAnalysis(null);
-                        transitionToScreen('prompt');
+                        transitionToScreen(getCreateNewTarget());
                     }}
                     onOpenSearchInterfaces={() => openSearchInterfaces()}
                     disabled={sidebarDisabled}

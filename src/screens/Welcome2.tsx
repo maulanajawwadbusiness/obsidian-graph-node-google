@@ -4,6 +4,7 @@ import { SHOW_ONBOARDING_AUX_BUTTONS } from '../config/onboardingUiFlags';
 import { TypingCursor, type TypingCursorMode } from '../components/TypingCursor';
 import { useTypedTimeline } from '../hooks/useTypedTimeline';
 import { MANIFESTO_TEXT } from './welcome2ManifestoText';
+import { buildWelcome2SentenceSpans, sentenceIndexForCharCount } from './welcome2SentenceSpans';
 import { buildWelcome2Timeline } from './welcome2Timeline';
 
 type Welcome2Props = {
@@ -33,9 +34,13 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
         () => buildWelcome2Timeline(MANIFESTO_TEXT, DEFAULT_CADENCE),
         [MANIFESTO_TEXT, DEFAULT_CADENCE]
     );
-    const { visibleText, visibleCharCount, phase, elapsedMs } = useTypedTimeline(builtTimeline, {
+    const { visibleText, visibleCharCount, phase, elapsedMs, seekToMs } = useTypedTimeline(builtTimeline, {
         debugTypeMetrics,
     });
+    const sentenceSpans = React.useMemo(
+        () => buildWelcome2SentenceSpans(builtTimeline.renderText),
+        [builtTimeline.renderText]
+    );
     const lastTypedCharMs = React.useMemo(() => {
         if (builtTimeline.events.length === 0) return 0;
         return builtTimeline.events[builtTimeline.events.length - 1].tMs;
@@ -121,6 +126,49 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
         rootRef.current.focus({ preventScroll: true });
     }, []);
 
+    const toTargetMs = React.useCallback((targetCharCount: number): number => {
+        if (targetCharCount <= 0) return 0;
+        const maxCount = builtTimeline.events.length;
+        const clampedCharCount = Math.max(0, Math.min(targetCharCount, maxCount));
+        if (clampedCharCount <= 0) return 0;
+        return builtTimeline.events[clampedCharCount - 1].tMs;
+    }, [builtTimeline.events]);
+
+    const handleSeekRestartSentence = React.useCallback((event: React.MouseEvent<HTMLButtonElement>) => {
+        event.stopPropagation();
+        const sentenceIdx = sentenceIndexForCharCount(
+            visibleCharCount,
+            sentenceSpans.sentenceEndCharCountByIndex
+        );
+        const targetCharCount = sentenceSpans.sentenceStartCharCountByIndex[sentenceIdx] ?? 0;
+        seekToMs(toTargetMs(targetCharCount));
+        rootRef.current?.focus({ preventScroll: true });
+    }, [
+        seekToMs,
+        sentenceSpans.sentenceEndCharCountByIndex,
+        sentenceSpans.sentenceStartCharCountByIndex,
+        toTargetMs,
+        visibleCharCount,
+    ]);
+
+    const handleSeekFinishSentence = React.useCallback((event: React.MouseEvent<HTMLButtonElement>) => {
+        event.stopPropagation();
+        const sentenceIdx = sentenceIndexForCharCount(
+            visibleCharCount,
+            sentenceSpans.sentenceEndCharCountByIndex
+        );
+        const targetCharCount =
+            sentenceSpans.sentenceEndCharCountByIndex[sentenceIdx] ?? builtTimeline.events.length;
+        seekToMs(toTargetMs(targetCharCount));
+        rootRef.current?.focus({ preventScroll: true });
+    }, [
+        builtTimeline.events.length,
+        seekToMs,
+        sentenceSpans.sentenceEndCharCountByIndex,
+        toTargetMs,
+        visibleCharCount,
+    ]);
+
     React.useEffect(() => {
         if (autoAdvanceTriggeredRef.current) return;
         if (autoAdvanceTimeoutRef.current !== null) return;
@@ -162,6 +210,25 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
                 >
                     <span>{visibleText}</span>
                     <TypingCursor mode={cursorMode} heightEm={0.95} style={CURSOR_STYLE} />
+                </div>
+
+                <div style={SEEK_BUTTON_ROW_STYLE} onPointerDown={(event) => event.stopPropagation()}>
+                    <button
+                        type="button"
+                        style={SEEK_BUTTON_STYLE}
+                        onPointerDown={(event) => event.stopPropagation()}
+                        onClick={handleSeekRestartSentence}
+                    >
+                        {'[<-]'}
+                    </button>
+                    <button
+                        type="button"
+                        style={SEEK_BUTTON_STYLE}
+                        onPointerDown={(event) => event.stopPropagation()}
+                        onClick={handleSeekFinishSentence}
+                    >
+                        {'[->]'}
+                    </button>
                 </div>
 
                 {SHOW_ONBOARDING_AUX_BUTTONS ? (
@@ -214,6 +281,24 @@ const TEXT_STYLE: React.CSSProperties = {
 
 const CURSOR_STYLE: React.CSSProperties = {
     marginLeft: '4px',
+};
+
+const SEEK_BUTTON_ROW_STYLE: React.CSSProperties = {
+    display: 'flex',
+    gap: '8px',
+    flexWrap: 'wrap',
+};
+
+const SEEK_BUTTON_STYLE: React.CSSProperties = {
+    padding: '6px 10px',
+    borderRadius: '7px',
+    border: '1px solid #2b2f3a',
+    background: 'transparent',
+    color: '#9db7e2',
+    cursor: 'pointer',
+    fontSize: '12px',
+    fontFamily: 'var(--font-ui)',
+    letterSpacing: 0.3,
 };
 
 const BUTTON_ROW_STYLE: React.CSSProperties = {

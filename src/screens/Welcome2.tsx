@@ -19,7 +19,8 @@ const CURSOR_PAUSE_THRESHOLD_MS = 130;
 const CURSOR_HOLD_FAST_WINDOW_MS = 680;
 const SHOW_WELCOME2_FOCUS_RING = false;
 const WELCOME2_AUTO_ADVANCE_DELAY_MS = 2000*4;
-const STABILIZE_BEFORE_BACK_MS = 200;
+const STABILIZE_STAGE_A_MS = 200;
+const STABILIZE_STAGE_B_MS = 400;
 const BLOCKED_SCROLL_KEYS = new Set([' ', 'PageDown', 'PageUp', 'ArrowDown', 'ArrowUp']);
 const INTERACTIVE_SELECTOR = 'button, input, textarea, select, a[href], [role=\"button\"], [contenteditable=\"true\"]';
 const DEBUG_WELCOME2_TYPE = false;
@@ -245,8 +246,8 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
                     isBackJumpingRef.current = false;
                     setClockPaused(false);
                 }, 0);
-            }, STABILIZE_BEFORE_BACK_MS);
-        }, STABILIZE_BEFORE_BACK_MS);
+            }, STABILIZE_STAGE_B_MS);
+        }, STABILIZE_STAGE_A_MS);
     }, [
         builtTimeline.events.length,
         clearAutoAdvanceTimer,

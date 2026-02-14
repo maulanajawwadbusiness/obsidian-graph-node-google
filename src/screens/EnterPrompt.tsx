@@ -112,12 +112,6 @@ export const EnterPrompt: React.FC<EnterPromptProps> = ({
         onOverlayOpenChange?.(loginOverlayOpen);
     }, [loginOverlayOpen, onOverlayOpenChange]);
 
-    React.useEffect(() => {
-        return () => {
-            onOverlayOpenChange?.(false);
-        };
-    }, [onOverlayOpenChange]);
-
     return (
         <div
             style={ROOT_STYLE}

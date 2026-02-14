@@ -38,7 +38,8 @@ import {
 } from './appshell/transitions/transitionTokens';
 import { OnboardingLayerHost } from './appshell/transitions/OnboardingLayerHost';
 import { useOnboardingTransition } from './appshell/transitions/useOnboardingTransition';
-import { isOnboardingScreen } from './appshell/screenFlow/screenTypes';
+import { AppScreen, isOnboardingScreen } from './appshell/screenFlow/screenTypes';
+import { getInitialScreen } from './appshell/screenFlow/screenStart';
 
 const Graph = React.lazy(() =>
     import('../playground/GraphPhysicsPlayground').then((mod) => ({
@@ -46,7 +47,7 @@ const Graph = React.lazy(() =>
     }))
 );
 
-type Screen = 'welcome1' | 'welcome2' | 'prompt' | 'graph';
+type Screen = AppScreen;
 type PendingAnalysisPayload =
     | { kind: 'text'; text: string; createdAt: number }
     | { kind: 'file'; file: File; createdAt: number }
@@ -84,7 +85,6 @@ const PROFILE_USERNAME_REGEX = /^[A-Za-z0-9_.-]+$/;
 const hydratedStorageKeysSession = new Set<string>();
 const backfilledStorageKeysSession = new Set<string>();
 let lastIdentityKeySession: string | null = null;
-let hasWarnedInvalidStartScreen = false;
 
 type RemoteOutboxOp = 'upsert' | 'delete';
 
@@ -243,34 +243,16 @@ function computeRetryDelayMs(attempt: number): number {
     return Math.min(REMOTE_RETRY_MAX_MS, base + jitter);
 }
 
-function warnInvalidOnboardingStartScreenOnce() {
-    if (!import.meta.env.DEV) return;
-    if (hasWarnedInvalidStartScreen) return;
-    if (ONBOARDING_START_SCREEN_RAW.trim() === '') return;
-    if (ONBOARDING_START_SCREEN !== null) return;
-    hasWarnedInvalidStartScreen = true;
-    console.warn(
-        '[OnboardingStart] invalid VITE_ONBOARDING_START_SCREEN="%s". Allowed: screen1|screen2|screen3|screen4|welcome1|welcome2|prompt|graph',
-        ONBOARDING_START_SCREEN_RAW
-    );
-}
-
-function getInitialScreen(): Screen {
-    if (!ONBOARDING_ENABLED) return 'graph';
-    if (import.meta.env.DEV && ONBOARDING_START_SCREEN !== null) return ONBOARDING_START_SCREEN;
-    warnInvalidOnboardingStartScreenOnce();
-    if (PERSIST_SCREEN && typeof window !== 'undefined') {
-        const stored = sessionStorage.getItem(STORAGE_KEY) as Screen | null;
-        if (stored === 'welcome1' || stored === 'welcome2' || stored === 'prompt' || stored === 'graph') {
-            return stored;
-        }
-    }
-    return 'welcome1';
-}
-
 export const AppShell: React.FC = () => {
     const { user, loading: authLoading, refreshMe, applyUserPatch, logout } = useAuth();
-    const [screen, setScreen] = React.useState<Screen>(() => getInitialScreen());
+    const [screen, setScreen] = React.useState<Screen>(() => getInitialScreen({
+        onboardingEnabled: ONBOARDING_ENABLED,
+        onboardingStartScreen: ONBOARDING_START_SCREEN,
+        onboardingStartScreenRaw: ONBOARDING_START_SCREEN_RAW,
+        isDev: import.meta.env.DEV,
+        persistScreen: PERSIST_SCREEN,
+        storageKey: STORAGE_KEY,
+    }));
     const [pendingAnalysis, setPendingAnalysis] = React.useState<PendingAnalysisPayload>(null);
     const [savedInterfaces, setSavedInterfaces] = React.useState<SavedInterfaceRecordV1[]>([]);
     const [pendingLoadInterface, setPendingLoadInterface] = React.useState<SavedInterfaceRecordV1 | null>(null);

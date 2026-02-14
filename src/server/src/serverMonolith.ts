@@ -1266,8 +1266,6 @@ app.post("/api/llm/paper-analyze", requireAuth, async (req, res) => {
         auditTerminationReason = "insufficient_rupiah";
         await writeAudit();
         res.setHeader("X-Request-Id", requestId);
-        res.setHeader("X-Request-Id", requestId);
-        res.setHeader("X-Request-Id", requestId);
         res.status(402).json({
           ok: false,
           code: "insufficient_rupiah",
@@ -1528,7 +1526,6 @@ app.post("/api/llm/paper-analyze", requireAuth, async (req, res) => {
         auditHttpStatus = 402;
         auditTerminationReason = "insufficient_rupiah";
         await writeAudit();
-        res.setHeader("X-Request-Id", requestId);
         res.setHeader("X-Request-Id", requestId);
         res.status(402).json({
           ok: false,

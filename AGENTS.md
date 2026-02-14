@@ -34,6 +34,19 @@ The Canvas (Graph) is the substrate. Panels (Chat, Docs) and the Loading Screen 
 | **DB Ops** | `docs/db.md`, `src/server/scripts`, `src/server/migrations` | Laptop-first DB workflow and migrations. |
 | **LLM Usage/Billing** | `src/server/src/llm/usage`, `src/server/src/llm/audit`, `src/server/src/pricing` | Usage tracking, audit persistence, and rupiah pricing. |
 
+## 2.2 Backend Runtime Mental Model (Post-Run14)
+
+- `src/server/src/serverMonolith.ts` is shell only.
+- `src/server/src/server/bootstrap.ts` owns app startup, middleware ordering, route registration order, and `startServer()`.
+- `src/server/src/server/depsBuilder.ts` is the route deps wiring hub.
+- Route logic lives in `src/server/src/routes/*`.
+- Core server seams live in `src/server/src/server/*`:
+  - `envConfig.ts`
+  - `jsonParsers.ts`
+  - `corsConfig.ts`
+  - `startupGates.ts`
+  - `cookies.ts`
+
 ## 2.1 AppShell Architecture (2026-02-14)
 
 - `src/screens/AppShell.tsx` is orchestration-only (current: 447 lines).
@@ -74,6 +87,28 @@ Invariant pins:
     *   **Staging Rule**: When preparing a commit, stage all current untracked files by default to avoid conflict drift.
     *   **ENV Exception**: Do NOT stage any untracked file if its path or filename contains `env`.
     *   **Auth Work**: Update `docs/report_2026_02_05_auth_session_postgres.md` when touching auth, session, or CORS behavior.
+
+## 3.1 Backend Route Add Checklist
+
+When adding a new backend route:
+1. Create `src/server/src/routes/<newRoute>.ts` with `registerXRoutes(app, deps)`.
+2. Extend `src/server/src/server/depsBuilder.ts` to assemble deps for that route.
+3. Register route in `src/server/src/server/bootstrap.ts` in correct order.
+4. Add deterministic contract script in `src/server/scripts/`.
+5. Add npm script in `src/server/package.json`.
+6. Include the new contract script in `src/server/scripts/run-contract-suite.mjs` (`npm run test:contracts`).
+7. If route is order-sensitive, update `src/server/scripts/test-servermonolith-shell.mjs` markers.
+
+Backend verification commands (Windows-safe):
+- `npm run build` (from `src/server`)
+- `npm run test:contracts` (from `src/server`)
+- `test:contracts` uses `run-contract-suite.mjs`; on Windows the npm command resolves through shell to `npm.cmd`.
+
+Docs discipline for architecture changes:
+- If backend architecture/seams/order ownership changes, update in the same PR:
+  - `docs/system.md`
+  - `docs/repo_xray.md`
+- Keep per-run reports under `docs/` for major refactor blocks.
 
 ## 4. CRITICAL WARNINGS
 

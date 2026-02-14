@@ -20,6 +20,11 @@ import { applyTopupFromMidtrans, getBalance } from "./rupiah/rupiahService";
 import { registerLlmAnalyzeRoute } from "./routes/llmAnalyzeRoute";
 import { registerLlmPrefillRoute } from "./routes/llmPrefillRoute";
 import { registerLlmChatRoute } from "./routes/llmChatRoute";
+import {
+  clearSessionCookie,
+  getSessionIdFromRequest,
+  setSessionCookie
+} from "./server/cookies";
 import { loadServerEnvConfig } from "./server/envConfig";
 import type {
   LlmAnalyzeRouteDeps,
@@ -104,27 +109,6 @@ const corsOptions = {
   allowedHeaders: ["Content-Type", "Authorization"]
 };
 
-function parseCookies(headerValue?: string) {
-  const cookies: Record<string, string> = {};
-  if (!headerValue) return cookies;
-
-  const parts = headerValue.split(";");
-  for (const part of parts) {
-    const [rawName, ...rest] = part.split("=");
-    const name = rawName.trim();
-    if (!name) continue;
-    const value = rest.join("=").trim();
-    cookies[name] = decodeURIComponent(value);
-  }
-
-  return cookies;
-}
-
-function normalizeSameSite(value: string): "lax" | "none" | "strict" {
-  if (value === "none" || value === "lax" || value === "strict") return value;
-  return "lax";
-}
-
 function isProd() {
   return serverEnv.isProd;
 }
@@ -144,23 +128,6 @@ async function detectProfileColumnsAvailability(): Promise<boolean> {
   );
   const found = new Set((result.rows || []).map((row: any) => String(row.column_name)));
   return found.has("display_name") && found.has("username");
-}
-
-function resolveCookieOptions() {
-  const sameSite = normalizeSameSite(COOKIE_SAMESITE);
-  const secure = isProd();
-
-  return { sameSite, secure };
-}
-
-function clearSessionCookie(res: express.Response) {
-  const { sameSite, secure } = resolveCookieOptions();
-  res.clearCookie(COOKIE_NAME, {
-    httpOnly: true,
-    sameSite,
-    secure,
-    path: "/"
-  });
 }
 
 function parseGrossAmount(value: unknown, fallbackAmount: number): number | null {
@@ -229,8 +196,7 @@ function verifyMidtransSignature(body: any): boolean {
 }
 
 async function requireAuth(req: express.Request, res: express.Response, next: express.NextFunction) {
-  const cookies = parseCookies(req.headers.cookie);
-  const sessionId = cookies[COOKIE_NAME];
+  const sessionId = getSessionIdFromRequest(req, { cookieName: COOKIE_NAME });
   if (!sessionId) {
     res.status(401).json({ ok: false, error: "unauthorized" });
     return;
@@ -247,7 +213,11 @@ async function requireAuth(req: express.Request, res: express.Response, next: ex
     );
     const row = result.rows[0] as AuthContext | undefined;
     if (!row) {
-      clearSessionCookie(res);
+      clearSessionCookie(res, {
+        cookieName: COOKIE_NAME,
+        cookieSameSite: COOKIE_SAMESITE,
+        isProd: isProd()
+      });
       res.status(401).json({ ok: false, error: "invalid session" });
       return;
     }
@@ -481,14 +451,11 @@ app.post("/auth/google", async (req, res) => {
     return;
   }
 
-  const { sameSite, secure } = resolveCookieOptions();
-
-  res.cookie(COOKIE_NAME, sessionId, {
-    httpOnly: true,
-    sameSite,
-    secure,
-    path: "/",
-    maxAge: SESSION_TTL_MS
+  setSessionCookie(res, sessionId, {
+    cookieName: COOKIE_NAME,
+    sessionTtlMs: SESSION_TTL_MS,
+    cookieSameSite: COOKIE_SAMESITE,
+    isProd: isProd()
   });
 
   res.json({
@@ -505,8 +472,7 @@ app.post("/auth/google", async (req, res) => {
 });
 
 app.get("/me", async (req, res) => {
-  const cookies = parseCookies(req.headers.cookie);
-  const sessionId = cookies[COOKIE_NAME];
+  const sessionId = getSessionIdFromRequest(req, { cookieName: COOKIE_NAME });
   if (!sessionId) {
     res.json({ ok: true, user: null });
     return;
@@ -537,7 +503,11 @@ app.get("/me", async (req, res) => {
 
     const row = result.rows[0];
     if (!row) {
-      clearSessionCookie(res);
+      clearSessionCookie(res, {
+        cookieName: COOKIE_NAME,
+        cookieSameSite: COOKIE_SAMESITE,
+        isProd: isProd()
+      });
       console.log("[auth] session missing -> cleared cookie");
       res.json({ ok: true, user: null });
       return;
@@ -546,7 +516,11 @@ app.get("/me", async (req, res) => {
     const expiresAt = row.expires_at ? new Date(row.expires_at) : null;
     if (expiresAt && Date.now() > expiresAt.getTime()) {
       await pool.query("delete from sessions where id = $1", [sessionId]);
-      clearSessionCookie(res);
+      clearSessionCookie(res, {
+        cookieName: COOKIE_NAME,
+        cookieSameSite: COOKIE_SAMESITE,
+        isProd: isProd()
+      });
       console.log("[auth] session expired -> cleared cookie");
       res.json({ ok: true, user: null });
       return;
@@ -569,8 +543,7 @@ app.get("/me", async (req, res) => {
 });
 
 app.post("/auth/logout", async (req, res) => {
-  const cookies = parseCookies(req.headers.cookie);
-  const sessionId = cookies[COOKIE_NAME];
+  const sessionId = getSessionIdFromRequest(req, { cookieName: COOKIE_NAME });
   if (sessionId) {
     try {
       const pool = await getPool();
@@ -581,7 +554,11 @@ app.post("/auth/logout", async (req, res) => {
     }
   }
 
-  clearSessionCookie(res);
+  clearSessionCookie(res, {
+    cookieName: COOKIE_NAME,
+    cookieSameSite: COOKIE_SAMESITE,
+    isProd: isProd()
+  });
   res.json({ ok: true });
 });
 

@@ -2,6 +2,7 @@ import React from 'react';
 import { useFullChat } from './FullChatStore';
 import chatbarIcon from '../assets/chatbar_icon.png';
 import chatbarIconMobile from '../assets/chatbar_icon_mobile.png';
+import { FULLCHAT_ENABLED } from './fullChatFlags';
 
 /**
  * FullChatToggle - Bottom-right toggle button for Full Chatbar
@@ -37,6 +38,8 @@ const ICON_STYLE_HOVER: React.CSSProperties = {
 };
 
 export const FullChatToggle: React.FC = () => {
+    if (!FULLCHAT_ENABLED) return null;
+
     const { isOpen } = useFullChat();
     const [isHovered, setIsHovered] = React.useState(false);
 

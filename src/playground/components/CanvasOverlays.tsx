@@ -11,10 +11,28 @@ import {
 } from '../graphPlaygroundStyles';
 import { IS_DEV } from '../rendering/debugUtils';
 import downloadDevModeIcon from '../../assets/download_dev_mode.png';
+import threeDotIcon from '../../assets/3_dot_icon.png';
+import shareIcon from '../../assets/share_icon.png';
+import fullscreenOpenIcon from '../../assets/fullscreen_open_icon.png';
+import fullscreenCloseIcon from '../../assets/fullscreen_close_icon.png';
+import { useFullscreen } from '../../hooks/useFullscreen';
 
 // Toggle to show/hide debug controls buttons (Debug, Theme, Controls)
 const SHOW_DEBUG_CONTROLS = false;
-const SHOW_DEV_DOWNLOAD_JSON_BUTTON = true;
+const SHOW_DEV_DOWNLOAD_JSON_BUTTON = false;
+const SHOW_TOP_RIGHT_DOTS_ICON = true;
+const SHOW_TOP_RIGHT_SHARE_ICON = false;
+const SHOW_TOP_RIGHT_FULLSCREEN_ICON = false;
+const TOP_RIGHT_ICON_SIZE_PX = 16;
+const FULLSCREEN_ICON_SCALE = 0.9;
+const TOP_RIGHT_ICON_BASE_TINT = '#d7f5ff';
+const TOP_RIGHT_ICON_IDLE_OPACITY = 0.5;
+const TOP_RIGHT_ICON_HOVER_OPACITY = 1;
+const TOP_RIGHT_ICON_OPACITY_TRANSITION = '200ms ease';
+const SHARE_MENU_SCALE = 0.8;
+const SHARE_MENU_PADDING_PX = 5;
+const SHARE_MENU_VIEWPORT_PADDING_PX = 8;
+const SHARE_MENU_ANCHOR_GAP_PX = 8;
 
 import type { ForceConfig } from '../../physics/types';
 
@@ -64,6 +82,50 @@ type CanvasOverlaysProps = {
     onDevDownloadJson?: () => void;
 };
 
+type MaskIconProps = {
+    src: string;
+    opacity: number;
+    sizePx?: number;
+};
+
+const MaskIcon: React.FC<MaskIconProps> = ({ src, opacity, sizePx = TOP_RIGHT_ICON_SIZE_PX }) => (
+    <span
+        aria-hidden="true"
+        style={{
+            width: `${sizePx}px`,
+            height: `${sizePx}px`,
+            display: 'inline-block',
+            flexShrink: 0,
+            backgroundColor: TOP_RIGHT_ICON_BASE_TINT,
+            opacity,
+            WebkitMaskImage: `url(${src})`,
+            maskImage: `url(${src})`,
+            WebkitMaskRepeat: 'no-repeat',
+            maskRepeat: 'no-repeat',
+            WebkitMaskPosition: 'center',
+            maskPosition: 'center',
+            WebkitMaskSize: 'contain',
+            maskSize: 'contain',
+            transition: `opacity ${TOP_RIGHT_ICON_OPACITY_TRANSITION}`,
+        }}
+    />
+);
+
+function computeShareMenuPosition(rect: DOMRect): { right: number; top: number } {
+    const right = Math.max(
+        SHARE_MENU_VIEWPORT_PADDING_PX,
+        window.innerWidth - rect.right
+    );
+    const estimatedHeight = 4 * 32 + SHARE_MENU_PADDING_PX * 2;
+    const canOpenDown =
+        rect.bottom + SHARE_MENU_ANCHOR_GAP_PX + estimatedHeight <=
+        window.innerHeight - SHARE_MENU_VIEWPORT_PADDING_PX;
+    const top = canOpenDown
+        ? Math.max(SHARE_MENU_VIEWPORT_PADDING_PX, rect.bottom + SHARE_MENU_ANCHOR_GAP_PX)
+        : Math.max(SHARE_MENU_VIEWPORT_PADDING_PX, rect.top - SHARE_MENU_ANCHOR_GAP_PX - estimatedHeight);
+    return { right, top };
+}
+
 export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
     debugOpen,
     metrics,
@@ -102,6 +164,7 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
     config,
     onConfigChange
 }) => {
+    const { isFullscreen, toggleFullscreen } = useFullscreen();
     const hud = metrics.physicsHud;
     const formatRatio = (value: number, base?: number) => {
         if (!base || base <= 0) return '';
@@ -112,6 +175,19 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
     const [showAdvanced, setShowAdvanced] = React.useState(false);
     const [showLegacyControls, setShowLegacyControls] = React.useState(false);
     const [showLegacyDiagnostics, setShowLegacyDiagnostics] = React.useState(false);
+    const [hoveredTopRightIcon, setHoveredTopRightIcon] = React.useState<'dots' | 'share' | 'fullscreen' | null>(null);
+    const [shareMenuOpen, setShareMenuOpen] = React.useState(false);
+    const [shareMenuPosition, setShareMenuPosition] = React.useState<{ right: number; top: number } | null>(null);
+    const shareTriggerRef = React.useRef<HTMLButtonElement | null>(null);
+    const shareMenuRef = React.useRef<HTMLDivElement | null>(null);
+
+    const shareMenuItems = React.useMemo(
+        () => [
+            { key: 'link', label: 'Save as Link' },
+            { key: 'arn', label: 'Save as ARN' },
+        ],
+        []
+    );
 
     // NEW: HUD Layout State
     const [isNarrow, setIsNarrow] = React.useState(typeof window !== 'undefined' ? window.innerWidth < 450 : false);
@@ -123,6 +199,52 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
         window.addEventListener('resize', handleResize);
         return () => window.removeEventListener('resize', handleResize);
     }, []);
+
+    React.useEffect(() => {
+        if (!shareMenuOpen || !shareTriggerRef.current) return;
+        const update = () => {
+            if (!shareTriggerRef.current) return;
+            setShareMenuPosition(computeShareMenuPosition(shareTriggerRef.current.getBoundingClientRect()));
+        };
+        update();
+        window.addEventListener('resize', update);
+        window.addEventListener('scroll', update, true);
+        return () => {
+            window.removeEventListener('resize', update);
+            window.removeEventListener('scroll', update, true);
+        };
+    }, [shareMenuOpen]);
+
+    React.useEffect(() => {
+        if (!shareMenuOpen) return;
+        const handleWindowPointerDown = (event: PointerEvent) => {
+            const target = event.target as Element | null;
+            if (!target) {
+                setShareMenuOpen(false);
+                return;
+            }
+            if (target.closest('[data-share-menu="1"]')) return;
+            if (target.closest('[data-share-trigger="1"]')) return;
+            setShareMenuOpen(false);
+        };
+        const handleWindowKeyDown = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') {
+                setShareMenuOpen(false);
+            }
+        };
+        window.addEventListener('pointerdown', handleWindowPointerDown, true);
+        window.addEventListener('keydown', handleWindowKeyDown, true);
+        return () => {
+            window.removeEventListener('pointerdown', handleWindowPointerDown, true);
+            window.removeEventListener('keydown', handleWindowKeyDown, true);
+        };
+    }, [shareMenuOpen]);
+
+    React.useEffect(() => {
+        if (!SHOW_TOP_RIGHT_SHARE_ICON && shareMenuOpen) {
+            setShareMenuOpen(false);
+        }
+    }, [shareMenuOpen]);
 
     const gridStyle: React.CSSProperties = isNarrow ? {
         display: 'flex',
@@ -225,6 +347,167 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
                     />
                 </button>
             )}
+            {(SHOW_TOP_RIGHT_DOTS_ICON || SHOW_TOP_RIGHT_SHARE_ICON || SHOW_TOP_RIGHT_FULLSCREEN_ICON) && (
+                <div
+                    style={{
+                        position: 'absolute',
+                        top: '24px',
+                        right: '24px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '12px',
+                        zIndex: 10,
+                        pointerEvents: 'none',
+                    }}
+                >
+                    {SHOW_TOP_RIGHT_DOTS_ICON && (
+                        <span
+                            style={{ pointerEvents: 'auto', display: 'inline-flex' }}
+                            onPointerEnter={() => setHoveredTopRightIcon('dots')}
+                            onPointerLeave={() => setHoveredTopRightIcon((current) => (current === 'dots' ? null : current))}
+                            onPointerDown={(e) => e.stopPropagation()}
+                            onPointerUp={(e) => e.stopPropagation()}
+                            onWheelCapture={(e) => e.stopPropagation()}
+                            onWheel={(e) => e.stopPropagation()}
+                        >
+                            <MaskIcon
+                                src={threeDotIcon}
+                                opacity={hoveredTopRightIcon === 'dots' ? TOP_RIGHT_ICON_HOVER_OPACITY : TOP_RIGHT_ICON_IDLE_OPACITY}
+                            />
+                        </span>
+                    )}
+                    {SHOW_TOP_RIGHT_SHARE_ICON && (
+                        <button
+                            ref={shareTriggerRef}
+                            data-share-trigger="1"
+                            type="button"
+                            style={{
+                                pointerEvents: 'auto',
+                                display: 'inline-flex',
+                                padding: 0,
+                                margin: 0,
+                                border: 'none',
+                                background: 'transparent',
+                                cursor: 'pointer'
+                            }}
+                            onPointerEnter={() => setHoveredTopRightIcon('share')}
+                            onPointerLeave={() => setHoveredTopRightIcon((current) => (current === 'share' ? null : current))}
+                            onPointerDown={(e) => e.stopPropagation()}
+                            onPointerUp={(e) => e.stopPropagation()}
+                            onWheelCapture={(e) => e.stopPropagation()}
+                            onWheel={(e) => e.stopPropagation()}
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                const trigger = e.currentTarget;
+                                setShareMenuOpen((prev) => {
+                                    const next = !prev;
+                                    if (next) {
+                                        setShareMenuPosition(computeShareMenuPosition(trigger.getBoundingClientRect()));
+                                    }
+                                    return next;
+                                });
+                            }}
+                            aria-label="Open share menu"
+                        >
+                            <MaskIcon
+                                src={shareIcon}
+                                opacity={hoveredTopRightIcon === 'share' ? TOP_RIGHT_ICON_HOVER_OPACITY : TOP_RIGHT_ICON_IDLE_OPACITY}
+                            />
+                        </button>
+                    )}
+                    {SHOW_TOP_RIGHT_FULLSCREEN_ICON && (
+                        <button
+                            type="button"
+                            style={{
+                                pointerEvents: 'auto',
+                                display: 'inline-flex',
+                                padding: 0,
+                                margin: 0,
+                                border: 'none',
+                                background: 'transparent',
+                                cursor: 'pointer'
+                            }}
+                            onPointerEnter={() => setHoveredTopRightIcon('fullscreen')}
+                            onPointerLeave={() => setHoveredTopRightIcon((current) => (current === 'fullscreen' ? null : current))}
+                            onPointerDown={(e) => e.stopPropagation()}
+                            onPointerUp={(e) => e.stopPropagation()}
+                            onWheelCapture={(e) => e.stopPropagation()}
+                            onWheel={(e) => e.stopPropagation()}
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                toggleFullscreen().catch((error: unknown) => {
+                                    console.warn('[fullscreen] Toggle failed:', error);
+                                });
+                            }}
+                            aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+                        >
+                            <MaskIcon
+                                src={isFullscreen ? fullscreenCloseIcon : fullscreenOpenIcon}
+                                opacity={hoveredTopRightIcon === 'fullscreen' ? TOP_RIGHT_ICON_HOVER_OPACITY : TOP_RIGHT_ICON_IDLE_OPACITY}
+                                sizePx={TOP_RIGHT_ICON_SIZE_PX * FULLSCREEN_ICON_SCALE}
+                            />
+                        </button>
+                    )}
+                </div>
+            )}
+            {shareMenuOpen && shareMenuPosition ? (
+                <div
+                    ref={shareMenuRef}
+                    data-share-menu="1"
+                    style={{
+                        position: 'fixed',
+                        right: `${shareMenuPosition.right}px`,
+                        top: `${shareMenuPosition.top}px`,
+                        width: 'max-content',
+                        maxWidth: `calc(100vw - ${SHARE_MENU_VIEWPORT_PADDING_PX * 2}px)`,
+                        padding: `${SHARE_MENU_PADDING_PX}px`,
+                        borderRadius: `${10 * SHARE_MENU_SCALE}px`,
+                        border: '1px solid rgba(255, 255, 255, 0.1)',
+                        background: '#0D0D18',
+                        boxShadow: '0 14px 28px rgba(0, 0, 0, 0.45)',
+                        zIndex: 1200,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '2px',
+                        pointerEvents: 'auto',
+                    }}
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onPointerUp={(e) => e.stopPropagation()}
+                    onWheelCapture={(e) => e.stopPropagation()}
+                    onWheel={(e) => e.stopPropagation()}
+                >
+                    {shareMenuItems.map((item) => (
+                        <button
+                            key={item.key}
+                            type="button"
+                            style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                padding: `${8 * SHARE_MENU_SCALE}px 10px`,
+                                border: 'none',
+                                borderRadius: `${8 * SHARE_MENU_SCALE}px`,
+                                background: 'transparent',
+                                textAlign: 'left',
+                                cursor: 'pointer',
+                                color: '#D7F5FF',
+                                fontFamily: 'var(--font-ui)',
+                                fontSize: `${13 * SHARE_MENU_SCALE}px`,
+                                lineHeight: 1.2,
+                            }}
+                            onPointerDown={(e) => e.stopPropagation()}
+                            onPointerUp={(e) => e.stopPropagation()}
+                            onWheelCapture={(e) => e.stopPropagation()}
+                            onWheel={(e) => e.stopPropagation()}
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                setShareMenuOpen(false);
+                            }}
+                        >
+                            <span>{item.label}</span>
+                        </button>
+                    ))}
+                </div>
+            ) : null}
 
             {debugOpen && (
                 <div

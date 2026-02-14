@@ -21,6 +21,7 @@ import { PopupProvider, usePopup } from '../popup/PopupStore';
 import { PopupPortal } from '../popup/PopupPortal';
 import { RotationCompass } from './components/RotationCompass';
 import { FullChatProvider, FullChatbar, FullChatToggle, useFullChat } from '../fullchat';
+import { FULLCHAT_ENABLED } from '../fullchat/fullChatFlags';
 import TestBackend from '../components/TestBackend';
 import { SessionExpiryBanner } from '../auth/SessionExpiryBanner';
 import { LoadingScreen } from '../screens/LoadingScreen';
@@ -1450,7 +1451,7 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
                     </div>
                 )}
 
-                <FullChatToggle />
+                {FULLCHAT_ENABLED && <FullChatToggle />}
             </div>
 
             {sidebarOpen && !fullChatOpen && (
@@ -1472,7 +1473,7 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
                 />
             )}
 
-            {fullChatOpen && (
+            {FULLCHAT_ENABLED && fullChatOpen && (
                 <FullChatbar engineRef={engineRef} />
             )}
         </div>

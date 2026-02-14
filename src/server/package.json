@@ -19,6 +19,7 @@
     "test:requestflow-contracts": "node scripts/test-requestflow-contracts.mjs",
     "test:jsonparsers-contracts": "node scripts/test-jsonparsers-contracts.mjs",
     "test:cors-contracts": "node scripts/test-cors-contracts.mjs",
+    "test:startupgates-contracts": "node scripts/test-startupgates-contracts.mjs",
     "test:midtrans-client": "ts-node src/midtrans/client.selftest.ts",
     "test:midtrans-prod-charge": "ts-node src/midtrans/smoke.charge.prod.ts",
     "test:midtrans-prod-gopayqris": "ts-node src/midtrans/smoke.gopayqris.prod.ts"

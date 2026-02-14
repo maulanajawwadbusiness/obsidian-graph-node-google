@@ -63,6 +63,8 @@ type GraphPendingAnalysisProps = {
 };
 const STORAGE_KEY = 'arnvoid_screen';
 const PERSIST_SCREEN = false;
+const ONBOARDING_SCREEN_FADE_MS = 200;
+const ONBOARDING_SCREEN_FADE_EASING = 'cubic-bezier(0.22, 1, 0.36, 1)';
 const DEBUG_ONBOARDING_SCROLL_GUARD = false;
 const WELCOME1_FONT_TIMEOUT_MS = 1500;
 const SEARCH_RECENT_LIMIT = 12;
@@ -262,9 +264,16 @@ function getInitialScreen(): Screen {
     return 'welcome1';
 }
 
+function isOnboardingScreen(screen: Screen): boolean {
+    return screen === 'welcome1' || screen === 'welcome2' || screen === 'prompt';
+}
+
 export const AppShell: React.FC = () => {
     const { user, loading: authLoading, refreshMe, applyUserPatch, logout } = useAuth();
     const [screen, setScreen] = React.useState<Screen>(() => getInitialScreen());
+    const [screenTransitionFrom, setScreenTransitionFrom] = React.useState<Screen | null>(null);
+    const [screenTransitionReady, setScreenTransitionReady] = React.useState(false);
+    const [prefersReducedMotion, setPrefersReducedMotion] = React.useState(false);
     const [pendingAnalysis, setPendingAnalysis] = React.useState<PendingAnalysisPayload>(null);
     const [savedInterfaces, setSavedInterfaces] = React.useState<SavedInterfaceRecordV1[]>([]);
     const [pendingLoadInterface, setPendingLoadInterface] = React.useState<SavedInterfaceRecordV1 | null>(null);
@@ -306,6 +315,9 @@ export const AppShell: React.FC = () => {
     const remoteOutboxDrainTimerRef = React.useRef<number | null>(null);
     const remoteOutboxDrainingRef = React.useRef(false);
     const remoteOutboxPausedUntilRef = React.useRef<number>(0);
+    const screenTransitionTimerRef = React.useRef<number | null>(null);
+    const screenTransitionRafRef = React.useRef<number | null>(null);
+    const screenTransitionEpochRef = React.useRef(0);
     const authStorageId = React.useMemo(() => resolveAuthStorageId(user), [user]);
     const isAuthReady = !authLoading;
     const isLoggedIn = isAuthReady && user !== null && authStorageId !== null;
@@ -340,14 +352,98 @@ export const AppShell: React.FC = () => {
         }),
         [stopEventPropagation]
     );
+    React.useEffect(() => {
+        if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
+        const media = window.matchMedia('(prefers-reduced-motion: reduce)');
+        const applyMatch = () => setPrefersReducedMotion(media.matches);
+        applyMatch();
+        const listener = () => applyMatch();
+        if (typeof media.addEventListener === 'function') {
+            media.addEventListener('change', listener);
+            return () => media.removeEventListener('change', listener);
+        }
+        media.addListener(listener);
+        return () => media.removeListener(listener);
+    }, []);
+    const effectiveScreenFadeMs = prefersReducedMotion ? 0 : ONBOARDING_SCREEN_FADE_MS;
+
+    const clearScreenTransition = React.useCallback(() => {
+        if (screenTransitionTimerRef.current !== null) {
+            window.clearTimeout(screenTransitionTimerRef.current);
+            screenTransitionTimerRef.current = null;
+        }
+        if (screenTransitionRafRef.current !== null) {
+            window.cancelAnimationFrame(screenTransitionRafRef.current);
+            screenTransitionRafRef.current = null;
+        }
+        setScreenTransitionReady(false);
+        setScreenTransitionFrom(null);
+    }, []);
+
+    const transitionToScreen = React.useCallback((next: Screen) => {
+        if (next === screen) return;
+        const current = screen;
+        const shouldAnimate = isOnboardingScreen(current) && isOnboardingScreen(next);
+        if (!shouldAnimate) {
+            clearScreenTransition();
+            setScreen(next);
+            return;
+        }
+
+        screenTransitionEpochRef.current += 1;
+        const epoch = screenTransitionEpochRef.current;
+        setScreenTransitionFrom(current);
+        setScreenTransitionReady(false);
+        setScreen(next);
+
+        if (effectiveScreenFadeMs <= 0) {
+            clearScreenTransition();
+            return;
+        }
+
+        if (screenTransitionRafRef.current !== null) {
+            window.cancelAnimationFrame(screenTransitionRafRef.current);
+            screenTransitionRafRef.current = null;
+        }
+        if (screenTransitionTimerRef.current !== null) {
+            window.clearTimeout(screenTransitionTimerRef.current);
+            screenTransitionTimerRef.current = null;
+        }
+
+        screenTransitionRafRef.current = window.requestAnimationFrame(() => {
+            if (screenTransitionEpochRef.current !== epoch) return;
+            screenTransitionRafRef.current = null;
+            setScreenTransitionReady(true);
+            screenTransitionTimerRef.current = window.setTimeout(() => {
+                if (screenTransitionEpochRef.current !== epoch) return;
+                screenTransitionTimerRef.current = null;
+                setScreenTransitionReady(false);
+                setScreenTransitionFrom(null);
+            }, effectiveScreenFadeMs);
+        });
+    }, [clearScreenTransition, effectiveScreenFadeMs, screen]);
+
+    React.useEffect(() => {
+        return () => {
+            if (screenTransitionTimerRef.current !== null) {
+                window.clearTimeout(screenTransitionTimerRef.current);
+            }
+            if (screenTransitionRafRef.current !== null) {
+                window.cancelAnimationFrame(screenTransitionRafRef.current);
+            }
+        };
+    }, []);
+
     const GraphWithPending = Graph as React.ComponentType<GraphPendingAnalysisProps>;
+    const isScreenTransitioning = screenTransitionFrom !== null;
+    const shouldBlockOnboardingInput = isScreenTransitioning && isOnboardingScreen(screen);
     const showMoneyUi = screen === 'prompt' || screen === 'graph';
     const showBalanceBadge = false;
     const showPersistentSidebar = screen === 'prompt' || screen === 'graph';
     const loginBlockingActive = screen === 'prompt' && enterPromptOverlayOpen;
     const sidebarDisabled = (screen === 'graph' && graphIsLoading) || loginBlockingActive;
-    const showOnboardingFullscreenButton = screen === 'welcome1' || screen === 'welcome2' || screen === 'prompt';
-    const onboardingActive = screen === 'welcome1' || screen === 'welcome2' || screen === 'prompt';
+    const showOnboardingFullscreenButton = isOnboardingScreen(screen);
+    const onboardingActive = isOnboardingScreen(screen) || shouldBlockOnboardingInput;
     const isOnboardingOverlayOpen = welcome1OverlayOpen || enterPromptOverlayOpen;
     const onboardingFullscreenButtonStyle: React.CSSProperties = screen === 'prompt'
         ? {
@@ -675,10 +771,10 @@ export const AppShell: React.FC = () => {
         if (!record) return;
         setPendingLoadInterface(record);
         if (screen !== 'graph') {
-            setScreen('graph');
+            transitionToScreen('graph');
         }
         console.log('[appshell] pending_load_interface id=%s', id);
-    }, [savedInterfaces, screen]);
+    }, [savedInterfaces, screen, transitionToScreen]);
     const openSearchInterfaces = React.useCallback(() => {
         if (pendingDeleteId) return;
         if (sidebarDisabled) return;
@@ -1245,58 +1341,105 @@ export const AppShell: React.FC = () => {
         }
     }
 
-    const screenContent = screen === 'graph'
-        ? (
-            <Suspense fallback={<div style={FALLBACK_STYLE}>Loading graph...</div>}>
-                <GraphWithPending
-                    pendingAnalysisPayload={pendingAnalysis}
-                    onPendingAnalysisConsumed={() => setPendingAnalysis(null)}
-                    onLoadingStateChange={(v) => setGraphIsLoading(v)}
-                    documentViewerToggleToken={documentViewerToggleToken}
-                    pendingLoadInterface={pendingLoadInterface}
-                    onPendingLoadInterfaceConsumed={() => setPendingLoadInterface(null)}
-                    onRestoreReadPathChange={(active) => {
-                        restoreReadPathActiveRef.current = active;
-                    }}
-                    onSavedInterfaceUpsert={(record, reason) => commitUpsertInterface(record, reason)}
-                    onSavedInterfaceLayoutPatch={(docId, layout, camera, reason) =>
-                        commitPatchLayoutByDocId(docId, layout, camera, reason)
-                    }
-                />
-            </Suspense>
-        )
-        : screen === 'welcome1'
-            ? (
+    const renderScreenContent = React.useCallback((targetScreen: Screen): React.ReactNode => {
+        if (targetScreen === 'graph') {
+            return (
+                <Suspense fallback={<div style={FALLBACK_STYLE}>Loading graph...</div>}>
+                    <GraphWithPending
+                        pendingAnalysisPayload={pendingAnalysis}
+                        onPendingAnalysisConsumed={() => setPendingAnalysis(null)}
+                        onLoadingStateChange={(v) => setGraphIsLoading(v)}
+                        documentViewerToggleToken={documentViewerToggleToken}
+                        pendingLoadInterface={pendingLoadInterface}
+                        onPendingLoadInterfaceConsumed={() => setPendingLoadInterface(null)}
+                        onRestoreReadPathChange={(active) => {
+                            restoreReadPathActiveRef.current = active;
+                        }}
+                        onSavedInterfaceUpsert={(record, reason) => commitUpsertInterface(record, reason)}
+                        onSavedInterfaceLayoutPatch={(docId, layout, camera, reason) =>
+                            commitPatchLayoutByDocId(docId, layout, camera, reason)
+                        }
+                    />
+                </Suspense>
+            );
+        }
+        if (targetScreen === 'welcome1') {
+            return (
                 <Welcome1
-                    onNext={() => setScreen('welcome2')}
-                    onSkip={() => setScreen('graph')}
+                    onNext={() => transitionToScreen('welcome2')}
+                    onSkip={() => transitionToScreen('graph')}
                     onOverlayOpenChange={setWelcome1OverlayOpen}
                 />
-            )
-            : screen === 'welcome2'
-                ? (
-                    <Welcome2
-                        onBack={() => setScreen('welcome1')}
-                        onNext={() => setScreen('prompt')}
-                        onSkip={() => setScreen('graph')}
-                    />
-                )
-                : (
-                    <EnterPrompt
-                        onBack={() => setScreen('welcome2')}
-                        onEnter={() => setScreen('graph')}
-                        onSkip={() => setScreen('graph')}
-                        onOverlayOpenChange={setEnterPromptOverlayOpen}
-                        onSubmitPromptText={(text) => {
-                            setPendingAnalysis({ kind: 'text', text, createdAt: Date.now() });
-                            console.log(`[appshell] pending_analysis_set kind=text len=${text.length}`);
-                        }}
-                        onSubmitPromptFile={(file) => {
-                            setPendingAnalysis({ kind: 'file', file, createdAt: Date.now() });
-                            console.log('[appshell] pending_analysis_set kind=file name=%s size=%d', file.name, file.size);
-                        }}
-                    />
-                );
+            );
+        }
+        if (targetScreen === 'welcome2') {
+            return (
+                <Welcome2
+                    onBack={() => transitionToScreen('welcome1')}
+                    onNext={() => transitionToScreen('prompt')}
+                    onSkip={() => transitionToScreen('graph')}
+                />
+            );
+        }
+        return (
+            <EnterPrompt
+                onBack={() => transitionToScreen('welcome2')}
+                onEnter={() => transitionToScreen('graph')}
+                onSkip={() => transitionToScreen('graph')}
+                onOverlayOpenChange={setEnterPromptOverlayOpen}
+                onSubmitPromptText={(text) => {
+                    setPendingAnalysis({ kind: 'text', text, createdAt: Date.now() });
+                    console.log(`[appshell] pending_analysis_set kind=text len=${text.length}`);
+                }}
+                onSubmitPromptFile={(file) => {
+                    setPendingAnalysis({ kind: 'file', file, createdAt: Date.now() });
+                    console.log('[appshell] pending_analysis_set kind=file name=%s size=%d', file.name, file.size);
+                }}
+            />
+        );
+    }, [
+        GraphWithPending,
+        commitPatchLayoutByDocId,
+        commitUpsertInterface,
+        documentViewerToggleToken,
+        pendingAnalysis,
+        pendingLoadInterface,
+        transitionToScreen
+    ]);
+
+    const screenContent = isScreenTransitioning && screenTransitionFrom
+        ? (
+            <div style={SCREEN_TRANSITION_CONTAINER_STYLE}>
+                <div
+                    style={{
+                        ...SCREEN_TRANSITION_LAYER_STYLE,
+                        opacity: screenTransitionReady ? 0 : 1,
+                        transition: `opacity ${effectiveScreenFadeMs}ms ${ONBOARDING_SCREEN_FADE_EASING}`,
+                        zIndex: 1,
+                    }}
+                >
+                    {renderScreenContent(screenTransitionFrom)}
+                </div>
+                <div
+                    style={{
+                        ...SCREEN_TRANSITION_LAYER_STYLE,
+                        opacity: screenTransitionReady ? 1 : 0,
+                        transition: `opacity ${effectiveScreenFadeMs}ms ${ONBOARDING_SCREEN_FADE_EASING}`,
+                        zIndex: 0,
+                    }}
+                >
+                    {renderScreenContent(screen)}
+                </div>
+                <div
+                    style={SCREEN_TRANSITION_INPUT_SHIELD_STYLE}
+                    onPointerDown={(event) => event.stopPropagation()}
+                    onPointerUp={(event) => event.stopPropagation()}
+                    onWheel={(event) => event.stopPropagation()}
+                    onWheelCapture={(event) => event.stopPropagation()}
+                />
+            </div>
+        )
+        : renderScreenContent(screen);
 
     return (
         <div
@@ -1312,7 +1455,7 @@ export const AppShell: React.FC = () => {
                     onCreateNew={() => {
                         setPendingLoadInterface(null);
                         setPendingAnalysis(null);
-                        setScreen('prompt');
+                        transitionToScreen('prompt');
                     }}
                     onOpenSearchInterfaces={() => openSearchInterfaces()}
                     disabled={sidebarDisabled}
@@ -1593,6 +1736,7 @@ export const AppShell: React.FC = () => {
                         <input
                             {...hardShieldInput}
                             ref={searchInputRef}
+                            className="search-interfaces-input"
                             autoFocus
                             value={searchInterfacesQuery}
                             placeholder="Search interfaces..."
@@ -1996,6 +2140,8 @@ const SEARCH_OVERLAY_CARD_STYLE: React.CSSProperties = {
     boxSizing: 'border-box',
     overflow: 'hidden',
     color: '#e7e7e7',
+    fontFamily: 'var(--font-ui)',
+    fontWeight: 300,
     display: 'flex',
     flexDirection: 'column',
     gap: '10px',
@@ -2074,6 +2220,8 @@ const SEARCH_RESULT_ROW_STYLE: React.CSSProperties = {
     background: 'transparent',
     textAlign: 'left',
     cursor: 'pointer',
+    fontFamily: 'var(--font-ui)',
+    fontWeight: 300,
 };
 
 const SEARCH_RESULT_TITLE_STYLE: React.CSSProperties = {
@@ -2128,6 +2276,28 @@ const MAIN_SCREEN_CONTAINER_STYLE: React.CSSProperties = {
     position: 'relative',
     width: '100%',
     minHeight: '100vh',
+};
+
+const SCREEN_TRANSITION_CONTAINER_STYLE: React.CSSProperties = {
+    position: 'relative',
+    width: '100%',
+    minHeight: '100vh',
+    overflow: 'hidden',
+};
+
+const SCREEN_TRANSITION_LAYER_STYLE: React.CSSProperties = {
+    position: 'absolute',
+    inset: 0,
+    width: '100%',
+    minHeight: '100%',
+    willChange: 'opacity',
+};
+
+const SCREEN_TRANSITION_INPUT_SHIELD_STYLE: React.CSSProperties = {
+    position: 'absolute',
+    inset: 0,
+    pointerEvents: 'auto',
+    zIndex: 2,
 };
 
 const NON_SIDEBAR_LAYER_STYLE: React.CSSProperties = {

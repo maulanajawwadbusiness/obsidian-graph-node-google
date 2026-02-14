@@ -20,17 +20,23 @@ const DEBUG_WELCOME2_INPUT_GUARD = false;
 const CURSOR_PAUSE_THRESHOLD_MS = 130;
 const CURSOR_HOLD_FAST_WINDOW_MS = 680;
 const SHOW_WELCOME2_FOCUS_RING = false;
-const WELCOME2_AUTO_ADVANCE_DELAY_MS = 2000*4;
+const WELCOME2_AUTO_ADVANCE_DELAY_MS = 2000;
 const STABILIZE_STAGE_A_MS = 400;
 const STABILIZE_STAGE_B_MS = 200;
 const BACKSTEP_CUT_RATIO = 0.7;
 const SEEK_ICON_SIZE_PX = 16;
 const SEEK_ICON_COLOR = '#9db7e2';
+const CONTINUE_BUTTON_LABEL = 'Continue';
 const BLOCKED_SCROLL_KEYS = new Set([' ', 'PageDown', 'PageUp', 'ArrowDown', 'ArrowUp']);
 const INTERACTIVE_SELECTOR = 'button, input, textarea, select, a[href], [role=\"button\"], [contenteditable=\"true\"]';
 const DEBUG_WELCOME2_TYPE = false;
 
 export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) => {
+    const debugForensic = React.useMemo(() => {
+        if (typeof window === 'undefined') return import.meta.env.DEV;
+        const params = new URLSearchParams(window.location.search);
+        return import.meta.env.DEV || params.get('debugCadence') === '1';
+    }, []);
     const debugTypeMetrics = React.useMemo(() => {
         if (typeof window === 'undefined') return DEBUG_WELCOME2_TYPE;
         const params = new URLSearchParams(window.location.search);
@@ -41,7 +47,18 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
         () => buildWelcome2Timeline(MANIFESTO_TEXT, DEFAULT_CADENCE),
         [MANIFESTO_TEXT, DEFAULT_CADENCE]
     );
-    const { visibleText, visibleCharCount, phase, elapsedMs, isDone, timeToDoneMs, seekToMs, setClockPaused } = useTypedTimeline(builtTimeline, {
+    const {
+        visibleText,
+        visibleCharCount,
+        phase,
+        elapsedMs,
+        isTextFullyRevealed,
+        isDone,
+        lastCharTimeMs,
+        timeToDoneMs,
+        seekToMs,
+        setClockPaused,
+    } = useTypedTimeline(builtTimeline, {
         debugTypeMetrics,
     });
     const sentenceSpans = React.useMemo(
@@ -55,6 +72,7 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
     const holdStartRef = React.useRef<number | null>(null);
     const prevCursorModeRef = React.useRef<TypingCursorMode>('typing');
     const hasManualSeekRef = React.useRef(false);
+    const wasContinueAvailableRef = React.useRef(false);
     const stabilizeTimeoutARef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
     const stabilizeTimeoutBRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
     const stabilizeTimeoutCRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -63,11 +81,24 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
     const stabilizeStageRef = React.useRef<'cur_start' | 'prev_end' | null>(null);
     const [stabilizeStage, setStabilizeStage] = React.useState<'cur_start' | 'prev_end' | null>(null);
 
+    const isContinueAvailable = hasManualSeekRef.current && isTextFullyRevealed;
+
     React.useEffect(() => {
         if (visibleCharCount === prevVisibleCountRef.current) return;
         prevVisibleCountRef.current = visibleCharCount;
         lastAdvanceRef.current = elapsedMs;
     }, [elapsedMs, visibleCharCount]);
+
+    React.useEffect(() => {
+        if (!debugForensic) return;
+        if (!isContinueAvailable) {
+            wasContinueAvailableRef.current = false;
+            return;
+        }
+        if (wasContinueAvailableRef.current) return;
+        wasContinueAvailableRef.current = true;
+        console.log('[w2] continue available');
+    }, [debugForensic, isContinueAvailable]);
 
     React.useEffect(() => {
         if (phase !== 'hold') {
@@ -122,18 +153,6 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
         };
     }, []);
 
-    const handleKeyDown = React.useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
-        if (!BLOCKED_SCROLL_KEYS.has(event.key)) return;
-        const target = event.target;
-        if (target instanceof HTMLElement && target.closest(INTERACTIVE_SELECTOR)) {
-            return;
-        }
-        event.preventDefault();
-        if (DEBUG_WELCOME2_INPUT_GUARD) {
-            console.log('[Welcome2Type] key prevented=%s', event.key);
-        }
-    }, []);
-
     const handlePointerDown = React.useCallback(() => {
         if (!rootRef.current) return;
         rootRef.current.focus({ preventScroll: true });
@@ -145,6 +164,34 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
             autoAdvanceTimeoutRef.current = null;
         }
     }, []);
+
+    const continueToNext = React.useCallback(() => {
+        if (!isContinueAvailable) return;
+        if (autoAdvanceTriggeredRef.current) return;
+        autoAdvanceTriggeredRef.current = true;
+        clearAutoAdvanceTimer();
+        if (debugForensic) {
+            console.log('[w2] continue click -> onNext');
+        }
+        onNext();
+    }, [clearAutoAdvanceTimer, debugForensic, isContinueAvailable, onNext]);
+
+    const handleKeyDown = React.useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
+        if (isContinueAvailable && (event.key === 'Enter' || event.key === 'ArrowRight')) {
+            event.preventDefault();
+            continueToNext();
+            return;
+        }
+        if (!BLOCKED_SCROLL_KEYS.has(event.key)) return;
+        const target = event.target;
+        if (target instanceof HTMLElement && target.closest(INTERACTIVE_SELECTOR)) {
+            return;
+        }
+        event.preventDefault();
+        if (DEBUG_WELCOME2_INPUT_GUARD) {
+            console.log('[Welcome2Type] key prevented=%s', event.key);
+        }
+    }, [continueToNext, isContinueAvailable]);
 
     const setBackJumpStage = React.useCallback((stage: 'cur_start' | 'prev_end' | null) => {
         stabilizeStageRef.current = stage;
@@ -187,13 +234,35 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
         return Math.max(0, startEvent.tMs - 1);
     }, [builtTimeline.events, builtTimeline.totalMs]);
 
-    const seekWithManualInteraction = React.useCallback((targetMs: number) => {
+    const seekWithManualInteraction = React.useCallback((targetMs: number, source: string) => {
+        if (debugForensic) {
+            console.log('[w2] manual seek', {
+                source,
+                ms: targetMs,
+                epoch: backJumpEpochRef.current,
+                before: hasManualSeekRef.current,
+            });
+        }
         hasManualSeekRef.current = true;
         clearAutoAdvanceTimer();
         seekToMs(targetMs);
         clearAutoAdvanceTimer();
         rootRef.current?.focus({ preventScroll: true });
-    }, [clearAutoAdvanceTimer, seekToMs]);
+    }, [clearAutoAdvanceTimer, debugForensic, seekToMs]);
+
+    const seekWithoutManualInteraction = React.useCallback((targetMs: number, source: string) => {
+        if (debugForensic) {
+            console.log('[w2] seek', {
+                source,
+                ms: targetMs,
+                epoch: backJumpEpochRef.current,
+            });
+        }
+        clearAutoAdvanceTimer();
+        seekToMs(targetMs);
+        clearAutoAdvanceTimer();
+        rootRef.current?.focus({ preventScroll: true });
+    }, [clearAutoAdvanceTimer, debugForensic, seekToMs]);
 
     const getCurrentPartIdx = React.useCallback(() => {
         const probeIndex = visibleCharCount <= 0 ? 0 : visibleCharCount - 1;
@@ -234,20 +303,20 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
         const targetMsC = toSentenceEndTargetMs(cutCharCount);
 
         setBackJumpStage('cur_start');
-        seekWithManualInteraction(targetMsA);
+        seekWithManualInteraction(targetMsA, 'restart_click_stageA');
 
         stabilizeTimeoutARef.current = setTimeout(() => {
             if (backJumpEpochRef.current !== localEpoch) return;
             stabilizeTimeoutARef.current = null;
             setBackJumpStage('prev_end');
-            seekWithManualInteraction(targetMsB);
+            seekWithoutManualInteraction(targetMsB, 'restart_stageB');
             stabilizeTimeoutBRef.current = setTimeout(() => {
                 if (backJumpEpochRef.current !== localEpoch) return;
                 stabilizeTimeoutBRef.current = null;
                 stabilizeTimeoutCRef.current = setTimeout(() => {
                     if (backJumpEpochRef.current !== localEpoch) return;
                     stabilizeTimeoutCRef.current = null;
-                    seekWithManualInteraction(targetMsC);
+                    seekWithoutManualInteraction(targetMsC, 'restart_stageC');
                     setBackJumpStage(null);
                     isBackJumpingRef.current = false;
                     setClockPaused(false);
@@ -260,6 +329,7 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
         cancelBackJumpSequence,
         getCurrentPartIdx,
         seekWithManualInteraction,
+        seekWithoutManualInteraction,
         sentenceSpans.partEndCoreCharCountByIndex,
         setBackJumpStage,
         setClockPaused,
@@ -277,7 +347,7 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
             rootRef.current?.focus({ preventScroll: true });
             return;
         }
-        seekWithManualInteraction(toSentenceEndTargetMs(targetCharCount));
+        seekWithManualInteraction(toSentenceEndTargetMs(targetCharCount), 'finish_click_soft_end');
     }, [
         builtTimeline.events.length,
         getCurrentPartIdx,
@@ -305,6 +375,18 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
     ]);
 
     React.useEffect(() => {
+        if (debugForensic) {
+            console.log('[w2] auto-advance check', {
+                phase,
+                elapsedMs,
+                totalMs: builtTimeline.totalMs,
+                lastCharTimeMs,
+                isTextFullyRevealed,
+                isDone,
+                hasManualSeek: hasManualSeekRef.current,
+                stabilizeStage,
+            });
+        }
         if (autoAdvanceTriggeredRef.current) return;
         if (autoAdvanceTimeoutRef.current !== null) return;
         if (builtTimeline.events.length === 0) return;
@@ -312,13 +394,36 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
         if (isDone) return;
 
         const remainingMs = Math.max(0, timeToDoneMs + WELCOME2_AUTO_ADVANCE_DELAY_MS);
+        if (debugForensic) {
+            console.log('[w2] auto-advance schedule', {
+                remainingMs,
+                delayMs: WELCOME2_AUTO_ADVANCE_DELAY_MS,
+                timeToDoneMs,
+            });
+        }
         autoAdvanceTimeoutRef.current = setTimeout(() => {
             autoAdvanceTimeoutRef.current = null;
             if (autoAdvanceTriggeredRef.current) return;
             autoAdvanceTriggeredRef.current = true;
+            if (debugForensic) {
+                console.log('[w2] auto-advance fire');
+                console.log('[w2] onNext invoke');
+            }
             onNext();
         }, remainingMs);
-    }, [builtTimeline.events.length, isDone, onNext, timeToDoneMs]);
+    }, [
+        builtTimeline.events.length,
+        builtTimeline.totalMs,
+        debugForensic,
+        elapsedMs,
+        isDone,
+        isTextFullyRevealed,
+        lastCharTimeMs,
+        onNext,
+        phase,
+        stabilizeStage,
+        timeToDoneMs,
+    ]);
 
     React.useEffect(() => {
         return () => {
@@ -379,6 +484,19 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
                         />
                     </button>
                 </div>
+                {isContinueAvailable ? (
+                    <div style={CONTINUE_ROW_STYLE} onPointerDown={(event) => event.stopPropagation()}>
+                        <button
+                            type="button"
+                            style={CONTINUE_BUTTON_STYLE}
+                            onPointerDown={(event) => event.stopPropagation()}
+                            onClick={continueToNext}
+                            aria-label="Continue to prompt"
+                        >
+                            {CONTINUE_BUTTON_LABEL}
+                        </button>
+                    </div>
+                ) : null}
 
                 {SHOW_ONBOARDING_AUX_BUTTONS ? (
                     <div style={BUTTON_ROW_STYLE}>
@@ -436,6 +554,25 @@ const SEEK_BUTTON_ROW_STYLE: React.CSSProperties = {
     display: 'flex',
     gap: '8px',
     flexWrap: 'wrap',
+};
+
+const CONTINUE_ROW_STYLE: React.CSSProperties = {
+    display: 'flex',
+    gap: '8px',
+    flexWrap: 'wrap',
+};
+
+const CONTINUE_BUTTON_STYLE: React.CSSProperties = {
+    padding: '8px 14px',
+    borderRadius: '7px',
+    border: '1px solid #2b2f3a',
+    background: 'transparent',
+    color: '#d8deea',
+    cursor: 'pointer',
+    lineHeight: 1.2,
+    fontSize: '12px',
+    fontFamily: 'var(--font-ui)',
+    letterSpacing: 0.2,
 };
 
 const SEEK_BUTTON_STYLE: React.CSSProperties = {

@@ -37,6 +37,7 @@ import {
     ONBOARDING_SCREEN_FADE_EASING,
     isOnboardingScreen,
 } from './appshell/transitions/transitionTokens';
+import { OnboardingLayerHost } from './appshell/transitions/OnboardingLayerHost';
 import { useOnboardingTransition } from './appshell/transitions/useOnboardingTransition';
 
 const Graph = React.lazy(() =>
@@ -1332,44 +1333,15 @@ export const AppShell: React.FC = () => {
 
     const screenContent = shouldUseOnboardingLayerHost
         ? (
-            <div style={SCREEN_TRANSITION_CONTAINER_STYLE}>
-                {isScreenTransitioning && screenTransitionFrom ? (
-                    <div
-                        key={`transition-from-${screenTransitionFrom}`}
-                        style={{
-                            ...SCREEN_TRANSITION_LAYER_STYLE,
-                            opacity: screenTransitionReady ? 0 : 1,
-                            transition: `opacity ${effectiveScreenFadeMs}ms ${ONBOARDING_SCREEN_FADE_EASING}`,
-                            zIndex: 1,
-                        }}
-                    >
-                        {renderScreenContent(screenTransitionFrom)}
-                    </div>
-                ) : null}
-                <div
-                    key={`active-screen-${screen}`}
-                    style={{
-                        ...SCREEN_TRANSITION_ACTIVE_LAYER_STYLE,
-                        ...(isScreenTransitioning ? SCREEN_TRANSITION_ACTIVE_LAYER_TRANSITIONING_STYLE : null),
-                        opacity: isScreenTransitioning ? (screenTransitionReady ? 1 : 0) : 1,
-                        transition: isScreenTransitioning
-                            ? `opacity ${effectiveScreenFadeMs}ms ${ONBOARDING_SCREEN_FADE_EASING}`
-                            : 'none',
-                        zIndex: 0,
-                    }}
-                >
-                    {renderScreenContent(screen)}
-                </div>
-                {isScreenTransitioning ? (
-                    <div
-                        style={SCREEN_TRANSITION_INPUT_SHIELD_STYLE}
-                        onPointerDown={(event) => event.stopPropagation()}
-                        onPointerUp={(event) => event.stopPropagation()}
-                        onWheel={(event) => event.stopPropagation()}
-                        onWheelCapture={(event) => event.stopPropagation()}
-                    />
-                ) : null}
-            </div>
+            <OnboardingLayerHost
+                screen={screen}
+                screenTransitionFrom={screenTransitionFrom}
+                screenTransitionReady={screenTransitionReady}
+                isScreenTransitioning={isScreenTransitioning}
+                effectiveScreenFadeMs={effectiveScreenFadeMs}
+                fadeEasing={ONBOARDING_SCREEN_FADE_EASING}
+                renderScreenContent={renderScreenContent}
+            />
         )
         : renderScreenContent(screen);
 
@@ -2208,42 +2180,6 @@ const MAIN_SCREEN_CONTAINER_STYLE: React.CSSProperties = {
     position: 'relative',
     width: '100%',
     minHeight: '100vh',
-};
-
-const SCREEN_TRANSITION_CONTAINER_STYLE: React.CSSProperties = {
-    position: 'relative',
-    width: '100%',
-    minHeight: '100vh',
-    overflow: 'hidden',
-};
-
-const SCREEN_TRANSITION_LAYER_STYLE: React.CSSProperties = {
-    position: 'absolute',
-    inset: 0,
-    width: '100%',
-    minHeight: '100%',
-    willChange: 'opacity',
-};
-
-const SCREEN_TRANSITION_ACTIVE_LAYER_STYLE: React.CSSProperties = {
-    position: 'relative',
-    width: '100%',
-    minHeight: '100vh',
-    willChange: 'opacity',
-};
-
-const SCREEN_TRANSITION_ACTIVE_LAYER_TRANSITIONING_STYLE: React.CSSProperties = {
-    position: 'absolute',
-    inset: 0,
-    width: '100%',
-    minHeight: '100%',
-};
-
-const SCREEN_TRANSITION_INPUT_SHIELD_STYLE: React.CSSProperties = {
-    position: 'absolute',
-    inset: 0,
-    pointerEvents: 'auto',
-    zIndex: 2,
 };
 
 const NON_SIDEBAR_LAYER_STYLE: React.CSSProperties = {

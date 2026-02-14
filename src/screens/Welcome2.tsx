@@ -22,6 +22,8 @@ const WELCOME2_AUTO_ADVANCE_DELAY_MS = 2000*4;
 const DOUBLE_CLICK_MS = 260;
 const CHAIN_WINDOW_MS = 900;
 const BACKSTEP_LAND_RATIO = 0.8;
+const BACKSTEP_ELLIPSIS_START_DOTS = 3;
+const BACKSTEP_ELLIPSIS_CHARS_PER_DOT_STEP = 2;
 const BLOCKED_SCROLL_KEYS = new Set([' ', 'PageDown', 'PageUp', 'ArrowDown', 'ArrowUp']);
 const INTERACTIVE_SELECTOR = 'button, input, textarea, select, a[href], [role=\"button\"], [contenteditable=\"true\"]';
 const DEBUG_WELCOME2_TYPE = false;
@@ -248,7 +250,8 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
         const endCore = sentenceSpans.sentenceEndCoreCharCountByIndex[currentSentenceIdx] ?? builtTimeline.events.length;
         if (visibleCharCount >= endCore) return '';
         const charsSinceLanding = Math.max(0, visibleCharCount - landingStartCharCount);
-        const dotCount = Math.max(0, 3 - charsSinceLanding);
+        const dotStepsConsumed = Math.floor(charsSinceLanding / BACKSTEP_ELLIPSIS_CHARS_PER_DOT_STEP);
+        const dotCount = Math.max(0, BACKSTEP_ELLIPSIS_START_DOTS - dotStepsConsumed);
         if (dotCount <= 0) return '';
         return '.'.repeat(dotCount);
     }, [

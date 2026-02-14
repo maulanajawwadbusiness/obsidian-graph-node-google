@@ -21,6 +21,7 @@ const SHOW_WELCOME2_FOCUS_RING = false;
 const WELCOME2_AUTO_ADVANCE_DELAY_MS = 2000*4;
 const DOUBLE_CLICK_MS = 260;
 const CHAIN_WINDOW_MS = 900;
+const BACKSTEP_LAND_RATIO = 0.8;
 const BLOCKED_SCROLL_KEYS = new Set([' ', 'PageDown', 'PageUp', 'ArrowDown', 'ArrowUp']);
 const INTERACTIVE_SELECTOR = 'button, input, textarea, select, a[href], [role=\"button\"], [contenteditable=\"true\"]';
 const DEBUG_WELCOME2_TYPE = false;
@@ -56,6 +57,7 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
     const lastLeftClickAtRef = React.useRef(0);
     const backChainUntilRef = React.useRef(0);
     const hasManualSeekRef = React.useRef(false);
+    const backStepLandingSentenceIdxRef = React.useRef<number | null>(null);
 
     React.useEffect(() => {
         if (visibleCharCount === prevVisibleCountRef.current) return;
@@ -171,8 +173,22 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
         );
     }, [sentenceSpans.sentenceEndSoftCharCountByIndex, visibleCharCount]);
 
+    const getBackStepLandCharCount = React.useCallback((sentenceIdx: number): number => {
+        const start = sentenceSpans.sentenceStartCharCountByIndex[sentenceIdx] ?? 0;
+        const endCore = sentenceSpans.sentenceEndCoreCharCountByIndex[sentenceIdx] ?? start;
+        const len = Math.max(0, endCore - start);
+        if (len <= 0) return Math.max(0, endCore);
+        const rawLand = start + Math.max(1, Math.floor(len * BACKSTEP_LAND_RATIO));
+        const minLand = Math.min(endCore, start + 1);
+        return Math.max(minLand, Math.min(rawLand, endCore));
+    }, [
+        sentenceSpans.sentenceEndCoreCharCountByIndex,
+        sentenceSpans.sentenceStartCharCountByIndex,
+    ]);
+
     const restartCurrentSentence = React.useCallback(() => {
         if (builtTimeline.events.length === 0) return;
+        backStepLandingSentenceIdxRef.current = null;
         const sentenceIdx = getCurrentSentenceIdx();
         const targetCharCount = sentenceSpans.sentenceStartCharCountByIndex[sentenceIdx] ?? 0;
         seekWithManualInteraction(toSentenceStartTargetMs(targetCharCount));
@@ -188,18 +204,20 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
         if (builtTimeline.events.length === 0) return;
         const sentenceIdx = getCurrentSentenceIdx();
         const prevSentenceIdx = Math.max(0, sentenceIdx - 1);
-        const targetCharCount = sentenceSpans.sentenceEndCoreCharCountByIndex[prevSentenceIdx] ?? 0;
+        backStepLandingSentenceIdxRef.current = prevSentenceIdx;
+        const targetCharCount = getBackStepLandCharCount(prevSentenceIdx);
         seekWithManualInteraction(toSentenceEndTargetMs(targetCharCount));
     }, [
         builtTimeline.events.length,
+        getBackStepLandCharCount,
         getCurrentSentenceIdx,
         seekWithManualInteraction,
-        sentenceSpans.sentenceEndCoreCharCountByIndex,
         toSentenceEndTargetMs,
     ]);
 
     const finishCurrentSentence = React.useCallback(() => {
         if (builtTimeline.events.length === 0) return;
+        backStepLandingSentenceIdxRef.current = null;
         const sentenceIdx = getCurrentSentenceIdx();
         const targetCharCount =
             sentenceSpans.sentenceEndSoftCharCountByIndex[sentenceIdx] ?? builtTimeline.events.length;
@@ -214,6 +232,20 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
         seekWithManualInteraction,
         sentenceSpans.sentenceEndSoftCharCountByIndex,
         toSentenceEndTargetMs,
+        visibleCharCount,
+    ]);
+
+    const showBackStepEllipsis = React.useMemo(() => {
+        const landingSentenceIdx = backStepLandingSentenceIdxRef.current;
+        if (landingSentenceIdx === null) return false;
+        const currentSentenceIdx = getCurrentSentenceIdx();
+        if (currentSentenceIdx !== landingSentenceIdx) return false;
+        const endCore = sentenceSpans.sentenceEndCoreCharCountByIndex[currentSentenceIdx] ?? builtTimeline.events.length;
+        return visibleCharCount < endCore;
+    }, [
+        builtTimeline.events.length,
+        getCurrentSentenceIdx,
+        sentenceSpans.sentenceEndCoreCharCountByIndex,
         visibleCharCount,
     ]);
 
@@ -299,6 +331,7 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
                     style={TEXT_STYLE}
                 >
                     <span>{visibleText}</span>
+                    {showBackStepEllipsis ? <span style={ELLIPSIS_STYLE}>...</span> : null}
                     <TypingCursor mode={cursorMode} heightEm={0.95} style={CURSOR_STYLE} />
                 </div>
 
@@ -371,6 +404,10 @@ const TEXT_STYLE: React.CSSProperties = {
 
 const CURSOR_STYLE: React.CSSProperties = {
     marginLeft: '4px',
+};
+
+const ELLIPSIS_STYLE: React.CSSProperties = {
+    opacity: 0.8,
 };
 
 const SEEK_BUTTON_ROW_STYLE: React.CSSProperties = {

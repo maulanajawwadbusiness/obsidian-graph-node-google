@@ -21,8 +21,6 @@ import { useFullscreen } from '../../hooks/useFullscreen';
 const SHOW_DEBUG_CONTROLS = false;
 const SHOW_DEV_DOWNLOAD_JSON_BUTTON = false;
 const SHOW_TOP_RIGHT_DOTS_ICON = true;
-const SHOW_TOP_RIGHT_SHARE_ICON = false;
-const SHOW_TOP_RIGHT_FULLSCREEN_ICON = false;
 const TOP_RIGHT_ICON_SIZE_PX = 16;
 const FULLSCREEN_ICON_SCALE = 0.9;
 const TOP_RIGHT_ICON_BASE_TINT = '#d7f5ff';
@@ -33,6 +31,8 @@ const SHARE_MENU_SCALE = 0.8;
 const SHARE_MENU_PADDING_PX = 5;
 const SHARE_MENU_VIEWPORT_PADDING_PX = 8;
 const SHARE_MENU_ANCHOR_GAP_PX = 8;
+const DOTS_MENU_SCALE = 0.85;
+const DOTS_MENU_PADDING_PX = 6;
 
 import type { ForceConfig } from '../../physics/types';
 
@@ -111,18 +111,31 @@ const MaskIcon: React.FC<MaskIconProps> = ({ src, opacity, sizePx = TOP_RIGHT_IC
     />
 );
 
-function computeShareMenuPosition(rect: DOMRect): { right: number; top: number } {
-    const right = Math.max(
-        SHARE_MENU_VIEWPORT_PADDING_PX,
-        window.innerWidth - rect.right
+function computeAnchoredMenuPosition(rect: DOMRect, estimatedHeight: number, estimatedWidth: number): { right: number; top: number } {
+    const minRight = SHARE_MENU_VIEWPORT_PADDING_PX;
+    const maxRight = Math.max(
+        minRight,
+        window.innerWidth - SHARE_MENU_VIEWPORT_PADDING_PX - estimatedWidth
     );
-    const estimatedHeight = 4 * 32 + SHARE_MENU_PADDING_PX * 2;
+    const right = Math.min(
+        maxRight,
+        Math.max(minRight, window.innerWidth - rect.right)
+    );
+    const downTop = rect.bottom + SHARE_MENU_ANCHOR_GAP_PX;
+    const upTop = rect.top - SHARE_MENU_ANCHOR_GAP_PX - estimatedHeight;
+    const maxTop = Math.max(
+        SHARE_MENU_VIEWPORT_PADDING_PX,
+        window.innerHeight - SHARE_MENU_VIEWPORT_PADDING_PX - estimatedHeight
+    );
     const canOpenDown =
-        rect.bottom + SHARE_MENU_ANCHOR_GAP_PX + estimatedHeight <=
+        downTop + estimatedHeight <=
         window.innerHeight - SHARE_MENU_VIEWPORT_PADDING_PX;
+    const canOpenUp = upTop >= SHARE_MENU_VIEWPORT_PADDING_PX;
     const top = canOpenDown
-        ? Math.max(SHARE_MENU_VIEWPORT_PADDING_PX, rect.bottom + SHARE_MENU_ANCHOR_GAP_PX)
-        : Math.max(SHARE_MENU_VIEWPORT_PADDING_PX, rect.top - SHARE_MENU_ANCHOR_GAP_PX - estimatedHeight);
+        ? downTop
+        : canOpenUp
+            ? upTop
+            : Math.min(maxTop, Math.max(SHARE_MENU_VIEWPORT_PADDING_PX, downTop));
     return { right, top };
 }
 
@@ -175,10 +188,13 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
     const [showAdvanced, setShowAdvanced] = React.useState(false);
     const [showLegacyControls, setShowLegacyControls] = React.useState(false);
     const [showLegacyDiagnostics, setShowLegacyDiagnostics] = React.useState(false);
-    const [hoveredTopRightIcon, setHoveredTopRightIcon] = React.useState<'dots' | 'share' | 'fullscreen' | null>(null);
+    const [hoveredTopRightIcon, setHoveredTopRightIcon] = React.useState<'dots' | null>(null);
+    const [dotsMenuOpen, setDotsMenuOpen] = React.useState(false);
+    const [dotsMenuPosition, setDotsMenuPosition] = React.useState<{ right: number; top: number } | null>(null);
     const [shareMenuOpen, setShareMenuOpen] = React.useState(false);
     const [shareMenuPosition, setShareMenuPosition] = React.useState<{ right: number; top: number } | null>(null);
-    const shareTriggerRef = React.useRef<HTMLButtonElement | null>(null);
+    const dotsTriggerRef = React.useRef<HTMLButtonElement | null>(null);
+    const dotsMenuRef = React.useRef<HTMLDivElement | null>(null);
     const shareMenuRef = React.useRef<HTMLDivElement | null>(null);
 
     const shareMenuItems = React.useMemo(
@@ -201,10 +217,21 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
     }, []);
 
     React.useEffect(() => {
-        if (!shareMenuOpen || !shareTriggerRef.current) return;
+        if ((!dotsMenuOpen && !shareMenuOpen) || !dotsTriggerRef.current) return;
         const update = () => {
-            if (!shareTriggerRef.current) return;
-            setShareMenuPosition(computeShareMenuPosition(shareTriggerRef.current.getBoundingClientRect()));
+            if (!dotsTriggerRef.current) return;
+            const triggerRect = dotsTriggerRef.current.getBoundingClientRect();
+            if (dotsMenuOpen) {
+                setDotsMenuPosition(
+                    computeAnchoredMenuPosition(triggerRect, 88, 210)
+                );
+            }
+            if (shareMenuOpen) {
+                const estimatedShareHeight = shareMenuItems.length * 32 + SHARE_MENU_PADDING_PX * 2;
+                setShareMenuPosition(
+                    computeAnchoredMenuPosition(triggerRect, estimatedShareHeight, 210)
+                );
+            }
         };
         update();
         window.addEventListener('resize', update);
@@ -213,22 +240,26 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
             window.removeEventListener('resize', update);
             window.removeEventListener('scroll', update, true);
         };
-    }, [shareMenuOpen]);
+    }, [dotsMenuOpen, shareMenuItems.length, shareMenuOpen]);
 
     React.useEffect(() => {
-        if (!shareMenuOpen) return;
+        if (!dotsMenuOpen && !shareMenuOpen) return;
         const handleWindowPointerDown = (event: PointerEvent) => {
             const target = event.target as Element | null;
             if (!target) {
+                setDotsMenuOpen(false);
                 setShareMenuOpen(false);
                 return;
             }
+            if (target.closest('[data-dots-menu="1"]')) return;
             if (target.closest('[data-share-menu="1"]')) return;
-            if (target.closest('[data-share-trigger="1"]')) return;
+            if (target.closest('[data-toolbar-trigger="dots"]')) return;
+            setDotsMenuOpen(false);
             setShareMenuOpen(false);
         };
         const handleWindowKeyDown = (event: KeyboardEvent) => {
             if (event.key === 'Escape') {
+                setDotsMenuOpen(false);
                 setShareMenuOpen(false);
             }
         };
@@ -238,13 +269,14 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
             window.removeEventListener('pointerdown', handleWindowPointerDown, true);
             window.removeEventListener('keydown', handleWindowKeyDown, true);
         };
-    }, [shareMenuOpen]);
+    }, [dotsMenuOpen, shareMenuOpen]);
 
     React.useEffect(() => {
-        if (!SHOW_TOP_RIGHT_SHARE_ICON && shareMenuOpen) {
+        if (!SHOW_TOP_RIGHT_DOTS_ICON && (dotsMenuOpen || shareMenuOpen)) {
+            setDotsMenuOpen(false);
             setShareMenuOpen(false);
         }
-    }, [shareMenuOpen]);
+    }, [dotsMenuOpen, shareMenuOpen]);
 
     const gridStyle: React.CSSProperties = isNarrow ? {
         display: 'flex',
@@ -347,7 +379,7 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
                     />
                 </button>
             )}
-            {(SHOW_TOP_RIGHT_DOTS_ICON || SHOW_TOP_RIGHT_SHARE_ICON || SHOW_TOP_RIGHT_FULLSCREEN_ICON) && (
+            {SHOW_TOP_RIGHT_DOTS_ICON && (
                 <div
                     style={{
                         position: 'absolute',
@@ -360,96 +392,154 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
                         pointerEvents: 'none',
                     }}
                 >
-                    {SHOW_TOP_RIGHT_DOTS_ICON && (
-                        <span
-                            style={{ pointerEvents: 'auto', display: 'inline-flex' }}
-                            onPointerEnter={() => setHoveredTopRightIcon('dots')}
-                            onPointerLeave={() => setHoveredTopRightIcon((current) => (current === 'dots' ? null : current))}
-                            onPointerDown={(e) => e.stopPropagation()}
-                            onPointerUp={(e) => e.stopPropagation()}
-                            onWheelCapture={(e) => e.stopPropagation()}
-                            onWheel={(e) => e.stopPropagation()}
-                        >
-                            <MaskIcon
-                                src={threeDotIcon}
-                                opacity={hoveredTopRightIcon === 'dots' ? TOP_RIGHT_ICON_HOVER_OPACITY : TOP_RIGHT_ICON_IDLE_OPACITY}
-                            />
-                        </span>
-                    )}
-                    {SHOW_TOP_RIGHT_SHARE_ICON && (
-                        <button
-                            ref={shareTriggerRef}
-                            data-share-trigger="1"
-                            type="button"
-                            style={{
-                                pointerEvents: 'auto',
-                                display: 'inline-flex',
-                                padding: 0,
-                                margin: 0,
-                                border: 'none',
-                                background: 'transparent',
-                                cursor: 'pointer'
-                            }}
-                            onPointerEnter={() => setHoveredTopRightIcon('share')}
-                            onPointerLeave={() => setHoveredTopRightIcon((current) => (current === 'share' ? null : current))}
-                            onPointerDown={(e) => e.stopPropagation()}
-                            onPointerUp={(e) => e.stopPropagation()}
-                            onWheelCapture={(e) => e.stopPropagation()}
-                            onWheel={(e) => e.stopPropagation()}
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                const trigger = e.currentTarget;
-                                setShareMenuOpen((prev) => {
-                                    const next = !prev;
-                                    if (next) {
-                                        setShareMenuPosition(computeShareMenuPosition(trigger.getBoundingClientRect()));
-                                    }
-                                    return next;
-                                });
-                            }}
-                            aria-label="Open share menu"
-                        >
-                            <MaskIcon
-                                src={shareIcon}
-                                opacity={hoveredTopRightIcon === 'share' ? TOP_RIGHT_ICON_HOVER_OPACITY : TOP_RIGHT_ICON_IDLE_OPACITY}
-                            />
-                        </button>
-                    )}
-                    {SHOW_TOP_RIGHT_FULLSCREEN_ICON && (
-                        <button
-                            type="button"
-                            style={{
-                                pointerEvents: 'auto',
-                                display: 'inline-flex',
-                                padding: 0,
-                                margin: 0,
-                                border: 'none',
-                                background: 'transparent',
-                                cursor: 'pointer'
-                            }}
-                            onPointerEnter={() => setHoveredTopRightIcon('fullscreen')}
-                            onPointerLeave={() => setHoveredTopRightIcon((current) => (current === 'fullscreen' ? null : current))}
-                            onPointerDown={(e) => e.stopPropagation()}
-                            onPointerUp={(e) => e.stopPropagation()}
-                            onWheelCapture={(e) => e.stopPropagation()}
-                            onWheel={(e) => e.stopPropagation()}
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                toggleFullscreen().catch((error: unknown) => {
-                                    console.warn('[fullscreen] Toggle failed:', error);
-                                });
-                            }}
-                            aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
-                        >
-                            <MaskIcon
-                                src={isFullscreen ? fullscreenCloseIcon : fullscreenOpenIcon}
-                                opacity={hoveredTopRightIcon === 'fullscreen' ? TOP_RIGHT_ICON_HOVER_OPACITY : TOP_RIGHT_ICON_IDLE_OPACITY}
-                                sizePx={TOP_RIGHT_ICON_SIZE_PX * FULLSCREEN_ICON_SCALE}
-                            />
-                        </button>
-                    )}
+                    <button
+                        ref={dotsTriggerRef}
+                        data-toolbar-trigger="dots"
+                        type="button"
+                        style={{
+                            pointerEvents: 'auto',
+                            display: 'inline-flex',
+                            padding: 0,
+                            margin: 0,
+                            border: 'none',
+                            background: 'transparent',
+                            cursor: 'pointer'
+                        }}
+                        onPointerEnter={() => setHoveredTopRightIcon('dots')}
+                        onPointerLeave={() => setHoveredTopRightIcon((current) => (current === 'dots' ? null : current))}
+                        onPointerDown={(e) => e.stopPropagation()}
+                        onPointerUp={(e) => e.stopPropagation()}
+                        onWheelCapture={(e) => e.stopPropagation()}
+                        onWheel={(e) => e.stopPropagation()}
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            const triggerRect = e.currentTarget.getBoundingClientRect();
+                            setShareMenuOpen(false);
+                            setDotsMenuOpen((prev) => {
+                                const next = !prev;
+                                if (next) {
+                                    setDotsMenuPosition(
+                                        computeAnchoredMenuPosition(triggerRect, 88, 210)
+                                    );
+                                }
+                                return next;
+                            });
+                        }}
+                        aria-label="Open graph action menu"
+                        title="Open graph action menu"
+                    >
+                        <MaskIcon
+                            src={threeDotIcon}
+                            opacity={hoveredTopRightIcon === 'dots' ? TOP_RIGHT_ICON_HOVER_OPACITY : TOP_RIGHT_ICON_IDLE_OPACITY}
+                        />
+                    </button>
                 </div>
             )}
+            {dotsMenuOpen && dotsMenuPosition ? (
+                <div
+                    ref={dotsMenuRef}
+                    data-dots-menu="1"
+                    style={{
+                        position: 'fixed',
+                        right: `${dotsMenuPosition.right}px`,
+                        top: `${dotsMenuPosition.top}px`,
+                        width: 'max-content',
+                        maxWidth: `calc(100vw - ${SHARE_MENU_VIEWPORT_PADDING_PX * 2}px)`,
+                        padding: `${DOTS_MENU_PADDING_PX}px`,
+                        borderRadius: `${10 * DOTS_MENU_SCALE}px`,
+                        border: '1px solid rgba(255, 255, 255, 0.1)',
+                        background: '#0D0D18',
+                        boxShadow: '0 14px 28px rgba(0, 0, 0, 0.45)',
+                        zIndex: 1200,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '2px',
+                        pointerEvents: 'auto',
+                    }}
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onPointerUp={(e) => e.stopPropagation()}
+                    onWheelCapture={(e) => e.stopPropagation()}
+                    onWheel={(e) => e.stopPropagation()}
+                >
+                    <button
+                        type="button"
+                        style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            padding: `${8 * DOTS_MENU_SCALE}px 10px`,
+                            border: 'none',
+                            borderRadius: `${8 * DOTS_MENU_SCALE}px`,
+                            background: 'transparent',
+                            textAlign: 'left',
+                            cursor: 'pointer',
+                            color: '#D7F5FF',
+                            fontFamily: 'var(--font-ui)',
+                            fontSize: `${13 * DOTS_MENU_SCALE}px`,
+                            lineHeight: 1.2,
+                        }}
+                        onPointerDown={(e) => e.stopPropagation()}
+                        onPointerUp={(e) => e.stopPropagation()}
+                        onWheelCapture={(e) => e.stopPropagation()}
+                        onWheel={(e) => e.stopPropagation()}
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            setDotsMenuOpen(false);
+                            setShareMenuOpen(false);
+                            toggleFullscreen().catch((error: unknown) => {
+                                console.warn('[fullscreen] Toggle failed:', error);
+                            });
+                        }}
+                    >
+                        <MaskIcon
+                            src={isFullscreen ? fullscreenCloseIcon : fullscreenOpenIcon}
+                            opacity={TOP_RIGHT_ICON_HOVER_OPACITY}
+                            sizePx={TOP_RIGHT_ICON_SIZE_PX * FULLSCREEN_ICON_SCALE}
+                        />
+                        <span>Fullscreen</span>
+                    </button>
+                    <button
+                        type="button"
+                        style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            padding: `${8 * DOTS_MENU_SCALE}px 10px`,
+                            border: 'none',
+                            borderRadius: `${8 * DOTS_MENU_SCALE}px`,
+                            background: 'transparent',
+                            textAlign: 'left',
+                            cursor: 'pointer',
+                            color: '#D7F5FF',
+                            fontFamily: 'var(--font-ui)',
+                            fontSize: `${13 * DOTS_MENU_SCALE}px`,
+                            lineHeight: 1.2,
+                        }}
+                        onPointerDown={(e) => e.stopPropagation()}
+                        onPointerUp={(e) => e.stopPropagation()}
+                        onWheelCapture={(e) => e.stopPropagation()}
+                        onWheel={(e) => e.stopPropagation()}
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            if (dotsTriggerRef.current) {
+                                const triggerRect = dotsTriggerRef.current.getBoundingClientRect();
+                                const estimatedShareHeight = shareMenuItems.length * 32 + SHARE_MENU_PADDING_PX * 2;
+                                setShareMenuPosition(
+                                    computeAnchoredMenuPosition(triggerRect, estimatedShareHeight, 210)
+                                );
+                            }
+                            setDotsMenuOpen(false);
+                            setShareMenuOpen(true);
+                        }}
+                    >
+                        <MaskIcon
+                            src={shareIcon}
+                            opacity={TOP_RIGHT_ICON_HOVER_OPACITY}
+                        />
+                        <span>Share Interface</span>
+                    </button>
+                </div>
+            ) : null}
             {shareMenuOpen && shareMenuPosition ? (
                 <div
                     ref={shareMenuRef}

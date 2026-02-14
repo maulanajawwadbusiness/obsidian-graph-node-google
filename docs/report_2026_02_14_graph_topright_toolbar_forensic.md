@@ -1,5 +1,8 @@
 # Forensic Report: Graph Top-Right Toolbar Iteration (2026-02-14)
 
+## Update (2026-02-14, Dots Menu Consolidation)
+This report has been updated to reflect the current shipped truth in `CanvasOverlays.tsx` after the dots-menu consolidation.
+
 ## Scope
 This report captures the graph screen toolbar and share popup work done today in `src/playground/components/CanvasOverlays.tsx`.
 
@@ -28,16 +31,21 @@ This report captures the graph screen toolbar and share popup work done today in
 15. Updated dots icon asset source to vertical ellipsis, then user reverted intent to `3_dot_icon.png` (final icon source currently follows repo state after latest user adjustment path).
 
 ## Current Functional State
-- Top-right icon system exists in code with feature toggles.
-- All three top-right icons are currently hidden by default via toggle constants.
-- Fullscreen icon logic remains implemented and functional when fullscreen toggle is enabled.
-- Share popup logic remains implemented and functional when share toggle is enabled.
-- Share popup currently has only two rows (Link and ARN).
+- Top-right action entry is the dots icon (`3_dot_icon.png`) only.
+- Dots click opens a compact popup menu with 2 rows:
+  - `(fullscreen icon) Fullscreen`
+  - `(share icon) Share Interface`
+- Selecting `Fullscreen` runs the real fullscreen toggle via `useFullscreen()`.
+- Selecting `Share Interface` opens the share popup.
+- Share popup currently has 2 rows:
+  - `Save as Link`
+  - `Save as ARN`
+- Menu and popup positioning use viewport-clamped anchored placement so they stay inside visible bounds.
 
 ## Input Safety and Overlay Contract
-- Popup and icon controls stop pointer and wheel propagation to prevent canvas drag/capture leaks.
-- Share popup closes on outside click and Escape.
-- Share popup anchor and viewport constraints were adjusted to prevent right-edge overflow.
+- Dots trigger, dots menu rows, and share popup rows stop pointer and wheel propagation to prevent canvas drag/capture leaks.
+- Dots menu and share popup close on outside click and Escape.
+- Both overlays use anchored + clamped placement to avoid viewport overflow.
 
 ## Validation Performed
 - Repeated `npm run build` checks were executed after each major toolbar/popup modification.

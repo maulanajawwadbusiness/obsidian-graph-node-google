@@ -163,10 +163,13 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
         rootRef.current?.focus({ preventScroll: true });
     }, [clearAutoAdvanceTimer, seekToMs]);
 
-    const getCurrentSentenceIdx = React.useCallback(() => sentenceIndexForCharCount(
-        visibleCharCount,
-        sentenceSpans.sentenceEndCharCountByIndex
-    ), [sentenceSpans.sentenceEndCharCountByIndex, visibleCharCount]);
+    const getCurrentSentenceIdx = React.useCallback(() => {
+        const probeIndex = visibleCharCount <= 0 ? 0 : visibleCharCount - 1;
+        return sentenceIndexForCharCount(
+            probeIndex,
+            sentenceSpans.sentenceEndSoftCharCountByIndex
+        );
+    }, [sentenceSpans.sentenceEndSoftCharCountByIndex, visibleCharCount]);
 
     const restartCurrentSentence = React.useCallback(() => {
         if (builtTimeline.events.length === 0) return;
@@ -185,21 +188,21 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
         if (builtTimeline.events.length === 0) return;
         const sentenceIdx = getCurrentSentenceIdx();
         const prevSentenceIdx = Math.max(0, sentenceIdx - 1);
-        const targetCharCount = sentenceSpans.sentenceStartCharCountByIndex[prevSentenceIdx] ?? 0;
-        seekWithManualInteraction(toSentenceStartTargetMs(targetCharCount));
+        const targetCharCount = sentenceSpans.sentenceEndCoreCharCountByIndex[prevSentenceIdx] ?? 0;
+        seekWithManualInteraction(toSentenceEndTargetMs(targetCharCount));
     }, [
         builtTimeline.events.length,
         getCurrentSentenceIdx,
         seekWithManualInteraction,
-        sentenceSpans.sentenceStartCharCountByIndex,
-        toSentenceStartTargetMs,
+        sentenceSpans.sentenceEndCoreCharCountByIndex,
+        toSentenceEndTargetMs,
     ]);
 
     const finishCurrentSentence = React.useCallback(() => {
         if (builtTimeline.events.length === 0) return;
         const sentenceIdx = getCurrentSentenceIdx();
         const targetCharCount =
-            sentenceSpans.sentenceEndCharCountByIndex[sentenceIdx] ?? builtTimeline.events.length;
+            sentenceSpans.sentenceEndSoftCharCountByIndex[sentenceIdx] ?? builtTimeline.events.length;
         if (targetCharCount <= visibleCharCount) {
             rootRef.current?.focus({ preventScroll: true });
             return;
@@ -209,7 +212,7 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
         builtTimeline.events.length,
         getCurrentSentenceIdx,
         seekWithManualInteraction,
-        sentenceSpans.sentenceEndCharCountByIndex,
+        sentenceSpans.sentenceEndSoftCharCountByIndex,
         toSentenceEndTargetMs,
         visibleCharCount,
     ]);

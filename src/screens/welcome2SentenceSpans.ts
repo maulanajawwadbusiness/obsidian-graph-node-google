@@ -1,6 +1,7 @@
 export type Welcome2SentenceSpans = {
     sentenceStartCharCountByIndex: number[];
-    sentenceEndCharCountByIndex: number[];
+    sentenceEndCoreCharCountByIndex: number[];
+    sentenceEndSoftCharCountByIndex: number[];
 };
 
 function isSentenceTerminator(ch: string): boolean {
@@ -11,15 +12,21 @@ function isTrailingWhitespace(ch: string): boolean {
     return ch === ' ' || ch === '\n' || ch === '\t';
 }
 
+function isSentenceCloser(ch: string): boolean {
+    return ch === '"' || ch === '\'' || ch === ')' || ch === ']' || ch === '}';
+}
+
 export function buildWelcome2SentenceSpans(renderText: string): Welcome2SentenceSpans {
     const starts: number[] = [];
-    const ends: number[] = [];
+    const coreEnds: number[] = [];
+    const softEnds: number[] = [];
     const len = renderText.length;
 
     if (len === 0) {
         return {
             sentenceStartCharCountByIndex: [0],
-            sentenceEndCharCountByIndex: [0],
+            sentenceEndCoreCharCountByIndex: [0],
+            sentenceEndSoftCharCountByIndex: [0],
         };
     }
 
@@ -32,25 +39,33 @@ export function buildWelcome2SentenceSpans(renderText: string): Welcome2Sentence
             continue;
         }
 
-        let endExclusive = i + 1;
-        while (endExclusive < len && isTrailingWhitespace(renderText[endExclusive])) {
-            endExclusive += 1;
+        let endCoreExclusive = i + 1;
+        while (endCoreExclusive < len && isSentenceCloser(renderText[endCoreExclusive])) {
+            endCoreExclusive += 1;
+        }
+
+        let endSoftExclusive = endCoreExclusive;
+        while (endSoftExclusive < len && isTrailingWhitespace(renderText[endSoftExclusive])) {
+            endSoftExclusive += 1;
         }
 
         starts.push(start);
-        ends.push(endExclusive);
-        start = endExclusive;
-        i = endExclusive;
+        coreEnds.push(endCoreExclusive);
+        softEnds.push(endSoftExclusive);
+        start = endSoftExclusive;
+        i = endSoftExclusive;
     }
 
     if (starts.length === 0 || start < len) {
         starts.push(start);
-        ends.push(len);
+        coreEnds.push(len);
+        softEnds.push(len);
     }
 
     return {
         sentenceStartCharCountByIndex: starts,
-        sentenceEndCharCountByIndex: ends,
+        sentenceEndCoreCharCountByIndex: coreEnds,
+        sentenceEndSoftCharCountByIndex: softEnds,
     };
 }
 

@@ -51,7 +51,7 @@ type UseSavedInterfacesSyncArgs = {
     isRestoreReadPathActive: () => boolean;
     refreshSavedInterfaces: () => SavedInterfaceRecordV1[];
     loadSavedInterfacesFn: () => SavedInterfaceRecordV1[];
-    commitHydrateMerge: (merged: SavedInterfaceRecordV1[]) => SavedInterfaceRecordV1[];
+    applySavedInterfacesState: (merged: SavedInterfaceRecordV1[]) => SavedInterfaceRecordV1[];
     setPendingLoadInterface: React.Dispatch<React.SetStateAction<SavedInterfaceRecordV1 | null>>;
     setPendingAnalysis: React.Dispatch<React.SetStateAction<PendingAnalysisPayload>>;
     closeDeleteConfirm: () => void;
@@ -185,7 +185,7 @@ export function useSavedInterfacesSync(args: UseSavedInterfacesSyncArgs): UseSav
         isRestoreReadPathActive,
         refreshSavedInterfaces,
         loadSavedInterfacesFn,
-        commitHydrateMerge,
+        applySavedInterfacesState,
         setPendingLoadInterface,
         setPendingAnalysis,
         closeDeleteConfirm,
@@ -520,7 +520,7 @@ export function useSavedInterfacesSync(args: UseSavedInterfacesSyncArgs): UseSav
                 }
 
                 const merged = sortAndCapSavedInterfaces(Array.from(mergedById.values()));
-                const reloaded = commitHydrateMerge(merged);
+                const reloaded = applySavedInterfacesState(merged);
                 if (cancelled) return;
                 if (syncEpochRef.current !== epochAtStart) return;
                 if (authIdentityKeyRef.current !== identityAtStart) return;
@@ -553,7 +553,7 @@ export function useSavedInterfacesSync(args: UseSavedInterfacesSyncArgs): UseSav
         return () => {
             cancelled = true;
         };
-    }, [activeStorageKeyRef, commitHydrateMerge, enqueueRemoteUpsert, isAuthReady, isLoggedIn, loadSavedInterfacesFn]);
+    }, [activeStorageKeyRef, applySavedInterfacesState, enqueueRemoteUpsert, isAuthReady, isLoggedIn, loadSavedInterfacesFn]);
 
     return {
         enqueueRemoteUpsert,

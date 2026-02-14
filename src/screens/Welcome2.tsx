@@ -19,8 +19,10 @@ const CURSOR_PAUSE_THRESHOLD_MS = 130;
 const CURSOR_HOLD_FAST_WINDOW_MS = 680;
 const SHOW_WELCOME2_FOCUS_RING = false;
 const WELCOME2_AUTO_ADVANCE_DELAY_MS = 2000*4;
-const STABILIZE_STAGE_A_MS = 200;
-const STABILIZE_STAGE_B_MS = 400;
+const STABILIZE_STAGE_A_MS = 300;
+const STABILIZE_STAGE_B_MS = 100;
+const CUT_ELLIPSIS_TOTAL_DOTS = 3;
+const CUT_ELLIPSIS_CHARS_PER_DOT_STEP = 4;
 const BLOCKED_SCROLL_KEYS = new Set([' ', 'PageDown', 'PageUp', 'ArrowDown', 'ArrowUp']);
 const INTERACTIVE_SELECTOR = 'button, input, textarea, select, a[href], [role=\"button\"], [contenteditable=\"true\"]';
 const DEBUG_WELCOME2_TYPE = false;
@@ -61,6 +63,7 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
     const stabilizeStageRef = React.useRef<'cur_start' | 'prev_end' | null>(null);
     const [stabilizeStage, setStabilizeStage] = React.useState<'cur_start' | 'prev_end' | null>(null);
     const cutLandingEndCoreRef = React.useRef<number | null>(null);
+    const cutLandingStartCharCountRef = React.useRef<number | null>(null);
     const [showCutEllipsis, setShowCutEllipsis] = React.useState(false);
 
     React.useEffect(() => {
@@ -167,6 +170,7 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
         isBackJumpingRef.current = false;
         setBackJumpStage(null);
         cutLandingEndCoreRef.current = null;
+        cutLandingStartCharCountRef.current = null;
         setShowCutEllipsis(false);
         setClockPaused(false);
     }, [setBackJumpStage, setClockPaused]);
@@ -241,6 +245,7 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
                     stabilizeTimeoutCRef.current = null;
                     seekWithManualInteraction(targetMsC);
                     cutLandingEndCoreRef.current = previousPartEndCore;
+                    cutLandingStartCharCountRef.current = cutCharCount;
                     setShowCutEllipsis(cutCharCount < previousPartEndCore);
                     setBackJumpStage(null);
                     isBackJumpingRef.current = false;
@@ -263,13 +268,24 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
         toSentenceStartTargetMs,
     ]);
 
-    React.useEffect(() => {
+    const cutEllipsisDotCount = React.useMemo(() => {
+        if (!showCutEllipsis) return 0;
         const cutLandingEndCore = cutLandingEndCoreRef.current;
-        if (!showCutEllipsis || cutLandingEndCore === null) return;
-        if (visibleCharCount < cutLandingEndCore) return;
-        cutLandingEndCoreRef.current = null;
-        setShowCutEllipsis(false);
+        const cutLandingStartCharCount = cutLandingStartCharCountRef.current;
+        if (cutLandingEndCore === null || cutLandingStartCharCount === null) return 0;
+        if (visibleCharCount >= cutLandingEndCore) return 0;
+        const charsSinceLanding = Math.max(0, visibleCharCount - cutLandingStartCharCount);
+        const dotStepsConsumed = Math.floor(charsSinceLanding / CUT_ELLIPSIS_CHARS_PER_DOT_STEP);
+        return Math.max(0, CUT_ELLIPSIS_TOTAL_DOTS - dotStepsConsumed);
     }, [showCutEllipsis, visibleCharCount]);
+
+    React.useEffect(() => {
+        if (!showCutEllipsis) return;
+        if (cutEllipsisDotCount > 0) return;
+        cutLandingEndCoreRef.current = null;
+        cutLandingStartCharCountRef.current = null;
+        setShowCutEllipsis(false);
+    }, [cutEllipsisDotCount, showCutEllipsis]);
 
     const finishCurrentSentence = React.useCallback(() => {
         if (builtTimeline.events.length === 0) return;
@@ -351,7 +367,21 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
                     style={TEXT_STYLE}
                 >
                     <span>{visibleText}</span>
-                    {showCutEllipsis ? <span style={CUT_ELLIPSIS_STYLE}>{'...'}</span> : null}
+                    {cutEllipsisDotCount > 0 ? (
+                        <span style={CUT_ELLIPSIS_SLOTS_STYLE} aria-hidden="true">
+                            {Array.from({ length: CUT_ELLIPSIS_TOTAL_DOTS }).map((_, index) => (
+                                <span
+                                    key={index}
+                                    style={{
+                                        ...CUT_ELLIPSIS_DOT_STYLE,
+                                        opacity: index < cutEllipsisDotCount ? 1 : 0,
+                                    }}
+                                >
+                                    {'.'}
+                                </span>
+                            ))}
+                        </span>
+                    ) : null}
                     <TypingCursor mode={cursorMode} heightEm={0.95} style={CURSOR_STYLE} />
                 </div>
 
@@ -426,8 +456,20 @@ const CURSOR_STYLE: React.CSSProperties = {
     marginLeft: '4px',
 };
 
-const CUT_ELLIPSIS_STYLE: React.CSSProperties = {
+const CUT_ELLIPSIS_SLOTS_STYLE: React.CSSProperties = {
+    display: 'inline-flex',
+    width: '1.05em',
     color: '#b9bcc5',
+    pointerEvents: 'none',
+};
+
+const CUT_ELLIPSIS_DOT_STYLE: React.CSSProperties = {
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '0.35em',
+    flex: '0 0 0.35em',
+    transition: 'opacity 90ms linear',
 };
 
 const SEEK_BUTTON_ROW_STYLE: React.CSSProperties = {

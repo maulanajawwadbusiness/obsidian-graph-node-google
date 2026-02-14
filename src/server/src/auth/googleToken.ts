@@ -1,11 +1,11 @@
 import { OAuth2Client } from "google-auth-library";
 
-export type GoogleTokenVerifyArgs = {
+type GoogleTokenVerifyArgs = {
   idToken: string;
   audience: string;
 };
 
-export type GoogleTokenInfo = {
+type GoogleTokenInfo = {
   sub?: string;
   email?: string;
   name?: string;

@@ -9,10 +9,6 @@ export type ServerEnvConfig = {
   cookieSameSite: string;
   googleClientId?: string;
   midtransServerKey: string;
-  devPorts: number[];
-  defaultDevOrigins: string[];
-  defaultAllowedOrigins: string[];
-  allowedOriginsRaw: string[];
   corsAllowedOrigins: string[];
   savedInterfacesListLimit: number;
   maxSavedInterfacePayloadBytes: number;
@@ -58,10 +54,6 @@ export function loadServerEnvConfig(): ServerEnvConfig {
     cookieSameSite: COOKIE_SAMESITE,
     googleClientId: process.env.GOOGLE_CLIENT_ID,
     midtransServerKey: process.env.MIDTRANS_SERVER_KEY || "",
-    devPorts: DEV_PORTS,
-    defaultDevOrigins,
-    defaultAllowedOrigins: DEFAULT_ALLOWED_ORIGINS,
-    allowedOriginsRaw,
     corsAllowedOrigins,
     savedInterfacesListLimit: 20,
     maxSavedInterfacePayloadBytes: Number(

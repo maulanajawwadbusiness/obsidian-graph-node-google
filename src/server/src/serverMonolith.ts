@@ -26,6 +26,7 @@ import {
   setSessionCookie
 } from "./server/cookies";
 import { loadServerEnvConfig } from "./server/envConfig";
+import { applyJsonParsers } from "./server/jsonParsers";
 import type {
   LlmAnalyzeRouteDeps,
   LlmPrefillRouteDeps,
@@ -67,23 +68,9 @@ const PROFILE_DISPLAY_NAME_MAX = 80;
 const PROFILE_USERNAME_MAX = 32;
 const PROFILE_USERNAME_REGEX = /^[A-Za-z0-9_.-]+$/;
 let profileColumnsAvailable = false;
-
-const savedInterfacesJsonParser = express.json({ limit: SAVED_INTERFACE_JSON_LIMIT });
-const globalJsonParser = express.json({ limit: LLM_LIMITS.jsonBodyLimit });
-app.use("/api/saved-interfaces", (req, res, next) => savedInterfacesJsonParser(req, res, next));
-app.use((req, res, next) => {
-  if (req.path.startsWith("/api/saved-interfaces")) {
-    next();
-    return;
-  }
-  globalJsonParser(req, res, next);
-});
-app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
-  if (err?.type === "entity.too.large" && req.path.startsWith("/api/saved-interfaces")) {
-    res.status(413).json({ ok: false, error: "saved interface payload too large" });
-    return;
-  }
-  next(err);
+applyJsonParsers(app, {
+  savedInterfacesJsonLimit: SAVED_INTERFACE_JSON_LIMIT,
+  globalJsonLimit: LLM_LIMITS.jsonBodyLimit
 });
 
 const corsAllowedOrigins = serverEnv.corsAllowedOrigins;

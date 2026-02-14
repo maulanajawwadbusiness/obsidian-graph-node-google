@@ -21,6 +21,7 @@ import { useOnboardingTransition } from './appshell/transitions/useOnboardingTra
 import { useOnboardingWheelGuard } from './appshell/transitions/useOnboardingWheelGuard';
 import { AppScreen, isOnboardingScreen } from './appshell/screenFlow/screenTypes';
 import { getInitialScreen } from './appshell/screenFlow/screenStart';
+import { useWelcome1FontGate } from './appshell/screenFlow/useWelcome1FontGate';
 import {
     getBackScreen,
     getCreateNewTarget,
@@ -139,7 +140,6 @@ export const AppShell: React.FC = () => {
     const [graphIsLoading, setGraphIsLoading] = React.useState(false);
     const [documentViewerToggleToken, setDocumentViewerToggleToken] = React.useState(0);
     const [isSidebarExpanded, setIsSidebarExpanded] = React.useState(false);
-    const [welcome1FontGateDone, setWelcome1FontGateDone] = React.useState(false);
     const savedInterfacesRef = React.useRef<SavedInterfaceRecordV1[]>([]);
     const restoreReadPathActiveRef = React.useRef(false);
     const activeStorageKeyRef = React.useRef<string>(getSavedInterfacesStorageKey());
@@ -186,6 +186,11 @@ export const AppShell: React.FC = () => {
     const loginBlockingActive = screen === 'prompt' && enterPromptOverlayOpen;
     const sidebarDisabled = (screen === 'graph' && graphIsLoading) || loginBlockingActive;
     const onboardingActive = isOnboardingScreen(screen) || shouldBlockOnboardingInput;
+    const welcome1FontGateDone = useWelcome1FontGate({
+        screen,
+        timeoutMs: WELCOME1_FONT_TIMEOUT_MS,
+        isDev: import.meta.env.DEV,
+    });
     useOnboardingWheelGuard({
         enabled: ONBOARDING_ENABLED,
         active: onboardingActive,
@@ -492,65 +497,6 @@ export const AppShell: React.FC = () => {
         if (typeof window === 'undefined') return;
         sessionStorage.setItem(STORAGE_KEY, screen);
     }, [screen]);
-
-    React.useEffect(() => {
-        if (screen !== 'welcome1') return;
-        if (welcome1FontGateDone) return;
-        const startMs = performance.now();
-        const shouldLog = import.meta.env.DEV;
-        if (shouldLog) {
-            console.log('[OnboardingFont] font_check_start');
-        }
-
-        let settled = false;
-        let disposed = false;
-        let timeoutId: number | null = null;
-
-        const settle = (timedOut: boolean) => {
-            if (settled || disposed) return;
-            settled = true;
-            if (timeoutId !== null) {
-                window.clearTimeout(timeoutId);
-            }
-
-            if (shouldLog) {
-                const elapsedMs = Math.round(performance.now() - startMs);
-                if (timedOut) {
-                    console.log('[OnboardingFont] font_timeout_ms=1500 proceed');
-                } else {
-                    console.log('[OnboardingFont] font_ready_ms=%d', elapsedMs);
-                }
-            }
-            setWelcome1FontGateDone(true);
-        };
-
-        if (typeof document === 'undefined' || !document.fonts || typeof document.fonts.load !== 'function') {
-            settle(false);
-            return () => {
-                disposed = true;
-            };
-        }
-
-        timeoutId = window.setTimeout(() => {
-            settle(true);
-        }, WELCOME1_FONT_TIMEOUT_MS);
-
-        void document.fonts
-            .load('16px "Quicksand"')
-            .then(() => {
-                settle(false);
-            })
-            .catch(() => {
-                settle(true);
-            });
-
-        return () => {
-            disposed = true;
-            if (timeoutId !== null) {
-                window.clearTimeout(timeoutId);
-            }
-        };
-    }, [screen, welcome1FontGateDone]);
 
     if (screen === 'welcome1') {
         if (!welcome1FontGateDone) {

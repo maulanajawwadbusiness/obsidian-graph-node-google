@@ -20,6 +20,7 @@ const CURSOR_HOLD_FAST_WINDOW_MS = 680;
 const SHOW_WELCOME2_FOCUS_RING = false;
 const WELCOME2_AUTO_ADVANCE_DELAY_MS = 2000*4;
 const PART_BACKSTEP_LAND_RATIO = 0.8;
+const STABILIZE_BEFORE_BACK_MS = 50;
 const BLOCKED_SCROLL_KEYS = new Set([' ', 'PageDown', 'PageUp', 'ArrowDown', 'ArrowUp']);
 const INTERACTIVE_SELECTOR = 'button, input, textarea, select, a[href], [role=\"button\"], [contenteditable=\"true\"]';
 const DEBUG_WELCOME2_TYPE = false;
@@ -55,6 +56,8 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
     const hasManualSeekRef = React.useRef(false);
     const lastPartIdxRef = React.useRef<number | null>(null);
     const restartedThisPartRef = React.useRef(false);
+    const backJumpTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+    const isBackJumpingRef = React.useRef(false);
 
     React.useEffect(() => {
         if (visibleCharCount === prevVisibleCountRef.current) return;
@@ -137,6 +140,14 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
         }
     }, []);
 
+    const clearPendingBackJump = React.useCallback(() => {
+        if (backJumpTimeoutRef.current !== null) {
+            clearTimeout(backJumpTimeoutRef.current);
+            backJumpTimeoutRef.current = null;
+        }
+        isBackJumpingRef.current = false;
+    }, []);
+
     const toSentenceEndTargetMs = React.useCallback((targetCharCount: number): number => {
         if (targetCharCount <= 0) return 0;
         const maxCount = builtTimeline.events.length;
@@ -153,6 +164,15 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
         if (!startEvent) return builtTimeline.totalMs;
         return Math.max(0, startEvent.tMs - 1);
     }, [builtTimeline.events, builtTimeline.totalMs]);
+
+    const toPartBoundaryAnchorMs = React.useCallback((startCharCount: number): number => {
+        const maxCount = builtTimeline.events.length;
+        const clampedStart = Math.max(0, Math.min(startCharCount, maxCount));
+        if (clampedStart <= 0) return 0;
+        const boundaryEvent = builtTimeline.events[clampedStart - 1];
+        if (!boundaryEvent) return 0;
+        return Math.max(0, boundaryEvent.tMs);
+    }, [builtTimeline.events]);
 
     const seekWithManualInteraction = React.useCallback((targetMs: number) => {
         hasManualSeekRef.current = true;
@@ -214,24 +234,42 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
         toSentenceStartTargetMs,
     ]);
 
-    const goBackOnePart80Percent = React.useCallback((partIdx: number) => {
+    const goBackOnePartWithStabilize = React.useCallback((partIdx: number) => {
         if (builtTimeline.events.length === 0) return;
         if (partIdx <= 0) {
             // Part 0 has no previous part. Clear stage-2 latch so next click
             // returns to stage-1 restart behavior instead of repeated no-op.
+            clearPendingBackJump();
             restartedThisPartRef.current = false;
             lastPartIdxRef.current = 0;
             return;
         }
+
+        clearPendingBackJump();
+        isBackJumpingRef.current = true;
+
+        const currentPartStart = sentenceSpans.partStartCharCountByIndex[partIdx] ?? 0;
         const prevPartIdx = Math.max(0, partIdx - 1);
         const targetCharCount = getPart80PercentLandCharCount(prevPartIdx);
-        seekWithManualInteraction(toSentenceEndTargetMs(targetCharCount));
-        restartedThisPartRef.current = false;
-        lastPartIdxRef.current = prevPartIdx;
+        const stabilizeMs = toPartBoundaryAnchorMs(currentPartStart);
+        const targetMs = toSentenceEndTargetMs(targetCharCount);
+
+        seekWithManualInteraction(stabilizeMs);
+
+        backJumpTimeoutRef.current = setTimeout(() => {
+            backJumpTimeoutRef.current = null;
+            seekWithManualInteraction(targetMs);
+            restartedThisPartRef.current = false;
+            lastPartIdxRef.current = prevPartIdx;
+            isBackJumpingRef.current = false;
+        }, STABILIZE_BEFORE_BACK_MS);
     }, [
         builtTimeline.events.length,
+        clearPendingBackJump,
         getPart80PercentLandCharCount,
         seekWithManualInteraction,
+        sentenceSpans.partStartCharCountByIndex,
+        toPartBoundaryAnchorMs,
         toSentenceEndTargetMs,
     ]);
 
@@ -257,6 +295,10 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
     const handleSeekRestartSentence = React.useCallback((event: React.MouseEvent<HTMLButtonElement>) => {
         event.stopPropagation();
         clearAutoAdvanceTimer();
+        if (isBackJumpingRef.current) {
+            rootRef.current?.focus({ preventScroll: true });
+            return;
+        }
         const observedPartIdx = getCurrentPartIdx();
         const currentPartIdx =
             restartedThisPartRef.current && lastPartIdxRef.current !== null
@@ -270,19 +312,21 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
             return;
         }
 
-        goBackOnePart80Percent(currentPartIdx);
+        goBackOnePartWithStabilize(currentPartIdx);
         rootRef.current?.focus({ preventScroll: true });
     }, [
         getCurrentPartIdx,
-        goBackOnePart80Percent,
+        goBackOnePartWithStabilize,
         restartCurrentPart,
         clearAutoAdvanceTimer,
     ]);
 
     const handleSeekFinishSentence = React.useCallback((event: React.MouseEvent<HTMLButtonElement>) => {
         event.stopPropagation();
+        clearPendingBackJump();
         finishCurrentSentence();
     }, [
+        clearPendingBackJump,
         finishCurrentSentence,
     ]);
 
@@ -310,9 +354,10 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
 
     React.useEffect(() => {
         return () => {
+            clearPendingBackJump();
             clearAutoAdvanceTimer();
         };
-    }, [clearAutoAdvanceTimer]);
+    }, [clearAutoAdvanceTimer, clearPendingBackJump]);
 
     return (
         <div

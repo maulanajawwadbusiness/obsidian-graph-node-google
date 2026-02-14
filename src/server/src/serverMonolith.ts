@@ -20,6 +20,7 @@ import { applyTopupFromMidtrans, getBalance } from "./rupiah/rupiahService";
 import { registerLlmAnalyzeRoute } from "./routes/llmAnalyzeRoute";
 import { registerLlmPrefillRoute } from "./routes/llmPrefillRoute";
 import { registerLlmChatRoute } from "./routes/llmChatRoute";
+import { loadServerEnvConfig } from "./server/envConfig";
 import type {
   LlmAnalyzeRouteDeps,
   LlmPrefillRouteDeps,
@@ -48,30 +49,19 @@ type AuthContext = {
 
 const app = express();
 app.set("trust proxy", 1);
-const port = Number(process.env.PORT || 8080);
+const serverEnv = loadServerEnvConfig();
+const port = serverEnv.port;
 
-const COOKIE_NAME = process.env.SESSION_COOKIE_NAME || "arnvoid_session";
-const SESSION_TTL_MS = Number(process.env.SESSION_TTL_MS || 1000 * 60 * 60 * 24 * 7);
-const COOKIE_SAMESITE = "lax";
-const DEV_PORTS = [5173, 5174, 5175, 5176, 5177, 5178];
-const DEFAULT_DEV_ORIGINS = DEV_PORTS.flatMap((port) => [
-  `http://localhost:${port}`,
-  `http://127.0.0.1:${port}`
-]);
-const DEFAULT_ALLOWED_ORIGINS = ["https://beta.arnvoid.com"];
-const SAVED_INTERFACES_LIST_LIMIT = 20;
-const MAX_SAVED_INTERFACE_PAYLOAD_BYTES = Number(
-  process.env.MAX_SAVED_INTERFACE_PAYLOAD_BYTES || 15 * 1024 * 1024
-);
-const SAVED_INTERFACE_JSON_LIMIT = process.env.SAVED_INTERFACE_JSON_LIMIT || "15mb";
+const COOKIE_NAME = serverEnv.cookieName;
+const SESSION_TTL_MS = serverEnv.sessionTtlMs;
+const COOKIE_SAMESITE = serverEnv.cookieSameSite;
+const SAVED_INTERFACES_LIST_LIMIT = serverEnv.savedInterfacesListLimit;
+const MAX_SAVED_INTERFACE_PAYLOAD_BYTES = serverEnv.maxSavedInterfacePayloadBytes;
+const SAVED_INTERFACE_JSON_LIMIT = serverEnv.savedInterfaceJsonLimit;
 const PROFILE_DISPLAY_NAME_MAX = 80;
 const PROFILE_USERNAME_MAX = 32;
 const PROFILE_USERNAME_REGEX = /^[A-Za-z0-9_.-]+$/;
 let profileColumnsAvailable = false;
-const allowedOrigins = (process.env.ALLOWED_ORIGINS ?? "")
-  .split(",")
-  .map((value) => value.trim())
-  .filter(Boolean);
 
 const savedInterfacesJsonParser = express.json({ limit: SAVED_INTERFACE_JSON_LIMIT });
 const globalJsonParser = express.json({ limit: LLM_LIMITS.jsonBodyLimit });
@@ -91,11 +81,8 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
   next(err);
 });
 
-const corsAllowedOrigins =
-  allowedOrigins.length > 0
-    ? allowedOrigins
-    : [...DEFAULT_ALLOWED_ORIGINS, ...DEFAULT_DEV_ORIGINS];
-if (isProd() && allowedOrigins.length === 0) {
+const corsAllowedOrigins = serverEnv.corsAllowedOrigins;
+if (serverEnv.shouldWarnMissingAllowedOriginsInProd) {
   console.warn("[cors] ALLOWED_ORIGINS not set in prod; CORS will block real frontend");
 }
 const corsOptions = {
@@ -139,11 +126,11 @@ function normalizeSameSite(value: string): "lax" | "none" | "strict" {
 }
 
 function isProd() {
-  return Boolean(process.env.K_SERVICE) || process.env.NODE_ENV === "production";
+  return serverEnv.isProd;
 }
 
 function isDevBalanceBypassEnabled() {
-  return !isProd() && process.env.DEV_BYPASS_BALANCE === "1";
+  return serverEnv.devBypassBalanceEnabled;
 }
 
 async function detectProfileColumnsAvailability(): Promise<boolean> {
@@ -203,18 +190,8 @@ function toIsoString(value: unknown): string | null {
   return date.toISOString();
 }
 
-const ALLOW_OPENROUTER_ANALYZE = process.env.ALLOW_OPENROUTER_ANALYZE === "true";
-const OPENROUTER_ANALYZE_MODELS = new Set(
-  (process.env.OPENROUTER_ANALYZE_MODELS ?? "")
-    .split(",")
-    .map((value) => value.trim())
-    .filter(Boolean)
-);
-
 function isOpenrouterAnalyzeAllowed(model: string): boolean {
-  if (!ALLOW_OPENROUTER_ANALYZE) return false;
-  if (OPENROUTER_ANALYZE_MODELS.size === 0) return false;
-  return OPENROUTER_ANALYZE_MODELS.has(model);
+  return serverEnv.isOpenrouterAnalyzeAllowed(model);
 }
 
 function sanitizeActions(value: unknown): Array<{ name: string; method: string; url: string }> {

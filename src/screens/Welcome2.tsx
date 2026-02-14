@@ -54,8 +54,6 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
     const holdStartRef = React.useRef<number | null>(null);
     const prevCursorModeRef = React.useRef<TypingCursorMode>('typing');
     const hasManualSeekRef = React.useRef(false);
-    const lastPartIdxRef = React.useRef<number | null>(null);
-    const restartedThisPartRef = React.useRef(false);
     const backJumpTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
     const isBackJumpingRef = React.useRef(false);
     const isStabilizingBackJumpRef = React.useRef(false);
@@ -176,15 +174,6 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
         return Math.max(0, startEvent.tMs - 1);
     }, [builtTimeline.events, builtTimeline.totalMs]);
 
-    const toPartBoundaryAnchorMs = React.useCallback((startCharCount: number): number => {
-        const maxCount = builtTimeline.events.length;
-        const clampedStart = Math.max(0, Math.min(startCharCount, maxCount));
-        if (clampedStart <= 0) return 0;
-        const boundaryEvent = builtTimeline.events[clampedStart - 1];
-        if (!boundaryEvent) return 0;
-        return Math.max(0, boundaryEvent.tMs);
-    }, [builtTimeline.events]);
-
     const seekWithManualInteraction = React.useCallback((targetMs: number) => {
         hasManualSeekRef.current = true;
         clearAutoAdvanceTimer();
@@ -201,26 +190,6 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
         );
     }, [sentenceSpans.partEndSoftCharCountByIndex, visibleCharCount]);
 
-    React.useEffect(() => {
-        const currentPartIdx = getCurrentPartIdx();
-        const lastPartIdx = lastPartIdxRef.current;
-        if (currentPartIdx === lastPartIdx) return;
-
-        // Restart stage seeks to the part boundary. Keep latch memory stable there so
-        // click 2 still backsteps from the original part.
-        if (
-            restartedThisPartRef.current &&
-            lastPartIdx !== null &&
-            currentPartIdx === lastPartIdx - 1 &&
-            visibleCharCount === (sentenceSpans.partStartCharCountByIndex[lastPartIdx] ?? -1)
-        ) {
-            return;
-        }
-
-        restartedThisPartRef.current = false;
-        lastPartIdxRef.current = currentPartIdx;
-    }, [getCurrentPartIdx, sentenceSpans.partStartCharCountByIndex, visibleCharCount]);
-
     const getPart80PercentLandCharCount = React.useCallback((partIdx: number): number => {
         const start = sentenceSpans.partStartCharCountByIndex[partIdx] ?? 0;
         const endCore = sentenceSpans.partEndCoreCharCountByIndex[partIdx] ?? start;
@@ -234,37 +203,20 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
         sentenceSpans.partStartCharCountByIndex,
     ]);
 
-    const restartCurrentPart = React.useCallback((partIdx: number) => {
+    const goPreviousPartWithStabilize = React.useCallback(() => {
         if (builtTimeline.events.length === 0) return;
-        const targetCharCount = sentenceSpans.partStartCharCountByIndex[partIdx] ?? 0;
-        seekWithManualInteraction(toSentenceStartTargetMs(targetCharCount));
-    }, [
-        builtTimeline.events.length,
-        seekWithManualInteraction,
-        sentenceSpans.partStartCharCountByIndex,
-        toSentenceStartTargetMs,
-    ]);
+        const currentPartIdx = getCurrentPartIdx();
+        const previousPartIdx = Math.max(0, currentPartIdx - 1);
 
-    const goBackOnePartWithStabilize = React.useCallback((partIdx: number) => {
-        if (builtTimeline.events.length === 0) return;
-        if (partIdx <= 0) {
-            // Part 0 has no previous part. Clear stage-2 latch so next click
-            // returns to stage-1 restart behavior instead of repeated no-op.
-            clearPendingBackJump();
-            restartedThisPartRef.current = false;
-            lastPartIdxRef.current = 0;
-            return;
-        }
-
+        clearAutoAdvanceTimer();
         clearPendingBackJump();
         isBackJumpingRef.current = true;
         setBackJumpStabilizing(true);
         setClockPaused(true);
 
-        const currentPartStart = sentenceSpans.partStartCharCountByIndex[partIdx] ?? 0;
-        const prevPartIdx = Math.max(0, partIdx - 1);
-        const targetCharCount = getPart80PercentLandCharCount(prevPartIdx);
-        const stabilizeMs = toPartBoundaryAnchorMs(currentPartStart);
+        const currentPartStart = sentenceSpans.partStartCharCountByIndex[currentPartIdx] ?? 0;
+        const stabilizeMs = toSentenceStartTargetMs(currentPartStart);
+        const targetCharCount = getPart80PercentLandCharCount(previousPartIdx);
         const targetMs = toSentenceEndTargetMs(targetCharCount);
 
         seekWithManualInteraction(stabilizeMs);
@@ -272,22 +224,22 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
         backJumpTimeoutRef.current = setTimeout(() => {
             backJumpTimeoutRef.current = null;
             seekWithManualInteraction(targetMs);
-            restartedThisPartRef.current = false;
-            lastPartIdxRef.current = prevPartIdx;
             isBackJumpingRef.current = false;
             setBackJumpStabilizing(false);
             setClockPaused(false);
         }, STABILIZE_BEFORE_BACK_MS);
     }, [
         builtTimeline.events.length,
+        clearAutoAdvanceTimer,
         clearPendingBackJump,
+        getCurrentPartIdx,
         getPart80PercentLandCharCount,
         seekWithManualInteraction,
         setBackJumpStabilizing,
         setClockPaused,
         sentenceSpans.partStartCharCountByIndex,
-        toPartBoundaryAnchorMs,
         toSentenceEndTargetMs,
+        toSentenceStartTargetMs,
     ]);
 
     const finishCurrentSentence = React.useCallback(() => {
@@ -311,31 +263,10 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
 
     const handleSeekRestartSentence = React.useCallback((event: React.MouseEvent<HTMLButtonElement>) => {
         event.stopPropagation();
-        clearAutoAdvanceTimer();
-        if (isBackJumpingRef.current) {
-            rootRef.current?.focus({ preventScroll: true });
-            return;
-        }
-        const observedPartIdx = getCurrentPartIdx();
-        const currentPartIdx =
-            restartedThisPartRef.current && lastPartIdxRef.current !== null
-                ? lastPartIdxRef.current
-                : observedPartIdx;
-        if (!restartedThisPartRef.current) {
-            restartCurrentPart(currentPartIdx);
-            restartedThisPartRef.current = true;
-            lastPartIdxRef.current = currentPartIdx;
-            rootRef.current?.focus({ preventScroll: true });
-            return;
-        }
-
-        goBackOnePartWithStabilize(currentPartIdx);
+        goPreviousPartWithStabilize();
         rootRef.current?.focus({ preventScroll: true });
     }, [
-        getCurrentPartIdx,
-        goBackOnePartWithStabilize,
-        restartCurrentPart,
-        clearAutoAdvanceTimer,
+        goPreviousPartWithStabilize,
     ]);
 
     const handleSeekFinishSentence = React.useCallback((event: React.MouseEvent<HTMLButtonElement>) => {

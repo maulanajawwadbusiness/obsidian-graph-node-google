@@ -19,8 +19,7 @@ const CURSOR_PAUSE_THRESHOLD_MS = 130;
 const CURSOR_HOLD_FAST_WINDOW_MS = 680;
 const SHOW_WELCOME2_FOCUS_RING = false;
 const WELCOME2_AUTO_ADVANCE_DELAY_MS = 2000*4;
-const PART_BACKSTEP_LAND_RATIO = 0.8;
-const STABILIZE_BEFORE_BACK_MS = 400;
+const STABILIZE_BEFORE_BACK_MS = 200;
 const BLOCKED_SCROLL_KEYS = new Set([' ', 'PageDown', 'PageUp', 'ArrowDown', 'ArrowUp']);
 const INTERACTIVE_SELECTOR = 'button, input, textarea, select, a[href], [role=\"button\"], [contenteditable=\"true\"]';
 const DEBUG_WELCOME2_TYPE = false;
@@ -54,10 +53,11 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
     const holdStartRef = React.useRef<number | null>(null);
     const prevCursorModeRef = React.useRef<TypingCursorMode>('typing');
     const hasManualSeekRef = React.useRef(false);
-    const backJumpTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+    const stabilizeTimeoutARef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+    const stabilizeTimeoutBRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
     const isBackJumpingRef = React.useRef(false);
-    const isStabilizingBackJumpRef = React.useRef(false);
-    const [isStabilizingBackJump, setIsStabilizingBackJump] = React.useState(false);
+    const stabilizeStageRef = React.useRef<'cur_start' | 'prev_end' | null>(null);
+    const [stabilizeStage, setStabilizeStage] = React.useState<'cur_start' | 'prev_end' | null>(null);
 
     React.useEffect(() => {
         if (visibleCharCount === prevVisibleCountRef.current) return;
@@ -76,7 +76,7 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
     }, [elapsedMs, phase]);
 
     let cursorMode: TypingCursorMode = 'typing';
-    if (isStabilizingBackJump) {
+    if (stabilizeStage !== null) {
         cursorMode = 'normal';
     } else if (phase === 'typing') {
         const paused = elapsedMs - lastAdvanceRef.current > CURSOR_PAUSE_THRESHOLD_MS;
@@ -142,20 +142,24 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
         }
     }, []);
 
-    const setBackJumpStabilizing = React.useCallback((isActive: boolean) => {
-        isStabilizingBackJumpRef.current = isActive;
-        setIsStabilizingBackJump(isActive);
+    const setBackJumpStage = React.useCallback((stage: 'cur_start' | 'prev_end' | null) => {
+        stabilizeStageRef.current = stage;
+        setStabilizeStage(stage);
     }, []);
 
     const clearPendingBackJump = React.useCallback(() => {
-        if (backJumpTimeoutRef.current !== null) {
-            clearTimeout(backJumpTimeoutRef.current);
-            backJumpTimeoutRef.current = null;
+        if (stabilizeTimeoutARef.current !== null) {
+            clearTimeout(stabilizeTimeoutARef.current);
+            stabilizeTimeoutARef.current = null;
+        }
+        if (stabilizeTimeoutBRef.current !== null) {
+            clearTimeout(stabilizeTimeoutBRef.current);
+            stabilizeTimeoutBRef.current = null;
         }
         isBackJumpingRef.current = false;
-        setBackJumpStabilizing(false);
+        setBackJumpStage(null);
         setClockPaused(false);
-    }, [setBackJumpStabilizing, setClockPaused]);
+    }, [setBackJumpStage, setClockPaused]);
 
     const toSentenceEndTargetMs = React.useCallback((targetCharCount: number): number => {
         if (targetCharCount <= 0) return 0;
@@ -190,19 +194,6 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
         );
     }, [sentenceSpans.partEndSoftCharCountByIndex, visibleCharCount]);
 
-    const getPart80PercentLandCharCount = React.useCallback((partIdx: number): number => {
-        const start = sentenceSpans.partStartCharCountByIndex[partIdx] ?? 0;
-        const endCore = sentenceSpans.partEndCoreCharCountByIndex[partIdx] ?? start;
-        const len = Math.max(0, endCore - start);
-        if (len <= 0) return Math.max(0, endCore);
-        const rawLand = start + Math.max(1, Math.floor(len * PART_BACKSTEP_LAND_RATIO));
-        const minLand = Math.min(endCore, start + 1);
-        return Math.max(minLand, Math.min(rawLand, endCore));
-    }, [
-        sentenceSpans.partEndCoreCharCountByIndex,
-        sentenceSpans.partStartCharCountByIndex,
-    ]);
-
     const goPreviousPartWithStabilize = React.useCallback(() => {
         if (builtTimeline.events.length === 0) return;
         const currentPartIdx = getCurrentPartIdx();
@@ -211,31 +202,35 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
         clearAutoAdvanceTimer();
         clearPendingBackJump();
         isBackJumpingRef.current = true;
-        setBackJumpStabilizing(true);
         setClockPaused(true);
 
         const currentPartStart = sentenceSpans.partStartCharCountByIndex[currentPartIdx] ?? 0;
-        const stabilizeMs = toSentenceStartTargetMs(currentPartStart);
-        const targetCharCount = getPart80PercentLandCharCount(previousPartIdx);
-        const targetMs = toSentenceEndTargetMs(targetCharCount);
+        const targetMsA = toSentenceStartTargetMs(currentPartStart);
+        const previousPartEndCore = sentenceSpans.partEndCoreCharCountByIndex[previousPartIdx] ?? 0;
+        const targetMsB = toSentenceEndTargetMs(previousPartEndCore);
 
-        seekWithManualInteraction(stabilizeMs);
+        setBackJumpStage('cur_start');
+        seekWithManualInteraction(targetMsA);
 
-        backJumpTimeoutRef.current = setTimeout(() => {
-            backJumpTimeoutRef.current = null;
-            seekWithManualInteraction(targetMs);
-            isBackJumpingRef.current = false;
-            setBackJumpStabilizing(false);
-            setClockPaused(false);
+        stabilizeTimeoutARef.current = setTimeout(() => {
+            stabilizeTimeoutARef.current = null;
+            setBackJumpStage('prev_end');
+            seekWithManualInteraction(targetMsB);
+            stabilizeTimeoutBRef.current = setTimeout(() => {
+                stabilizeTimeoutBRef.current = null;
+                setBackJumpStage(null);
+                isBackJumpingRef.current = false;
+                setClockPaused(false);
+            }, STABILIZE_BEFORE_BACK_MS);
         }, STABILIZE_BEFORE_BACK_MS);
     }, [
         builtTimeline.events.length,
         clearAutoAdvanceTimer,
         clearPendingBackJump,
         getCurrentPartIdx,
-        getPart80PercentLandCharCount,
         seekWithManualInteraction,
-        setBackJumpStabilizing,
+        sentenceSpans.partEndCoreCharCountByIndex,
+        setBackJumpStage,
         setClockPaused,
         sentenceSpans.partStartCharCountByIndex,
         toSentenceEndTargetMs,

@@ -41,17 +41,13 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
         () => buildWelcome2Timeline(MANIFESTO_TEXT, DEFAULT_CADENCE),
         [MANIFESTO_TEXT, DEFAULT_CADENCE]
     );
-    const { visibleText, visibleCharCount, phase, elapsedMs, seekToMs, setClockPaused } = useTypedTimeline(builtTimeline, {
+    const { visibleText, visibleCharCount, phase, elapsedMs, isDone, timeToDoneMs, seekToMs, setClockPaused } = useTypedTimeline(builtTimeline, {
         debugTypeMetrics,
     });
     const sentenceSpans = React.useMemo(
         () => buildWelcome2SentenceSpans(builtTimeline.renderText),
         [builtTimeline.renderText]
     );
-    const lastTypedCharMs = React.useMemo(() => {
-        if (builtTimeline.events.length === 0) return 0;
-        return builtTimeline.events[builtTimeline.events.length - 1].tMs;
-    }, [builtTimeline.events]);
     const autoAdvanceTriggeredRef = React.useRef(false);
     const autoAdvanceTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
     const lastAdvanceRef = React.useRef(0);
@@ -309,26 +305,20 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
     ]);
 
     React.useEffect(() => {
-        if (phase !== 'typing') return;
-        clearAutoAdvanceTimer();
-    }, [clearAutoAdvanceTimer, phase]);
-
-    React.useEffect(() => {
         if (autoAdvanceTriggeredRef.current) return;
         if (autoAdvanceTimeoutRef.current !== null) return;
         if (builtTimeline.events.length === 0) return;
         if (hasManualSeekRef.current) return;
-        if (phase === 'typing') return;
+        if (isDone) return;
 
-        const autoAdvanceAtMs = lastTypedCharMs + WELCOME2_AUTO_ADVANCE_DELAY_MS;
-        const remainingMs = Math.max(0, autoAdvanceAtMs - elapsedMs);
+        const remainingMs = Math.max(0, timeToDoneMs + WELCOME2_AUTO_ADVANCE_DELAY_MS);
         autoAdvanceTimeoutRef.current = setTimeout(() => {
             autoAdvanceTimeoutRef.current = null;
             if (autoAdvanceTriggeredRef.current) return;
             autoAdvanceTriggeredRef.current = true;
             onNext();
         }, remainingMs);
-    }, [builtTimeline.events.length, elapsedMs, lastTypedCharMs, onNext, phase]);
+    }, [builtTimeline.events.length, isDone, onNext, timeToDoneMs]);
 
     React.useEffect(() => {
         return () => {

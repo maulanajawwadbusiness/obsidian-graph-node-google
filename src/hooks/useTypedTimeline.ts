@@ -9,8 +9,11 @@ export type TypedTimelineState = {
     visibleText: string;
     phase: TypedTimelinePhase;
     isTypingDone: boolean;
+    isTextFullyRevealed: boolean;
     isDone: boolean;
     elapsedMs: number;
+    lastCharTimeMs: number;
+    timeToDoneMs: number;
     seekToMs: (ms: number) => void;
     setClockPaused: (paused: boolean) => void;
 };
@@ -38,6 +41,7 @@ function getLastCharTimeMs(events: TimelineEvent[]): number {
 
 function getPhase(elapsedMs: number, lastCharTimeMs: number, totalMs: number): TypedTimelinePhase {
     if (elapsedMs >= totalMs) return 'done';
+    // "hold" is an intentional post-typing hold window; it is not timeline completion.
     if (elapsedMs >= lastCharTimeMs) return 'hold';
     return 'typing';
 }
@@ -315,14 +319,22 @@ export function useTypedTimeline(
         () => built.renderText.slice(0, state.visibleCharCount),
         [built.renderText, state.visibleCharCount]
     );
+    const elapsedMsClamped = Math.max(0, state.elapsedMs);
+    const isTextFullyRevealed =
+        state.visibleCharCount >= built.events.length || elapsedMsClamped >= lastCharTimeMs;
+    const isDone = elapsedMsClamped >= built.totalMs;
+    const timeToDoneMs = Math.max(0, built.totalMs - elapsedMsClamped);
 
     return {
         visibleCharCount: state.visibleCharCount,
         visibleText,
         phase: state.phase,
         isTypingDone: state.phase !== 'typing',
-        isDone: state.phase === 'done',
-        elapsedMs: Math.max(0, state.elapsedMs),
+        isTextFullyRevealed,
+        isDone,
+        elapsedMs: elapsedMsClamped,
+        lastCharTimeMs,
+        timeToDoneMs,
         seekToMs,
         setClockPaused,
     };

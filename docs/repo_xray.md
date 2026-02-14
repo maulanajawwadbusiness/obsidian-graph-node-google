@@ -265,10 +265,16 @@ Search overlay contract:
 
 ## 7.4 Important Files and Seams (Current)
 
-Backend API seams:
+Backend API seams (canonical ownership map):
 - `src/server/src/serverMonolith.ts` (shell startup only)
 - `src/server/src/server/bootstrap.ts` (order and startup orchestration)
 - `src/server/src/server/depsBuilder.ts` (route deps assembly)
+- `src/server/src/server/envConfig.ts`
+- `src/server/src/server/jsonParsers.ts`
+- `src/server/src/server/corsConfig.ts`
+- `src/server/src/server/startupGates.ts`
+- `src/server/src/server/cookies.ts`
+- `src/server/src/routes/healthRoutes.ts`
 - `src/server/src/routes/authRoutes.ts`
 - `src/server/src/routes/profileRoutes.ts`
 - `src/server/src/routes/savedInterfacesRoutes.ts`
@@ -324,6 +330,8 @@ Frontend orchestration seams:
 - `registerPaymentsWebhookRoute(...)` must run before CORS middleware registration.
 - `applyJsonParsers(...)` must run before route registration.
 - startup gates must run before `app.listen(...)`.
+- full backend contract suite:
+  - `npm run test:contracts`
 - order guard script:
   - `npm run test:servermonolith-shell`
 

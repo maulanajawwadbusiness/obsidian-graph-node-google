@@ -20,6 +20,11 @@ import { applyTopupFromMidtrans, getBalance } from "./rupiah/rupiahService";
 import { registerLlmAnalyzeRoute } from "./routes/llmAnalyzeRoute";
 import { registerLlmPrefillRoute } from "./routes/llmPrefillRoute";
 import { registerLlmChatRoute } from "./routes/llmChatRoute";
+import {
+  registerPaymentsStatusRoute,
+  registerRupiahAndPaymentsCreateRoutes
+} from "./routes/paymentsRoutes";
+import { registerPaymentsWebhookRoute } from "./routes/paymentsWebhookRoute";
 import { registerHealthRoutes } from "./routes/healthRoutes";
 import { registerAuthRoutes } from "./routes/authRoutes";
 import { registerProfileRoutes } from "./routes/profileRoutes";
@@ -184,114 +189,11 @@ async function requireAuth(req: express.Request, res: express.Response, next: ex
   }
 }
 
-app.post("/api/payments/webhook", async (req, res) => {
-  const body = req.body ?? {};
-  const now = new Date();
-  const eventId = crypto.randomUUID();
-  const orderId = body?.order_id ? String(body.order_id) : null;
-  const transactionId = body?.transaction_id ? String(body.transaction_id) : null;
-  const signatureKey = body?.signature_key ? String(body.signature_key) : null;
-  const verified = verifyMidtransSignature(body);
-
-  try {
-    const pool = await getPool();
-    await pool.query(
-      `insert into payment_webhook_events
-        (id, received_at, order_id, midtrans_transaction_id, raw_body, signature_key, is_verified, processed)
-       values ($1, $2, $3, $4, $5, $6, $7, $8)`,
-      [eventId, now, orderId, transactionId, body, signatureKey, verified, false]
-    );
-  } catch (e) {
-    res.status(200).json({ ok: false, error: "failed to store webhook" });
-    return;
-  }
-
-  let processingError: string | null = null;
-  let rupiahApplyError: string | null = null;
-  let shouldApplyCredits = false;
-  if (verified && orderId) {
-    try {
-      const pool = await getPool();
-      const client = await pool.connect();
-      try {
-        await client.query("BEGIN");
-        const status = body?.transaction_status ? String(body.transaction_status) : "unknown";
-        const paidAt = isPaidStatus(status) ? now : null;
-        const updateResult = await client.query(
-          `update payment_transactions
-             set status = $2,
-                 midtrans_transaction_id = coalesce($3, midtrans_transaction_id),
-                 midtrans_response_json = $4,
-                 updated_at = $5,
-                 paid_at = case
-                   when paid_at is null and $6 is not null then $6
-                   else paid_at
-                 end
-           where order_id = $1`,
-          [orderId, status, transactionId, body, now, paidAt]
-        );
-        if (updateResult.rowCount === 0) {
-          processingError = "order not found";
-        }
-        if (paidAt) {
-          shouldApplyCredits = true;
-        }
-        await client.query("COMMIT");
-      } catch (e) {
-        await client.query("ROLLBACK");
-        processingError = "failed to update transaction";
-      } finally {
-        client.release();
-      }
-    } catch (e) {
-      processingError = "failed to update transaction";
-    }
-  } else if (!verified) {
-    processingError = "signature not verified";
-  }
-
-  if (!processingError && shouldApplyCredits && orderId) {
-    try {
-      const pool = await getPool();
-      const result = await pool.query(
-        `select user_id, gross_amount
-           from payment_transactions
-          where order_id = $1`,
-        [orderId]
-      );
-      const row = result.rows[0];
-      if (row) {
-        await applyTopupFromMidtrans({
-          userId: String(row.user_id),
-          orderId,
-          amountIdr: Number(row.gross_amount || 0)
-        });
-      } else {
-        rupiahApplyError = "rupiah apply failed: missing transaction row";
-      }
-    } catch (e) {
-      rupiahApplyError = "rupiah apply failed";
-    }
-  }
-
-  if (!processingError && rupiahApplyError) {
-    processingError = rupiahApplyError;
-  }
-
-  try {
-    const pool = await getPool();
-    await pool.query(
-      `update payment_webhook_events
-         set processed = $2, processing_error = $3
-       where id = $1`,
-      [eventId, true, processingError]
-    );
-  } catch (e) {
-    res.status(200).json({ ok: false, error: "failed to finalize webhook" });
-    return;
-  }
-
-  res.status(200).json({ ok: true });
+registerPaymentsWebhookRoute(app, {
+  getPool,
+  verifyMidtransSignature,
+  applyTopupFromMidtrans,
+  isPaidStatus
 });
 
 app.use(cors(corsOptions));
@@ -327,114 +229,18 @@ registerSavedInterfacesRoutes(app, {
   logger: console
 });
 
-app.get("/api/rupiah/me", requireAuth, async (_req, res) => {
-  const user = res.locals.user as AuthContext;
-  try {
-    const balance = await getBalance(String(user.id));
-    res.json({ ok: true, balance_idr: balance.balance_idr, updated_at: balance.updated_at });
-  } catch (e) {
-    res.status(500).json({ ok: false, error: "failed to load rupiah balance" });
-  }
-});
+const paymentsRouteDeps = {
+  getPool,
+  requireAuth,
+  getBalance,
+  midtransRequest,
+  parseGrossAmount,
+  applyTopupFromMidtrans,
+  sanitizeActions,
+  isPaidStatus
+};
 
-app.post("/api/payments/gopayqris/create", requireAuth, async (req, res) => {
-  const user = res.locals.user as AuthContext;
-  const grossAmount = parseGrossAmount(req.body?.gross_amount, 1000);
-  if (!grossAmount) {
-    res.status(400).json({ ok: false, error: "invalid gross_amount" });
-    return;
-  }
-
-  const orderId = `arnv-${user.id}-${Date.now()}`;
-  const now = new Date();
-  const rowId = crypto.randomUUID();
-
-  try {
-    const pool = await getPool();
-    await pool.query(
-      `insert into payment_transactions
-        (id, user_id, order_id, gross_amount, payment_type, status, created_at, updated_at)
-       values ($1, $2, $3, $4, $5, $6, $7, $8)`,
-      [rowId, user.id, orderId, grossAmount, "gopay", "created", now, now]
-    );
-  } catch (e) {
-    res.status(500).json({ ok: false, error: "failed to create transaction" });
-    return;
-  }
-
-  const chargePayload = {
-    payment_type: "gopay",
-    transaction_details: {
-      order_id: orderId,
-      gross_amount: grossAmount
-    },
-    gopay: {
-      enable_callback: true,
-      callback_url: "https://<your-domain>/payment/gopay-finish"
-    }
-  };
-
-  const midtransResult = await midtransRequest("/v2/charge", {
-    method: "POST",
-    body: chargePayload
-  });
-
-  if (midtransResult.ok === false) {
-    try {
-      const pool = await getPool();
-      await pool.query(
-        `update payment_transactions
-            set status = $2,
-                midtrans_response_json = $3,
-                updated_at = $4
-          where order_id = $1`,
-        [orderId, "failed", midtransResult.error, new Date()]
-      );
-    } catch {
-      // Ignore update failure here.
-    }
-
-    res.status(502).json({ ok: false, error: midtransResult.error, order_id: orderId });
-    return;
-  }
-
-  const data = midtransResult.data as {
-    transaction_id?: string;
-    transaction_status?: string;
-    payment_type?: string;
-    actions?: unknown;
-  };
-
-  const transactionId = data.transaction_id || null;
-  const transactionStatus = data.transaction_status || "pending";
-  const paymentType = data.payment_type || "gopay";
-  const actions = sanitizeActions(data.actions);
-
-  try {
-    const pool = await getPool();
-    await pool.query(
-      `update payment_transactions
-          set status = $2,
-              midtrans_transaction_id = $3,
-              midtrans_response_json = $4,
-              updated_at = $5
-        where order_id = $1`,
-      [orderId, transactionStatus, transactionId, midtransResult.data, new Date()]
-    );
-  } catch (e) {
-    res.status(500).json({ ok: false, error: "failed to store transaction" });
-    return;
-  }
-
-  res.json({
-    ok: true,
-    order_id: orderId,
-    transaction_id: transactionId,
-    payment_type: paymentType,
-    transaction_status: transactionStatus,
-    actions
-  });
-});
+registerRupiahAndPaymentsCreateRoutes(app, paymentsRouteDeps);
 
 const llmRouteCommonDeps = {
   requireAuth,
@@ -471,116 +277,7 @@ const llmChatRouteDeps: LlmChatRouteDeps = {
 
 registerLlmAnalyzeRoute(app, llmAnalyzeRouteDeps);
 
-app.get("/api/payments/:orderId/status", requireAuth, async (req, res) => {
-  const user = res.locals.user as AuthContext;
-  const orderId = String(req.params.orderId || "");
-  if (!orderId) {
-    res.status(400).json({ ok: false, error: "missing orderId" });
-    return;
-  }
-
-  const pool = await getPool();
-  const existing = await pool.query(
-    `select order_id, status, payment_type, midtrans_transaction_id, paid_at, gross_amount
-       from payment_transactions
-      where order_id = $1 and user_id = $2`,
-    [orderId, user.id]
-  );
-
-  const row = existing.rows[0];
-  if (!row) {
-    res.status(404).json({ ok: false, error: "not found" });
-    return;
-  }
-
-  if (row.status === "pending") {
-    const statusResult = await midtransRequest(`/v2/${orderId}/status`, { method: "GET" });
-    if (statusResult.ok) {
-      const data = statusResult.data as { transaction_status?: string; transaction_id?: string };
-      const nextStatus = data.transaction_status || row.status;
-      const now = new Date();
-      const paidAt = isPaidStatus(nextStatus) ? now : null;
-
-      try {
-        await pool.query(
-          `update payment_transactions
-              set status = $2,
-                  midtrans_transaction_id = coalesce($3, midtrans_transaction_id),
-                  midtrans_response_json = $4,
-                  updated_at = $5,
-                  paid_at = case
-                    when paid_at is null and $6 is not null then $6
-                    else paid_at
-                  end
-            where order_id = $1`,
-          [orderId, nextStatus, data.transaction_id || null, statusResult.data, now, paidAt]
-        );
-      } catch (e) {
-        res.status(500).json({ ok: false, error: "failed to update status" });
-        return;
-      }
-
-      if (paidAt) {
-        try {
-        await applyTopupFromMidtrans({
-          userId: String(user.id),
-          orderId,
-          amountIdr: Number(row.gross_amount || 0)
-        });
-        } catch {
-          // Ignore credit application failures here.
-        }
-      }
-
-      res.json({
-        ok: true,
-        order_id: orderId,
-        status: nextStatus,
-        payment_type: row.payment_type,
-        transaction_id: data.transaction_id || row.midtrans_transaction_id,
-        paid_at: paidAt || row.paid_at || null
-      });
-      return;
-    }
-
-    let midtransError: unknown = null;
-    if (statusResult.ok === false) {
-      midtransError = statusResult.error;
-    }
-
-    res.json({
-      ok: true,
-      order_id: orderId,
-      status: row.status,
-      payment_type: row.payment_type,
-      transaction_id: row.midtrans_transaction_id,
-      paid_at: row.paid_at || null,
-      midtrans_error: midtransError
-    });
-    return;
-  }
-
-  if (row.paid_at) {
-    try {
-      await applyTopupFromMidtrans({
-        userId: String(user.id),
-        orderId,
-        amountIdr: Number(row.gross_amount || 0)
-      });
-    } catch {
-      // Ignore credit application failures here.
-    }
-  }
-
-  res.json({
-    ok: true,
-    order_id: orderId,
-    status: row.status,
-    payment_type: row.payment_type,
-    transaction_id: row.midtrans_transaction_id,
-    paid_at: row.paid_at || null
-  });
-});
+registerPaymentsStatusRoute(app, paymentsRouteDeps);
 
 registerLlmPrefillRoute(app, llmPrefillRouteDeps);
 registerLlmChatRoute(app, llmChatRouteDeps);

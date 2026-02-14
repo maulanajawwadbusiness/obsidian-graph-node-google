@@ -20,7 +20,7 @@ export type PaymentsRouteDeps = {
     userId: string;
     orderId: string;
     amountIdr: number;
-  }) => Promise<void>;
+  }) => Promise<unknown>;
   sanitizeActions: (value: unknown) => Array<{ name: string; method: string; url: string }>;
   isPaidStatus: (status: string | undefined) => boolean;
 };

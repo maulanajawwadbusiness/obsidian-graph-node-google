@@ -23,7 +23,7 @@ export type PaymentsWebhookDeps = {
     userId: string;
     orderId: string;
     amountIdr: number;
-  }) => Promise<void>;
+  }) => Promise<unknown>;
   isPaidStatus: (status: string | undefined) => boolean;
 };
 

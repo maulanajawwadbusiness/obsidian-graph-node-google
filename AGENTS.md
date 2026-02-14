@@ -46,6 +46,10 @@ The Canvas (Graph) is the substrate. Panels (Chat, Docs) and the Loading Screen 
   - `corsConfig.ts`
   - `startupGates.ts`
   - `cookies.ts`
+- Backend order invariants to preserve:
+  - payments webhook registration is pre-cors
+  - JSON parsers are applied before route registration
+  - startup gates complete before `app.listen(...)`
 
 ## 2.1 AppShell Architecture (2026-02-14)
 
@@ -93,7 +97,7 @@ Invariant pins:
 When adding a new backend route:
 1. Create `src/server/src/routes/<newRoute>.ts` with `registerXRoutes(app, deps)`.
 2. Extend `src/server/src/server/depsBuilder.ts` to assemble deps for that route.
-3. Register route in `src/server/src/server/bootstrap.ts` in correct order.
+3. Register route in `src/server/src/server/bootstrap.ts` in correct order (webhook pre-cors, parsers pre-routes, startup gates pre-listen).
 4. Add deterministic contract script in `src/server/scripts/`.
 5. Add npm script in `src/server/package.json`.
 6. Include the new contract script in `src/server/scripts/run-contract-suite.mjs` (`npm run test:contracts`).

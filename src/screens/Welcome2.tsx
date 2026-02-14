@@ -58,6 +58,8 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
     const restartedThisPartRef = React.useRef(false);
     const backJumpTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
     const isBackJumpingRef = React.useRef(false);
+    const isStabilizingBackJumpRef = React.useRef(false);
+    const [isStabilizingBackJump, setIsStabilizingBackJump] = React.useState(false);
 
     React.useEffect(() => {
         if (visibleCharCount === prevVisibleCountRef.current) return;
@@ -76,7 +78,9 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
     }, [elapsedMs, phase]);
 
     let cursorMode: TypingCursorMode = 'typing';
-    if (phase === 'typing') {
+    if (isStabilizingBackJump) {
+        cursorMode = 'normal';
+    } else if (phase === 'typing') {
         const paused = elapsedMs - lastAdvanceRef.current > CURSOR_PAUSE_THRESHOLD_MS;
         cursorMode = paused ? 'pause' : 'typing';
     } else if (phase === 'hold') {
@@ -140,14 +144,20 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
         }
     }, []);
 
+    const setBackJumpStabilizing = React.useCallback((isActive: boolean) => {
+        isStabilizingBackJumpRef.current = isActive;
+        setIsStabilizingBackJump(isActive);
+    }, []);
+
     const clearPendingBackJump = React.useCallback(() => {
         if (backJumpTimeoutRef.current !== null) {
             clearTimeout(backJumpTimeoutRef.current);
             backJumpTimeoutRef.current = null;
         }
         isBackJumpingRef.current = false;
+        setBackJumpStabilizing(false);
         setClockPaused(false);
-    }, [setClockPaused]);
+    }, [setBackJumpStabilizing, setClockPaused]);
 
     const toSentenceEndTargetMs = React.useCallback((targetCharCount: number): number => {
         if (targetCharCount <= 0) return 0;
@@ -248,6 +258,7 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
 
         clearPendingBackJump();
         isBackJumpingRef.current = true;
+        setBackJumpStabilizing(true);
         setClockPaused(true);
 
         const currentPartStart = sentenceSpans.partStartCharCountByIndex[partIdx] ?? 0;
@@ -264,6 +275,7 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
             restartedThisPartRef.current = false;
             lastPartIdxRef.current = prevPartIdx;
             isBackJumpingRef.current = false;
+            setBackJumpStabilizing(false);
             setClockPaused(false);
         }, STABILIZE_BEFORE_BACK_MS);
     }, [
@@ -271,6 +283,7 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
         clearPendingBackJump,
         getPart80PercentLandCharCount,
         seekWithManualInteraction,
+        setBackJumpStabilizing,
         setClockPaused,
         sentenceSpans.partStartCharCountByIndex,
         toPartBoundaryAnchorMs,

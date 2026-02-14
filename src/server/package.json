@@ -20,6 +20,7 @@
     "test:health-contracts": "node scripts/test-health-contracts.mjs",
     "test:auth-me-contracts": "node scripts/test-auth-me-contracts.mjs",
     "test:auth-google-contracts": "node scripts/test-auth-google-contracts.mjs",
+    "test:profile-contracts": "node scripts/test-profile-contracts.mjs",
     "test:jsonparsers-contracts": "node scripts/test-jsonparsers-contracts.mjs",
     "test:cors-contracts": "node scripts/test-cors-contracts.mjs",
     "test:startupgates-contracts": "node scripts/test-startupgates-contracts.mjs",

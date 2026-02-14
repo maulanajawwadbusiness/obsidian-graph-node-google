@@ -44,6 +44,7 @@ import {
     getSkipTarget,
 } from './appshell/screenFlow/screenFlowController';
 import { renderScreenContent } from './appshell/render/renderScreenContent';
+import { useOnboardingOverlayState } from './appshell/overlays/useOnboardingOverlayState';
 
 const Graph = React.lazy(() =>
     import('../playground/GraphPhysicsPlayground').then((mod) => ({
@@ -276,8 +277,6 @@ export const AppShell: React.FC = () => {
     const [graphIsLoading, setGraphIsLoading] = React.useState(false);
     const [documentViewerToggleToken, setDocumentViewerToggleToken] = React.useState(0);
     const [isSidebarExpanded, setIsSidebarExpanded] = React.useState(false);
-    const [welcome1OverlayOpen, setWelcome1OverlayOpen] = React.useState(false);
-    const [enterPromptOverlayOpen, setEnterPromptOverlayOpen] = React.useState(false);
     const [welcome1FontGateDone, setWelcome1FontGateDone] = React.useState(false);
     const [searchInputFocused, setSearchInputFocused] = React.useState(false);
     const searchInputRef = React.useRef<HTMLInputElement | null>(null);
@@ -340,6 +339,12 @@ export const AppShell: React.FC = () => {
         isScreenTransitioning,
         shouldBlockOnboardingInput,
     } = useOnboardingTransition<Screen>({ screen, setScreen });
+    const {
+        enterPromptOverlayOpen,
+        isOnboardingOverlayOpen,
+        setWelcome1OverlayOpen,
+        setEnterPromptOverlayOpen,
+    } = useOnboardingOverlayState({ screen });
 
     const GraphWithPending = Graph as React.ComponentType<GraphPendingAnalysisProps>;
     const showMoneyUi = screen === 'prompt' || screen === 'graph';
@@ -349,7 +354,6 @@ export const AppShell: React.FC = () => {
     const sidebarDisabled = (screen === 'graph' && graphIsLoading) || loginBlockingActive;
     const showOnboardingFullscreenButton = isOnboardingScreen(screen);
     const onboardingActive = isOnboardingScreen(screen) || shouldBlockOnboardingInput;
-    const isOnboardingOverlayOpen = welcome1OverlayOpen || enterPromptOverlayOpen;
     const onboardingFullscreenIconScale = (screen === 'welcome1' || screen === 'welcome2')
         ? WELCOME_FULLSCREEN_ICON_SCALE
         : 1;
@@ -1167,12 +1171,6 @@ export const AppShell: React.FC = () => {
         if (typeof window === 'undefined') return;
         sessionStorage.setItem(STORAGE_KEY, screen);
     }, [screen]);
-
-    React.useEffect(() => {
-        if (screen === 'prompt') return;
-        if (!enterPromptOverlayOpen) return;
-        setEnterPromptOverlayOpen(false);
-    }, [enterPromptOverlayOpen, screen]);
 
     React.useEffect(() => {
         if (!ONBOARDING_ENABLED || !onboardingActive) return;

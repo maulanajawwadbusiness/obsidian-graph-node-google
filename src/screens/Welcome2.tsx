@@ -367,16 +367,18 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
                     style={TEXT_STYLE}
                 >
                     <span>{visibleText}</span>
-                    {cutEllipsisDotCount > 0 ? (
-                        <span style={CUT_ELLIPSIS_SLOTS_STYLE} aria-hidden="true">
-                            {Array.from({ length: cutEllipsisDotCount }).map((_, index) => (
-                                <span key={index} style={CUT_ELLIPSIS_DOT_STYLE}>
-                                    {'.'}
-                                </span>
-                            ))}
-                        </span>
-                    ) : null}
-                    <TypingCursor mode={cursorMode} heightEm={0.95} style={CURSOR_STYLE} />
+                    <span style={CURSOR_CLUSTER_STYLE}>
+                        {cutEllipsisDotCount > 0 ? (
+                            <span style={CUT_ELLIPSIS_OVERLAY_STYLE} aria-hidden="true">
+                                {Array.from({ length: cutEllipsisDotCount }).map((_, index) => (
+                                    <span key={index} style={CUT_ELLIPSIS_DOT_STYLE}>
+                                        {'.'}
+                                    </span>
+                                ))}
+                            </span>
+                        ) : null}
+                        <TypingCursor mode={cursorMode} heightEm={0.95} style={CURSOR_STYLE} />
+                    </span>
                 </div>
 
                 <div style={SEEK_BUTTON_ROW_STYLE} onPointerDown={(event) => event.stopPropagation()}>
@@ -447,13 +449,23 @@ const TEXT_STYLE: React.CSSProperties = {
 };
 
 const CURSOR_STYLE: React.CSSProperties = {
+    marginLeft: 0,
+};
+
+const CURSOR_CLUSTER_STYLE: React.CSSProperties = {
+    display: 'inline-block',
+    position: 'relative',
     marginLeft: '4px',
 };
 
-const CUT_ELLIPSIS_SLOTS_STYLE: React.CSSProperties = {
+const CUT_ELLIPSIS_OVERLAY_STYLE: React.CSSProperties = {
+    position: 'absolute',
+    right: '100%',
+    top: 0,
     display: 'inline-flex',
     color: '#b9bcc5',
     pointerEvents: 'none',
+    whiteSpace: 'nowrap',
 };
 
 const CUT_ELLIPSIS_DOT_STYLE: React.CSSProperties = {

@@ -35,9 +35,9 @@ import {
 } from '../store/savedInterfacesStore';
 import {
     ONBOARDING_SCREEN_FADE_EASING,
-    ONBOARDING_SCREEN_FADE_MS,
     isOnboardingScreen,
 } from './appshell/transitions/transitionTokens';
+import { useOnboardingTransition } from './appshell/transitions/useOnboardingTransition';
 
 const Graph = React.lazy(() =>
     import('../playground/GraphPhysicsPlayground').then((mod) => ({
@@ -270,9 +270,6 @@ function getInitialScreen(): Screen {
 export const AppShell: React.FC = () => {
     const { user, loading: authLoading, refreshMe, applyUserPatch, logout } = useAuth();
     const [screen, setScreen] = React.useState<Screen>(() => getInitialScreen());
-    const [screenTransitionFrom, setScreenTransitionFrom] = React.useState<Screen | null>(null);
-    const [screenTransitionReady, setScreenTransitionReady] = React.useState(false);
-    const [prefersReducedMotion, setPrefersReducedMotion] = React.useState(false);
     const [pendingAnalysis, setPendingAnalysis] = React.useState<PendingAnalysisPayload>(null);
     const [savedInterfaces, setSavedInterfaces] = React.useState<SavedInterfaceRecordV1[]>([]);
     const [pendingLoadInterface, setPendingLoadInterface] = React.useState<SavedInterfaceRecordV1 | null>(null);
@@ -314,9 +311,6 @@ export const AppShell: React.FC = () => {
     const remoteOutboxDrainTimerRef = React.useRef<number | null>(null);
     const remoteOutboxDrainingRef = React.useRef(false);
     const remoteOutboxPausedUntilRef = React.useRef<number>(0);
-    const screenTransitionTimerRef = React.useRef<number | null>(null);
-    const screenTransitionRafRef = React.useRef<number | null>(null);
-    const screenTransitionEpochRef = React.useRef(0);
     const authStorageId = React.useMemo(() => resolveAuthStorageId(user), [user]);
     const isAuthReady = !authLoading;
     const isLoggedIn = isAuthReady && user !== null && authStorageId !== null;
@@ -351,91 +345,16 @@ export const AppShell: React.FC = () => {
         }),
         [stopEventPropagation]
     );
-    React.useEffect(() => {
-        if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
-        const media = window.matchMedia('(prefers-reduced-motion: reduce)');
-        const applyMatch = () => setPrefersReducedMotion(media.matches);
-        applyMatch();
-        const listener = () => applyMatch();
-        if (typeof media.addEventListener === 'function') {
-            media.addEventListener('change', listener);
-            return () => media.removeEventListener('change', listener);
-        }
-        media.addListener(listener);
-        return () => media.removeListener(listener);
-    }, []);
-    const effectiveScreenFadeMs = prefersReducedMotion ? 0 : ONBOARDING_SCREEN_FADE_MS;
-
-    const clearScreenTransition = React.useCallback(() => {
-        if (screenTransitionTimerRef.current !== null) {
-            window.clearTimeout(screenTransitionTimerRef.current);
-            screenTransitionTimerRef.current = null;
-        }
-        if (screenTransitionRafRef.current !== null) {
-            window.cancelAnimationFrame(screenTransitionRafRef.current);
-            screenTransitionRafRef.current = null;
-        }
-        setScreenTransitionReady(false);
-        setScreenTransitionFrom(null);
-    }, []);
-
-    const transitionToScreen = React.useCallback((next: Screen) => {
-        if (next === screen) return;
-        const current = screen;
-        const shouldAnimate = isOnboardingScreen(current) && isOnboardingScreen(next);
-        if (!shouldAnimate) {
-            clearScreenTransition();
-            setScreen(next);
-            return;
-        }
-
-        screenTransitionEpochRef.current += 1;
-        const epoch = screenTransitionEpochRef.current;
-        setScreenTransitionFrom(current);
-        setScreenTransitionReady(false);
-        setScreen(next);
-
-        if (effectiveScreenFadeMs <= 0) {
-            clearScreenTransition();
-            return;
-        }
-
-        if (screenTransitionRafRef.current !== null) {
-            window.cancelAnimationFrame(screenTransitionRafRef.current);
-            screenTransitionRafRef.current = null;
-        }
-        if (screenTransitionTimerRef.current !== null) {
-            window.clearTimeout(screenTransitionTimerRef.current);
-            screenTransitionTimerRef.current = null;
-        }
-
-        screenTransitionRafRef.current = window.requestAnimationFrame(() => {
-            if (screenTransitionEpochRef.current !== epoch) return;
-            screenTransitionRafRef.current = null;
-            setScreenTransitionReady(true);
-            screenTransitionTimerRef.current = window.setTimeout(() => {
-                if (screenTransitionEpochRef.current !== epoch) return;
-                screenTransitionTimerRef.current = null;
-                setScreenTransitionReady(false);
-                setScreenTransitionFrom(null);
-            }, effectiveScreenFadeMs);
-        });
-    }, [clearScreenTransition, effectiveScreenFadeMs, screen]);
-
-    React.useEffect(() => {
-        return () => {
-            if (screenTransitionTimerRef.current !== null) {
-                window.clearTimeout(screenTransitionTimerRef.current);
-            }
-            if (screenTransitionRafRef.current !== null) {
-                window.cancelAnimationFrame(screenTransitionRafRef.current);
-            }
-        };
-    }, []);
+    const {
+        transitionToScreen,
+        screenTransitionFrom,
+        screenTransitionReady,
+        effectiveScreenFadeMs,
+        isScreenTransitioning,
+        shouldBlockOnboardingInput,
+    } = useOnboardingTransition<Screen>({ screen, setScreen });
 
     const GraphWithPending = Graph as React.ComponentType<GraphPendingAnalysisProps>;
-    const isScreenTransitioning = screenTransitionFrom !== null;
-    const shouldBlockOnboardingInput = isScreenTransitioning && isOnboardingScreen(screen);
     const showMoneyUi = screen === 'prompt' || screen === 'graph';
     const showBalanceBadge = false;
     const showPersistentSidebar = screen === 'prompt' || screen === 'graph';

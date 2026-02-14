@@ -3,25 +3,20 @@ import cors from "cors";
 import express from "express";
 import { OAuth2Client } from "google-auth-library";
 import { getPool } from "./db";
-import { getUsdToIdr } from "./fx/fxService";
 import { midtransRequest } from "./midtrans/client";
 import { assertAuthSchemaReady } from "./authSchemaGuard";
-import { buildAnalyzeJsonSchema, validateAnalyzeJson } from "./llm/analyze/schema";
-import { runOpenrouterAnalyze } from "./llm/analyze/openrouterAnalyze";
-import { buildStructuredAnalyzeInput } from "./llm/analyze/prompt";
-import { recordTokenSpend } from "./llm/freePoolAccounting";
-import { type LlmError } from "./llm/llmClient";
 import { LLM_LIMITS } from "./llm/limits";
-import { getProvider } from "./llm/getProvider";
-import { upsertAuditRecord } from "./llm/audit/llmAudit";
-import { pickProviderForRequest, type ProviderPolicyMeta } from "./llm/providerRouter";
-import { validateChat, validatePaperAnalyze, validatePrefill, type ValidationError } from "./llm/validate";
-import { mapModel } from "./llm/models/modelMap";
-import { initUsageTracker, type UsageRecord } from "./llm/usage/usageTracker";
-import { normalizeUsage, type ProviderUsage } from "./llm/usage/providerUsage";
-import { MARKUP_MULTIPLIER, MODEL_PRICE_USD_PER_MTOKEN_COMBINED } from "./pricing/pricingConfig";
-import { estimateIdrCost } from "./pricing/pricingCalculator";
-import { applyTopupFromMidtrans, chargeForLlm, getBalance } from "./rupiah/rupiahService";
+import { createLlmRuntimeState } from "./llm/runtimeState";
+import {
+  getPriceUsdPerM,
+  getUsageFieldList,
+  logLlmRequest,
+  mapLlmErrorToStatus,
+  mapTerminationReason,
+  sendApiError
+} from "./llm/requestFlow";
+import { type ValidationError } from "./llm/validate";
+import { applyTopupFromMidtrans, getBalance } from "./rupiah/rupiahService";
 import { registerLlmAnalyzeRoute } from "./routes/llmAnalyzeRoute";
 import { registerLlmPrefillRoute } from "./routes/llmPrefillRoute";
 import { registerLlmChatRoute } from "./routes/llmChatRoute";
@@ -190,51 +185,11 @@ function parseGrossAmount(value: unknown, fallbackAmount: number): number | null
   return rounded;
 }
 
-type ApiErrorCode =
-  | "bad_request"
-  | "too_large"
-  | "unauthorized"
-  | "insufficient_rupiah"
-  | "rate_limited"
-  | "upstream_error"
-  | "timeout"
-  | "parse_error"
-  | "structured_output_invalid";
-
-type ApiError = {
-  ok: false;
-  request_id: string;
-  code: ApiErrorCode;
-  error: string;
-};
-
-const llmConcurrency = new Map<string, number>();
-const MAX_CONCURRENT_LLM = 2;
-let llmRequestsTotal = 0;
-let llmRequestsInflight = 0;
-let llmRequestsStreaming = 0;
+const llmRuntime = createLlmRuntimeState({ maxConcurrentLlm: 2 });
+llmRuntime.startPeriodicLog(60000);
 
 function getUserId(user: AuthContext): string {
   return String(user.id);
-}
-
-function acquireLlmSlot(userId: string): boolean {
-  const current = llmConcurrency.get(userId) || 0;
-  if (current >= MAX_CONCURRENT_LLM) return false;
-  llmConcurrency.set(userId, current + 1);
-  return true;
-}
-
-function releaseLlmSlot(userId: string) {
-  const current = llmConcurrency.get(userId) || 0;
-  const next = current - 1;
-  if (next <= 0) llmConcurrency.delete(userId);
-  else llmConcurrency.set(userId, next);
-}
-
-function sendApiError(res: express.Response, status: number, body: ApiError) {
-  res.setHeader("X-Request-Id", body.request_id);
-  res.status(status).json(body);
 }
 
 function isValidationError(value: unknown): value is ValidationError {
@@ -246,98 +201,6 @@ function toIsoString(value: unknown): string | null {
   const date = value instanceof Date ? value : new Date(String(value));
   if (Number.isNaN(date.getTime())) return null;
   return date.toISOString();
-}
-
-function logLlmRequest(fields: {
-  request_id: string;
-  endpoint: string;
-  user_id: string;
-  model: string;
-  input_chars: number;
-  output_chars: number;
-  duration_ms: number;
-  time_to_first_token_ms?: number | null;
-  status_code: number;
-  termination_reason: string;
-  rupiah_cost?: number | null;
-  rupiah_balance_before?: number | null;
-  rupiah_balance_after?: number | null;
-  provider?: "openai" | "openrouter" | null;
-  provider_model_id?: string | null;
-  structured_output_mode?: string | null;
-  validation_result?: string | null;
-  usage_input_tokens?: number | null;
-  usage_output_tokens?: number | null;
-  usage_total_tokens?: number | null;
-  usage_source?: string | null;
-  provider_usage_present?: boolean | null;
-  provider_usage_source?: string | null;
-  provider_usage_fields_present?: string[] | null;
-  tokenizer_encoding_used?: string | null;
-  tokenizer_fallback_reason?: string | null;
-  freepool_decrement_tokens?: number | null;
-  freepool_decrement_applied?: boolean | null;
-  freepool_decrement_reason?: string | null;
-}) {
-  console.log(JSON.stringify({
-    request_id: fields.request_id,
-    endpoint: fields.endpoint,
-    user_id: fields.user_id,
-    model: fields.model,
-    provider: fields.provider ?? null,
-    provider_model_id: fields.provider_model_id ?? null,
-    input_chars: fields.input_chars,
-    output_chars: fields.output_chars,
-    duration_ms: fields.duration_ms,
-    time_to_first_token_ms: fields.time_to_first_token_ms ?? null,
-    status_code: fields.status_code,
-    termination_reason: fields.termination_reason,
-    usage_input_tokens: fields.usage_input_tokens ?? null,
-    usage_output_tokens: fields.usage_output_tokens ?? null,
-    usage_total_tokens: fields.usage_total_tokens ?? null,
-    usage_source: fields.usage_source ?? null,
-    provider_usage_present: fields.provider_usage_present ?? null,
-    provider_usage_source: fields.provider_usage_source ?? null,
-    provider_usage_fields_present: fields.provider_usage_fields_present ?? null,
-    tokenizer_encoding_used: fields.tokenizer_encoding_used ?? null,
-    tokenizer_fallback_reason: fields.tokenizer_fallback_reason ?? null,
-    rupiah_cost: fields.rupiah_cost ?? null,
-    rupiah_balance_before: fields.rupiah_balance_before ?? null,
-    rupiah_balance_after: fields.rupiah_balance_after ?? null,
-    freepool_decrement_tokens: fields.freepool_decrement_tokens ?? null,
-    freepool_decrement_applied: fields.freepool_decrement_applied ?? null,
-    freepool_decrement_reason: fields.freepool_decrement_reason ?? null,
-    structured_output_mode: fields.structured_output_mode ?? null,
-    validation_result: fields.validation_result ?? null
-  }));
-}
-
-function mapLlmErrorToStatus(error: LlmError): number {
-  switch (error.code) {
-    case "bad_request":
-      return 400;
-    case "rate_limited":
-      return 429;
-    case "timeout":
-      return 504;
-    case "parse_error":
-      return 502;
-    case "unauthorized":
-      return 401;
-    default:
-      return 502;
-  }
-}
-
-function mapTerminationReason(statusCode: number, code?: string) {
-  if (statusCode === 402 || code === "insufficient_rupiah") return "insufficient_rupiah";
-  if (statusCode === 429) return "rate_limited";
-  if (statusCode === 400 || statusCode === 413) return "validation_error";
-  if (statusCode === 504 || code === "timeout") return "timeout";
-  if (code === "structured_output_invalid") return "structured_output_invalid";
-  if (code === "upstream_error" || statusCode >= 500) return "upstream_error";
-  if (statusCode === 200) return "success";
-  return "upstream_error";
 }
 
 const ALLOW_OPENROUTER_ANALYZE = process.env.ALLOW_OPENROUTER_ANALYZE === "true";
@@ -353,30 +216,6 @@ function isOpenrouterAnalyzeAllowed(model: string): boolean {
   if (OPENROUTER_ANALYZE_MODELS.size === 0) return false;
   return OPENROUTER_ANALYZE_MODELS.has(model);
 }
-
-function getUsageFieldList(usage: ProviderUsage | null | undefined): string[] {
-  const fields: string[] = [];
-  if (!usage) return fields;
-  if (usage.input_tokens !== undefined) fields.push("input");
-  if (usage.output_tokens !== undefined) fields.push("output");
-  if (usage.total_tokens !== undefined) fields.push("total");
-  return fields;
-}
-
-function getPriceUsdPerM(model: string): number | null {
-  const value = MODEL_PRICE_USD_PER_MTOKEN_COMBINED[model];
-  if (typeof value !== "number" || !Number.isFinite(value)) return null;
-  return value;
-}
-
-
-setInterval(() => {
-  console.log(JSON.stringify({
-    llm_requests_total: llmRequestsTotal,
-    llm_requests_inflight: llmRequestsInflight,
-    llm_requests_streaming: llmRequestsStreaming
-  }));
-}, 60000);
 
 function sanitizeActions(value: unknown): Array<{ name: string; method: string; url: string }> {
   if (!Array.isArray(value)) return [];
@@ -1070,8 +909,8 @@ app.post("/api/payments/gopayqris/create", requireAuth, async (req, res) => {
 const llmRouteCommonDeps = {
   requireAuth,
   getUserId,
-  acquireLlmSlot,
-  releaseLlmSlot,
+  acquireLlmSlot: llmRuntime.acquireLlmSlot,
+  releaseLlmSlot: llmRuntime.releaseLlmSlot,
   sendApiError,
   isValidationError,
   logLlmRequest,
@@ -1080,15 +919,9 @@ const llmRouteCommonDeps = {
   getUsageFieldList,
   getPriceUsdPerM,
   isDevBalanceBypassEnabled,
-  incRequestsTotal: () => {
-    llmRequestsTotal += 1;
-  },
-  incRequestsInflight: () => {
-    llmRequestsInflight += 1;
-  },
-  decRequestsInflight: () => {
-    llmRequestsInflight -= 1;
-  }
+  incRequestsTotal: llmRuntime.incRequestsTotal,
+  incRequestsInflight: llmRuntime.incRequestsInflight,
+  decRequestsInflight: llmRuntime.decRequestsInflight
 };
 
 const llmAnalyzeRouteDeps: LlmAnalyzeRouteDeps = {
@@ -1102,12 +935,8 @@ const llmPrefillRouteDeps: LlmPrefillRouteDeps = {
 
 const llmChatRouteDeps: LlmChatRouteDeps = {
   ...llmRouteCommonDeps,
-  incRequestsStreaming: () => {
-    llmRequestsStreaming += 1;
-  },
-  decRequestsStreaming: () => {
-    llmRequestsStreaming -= 1;
-  }
+  incRequestsStreaming: llmRuntime.incRequestsStreaming,
+  decRequestsStreaming: llmRuntime.decRequestsStreaming
 };
 
 registerLlmAnalyzeRoute(app, llmAnalyzeRouteDeps);

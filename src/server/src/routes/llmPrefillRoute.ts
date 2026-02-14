@@ -1,7 +1,12 @@
 import crypto from "crypto";
 import type express from "express";
-import { getUsdToIdr } from "../fx/fxService";
-import { recordTokenSpend } from "../llm/freePoolAccounting";
+import { buildAuditState } from "../llm/auditState";
+import {
+  applyFreepoolLedger,
+  chargeUsage,
+  estimateWithFx,
+  precheckBalance
+} from "../llm/billingFlow";
 import { upsertAuditRecord } from "../llm/audit/llmAudit";
 import { pickProviderForRequest } from "../llm/providerRouter";
 import { validatePrefill } from "../llm/validate";
@@ -10,7 +15,6 @@ import { initUsageTracker, type UsageRecord } from "../llm/usage/usageTracker";
 import { normalizeUsage, type ProviderUsage } from "../llm/usage/providerUsage";
 import { MARKUP_MULTIPLIER } from "../pricing/pricingConfig";
 import { estimateIdrCost } from "../pricing/pricingCalculator";
-import { chargeForLlm, getBalance } from "../rupiah/rupiahService";
 import type { ApiErrorCode, AuthContext, LlmPrefillRouteDeps } from "./llmRouteDeps";
 export function registerLlmPrefillRoute(app: express.Express, deps: LlmPrefillRouteDeps) {
 app.post("/api/llm/prefill", deps.requireAuth, async (req, res) => {
@@ -31,29 +35,34 @@ app.post("/api/llm/prefill", deps.requireAuth, async (req, res) => {
   let freepoolReason: string | null = null;
   let providerUsage: ProviderUsage | null = null;
   let auditWritten = false;
-  let auditSelectedProvider = "unknown";
-  let auditActualProvider = "unknown";
-  let auditLogicalModel = typeof req.body?.model === "string" ? req.body.model : "unknown";
-  let auditProviderModelId = "unknown";
-  let auditUsageSource = "estimate_wordcount";
-  let auditInputTokens = 0;
-  let auditOutputTokens = 0;
-  let auditTotalTokens = 0;
-  let auditTokenizerEncoding: string | null = null;
-  let auditTokenizerFallback: string | null = null;
-  let auditProviderUsagePresent = false;
-  let auditFxRate: number | null = null;
-  let auditPriceUsdPerM = deps.getPriceUsdPerM(auditLogicalModel);
-  let auditCostIdr = 0;
-  let auditBalanceBefore: number | null = null;
-  let auditBalanceAfter: number | null = null;
-  let auditChargeStatus = "unknown";
-  let auditChargeError: string | null = null;
-  let auditFreepoolApplied = false;
-  let auditFreepoolDecrement = 0;
-  let auditFreepoolReason: string | null = null;
-  let auditHttpStatus: number | null = null;
-  let auditTerminationReason: string | null = null;
+  let {
+    auditSelectedProvider,
+    auditActualProvider,
+    auditLogicalModel,
+    auditProviderModelId,
+    auditUsageSource,
+    auditInputTokens,
+    auditOutputTokens,
+    auditTotalTokens,
+    auditTokenizerEncoding,
+    auditTokenizerFallback,
+    auditProviderUsagePresent,
+    auditFxRate,
+    auditPriceUsdPerM,
+    auditCostIdr,
+    auditBalanceBefore,
+    auditBalanceAfter,
+    auditChargeStatus,
+    auditChargeError,
+    auditFreepoolApplied,
+    auditFreepoolDecrement,
+    auditFreepoolReason,
+    auditHttpStatus,
+    auditTerminationReason
+  } = buildAuditState(
+    typeof req.body?.model === "string" ? req.body.model : "unknown",
+    deps.getPriceUsdPerM
+  );
 
   async function writeAudit() {
     if (auditWritten) return;
@@ -204,27 +213,29 @@ app.post("/api/llm/prefill", deps.requireAuth, async (req, res) => {
     });
     usageTracker.recordInputText(input);
     const inputTokensEstimate = usageTracker.getInputTokensEstimate();
-    const fx = await getUsdToIdr();
-    fxRate = fx.rate;
-    const estimated = estimateIdrCost({
+    const estimate = await estimateWithFx({
       model: validation.model,
       inputTokens: inputTokensEstimate,
-      outputTokens: 0,
-      fxRate
+      outputTokens: 0
     });
+    fxRate = estimate.fxRate;
+    const estimated = estimate.pricing;
     const bypassBalance = deps.isDevBalanceBypassEnabled();
-    if (!bypassBalance) {
-      const balanceSnapshot = await getBalance(userId);
-      if (balanceSnapshot.balance_idr < estimated.idrCostRounded) {
-        const shortfall = estimated.idrCostRounded - balanceSnapshot.balance_idr;
+    const precheck = await precheckBalance({
+      userId,
+      neededIdr: estimated.idrCostRounded,
+      bypassBalance
+    });
+    if (!precheck.ok) {
+        const shortfall = precheck.shortfall_idr;
         auditInputTokens = inputTokensEstimate;
         auditOutputTokens = 0;
         auditTotalTokens = inputTokensEstimate;
         auditUsageSource = "estimate_wordcount";
         auditProviderUsagePresent = false;
         auditCostIdr = 0;
-        auditBalanceBefore = balanceSnapshot.balance_idr;
-        auditBalanceAfter = balanceSnapshot.balance_idr;
+        auditBalanceBefore = precheck.balance_idr;
+        auditBalanceAfter = precheck.balance_idr;
         auditChargeStatus = "failed";
         auditChargeError = "insufficient_rupiah";
         auditHttpStatus = 402;
@@ -235,7 +246,7 @@ app.post("/api/llm/prefill", deps.requireAuth, async (req, res) => {
           code: "insufficient_rupiah",
           request_id: requestId,
           needed_idr: estimated.idrCostRounded,
-          balance_idr: balanceSnapshot.balance_idr,
+          balance_idr: precheck.balance_idr,
           shortfall_idr: shortfall
         });
         deps.logLlmRequest({
@@ -250,12 +261,11 @@ app.post("/api/llm/prefill", deps.requireAuth, async (req, res) => {
           status_code: 402,
           termination_reason: "insufficient_rupiah",
           rupiah_cost: estimated.idrCostRounded,
-          rupiah_balance_before: balanceSnapshot.balance_idr,
-          rupiah_balance_after: balanceSnapshot.balance_idr
+          rupiah_balance_before: precheck.balance_idr,
+          rupiah_balance_after: precheck.balance_idr
         });
         return;
-      }
-    } else {
+    } else if (bypassBalance) {
       auditChargeStatus = "bypassed_dev";
       auditChargeError = null;
       auditCostIdr = 0;
@@ -321,89 +331,68 @@ app.post("/api/llm/prefill", deps.requireAuth, async (req, res) => {
       outputTokens: usageRecord.output_tokens,
       fxRate
     });
-    if (bypassBalance) {
-      rupiahCost = 0;
-      rupiahBefore = null;
-      rupiahAfter = null;
+    const charge = await chargeUsage({
+      userId,
+      requestId,
+      model: validation.model,
+      totalTokens: pricing.totalTokens,
+      amountIdr: pricing.idrCostRounded,
+      bypassBalance
+    });
+    if (!charge.ok) {
       auditCostIdr = 0;
-      auditBalanceBefore = null;
-      auditBalanceAfter = null;
-      auditChargeStatus = "bypassed_dev";
-      auditChargeError = null;
-    } else {
-      const chargeResult = await chargeForLlm({
-        userId,
-        requestId,
-        amountIdr: pricing.idrCostRounded,
-        meta: { model: validation.model, totalTokens: pricing.totalTokens }
+      auditBalanceBefore = charge.balance_idr;
+      auditBalanceAfter = charge.balance_idr;
+      auditChargeStatus = "failed";
+      auditChargeError = "insufficient_rupiah";
+      auditHttpStatus = 402;
+      auditTerminationReason = "insufficient_rupiah";
+      await writeAudit();
+      res.status(402).json({
+        ok: false,
+        code: "insufficient_rupiah",
+        request_id: requestId,
+        needed_idr: pricing.idrCostRounded,
+        balance_idr: charge.balance_idr,
+        shortfall_idr: charge.shortfall_idr
       });
-      if (chargeResult.ok === false) {
-        const chargeError = chargeResult;
-        const shortfall = pricing.idrCostRounded - chargeError.balance_idr;
-        auditCostIdr = 0;
-        auditBalanceBefore = chargeError.balance_idr;
-        auditBalanceAfter = chargeError.balance_idr;
-        auditChargeStatus = "failed";
-        auditChargeError = "insufficient_rupiah";
-        auditHttpStatus = 402;
-        auditTerminationReason = "insufficient_rupiah";
-        await writeAudit();
-        res.status(402).json({
-          ok: false,
-          code: "insufficient_rupiah",
-          request_id: requestId,
-          needed_idr: pricing.idrCostRounded,
-          balance_idr: chargeError.balance_idr,
-          shortfall_idr: shortfall
-        });
-        deps.logLlmRequest({
-          request_id: requestId,
-          endpoint: "/api/llm/prefill",
-          user_id: userId,
-          model: validation.model,
-          provider_model_id: providerModelId,
-          input_chars: validation.nodeLabel.length,
-          output_chars: result.text.length,
-          duration_ms: Date.now() - startedAt,
-          status_code: 402,
-          termination_reason: "insufficient_rupiah",
-          rupiah_cost: pricing.idrCostRounded,
-          rupiah_balance_before: chargeError.balance_idr,
-          rupiah_balance_after: chargeError.balance_idr
-        });
-        return;
-      }
-
-      rupiahCost = pricing.idrCostRounded;
-      rupiahBefore = chargeResult.balance_before;
-      rupiahAfter = chargeResult.balance_after;
+      deps.logLlmRequest({
+        request_id: requestId,
+        endpoint: "/api/llm/prefill",
+        user_id: userId,
+        model: validation.model,
+        provider_model_id: providerModelId,
+        input_chars: validation.nodeLabel.length,
+        output_chars: result.text.length,
+        duration_ms: Date.now() - startedAt,
+        status_code: 402,
+        termination_reason: "insufficient_rupiah",
+        rupiah_cost: pricing.idrCostRounded,
+        rupiah_balance_before: charge.balance_idr,
+        rupiah_balance_after: charge.balance_idr
+      });
+      return;
     }
 
-    if (provider.name === "openai") {
-      const eligible = router.policyMeta.cohort_selected && router.policyMeta.reason === "free_ok";
-      if (eligible) {
-        try {
-          const applied = await recordTokenSpend({
-            requestId,
-            userId,
-            dateKey: router.policyMeta.date_key,
-            tokensUsed: usageRecord.total_tokens
-          });
-          freepoolApplied = applied.applied;
-          freepoolDecrement = applied.applied ? usageRecord.total_tokens : 0;
-          freepoolReason = applied.applied ? "applied" : "already_ledgered";
-        } catch {
-          freepoolApplied = false;
-          freepoolReason = "error";
-        }
-      } else {
-        freepoolApplied = false;
-        freepoolReason = router.policyMeta.cohort_selected ? "cap_exhausted" : "not_in_cohort";
-      }
-    } else {
-      freepoolApplied = false;
-      freepoolReason = "provider_not_openai";
-    }
+    rupiahCost = charge.rupiahCost;
+    rupiahBefore = charge.rupiahBefore;
+    rupiahAfter = charge.rupiahAfter;
+    auditCostIdr = charge.rupiahCost;
+    auditBalanceBefore = charge.rupiahBefore;
+    auditBalanceAfter = charge.rupiahAfter;
+    auditChargeStatus = charge.chargeStatus;
+    auditChargeError = null;
+
+    const freepool = await applyFreepoolLedger({
+      providerName: provider.name,
+      policyMeta: router.policyMeta,
+      requestId,
+      userId,
+      tokensUsed: usageRecord.total_tokens
+    });
+    freepoolApplied = freepool.applied;
+    freepoolDecrement = freepool.decrement;
+    freepoolReason = freepool.reason;
     auditFreepoolApplied = freepoolApplied ?? false;
     auditFreepoolDecrement = freepoolDecrement ?? 0;
     auditFreepoolReason = freepoolReason;

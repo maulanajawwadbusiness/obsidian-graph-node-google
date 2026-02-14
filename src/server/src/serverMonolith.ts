@@ -25,6 +25,7 @@ import {
   getSessionIdFromRequest,
   setSessionCookie
 } from "./server/cookies";
+import { buildCorsOptions } from "./server/corsConfig";
 import { loadServerEnvConfig } from "./server/envConfig";
 import { applyJsonParsers } from "./server/jsonParsers";
 import type {
@@ -77,24 +78,7 @@ const corsAllowedOrigins = serverEnv.corsAllowedOrigins;
 if (serverEnv.shouldWarnMissingAllowedOriginsInProd) {
   console.warn("[cors] ALLOWED_ORIGINS not set in prod; CORS will block real frontend");
 }
-const corsOptions = {
-  origin: (origin: string | undefined, cb: (err: Error | null, allow?: boolean) => void) => {
-    if (!origin) {
-      cb(null, true);
-      return;
-    }
-    if (corsAllowedOrigins.includes(origin)) {
-      console.log(`[cors] allowed origin: ${origin}`);
-      cb(null, true);
-      return;
-    }
-    console.warn(`[cors] blocked origin: ${origin}`);
-    cb(new Error(`CORS blocked origin: ${origin}`));
-  },
-  credentials: true,
-  methods: ["GET", "POST", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"]
-};
+const corsOptions = buildCorsOptions({ allowedOrigins: corsAllowedOrigins });
 
 function isProd() {
   return serverEnv.isProd;

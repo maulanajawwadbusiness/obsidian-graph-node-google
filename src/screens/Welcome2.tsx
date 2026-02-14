@@ -172,11 +172,23 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
 
     React.useEffect(() => {
         const currentPartIdx = getCurrentPartIdx();
-        if (currentPartIdx !== lastPartIdxRef.current) {
-            restartedThisPartRef.current = false;
-            lastPartIdxRef.current = currentPartIdx;
+        const lastPartIdx = lastPartIdxRef.current;
+        if (currentPartIdx === lastPartIdx) return;
+
+        // Restart stage seeks to the part boundary. Keep latch memory stable there so
+        // click 2 still backsteps from the original part.
+        if (
+            restartedThisPartRef.current &&
+            lastPartIdx !== null &&
+            currentPartIdx === lastPartIdx - 1 &&
+            visibleCharCount === (sentenceSpans.partStartCharCountByIndex[lastPartIdx] ?? -1)
+        ) {
+            return;
         }
-    }, [getCurrentPartIdx]);
+
+        restartedThisPartRef.current = false;
+        lastPartIdxRef.current = currentPartIdx;
+    }, [getCurrentPartIdx, sentenceSpans.partStartCharCountByIndex, visibleCharCount]);
 
     const getPart80PercentLandCharCount = React.useCallback((partIdx: number): number => {
         const start = sentenceSpans.partStartCharCountByIndex[partIdx] ?? 0;
@@ -204,7 +216,13 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
 
     const goBackOnePart80Percent = React.useCallback((partIdx: number) => {
         if (builtTimeline.events.length === 0) return;
-        if (partIdx <= 0) return;
+        if (partIdx <= 0) {
+            // Part 0 has no previous part. Clear stage-2 latch so next click
+            // returns to stage-1 restart behavior instead of repeated no-op.
+            restartedThisPartRef.current = false;
+            lastPartIdxRef.current = 0;
+            return;
+        }
         const prevPartIdx = Math.max(0, partIdx - 1);
         const targetCharCount = getPart80PercentLandCharCount(prevPartIdx);
         seekWithManualInteraction(toSentenceEndTargetMs(targetCharCount));
@@ -239,7 +257,11 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
     const handleSeekRestartSentence = React.useCallback((event: React.MouseEvent<HTMLButtonElement>) => {
         event.stopPropagation();
         clearAutoAdvanceTimer();
-        const currentPartIdx = getCurrentPartIdx();
+        const observedPartIdx = getCurrentPartIdx();
+        const currentPartIdx =
+            restartedThisPartRef.current && lastPartIdxRef.current !== null
+                ? lastPartIdxRef.current
+                : observedPartIdx;
         if (!restartedThisPartRef.current) {
             restartCurrentPart(currentPartIdx);
             restartedThisPartRef.current = true;

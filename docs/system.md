@@ -478,6 +478,10 @@ Central operating notes for backend/frontend behavior, integration seams, and li
   - cors: `src/server/src/server/corsConfig.ts`
   - startup gates: `src/server/src/server/startupGates.ts`
   - cookies: `src/server/src/server/cookies.ts`
+- Order invariants:
+  - payments webhook route is registered before CORS middleware.
+  - JSON parser chain is registered before route modules.
+  - startup gates complete before `app.listen(...)`.
 
 ## LLM Provider Policy
 - Provider routing is policy-driven (daily cohort + per-user cap + global pool).
@@ -557,7 +561,7 @@ Frontend:
   - startup gates ordering/shape
   - route contracts: health, auth, profile, saved-interfaces, payments
   - deps builder shape
-  - monolith shell and bootstrap order markers
+  - monolith shell/bootstrap order markers (`npm run test:servermonolith-shell`)
 
 ## Backend VPN Reminder
 - Before running backend commands in `src/server` (for example `npm run dev`, `npm run check:auth-schema`, DB scripts), turn VPN OFF.

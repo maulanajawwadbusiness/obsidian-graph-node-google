@@ -7,9 +7,15 @@ type FullscreenButtonProps = {
     className?: string;
     style?: React.CSSProperties;
     blocked?: boolean;
+    iconScale?: number;
 };
 
-export const FullscreenButton: React.FC<FullscreenButtonProps> = ({ className, style, blocked = false }) => {
+export const FullscreenButton: React.FC<FullscreenButtonProps> = ({
+    className,
+    style,
+    blocked = false,
+    iconScale = 1,
+}) => {
     const { isFullscreen, toggleFullscreen } = useFullscreen();
     const [isHovered, setIsHovered] = React.useState(false);
 
@@ -43,6 +49,8 @@ export const FullscreenButton: React.FC<FullscreenButtonProps> = ({ className, s
                 aria-hidden="true"
                 style={{
                     ...ICON_STYLE,
+                    width: `${Math.max(0, iconScale) * 100}%`,
+                    height: `${Math.max(0, iconScale) * 100}%`,
                     backgroundColor: '#D7F5FF',
                     WebkitMaskImage: `url(${isFullscreen ? fullscreenCloseIcon : fullscreenOpenIcon})`,
                     maskImage: `url(${isFullscreen ? fullscreenCloseIcon : fullscreenOpenIcon})`,

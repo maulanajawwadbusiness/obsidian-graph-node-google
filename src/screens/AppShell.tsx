@@ -445,6 +445,9 @@ export const AppShell: React.FC = () => {
     const showOnboardingFullscreenButton = isOnboardingScreen(screen);
     const onboardingActive = isOnboardingScreen(screen) || shouldBlockOnboardingInput;
     const isOnboardingOverlayOpen = welcome1OverlayOpen || enterPromptOverlayOpen;
+    const onboardingFullscreenIconScale = (screen === 'welcome1' || screen === 'welcome2')
+        ? WELCOME_FULLSCREEN_ICON_SCALE
+        : 1;
     const onboardingFullscreenButtonStyle: React.CSSProperties = screen === 'prompt'
         ? {
             ...ONBOARDING_FULLSCREEN_BUTTON_STYLE,
@@ -466,6 +469,7 @@ export const AppShell: React.FC = () => {
         <FullscreenButton
             style={onboardingFullscreenButtonStyle}
             blocked={isOnboardingOverlayOpen}
+            iconScale={onboardingFullscreenIconScale}
         />
     ) : null;
 
@@ -2307,6 +2311,7 @@ const ONBOARDING_FULLSCREEN_BUTTON_STYLE: React.CSSProperties = {
     right: '24px',
     zIndex: LAYER_ONBOARDING_FULLSCREEN_BUTTON
 };
+const WELCOME_FULLSCREEN_ICON_SCALE = 0.8;
 
 const WELCOME1_FONT_GATE_BLANK_STYLE: React.CSSProperties = {
     minHeight: '100vh',

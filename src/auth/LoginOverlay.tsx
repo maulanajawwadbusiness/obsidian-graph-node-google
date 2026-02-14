@@ -8,6 +8,8 @@ import { LAYER_OVERLAY_LOGIN } from '../ui/layers';
 
 const SHOW_LOGIN_DEBUG_ERRORS =
     import.meta.env.VITE_SHOW_LOGIN_DEBUG_ERRORS === '1' || !import.meta.env.DEV;
+const OVERLAY_FADE_MS = 200;
+const OVERLAY_FADE_EASING = 'cubic-bezier(0.22, 1, 0.36, 1)';
 
 type LoginOverlayProps = {
     open: boolean;
@@ -26,6 +28,23 @@ export const LoginOverlay: React.FC<LoginOverlayProps> = ({
     onHide,
 }) => {
     const { user, loading, error } = useAuth();
+    const [prefersReducedMotion, setPrefersReducedMotion] = React.useState(false);
+    const [fadeInReady, setFadeInReady] = React.useState(false);
+    const fadeRafRef = React.useRef<number | null>(null);
+
+    React.useEffect(() => {
+        if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
+        const media = window.matchMedia('(prefers-reduced-motion: reduce)');
+        const applyMatch = () => setPrefersReducedMotion(media.matches);
+        applyMatch();
+        const listener = () => applyMatch();
+        if (typeof media.addEventListener === 'function') {
+            media.addEventListener('change', listener);
+            return () => media.removeEventListener('change', listener);
+        }
+        media.addListener(listener);
+        return () => media.removeListener(listener);
+    }, []);
 
     React.useEffect(() => {
         if (!open) return;
@@ -36,11 +55,44 @@ export const LoginOverlay: React.FC<LoginOverlayProps> = ({
         };
     }, [open]);
 
+    React.useEffect(() => {
+        if (fadeRafRef.current !== null) {
+            window.cancelAnimationFrame(fadeRafRef.current);
+            fadeRafRef.current = null;
+        }
+        if (!open) {
+            setFadeInReady(false);
+            return;
+        }
+        if (prefersReducedMotion) {
+            setFadeInReady(true);
+            return;
+        }
+        setFadeInReady(false);
+        fadeRafRef.current = window.requestAnimationFrame(() => {
+            fadeRafRef.current = null;
+            setFadeInReady(true);
+        });
+        return () => {
+            if (fadeRafRef.current !== null) {
+                window.cancelAnimationFrame(fadeRafRef.current);
+                fadeRafRef.current = null;
+            }
+        };
+    }, [open, prefersReducedMotion]);
+
     if (!open) return null;
 
     const overlay = (
         <div
-            style={BACKDROP_STYLE}
+            style={{
+                ...BACKDROP_STYLE,
+                opacity: fadeInReady ? 1 : 0,
+                transition: prefersReducedMotion
+                    ? 'none'
+                    : `opacity ${OVERLAY_FADE_MS}ms ${OVERLAY_FADE_EASING}`,
+                willChange: 'opacity',
+            }}
             onPointerDown={(e) => e.stopPropagation()}
             onWheel={(e) => e.stopPropagation()}
         >
@@ -150,7 +202,7 @@ const CARD_STYLE: React.CSSProperties = {
 
 const TITLE_STYLE: React.CSSProperties = {
     fontSize: '20px',
-    fontWeight: 700,
+    fontWeight: 300,
 };
 
 const SUBTEXT_STYLE: React.CSSProperties = {

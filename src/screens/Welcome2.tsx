@@ -62,6 +62,7 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
     const stabilizeTimeoutARef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
     const stabilizeTimeoutBRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
     const stabilizeTimeoutCRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+    const backJumpEpochRef = React.useRef(0);
     const isBackJumpingRef = React.useRef(false);
     const stabilizeStageRef = React.useRef<'cur_start' | 'prev_end' | null>(null);
     const [stabilizeStage, setStabilizeStage] = React.useState<'cur_start' | 'prev_end' | null>(null);
@@ -155,6 +156,7 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
     }, []);
 
     const cancelBackJumpSequence = React.useCallback(() => {
+        backJumpEpochRef.current += 1;
         if (stabilizeTimeoutARef.current !== null) {
             clearTimeout(stabilizeTimeoutARef.current);
             stabilizeTimeoutARef.current = null;
@@ -215,6 +217,7 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
             rootRef.current?.focus({ preventScroll: true });
             return;
         }
+        const localEpoch = backJumpEpochRef.current;
 
         const previousPartIdx = currentPartIdx - 1;
         isBackJumpingRef.current = true;
@@ -238,12 +241,15 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
         seekWithManualInteraction(targetMsA);
 
         stabilizeTimeoutARef.current = setTimeout(() => {
+            if (backJumpEpochRef.current !== localEpoch) return;
             stabilizeTimeoutARef.current = null;
             setBackJumpStage('prev_end');
             seekWithManualInteraction(targetMsB);
             stabilizeTimeoutBRef.current = setTimeout(() => {
+                if (backJumpEpochRef.current !== localEpoch) return;
                 stabilizeTimeoutBRef.current = null;
                 stabilizeTimeoutCRef.current = setTimeout(() => {
+                    if (backJumpEpochRef.current !== localEpoch) return;
                     stabilizeTimeoutCRef.current = null;
                     seekWithManualInteraction(targetMsC);
                     setBackJumpStage(null);

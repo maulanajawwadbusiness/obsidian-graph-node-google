@@ -1,17 +1,15 @@
 import React from 'react';
 import { ONBOARDING_ENABLED, ONBOARDING_START_SCREEN, ONBOARDING_START_SCREEN_RAW } from '../config/env';
-import { BalanceBadge } from '../components/BalanceBadge';
 import { ShortageWarning } from '../components/ShortageWarning';
 import { MoneyNoticeStack } from '../components/MoneyNoticeStack';
-import { Sidebar, type SidebarInterfaceItem } from '../components/Sidebar';
 import { useAuth } from '../auth/AuthProvider';
 import {
-    DEFAULT_SAVED_INTERFACES_CAP,
     getSavedInterfacesStorageKey,
     loadSavedInterfaces,
     saveAllSavedInterfaces,
     type SavedInterfaceRecordV1
 } from '../store/savedInterfacesStore';
+import type { GraphPhysicsPlaygroundProps, PendingAnalysisPayload } from '../playground/modules/graphPhysicsTypes';
 import {
     ONBOARDING_SCREEN_FADE_EASING,
 } from './appshell/transitions/transitionTokens';
@@ -37,6 +35,17 @@ import { useLogoutConfirmController } from './appshell/overlays/useLogoutConfirm
 import { useSearchInterfacesEngine } from './appshell/overlays/useSearchInterfacesEngine';
 import { createSavedInterfacesCommitSurfaces } from './appshell/savedInterfaces/savedInterfacesCommits';
 import { useSavedInterfacesSync } from './appshell/savedInterfaces/useSavedInterfacesSync';
+import { resolveAuthStorageId, sortAndCapSavedInterfaces } from './appshell/appShellHelpers';
+import {
+    FALLBACK_STYLE,
+    MAIN_SCREEN_CONTAINER_STYLE,
+    NON_SIDEBAR_DIMMED_STYLE,
+    NON_SIDEBAR_LAYER_STYLE,
+    SHELL_STYLE,
+    WELCOME1_FONT_GATE_BLANK_STYLE,
+} from './appshell/appShellStyles';
+import { SidebarLayer } from './appshell/sidebar/SidebarLayer';
+import { useSidebarInterfaces } from './appshell/sidebar/useSidebarInterfaces';
 
 const Graph = React.lazy(() =>
     import('../playground/GraphPhysicsPlayground').then((mod) => ({
@@ -45,59 +54,10 @@ const Graph = React.lazy(() =>
 );
 
 type Screen = AppScreen;
-type PendingAnalysisPayload =
-    | { kind: 'text'; text: string; createdAt: number }
-    | { kind: 'file'; file: File; createdAt: number }
-    | null;
-type GraphPendingAnalysisProps = {
-    pendingAnalysisPayload: PendingAnalysisPayload;
-    onPendingAnalysisConsumed: () => void;
-    onLoadingStateChange?: (isLoading: boolean) => void;
-    documentViewerToggleToken?: number;
-    pendingLoadInterface?: SavedInterfaceRecordV1 | null;
-    onPendingLoadInterfaceConsumed?: () => void;
-    onRestoreReadPathChange?: (active: boolean) => void;
-    onSavedInterfaceUpsert?: (record: SavedInterfaceRecordV1, reason: string) => void;
-    onSavedInterfaceLayoutPatch?: (
-        docId: string,
-        layout: SavedInterfaceRecordV1['layout'],
-        camera: SavedInterfaceRecordV1['camera'],
-        reason: string
-    ) => void;
-};
 const STORAGE_KEY = 'arnvoid_screen';
 const PERSIST_SCREEN = false;
 const DEBUG_ONBOARDING_SCROLL_GUARD = false;
 const WELCOME1_FONT_TIMEOUT_MS = 1500;
-
-function resolveAuthStorageId(user: unknown): string | null {
-    if (!user || typeof user !== 'object') return null;
-    const typed = user as Record<string, unknown>;
-    const rawId = typed.id;
-    if (typeof rawId === 'string' && rawId.trim().length > 0) {
-        return `id_${rawId.trim()}`;
-    }
-    if (typeof rawId === 'number' && Number.isFinite(rawId)) {
-        return `id_${rawId}`;
-    }
-    const rawSub = typed.sub;
-    if (typeof rawSub === 'string' && rawSub.trim().length > 0) {
-        return `sub_${rawSub.trim()}`;
-    }
-    return null;
-}
-
-function sortAndCapSavedInterfaces(
-    list: SavedInterfaceRecordV1[],
-    cap = DEFAULT_SAVED_INTERFACES_CAP
-): SavedInterfaceRecordV1[] {
-    const sorted = [...list].sort((a, b) => {
-        if (a.updatedAt !== b.updatedAt) return b.updatedAt - a.updatedAt;
-        return b.createdAt - a.createdAt;
-    });
-    if (sorted.length <= cap) return sorted;
-    return sorted.slice(0, cap);
-}
 
 export const AppShell: React.FC = () => {
     const { user, loading: authLoading, refreshMe, applyUserPatch, logout } = useAuth();
@@ -154,9 +114,8 @@ export const AppShell: React.FC = () => {
         setEnterPromptOverlayOpen,
     } = useOnboardingOverlayState({ screen });
 
-    const GraphWithPending = Graph as React.ComponentType<GraphPendingAnalysisProps>;
+    const GraphWithPending = Graph as React.ComponentType<GraphPhysicsPlaygroundProps>;
     const showMoneyUi = screen === 'prompt' || screen === 'graph';
-    const showBalanceBadge = false;
     const showPersistentSidebar = screen === 'prompt' || screen === 'graph';
     const loginBlockingActive = screen === 'prompt' && enterPromptOverlayOpen;
     const sidebarDisabled = (screen === 'graph' && graphIsLoading) || loginBlockingActive;
@@ -233,7 +192,6 @@ export const AppShell: React.FC = () => {
 
     const moneyUi = showMoneyUi ? (
         <>
-            {showBalanceBadge ? <BalanceBadge /> : null}
             <ShortageWarning />
             <MoneyNoticeStack />
         </>
@@ -331,18 +289,7 @@ export const AppShell: React.FC = () => {
         savedInterfacesRef.current = savedInterfaces;
     }, [savedInterfaces]);
 
-    const sidebarInterfaces = React.useMemo<SidebarInterfaceItem[]>(
-        () =>
-            savedInterfaces.map((record) => ({
-                id: record.id,
-                title: record.title,
-                subtitle: new Date(record.updatedAt).toLocaleString(),
-                nodeCount: record.preview.nodeCount,
-                linkCount: record.preview.linkCount,
-                updatedAt: record.updatedAt
-            })),
-        [savedInterfaces]
-    );
+    const sidebarInterfaces = useSidebarInterfaces(savedInterfaces);
     const { filteredSearchResults } = useSearchInterfacesEngine({
         savedInterfaces,
         searchInterfacesQuery,
@@ -360,11 +307,7 @@ export const AppShell: React.FC = () => {
         sessionStorage.setItem(STORAGE_KEY, screen);
     }, [screen]);
 
-    if (screen === 'welcome1') {
-        if (!welcome1FontGateDone) {
-            return <div style={WELCOME1_FONT_GATE_BLANK_STYLE} />;
-        }
-    }
+    if (screen === 'welcome1' && !welcome1FontGateDone) return <div style={WELCOME1_FONT_GATE_BLANK_STYLE} />;
 
     const renderScreenContentByScreen = (targetScreen: Screen): React.ReactNode => renderScreenContent({
         screen: targetScreen,
@@ -413,37 +356,36 @@ export const AppShell: React.FC = () => {
             data-search-interfaces-open={isSearchInterfacesOpen ? '1' : '0'}
             data-search-interfaces-query-len={String(searchInterfacesQuery.length)}
         >
-            {showPersistentSidebar ? (
-                <Sidebar
-                    isExpanded={isSidebarExpanded}
-                    onToggle={() => setIsSidebarExpanded((prev) => !prev)}
-                    onCreateNew={() => {
-                        setPendingLoadInterface(null);
-                        setPendingAnalysis(null);
-                        transitionToScreen(getCreateNewTarget());
-                    }}
-                    onOpenSearchInterfaces={() => openSearchInterfaces()}
-                    disabled={sidebarDisabled}
-                    showDocumentViewerButton={screen === 'graph'}
-                    onToggleDocumentViewer={() => setDocumentViewerToggleToken((prev) => prev + 1)}
-                    interfaces={sidebarInterfaces}
-                    onRenameInterface={handleRenameInterface}
-                    onDeleteInterface={(id) => {
-                        if (isSearchInterfacesOpen) return;
-                        if (sidebarDisabled) return;
-                        const record = savedInterfaces.find((item) => item.id === id);
-                        if (!record) return;
-                        openDeleteConfirm(record.id, record.title);
-                        console.log('[appshell] pending_delete_open id=%s', id);
-                    }}
-                    selectedInterfaceId={pendingLoadInterface?.id ?? undefined}
-                    onSelectInterface={(id) => selectSavedInterfaceById(id)}
-                    accountName={sidebarAccountName}
-                    accountImageUrl={sidebarAccountImageUrl}
-                    onOpenProfile={isLoggedIn ? openProfileOverlay : undefined}
-                    onRequestLogout={isLoggedIn ? openLogoutConfirm : undefined}
-                />
-            ) : null}
+            <SidebarLayer
+                show={showPersistentSidebar}
+                isExpanded={isSidebarExpanded}
+                onToggle={() => setIsSidebarExpanded((prev) => !prev)}
+                onCreateNew={() => {
+                    setPendingLoadInterface(null);
+                    setPendingAnalysis(null);
+                    transitionToScreen(getCreateNewTarget());
+                }}
+                onOpenSearchInterfaces={() => openSearchInterfaces()}
+                disabled={sidebarDisabled}
+                showDocumentViewerButton={screen === 'graph'}
+                onToggleDocumentViewer={() => setDocumentViewerToggleToken((prev) => prev + 1)}
+                interfaces={sidebarInterfaces}
+                onRenameInterface={handleRenameInterface}
+                onDeleteInterface={(id) => {
+                    if (isSearchInterfacesOpen) return;
+                    if (sidebarDisabled) return;
+                    const record = savedInterfaces.find((item) => item.id === id);
+                    if (!record) return;
+                    openDeleteConfirm(record.id, record.title);
+                    console.log('[appshell] pending_delete_open id=%s', id);
+                }}
+                selectedInterfaceId={pendingLoadInterface?.id ?? undefined}
+                onSelectInterface={(id) => selectSavedInterfaceById(id)}
+                accountName={sidebarAccountName}
+                accountImageUrl={sidebarAccountImageUrl}
+                onOpenProfile={isLoggedIn ? openProfileOverlay : undefined}
+                onRequestLogout={isLoggedIn ? openLogoutConfirm : undefined}
+            />
             <div
                 style={{
                     ...NON_SIDEBAR_LAYER_STYLE,
@@ -502,41 +444,4 @@ export const AppShell: React.FC = () => {
             />
         </div>
     );
-};
-
-const FALLBACK_STYLE: React.CSSProperties = {
-    minHeight: '100vh',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    background: '#0f1115',
-    color: '#e7e7e7',
-    fontSize: '14px',
-};
-
-const SHELL_STYLE: React.CSSProperties = {
-    position: 'relative',
-    width: '100%',
-    minHeight: '100vh',
-};
-
-const MAIN_SCREEN_CONTAINER_STYLE: React.CSSProperties = {
-    position: 'relative',
-    width: '100%',
-    minHeight: '100vh',
-};
-
-const NON_SIDEBAR_LAYER_STYLE: React.CSSProperties = {
-    width: '100%',
-    minHeight: '100vh',
-};
-
-const NON_SIDEBAR_DIMMED_STYLE: React.CSSProperties = {
-    filter: 'brightness(0.8)',
-};
-
-const WELCOME1_FONT_GATE_BLANK_STYLE: React.CSSProperties = {
-    minHeight: '100vh',
-    width: '100%',
-    background: '#06060A',
 };

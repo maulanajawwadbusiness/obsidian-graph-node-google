@@ -3,6 +3,13 @@
 ## Update (2026-02-14, Dots Menu Consolidation)
 This report has been updated to reflect the current shipped truth in `CanvasOverlays.tsx` after the dots-menu consolidation.
 
+## Update (2026-02-14, Front Share Restore)
+Toolbar has been revised again:
+- Front toolbar order is now `Share -> 3 Dot`.
+- Share icon is visible but intentionally no-action for now.
+- Dots menu now contains fullscreen only.
+- Share popup flow (`Save as Link`, `Save as ARN`) is disabled from runtime for now.
+
 ## Scope
 This report captures the graph screen toolbar and share popup work done today in `src/playground/components/CanvasOverlays.tsx`.
 
@@ -31,21 +38,19 @@ This report captures the graph screen toolbar and share popup work done today in
 15. Updated dots icon asset source to vertical ellipsis, then user reverted intent to `3_dot_icon.png` (final icon source currently follows repo state after latest user adjustment path).
 
 ## Current Functional State
-- Top-right action entry is the dots icon (`3_dot_icon.png`) only.
-- Dots click opens a compact popup menu with 2 rows:
+- Front toolbar shows 2 icons in this order:
+  - `Share` (left)
+  - `3 Dot` (right)
+- Share icon click is intentionally no-action (placeholder state).
+- Dots click opens a compact popup with:
   - `(fullscreen icon) Fullscreen`
-  - `(share icon) Share Interface`
 - Selecting `Fullscreen` runs the real fullscreen toggle via `useFullscreen()`.
-- Selecting `Share Interface` opens the share popup.
-- Share popup currently has 2 rows:
-  - `Save as Link`
-  - `Save as ARN`
-- Menu and popup positioning use viewport-clamped anchored placement so they stay inside visible bounds.
+- Dots menu positioning uses viewport-clamped anchored placement so it stays inside visible bounds.
 
 ## Input Safety and Overlay Contract
-- Dots trigger, dots menu rows, and share popup rows stop pointer and wheel propagation to prevent canvas drag/capture leaks.
-- Dots menu and share popup close on outside click and Escape.
-- Both overlays use anchored + clamped placement to avoid viewport overflow.
+- Share trigger, dots trigger, and dots menu rows stop pointer and wheel propagation to prevent canvas drag/capture leaks.
+- Dots menu closes on outside click and Escape.
+- Dots menu uses anchored + clamped placement to avoid viewport overflow.
 
 ## Validation Performed
 - Repeated `npm run build` checks were executed after each major toolbar/popup modification.

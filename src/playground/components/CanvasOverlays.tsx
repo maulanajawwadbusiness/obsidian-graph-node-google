@@ -27,12 +27,12 @@ const TOP_RIGHT_ICON_BASE_TINT = '#d7f5ff';
 const TOP_RIGHT_ICON_IDLE_OPACITY = 0.5;
 const TOP_RIGHT_ICON_HOVER_OPACITY = 1;
 const TOP_RIGHT_ICON_OPACITY_TRANSITION = '200ms ease';
-const SHARE_MENU_SCALE = 0.8;
-const SHARE_MENU_PADDING_PX = 5;
 const SHARE_MENU_VIEWPORT_PADDING_PX = 8;
 const SHARE_MENU_ANCHOR_GAP_PX = 8;
 const DOTS_MENU_SCALE = 0.85;
 const DOTS_MENU_PADDING_PX = 6;
+const DOTS_MENU_ESTIMATED_HEIGHT_PX = 52;
+const MENU_ESTIMATED_WIDTH_PX = 210;
 
 import type { ForceConfig } from '../../physics/types';
 
@@ -188,22 +188,11 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
     const [showAdvanced, setShowAdvanced] = React.useState(false);
     const [showLegacyControls, setShowLegacyControls] = React.useState(false);
     const [showLegacyDiagnostics, setShowLegacyDiagnostics] = React.useState(false);
-    const [hoveredTopRightIcon, setHoveredTopRightIcon] = React.useState<'dots' | null>(null);
+    const [hoveredTopRightIcon, setHoveredTopRightIcon] = React.useState<'dots' | 'share' | null>(null);
     const [dotsMenuOpen, setDotsMenuOpen] = React.useState(false);
     const [dotsMenuPosition, setDotsMenuPosition] = React.useState<{ right: number; top: number } | null>(null);
-    const [shareMenuOpen, setShareMenuOpen] = React.useState(false);
-    const [shareMenuPosition, setShareMenuPosition] = React.useState<{ right: number; top: number } | null>(null);
     const dotsTriggerRef = React.useRef<HTMLButtonElement | null>(null);
     const dotsMenuRef = React.useRef<HTMLDivElement | null>(null);
-    const shareMenuRef = React.useRef<HTMLDivElement | null>(null);
-
-    const shareMenuItems = React.useMemo(
-        () => [
-            { key: 'link', label: 'Save as Link' },
-            { key: 'arn', label: 'Save as ARN' },
-        ],
-        []
-    );
 
     // NEW: HUD Layout State
     const [isNarrow, setIsNarrow] = React.useState(typeof window !== 'undefined' ? window.innerWidth < 450 : false);
@@ -217,21 +206,13 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
     }, []);
 
     React.useEffect(() => {
-        if ((!dotsMenuOpen && !shareMenuOpen) || !dotsTriggerRef.current) return;
+        if (!dotsMenuOpen || !dotsTriggerRef.current) return;
         const update = () => {
             if (!dotsTriggerRef.current) return;
             const triggerRect = dotsTriggerRef.current.getBoundingClientRect();
-            if (dotsMenuOpen) {
-                setDotsMenuPosition(
-                    computeAnchoredMenuPosition(triggerRect, 88, 210)
-                );
-            }
-            if (shareMenuOpen) {
-                const estimatedShareHeight = shareMenuItems.length * 32 + SHARE_MENU_PADDING_PX * 2;
-                setShareMenuPosition(
-                    computeAnchoredMenuPosition(triggerRect, estimatedShareHeight, 210)
-                );
-            }
+            setDotsMenuPosition(
+                computeAnchoredMenuPosition(triggerRect, DOTS_MENU_ESTIMATED_HEIGHT_PX, MENU_ESTIMATED_WIDTH_PX)
+            );
         };
         update();
         window.addEventListener('resize', update);
@@ -240,27 +221,23 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
             window.removeEventListener('resize', update);
             window.removeEventListener('scroll', update, true);
         };
-    }, [dotsMenuOpen, shareMenuItems.length, shareMenuOpen]);
+    }, [dotsMenuOpen]);
 
     React.useEffect(() => {
-        if (!dotsMenuOpen && !shareMenuOpen) return;
+        if (!dotsMenuOpen) return;
         const handleWindowPointerDown = (event: PointerEvent) => {
             const target = event.target as Element | null;
             if (!target) {
                 setDotsMenuOpen(false);
-                setShareMenuOpen(false);
                 return;
             }
             if (target.closest('[data-dots-menu="1"]')) return;
-            if (target.closest('[data-share-menu="1"]')) return;
             if (target.closest('[data-toolbar-trigger="dots"]')) return;
             setDotsMenuOpen(false);
-            setShareMenuOpen(false);
         };
         const handleWindowKeyDown = (event: KeyboardEvent) => {
             if (event.key === 'Escape') {
                 setDotsMenuOpen(false);
-                setShareMenuOpen(false);
             }
         };
         window.addEventListener('pointerdown', handleWindowPointerDown, true);
@@ -269,14 +246,13 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
             window.removeEventListener('pointerdown', handleWindowPointerDown, true);
             window.removeEventListener('keydown', handleWindowKeyDown, true);
         };
-    }, [dotsMenuOpen, shareMenuOpen]);
+    }, [dotsMenuOpen]);
 
     React.useEffect(() => {
-        if (!SHOW_TOP_RIGHT_DOTS_ICON && (dotsMenuOpen || shareMenuOpen)) {
+        if (!SHOW_TOP_RIGHT_DOTS_ICON && dotsMenuOpen) {
             setDotsMenuOpen(false);
-            setShareMenuOpen(false);
         }
-    }, [dotsMenuOpen, shareMenuOpen]);
+    }, [dotsMenuOpen]);
 
     const gridStyle: React.CSSProperties = isNarrow ? {
         display: 'flex',
@@ -393,6 +369,35 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
                     }}
                 >
                     <button
+                        data-toolbar-trigger="share"
+                        type="button"
+                        style={{
+                            pointerEvents: 'auto',
+                            display: 'inline-flex',
+                            padding: 0,
+                            margin: 0,
+                            border: 'none',
+                            background: 'transparent',
+                            cursor: 'pointer'
+                        }}
+                        onPointerEnter={() => setHoveredTopRightIcon('share')}
+                        onPointerLeave={() => setHoveredTopRightIcon((current) => (current === 'share' ? null : current))}
+                        onPointerDown={(e) => e.stopPropagation()}
+                        onPointerUp={(e) => e.stopPropagation()}
+                        onWheelCapture={(e) => e.stopPropagation()}
+                        onWheel={(e) => e.stopPropagation()}
+                        onClick={(e) => {
+                            e.stopPropagation();
+                        }}
+                        aria-label="Share interface (coming soon)"
+                        title="Share interface (coming soon)"
+                    >
+                        <MaskIcon
+                            src={shareIcon}
+                            opacity={hoveredTopRightIcon === 'share' ? TOP_RIGHT_ICON_HOVER_OPACITY : TOP_RIGHT_ICON_IDLE_OPACITY}
+                        />
+                    </button>
+                    <button
                         ref={dotsTriggerRef}
                         data-toolbar-trigger="dots"
                         type="button"
@@ -414,12 +419,11 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
                         onClick={(e) => {
                             e.stopPropagation();
                             const triggerRect = e.currentTarget.getBoundingClientRect();
-                            setShareMenuOpen(false);
                             setDotsMenuOpen((prev) => {
                                 const next = !prev;
                                 if (next) {
                                     setDotsMenuPosition(
-                                        computeAnchoredMenuPosition(triggerRect, 88, 210)
+                                        computeAnchoredMenuPosition(triggerRect, DOTS_MENU_ESTIMATED_HEIGHT_PX, MENU_ESTIMATED_WIDTH_PX)
                                     );
                                 }
                                 return next;
@@ -485,7 +489,6 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
                         onClick={(e) => {
                             e.stopPropagation();
                             setDotsMenuOpen(false);
-                            setShareMenuOpen(false);
                             toggleFullscreen().catch((error: unknown) => {
                                 console.warn('[fullscreen] Toggle failed:', error);
                             });
@@ -498,104 +501,6 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
                         />
                         <span>Fullscreen</span>
                     </button>
-                    <button
-                        type="button"
-                        style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '8px',
-                            padding: `${8 * DOTS_MENU_SCALE}px 10px`,
-                            border: 'none',
-                            borderRadius: `${8 * DOTS_MENU_SCALE}px`,
-                            background: 'transparent',
-                            textAlign: 'left',
-                            cursor: 'pointer',
-                            color: '#D7F5FF',
-                            fontFamily: 'var(--font-ui)',
-                            fontSize: `${13 * DOTS_MENU_SCALE}px`,
-                            lineHeight: 1.2,
-                        }}
-                        onPointerDown={(e) => e.stopPropagation()}
-                        onPointerUp={(e) => e.stopPropagation()}
-                        onWheelCapture={(e) => e.stopPropagation()}
-                        onWheel={(e) => e.stopPropagation()}
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            if (dotsTriggerRef.current) {
-                                const triggerRect = dotsTriggerRef.current.getBoundingClientRect();
-                                const estimatedShareHeight = shareMenuItems.length * 32 + SHARE_MENU_PADDING_PX * 2;
-                                setShareMenuPosition(
-                                    computeAnchoredMenuPosition(triggerRect, estimatedShareHeight, 210)
-                                );
-                            }
-                            setDotsMenuOpen(false);
-                            setShareMenuOpen(true);
-                        }}
-                    >
-                        <MaskIcon
-                            src={shareIcon}
-                            opacity={TOP_RIGHT_ICON_HOVER_OPACITY}
-                        />
-                        <span>Share Interface</span>
-                    </button>
-                </div>
-            ) : null}
-            {shareMenuOpen && shareMenuPosition ? (
-                <div
-                    ref={shareMenuRef}
-                    data-share-menu="1"
-                    style={{
-                        position: 'fixed',
-                        right: `${shareMenuPosition.right}px`,
-                        top: `${shareMenuPosition.top}px`,
-                        width: 'max-content',
-                        maxWidth: `calc(100vw - ${SHARE_MENU_VIEWPORT_PADDING_PX * 2}px)`,
-                        padding: `${SHARE_MENU_PADDING_PX}px`,
-                        borderRadius: `${10 * SHARE_MENU_SCALE}px`,
-                        border: '1px solid rgba(255, 255, 255, 0.1)',
-                        background: '#0D0D18',
-                        boxShadow: '0 14px 28px rgba(0, 0, 0, 0.45)',
-                        zIndex: 1200,
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: '2px',
-                        pointerEvents: 'auto',
-                    }}
-                    onPointerDown={(e) => e.stopPropagation()}
-                    onPointerUp={(e) => e.stopPropagation()}
-                    onWheelCapture={(e) => e.stopPropagation()}
-                    onWheel={(e) => e.stopPropagation()}
-                >
-                    {shareMenuItems.map((item) => (
-                        <button
-                            key={item.key}
-                            type="button"
-                            style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                padding: `${8 * SHARE_MENU_SCALE}px 10px`,
-                                border: 'none',
-                                borderRadius: `${8 * SHARE_MENU_SCALE}px`,
-                                background: 'transparent',
-                                textAlign: 'left',
-                                cursor: 'pointer',
-                                color: '#D7F5FF',
-                                fontFamily: 'var(--font-ui)',
-                                fontSize: `${13 * SHARE_MENU_SCALE}px`,
-                                lineHeight: 1.2,
-                            }}
-                            onPointerDown={(e) => e.stopPropagation()}
-                            onPointerUp={(e) => e.stopPropagation()}
-                            onWheelCapture={(e) => e.stopPropagation()}
-                            onWheel={(e) => e.stopPropagation()}
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                setShareMenuOpen(false);
-                            }}
-                        >
-                            <span>{item.label}</span>
-                        </button>
-                    ))}
                 </div>
             ) : null}
 

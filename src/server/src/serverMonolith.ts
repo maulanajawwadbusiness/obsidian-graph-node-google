@@ -20,6 +20,7 @@ import { applyTopupFromMidtrans, getBalance } from "./rupiah/rupiahService";
 import { registerLlmAnalyzeRoute } from "./routes/llmAnalyzeRoute";
 import { registerLlmPrefillRoute } from "./routes/llmPrefillRoute";
 import { registerLlmChatRoute } from "./routes/llmChatRoute";
+import { registerHealthRoutes } from "./routes/healthRoutes";
 import {
   clearSessionCookie,
   getSessionIdFromRequest,
@@ -300,15 +301,7 @@ app.post("/api/payments/webhook", async (req, res) => {
 app.use(cors(corsOptions));
 app.options(/.*/, cors(corsOptions));
 
-app.get("/health", async (_req, res) => {
-  try {
-    const pool = await getPool();
-    await pool.query("SELECT 1");
-    res.json({ ok: true });
-  } catch (e) {
-    res.status(500).json({ ok: false, error: String(e) });
-  }
-});
+registerHealthRoutes(app, { getPool });
 
 app.post("/auth/google", async (req, res) => {
   const idToken = req.body?.idToken;

@@ -2,7 +2,7 @@
 
 Generated for External AI Context Loading
 Target: Deep Codebase Understanding without Repo Access
-Date: 2026-02-06
+Date: 2026-02-15
 
 Update Note: 2026-02-10
 - Added local-first saved interface system and extensive Sidebar session UX hardening.
@@ -27,6 +27,14 @@ Update Note: 2026-02-14
 - `src/screens/AppShell.tsx` is orchestration-only at 447 lines.
 - Domain seams moved under `src/screens/appshell/*` (screenFlow, transitions, overlays, savedInterfaces, render, sidebar, helpers/styles).
 - See `docs/report_2026_02_14_appshell_modularization.md`.
+
+Update Note: 2026-02-15
+- Completed backend refactor runs 0-14.
+- `src/server/src/serverMonolith.ts` is now a shell that starts bootstrap.
+- Orchestration and ordering live in `src/server/src/server/bootstrap.ts`.
+- Route deps assembly lives in `src/server/src/server/depsBuilder.ts`.
+- Backend routes are split into `src/server/src/routes/*` (health/auth/profile/saved-interfaces/payments/webhook/llm).
+- Contract guards expanded and unified under `npm run test:contracts` in `src/server`.
 
 ## 0.1 AppShell Seams (2026-02-14)
 
@@ -120,12 +128,12 @@ Note: Counts are estimated post-modularization.
 12. src/auth/AuthProvider.tsx - Auth context + /me bootstrap
 13. src/auth/SessionExpiryBanner.tsx - Session expiry UI
 14. src/api.ts - Backend fetch helper (credentials include)
-15. src/server/src/serverMonolith.ts - Auth routes, payments, LLM endpoints
-16. src/server/src/index.ts - Thin server composition entry
-17. src/server/src/llm/llmClient.ts - Server LLM client (Responses API)
-18. src/server/src/db.ts - Cloud SQL connector + pool
-19. src/server/src/llm/usage/usageTracker.ts - LLM usage tracker and tokenizer fallback
-20. src/server/src/llm/audit/llmAudit.ts - LLM audit persistence
+15. src/server/src/routes/llmAnalyzeRoute.ts (561 lines) - Analyze endpoint orchestration
+16. src/server/src/routes/paymentsRoutes.ts (227 lines) - Rupiah and payments create/status routes
+17. src/server/src/routes/authRoutes.ts (218 lines) - Auth endpoints (/auth/google, /me, /auth/logout)
+18. src/server/src/routes/savedInterfacesRoutes.ts (137 lines) - Saved interface CRUD routes
+19. src/server/src/server/bootstrap.ts (142 lines) - Backend startup/order orchestration
+20. src/server/src/server/depsBuilder.ts (120 lines) - Route deps assembly seam
 21. src/components/PaymentGopayPanel.tsx - QRIS payment UI panel
 22. src/components/PromptCard.tsx - EnterPrompt main card (input, attachments, submit control)
 
@@ -187,8 +195,12 @@ Key files:
 - `src/auth/SessionExpiryBanner.tsx` (expiry UI)
 - `src/components/GoogleLoginButton.tsx` (Google login entry)
 - `src/api.ts` (GET /me with `credentials: "include"`)
-- `src/server/src/index.ts` (thin entry, imports runtime server module)
-- `src/server/src/serverMonolith.ts` (auth routes, cookie, sessions)
+- `src/server/src/index.ts` (thin entry imports monolith shell)
+- `src/server/src/serverMonolith.ts` (shell only, starts bootstrap)
+- `src/server/src/server/bootstrap.ts` (runtime orchestration and order owner)
+- `src/server/src/routes/authRoutes.ts` (auth route logic)
+- `src/server/src/auth/requireAuth.ts` (session middleware)
+- `src/server/src/server/cookies.ts` (cookie parse/set/clear helpers)
 - `src/server/src/db.ts` (Postgres connection)
 
 Follow the auth flow:
@@ -212,7 +224,8 @@ Primary files:
 - `src/playground/GraphPhysicsPlaygroundShell.tsx` (restore pipeline + callback emitters)
 - `src/document/nodeBinding.ts` (analysis record creation, callback emission)
 - `src/api.ts` (saved-interfaces API helpers)
-- `src/server/src/serverMonolith.ts` (requireAuth CRUD API)
+- `src/server/src/routes/savedInterfacesRoutes.ts` (requireAuth CRUD API)
+- `src/server/src/server/jsonParsers.ts` (saved-interfaces parser split + 413 mapping seam)
 - `src/server/migrations/1770383000000_add_saved_interfaces.js` (DB table)
 
 Current write ownership:
@@ -241,7 +254,9 @@ Payload and API contract:
   - `POST /api/saved-interfaces/upsert`
   - `POST /api/saved-interfaces/delete`
 - backend payload guard:
-  - `MAX_SAVED_INTERFACE_PAYLOAD_BYTES` default 15 MB
+  - parser seam in `src/server/src/server/jsonParsers.ts`
+  - 413 mapping guard: `npm run test:jsonparsers-contracts`
+  - route validation guard: `npm run test:saved-interfaces-contracts`
 
 Search overlay contract:
 - centered AppShell overlay opened from Sidebar Search row
@@ -251,12 +266,17 @@ Search overlay contract:
 ## 7.4 Important Files and Seams (Current)
 
 Backend API seams:
-- `src/server/src/serverMonolith.ts`
-  - `GET /api/saved-interfaces`
-  - `POST /api/saved-interfaces/upsert`
-  - `POST /api/saved-interfaces/delete`
-  - `POST /api/profile/update`
-  - `GET /me` payload includes `displayName`, `username`, `picture`.
+- `src/server/src/serverMonolith.ts` (shell startup only)
+- `src/server/src/server/bootstrap.ts` (order and startup orchestration)
+- `src/server/src/server/depsBuilder.ts` (route deps assembly)
+- `src/server/src/routes/authRoutes.ts`
+- `src/server/src/routes/profileRoutes.ts`
+- `src/server/src/routes/savedInterfacesRoutes.ts`
+- `src/server/src/routes/paymentsRoutes.ts`
+- `src/server/src/routes/paymentsWebhookRoute.ts`
+- `src/server/src/routes/llmAnalyzeRoute.ts`
+- `src/server/src/routes/llmPrefillRoute.ts`
+- `src/server/src/routes/llmChatRoute.ts`
 
 Backend migrations:
 - `src/server/migrations/1770383000000_add_saved_interfaces.js`
@@ -299,6 +319,14 @@ Frontend orchestration seams:
 - Do not use DB row timestamps (`created_at`, `updated_at`) for ordering or merge decisions.
 - Do not write during restore path: restore must stay read-only and block save/sync side effects.
 
+## 7.6 Backend Order Invariants
+
+- `registerPaymentsWebhookRoute(...)` must run before CORS middleware registration.
+- `applyJsonParsers(...)` must run before route registration.
+- startup gates must run before `app.listen(...)`.
+- order guard script:
+  - `npm run test:servermonolith-shell`
+
 ## 7.2 Saved Interfaces Call Graph (Step 7-9)
 
 Write path (single writer):
@@ -335,12 +363,19 @@ Backend:
 - `POST /api/payments/gopayqris/create`
 - `GET /api/payments/:orderId/status`
 - `POST /api/payments/webhook`
+- Route ownership:
+  - `src/server/src/routes/paymentsRoutes.ts`
+  - `src/server/src/routes/paymentsWebhookRoute.ts`
 
 ## 9. LLM Endpoints (Server-Side)
 Backend:
 - `POST /api/llm/paper-analyze`
 - `POST /api/llm/chat`
 - `POST /api/llm/prefill`
+- Route ownership:
+  - `src/server/src/routes/llmAnalyzeRoute.ts`
+  - `src/server/src/routes/llmChatRoute.ts`
+  - `src/server/src/routes/llmPrefillRoute.ts`
 
 Client call sites:
 - `src/ai/paperAnalyzer.ts`

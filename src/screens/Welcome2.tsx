@@ -24,8 +24,6 @@ const WELCOME2_AUTO_ADVANCE_DELAY_MS = 2000*4;
 const STABILIZE_STAGE_A_MS = 400;
 const STABILIZE_STAGE_B_MS = 200;
 const BACKSTEP_CUT_RATIO = 0.7;
-const CUT_ELLIPSIS_TOTAL_DOTS = 0;
-const CUT_ELLIPSIS_CHARS_PER_DOT_STEP = 4;
 const SEEK_ICON_SIZE_PX = 16;
 const SEEK_ICON_COLOR = '#9db7e2';
 const BLOCKED_SCROLL_KEYS = new Set([' ', 'PageDown', 'PageUp', 'ArrowDown', 'ArrowUp']);
@@ -67,9 +65,6 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
     const isBackJumpingRef = React.useRef(false);
     const stabilizeStageRef = React.useRef<'cur_start' | 'prev_end' | null>(null);
     const [stabilizeStage, setStabilizeStage] = React.useState<'cur_start' | 'prev_end' | null>(null);
-    const cutLandingEndCoreRef = React.useRef<number | null>(null);
-    const cutLandingStartCharCountRef = React.useRef<number | null>(null);
-    const [showCutEllipsis, setShowCutEllipsis] = React.useState(false);
 
     React.useEffect(() => {
         if (visibleCharCount === prevVisibleCountRef.current) return;
@@ -159,7 +154,7 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
         setStabilizeStage(stage);
     }, []);
 
-    const clearPendingBackJump = React.useCallback(() => {
+    const cancelBackJumpSequence = React.useCallback(() => {
         if (stabilizeTimeoutARef.current !== null) {
             clearTimeout(stabilizeTimeoutARef.current);
             stabilizeTimeoutARef.current = null;
@@ -174,9 +169,6 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
         }
         isBackJumpingRef.current = false;
         setBackJumpStage(null);
-        cutLandingEndCoreRef.current = null;
-        cutLandingStartCharCountRef.current = null;
-        setShowCutEllipsis(false);
         setClockPaused(false);
     }, [setBackJumpStage, setClockPaused]);
 
@@ -219,7 +211,7 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
         const previousPartIdx = Math.max(0, currentPartIdx - 1);
 
         clearAutoAdvanceTimer();
-        clearPendingBackJump();
+        cancelBackJumpSequence();
         isBackJumpingRef.current = true;
         setClockPaused(true);
 
@@ -249,9 +241,6 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
                 stabilizeTimeoutCRef.current = setTimeout(() => {
                     stabilizeTimeoutCRef.current = null;
                     seekWithManualInteraction(targetMsC);
-                    cutLandingEndCoreRef.current = previousPartEndCore;
-                    cutLandingStartCharCountRef.current = cutCharCount;
-                    setShowCutEllipsis(cutCharCount < previousPartEndCore);
                     setBackJumpStage(null);
                     isBackJumpingRef.current = false;
                     setClockPaused(false);
@@ -261,10 +250,9 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
     }, [
         builtTimeline.events.length,
         clearAutoAdvanceTimer,
-        clearPendingBackJump,
+        cancelBackJumpSequence,
         getCurrentPartIdx,
         seekWithManualInteraction,
-        setShowCutEllipsis,
         sentenceSpans.partEndCoreCharCountByIndex,
         setBackJumpStage,
         setClockPaused,
@@ -272,25 +260,6 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
         toSentenceEndTargetMs,
         toSentenceStartTargetMs,
     ]);
-
-    const cutEllipsisDotCount = React.useMemo(() => {
-        if (!showCutEllipsis) return 0;
-        const cutLandingEndCore = cutLandingEndCoreRef.current;
-        const cutLandingStartCharCount = cutLandingStartCharCountRef.current;
-        if (cutLandingEndCore === null || cutLandingStartCharCount === null) return 0;
-        if (visibleCharCount >= cutLandingEndCore) return 0;
-        const charsSinceLanding = Math.max(0, visibleCharCount - cutLandingStartCharCount);
-        const dotStepsConsumed = Math.floor(charsSinceLanding / CUT_ELLIPSIS_CHARS_PER_DOT_STEP);
-        return Math.max(0, CUT_ELLIPSIS_TOTAL_DOTS - dotStepsConsumed);
-    }, [showCutEllipsis, visibleCharCount]);
-
-    React.useEffect(() => {
-        if (!showCutEllipsis) return;
-        if (cutEllipsisDotCount > 0) return;
-        cutLandingEndCoreRef.current = null;
-        cutLandingStartCharCountRef.current = null;
-        setShowCutEllipsis(false);
-    }, [cutEllipsisDotCount, showCutEllipsis]);
 
     const finishCurrentSentence = React.useCallback(() => {
         if (builtTimeline.events.length === 0) return;
@@ -321,10 +290,10 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
 
     const handleSeekFinishSentence = React.useCallback((event: React.MouseEvent<HTMLButtonElement>) => {
         event.stopPropagation();
-        clearPendingBackJump();
+        cancelBackJumpSequence();
         finishCurrentSentence();
     }, [
-        clearPendingBackJump,
+        cancelBackJumpSequence,
         finishCurrentSentence,
     ]);
 
@@ -352,10 +321,10 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
 
     React.useEffect(() => {
         return () => {
-            clearPendingBackJump();
+            cancelBackJumpSequence();
             clearAutoAdvanceTimer();
         };
-    }, [clearAutoAdvanceTimer, clearPendingBackJump]);
+    }, [cancelBackJumpSequence, clearAutoAdvanceTimer]);
 
     return (
         <div
@@ -372,18 +341,7 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
                     style={TEXT_STYLE}
                 >
                     <span>{visibleText}</span>
-                    <span style={CURSOR_CLUSTER_STYLE}>
-                        {cutEllipsisDotCount > 0 ? (
-                            <span style={CUT_ELLIPSIS_OVERLAY_STYLE} aria-hidden="true">
-                                {Array.from({ length: cutEllipsisDotCount }).map((_, index) => (
-                                    <span key={index} style={CUT_ELLIPSIS_DOT_STYLE}>
-                                        {'.'}
-                                    </span>
-                                ))}
-                            </span>
-                        ) : null}
-                        <TypingCursor mode={cursorMode} heightEm={0.95} style={CURSOR_STYLE} />
-                    </span>
+                    <TypingCursor mode={cursorMode} heightEm={0.95} style={CURSOR_STYLE} />
                 </div>
 
                 <div style={SEEK_BUTTON_ROW_STYLE} onPointerDown={(event) => event.stopPropagation()}>
@@ -470,31 +428,7 @@ const TEXT_STYLE: React.CSSProperties = {
 };
 
 const CURSOR_STYLE: React.CSSProperties = {
-    marginLeft: 0,
-};
-
-const CURSOR_CLUSTER_STYLE: React.CSSProperties = {
-    display: 'inline-block',
-    position: 'relative',
     marginLeft: '4px',
-};
-
-const CUT_ELLIPSIS_OVERLAY_STYLE: React.CSSProperties = {
-    position: 'absolute',
-    right: '100%',
-    top: 0,
-    display: 'inline-flex',
-    color: '#b9bcc5',
-    pointerEvents: 'none',
-    whiteSpace: 'nowrap',
-};
-
-const CUT_ELLIPSIS_DOT_STYLE: React.CSSProperties = {
-    display: 'inline-flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: '0.35em',
-    flex: '0 0 0.35em',
 };
 
 const SEEK_BUTTON_ROW_STYLE: React.CSSProperties = {

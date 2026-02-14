@@ -1,5 +1,11 @@
 # Welcome2 Ellipsis Period Decay Mechanism (Detailed Technical Report)
 
+DEPRECATED NOTICE (2026-02-14):
+- This mechanism has been removed completely from `src/screens/Welcome2.tsx`.
+- Welcome2 no longer renders cut ellipsis dots and no longer keeps ellipsis lifecycle state.
+- Current behavior reference is documented in:
+  - `docs/report_2026_02_14_welcome2_ellipsis_removed.md`
+
 Date: 2026-02-14
 File of truth: `src/screens/Welcome2.tsx`
 

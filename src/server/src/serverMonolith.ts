@@ -21,11 +21,8 @@ import { registerLlmAnalyzeRoute } from "./routes/llmAnalyzeRoute";
 import { registerLlmPrefillRoute } from "./routes/llmPrefillRoute";
 import { registerLlmChatRoute } from "./routes/llmChatRoute";
 import { registerHealthRoutes } from "./routes/healthRoutes";
-import {
-  clearSessionCookie,
-  getSessionIdFromRequest,
-  setSessionCookie
-} from "./server/cookies";
+import { registerAuthRoutes } from "./routes/authRoutes";
+import { clearSessionCookie, getSessionIdFromRequest } from "./server/cookies";
 import { buildCorsOptions } from "./server/corsConfig";
 import { loadServerEnvConfig } from "./server/envConfig";
 import { applyJsonParsers } from "./server/jsonParsers";
@@ -35,20 +32,6 @@ import type {
   LlmPrefillRouteDeps,
   LlmChatRouteDeps
 } from "./routes/llmRouteDeps";
-
-type SessionUser = {
-  sub: string;
-  email?: string;
-  name?: string;
-  picture?: string;
-};
-
-type TokenInfo = {
-  sub?: string;
-  email?: string;
-  name?: string;
-  picture?: string;
-};
 
 type AuthContext = {
   id: string;
@@ -88,6 +71,24 @@ function isProd() {
 
 function isDevBalanceBypassEnabled() {
   return serverEnv.devBypassBalanceEnabled;
+}
+
+async function verifyGoogleIdToken(args: {
+  idToken: string;
+  audience: string;
+}): Promise<{ sub?: string; email?: string; name?: string; picture?: string }> {
+  const oauthClient = new OAuth2Client(args.audience);
+  const ticket = await oauthClient.verifyIdToken({
+    idToken: args.idToken,
+    audience: args.audience
+  });
+  const payload = ticket.getPayload();
+  return {
+    sub: payload?.sub,
+    email: payload?.email ?? undefined,
+    name: payload?.name ?? undefined,
+    picture: payload?.picture ?? undefined
+  };
 }
 
 function parseGrossAmount(value: unknown, fallbackAmount: number): number | null {
@@ -303,215 +304,15 @@ app.options(/.*/, cors(corsOptions));
 
 registerHealthRoutes(app, { getPool });
 
-app.post("/auth/google", async (req, res) => {
-  const idToken = req.body?.idToken;
-  if (!idToken) {
-    res.status(400).json({ ok: false, error: "missing idToken" });
-    return;
-  }
-
-  const clientId = process.env.GOOGLE_CLIENT_ID;
-  if (!clientId) {
-    res.status(500).json({ ok: false, error: "GOOGLE_CLIENT_ID is not set" });
-    return;
-  }
-
-  console.log("[auth] requiredAudience:", process.env.GOOGLE_CLIENT_ID);
-
-  let tokenInfo: TokenInfo | null = null;
-  try {
-    const oauthClient = new OAuth2Client(clientId);
-    const ticket = await oauthClient.verifyIdToken({
-      idToken,
-      audience: clientId
-    });
-    const payload = ticket.getPayload();
-    if (!payload?.sub) {
-      res.status(401).json({ ok: false, error: "token missing subject" });
-      return;
-    }
-
-    tokenInfo = {
-      sub: payload.sub,
-      email: payload.email ?? undefined,
-      name: payload.name ?? undefined,
-      picture: payload.picture ?? undefined
-    };
-  } catch (e) {
-    res.status(401).json({ ok: false, error: `token validation failed: ${String(e)}` });
-    return;
-  }
-
-  if (!tokenInfo?.sub) {
-    res.status(401).json({ ok: false, error: "token missing subject" });
-    return;
-  }
-
-  const user: SessionUser = {
-    sub: tokenInfo.sub,
-    email: tokenInfo.email,
-    name: tokenInfo.name,
-    picture: tokenInfo.picture
-  };
-
-  const sessionId = crypto.randomUUID();
-  const expiresAt = new Date(Date.now() + SESSION_TTL_MS);
-
-  let userRow: {
-    id: string;
-    google_sub: string;
-    email: string | null;
-    name: string | null;
-    picture: string | null;
-    display_name: string | null;
-    username: string | null;
-  } | null = null;
-
-  try {
-    const pool = await getPool();
-    const upsertSql = profileColumnsAvailable
-      ? `insert into users (google_sub, email, name, picture)
-         values ($1, $2, $3, $4)
-         on conflict (google_sub)
-         do update set email = excluded.email, name = excluded.name, picture = excluded.picture
-         returning id, google_sub, email, name, picture, display_name, username`
-      : `insert into users (google_sub, email, name, picture)
-         values ($1, $2, $3, $4)
-         on conflict (google_sub)
-         do update set email = excluded.email, name = excluded.name, picture = excluded.picture
-         returning id, google_sub, email, name, picture`;
-    const upsertResult = await pool.query(upsertSql, [
-      user.sub,
-      user.email ?? null,
-      user.name ?? null,
-      user.picture ?? null
-    ]);
-    userRow = upsertResult.rows[0] || null;
-
-    if (!userRow) {
-      res.status(500).json({ ok: false, error: "failed to upsert user" });
-      return;
-    }
-
-    await pool.query(
-      `insert into sessions (id, user_id, expires_at)
-       values ($1, $2, $3)`,
-      [sessionId, userRow.id, expiresAt]
-    );
-  } catch (e) {
-    res.status(500).json({ ok: false, error: `db error: ${String(e)}` });
-    return;
-  }
-
-  setSessionCookie(res, sessionId, {
-    cookieName: COOKIE_NAME,
-    sessionTtlMs: SESSION_TTL_MS,
-    cookieSameSite: COOKIE_SAMESITE,
-    isProd: isProd()
-  });
-
-  res.json({
-    ok: true,
-    user: {
-      sub: userRow.google_sub,
-      email: userRow.email ?? undefined,
-      name: userRow.name ?? undefined,
-      picture: userRow.picture ?? undefined,
-      displayName: profileColumnsAvailable ? userRow.display_name ?? undefined : undefined,
-      username: profileColumnsAvailable ? userRow.username ?? undefined : undefined
-    }
-  });
-});
-
-app.get("/me", async (req, res) => {
-  const sessionId = getSessionIdFromRequest(req, { cookieName: COOKIE_NAME });
-  if (!sessionId) {
-    res.json({ ok: true, user: null });
-    return;
-  }
-
-  try {
-    const pool = await getPool();
-    const meSql = profileColumnsAvailable
-      ? `select sessions.expires_at as expires_at,
-                users.google_sub as google_sub,
-                users.email as email,
-                users.name as name,
-                users.picture as picture,
-                users.display_name as display_name,
-                users.username as username
-           from sessions
-           join users on users.id = sessions.user_id
-          where sessions.id = $1`
-      : `select sessions.expires_at as expires_at,
-                users.google_sub as google_sub,
-                users.email as email,
-                users.name as name,
-                users.picture as picture
-           from sessions
-           join users on users.id = sessions.user_id
-          where sessions.id = $1`;
-    const result = await pool.query(meSql, [sessionId]);
-
-    const row = result.rows[0];
-    if (!row) {
-      clearSessionCookie(res, {
-        cookieName: COOKIE_NAME,
-        cookieSameSite: COOKIE_SAMESITE,
-        isProd: isProd()
-      });
-      console.log("[auth] session missing -> cleared cookie");
-      res.json({ ok: true, user: null });
-      return;
-    }
-
-    const expiresAt = row.expires_at ? new Date(row.expires_at) : null;
-    if (expiresAt && Date.now() > expiresAt.getTime()) {
-      await pool.query("delete from sessions where id = $1", [sessionId]);
-      clearSessionCookie(res, {
-        cookieName: COOKIE_NAME,
-        cookieSameSite: COOKIE_SAMESITE,
-        isProd: isProd()
-      });
-      console.log("[auth] session expired -> cleared cookie");
-      res.json({ ok: true, user: null });
-      return;
-    }
-
-    res.json({
-      ok: true,
-      user: {
-        sub: row.google_sub,
-        email: row.email ?? undefined,
-        name: row.name ?? undefined,
-        picture: row.picture ?? undefined,
-        displayName: profileColumnsAvailable ? row.display_name ?? undefined : undefined,
-        username: profileColumnsAvailable ? row.username ?? undefined : undefined
-      }
-    });
-  } catch (e) {
-    res.status(500).json({ ok: false, error: `db error: ${String(e)}` });
-  }
-});
-
-app.post("/auth/logout", async (req, res) => {
-  const sessionId = getSessionIdFromRequest(req, { cookieName: COOKIE_NAME });
-  if (sessionId) {
-    try {
-      const pool = await getPool();
-      await pool.query("delete from sessions where id = $1", [sessionId]);
-    } catch (e) {
-      res.status(500).json({ ok: false, error: `db error: ${String(e)}` });
-      return;
-    }
-  }
-
-  clearSessionCookie(res, {
-    cookieName: COOKIE_NAME,
-    cookieSameSite: COOKIE_SAMESITE,
-    isProd: isProd()
-  });
-  res.json({ ok: true });
+registerAuthRoutes(app, {
+  getPool,
+  cookieName: COOKIE_NAME,
+  cookieSameSite: COOKIE_SAMESITE,
+  cookieTtlMs: SESSION_TTL_MS,
+  isProd: isProd(),
+  getProfileColumnsAvailable: () => profileColumnsAvailable,
+  googleClientId: process.env.GOOGLE_CLIENT_ID,
+  verifyGoogleIdToken
 });
 
 app.post("/api/profile/update", requireAuth, async (req, res) => {

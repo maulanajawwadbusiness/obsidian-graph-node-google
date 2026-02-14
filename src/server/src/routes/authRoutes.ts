@@ -15,7 +15,7 @@ type QueryablePool = {
 };
 
 export type GoogleTokenInfo = {
-  sub: string;
+  sub?: string;
   email?: string;
   name?: string;
   picture?: string;

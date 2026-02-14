@@ -3,7 +3,6 @@ import { ONBOARDING_ENABLED, ONBOARDING_START_SCREEN, ONBOARDING_START_SCREEN_RA
 import { BalanceBadge } from '../components/BalanceBadge';
 import { ShortageWarning } from '../components/ShortageWarning';
 import { MoneyNoticeStack } from '../components/MoneyNoticeStack';
-import { FullscreenButton } from '../components/FullscreenButton';
 import { Sidebar, type SidebarInterfaceItem } from '../components/Sidebar';
 import { useAuth } from '../auth/AuthProvider';
 import {
@@ -11,7 +10,6 @@ import {
     LAYER_MODAL_LOGOUT_CONFIRM,
     LAYER_MODAL_PROFILE,
     LAYER_MODAL_SEARCH,
-    LAYER_ONBOARDING_FULLSCREEN_BUTTON,
 } from '../ui/layers';
 import {
     deleteSavedInterface as deleteSavedInterfaceRemote,
@@ -45,6 +43,7 @@ import {
 } from './appshell/screenFlow/screenFlowController';
 import { renderScreenContent } from './appshell/render/renderScreenContent';
 import { useOnboardingOverlayState } from './appshell/overlays/useOnboardingOverlayState';
+import { OnboardingChrome } from './appshell/overlays/OnboardingChrome';
 
 const Graph = React.lazy(() =>
     import('../playground/GraphPhysicsPlayground').then((mod) => ({
@@ -352,19 +351,7 @@ export const AppShell: React.FC = () => {
     const showPersistentSidebar = screen === 'prompt' || screen === 'graph';
     const loginBlockingActive = screen === 'prompt' && enterPromptOverlayOpen;
     const sidebarDisabled = (screen === 'graph' && graphIsLoading) || loginBlockingActive;
-    const showOnboardingFullscreenButton = isOnboardingScreen(screen);
     const onboardingActive = isOnboardingScreen(screen) || shouldBlockOnboardingInput;
-    const onboardingFullscreenIconScale = (screen === 'welcome1' || screen === 'welcome2')
-        ? WELCOME_FULLSCREEN_ICON_SCALE
-        : 1;
-    const onboardingFullscreenButtonStyle: React.CSSProperties = screen === 'prompt'
-        ? {
-            ...ONBOARDING_FULLSCREEN_BUTTON_STYLE,
-            width: '30px',
-            height: '30px',
-            padding: '6px',
-        }
-        : ONBOARDING_FULLSCREEN_BUTTON_STYLE;
 
     const moneyUi = showMoneyUi ? (
         <>
@@ -372,14 +359,6 @@ export const AppShell: React.FC = () => {
             <ShortageWarning />
             <MoneyNoticeStack />
         </>
-    ) : null;
-
-    const onboardingFullscreenButton = showOnboardingFullscreenButton ? (
-        <FullscreenButton
-            style={onboardingFullscreenButtonStyle}
-            blocked={isOnboardingOverlayOpen}
-            iconScale={onboardingFullscreenIconScale}
-        />
     ) : null;
 
     const applySavedInterfacesState = React.useCallback((next: SavedInterfaceRecordV1[]) => {
@@ -1342,7 +1321,10 @@ export const AppShell: React.FC = () => {
                 <div data-main-screen-root="1" style={MAIN_SCREEN_CONTAINER_STYLE}>
                     {screenContent}
                 </div>
-                {onboardingFullscreenButton}
+                <OnboardingChrome
+                    screen={screen}
+                    isOnboardingOverlayOpen={isOnboardingOverlayOpen}
+                />
                 {moneyUi}
             </div>
             {isProfileOpen ? (
@@ -2139,14 +2121,6 @@ const NON_SIDEBAR_LAYER_STYLE: React.CSSProperties = {
 const NON_SIDEBAR_DIMMED_STYLE: React.CSSProperties = {
     filter: 'brightness(0.8)',
 };
-
-const ONBOARDING_FULLSCREEN_BUTTON_STYLE: React.CSSProperties = {
-    position: 'fixed',
-    top: '24px',
-    right: '24px',
-    zIndex: LAYER_ONBOARDING_FULLSCREEN_BUTTON
-};
-const WELCOME_FULLSCREEN_ICON_SCALE = 0.8;
 
 const WELCOME1_FONT_GATE_BLANK_STYLE: React.CSSProperties = {
     minHeight: '100vh',

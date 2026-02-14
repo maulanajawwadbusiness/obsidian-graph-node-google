@@ -183,7 +183,7 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
     const toSentenceStartTargetMs = React.useCallback((startCharCount: number): number => {
         const maxCount = builtTimeline.events.length;
         const clampedStart = Math.max(0, Math.min(startCharCount, maxCount));
-        if (clampedStart <= 0) return 0;
+        if (clampedStart <= 0) return -1;
         const startEvent = builtTimeline.events[clampedStart];
         if (!startEvent) return builtTimeline.totalMs;
         return Math.max(0, startEvent.tMs - 1);

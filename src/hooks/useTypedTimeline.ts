@@ -19,6 +19,7 @@ const DEBUG_WELCOME2_TYPE = false;
 const DEBUG_WELCOME2_FLICKER = false;
 const DEBUG_LOG_INTERVAL_MS = 500;
 const ELAPSED_PUBLISH_INTERVAL_MS = 100;
+const PRE_CHAR_EPS_MS = 1;
 
 type InternalState = {
     visibleCharCount: number;
@@ -84,7 +85,7 @@ export function useTypedTimeline(
     const lastCharTimeMs = React.useMemo(() => getLastCharTimeMs(built.events), [built.events]);
 
     const seekToMs = React.useCallback((ms: number) => {
-        const targetElapsedMs = clamp(Math.round(ms), 0, built.totalMs);
+        const targetElapsedMs = clamp(Math.round(ms), -PRE_CHAR_EPS_MS, built.totalMs);
         const currentElapsedMs = elapsedMsRef.current;
         offsetMsRef.current += targetElapsedMs - currentElapsedMs;
         elapsedMsRef.current = targetElapsedMs;
@@ -321,7 +322,7 @@ export function useTypedTimeline(
         phase: state.phase,
         isTypingDone: state.phase !== 'typing',
         isDone: state.phase === 'done',
-        elapsedMs: state.elapsedMs,
+        elapsedMs: Math.max(0, state.elapsedMs),
         seekToMs,
         setClockPaused,
     };

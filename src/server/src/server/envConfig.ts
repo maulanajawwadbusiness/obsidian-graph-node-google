@@ -2,6 +2,12 @@ const DEV_PORTS = [5173, 5174, 5175, 5176, 5177, 5178];
 const DEFAULT_ALLOWED_ORIGINS = ["https://beta.arnvoid.com"];
 const COOKIE_SAMESITE = "lax";
 
+// Env ownership boundary:
+// - loadServerEnvConfig() owns bootstrap/server wiring env values only
+//   (port, cookie/session, cors, saved-interface limits, analyze provider flags).
+// - Domain modules keep domain-specific env reads local (db, llm providers,
+//   midtrans transport, fx, and selftest/smoke scripts) to avoid coupling all
+//   runtime concerns into one server bootstrap config object.
 export type ServerEnvConfig = {
   port: number;
   cookieName: string;

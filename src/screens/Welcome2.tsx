@@ -143,16 +143,22 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
 
     const handleSeekRestartSentence = React.useCallback((event: React.MouseEvent<HTMLButtonElement>) => {
         event.stopPropagation();
+        if (builtTimeline.events.length === 0) return;
         clearAutoAdvanceTimer();
         const sentenceIdx = sentenceIndexForCharCount(
             visibleCharCount,
             sentenceSpans.sentenceEndCharCountByIndex
         );
         const targetCharCount = sentenceSpans.sentenceStartCharCountByIndex[sentenceIdx] ?? 0;
+        if (targetCharCount === visibleCharCount) {
+            rootRef.current?.focus({ preventScroll: true });
+            return;
+        }
         seekToMs(toTargetMs(targetCharCount));
         clearAutoAdvanceTimer();
         rootRef.current?.focus({ preventScroll: true });
     }, [
+        builtTimeline.events.length,
         clearAutoAdvanceTimer,
         seekToMs,
         sentenceSpans.sentenceEndCharCountByIndex,
@@ -163,6 +169,7 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
 
     const handleSeekFinishSentence = React.useCallback((event: React.MouseEvent<HTMLButtonElement>) => {
         event.stopPropagation();
+        if (builtTimeline.events.length === 0) return;
         clearAutoAdvanceTimer();
         const sentenceIdx = sentenceIndexForCharCount(
             visibleCharCount,
@@ -170,6 +177,10 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
         );
         const targetCharCount =
             sentenceSpans.sentenceEndCharCountByIndex[sentenceIdx] ?? builtTimeline.events.length;
+        if (targetCharCount <= visibleCharCount) {
+            rootRef.current?.focus({ preventScroll: true });
+            return;
+        }
         seekToMs(toTargetMs(targetCharCount));
         clearAutoAdvanceTimer();
         rootRef.current?.focus({ preventScroll: true });

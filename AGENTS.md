@@ -34,6 +34,30 @@ The Canvas (Graph) is the substrate. Panels (Chat, Docs) and the Loading Screen 
 | **DB Ops** | `docs/db.md`, `src/server/scripts`, `src/server/migrations` | Laptop-first DB workflow and migrations. |
 | **LLM Usage/Billing** | `src/server/src/llm/usage`, `src/server/src/llm/audit`, `src/server/src/pricing` | Usage tracking, audit persistence, and rupiah pricing. |
 
+## 2.1 AppShell Architecture (2026-02-14)
+
+- `src/screens/AppShell.tsx` is orchestration-only (current: 447 lines).
+- Domain logic lives in `src/screens/appshell/*`.
+- Full seam report: `docs/report_2026_02_14_appshell_modularization.md`.
+
+Where to edit X:
+- onboarding fade tokens: `src/screens/appshell/transitions/transitionTokens.ts`
+- onboarding transition logic: `src/screens/appshell/transitions/useOnboardingTransition.ts`
+- onboarding wheel guard: `src/screens/appshell/transitions/useOnboardingWheelGuard.ts`
+- screen start/flow policy: `src/screens/appshell/screenFlow/screenStart.ts`, `src/screens/appshell/screenFlow/screenFlowController.ts`
+- screen render mapping: `src/screens/appshell/render/renderScreenContent.tsx`
+- onboarding overlay and fullscreen chrome: `src/screens/appshell/overlays/useOnboardingOverlayState.ts`, `src/screens/appshell/overlays/OnboardingChrome.tsx`
+- non-onboarding modal state/render: `src/screens/appshell/overlays/useAppShellModals.ts`, `src/screens/appshell/overlays/ModalLayer.tsx`
+- search overlay ranking: `src/screens/appshell/overlays/useSearchInterfacesEngine.ts`
+- saved interface writes: `src/screens/appshell/savedInterfaces/savedInterfacesCommits.ts`
+- saved interface sync/outbox: `src/screens/appshell/savedInterfaces/useSavedInterfacesSync.ts`
+
+Invariant pins:
+- onboarding fades and reduced-motion behavior must stay parity-safe (no flicker, no remount pulse).
+- fullscreen is explicit-only and blocked while onboarding overlays are open.
+- overlays and modals must shield pointer and wheel so canvas never reacts underneath.
+- saved interfaces: single writer, rename no reorder, restore read-only, payload timestamps are ordering truth, outbox retry + identity isolation.
+
 ## 3. Safe Workflow
 
 1.  **Scan**: Read `docs/repo_xray.md`.

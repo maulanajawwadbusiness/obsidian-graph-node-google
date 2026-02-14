@@ -137,6 +137,11 @@ Current fullscreen rules in onboarding:
 ## 2.4 Persistent Sidebar Sessions (Current)
 Saved interfaces in the left Sidebar are now local-first and AppShell-owned.
 
+AppShell architecture note (2026-02-14):
+- `src/screens/AppShell.tsx` is orchestration-only (`447` lines).
+- Domain logic lives under `src/screens/appshell/*` (screen flow, transitions, overlays, saved interfaces, render mapping, sidebar wiring).
+- See `docs/report_2026_02_14_appshell_modularization.md` for seam-by-seam ownership and commit history.
+
 Current behavior:
 - Source of truth:
   - Store module: `src/store/savedInterfacesStore.ts`
@@ -199,14 +204,14 @@ Remote memory (account-backed):
   - `POST /api/saved-interfaces/delete`
 - Payload size limit:
   - server guard constant `MAX_SAVED_INTERFACE_PAYLOAD_BYTES` (default 15 MB) in `src/server/src/serverMonolith.ts`
-- AppShell sync role:
+- AppShell orchestration role:
   - Hydrates remote + local on auth-ready, merges, and persists into active local namespace.
   - Mirrors local save/rename/delete events to backend as best-effort background sync.
   - Logged-out mode skips remote calls completely.
 
 Unified write contract (current truth):
 - AppShell is the write owner for saved interface mutations.
-- Commit surfaces in `src/screens/AppShell.tsx`:
+- Commit surfaces live in `src/screens/appshell/savedInterfaces/savedInterfacesCommits.ts` and are wired from AppShell:
   - `commitUpsertInterface`
   - `commitPatchLayoutByDocId`
   - `commitRenameInterface`
@@ -215,7 +220,7 @@ Unified write contract (current truth):
 - Graph and node-binding emit callbacks to AppShell; they do not directly mutate saved interface storage anymore.
 
 Remote failure behavior (current truth):
-- Remote sync uses a persistent per-identity outbox in AppShell.
+- Remote sync uses a persistent per-identity outbox in `src/screens/appshell/savedInterfaces/useSavedInterfacesSync.ts` (wired by AppShell).
 - Local state + localStorage are UX truth; remote is mirror-only.
 - Outbox localStorage namespace:
   - `arnvoid_saved_interfaces_v1_remote_outbox_<identityKey>`
@@ -247,6 +252,17 @@ Critical gotchas (must not regress):
 - Do not reorder sessions on rename. Rename must not bump payload `updatedAt`.
 - Do not use DB row timestamps (`created_at`, `updated_at`) for UI ordering.
 - Do not write during restore path. Restore must remain read-only.
+
+## 2.5 AppShell Seams (2026-02-14)
+
+- AppShell orchestration entry: `src/screens/AppShell.tsx`
+- screen policy: `src/screens/appshell/screenFlow/*`
+- onboarding transitions: `src/screens/appshell/transitions/*`
+- overlays and modal rendering: `src/screens/appshell/overlays/*`
+- saved interface commits and sync: `src/screens/appshell/savedInterfaces/*`
+- screen render mapping: `src/screens/appshell/render/renderScreenContent.tsx`
+- sidebar wiring: `src/screens/appshell/sidebar/*`
+- full modularization report: `docs/report_2026_02_14_appshell_modularization.md`
 
 ## 3. Physics Architecture And Contract
 The graph is driven by a **Hybrid Solver** (`src/physics/`) prioritizing "Visual Dignity" over pure simulation accuracy.

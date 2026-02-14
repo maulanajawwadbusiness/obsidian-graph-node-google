@@ -22,6 +22,23 @@ Update Note: 2026-02-12
 - Sidebar avatar flow now owns profile open and logout trigger path (with AppShell confirm modal).
 - Font system moved to Quicksand `woff2` multi-weight via `src/styles/fonts.css` and CSS vars.
 
+Update Note: 2026-02-14
+- Completed AppShell modularization runs 1-8.
+- `src/screens/AppShell.tsx` is orchestration-only at 447 lines.
+- Domain seams moved under `src/screens/appshell/*` (screenFlow, transitions, overlays, savedInterfaces, render, sidebar, helpers/styles).
+- See `docs/report_2026_02_14_appshell_modularization.md`.
+
+## 0.1 AppShell Seams (2026-02-14)
+
+- orchestrator: `src/screens/AppShell.tsx`
+- screen flow: `src/screens/appshell/screenFlow/*`
+- transitions: `src/screens/appshell/transitions/*`
+- overlays and modals: `src/screens/appshell/overlays/*`
+- saved interfaces: `src/screens/appshell/savedInterfaces/*`
+- render mapping: `src/screens/appshell/render/renderScreenContent.tsx`
+- sidebar wiring: `src/screens/appshell/sidebar/*`
+- full details: `docs/report_2026_02_14_appshell_modularization.md`
+
 ## 1. Repository Tree (Depth 4)
 Excluding: node_modules, dist, build, .git
 
@@ -188,7 +205,9 @@ Note:
 ## 7.1 Saved Interfaces Sync Map (Current)
 
 Primary files:
-- `src/screens/AppShell.tsx` (sync brain, unified commit paths, outbox)
+- `src/screens/AppShell.tsx` (orchestration and dependency wiring)
+- `src/screens/appshell/savedInterfaces/savedInterfacesCommits.ts` (single-writer commit surfaces)
+- `src/screens/appshell/savedInterfaces/useSavedInterfacesSync.ts` (hydrate + outbox retry engine)
 - `src/store/savedInterfacesStore.ts` (local storage schema + namespace helpers)
 - `src/playground/GraphPhysicsPlaygroundShell.tsx` (restore pipeline + callback emitters)
 - `src/document/nodeBinding.ts` (analysis record creation, callback emission)
@@ -252,10 +271,20 @@ Frontend API helpers:
 
 Frontend orchestration seams:
 - `src/screens/AppShell.tsx`
-  - sync brain + identity/epoch guards
-  - outbox enqueue/drain and retry policy
-  - single writer commit surfaces for upsert/rename/delete/layout patch
-  - profile modal + logout confirm modal ownership
+  - orchestration-only shell: screen wiring, auth and saved-interface dependency injection
+  - no monolithic domain internals
+- `src/screens/appshell/screenFlow/*`
+  - screen types, start policy, flow mapping, welcome1 font gate
+- `src/screens/appshell/transitions/*`
+  - onboarding transition machine, tokens, wheel guard, layer host
+- `src/screens/appshell/overlays/*`
+  - onboarding overlay/fullscreen chrome, modal state and modal layer, profile/logout controllers, search engine
+- `src/screens/appshell/savedInterfaces/*`
+  - commit surfaces + sync engine split
+- `src/screens/appshell/render/renderScreenContent.tsx`
+  - pure screen-to-jsx mapping
+- `src/screens/appshell/sidebar/*`
+  - sidebar wiring layer and interface item mapping
 - `src/components/Sidebar.tsx`
   - saved session row list + ellipsis menu (rename/delete)
   - search overlay trigger wiring
@@ -274,7 +303,7 @@ Frontend orchestration seams:
 
 Write path (single writer):
 1. Graph/nodeBinding/sidebar intent
-2. AppShell commit surface (`commitUpsertInterface`, `commitPatchLayoutByDocId`, `commitRenameInterface`, `commitDeleteInterface`, `commitHydrateMerge`)
+2. AppShell-wired commit surface (`src/screens/appshell/savedInterfaces/savedInterfacesCommits.ts`)
 3. immediate in-memory list update
 4. immediate localStorage persist (active identity key)
 5. optional outbox enqueue (authenticated only)

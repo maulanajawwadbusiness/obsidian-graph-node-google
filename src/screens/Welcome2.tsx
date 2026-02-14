@@ -19,6 +19,8 @@ const CURSOR_PAUSE_THRESHOLD_MS = 130;
 const CURSOR_HOLD_FAST_WINDOW_MS = 680;
 const SHOW_WELCOME2_FOCUS_RING = false;
 const WELCOME2_AUTO_ADVANCE_DELAY_MS = 2000*4;
+const DOUBLE_CLICK_MS = 260;
+const CHAIN_WINDOW_MS = 900;
 const BLOCKED_SCROLL_KEYS = new Set([' ', 'PageDown', 'PageUp', 'ArrowDown', 'ArrowUp']);
 const INTERACTIVE_SELECTOR = 'button, input, textarea, select, a[href], [role=\"button\"], [contenteditable=\"true\"]';
 const DEBUG_WELCOME2_TYPE = false;
@@ -51,6 +53,9 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
     const prevVisibleCountRef = React.useRef(visibleCharCount);
     const holdStartRef = React.useRef<number | null>(null);
     const prevCursorModeRef = React.useRef<TypingCursorMode>('typing');
+    const lastLeftClickAtRef = React.useRef(0);
+    const backChainUntilRef = React.useRef(0);
+    const hasManualSeekRef = React.useRef(false);
 
     React.useEffect(() => {
         if (visibleCharCount === prevVisibleCountRef.current) return;
@@ -133,7 +138,7 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
         }
     }, []);
 
-    const toTargetMs = React.useCallback((targetCharCount: number): number => {
+    const toSentenceEndTargetMs = React.useCallback((targetCharCount: number): number => {
         if (targetCharCount <= 0) return 0;
         const maxCount = builtTimeline.events.length;
         const clampedCharCount = Math.max(0, Math.min(targetCharCount, maxCount));
@@ -141,56 +146,111 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
         return builtTimeline.events[clampedCharCount - 1].tMs;
     }, [builtTimeline.events]);
 
-    const handleSeekRestartSentence = React.useCallback((event: React.MouseEvent<HTMLButtonElement>) => {
-        event.stopPropagation();
-        if (builtTimeline.events.length === 0) return;
+    const toSentenceStartTargetMs = React.useCallback((startCharCount: number): number => {
+        const maxCount = builtTimeline.events.length;
+        const clampedStart = Math.max(0, Math.min(startCharCount, maxCount));
+        if (clampedStart <= 0) return 0;
+        const startEvent = builtTimeline.events[clampedStart];
+        if (!startEvent) return builtTimeline.totalMs;
+        return Math.max(0, startEvent.tMs - 1);
+    }, [builtTimeline.events, builtTimeline.totalMs]);
+
+    const seekWithManualInteraction = React.useCallback((targetMs: number) => {
+        hasManualSeekRef.current = true;
         clearAutoAdvanceTimer();
-        const sentenceIdx = sentenceIndexForCharCount(
-            visibleCharCount,
-            sentenceSpans.sentenceEndCharCountByIndex
-        );
-        const targetCharCount = sentenceSpans.sentenceStartCharCountByIndex[sentenceIdx] ?? 0;
-        if (targetCharCount === visibleCharCount) {
-            rootRef.current?.focus({ preventScroll: true });
-            return;
-        }
-        seekToMs(toTargetMs(targetCharCount));
+        seekToMs(targetMs);
         clearAutoAdvanceTimer();
         rootRef.current?.focus({ preventScroll: true });
+    }, [clearAutoAdvanceTimer, seekToMs]);
+
+    const getCurrentSentenceIdx = React.useCallback(() => sentenceIndexForCharCount(
+        visibleCharCount,
+        sentenceSpans.sentenceEndCharCountByIndex
+    ), [sentenceSpans.sentenceEndCharCountByIndex, visibleCharCount]);
+
+    const restartCurrentSentence = React.useCallback(() => {
+        if (builtTimeline.events.length === 0) return;
+        const sentenceIdx = getCurrentSentenceIdx();
+        const targetCharCount = sentenceSpans.sentenceStartCharCountByIndex[sentenceIdx] ?? 0;
+        seekWithManualInteraction(toSentenceStartTargetMs(targetCharCount));
     }, [
         builtTimeline.events.length,
-        clearAutoAdvanceTimer,
-        seekToMs,
-        sentenceSpans.sentenceEndCharCountByIndex,
+        getCurrentSentenceIdx,
+        seekWithManualInteraction,
         sentenceSpans.sentenceStartCharCountByIndex,
-        toTargetMs,
-        visibleCharCount,
+        toSentenceStartTargetMs,
     ]);
 
-    const handleSeekFinishSentence = React.useCallback((event: React.MouseEvent<HTMLButtonElement>) => {
-        event.stopPropagation();
+    const goBackOneSentence = React.useCallback(() => {
         if (builtTimeline.events.length === 0) return;
-        clearAutoAdvanceTimer();
-        const sentenceIdx = sentenceIndexForCharCount(
-            visibleCharCount,
-            sentenceSpans.sentenceEndCharCountByIndex
-        );
+        const sentenceIdx = getCurrentSentenceIdx();
+        const prevSentenceIdx = Math.max(0, sentenceIdx - 1);
+        const targetCharCount = sentenceSpans.sentenceStartCharCountByIndex[prevSentenceIdx] ?? 0;
+        seekWithManualInteraction(toSentenceStartTargetMs(targetCharCount));
+    }, [
+        builtTimeline.events.length,
+        getCurrentSentenceIdx,
+        seekWithManualInteraction,
+        sentenceSpans.sentenceStartCharCountByIndex,
+        toSentenceStartTargetMs,
+    ]);
+
+    const finishCurrentSentence = React.useCallback(() => {
+        if (builtTimeline.events.length === 0) return;
+        const sentenceIdx = getCurrentSentenceIdx();
         const targetCharCount =
             sentenceSpans.sentenceEndCharCountByIndex[sentenceIdx] ?? builtTimeline.events.length;
         if (targetCharCount <= visibleCharCount) {
             rootRef.current?.focus({ preventScroll: true });
             return;
         }
-        seekToMs(toTargetMs(targetCharCount));
-        clearAutoAdvanceTimer();
-        rootRef.current?.focus({ preventScroll: true });
+        seekWithManualInteraction(toSentenceEndTargetMs(targetCharCount));
     }, [
         builtTimeline.events.length,
-        clearAutoAdvanceTimer,
-        seekToMs,
+        getCurrentSentenceIdx,
+        seekWithManualInteraction,
         sentenceSpans.sentenceEndCharCountByIndex,
-        toTargetMs,
+        toSentenceEndTargetMs,
         visibleCharCount,
+    ]);
+
+    const handleSeekRestartSentence = React.useCallback((event: React.MouseEvent<HTMLButtonElement>) => {
+        event.stopPropagation();
+        clearAutoAdvanceTimer();
+        const now = performance.now();
+
+        if (now < backChainUntilRef.current) {
+            goBackOneSentence();
+            backChainUntilRef.current = now + CHAIN_WINDOW_MS;
+            lastLeftClickAtRef.current = now;
+            rootRef.current?.focus({ preventScroll: true });
+            return;
+        }
+
+        const isDoubleClick = now - lastLeftClickAtRef.current <= DOUBLE_CLICK_MS;
+        if (isDoubleClick) {
+            goBackOneSentence();
+            backChainUntilRef.current = now + CHAIN_WINDOW_MS;
+            lastLeftClickAtRef.current = 0;
+            rootRef.current?.focus({ preventScroll: true });
+            return;
+        }
+
+        restartCurrentSentence();
+        lastLeftClickAtRef.current = now;
+        backChainUntilRef.current = 0;
+        rootRef.current?.focus({ preventScroll: true });
+    }, [
+        goBackOneSentence,
+        restartCurrentSentence,
+        clearAutoAdvanceTimer,
+    ]);
+
+    const handleSeekFinishSentence = React.useCallback((event: React.MouseEvent<HTMLButtonElement>) => {
+        event.stopPropagation();
+        finishCurrentSentence();
+    }, [
+        finishCurrentSentence,
     ]);
 
     React.useEffect(() => {
@@ -202,6 +262,7 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
         if (autoAdvanceTriggeredRef.current) return;
         if (autoAdvanceTimeoutRef.current !== null) return;
         if (builtTimeline.events.length === 0) return;
+        if (hasManualSeekRef.current) return;
         if (phase === 'typing') return;
 
         const autoAdvanceAtMs = lastTypedCharMs + WELCOME2_AUTO_ADVANCE_DELAY_MS;

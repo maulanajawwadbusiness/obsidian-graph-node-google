@@ -11,6 +11,7 @@ export type TypedTimelineState = {
     isTypingDone: boolean;
     isDone: boolean;
     elapsedMs: number;
+    seekToMs: (ms: number) => void;
 };
 
 const DEBUG_WELCOME2_TYPE = false;
@@ -73,17 +74,50 @@ export function useTypedTimeline(
 ): TypedTimelineState {
     const [state, setState] = React.useState<InternalState>(() => getInitialState(built));
     const debugTypeMetrics = options.debugTypeMetrics ?? DEBUG_WELCOME2_TYPE;
+    const startTimeMsRef = React.useRef(0);
+    const offsetMsRef = React.useRef(0);
+    const elapsedMsRef = React.useRef(0);
+    const seekEpochRef = React.useRef(0);
+    const lastCharTimeMs = React.useMemo(() => getLastCharTimeMs(built.events), [built.events]);
+
+    const seekToMs = React.useCallback((ms: number) => {
+        const targetElapsedMs = clamp(Math.round(ms), 0, built.totalMs);
+        const currentElapsedMs = elapsedMsRef.current;
+        offsetMsRef.current += targetElapsedMs - currentElapsedMs;
+        elapsedMsRef.current = targetElapsedMs;
+        seekEpochRef.current += 1;
+
+        const visibleCharCount = getVisibleCharCountAtElapsed(built.events, targetElapsedMs);
+        const phase = getPhase(targetElapsedMs, lastCharTimeMs, built.totalMs);
+        setState((prev) => {
+            if (
+                prev.visibleCharCount === visibleCharCount &&
+                prev.phase === phase &&
+                prev.elapsedMs === targetElapsedMs
+            ) {
+                return prev;
+            }
+            return {
+                visibleCharCount,
+                phase,
+                elapsedMs: targetElapsedMs,
+            };
+        });
+    }, [built.events, built.totalMs, lastCharTimeMs]);
 
     React.useEffect(() => {
         let rafId = 0;
         let isActive = true;
-        const startTimeMs = nowMs();
-        const lastCharTimeMs = getLastCharTimeMs(built.events);
+        startTimeMsRef.current = nowMs();
+        offsetMsRef.current = 0;
+        elapsedMsRef.current = 0;
+        seekEpochRef.current = 0;
         let lastDebugBucket = -1;
         let lastNowMs: number | null = null;
         let guardViolationLogged = false;
         let summaryLogged = false;
         let prevVisibleCharCount = getInitialState(built).visibleCharCount;
+        let lastSeenSeekEpoch = seekEpochRef.current;
         let holdAtMs: number | null = null;
         let doneAtMs: number | null = null;
         let pendingNewlineIndex: number | null = null;
@@ -135,12 +169,24 @@ export function useTypedTimeline(
             }
             lastNowMs = nowMs;
 
-            const elapsedMs = Math.max(0, Math.round(nowMs - startTimeMs));
+            const elapsedMs = clamp(
+                Math.round((nowMs - startTimeMsRef.current) + offsetMsRef.current),
+                0,
+                built.totalMs
+            );
+            elapsedMsRef.current = elapsedMs;
             const visibleCharCount = getVisibleCharCountAtElapsed(built.events, elapsedMs);
             const phase = getPhase(elapsedMs, lastCharTimeMs, built.totalMs);
+            const didSeekSinceLastFrame = seekEpochRef.current !== lastSeenSeekEpoch;
+            if (didSeekSinceLastFrame) {
+                lastSeenSeekEpoch = seekEpochRef.current;
+            }
 
             const maxVisible = built.renderText.length;
-            if (visibleCharCount < prevVisibleCharCount || visibleCharCount > maxVisible) {
+            if (
+                (visibleCharCount < prevVisibleCharCount && !didSeekSinceLastFrame) ||
+                visibleCharCount > maxVisible
+            ) {
                 if (!guardViolationLogged) {
                     guardViolationLogged = true;
                     console.log(
@@ -196,6 +242,10 @@ export function useTypedTimeline(
             if (phase === 'done' && doneAtMs === null) {
                 doneAtMs = elapsedMs;
             }
+            if (phase === 'typing' && didSeekSinceLastFrame) {
+                holdAtMs = null;
+                doneAtMs = null;
+            }
 
             prevVisibleCharCount = visibleCharCount;
             setState((prev) => {
@@ -248,5 +298,6 @@ export function useTypedTimeline(
         isTypingDone: state.phase !== 'typing',
         isDone: state.phase === 'done',
         elapsedMs: state.elapsedMs,
+        seekToMs,
     };
 }

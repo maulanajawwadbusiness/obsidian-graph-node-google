@@ -35,6 +35,7 @@ import {
 import { renderScreenContent } from './appshell/render/renderScreenContent';
 import { useOnboardingOverlayState } from './appshell/overlays/useOnboardingOverlayState';
 import { OnboardingChrome } from './appshell/overlays/OnboardingChrome';
+import { useAppShellModals } from './appshell/overlays/useAppShellModals';
 import { createSavedInterfacesCommitSurfaces } from './appshell/savedInterfaces/savedInterfacesCommits';
 import { useSavedInterfacesSync } from './appshell/savedInterfaces/useSavedInterfacesSync';
 
@@ -138,15 +139,8 @@ export const AppShell: React.FC = () => {
     const [pendingAnalysis, setPendingAnalysis] = React.useState<PendingAnalysisPayload>(null);
     const [savedInterfaces, setSavedInterfaces] = React.useState<SavedInterfaceRecordV1[]>([]);
     const [pendingLoadInterface, setPendingLoadInterface] = React.useState<SavedInterfaceRecordV1 | null>(null);
-    const [isSearchInterfacesOpen, setIsSearchInterfacesOpen] = React.useState(false);
-    const [searchInterfacesQuery, setSearchInterfacesQueryState] = React.useState('');
-    const [searchHighlightedIndex, setSearchHighlightedIndex] = React.useState(0);
-    const [pendingDeleteId, setPendingDeleteId] = React.useState<string | null>(null);
-    const [pendingDeleteTitle, setPendingDeleteTitle] = React.useState<string | null>(null);
-    const [isLogoutConfirmOpen, setIsLogoutConfirmOpen] = React.useState(false);
     const [logoutConfirmBusy, setLogoutConfirmBusy] = React.useState(false);
     const [logoutConfirmError, setLogoutConfirmError] = React.useState<string | null>(null);
-    const [isProfileOpen, setIsProfileOpen] = React.useState(false);
     const [profileDraftDisplayName, setProfileDraftDisplayName] = React.useState('');
     const [profileDraftUsername, setProfileDraftUsername] = React.useState('');
     const [profileError, setProfileError] = React.useState<string | null>(null);
@@ -155,9 +149,6 @@ export const AppShell: React.FC = () => {
     const [documentViewerToggleToken, setDocumentViewerToggleToken] = React.useState(0);
     const [isSidebarExpanded, setIsSidebarExpanded] = React.useState(false);
     const [welcome1FontGateDone, setWelcome1FontGateDone] = React.useState(false);
-    const [searchInputFocused, setSearchInputFocused] = React.useState(false);
-    const searchInputRef = React.useRef<HTMLInputElement | null>(null);
-    const didSelectThisOpenRef = React.useRef(false);
     const savedInterfacesRef = React.useRef<SavedInterfaceRecordV1[]>([]);
     const restoreReadPathActiveRef = React.useRef(false);
     const activeStorageKeyRef = React.useRef<string>(getSavedInterfacesStorageKey());
@@ -217,6 +208,38 @@ export const AppShell: React.FC = () => {
     const loginBlockingActive = screen === 'prompt' && enterPromptOverlayOpen;
     const sidebarDisabled = (screen === 'graph' && graphIsLoading) || loginBlockingActive;
     const onboardingActive = isOnboardingScreen(screen) || shouldBlockOnboardingInput;
+    const {
+        isSearchInterfacesOpen,
+        searchInterfacesQuery,
+        searchHighlightedIndex,
+        searchInputFocused,
+        pendingDeleteId,
+        pendingDeleteTitle,
+        isProfileOpen,
+        isLogoutConfirmOpen,
+        searchInputRef,
+        setSearchInterfacesQuery,
+        setSearchHighlightedIndex,
+        setSearchInputFocused,
+        openSearchInterfaces,
+        closeSearchInterfaces,
+        resetSearchUi,
+        openDeleteConfirm,
+        closeDeleteConfirm,
+        openProfileOverlay: openProfileOverlayState,
+        closeProfileOverlay: closeProfileOverlayState,
+        forceCloseProfileOverlay,
+        openLogoutConfirm: openLogoutConfirmState,
+        closeLogoutConfirm: closeLogoutConfirmState,
+        forceCloseLogoutConfirm,
+        selectSearchResultById: selectSearchResultByIdState,
+    } = useAppShellModals({
+        sidebarDisabled,
+        isLoggedIn,
+        hasUser: user !== null,
+        profileSaving,
+        logoutConfirmBusy,
+    });
 
     const moneyUi = showMoneyUi ? (
         <>
@@ -238,17 +261,6 @@ export const AppShell: React.FC = () => {
         savedInterfacesRef.current = next;
         setSavedInterfaces(next);
         return next;
-    }, []);
-    const closeDeleteConfirm = React.useCallback(() => {
-        setPendingDeleteId(null);
-        setPendingDeleteTitle(null);
-    }, []);
-    const resetSearchUi = React.useCallback(() => {
-        didSelectThisOpenRef.current = false;
-        setIsSearchInterfacesOpen(false);
-        setSearchInterfacesQueryState('');
-        setSearchHighlightedIndex(0);
-        setSearchInputFocused(false);
     }, []);
     const { enqueueRemoteUpsert, enqueueRemoteDelete } = useSavedInterfacesSync({
         isAuthReady,
@@ -284,10 +296,6 @@ export const AppShell: React.FC = () => {
         enqueueRemoteUpsert,
         setPendingLoadInterface,
     ]);
-    const setSearchInterfacesQuery = React.useCallback((next: string) => {
-        setSearchInterfacesQueryState(next);
-        setSearchHighlightedIndex(0);
-    }, []);
     const selectSavedInterfaceById = React.useCallback((id: string) => {
         const record = savedInterfaces.find((item) => item.id === id);
         if (!record) return;
@@ -297,22 +305,6 @@ export const AppShell: React.FC = () => {
         }
         console.log('[appshell] pending_load_interface id=%s', id);
     }, [savedInterfaces, screen, transitionToScreen]);
-    const openSearchInterfaces = React.useCallback(() => {
-        if (pendingDeleteId) return;
-        if (sidebarDisabled) return;
-        didSelectThisOpenRef.current = false;
-        setIsSearchInterfacesOpen(true);
-        setSearchInterfacesQuery('');
-        setSearchHighlightedIndex(0);
-        console.log('[appshell] search_open');
-    }, [pendingDeleteId, setSearchInterfacesQuery, sidebarDisabled]);
-    const closeSearchInterfaces = React.useCallback(() => {
-        didSelectThisOpenRef.current = false;
-        setIsSearchInterfacesOpen(false);
-        setSearchInterfacesQuery('');
-        setSearchHighlightedIndex(0);
-        console.log('[appshell] search_close');
-    }, [setSearchInterfacesQuery]);
     const confirmDelete = React.useCallback(() => {
         if (!pendingDeleteId) {
             console.log('[appshell] delete_interface_skipped reason=no_id');
@@ -327,46 +319,27 @@ export const AppShell: React.FC = () => {
         commitRenameInterface(id, newTitle, 'sidebar_rename');
     }, [commitRenameInterface]);
     const closeProfileOverlay = React.useCallback(() => {
-        if (profileSaving) return;
-        setIsProfileOpen(false);
+        const closed = closeProfileOverlayState();
+        if (!closed) return;
         setProfileError(null);
-    }, [profileSaving]);
+    }, [closeProfileOverlayState]);
     const closeLogoutConfirm = React.useCallback(() => {
-        if (logoutConfirmBusy) return;
-        setIsLogoutConfirmOpen(false);
+        const closed = closeLogoutConfirmState();
+        if (!closed) return;
         setLogoutConfirmError(null);
-    }, [logoutConfirmBusy]);
+    }, [closeLogoutConfirmState]);
     const openLogoutConfirm = React.useCallback(() => {
-        if (!isLoggedIn) return;
-        if (sidebarDisabled) return;
-        if (isSearchInterfacesOpen) {
-            closeSearchInterfaces();
-        }
-        if (pendingDeleteId) {
-            closeDeleteConfirm();
-        }
-        if (isProfileOpen) {
-            closeProfileOverlay();
-        }
+        const opened = openLogoutConfirmState();
+        if (!opened) return;
         setLogoutConfirmError(null);
-        setIsLogoutConfirmOpen(true);
-    }, [
-        closeDeleteConfirm,
-        closeProfileOverlay,
-        closeSearchInterfaces,
-        isLoggedIn,
-        isProfileOpen,
-        isSearchInterfacesOpen,
-        pendingDeleteId,
-        sidebarDisabled
-    ]);
+    }, [openLogoutConfirmState]);
     const confirmLogout = React.useCallback(async () => {
         if (logoutConfirmBusy) return;
         setLogoutConfirmBusy(true);
         setLogoutConfirmError(null);
         try {
             await logout();
-            setIsLogoutConfirmOpen(false);
+            forceCloseLogoutConfirm();
             setLogoutConfirmError(null);
         } catch (error) {
             setLogoutConfirmError('Failed to log out. Please try again.');
@@ -376,16 +349,10 @@ export const AppShell: React.FC = () => {
         } finally {
             setLogoutConfirmBusy(false);
         }
-    }, [logout, logoutConfirmBusy]);
+    }, [forceCloseLogoutConfirm, logout, logoutConfirmBusy]);
     const openProfileOverlay = React.useCallback(() => {
-        if (!isLoggedIn || !user) return;
-        if (sidebarDisabled) return;
-        if (isSearchInterfacesOpen) {
-            closeSearchInterfaces();
-        }
-        if (pendingDeleteId) {
-            closeDeleteConfirm();
-        }
+        const opened = openProfileOverlayState();
+        if (!opened || !user) return;
         const nextDisplayName = typeof user?.displayName === 'string' && user.displayName.trim()
             ? user.displayName.trim()
             : (typeof user?.name === 'string' && user.name.trim() ? user.name.trim() : '');
@@ -393,8 +360,7 @@ export const AppShell: React.FC = () => {
         setProfileDraftDisplayName(nextDisplayName);
         setProfileDraftUsername(nextUsername);
         setProfileError(null);
-        setIsProfileOpen(true);
-    }, [closeDeleteConfirm, closeSearchInterfaces, isLoggedIn, isSearchInterfacesOpen, pendingDeleteId, sidebarDisabled, user]);
+    }, [openProfileOverlayState, user]);
     const onProfileSave = React.useCallback(async () => {
         if (profileSaving) return;
         const displayName = profileDraftDisplayName.replace(/\s+/g, ' ').trim();
@@ -418,7 +384,7 @@ export const AppShell: React.FC = () => {
         try {
             const updatedUser = await updateProfile({ displayName, username });
             applyUserPatch(updatedUser);
-            setIsProfileOpen(false);
+            forceCloseProfileOverlay();
             void refreshMe().catch((error) => {
                 if (import.meta.env.DEV) {
                     console.warn('[appshell] profile_refresh_after_save_failed error=%s', String(error));
@@ -432,67 +398,7 @@ export const AppShell: React.FC = () => {
         } finally {
             setProfileSaving(false);
         }
-    }, [applyUserPatch, profileDraftDisplayName, profileDraftUsername, profileSaving, refreshMe]);
-
-    React.useEffect(() => {
-        if (!isSearchInterfacesOpen) return;
-        if (!pendingDeleteId) return;
-        closeSearchInterfaces();
-    }, [closeSearchInterfaces, isSearchInterfacesOpen, pendingDeleteId]);
-
-    React.useEffect(() => {
-        if (!isSearchInterfacesOpen) return;
-        if (!sidebarDisabled) return;
-        closeSearchInterfaces();
-    }, [closeSearchInterfaces, isSearchInterfacesOpen, sidebarDisabled]);
-
-    React.useEffect(() => {
-        if (!isSearchInterfacesOpen) return;
-        const id = window.requestAnimationFrame(() => {
-            searchInputRef.current?.focus();
-            searchInputRef.current?.select();
-        });
-        return () => window.cancelAnimationFrame(id);
-    }, [isSearchInterfacesOpen]);
-
-    React.useEffect(() => {
-        if (!pendingDeleteId) return;
-        const onKeyDown = (event: KeyboardEvent) => {
-            if (event.key !== 'Escape') return;
-            event.stopPropagation();
-            closeDeleteConfirm();
-        };
-        window.addEventListener('keydown', onKeyDown, true);
-        return () => {
-            window.removeEventListener('keydown', onKeyDown, true);
-        };
-    }, [closeDeleteConfirm, pendingDeleteId]);
-
-    React.useEffect(() => {
-        if (!isProfileOpen) return;
-        const onKeyDown = (event: KeyboardEvent) => {
-            if (event.key !== 'Escape') return;
-            event.stopPropagation();
-            closeProfileOverlay();
-        };
-        window.addEventListener('keydown', onKeyDown, true);
-        return () => {
-            window.removeEventListener('keydown', onKeyDown, true);
-        };
-    }, [closeProfileOverlay, isProfileOpen]);
-
-    React.useEffect(() => {
-        if (!isLogoutConfirmOpen) return;
-        const onKeyDown = (event: KeyboardEvent) => {
-            if (event.key !== 'Escape') return;
-            event.stopPropagation();
-            closeLogoutConfirm();
-        };
-        window.addEventListener('keydown', onKeyDown, true);
-        return () => {
-            window.removeEventListener('keydown', onKeyDown, true);
-        };
-    }, [closeLogoutConfirm, isLogoutConfirmOpen]);
+    }, [applyUserPatch, forceCloseProfileOverlay, profileDraftDisplayName, profileDraftUsername, profileSaving, refreshMe]);
 
     React.useEffect(() => {
         savedInterfacesRef.current = savedInterfaces;
@@ -589,11 +495,8 @@ export const AppShell: React.FC = () => {
     }, [filteredSearchResults.length, searchHighlightedIndex]);
 
     const selectSearchResultById = React.useCallback((id: string) => {
-        if (didSelectThisOpenRef.current) return;
-        didSelectThisOpenRef.current = true;
-        closeSearchInterfaces();
-        selectSavedInterfaceById(id);
-    }, [closeSearchInterfaces, selectSavedInterfaceById]);
+        selectSearchResultByIdState(id, selectSavedInterfaceById);
+    }, [selectSavedInterfaceById, selectSearchResultByIdState]);
 
     React.useEffect(() => {
         if (searchHighlightedIndex !== -1) return;
@@ -756,8 +659,7 @@ export const AppShell: React.FC = () => {
                         if (sidebarDisabled) return;
                         const record = savedInterfaces.find((item) => item.id === id);
                         if (!record) return;
-                        setPendingDeleteId(record.id);
-                        setPendingDeleteTitle(record.title);
+                        openDeleteConfirm(record.id, record.title);
                         console.log('[appshell] pending_delete_open id=%s', id);
                     }}
                     selectedInterfaceId={pendingLoadInterface?.id ?? undefined}

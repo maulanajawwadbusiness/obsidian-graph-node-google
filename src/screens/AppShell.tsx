@@ -1341,7 +1341,7 @@ export const AppShell: React.FC = () => {
         }
     }
 
-    const renderScreenContent = React.useCallback((targetScreen: Screen): React.ReactNode => {
+    const renderScreenContent = (targetScreen: Screen): React.ReactNode => {
         if (targetScreen === 'graph') {
             return (
                 <Suspense fallback={<div style={FALLBACK_STYLE}>Loading graph...</div>}>
@@ -1397,15 +1397,7 @@ export const AppShell: React.FC = () => {
                 }}
             />
         );
-    }, [
-        GraphWithPending,
-        commitPatchLayoutByDocId,
-        commitUpsertInterface,
-        documentViewerToggleToken,
-        pendingAnalysis,
-        pendingLoadInterface,
-        transitionToScreen
-    ]);
+    };
 
     const screenContent = isScreenTransitioning && screenTransitionFrom
         ? (

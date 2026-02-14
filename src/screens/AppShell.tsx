@@ -18,6 +18,7 @@ import {
 } from './appshell/transitions/transitionTokens';
 import { OnboardingLayerHost } from './appshell/transitions/OnboardingLayerHost';
 import { useOnboardingTransition } from './appshell/transitions/useOnboardingTransition';
+import { useOnboardingWheelGuard } from './appshell/transitions/useOnboardingWheelGuard';
 import { AppScreen, isOnboardingScreen } from './appshell/screenFlow/screenTypes';
 import { getInitialScreen } from './appshell/screenFlow/screenStart';
 import {
@@ -185,6 +186,11 @@ export const AppShell: React.FC = () => {
     const loginBlockingActive = screen === 'prompt' && enterPromptOverlayOpen;
     const sidebarDisabled = (screen === 'graph' && graphIsLoading) || loginBlockingActive;
     const onboardingActive = isOnboardingScreen(screen) || shouldBlockOnboardingInput;
+    useOnboardingWheelGuard({
+        enabled: ONBOARDING_ENABLED,
+        active: onboardingActive,
+        debug: DEBUG_ONBOARDING_SCROLL_GUARD,
+    });
     const {
         isSearchInterfacesOpen,
         searchInterfacesQuery,
@@ -486,23 +492,6 @@ export const AppShell: React.FC = () => {
         if (typeof window === 'undefined') return;
         sessionStorage.setItem(STORAGE_KEY, screen);
     }, [screen]);
-
-    React.useEffect(() => {
-        if (!ONBOARDING_ENABLED || !onboardingActive) return;
-        if (typeof window === 'undefined') return;
-
-        const onWheel = (event: WheelEvent) => {
-            event.preventDefault();
-            if (DEBUG_ONBOARDING_SCROLL_GUARD) {
-                console.log('[OnboardingGesture] wheel prevented');
-            }
-        };
-
-        window.addEventListener('wheel', onWheel, { passive: false, capture: true });
-        return () => {
-            window.removeEventListener('wheel', onWheel, true);
-        };
-    }, [onboardingActive]);
 
     React.useEffect(() => {
         if (screen !== 'welcome1') return;

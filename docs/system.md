@@ -1,7 +1,7 @@
 # Arnvoid System Documentation
 
 ## 1. Introduction
-**Arnvoid** is a conversational graph interface designed for deep reasoning over complex knowledgebases. It acts as a "thinking partner" that lives inside the user's obsidian graph, providing context-aware synthesis and exploration.
+**Arnvoid** is a conversational graph interface designed for deep reasoning over complex knowledgebases. It acts as a "thinking partner" that lives inside the user's graph, providing context-aware synthesis and exploration.
 
 The core flow is the **Paper Essence Pipeline**:
 `Document (PDF/MD/TXT) -> AI Paper Analyzer -> Key Dots + Directed Links + Node Knowledge -> Interactive Graph -> Contextual Chat`.

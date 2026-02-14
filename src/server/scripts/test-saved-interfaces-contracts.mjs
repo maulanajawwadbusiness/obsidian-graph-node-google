@@ -3,6 +3,7 @@
 import { once } from "events";
 import express from "express";
 import savedInterfacesRoutesModule from "../dist/routes/savedInterfacesRoutes.js";
+import { createSilentLogger } from "./_testLogger.mjs";
 
 const { registerSavedInterfacesRoutes } = savedInterfacesRoutesModule;
 
@@ -64,7 +65,7 @@ function createApp(fakePool, maxPayloadBytes = 50) {
     },
     listLimit: 2,
     maxPayloadBytes,
-    logger: console
+    logger: createSilentLogger()
   });
 
   return app;

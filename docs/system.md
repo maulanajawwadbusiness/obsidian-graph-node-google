@@ -203,7 +203,10 @@ Remote memory (account-backed):
   - `POST /api/saved-interfaces/upsert`
   - `POST /api/saved-interfaces/delete`
 - Payload size limit:
-  - server guard constant `MAX_SAVED_INTERFACE_PAYLOAD_BYTES` (default 15 MB) in `src/server/src/serverMonolith.ts`
+  - parser seam in `src/server/src/server/jsonParsers.ts` with saved-interfaces-specific 413 mapping.
+  - contract guard: `npm run test:jsonparsers-contracts` in `src/server`.
+  - user-facing 413 error body for saved-interfaces stays:
+    - `{ ok: false, error: "saved interface payload too large" }`
 - AppShell orchestration role:
   - Hydrates remote + local on auth-ready, merges, and persists into active local namespace.
   - Mirrors local save/rename/delete events to backend as best-effort background sync.
@@ -460,6 +463,22 @@ for dot hover visuals (match pixels, no ghosting).
 ## Purpose
 Central operating notes for backend/frontend behavior, integration seams, and live environment assumptions.
 
+## Backend Runtime Architecture
+- Runtime shell entry: `src/server/src/serverMonolith.ts` (imports bootstrap and starts server).
+- Runtime orchestration and order ownership: `src/server/src/server/bootstrap.ts`.
+- Route modules: `src/server/src/routes/*.ts`:
+  - `authRoutes.ts`, `profileRoutes.ts`, `savedInterfacesRoutes.ts`
+  - `paymentsRoutes.ts`, `paymentsWebhookRoute.ts`
+  - `llmAnalyzeRoute.ts`, `llmPrefillRoute.ts`, `llmChatRoute.ts`
+  - `healthRoutes.ts`
+- Route deps assembly: `src/server/src/server/depsBuilder.ts`.
+- Core backend seams:
+  - env: `src/server/src/server/envConfig.ts`
+  - parsers: `src/server/src/server/jsonParsers.ts`
+  - cors: `src/server/src/server/corsConfig.ts`
+  - startup gates: `src/server/src/server/startupGates.ts`
+  - cookies: `src/server/src/server/cookies.ts`
+
 ## LLM Provider Policy
 - Provider routing is policy-driven (daily cohort + per-user cap + global pool).
 - See test verification report: `docs/report_2026_02_06_provider_step4_test_results.md`.
@@ -471,6 +490,14 @@ Backend LLM endpoints:
 - `POST /api/llm/paper-analyze`
 - `POST /api/llm/chat`
 - `POST /api/llm/prefill`
+- Route files:
+  - `src/server/src/routes/llmAnalyzeRoute.ts`
+  - `src/server/src/routes/llmChatRoute.ts`
+  - `src/server/src/routes/llmPrefillRoute.ts`
+- Shared request flow seam:
+  - `src/server/src/llm/requestFlow.ts`
+  - contract guard: `npm run test:requestflow-contracts`
+- Retry-After and API error header/order behavior are locked in the requestFlow seam and guard tests.
 
 ## LLM Audit
 - Per-request audit records are stored in `llm_request_audit`.
@@ -481,6 +508,11 @@ Backend:
 - `POST /api/payments/gopayqris/create`
 - `GET /api/payments/:orderId/status`
 - `POST /api/payments/webhook`
+- Route files:
+  - `src/server/src/routes/paymentsRoutes.ts`
+  - `src/server/src/routes/paymentsWebhookRoute.ts`
+- Midtrans helper seam:
+  - `src/server/src/payments/midtransUtils.ts`
 
 Frontend:
 - `src/components/PaymentGopayPanel.tsx`
@@ -494,22 +526,38 @@ Frontend:
   - auth calls are `${VITE_API_BASE_URL}/auth/google`, `${VITE_API_BASE_URL}/auth/logout`, and `${VITE_API_BASE_URL}/me`.
   - `/api/*` pathing is only true when `VITE_API_BASE_URL=/api` (for example behind Vercel rewrite).
 - Backend runtime route ownership:
-  - route logic lives in `src/server/src/serverMonolith.ts`.
-  - `src/server/src/index.ts` is a thin entry that imports `serverMonolith`.
+  - `src/server/src/index.ts` imports `src/server/src/serverMonolith.ts` (shell).
+  - shell calls `startServer` from `src/server/src/server/bootstrap.ts`.
+  - auth endpoints live in `src/server/src/routes/authRoutes.ts`.
+  - auth helper seams:
+    - `src/server/src/auth/googleToken.ts`
+    - `src/server/src/auth/requireAuth.ts`
 - `/me` payload contract:
   - returns `sub`, `email`, `name`, `picture`, `displayName`, `username` for signed-in state.
   - `picture` is the Google profile photo URL used by Sidebar and profile UI.
   - does not currently return DB numeric `id` in the `/me` response body.
   - frontend identity logic must support `sub` fallback for namespacing and sync isolation.
 - Profile update contract:
-  - endpoint: `POST /api/profile/update` (`requireAuth`) in `src/server/src/serverMonolith.ts`.
+  - endpoint: `POST /api/profile/update` (`requireAuth`) in `src/server/src/routes/profileRoutes.ts`.
   - request fields: `displayName`, `username` with trim/max-length/regex validation.
   - schema columns: `users.display_name`, `users.username` from migration `src/server/migrations/1770383500000_add_user_profile_fields.js`.
   - UI owner: AppShell profile modal in `src/screens/AppShell.tsx` (opened from Sidebar avatar menu).
   - save path uses `updateProfile(...)`, applies returned user fields locally, then runs `/me` refresh as reconciliation.
 - Logout UI contract:
   - logout action is accessed from Sidebar avatar popup menu, not EnterPrompt.
-  - logout confirmation is AppShell-owned centered modal that runs the same auth logout path.
+- logout confirmation is AppShell-owned centered modal that runs the same auth logout path.
+
+## Backend Contract Tests
+- Run from `src/server`:
+  - `npm run test:contracts`
+- Coverage summary:
+  - request flow mapping and API error/header behavior
+  - json parser split + saved-interfaces 413 mapping
+  - cors policy callback/preflight behavior
+  - startup gates ordering/shape
+  - route contracts: health, auth, profile, saved-interfaces, payments
+  - deps builder shape
+  - monolith shell and bootstrap order markers
 
 ## Backend VPN Reminder
 - Before running backend commands in `src/server` (for example `npm run dev`, `npm run check:auth-schema`, DB scripts), turn VPN OFF.

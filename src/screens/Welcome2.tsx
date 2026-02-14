@@ -23,7 +23,7 @@ const DOUBLE_CLICK_MS = 260;
 const CHAIN_WINDOW_MS = 900;
 const BACKSTEP_LAND_RATIO = 0.8;
 const BACKSTEP_ELLIPSIS_START_DOTS = 3;
-const BACKSTEP_ELLIPSIS_CHARS_PER_DOT_STEP = 6;
+const BACKSTEP_ELLIPSIS_CHARS_PER_DOT_STEP = 4;
 const BLOCKED_SCROLL_KEYS = new Set([' ', 'PageDown', 'PageUp', 'ArrowDown', 'ArrowUp']);
 const INTERACTIVE_SELECTOR = 'button, input, textarea, select, a[href], [role=\"button\"], [contenteditable=\"true\"]';
 const DEBUG_WELCOME2_TYPE = false;

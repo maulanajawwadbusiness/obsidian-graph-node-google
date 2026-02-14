@@ -44,6 +44,7 @@ import {
 import { renderScreenContent } from './appshell/render/renderScreenContent';
 import { useOnboardingOverlayState } from './appshell/overlays/useOnboardingOverlayState';
 import { OnboardingChrome } from './appshell/overlays/OnboardingChrome';
+import { createSavedInterfacesCommitSurfaces } from './appshell/savedInterfaces/savedInterfacesCommits';
 
 const Graph = React.lazy(() =>
     import('../playground/GraphPhysicsPlayground').then((mod) => ({
@@ -542,114 +543,26 @@ export const AppShell: React.FC = () => {
         console.log('[savedInterfaces] remote_outbox_enqueue op=delete id=%s reason=%s', id, reason);
         scheduleRemoteOutboxDrain(0);
     }, [scheduleRemoteOutboxDrain, updateRemoteOutbox]);
-    const commitUpsertInterface = React.useCallback((record: SavedInterfaceRecordV1, reason: string) => {
-        if (restoreReadPathActiveRef.current) {
-            if (import.meta.env.DEV) {
-                console.log('[savedInterfaces] restore_write_blocked op=upsert id=%s reason=%s', record.id, reason);
-            }
-            return;
-        }
-        if (reason.startsWith('restore_')) {
-            if (import.meta.env.DEV) {
-                console.log('[savedInterfaces] restore_write_blocked op=upsert id=%s reason=%s', record.id, reason);
-            }
-            return;
-        }
-        const nowMs = Date.now();
-        const current = savedInterfacesRef.current;
-        const existingIndex = current.findIndex((item) => item.dedupeKey === record.dedupeKey);
-        let committed: SavedInterfaceRecordV1;
-        let next: SavedInterfaceRecordV1[];
-        if (existingIndex >= 0) {
-            const existing = current[existingIndex];
-            committed = {
-                ...record,
-                id: existing.id,
-                createdAt: existing.createdAt,
-                updatedAt: nowMs,
-            };
-            next = [
-                committed,
-                ...current.filter((_, index) => index !== existingIndex),
-            ];
-        } else {
-            committed = {
-                ...record,
-                createdAt: Number.isFinite(record.createdAt) ? record.createdAt : nowMs,
-                updatedAt: nowMs,
-            };
-            next = [committed, ...current];
-        }
-        applySavedInterfacesState(next);
-        enqueueRemoteUpsert(committed, reason);
-    }, [applySavedInterfacesState, enqueueRemoteUpsert]);
-    const commitPatchLayoutByDocId = React.useCallback((
-        docId: string,
-        layout: SavedInterfaceRecordV1['layout'],
-        camera: SavedInterfaceRecordV1['camera'],
-        reason: string
-    ) => {
-        if (restoreReadPathActiveRef.current) {
-            if (import.meta.env.DEV) {
-                console.log('[savedInterfaces] restore_write_blocked op=layout_patch docId=%s reason=%s', docId, reason);
-            }
-            return;
-        }
-        if (reason.startsWith('restore_')) {
-            if (import.meta.env.DEV) {
-                console.log('[savedInterfaces] restore_write_blocked op=layout_patch docId=%s reason=%s', docId, reason);
-            }
-            return;
-        }
-        if (!docId) return;
-        const current = savedInterfacesRef.current;
-        const index = current.findIndex((item) => item.docId === docId);
-        if (index < 0) {
-            if (import.meta.env.DEV) {
-                console.log('[savedInterfaces] layout_patch_skipped reason=no_target_docId');
-            }
-            return;
-        }
-        const next = [...current];
-        const existing = next[index];
-        const committed: SavedInterfaceRecordV1 = {
-            ...existing,
-            layout,
-            camera: camera ?? existing.camera,
-        };
-        next[index] = committed;
-        applySavedInterfacesState(next);
-        enqueueRemoteUpsert(committed, reason);
-    }, [applySavedInterfacesState, enqueueRemoteUpsert]);
-    const commitDeleteInterface = React.useCallback((id: string, reason: string) => {
-        const current = savedInterfacesRef.current;
-        const next = current.filter((item) => item.id !== id);
-        applySavedInterfacesState(next);
-        setPendingLoadInterface((curr) => (curr?.id === id ? null : curr));
-        enqueueRemoteDelete(id, reason);
-    }, [applySavedInterfacesState, enqueueRemoteDelete]);
-    const commitRenameInterface = React.useCallback((id: string, newTitle: string, reason: string) => {
-        const current = savedInterfacesRef.current;
-        const index = current.findIndex((item) => item.id === id);
-        if (index < 0) {
-            if (import.meta.env.DEV) {
-                console.log('[savedInterfaces] title_patch_skipped reason=not_found');
-            }
-            return;
-        }
-        const next = [...current];
-        const existing = next[index];
-        const committed: SavedInterfaceRecordV1 = {
-            ...existing,
-            title: newTitle,
-        };
-        next[index] = committed;
-        applySavedInterfacesState(next);
-        enqueueRemoteUpsert(committed, reason);
-    }, [applySavedInterfacesState, enqueueRemoteUpsert]);
-    const commitHydrateMerge = React.useCallback((merged: SavedInterfaceRecordV1[]) => {
-        return applySavedInterfacesState(merged);
-    }, [applySavedInterfacesState]);
+    const {
+        commitUpsertInterface,
+        commitPatchLayoutByDocId,
+        commitDeleteInterface,
+        commitRenameInterface,
+        commitHydrateMerge,
+    } = React.useMemo(() => createSavedInterfacesCommitSurfaces({
+        getSavedInterfaces: () => savedInterfacesRef.current,
+        applySavedInterfacesState,
+        setPendingLoadInterface,
+        enqueueRemoteUpsert,
+        enqueueRemoteDelete,
+        isRestoreReadPathActive: () => restoreReadPathActiveRef.current,
+        isDev: import.meta.env.DEV,
+    }), [
+        applySavedInterfacesState,
+        enqueueRemoteDelete,
+        enqueueRemoteUpsert,
+        setPendingLoadInterface,
+    ]);
     const closeDeleteConfirm = React.useCallback(() => {
         setPendingDeleteId(null);
         setPendingDeleteTitle(null);

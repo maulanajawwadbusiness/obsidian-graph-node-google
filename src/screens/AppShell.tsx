@@ -33,6 +33,11 @@ import {
     setSavedInterfacesStorageKey,
     type SavedInterfaceRecordV1
 } from '../store/savedInterfacesStore';
+import {
+    ONBOARDING_SCREEN_FADE_EASING,
+    ONBOARDING_SCREEN_FADE_MS,
+    isOnboardingScreen,
+} from './appshell/transitions/transitionTokens';
 
 const Graph = React.lazy(() =>
     import('../playground/GraphPhysicsPlayground').then((mod) => ({
@@ -63,8 +68,6 @@ type GraphPendingAnalysisProps = {
 };
 const STORAGE_KEY = 'arnvoid_screen';
 const PERSIST_SCREEN = false;
-const ONBOARDING_SCREEN_FADE_MS = 200;
-const ONBOARDING_SCREEN_FADE_EASING = 'cubic-bezier(0.22, 1, 0.36, 1)';
 const DEBUG_ONBOARDING_SCROLL_GUARD = false;
 const WELCOME1_FONT_TIMEOUT_MS = 1500;
 const SEARCH_RECENT_LIMIT = 12;
@@ -262,10 +265,6 @@ function getInitialScreen(): Screen {
         }
     }
     return 'welcome1';
-}
-
-function isOnboardingScreen(screen: Screen): boolean {
-    return screen === 'welcome1' || screen === 'welcome2' || screen === 'prompt';
 }
 
 export const AppShell: React.FC = () => {

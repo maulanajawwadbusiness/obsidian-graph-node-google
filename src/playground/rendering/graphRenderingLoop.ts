@@ -282,6 +282,7 @@ export const startGraphRenderLoop = (deps: GraphRenderLoopDeps) => {
     const overloadState = createOverloadState();
     const trackMetrics = createMetricsTracker(setMetrics, () => renderDebugRef.current);
     let firstFrameLogged = false;
+    let lastAppliedCursor = '';
 
     ensureSeededGraph(engine, config, seed, spawnCount);
     engine.updateBounds(canvas.width, canvas.height);
@@ -548,6 +549,16 @@ export const startGraphRenderLoop = (deps: GraphRenderLoopDeps) => {
 
         applyDragTargetSync(engine, hoverStateRef, clientToWorld, rect, camera);
 
+        const nextCursor = engine.draggedNodeId
+            ? 'grabbing'
+            : hoverStateRef.current.hoveredNodeId
+                ? 'pointer'
+                : 'default';
+        if (nextCursor !== lastAppliedCursor) {
+            canvas.style.cursor = nextCursor;
+            lastAppliedCursor = nextCursor;
+        }
+
         if (engine.draggedNodeId && Math.random() < 0.05) {
             const { cursorClientX, cursorClientY } = hoverStateRef.current;
             console.log(`[PointerTrace] Sync: Moving drag ${engine.draggedNodeId} to client=${cursorClientX.toFixed(0)},${cursorClientY.toFixed(0)}`);
@@ -632,6 +643,7 @@ export const startGraphRenderLoop = (deps: GraphRenderLoopDeps) => {
 
     return () => {
         window.removeEventListener('blur', handleBlur);
+        canvas.style.cursor = 'default';
         cancelAnimationFrame(frameId);
     };
 };

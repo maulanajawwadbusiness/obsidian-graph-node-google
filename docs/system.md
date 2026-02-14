@@ -32,6 +32,11 @@ The application layers, ordered by z-index (lowest to highest):
 
 1.  **The Canvas (Graph substrate)**
     *   **Rule**: Never under-reacts. If a panel or overlay is active, the canvas underneath MUST NOT receive pointer/wheel events.
+    *   **Cursor Contract (Graph Screen)**:
+        *   Empty graph space: `cursor: default`
+        *   Hovering a Dot: `cursor: pointer`
+        *   Active Dot drag: `cursor: grabbing`
+        *   Cursor state is derived from render-loop hover/drag truth and must not be hardcoded as a static hand cursor on the full graph container.
     *   Owned by: `PhysicsEngine`.
 
 2.  **Top-Left Brand (`BrandLabel`) & Bottom-Center Title (`MapTitleBlock`)**

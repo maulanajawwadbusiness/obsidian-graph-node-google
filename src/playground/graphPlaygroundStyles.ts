@@ -22,7 +22,6 @@ export const CONTAINER_STYLE: React.CSSProperties = {
 export const MAIN_STYLE: React.CSSProperties = {
     flex: 1,
     position: 'relative',
-    cursor: 'grab',
     touchAction: 'none', // FIX 41: Prevent browser pan/zoom gestures on canvas
     userSelect: 'none', // FIX 42: Prevent text selection during drag
 };

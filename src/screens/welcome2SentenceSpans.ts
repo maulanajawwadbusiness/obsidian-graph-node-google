@@ -1,19 +1,15 @@
 export type Welcome2SentenceSpans = {
-    sentenceStartCharCountByIndex: number[];
-    sentenceEndCoreCharCountByIndex: number[];
-    sentenceEndSoftCharCountByIndex: number[];
+    partStartCharCountByIndex: number[];
+    partEndCoreCharCountByIndex: number[];
+    partEndSoftCharCountByIndex: number[];
 };
 
-function isSentenceTerminator(ch: string): boolean {
-    return ch === '.' || ch === '?' || ch === '!';
+function isPartTerminator(ch: string): boolean {
+    return ch === ',' || ch === '.' || ch === '!' || ch === '?' || ch === ';' || ch === ':';
 }
 
 function isTrailingWhitespace(ch: string): boolean {
     return ch === ' ' || ch === '\n' || ch === '\t';
-}
-
-function isSentenceCloser(ch: string): boolean {
-    return ch === '"' || ch === '\'' || ch === ')' || ch === ']' || ch === '}';
 }
 
 export function buildWelcome2SentenceSpans(renderText: string): Welcome2SentenceSpans {
@@ -24,9 +20,9 @@ export function buildWelcome2SentenceSpans(renderText: string): Welcome2Sentence
 
     if (len === 0) {
         return {
-            sentenceStartCharCountByIndex: [0],
-            sentenceEndCoreCharCountByIndex: [0],
-            sentenceEndSoftCharCountByIndex: [0],
+            partStartCharCountByIndex: [0],
+            partEndCoreCharCountByIndex: [0],
+            partEndSoftCharCountByIndex: [0],
         };
     }
 
@@ -34,24 +30,23 @@ export function buildWelcome2SentenceSpans(renderText: string): Welcome2Sentence
     let i = 0;
     while (i < len) {
         const ch = renderText[i];
-        if (!isSentenceTerminator(ch)) {
+        if (!isPartTerminator(ch)) {
             i += 1;
             continue;
         }
 
-        let endCoreExclusive = i + 1;
-        while (endCoreExclusive < len && isSentenceCloser(renderText[endCoreExclusive])) {
-            endCoreExclusive += 1;
-        }
+        const endCoreExclusive = i + 1;
 
         let endSoftExclusive = endCoreExclusive;
         while (endSoftExclusive < len && isTrailingWhitespace(renderText[endSoftExclusive])) {
             endSoftExclusive += 1;
         }
 
-        starts.push(start);
-        coreEnds.push(endCoreExclusive);
-        softEnds.push(endSoftExclusive);
+        if (endCoreExclusive > start) {
+            starts.push(start);
+            coreEnds.push(endCoreExclusive);
+            softEnds.push(endSoftExclusive);
+        }
         start = endSoftExclusive;
         i = endSoftExclusive;
     }
@@ -63,9 +58,9 @@ export function buildWelcome2SentenceSpans(renderText: string): Welcome2Sentence
     }
 
     return {
-        sentenceStartCharCountByIndex: starts,
-        sentenceEndCoreCharCountByIndex: coreEnds,
-        sentenceEndSoftCharCountByIndex: softEnds,
+        partStartCharCountByIndex: starts,
+        partEndCoreCharCountByIndex: coreEnds,
+        partEndSoftCharCountByIndex: softEnds,
     };
 }
 

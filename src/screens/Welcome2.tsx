@@ -19,11 +19,7 @@ const CURSOR_PAUSE_THRESHOLD_MS = 130;
 const CURSOR_HOLD_FAST_WINDOW_MS = 680;
 const SHOW_WELCOME2_FOCUS_RING = false;
 const WELCOME2_AUTO_ADVANCE_DELAY_MS = 2000*4;
-const DOUBLE_CLICK_MS = 260;
-const CHAIN_WINDOW_MS = 900;
-const BACKSTEP_LAND_RATIO = 0.8;
-const BACKSTEP_ELLIPSIS_START_DOTS = 3;
-const BACKSTEP_ELLIPSIS_CHARS_PER_DOT_STEP = 4;
+const PART_BACKSTEP_LAND_RATIO = 0.8;
 const BLOCKED_SCROLL_KEYS = new Set([' ', 'PageDown', 'PageUp', 'ArrowDown', 'ArrowUp']);
 const INTERACTIVE_SELECTOR = 'button, input, textarea, select, a[href], [role=\"button\"], [contenteditable=\"true\"]';
 const DEBUG_WELCOME2_TYPE = false;
@@ -56,11 +52,9 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
     const prevVisibleCountRef = React.useRef(visibleCharCount);
     const holdStartRef = React.useRef<number | null>(null);
     const prevCursorModeRef = React.useRef<TypingCursorMode>('typing');
-    const lastLeftClickAtRef = React.useRef(0);
-    const backChainUntilRef = React.useRef(0);
     const hasManualSeekRef = React.useRef(false);
-    const backStepLandingSentenceIdxRef = React.useRef<number | null>(null);
-    const backStepLandingStartCharCountRef = React.useRef<number | null>(null);
+    const lastPartIdxRef = React.useRef<number | null>(null);
+    const restartedThisPartRef = React.useRef(false);
 
     React.useEffect(() => {
         if (visibleCharCount === prevVisibleCountRef.current) return;
@@ -168,65 +162,66 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
         rootRef.current?.focus({ preventScroll: true });
     }, [clearAutoAdvanceTimer, seekToMs]);
 
-    const getCurrentSentenceIdx = React.useCallback(() => {
+    const getCurrentPartIdx = React.useCallback(() => {
         const probeIndex = visibleCharCount <= 0 ? 0 : visibleCharCount - 1;
         return sentenceIndexForCharCount(
             probeIndex,
-            sentenceSpans.sentenceEndSoftCharCountByIndex
+            sentenceSpans.partEndSoftCharCountByIndex
         );
-    }, [sentenceSpans.sentenceEndSoftCharCountByIndex, visibleCharCount]);
+    }, [sentenceSpans.partEndSoftCharCountByIndex, visibleCharCount]);
 
-    const getBackStepLandCharCount = React.useCallback((sentenceIdx: number): number => {
-        const start = sentenceSpans.sentenceStartCharCountByIndex[sentenceIdx] ?? 0;
-        const endCore = sentenceSpans.sentenceEndCoreCharCountByIndex[sentenceIdx] ?? start;
+    React.useEffect(() => {
+        const currentPartIdx = getCurrentPartIdx();
+        if (currentPartIdx !== lastPartIdxRef.current) {
+            restartedThisPartRef.current = false;
+            lastPartIdxRef.current = currentPartIdx;
+        }
+    }, [getCurrentPartIdx]);
+
+    const getPart80PercentLandCharCount = React.useCallback((partIdx: number): number => {
+        const start = sentenceSpans.partStartCharCountByIndex[partIdx] ?? 0;
+        const endCore = sentenceSpans.partEndCoreCharCountByIndex[partIdx] ?? start;
         const len = Math.max(0, endCore - start);
         if (len <= 0) return Math.max(0, endCore);
-        const rawLand = start + Math.max(1, Math.floor(len * BACKSTEP_LAND_RATIO));
+        const rawLand = start + Math.max(1, Math.floor(len * PART_BACKSTEP_LAND_RATIO));
         const minLand = Math.min(endCore, start + 1);
         return Math.max(minLand, Math.min(rawLand, endCore));
     }, [
-        sentenceSpans.sentenceEndCoreCharCountByIndex,
-        sentenceSpans.sentenceStartCharCountByIndex,
+        sentenceSpans.partEndCoreCharCountByIndex,
+        sentenceSpans.partStartCharCountByIndex,
     ]);
 
-    const restartCurrentSentence = React.useCallback(() => {
+    const restartCurrentPart = React.useCallback((partIdx: number) => {
         if (builtTimeline.events.length === 0) return;
-        backStepLandingSentenceIdxRef.current = null;
-        backStepLandingStartCharCountRef.current = null;
-        const sentenceIdx = getCurrentSentenceIdx();
-        const targetCharCount = sentenceSpans.sentenceStartCharCountByIndex[sentenceIdx] ?? 0;
+        const targetCharCount = sentenceSpans.partStartCharCountByIndex[partIdx] ?? 0;
         seekWithManualInteraction(toSentenceStartTargetMs(targetCharCount));
     }, [
         builtTimeline.events.length,
-        getCurrentSentenceIdx,
         seekWithManualInteraction,
-        sentenceSpans.sentenceStartCharCountByIndex,
+        sentenceSpans.partStartCharCountByIndex,
         toSentenceStartTargetMs,
     ]);
 
-    const goBackOneSentence = React.useCallback(() => {
+    const goBackOnePart80Percent = React.useCallback((partIdx: number) => {
         if (builtTimeline.events.length === 0) return;
-        const sentenceIdx = getCurrentSentenceIdx();
-        const prevSentenceIdx = Math.max(0, sentenceIdx - 1);
-        backStepLandingSentenceIdxRef.current = prevSentenceIdx;
-        const targetCharCount = getBackStepLandCharCount(prevSentenceIdx);
-        backStepLandingStartCharCountRef.current = targetCharCount;
+        if (partIdx <= 0) return;
+        const prevPartIdx = Math.max(0, partIdx - 1);
+        const targetCharCount = getPart80PercentLandCharCount(prevPartIdx);
         seekWithManualInteraction(toSentenceEndTargetMs(targetCharCount));
+        restartedThisPartRef.current = false;
+        lastPartIdxRef.current = prevPartIdx;
     }, [
         builtTimeline.events.length,
-        getBackStepLandCharCount,
-        getCurrentSentenceIdx,
+        getPart80PercentLandCharCount,
         seekWithManualInteraction,
         toSentenceEndTargetMs,
     ]);
 
     const finishCurrentSentence = React.useCallback(() => {
         if (builtTimeline.events.length === 0) return;
-        backStepLandingSentenceIdxRef.current = null;
-        backStepLandingStartCharCountRef.current = null;
-        const sentenceIdx = getCurrentSentenceIdx();
+        const sentenceIdx = getCurrentPartIdx();
         const targetCharCount =
-            sentenceSpans.sentenceEndSoftCharCountByIndex[sentenceIdx] ?? builtTimeline.events.length;
+            sentenceSpans.partEndSoftCharCountByIndex[sentenceIdx] ?? builtTimeline.events.length;
         if (targetCharCount <= visibleCharCount) {
             rootRef.current?.focus({ preventScroll: true });
             return;
@@ -234,70 +229,31 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
         seekWithManualInteraction(toSentenceEndTargetMs(targetCharCount));
     }, [
         builtTimeline.events.length,
-        getCurrentSentenceIdx,
+        getCurrentPartIdx,
         seekWithManualInteraction,
-        sentenceSpans.sentenceEndSoftCharCountByIndex,
+        sentenceSpans.partEndSoftCharCountByIndex,
         toSentenceEndTargetMs,
         visibleCharCount,
     ]);
 
-    const backStepEllipsisText = React.useMemo(() => {
-        const landingSentenceIdx = backStepLandingSentenceIdxRef.current;
-        const landingStartCharCount = backStepLandingStartCharCountRef.current;
-        if (landingSentenceIdx === null || landingStartCharCount === null) return '';
-        const currentSentenceIdx = getCurrentSentenceIdx();
-        if (currentSentenceIdx !== landingSentenceIdx) return '';
-        const endCore = sentenceSpans.sentenceEndCoreCharCountByIndex[currentSentenceIdx] ?? builtTimeline.events.length;
-        if (visibleCharCount >= endCore) return '';
-        const charsSinceLanding = Math.max(0, visibleCharCount - landingStartCharCount);
-        const dotStepsConsumed = Math.floor(charsSinceLanding / BACKSTEP_ELLIPSIS_CHARS_PER_DOT_STEP);
-        const dotCount = Math.max(0, BACKSTEP_ELLIPSIS_START_DOTS - dotStepsConsumed);
-        if (dotCount <= 0) return '';
-        return '.'.repeat(dotCount);
-    }, [
-        builtTimeline.events.length,
-        getCurrentSentenceIdx,
-        sentenceSpans.sentenceEndCoreCharCountByIndex,
-        visibleCharCount,
-    ]);
-
-    React.useEffect(() => {
-        if (backStepEllipsisText.length > 0) return;
-        const landingSentenceIdx = backStepLandingSentenceIdxRef.current;
-        if (landingSentenceIdx === null) return;
-        backStepLandingSentenceIdxRef.current = null;
-        backStepLandingStartCharCountRef.current = null;
-    }, [backStepEllipsisText]);
-
     const handleSeekRestartSentence = React.useCallback((event: React.MouseEvent<HTMLButtonElement>) => {
         event.stopPropagation();
         clearAutoAdvanceTimer();
-        const now = performance.now();
-
-        if (now < backChainUntilRef.current) {
-            goBackOneSentence();
-            backChainUntilRef.current = now + CHAIN_WINDOW_MS;
-            lastLeftClickAtRef.current = now;
+        const currentPartIdx = getCurrentPartIdx();
+        if (!restartedThisPartRef.current) {
+            restartCurrentPart(currentPartIdx);
+            restartedThisPartRef.current = true;
+            lastPartIdxRef.current = currentPartIdx;
             rootRef.current?.focus({ preventScroll: true });
             return;
         }
 
-        const isDoubleClick = now - lastLeftClickAtRef.current <= DOUBLE_CLICK_MS;
-        if (isDoubleClick) {
-            goBackOneSentence();
-            backChainUntilRef.current = now + CHAIN_WINDOW_MS;
-            lastLeftClickAtRef.current = 0;
-            rootRef.current?.focus({ preventScroll: true });
-            return;
-        }
-
-        restartCurrentSentence();
-        lastLeftClickAtRef.current = now;
-        backChainUntilRef.current = 0;
+        goBackOnePart80Percent(currentPartIdx);
         rootRef.current?.focus({ preventScroll: true });
     }, [
-        goBackOneSentence,
-        restartCurrentSentence,
+        getCurrentPartIdx,
+        goBackOnePart80Percent,
+        restartCurrentPart,
         clearAutoAdvanceTimer,
     ]);
 
@@ -351,7 +307,6 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
                     style={TEXT_STYLE}
                 >
                     <span>{visibleText}</span>
-                    {backStepEllipsisText ? <span style={ELLIPSIS_STYLE}>{backStepEllipsisText}</span> : null}
                     <TypingCursor mode={cursorMode} heightEm={0.95} style={CURSOR_STYLE} />
                 </div>
 
@@ -424,10 +379,6 @@ const TEXT_STYLE: React.CSSProperties = {
 
 const CURSOR_STYLE: React.CSSProperties = {
     marginLeft: '4px',
-};
-
-const ELLIPSIS_STYLE: React.CSSProperties = {
-    opacity: 0.8,
 };
 
 const SEEK_BUTTON_ROW_STYLE: React.CSSProperties = {

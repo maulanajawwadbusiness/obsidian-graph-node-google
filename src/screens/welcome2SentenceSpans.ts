@@ -5,7 +5,7 @@ export type Welcome2SentenceSpans = {
 };
 
 function isPartTerminator(ch: string): boolean {
-    return ch === ',' || ch === '.' || ch === '!' || ch === '?' || ch === ';' || ch === ':';
+    return ch === '.';
 }
 
 function isTrailingWhitespace(ch: string): boolean {

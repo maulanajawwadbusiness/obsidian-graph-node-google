@@ -27,6 +27,7 @@
     "test:payments-webhook-contracts": "node scripts/test-payments-webhook-contracts.mjs",
     "test:payments-contracts": "node scripts/test-payments-contracts.mjs",
     "test:depsbuilder-contracts": "node scripts/test-depsbuilder-contracts.mjs",
+    "test:servermonolith-shell": "node scripts/test-servermonolith-shell.mjs",
     "test:jsonparsers-contracts": "node scripts/test-jsonparsers-contracts.mjs",
     "test:cors-contracts": "node scripts/test-cors-contracts.mjs",
     "test:startupgates-contracts": "node scripts/test-startupgates-contracts.mjs",

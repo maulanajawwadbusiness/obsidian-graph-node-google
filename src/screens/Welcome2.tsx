@@ -208,10 +208,15 @@ export const Welcome2: React.FC<Welcome2Props> = ({ onNext, onSkip, onBack }) =>
     const goPreviousPartWithStabilize = React.useCallback(() => {
         if (builtTimeline.events.length === 0) return;
         const currentPartIdx = getCurrentPartIdx();
-        const previousPartIdx = Math.max(0, currentPartIdx - 1);
 
         clearAutoAdvanceTimer();
         cancelBackJumpSequence();
+        if (currentPartIdx <= 0) {
+            rootRef.current?.focus({ preventScroll: true });
+            return;
+        }
+
+        const previousPartIdx = currentPartIdx - 1;
         isBackJumpingRef.current = true;
         setClockPaused(true);
 

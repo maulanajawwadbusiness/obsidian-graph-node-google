@@ -1,4 +1,4 @@
-import { AppScreen, isGraphClassScreen } from '../screenFlow/screenTypes';
+import { AppScreen } from '../screenFlow/screenTypes';
 
 export const ONBOARDING_FADE_MS = 200;
 export const ONBOARDING_FADE_EASING = 'cubic-bezier(0.22, 1, 0.36, 1)';
@@ -11,12 +11,26 @@ export type TransitionPolicy = {
     reason: string;
 };
 
+export type TransitionClass = 'onboarding' | 'graph';
+
+const TRANSITION_CLASS_BY_SCREEN: Record<AppScreen, TransitionClass> = {
+    welcome1: 'onboarding',
+    welcome2: 'onboarding',
+    prompt: 'onboarding',
+    graph_loading: 'graph',
+    graph: 'graph',
+};
+
 function isAnimatedOnboardingPair(from: AppScreen, to: AppScreen): boolean {
     if (from === 'welcome1' && to === 'welcome2') return true;
     if (from === 'welcome2' && to === 'welcome1') return true;
     if (from === 'welcome2' && to === 'prompt') return true;
     if (from === 'prompt' && to === 'welcome2') return true;
     return false;
+}
+
+function isGraphBoundary(from: AppScreen, to: AppScreen): boolean {
+    return TRANSITION_CLASS_BY_SCREEN[from] === 'graph' || TRANSITION_CLASS_BY_SCREEN[to] === 'graph';
 }
 
 export function getTransitionPolicy(from: AppScreen, to: AppScreen): TransitionPolicy {
@@ -26,7 +40,7 @@ export function getTransitionPolicy(from: AppScreen, to: AppScreen): TransitionP
     if (isAnimatedOnboardingPair(from, to)) {
         return { animate: true, blockInput: true, reason: 'onboarding_pair' };
     }
-    if (isGraphClassScreen(from) || isGraphClassScreen(to)) {
+    if (isGraphBoundary(from, to)) {
         return { animate: false, blockInput: false, reason: 'graph_boundary' };
     }
     return { animate: false, blockInput: false, reason: 'non_animated_pair' };

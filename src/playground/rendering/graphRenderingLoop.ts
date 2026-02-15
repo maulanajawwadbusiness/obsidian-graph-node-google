@@ -23,6 +23,7 @@ import { createOverloadState, createPerfSample, recordPerfSample } from './rende
 import { runPhysicsScheduler, type SchedulerState } from './renderLoopScheduler';
 import { updateCanvasSurface } from './renderLoopSurface';
 import { enforceCameraSafety, stabilizeCentroid } from './renderLoopCamera';
+import { trackResource } from '../../runtime/resourceTracker';
 
 type Ref<T> = { current: T };
 
@@ -273,6 +274,7 @@ export const startGraphRenderLoop = (deps: GraphRenderLoopDeps) => {
     } = deps;
 
     let frameId = 0;
+    let disposed = false;
     const schedulerState: SchedulerState = {
         lastTime: performance.now(),
         accumulatorMs: 0,
@@ -579,6 +581,7 @@ export const startGraphRenderLoop = (deps: GraphRenderLoopDeps) => {
         clearHover('window blur', -1, 'unknown');
     };
     window.addEventListener('blur', handleBlur);
+    const releaseBlurListener = trackResource('graph-runtime.window-blur-listener');
 
     const handleWheel = (e: WheelEvent) => {
         // FIX 32: strict wheel ownership
@@ -629,22 +632,45 @@ export const startGraphRenderLoop = (deps: GraphRenderLoopDeps) => {
         camera.targetZoom = newZoom;
     };
     canvas.addEventListener('wheel', handleWheel, { passive: false });
+    const releaseWheelListener = trackResource('graph-runtime.canvas-wheel-listener');
 
     frameId = requestAnimationFrame(render);
+    const releaseRafLoop = trackResource('graph-runtime.raf-loop');
 
     const handleFontLoad = () => {
+        if (disposed) return;
         textMetricsCache.clear();
         // Force a re-render if needed, though the loop is running 60fps anyway.
     };
+    let releaseFontsReadyPending = () => {};
+    let releaseFontsLoadingDone = () => {};
     if (document.fonts) {
-        document.fonts.ready.then(handleFontLoad);
+        releaseFontsReadyPending = trackResource('graph-runtime.document-fonts-ready-pending');
+        document.fonts.ready
+            .then(() => {
+                handleFontLoad();
+                releaseFontsReadyPending();
+            })
+            .catch(() => {
+                releaseFontsReadyPending();
+            });
         document.fonts.addEventListener('loadingdone', handleFontLoad);
+        releaseFontsLoadingDone = trackResource('graph-runtime.document-fonts-loadingdone-listener');
     }
 
     return () => {
+        disposed = true;
         window.removeEventListener('blur', handleBlur);
+        releaseBlurListener();
         canvas.removeEventListener('wheel', handleWheel);
+        releaseWheelListener();
+        if (document.fonts) {
+            document.fonts.removeEventListener('loadingdone', handleFontLoad);
+            releaseFontsLoadingDone();
+            releaseFontsReadyPending();
+        }
         canvas.style.cursor = 'default';
         cancelAnimationFrame(frameId);
+        releaseRafLoop();
     };
 };

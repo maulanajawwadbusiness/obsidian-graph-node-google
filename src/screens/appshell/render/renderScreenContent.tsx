@@ -88,6 +88,7 @@ export function renderScreenContent(args: RenderScreenArgs): React.ReactNode {
                     {/* Warm-mount contract: graph-class screens must share this exact subtree shape with no screen key. */}
                     <GraphWithPending
                         enableDebugSidebar={false}
+                        legacyLoadingScreenMode="disabled"
                         pendingAnalysisPayload={pendingAnalysis}
                         onPendingAnalysisConsumed={() => setPendingAnalysis(null)}
                         onLoadingStateChange={(v) => setGraphIsLoading(v)}

@@ -118,6 +118,7 @@ export const AppShell: React.FC = () => {
     const [documentViewerToggleToken, setDocumentViewerToggleToken] = React.useState(0);
     const [isSidebarExpanded, setIsSidebarExpanded] = React.useState(false);
     const gatePhaseRef = React.useRef<GatePhase>('idle');
+    const graphLoadingGateRootRef = React.useRef<HTMLDivElement>(null);
     const savedInterfacesRef = React.useRef<SavedInterfaceRecordV1[]>([]);
     const restoreReadPathActiveRef = React.useRef(false);
     const activeStorageKeyRef = React.useRef<string>(getSavedInterfacesStorageKey());
@@ -441,6 +442,18 @@ export const AppShell: React.FC = () => {
     }, [gatePhase]);
 
     React.useEffect(() => {
+        if (screen !== 'graph_loading') return;
+        const modalBlockingFocus = isProfileOpen || isLogoutConfirmOpen || pendingDeleteId !== null || isSearchInterfacesOpen;
+        if (modalBlockingFocus) return;
+        const rafId = window.requestAnimationFrame(() => {
+            graphLoadingGateRootRef.current?.focus();
+        });
+        return () => {
+            window.cancelAnimationFrame(rafId);
+        };
+    }, [isLogoutConfirmOpen, isProfileOpen, isSearchInterfacesOpen, pendingDeleteId, screen]);
+
+    React.useEffect(() => {
         if (!import.meta.env.DEV) return;
         if (screen !== 'graph_loading') return;
         if (sidebarFrozen) return;
@@ -516,6 +529,7 @@ export const AppShell: React.FC = () => {
         },
         gateConfirmVisible: gatePhase === 'done',
         gateConfirmEnabled: gatePhase === 'done',
+        gateRootRef: graphLoadingGateRootRef,
         onGateConfirm: confirmGraphLoadingGate,
         gateShowBackToPrompt: targetScreen === 'graph_loading' && gatePhase !== 'done',
         onGateBackToPrompt: backToPromptFromGate,

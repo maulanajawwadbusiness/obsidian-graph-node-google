@@ -1,6 +1,7 @@
 import React from 'react';
 
 type GraphLoadingGateProps = {
+    rootRef?: React.RefObject<HTMLDivElement>;
     confirmVisible?: boolean;
     confirmEnabled?: boolean;
     onConfirm?: () => void;
@@ -78,6 +79,7 @@ const BACK_BUTTON_STYLE: React.CSSProperties = {
 };
 
 export const GraphLoadingGate: React.FC<GraphLoadingGateProps> = ({
+    rootRef,
     confirmVisible = false,
     confirmEnabled = false,
     onConfirm,
@@ -86,7 +88,9 @@ export const GraphLoadingGate: React.FC<GraphLoadingGateProps> = ({
 }) => {
     return (
         <div
+            ref={rootRef}
             data-graph-loading-gate="1"
+            tabIndex={-1}
             style={ROOT_STYLE}
             onPointerDownCapture={(e) => e.stopPropagation()}
             onPointerMoveCapture={(e) => e.stopPropagation()}

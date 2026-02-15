@@ -47,6 +47,7 @@ export type RenderScreenArgs = {
     setRestoreReadPathActive: (active: boolean) => void;
     gateConfirmVisible: boolean;
     gateConfirmEnabled: boolean;
+    gateRootRef?: React.RefObject<HTMLDivElement>;
     onGateConfirm?: () => void;
     gateShowBackToPrompt: boolean;
     onGateBackToPrompt: () => void;
@@ -80,6 +81,7 @@ export function renderScreenContent(args: RenderScreenArgs): React.ReactNode {
         setRestoreReadPathActive,
         gateConfirmVisible,
         gateConfirmEnabled,
+        gateRootRef,
         onGateConfirm,
         gateShowBackToPrompt,
         onGateBackToPrompt,
@@ -121,6 +123,7 @@ export function renderScreenContent(args: RenderScreenArgs): React.ReactNode {
                     </GraphRuntimeLeaseBoundary>
                     {screen === 'graph_loading' ? (
                         <GraphLoadingGate
+                            rootRef={gateRootRef}
                             confirmVisible={gateConfirmVisible}
                             confirmEnabled={gateConfirmEnabled}
                             onConfirm={onGateConfirm}

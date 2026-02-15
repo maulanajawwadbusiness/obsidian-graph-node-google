@@ -9,6 +9,18 @@ type DevExportAdapterOptions = {
     preview?: boolean;
 };
 
+function assertDevExportForAdapter(dev: DevInterfaceExportV1): void {
+    if (dev.version !== 1) {
+        throw new Error('invalid_dev_export_version');
+    }
+    if (!Number.isFinite(dev.exportedAt)) {
+        throw new Error('invalid_dev_export_exported_at');
+    }
+    if (typeof dev.title !== 'string') {
+        throw new Error('invalid_dev_export_title');
+    }
+}
+
 function countWords(text: string): number {
     const trimmed = text.trim();
     if (!trimmed) return 0;
@@ -66,6 +78,7 @@ export function devExportToSavedInterfaceRecordV1(
     dev: DevInterfaceExportV1,
     opts?: DevExportAdapterOptions
 ): SavedInterfaceRecordV1 {
+    assertDevExportForAdapter(dev);
     const exportedAt = Math.floor(dev.exportedAt);
     const title = (dev.title || 'Sample Preview').trim() || 'Sample Preview';
     const parsedDocument = ensureParsedDocument(dev.parsedDocument, title, exportedAt);

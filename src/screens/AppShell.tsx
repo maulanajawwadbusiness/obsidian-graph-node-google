@@ -58,6 +58,7 @@ const Graph = React.lazy(() =>
 );
 
 type Screen = AppScreen;
+type GatePhase = 'idle' | 'arming' | 'loading' | 'done' | 'confirmed';
 const STORAGE_KEY = 'arnvoid_screen';
 const PERSIST_SCREEN = false;
 const DEBUG_ONBOARDING_SCROLL_GUARD = false;
@@ -86,6 +87,8 @@ export const AppShell: React.FC = () => {
     const [savedInterfaces, setSavedInterfaces] = React.useState<SavedInterfaceRecordV1[]>([]);
     const [pendingLoadInterface, setPendingLoadInterface] = React.useState<SavedInterfaceRecordV1 | null>(null);
     const [graphIsLoading, setGraphIsLoading] = React.useState(false);
+    const [gatePhase, setGatePhase] = React.useState<GatePhase>('idle');
+    const [seenLoadingTrue, setSeenLoadingTrue] = React.useState(false);
     const [documentViewerToggleToken, setDocumentViewerToggleToken] = React.useState(0);
     const [isSidebarExpanded, setIsSidebarExpanded] = React.useState(false);
     const savedInterfacesRef = React.useRef<SavedInterfaceRecordV1[]>([]);
@@ -329,6 +332,15 @@ export const AppShell: React.FC = () => {
         savedInterfacesRef.current = savedInterfaces;
     }, [savedInterfaces]);
 
+    React.useEffect(() => {
+        if (screen === 'graph_loading') {
+            setGatePhase('arming');
+            setSeenLoadingTrue(false);
+            return;
+        }
+        setGatePhase('idle');
+    }, [screen]);
+
     const sidebarInterfaces = useSidebarInterfaces(savedInterfaces);
     const { filteredSearchResults } = useSearchInterfacesEngine({
         savedInterfaces,
@@ -401,6 +413,8 @@ export const AppShell: React.FC = () => {
             <div
                 style={SHELL_STYLE}
                 data-graph-loading={graphIsLoading ? '1' : '0'}
+                data-gate-phase={gatePhase}
+                data-gate-seen-loading={seenLoadingTrue ? '1' : '0'}
                 data-search-interfaces-open={isSearchInterfacesOpen ? '1' : '0'}
                 data-search-interfaces-query-len={String(searchInterfacesQuery.length)}
             >

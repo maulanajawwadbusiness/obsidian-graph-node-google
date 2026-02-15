@@ -41,7 +41,6 @@ const CONFIRM_SLOT_STYLE: React.CSSProperties = {
     borderRadius: '10px',
     border: '1px solid rgba(255, 255, 255, 0.14)',
     background: 'rgba(255, 255, 255, 0.06)',
-    opacity: 0.35,
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -60,7 +59,16 @@ const CONFIRM_BUTTON_STYLE: React.CSSProperties = {
     color: '#f2f2f2',
     fontSize: '14px',
     fontWeight: 600,
+};
+
+const CONFIRM_BUTTON_ENABLED_STYLE: React.CSSProperties = {
+    opacity: 1,
     cursor: 'pointer',
+};
+
+const CONFIRM_BUTTON_DISABLED_STYLE: React.CSSProperties = {
+    opacity: 0.5,
+    cursor: 'not-allowed',
 };
 
 const BACK_BUTTON_STYLE: React.CSSProperties = {
@@ -138,12 +146,15 @@ export const GraphLoadingGate: React.FC<GraphLoadingGateProps> = ({
                     Back to Prompt
                 </button>
             ) : null}
-            <div style={CONFIRM_SLOT_STYLE}>
+            <div style={{ ...CONFIRM_SLOT_STYLE, opacity: confirmVisible ? 1 : 0.35 }}>
                 {confirmVisible ? (
                     <button
                         ref={confirmButtonRef}
                         type="button"
-                        style={CONFIRM_BUTTON_STYLE}
+                        style={{
+                            ...CONFIRM_BUTTON_STYLE,
+                            ...(confirmEnabled ? CONFIRM_BUTTON_ENABLED_STYLE : CONFIRM_BUTTON_DISABLED_STYLE),
+                        }}
                         disabled={!confirmEnabled}
                         onPointerDown={(e) => e.stopPropagation()}
                         onClick={() => onConfirm?.()}

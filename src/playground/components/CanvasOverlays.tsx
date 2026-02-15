@@ -16,10 +16,11 @@ import shareIcon from '../../assets/share_icon.png';
 import fullscreenOpenIcon from '../../assets/fullscreen_open_icon.png';
 import fullscreenCloseIcon from '../../assets/fullscreen_close_icon.png';
 import { useFullscreen } from '../../hooks/useFullscreen';
+import { useTooltip } from '../../ui/tooltip/useTooltip';
 
 // Toggle to show/hide debug controls buttons (Debug, Theme, Controls)
 const SHOW_DEBUG_CONTROLS = false;
-const SHOW_DEV_DOWNLOAD_JSON_BUTTON = false;
+const SHOW_DEV_DOWNLOAD_JSON_BUTTON = true;
 const SHOW_TOP_RIGHT_DOTS_ICON = true;
 const TOP_RIGHT_ICON_SIZE_PX = 16;
 const FULLSCREEN_ICON_SCALE = 0.9;
@@ -178,6 +179,19 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
     onConfigChange
 }) => {
     const { isFullscreen, toggleFullscreen } = useFullscreen();
+    const showDebugTooltip = useTooltip('Show debug');
+    const themeToggleTooltip = useTooltip('Toggle between normal and elegant theme');
+    const controlsToggleTooltip = useTooltip(sidebarOpen ? 'Hide controls' : 'Show controls');
+    const downloadJsonTooltip = useTooltip('Download graph json (dev)');
+    const shareTooltip = useTooltip('Share interface (coming soon)');
+    const graphActionMenuTooltip = useTooltip('Open graph action menu');
+    const hideDebugTooltip = useTooltip('Hide');
+    const closeDebugTooltip = useTooltip('Close');
+    const ghostVelocityTooltip = useTooltip('Peak inferred velocity from solver corrections (Projection / dt)');
+    const complianceTooltip = useTooltip('Compliance value in use (lower = stiffer)');
+    const alphaTooltip = useTooltip('Average alpha = compliance/dt^2 (higher = stronger correction)');
+    const restartSameSeedTooltip = useTooltip('Restart Same Seed');
+    const settleNewSeedTooltip = useTooltip('Wait, this is Settle Test. New Seed requires logic.');
     const hud = metrics.physicsHud;
     const formatRatio = (value: number, base?: number) => {
         if (!base || base <= 0) return '';
@@ -269,16 +283,17 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
         <>
             {SHOW_DEBUG_CONTROLS && !debugOpen && (
                 <button
-                    type="button"
-                    style={DEBUG_TOGGLE_STYLE}
-                    onMouseDown={stopPropagation}
-                    onPointerDown={stopPropagation}
-                    onClick={(e) => {
-                        stopPropagation(e);
-                        onShowDebug();
-                    }}
-                    aria-label="Show debug panel"
-                    title="Show debug"
+                    {...showDebugTooltip.getAnchorProps({
+                        type: 'button',
+                        style: DEBUG_TOGGLE_STYLE,
+                        onMouseDown: stopPropagation,
+                        onPointerDown: stopPropagation,
+                        onClick: (e) => {
+                            stopPropagation(e);
+                            onShowDebug();
+                        },
+                        'aria-label': 'Show debug panel',
+                    })}
                 >
                     Debug
                 </button>
@@ -286,16 +301,17 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
 
             {SHOW_DEBUG_CONTROLS && showThemeToggle && (
                 <button
-                    type="button"
-                    style={THEME_TOGGLE_STYLE}
-                    onMouseDown={stopPropagation}
-                    onPointerDown={stopPropagation}
-                    onClick={(e) => {
-                        stopPropagation(e);
-                        onToggleTheme();
-                    }}
-                    aria-label="Toggle theme"
-                    title="Toggle between normal and elegant theme"
+                    {...themeToggleTooltip.getAnchorProps({
+                        type: 'button',
+                        style: THEME_TOGGLE_STYLE,
+                        onMouseDown: stopPropagation,
+                        onPointerDown: stopPropagation,
+                        onClick: (e) => {
+                            stopPropagation(e);
+                            onToggleTheme();
+                        },
+                        'aria-label': 'Toggle theme',
+                    })}
                 >
                     Theme: {skinMode}
                 </button>
@@ -303,16 +319,17 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
 
             {SHOW_DEBUG_CONTROLS && (
                 <button
-                    type="button"
-                    style={SIDEBAR_TOGGLE_STYLE}
-                    onMouseDown={stopPropagation}
-                    onPointerDown={stopPropagation}
-                    onClick={(e) => {
-                        stopPropagation(e);
-                        onToggleSidebar();
-                    }}
-                    aria-label={sidebarOpen ? 'Hide controls' : 'Show controls'}
-                    title={sidebarOpen ? 'Hide controls' : 'Show controls'}
+                    {...controlsToggleTooltip.getAnchorProps({
+                        type: 'button',
+                        style: SIDEBAR_TOGGLE_STYLE,
+                        onMouseDown: stopPropagation,
+                        onPointerDown: stopPropagation,
+                        onClick: (e) => {
+                            stopPropagation(e);
+                            onToggleSidebar();
+                        },
+                        'aria-label': sidebarOpen ? 'Hide controls' : 'Show controls',
+                    })}
                 >
                     {sidebarOpen ? 'Hide Controls' : 'Controls'}
                 </button>
@@ -320,29 +337,30 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
 
             {import.meta.env.DEV && SHOW_DEV_DOWNLOAD_JSON_BUTTON && (
                 <button
-                    type="button"
-                    style={{
-                        ...SIDEBAR_TOGGLE_STYLE,
-                        top: '56px',
-                        width: '32px',
-                        height: '32px',
-                        padding: '4px',
-                        background: 'transparent',
-                        border: 'none',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                    }}
-                    onPointerDown={stopPropagation}
-                    onPointerUp={stopPropagation}
-                    onWheelCapture={stopPropagation}
-                    onWheel={stopPropagation}
-                    onClick={(e) => {
-                        stopPropagation(e);
-                        onDevDownloadJson?.();
-                    }}
-                    aria-label="Download graph json (dev)"
-                    title="Download graph json (dev)"
+                    {...downloadJsonTooltip.getAnchorProps({
+                        type: 'button',
+                        style: {
+                            ...SIDEBAR_TOGGLE_STYLE,
+                            top: '56px',
+                            width: '32px',
+                            height: '32px',
+                            padding: '4px',
+                            background: 'transparent',
+                            border: 'none',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                        },
+                        onPointerDown: stopPropagation,
+                        onPointerUp: stopPropagation,
+                        onWheelCapture: stopPropagation,
+                        onWheel: stopPropagation,
+                        onClick: (e) => {
+                            stopPropagation(e);
+                            onDevDownloadJson?.();
+                        },
+                        'aria-label': 'Download graph json (dev)',
+                    })}
                 >
                     <img
                         src={downloadDevModeIcon}
@@ -370,27 +388,28 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
                 >
                     <button
                         data-toolbar-trigger="share"
-                        type="button"
-                        style={{
-                            pointerEvents: 'auto',
-                            display: 'inline-flex',
-                            padding: 0,
-                            margin: 0,
-                            border: 'none',
-                            background: 'transparent',
-                            cursor: 'pointer'
-                        }}
-                        onPointerEnter={() => setHoveredTopRightIcon('share')}
-                        onPointerLeave={() => setHoveredTopRightIcon((current) => (current === 'share' ? null : current))}
-                        onPointerDown={(e) => e.stopPropagation()}
-                        onPointerUp={(e) => e.stopPropagation()}
-                        onWheelCapture={(e) => e.stopPropagation()}
-                        onWheel={(e) => e.stopPropagation()}
-                        onClick={(e) => {
-                            e.stopPropagation();
-                        }}
-                        aria-label="Share interface (coming soon)"
-                        title="Share interface (coming soon)"
+                        {...shareTooltip.getAnchorProps({
+                            type: 'button',
+                            'aria-label': 'Share interface (coming soon)',
+                            style: {
+                                pointerEvents: 'auto',
+                                display: 'inline-flex',
+                                padding: 0,
+                                margin: 0,
+                                border: 'none',
+                                background: 'transparent',
+                                cursor: 'pointer'
+                            },
+                            onPointerEnter: () => setHoveredTopRightIcon('share'),
+                            onPointerLeave: () => setHoveredTopRightIcon((current) => (current === 'share' ? null : current)),
+                            onPointerDown: (e) => e.stopPropagation(),
+                            onPointerUp: (e) => e.stopPropagation(),
+                            onWheelCapture: (e) => e.stopPropagation(),
+                            onWheel: (e) => e.stopPropagation(),
+                            onClick: (e) => {
+                                e.stopPropagation();
+                            },
+                        })}
                     >
                         <MaskIcon
                             src={shareIcon}
@@ -400,37 +419,38 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
                     <button
                         ref={dotsTriggerRef}
                         data-toolbar-trigger="dots"
-                        type="button"
-                        style={{
-                            pointerEvents: 'auto',
-                            display: 'inline-flex',
-                            padding: 0,
-                            margin: 0,
-                            border: 'none',
-                            background: 'transparent',
-                            cursor: 'pointer'
-                        }}
-                        onPointerEnter={() => setHoveredTopRightIcon('dots')}
-                        onPointerLeave={() => setHoveredTopRightIcon((current) => (current === 'dots' ? null : current))}
-                        onPointerDown={(e) => e.stopPropagation()}
-                        onPointerUp={(e) => e.stopPropagation()}
-                        onWheelCapture={(e) => e.stopPropagation()}
-                        onWheel={(e) => e.stopPropagation()}
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            const triggerRect = e.currentTarget.getBoundingClientRect();
-                            setDotsMenuOpen((prev) => {
-                                const next = !prev;
-                                if (next) {
-                                    setDotsMenuPosition(
-                                        computeAnchoredMenuPosition(triggerRect, DOTS_MENU_ESTIMATED_HEIGHT_PX, MENU_ESTIMATED_WIDTH_PX)
-                                    );
-                                }
-                                return next;
-                            });
-                        }}
-                        aria-label="Open graph action menu"
-                        title="Open graph action menu"
+                        {...graphActionMenuTooltip.getAnchorProps({
+                            type: 'button',
+                            'aria-label': 'Open graph action menu',
+                            style: {
+                                pointerEvents: 'auto',
+                                display: 'inline-flex',
+                                padding: 0,
+                                margin: 0,
+                                border: 'none',
+                                background: 'transparent',
+                                cursor: 'pointer'
+                            },
+                            onPointerEnter: () => setHoveredTopRightIcon('dots'),
+                            onPointerLeave: () => setHoveredTopRightIcon((current) => (current === 'dots' ? null : current)),
+                            onPointerDown: (e) => e.stopPropagation(),
+                            onPointerUp: (e) => e.stopPropagation(),
+                            onWheelCapture: (e) => e.stopPropagation(),
+                            onWheel: (e) => e.stopPropagation(),
+                            onClick: (e) => {
+                                e.stopPropagation();
+                                const triggerRect = e.currentTarget.getBoundingClientRect();
+                                setDotsMenuOpen((prev) => {
+                                    const next = !prev;
+                                    if (next) {
+                                        setDotsMenuPosition(
+                                            computeAnchoredMenuPosition(triggerRect, DOTS_MENU_ESTIMATED_HEIGHT_PX, MENU_ESTIMATED_WIDTH_PX)
+                                        );
+                                    }
+                                    return next;
+                                });
+                            },
+                        })}
                     >
                         <MaskIcon
                             src={threeDotIcon}
@@ -524,25 +544,27 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
                             <strong>Time: T+{metrics.lifecycleMs}ms</strong>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                                 <button
-                                    type="button"
-                                    style={{
-                                        ...DEBUG_CLOSE_STYLE,
-                                        width: '44px',
-                                        fontSize: '11px',
-                                        padding: 0
-                                    }}
-                                    onClick={onCloseDebug}
-                                    aria-label="Hide debug panel"
-                                    title="Hide"
+                                    {...hideDebugTooltip.getAnchorProps({
+                                        type: 'button',
+                                        style: {
+                                            ...DEBUG_CLOSE_STYLE,
+                                            width: '44px',
+                                            fontSize: '11px',
+                                            padding: 0
+                                        },
+                                        onClick: onCloseDebug,
+                                        'aria-label': 'Hide debug panel',
+                                    })}
                                 >
                                     Hide
                                 </button>
                                 <button
-                                    type="button"
-                                    style={DEBUG_CLOSE_STYLE}
-                                    onClick={onCloseDebug}
-                                    aria-label="Close debug panel"
-                                    title="Close"
+                                    {...closeDebugTooltip.getAnchorProps({
+                                        type: 'button',
+                                        style: DEBUG_CLOSE_STYLE,
+                                        onClick: onCloseDebug,
+                                        'aria-label': 'Close debug panel',
+                                    })}
                                 >
                                     x
                                 </button>
@@ -782,9 +804,9 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
                                             solve: {(hud.xpbdSpringSolveMs || 0).toFixed(2)} ms {hud.xpbdEarlyBreaks ? `(Break: ${hud.xpbdEarlyBreaks})` : ''}<br />
                                             <span style={{ fontSize: '0.9em', color: '#888' }}>
                                                 drop: {hud.xpbdSpringSkipped}/{hud.xpbdSpringSingularity} | sync: {hud.xpbdGhostSyncs}<br />
-                                                <span title="Peak inferred velocity from solver corrections (Projection / dt)">ghost:</span> {(hud.xpbdGhostVelMax || 0).toFixed(1)}px/s (evt: {hud.xpbdGhostVelEvents})<br />
+                                                <span {...ghostVelocityTooltip.getAnchorProps()}>ghost:</span> {(hud.xpbdGhostVelMax || 0).toFixed(1)}px/s (evt: {hud.xpbdGhostVelEvents})<br />
                                                 inv: {hud.xpbdInvInvalid} | inf: {hud.xpbdInvNonFinite} | 0len: {hud.xpbdInvZero}<br />
-                                                <span title="Compliance value in use (lower = stiffer)">C:</span> {(hud.xpbdComplianceUsed || 0).toFixed(6)} | <span title="Average alpha = compliance/dt^2 (higher = stronger correction)">alpha:</span> {(hud.xpbdAlphaAvg || 0).toFixed(2)}<br />
+                                                <span {...complianceTooltip.getAnchorProps()}>C:</span> {(hud.xpbdComplianceUsed || 0).toFixed(6)} | <span {...alphaTooltip.getAnchorProps()}>alpha:</span> {(hud.xpbdAlphaAvg || 0).toFixed(2)}<br />
                                                 <span style={{ color: hud.xpbdDragActive ? '#00eeee' : '#666' }}>
                                                     drag: {hud.xpbdDragActive ? 'ON' : 'off'} (k={hud.xpbdDragKinematic ? '1' : '0'}, sync={hud.xpbdDragSyncs})
                                                 </span>
@@ -979,18 +1001,20 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
                                             </button>
                                         ))}
                                         <button
-                                            type="button"
-                                            style={{ ...DEBUG_CLOSE_STYLE, width: '48px', color: '#8f8' }}
-                                            onClick={() => onSpawnPreset(metrics.nodes)}
-                                            title="Restart Same Seed"
+                                            {...restartSameSeedTooltip.getAnchorProps({
+                                                type: 'button',
+                                                style: { ...DEBUG_CLOSE_STYLE, width: '48px', color: '#8f8' },
+                                                onClick: () => onSpawnPreset(metrics.nodes),
+                                            })}
                                         >
                                             Same
                                         </button>
                                         <button
-                                            type="button"
-                                            style={{ ...DEBUG_CLOSE_STYLE, width: '48px', color: '#f88' }}
-                                            onClick={() => onRunSettleScenario()}
-                                            title="Wait, this is Settle Test. New Seed requires logic."
+                                            {...settleNewSeedTooltip.getAnchorProps({
+                                                type: 'button',
+                                                style: { ...DEBUG_CLOSE_STYLE, width: '48px', color: '#f88' },
+                                                onClick: () => onRunSettleScenario(),
+                                            })}
                                         >
                                             New
                                         </button>

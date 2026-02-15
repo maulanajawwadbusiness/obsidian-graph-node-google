@@ -63,7 +63,6 @@ export const AIActivityGlyph: React.FC = () => {
             onMouseMove={stopPropagation}
             onMouseUp={stopPropagation}
             aria-hidden="true"
-            title="AI generating labels..."
         >
             <div style={DOT_STYLE} />
         </div>

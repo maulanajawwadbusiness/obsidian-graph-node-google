@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useDocument } from '../../store/documentStore';
 import { t } from '../../i18n/t';
 import documentIcon from '../../assets/document_icon.png';
+import { useTooltip } from '../../ui/tooltip/useTooltip';
 
 /**
  * Bottom-left button to toggle the left viewer window.
@@ -42,26 +43,28 @@ export const TextPreviewButton: React.FC<TextPreviewButtonProps> = ({ onToggle }
     const { state, togglePreview } = useDocument();
     const open = state.previewOpen;
     const [isHovered, setIsHovered] = useState(false);
+    const previewTooltip = useTooltip(open ? t('tooltip.closeViewer') : t('tooltip.openViewer'));
 
     return (
         <button
-            type="button"
-            style={{
-                ...BUTTON_STYLE,
-                opacity: isHovered ? 0.65 : 0.35,
-            }}
-            onMouseDown={stopPropagation}
-            onMouseMove={stopPropagation}
-            onMouseUp={stopPropagation}
-            onPointerDown={stopPropagation}
-            onMouseEnter={() => setIsHovered(true)}
-            onMouseLeave={() => setIsHovered(false)}
-            onClick={(e) => {
-                stopPropagation(e);
-                (onToggle ?? togglePreview)();
-            }}
-            aria-label={open ? t('tooltip.closeViewer') : t('tooltip.openViewer')}
-            title={open ? t('tooltip.closeViewer') : t('tooltip.openViewer')}
+            {...previewTooltip.getAnchorProps({
+                type: 'button',
+                style: {
+                    ...BUTTON_STYLE,
+                    opacity: isHovered ? 0.65 : 0.35,
+                },
+                onMouseDown: stopPropagation,
+                onMouseMove: stopPropagation,
+                onMouseUp: stopPropagation,
+                onPointerDown: stopPropagation,
+                onMouseEnter: () => setIsHovered(true),
+                onMouseLeave: () => setIsHovered(false),
+                onClick: (e) => {
+                    stopPropagation(e);
+                    (onToggle ?? togglePreview)();
+                },
+                'aria-label': open ? t('tooltip.closeViewer') : t('tooltip.openViewer'),
+            })}
         >
             <img src={documentIcon} alt="Document" style={IMG_STYLE} />
         </button>

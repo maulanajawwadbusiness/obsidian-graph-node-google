@@ -12,6 +12,7 @@ import logoutIcon from '../assets/logout_icon.png';
 import suggestionFeedbackIcon from '../assets/suggestion_feedback_icon.png';
 import blogIcon from '../assets/blog_icon.png';
 import { LAYER_SIDEBAR, LAYER_SIDEBAR_ROW_MENU } from '../ui/layers';
+import { useTooltip } from '../ui/tooltip/useTooltip';
 import {
     SIDEBAR_COLLAPSED_WIDTH_CSS,
     SIDEBAR_COLLAPSE_DURATION_MS,
@@ -149,6 +150,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
     onOpenProfile,
     onRequestLogout,
 }) => {
+    const openSidebarTooltip = useTooltip('Open sidebar', { disabled: isExpanded });
+    const closeSidebarTooltip = useTooltip('Close sidebar');
+    const sessionActionsTooltip = useTooltip('Session actions');
+    const openDocumentViewerTooltip = useTooltip('Open document viewer');
     const [logoHover, setLogoHover] = React.useState(false);
     const [createNewHover, setCreateNewHover] = React.useState(false);
     const [searchHover, setSearchHover] = React.useState(false);
@@ -722,15 +727,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       Top-left logo uses layered mask crossfade so shape swap is a true 100ms fade.
                     */}
                         <button
-                            type="button"
-                            style={ICON_BUTTON_STYLE}
-                            onMouseEnter={() => {
-                                if (isInMotionPhase) return;
-                                setLogoHover(true);
-                            }}
-                            onMouseLeave={() => setLogoHover(false)}
-                            onClick={!isExpanded ? onToggle : undefined}
-                            title={!isExpanded ? 'Open sidebar' : undefined}
+                            {...openSidebarTooltip.getAnchorProps({
+                                type: 'button',
+                                style: ICON_BUTTON_STYLE,
+                                onMouseEnter: () => {
+                                    if (isInMotionPhase) return;
+                                    setLogoHover(true);
+                                },
+                                onMouseLeave: () => setLogoHover(false),
+                                onClick: !isExpanded ? onToggle : undefined,
+                            })}
                         >
                             <span
                                 aria-hidden="true"
@@ -776,22 +782,23 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         </button>
                         {shouldMountExpandedContent && (
                             <button
-                                type="button"
-                                aria-hidden={!isExpanded}
-                                style={{
-                                    ...ICON_BUTTON_STYLE,
-                                    ...expandedContentStyle,
-                                    marginLeft: 'auto',
-                                    marginRight: `${-CLOSE_ICON_OFFSET_LEFT}px`,
-                                }}
-                                onMouseEnter={() => {
-                                    if (isInMotionPhase) return;
-                                    if (!closeHoverArmed) return;
-                                    setCloseHover(true);
-                                }}
-                                onMouseLeave={() => setCloseHover(false)}
-                                onClick={onToggle}
-                                title="Close sidebar"
+                                {...closeSidebarTooltip.getAnchorProps({
+                                    type: 'button',
+                                    'aria-hidden': !isExpanded,
+                                    style: {
+                                        ...ICON_BUTTON_STYLE,
+                                        ...expandedContentStyle,
+                                        marginLeft: 'auto',
+                                        marginRight: `${-CLOSE_ICON_OFFSET_LEFT}px`,
+                                    },
+                                    onMouseEnter: () => {
+                                        if (isInMotionPhase) return;
+                                        if (!closeHoverArmed) return;
+                                        setCloseHover(true);
+                                    },
+                                    onMouseLeave: () => setCloseHover(false),
+                                    onClick: onToggle,
+                                })}
                             >
                                 <svg
                                     aria-hidden="true"
@@ -904,7 +911,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
                                             if (isRenaming) return;
                                             onSelectInterface?.(item.id);
                                         }}
-                                        title={item.subtitle}
                                     >
                                         <span style={INTERFACE_ROW_CONTENT_STYLE}>
                                             {isRenaming ? (
@@ -944,52 +950,54 @@ export const Sidebar: React.FC<SidebarProps> = ({
                                                     />
                                                 </span>
                                             ) : (
-                                                <span
-                                                    ref={index === 0 ? firstSessionTitleRef : undefined}
+                                                <SidebarTooltipText
+                                                    content={item.subtitle ?? ''}
                                                     style={{ ...interfaceTitleStyle, ...sessionTitleRevealStyle }}
+                                                    textRef={index === 0 ? firstSessionTitleRef : undefined}
                                                 >
                                                     {item.title}
-                                                </span>
+                                                </SidebarTooltipText>
                                             )}
                                             <span style={INTERFACE_ROW_MENU_SLOT_STYLE}>
                                                 <button
-                                                    type="button"
+                                                    {...sessionActionsTooltip.getAnchorProps({
+                                                        type: 'button',
+                                                        'data-row-ellipsis': '1',
+                                                        'aria-label': `Open actions for ${item.title}`,
+                                                        style: {
+                                                            ...ROW_ELLIPSIS_BUTTON_STYLE,
+                                                            border: 'none',
+                                                            background: 'transparent',
+                                                            cursor: disabled ? 'default' : ROW_ELLIPSIS_BUTTON_STYLE.cursor,
+                                                            opacity: showRowEllipsis ? 1 : 0,
+                                                        },
+                                                        onPointerDown: (e) => e.stopPropagation(),
+                                                        onPointerUp: (e) => e.stopPropagation(),
+                                                        onWheelCapture: (e) => e.stopPropagation(),
+                                                        onWheel: (e) => e.stopPropagation(),
+                                                        onMouseEnter: () => {
+                                                            if (isInMotionPhase) return;
+                                                            setHoveredEllipsisRowId(item.id);
+                                                        },
+                                                        onMouseLeave: () => setHoveredEllipsisRowId((curr) => (curr === item.id ? null : curr)),
+                                                        onClick: (e) => {
+                                                            e.preventDefault();
+                                                            e.stopPropagation();
+                                                            if (disabled) return;
+                                                            const el = e.currentTarget as HTMLButtonElement;
+                                                            if (isRenaming) return;
+                                                            toggleRowMenuForItem(item.id, el);
+                                                        },
+                                                        onKeyDown: (e) => {
+                                                            if (e.key !== 'Enter' && e.key !== ' ') return;
+                                                            e.preventDefault();
+                                                            e.stopPropagation();
+                                                            if (disabled) return;
+                                                            const el = e.currentTarget as HTMLButtonElement;
+                                                            toggleRowMenuForItem(item.id, el);
+                                                        },
+                                                    })}
                                                     disabled={disabled}
-                                                    data-row-ellipsis="1"
-                                                    aria-label={`Open actions for ${item.title}`}
-                                                    title="Session actions"
-                                                    style={{
-                                                        ...ROW_ELLIPSIS_BUTTON_STYLE,
-                                                        border: 'none',
-                                                        background: 'transparent',
-                                                        cursor: disabled ? 'default' : ROW_ELLIPSIS_BUTTON_STYLE.cursor,
-                                                        opacity: showRowEllipsis ? 1 : 0,
-                                                    }}
-                                                    onPointerDown={(e) => e.stopPropagation()}
-                                                    onPointerUp={(e) => e.stopPropagation()}
-                                                    onWheelCapture={(e) => e.stopPropagation()}
-                                                    onWheel={(e) => e.stopPropagation()}
-                                                    onMouseEnter={() => {
-                                                        if (isInMotionPhase) return;
-                                                        setHoveredEllipsisRowId(item.id);
-                                                    }}
-                                                    onMouseLeave={() => setHoveredEllipsisRowId((curr) => (curr === item.id ? null : curr))}
-                                                    onClick={(e) => {
-                                                        e.preventDefault();
-                                                        e.stopPropagation();
-                                                        if (disabled) return;
-                                                        const el = e.currentTarget as HTMLButtonElement;
-                                                        if (isRenaming) return;
-                                                        toggleRowMenuForItem(item.id, el);
-                                                    }}
-                                                    onKeyDown={(e) => {
-                                                        if (e.key !== 'Enter' && e.key !== ' ') return;
-                                                        e.preventDefault();
-                                                        e.stopPropagation();
-                                                        if (disabled) return;
-                                                        const el = e.currentTarget as HTMLButtonElement;
-                                                        toggleRowMenuForItem(item.id, el);
-                                                    }}
                                                 >
                                                     <MaskIcon
                                                         src={verticalElipsisIcon}
@@ -1272,21 +1280,22 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 >
                     {showDocumentViewerButton ? (
                         <button
-                            type="button"
-                            style={{
-                                ...NAV_ITEM_STYLE,
-                                justifyContent: 'flex-start',
-                                alignSelf: 'stretch',
-                                marginBottom: '8px',
-                            }}
-                            onClick={onToggleDocumentViewer}
-                            onPointerDown={(e) => e.stopPropagation()}
-                            onMouseEnter={() => {
-                                if (isInMotionPhase) return;
-                                setDocumentHover(true);
-                            }}
-                            onMouseLeave={() => setDocumentHover(false)}
-                            title="Open document viewer"
+                            {...openDocumentViewerTooltip.getAnchorProps({
+                                type: 'button',
+                                style: {
+                                    ...NAV_ITEM_STYLE,
+                                    justifyContent: 'flex-start',
+                                    alignSelf: 'stretch',
+                                    marginBottom: '8px',
+                                },
+                                onClick: onToggleDocumentViewer,
+                                onPointerDown: (e) => e.stopPropagation(),
+                                onMouseEnter: () => {
+                                    if (isInMotionPhase) return;
+                                    setDocumentHover(true);
+                                },
+                                onMouseLeave: () => setDocumentHover(false),
+                            })}
                         >
                             <MaskIcon
                                 src={documentIcon}
@@ -1490,6 +1499,27 @@ const MaskIcon: React.FC<MaskIconProps> = ({ src, size, color, opacity = 1, tran
         }}
     />
 );
+
+type SidebarTooltipTextProps = {
+    content: string;
+    style: React.CSSProperties;
+    children: React.ReactNode;
+    textRef?: React.Ref<HTMLSpanElement>;
+};
+
+const SidebarTooltipText: React.FC<SidebarTooltipTextProps> = ({ content, style, children, textRef }) => {
+    const tooltip = useTooltip(content, { disabled: content.trim().length === 0 });
+    return (
+        <span
+            {...tooltip.getAnchorProps({
+                style,
+            })}
+            ref={textRef}
+        >
+            {children}
+        </span>
+    );
+};
 
 // ===========================================================================
 // Styles

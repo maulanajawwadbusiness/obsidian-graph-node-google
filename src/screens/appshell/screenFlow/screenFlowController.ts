@@ -1,9 +1,11 @@
 import { AppScreen } from './screenTypes';
 
+export const PROMPT_FORWARD_GRAPH_CLASS_TARGET: AppScreen = 'graph_loading';
+
 const NEXT_SCREEN_BY_ID: Record<AppScreen, AppScreen | null> = {
     welcome1: 'welcome2',
     welcome2: 'prompt',
-    prompt: 'graph_loading',
+    prompt: PROMPT_FORWARD_GRAPH_CLASS_TARGET,
     graph_loading: 'graph',
     graph: null,
 };

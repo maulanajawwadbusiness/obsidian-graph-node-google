@@ -24,6 +24,7 @@ import {
     getBackScreen,
     getCreateNewTarget,
     getNextScreen,
+    PROMPT_FORWARD_GRAPH_CLASS_TARGET,
     getSkipTarget,
 } from './appshell/screenFlow/screenFlowController';
 import { renderScreenContent } from './appshell/render/renderScreenContent';
@@ -222,7 +223,7 @@ export const AppShell: React.FC = () => {
             if (import.meta.env.DEV) {
                 console.warn('[FlowGuard] blocked prompt->graph direct transition; rerouting to graph_loading');
             }
-            transitionToScreen('graph_loading');
+            transitionToScreen(PROMPT_FORWARD_GRAPH_CLASS_TARGET);
             return;
         }
         transitionToScreen(next);

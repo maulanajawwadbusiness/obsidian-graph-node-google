@@ -7,6 +7,7 @@ import type { SavedInterfaceRecordV1 } from '../store/savedInterfacesStore';
 import { devExportToSavedInterfaceRecordV1 } from '../lib/devExport/devExportToSavedInterfaceRecord';
 import { parseDevInterfaceExportStrict } from '../lib/devExport/parseDevInterfaceExportStrict';
 import { parseSavedInterfaceRecordForPreview } from '../lib/devExport/parseSavedInterfaceRecordForPreview';
+import { validateSampleGraphSemantic } from '../lib/preview/validateSampleGraphSemantic';
 import {
     PREVIEW_VALIDATION_ERROR_CODE,
     createValidationError,
@@ -121,7 +122,9 @@ export const SampleGraphPreview: React.FC = () => {
 
         return chainResult(adapted, (candidateRecord) => {
             const parsedPreviewRecord = parseSavedInterfaceRecordForPreview(candidateRecord);
-            return chainResult(parsedPreviewRecord, (parsedRecord) => ok({ record: parsedRecord }));
+            return chainResult(parsedPreviewRecord, (parsedRecord) =>
+                chainResult(validateSampleGraphSemantic(parsedRecord), () => ok({ record: parsedRecord }))
+            );
         });
     }, []);
 

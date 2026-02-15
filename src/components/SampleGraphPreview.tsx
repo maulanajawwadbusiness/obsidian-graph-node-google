@@ -22,6 +22,7 @@ import {
     subscribeGraphRuntimeLease,
     type GraphRuntimeOwner,
 } from '../runtime/graphRuntimeLease';
+import { warnIfGraphRuntimeResourcesUnbalanced } from '../runtime/resourceTracker';
 import {
     SAMPLE_GRAPH_PREVIEW_ROOT_ATTR,
     SAMPLE_GRAPH_PREVIEW_ROOT_VALUE
@@ -234,9 +235,11 @@ export const SampleGraphPreview: React.FC = () => {
     React.useEffect(() => {
         return () => {
             const token = activeLeaseTokenRef.current;
-            if (!token) return;
-            releaseGraphRuntimeLease(token);
-            activeLeaseTokenRef.current = null;
+            if (token) {
+                releaseGraphRuntimeLease(token);
+                activeLeaseTokenRef.current = null;
+            }
+            warnIfGraphRuntimeResourcesUnbalanced('SampleGraphPreview.unmount');
         };
     }, []);
 

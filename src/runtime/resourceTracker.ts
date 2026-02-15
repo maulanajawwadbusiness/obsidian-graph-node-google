@@ -2,6 +2,7 @@ type ResourceSnapshot = Record<string, number>;
 
 const isDev = typeof import.meta !== 'undefined' && import.meta.env.DEV;
 const resourceCounts = new Map<string, number>();
+const warnedSignatures = new Set<string>();
 
 function bump(name: string, delta: 1 | -1): void {
     const current = resourceCounts.get(name) ?? 0;
@@ -30,4 +31,20 @@ export function getResourceTrackerSnapshot(): ResourceSnapshot {
         out[key] = value;
     });
     return out;
+}
+
+export function warnIfGraphRuntimeResourcesUnbalanced(source: string): void {
+    if (!isDev) return;
+    const unbalanced: Array<[string, number]> = [];
+    resourceCounts.forEach((count, name) => {
+        if (!name.startsWith('graph-runtime.')) return;
+        if (count === 0) return;
+        unbalanced.push([name, count]);
+    });
+    if (unbalanced.length === 0) return;
+
+    const signature = `${source}:${unbalanced.map(([name, count]) => `${name}=${count}`).join('|')}`;
+    if (warnedSignatures.has(signature)) return;
+    warnedSignatures.add(signature);
+    console.warn('[ResourceTracker] graph-runtime resources unbalanced at %s: %s', source, signature);
 }

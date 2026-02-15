@@ -373,6 +373,40 @@ Expected debug counters/logs:
   - `reacquireAttemptCount`
   - `reacquireSuccessCount`
 
+## 2.8 Graph Runtime Cleanup Hardening (2026-02-15)
+
+Purpose:
+- enforce balanced runtime cleanup across repeated prompt <-> graph mount cycles.
+- prevent listener and frame-loop accumulation in shared graph runtime path.
+
+Patched leak risks:
+1. `graphRenderingLoop` canvas wheel listener now has explicit teardown:
+   - add: `canvas.removeEventListener('wheel', handleWheel)`
+2. `graphRenderingLoop` font listener now has explicit teardown:
+   - add: `document.fonts.removeEventListener('loadingdone', handleFontLoad)`
+3. `graphRenderingLoop` now guards late async callbacks and frame reschedule after unmount:
+   - `disposed` guard in `handleFontLoad`
+   - `disposed` guard before all `requestAnimationFrame(render)` re-schedules
+
+Dev-only resource tracker:
+- file: `src/runtime/resourceTracker.ts`
+- tracked names are under `graph-runtime.*`
+- API:
+  - `trackResource(name)` -> idempotent release function
+  - `getResourceTrackerSnapshot()`
+  - `warnIfGraphRuntimeResourcesUnbalanced(source)`
+
+Unmount invariant seam points:
+- `src/components/SampleGraphPreview.tsx` cleanup
+- `src/runtime/GraphRuntimeLeaseBoundary.tsx` cleanup
+- both call `warnIfGraphRuntimeResourcesUnbalanced(...)` in DEV to catch non-zero graph runtime counters.
+
+Manual verification checklist:
+1. Open prompt screen (preview mounts), then go to graph, then back to prompt several times.
+2. In DEV logs, verify no repeated unbalanced `graph-runtime.*` warnings grow over cycles.
+3. Confirm graph behavior remains unchanged (drag, hover, wheel, popup flow).
+4. Confirm preview and graph transitions still obey lease ownership rules.
+
 Manual verification checklist:
 1. open prompt screen: preview acquires lease and renders graph.
 2. navigate to graph-class screen: graph-screen preempts preview lease.

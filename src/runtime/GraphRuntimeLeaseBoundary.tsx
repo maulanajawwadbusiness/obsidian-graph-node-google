@@ -6,6 +6,7 @@ import {
     subscribeGraphRuntimeLease,
     type GraphRuntimeOwner,
 } from './graphRuntimeLease';
+import { warnIfGraphRuntimeResourcesUnbalanced } from './resourceTracker';
 
 type LeaseBoundaryState =
     | { phase: 'checking' }
@@ -53,9 +54,11 @@ export const GraphRuntimeLeaseBoundary: React.FC<GraphRuntimeLeaseBoundaryProps>
     React.useEffect(() => {
         return () => {
             const token = activeTokenRef.current;
-            if (!token) return;
-            releaseGraphRuntimeLease(token);
-            activeTokenRef.current = null;
+            if (token) {
+                releaseGraphRuntimeLease(token);
+                activeTokenRef.current = null;
+            }
+            warnIfGraphRuntimeResourcesUnbalanced('GraphRuntimeLeaseBoundary.unmount');
         };
     }, []);
 

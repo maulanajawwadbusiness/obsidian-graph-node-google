@@ -5,7 +5,7 @@ import { ForceConfig, PhysicsNode } from '../physics/types';
 import { DEFAULT_PHYSICS_CONFIG } from '../physics/config';
 import { DRAG_ENABLED, SkinMode, getTheme } from '../visual/theme';
 import { CanvasOverlays } from './components/CanvasOverlays';
-import { SidebarControls } from './components/SidebarControls';
+import { SidebarControls as DebugSidebarControls } from './components/SidebarControls';
 import { HalfLeftWindow } from './components/HalfLeftWindow';
 import { AIActivityGlyph } from './components/AIActivityGlyph';
 import { CONTAINER_STYLE, MAIN_STYLE, SHOW_THEME_TOGGLE, SHOW_MAP_TITLE, SHOW_BRAND_LABEL } from './graphPlaygroundStyles';
@@ -161,7 +161,7 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
     const [config, setConfig] = useState<ForceConfig>(DEFAULT_PHYSICS_CONFIG);
 
     const [useVariedSize, setUseVariedSize] = useState(false); // Toggle State
-    const [sidebarOpen, setSidebarOpen] = useState(false); // Hidden by default
+    const [debugSidebarOpen, setDebugSidebarOpen] = useState(false); // Hidden by default
     const [debugOpen, setDebugOpen] = useState(false); // Hidden by default
     const [lastDroppedFile, setLastDroppedFile] = useState<File | null>(null);
     const [metrics, setMetrics] = useState<PlaygroundMetrics>({
@@ -1348,11 +1348,11 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
                     onShowDebug={() => setDebugOpen(true)}
                     onToggleSidebar={() => {
                         if (!enableDebugSidebar) return;
-                        setSidebarOpen((v) => !v);
+                        setDebugSidebarOpen((v) => !v);
                     }}
                     onToggleTheme={() => setSkinMode(skinMode === 'elegant' ? 'normal' : 'elegant')}
                     showThemeToggle={SHOW_THEME_TOGGLE}
-                    sidebarOpen={enableDebugSidebar ? sidebarOpen : false}
+                    sidebarOpen={enableDebugSidebar ? debugSidebarOpen : false}
                     skinMode={skinMode}
                     viewerOpen={documentContext.state.previewOpen}
                     cameraLocked={cameraLocked}
@@ -1459,10 +1459,10 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
                 {FULLCHAT_ENABLED && <FullChatToggle />}
             </div>
 
-            {enableDebugSidebar && sidebarOpen && !fullChatOpen && (
-                <SidebarControls
+            {enableDebugSidebar && debugSidebarOpen && !fullChatOpen && (
+                <DebugSidebarControls
                     config={config}
-                    onClose={() => setSidebarOpen(false)}
+                    onClose={() => setDebugSidebarOpen(false)}
                     onConfigChange={handleConfigChange}
                     onLogPreset={handleLogPreset}
                     onReset={handleReset}

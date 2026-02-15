@@ -632,3 +632,34 @@ Frontend:
 - Money notices for payment/balance/deduction outcomes.
 - Offline or backend-unreachable network failures do not emit balance/payment/chat money notices.
 - Reports: docs/report_2026_02_07_moneyux_final.md and step reports.
+
+## EnterPrompt Sample Graph Preview Mount (2026-02-15)
+- Mount seam:
+  - `src/components/PromptCard.tsx` keeps the existing preview wrapper `GRAPH_PREVIEW_PLACEHOLDER_STYLE`.
+  - Inner placeholder label has been replaced by `<SampleGraphPreview />`.
+- Preview component:
+  - `src/components/SampleGraphPreview.tsx`
+  - mounts `GraphPhysicsPlayground` (same runtime path as graph screen)
+  - root marker: `data-arnvoid-graph-preview-root="1"`
+- Seam helper for future gating/scoping:
+  - `src/components/sampleGraphPreviewSeams.ts`
+  - exports root attr/value/selector and `isInsideSampleGraphPreviewRoot(...)`
+
+Current known risks not fixed yet:
+1. Onboarding wheel guard:
+   - `src/screens/appshell/transitions/useOnboardingWheelGuard.ts` uses window capture + `preventDefault`.
+   - This can block wheel zoom over preview until target-aware gating is added.
+2. Portal escape:
+   - popup/tooltip/glyph/login overlays still portal to `document.body`.
+   - True boxed containment requires portal root scoping in follow-up work.
+3. Prompt overlays can mask preview:
+   - drag/error/login overlays in `src/screens/EnterPrompt.tsx` are fixed and can block visibility/input.
+4. Render-loop teardown gaps:
+   - graph loop cleanup still needs follow-up for canvas wheel and `document.fonts` listener teardown.
+
+Manual verification checklist for follow-up runs:
+1. Prompt loads without crash and preview stays inside the 200px wrapper.
+2. Placeholder label is gone; preview runtime surface is visible.
+3. EnterPrompt overlays still behave as before (drag overlay, error overlay, login overlay).
+4. Repeated prompt visit cycles do not cause obvious listener/input regressions.
+5. Future wheel-gated build: wheel over preview zooms graph and does not leak page scroll.

@@ -13,7 +13,6 @@ import suggestionFeedbackIcon from '../assets/suggestion_feedback_icon.png';
 import blogIcon from '../assets/blog_icon.png';
 import { LAYER_SIDEBAR, LAYER_SIDEBAR_ROW_MENU } from '../ui/layers';
 import {
-    SIDEBAR_COLLAPSED_WIDTH_PX,
     SIDEBAR_COLLAPSED_WIDTH_CSS,
     SIDEBAR_COLLAPSE_DURATION_MS,
     SIDEBAR_EXPAND_DURATION_MS,
@@ -46,6 +45,9 @@ const LOGO_SCALE = 1.05;
 const LOGO_SIZE = 20 * SIDEBAR_SCALE * LOGO_SCALE;
 const CLOSE_ICON_SIZE_PX = Math.round(ICON_SIZE);
 const AVATAR_ICON_HITBOX_PX = 32;
+const AVATAR_PIN_INSET_LEFT_PX = 1;
+const AVATAR_CONTENT_GAP_PX = 12;
+const AVATAR_CONTENT_LANE_OFFSET_PX = AVATAR_PIN_INSET_LEFT_PX + AVATAR_ICON_HITBOX_PX + AVATAR_CONTENT_GAP_PX;
 // Avatar size multiplier: 1.0 = base, 0.85 = 15% smaller
 const AVATAR_SCALE = 0.85;
 const AVATAR_SIZE = 28 * SIDEBAR_SCALE * AVATAR_SCALE;
@@ -587,9 +589,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
     const bottomSectionStyle: React.CSSProperties = {
         ...BOTTOM_SECTION_STYLE,
         alignItems: 'stretch',
-        paddingLeft: `${8 - ICON_OFFSET_LEFT}px`,
-        // Keep collapsed inner width >= avatar icon hitbox so avatar icon never clips or appears to drift.
-        paddingRight: `${SIDEBAR_COLLAPSED_WIDTH_PX - AVATAR_ICON_HITBOX_PX - (8 - ICON_OFFSET_LEFT)}px`,
+        // Keep bottom icon anchors in fully valid bounds; avoid negative padding math.
+        paddingLeft: '0px',
+        paddingRight: '0px',
     };
 
     const expandedContentStyle: React.CSSProperties = {
@@ -611,6 +613,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
             : `translateX(${AVATAR_NAME_BASE_OFFSET_PX - AVATAR_NAME_HIDDEN_OFFSET_PX}px)`,
         transition: contentTransitionCss,
         pointerEvents: shouldShowAvatarName ? 'auto' : 'none',
+    };
+    const avatarNameLaneStyle: React.CSSProperties = {
+        ...AVATAR_NAME_LANE_STYLE,
+        marginLeft: `${AVATAR_CONTENT_LANE_OFFSET_PX}px`,
     };
 
     return (
@@ -1252,6 +1258,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                                 type="button"
                                 style={{
                                     ...ICON_BUTTON_STYLE,
+                                    ...AVATAR_ICON_PIN_STYLE,
                                     padding: '0',
                                     width: `${AVATAR_ICON_HITBOX_PX}px`,
                                     height: `${AVATAR_ICON_HITBOX_PX}px`,
@@ -1280,7 +1287,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                                 )}
                             </button>
                             {shouldMountExpandedContent && (
-                                <span style={{ ...AVATAR_NAME_STYLE, ...avatarNameRevealStyle }} aria-hidden={!isExpanded}>
+                                <span style={{ ...AVATAR_NAME_STYLE, ...avatarNameLaneStyle, ...avatarNameRevealStyle }} aria-hidden={!isExpanded}>
                                     {displayAccountName}
                                 </span>
                             )}
@@ -1751,13 +1758,29 @@ const AVATAR_SECTION_STYLE: React.CSSProperties = {
 
 const PROFILE_ROW_STYLE: React.CSSProperties = {
     width: '100%',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '12px',
+    position: 'relative',
+    display: 'block',
     borderRadius: '10px',
     height: '36px',
     padding: '0',
+    overflow: 'hidden',
     transition: `background-color ${SIDEBAR_HOVER_TRANSITION}`,
+};
+
+const AVATAR_ICON_PIN_STYLE: React.CSSProperties = {
+    position: 'absolute',
+    left: `${AVATAR_PIN_INSET_LEFT_PX}px`,
+    top: '50%',
+    transform: 'translateY(-50%)',
+};
+
+const AVATAR_NAME_LANE_STYLE: React.CSSProperties = {
+    display: 'block',
+    width: `calc(100% - ${AVATAR_CONTENT_LANE_OFFSET_PX}px)`,
+    height: '100%',
+    minHeight: '36px',
+    paddingTop: '9px',
+    boxSizing: 'border-box',
 };
 
 const AVATAR_STYLE: React.CSSProperties = {

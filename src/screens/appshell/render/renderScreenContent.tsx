@@ -2,6 +2,7 @@ import React, { Suspense } from 'react';
 import { EnterPrompt } from '../../EnterPrompt';
 import { Welcome1 } from '../../Welcome1';
 import { Welcome2 } from '../../Welcome2';
+import { GraphScreenShell } from './GraphScreenShell';
 import type { AppScreen } from '../screenFlow/screenTypes';
 import type {
     GraphPhysicsPlaygroundProps,
@@ -60,21 +61,23 @@ export function renderScreenContent(args: RenderScreenArgs): React.ReactNode {
     if (screen === 'graph') {
         return (
             <Suspense fallback={<div style={fallbackStyle}>Loading graph...</div>}>
-                <GraphWithPending
-                    pendingAnalysisPayload={pendingAnalysis}
-                    onPendingAnalysisConsumed={() => setPendingAnalysis(null)}
-                    onLoadingStateChange={(v) => setGraphIsLoading(v)}
-                    documentViewerToggleToken={documentViewerToggleToken}
-                    pendingLoadInterface={pendingLoadInterface}
-                    onPendingLoadInterfaceConsumed={() => setPendingLoadInterface(null)}
-                    onRestoreReadPathChange={(active) => {
-                        setRestoreReadPathActive(active);
-                    }}
-                    onSavedInterfaceUpsert={(record, reason) => commitUpsertInterface(record, reason)}
-                    onSavedInterfaceLayoutPatch={(docId, layout, camera, reason) =>
-                        commitPatchLayoutByDocId(docId, layout, camera, reason)
-                    }
-                />
+                <GraphScreenShell>
+                    <GraphWithPending
+                        pendingAnalysisPayload={pendingAnalysis}
+                        onPendingAnalysisConsumed={() => setPendingAnalysis(null)}
+                        onLoadingStateChange={(v) => setGraphIsLoading(v)}
+                        documentViewerToggleToken={documentViewerToggleToken}
+                        pendingLoadInterface={pendingLoadInterface}
+                        onPendingLoadInterfaceConsumed={() => setPendingLoadInterface(null)}
+                        onRestoreReadPathChange={(active) => {
+                            setRestoreReadPathActive(active);
+                        }}
+                        onSavedInterfaceUpsert={(record, reason) => commitUpsertInterface(record, reason)}
+                        onSavedInterfaceLayoutPatch={(docId, layout, camera, reason) =>
+                            commitPatchLayoutByDocId(docId, layout, camera, reason)
+                        }
+                    />
+                </GraphScreenShell>
             </Suspense>
         );
     }

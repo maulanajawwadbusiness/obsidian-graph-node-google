@@ -16,6 +16,14 @@ The application layers, ordered by z-index (lowest to highest):
 0.  **Onboarding Shell (Pre-Graph Startup Flow)**
     *   Active only before `screen === 'graph'` in `src/screens/AppShell.tsx`.
     *   Flow state machine: `welcome1 -> welcome2 -> prompt -> graph`.
+    *   Transition control seams:
+        *   canonical timing and route policy: `src/screens/appshell/transitions/transitionContract.ts`
+        *   phase machine (idle, arming, fading): `src/screens/appshell/transitions/useOnboardingTransition.ts`
+        *   layer host and input shield: `src/screens/appshell/transitions/OnboardingLayerHost.tsx`
+    *   Animated route matrix:
+        *   `welcome1 <-> welcome2`
+        *   `welcome2 <-> prompt`
+        *   any transition touching `graph` is non-animated by policy.
     *   Env gate: `ONBOARDING_ENABLED` (`src/config/env.ts`):
         *   `false` or not set: app starts directly in `graph`.
         *   `true` or `1`: app starts in `welcome1`.
@@ -113,8 +121,8 @@ Debug toggles:
 *   **Behavior**:
     *   Reads auth state from `useAuth()`.
     *   Payment panel visibility is controlled by `SHOW_ENTERPROMPT_PAYMENT_PANEL` in `src/config/onboardingUiFlags.ts`.
-    *   `LoginOverlay` is currently feature-gated off in EnterPrompt (`LOGIN_OVERLAY_ENABLED = false`).
-    *   When enabled, `LoginOverlay` blocks pointer/wheel interaction and locks page scroll while open.
+    *   `LoginOverlay` is currently enabled in EnterPrompt (`LOGIN_OVERLAY_ENABLED = true`).
+    *   `LoginOverlay` blocks pointer/wheel interaction and locks page scroll while open.
     *   Continue button in LoginOverlay is a non-functional formal control (no click handler). Auth flow proceeds via session state update after sign-in.
     *   Login debug/error text is hidden by default in dev and visible by default in prod. Dev override: `VITE_SHOW_LOGIN_DEBUG_ERRORS=1`.
 *   **Role in flow**:
@@ -138,7 +146,7 @@ Current fullscreen rules in onboarding:
 Saved interfaces in the left Sidebar are now local-first and AppShell-owned.
 
 AppShell architecture note (2026-02-14):
-- `src/screens/AppShell.tsx` is orchestration-only (`447` lines).
+- `src/screens/AppShell.tsx` is orchestration-only (`432` lines).
 - Domain logic lives under `src/screens/appshell/*` (screen flow, transitions, overlays, saved interfaces, render mapping, sidebar wiring).
 - See `docs/report_2026_02_14_appshell_modularization.md` for seam-by-seam ownership and commit history.
 
@@ -261,11 +269,45 @@ Critical gotchas (must not regress):
 - AppShell orchestration entry: `src/screens/AppShell.tsx`
 - screen policy: `src/screens/appshell/screenFlow/*`
 - onboarding transitions: `src/screens/appshell/transitions/*`
+  - transition contract and route policy: `src/screens/appshell/transitions/transitionContract.ts`
 - overlays and modal rendering: `src/screens/appshell/overlays/*`
 - saved interface commits and sync: `src/screens/appshell/savedInterfaces/*`
 - screen render mapping: `src/screens/appshell/render/renderScreenContent.tsx`
 - sidebar wiring: `src/screens/appshell/sidebar/*`
 - full modularization report: `docs/report_2026_02_14_appshell_modularization.md`
+
+## 2.6 Graph Screen Layout And Sidebar Modes (2026-02-15)
+
+Current graph-screen layout contract:
+- Graph screen is hosted by `GraphScreenShell` from `src/screens/appshell/render/GraphScreenShell.tsx`.
+- `GraphScreenShell` uses a two-pane layout:
+  - left pane: structural sidebar column (`graph-screen-sidebar-pane`)
+  - right pane: graph pane (`graph-screen-graph-pane`) that hosts graph runtime
+- Left pane width is driven by the same AppShell state used by product Sidebar:
+  - state owner: `isSidebarExpanded` in `src/screens/AppShell.tsx`
+  - collapsed width: `35px`
+  - expanded width: `10vw` with min `200px`
+  - shared tokens live in `src/screens/appshell/appShellStyles.ts`
+- Graph runtime is container-relative:
+  - playground root fills parent container (`width: 100%`, `height: 100%`)
+  - viewport binding is owned by screen shell layout, not by playground root.
+
+Sidebar modes (current behavior):
+- Product Sidebar:
+  - owner path: `SidebarLayer` -> `Sidebar`
+  - state: `isSidebarExpanded` in AppShell
+  - still rendered as overlay on `prompt` and `graph`
+  - graph screen also reserves structural left column width that follows the same state.
+- Non-graph screens:
+  - continue using original overlay-only Sidebar pattern.
+- Internal debug sidebar:
+  - lives in `GraphPhysicsPlaygroundShell`
+  - debug-only controls panel, gated by `enableDebugSidebar`
+  - product graph path passes `enableDebugSidebar={false}`.
+
+Layering and shielding guardrails:
+- `GraphScreenShell` and pane wrappers must not introduce new z-index layers above overlays or modals.
+- Overlay/modal/sidebar surfaces on top of graph must shield pointer and wheel so dot canvas never receives leaked input.
 
 ## 3. Physics Architecture And Contract
 The graph is driven by a **Hybrid Solver** (`src/physics/`) prioritizing "Visual Dignity" over pure simulation accuracy.

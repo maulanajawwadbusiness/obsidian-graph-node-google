@@ -530,15 +530,13 @@ export const AppShell: React.FC = () => {
             if (event.key === 'Enter' || event.key === ' ') {
                 event.preventDefault();
                 event.stopPropagation();
-                if (gatePhase !== 'done') return;
-                confirmGraphLoadingGate();
             }
         };
         window.addEventListener('keydown', onKeyDownCapture, true);
         return () => {
             window.removeEventListener('keydown', onKeyDownCapture, true);
         };
-    }, [backToPromptFromGate, confirmGraphLoadingGate, gatePhase, screen]);
+    }, [backToPromptFromGate, screen]);
 
     React.useEffect(() => {
         if (!import.meta.env.DEV) return;

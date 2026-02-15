@@ -112,10 +112,8 @@ export const GraphLoadingGate: React.FC<GraphLoadingGateProps> = ({
         if (event.key === 'Enter' || event.key === ' ') {
             event.preventDefault();
             event.stopPropagation();
-            if (!confirmEnabled) return;
-            onConfirm?.();
         }
-    }, [confirmEnabled, onBackToPrompt, onConfirm]);
+    }, [onBackToPrompt]);
 
     return (
         <div

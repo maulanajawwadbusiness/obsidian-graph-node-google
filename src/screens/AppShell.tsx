@@ -253,6 +253,11 @@ export const AppShell: React.FC = () => {
         transitionToScreen(next);
     }, [screen, transitionToScreen]);
 
+    const warnFrozenSidebarAction = React.useCallback((action: string) => {
+        if (!import.meta.env.DEV) return;
+        console.warn('[SidebarFreezeGuard] blocked_action=%s screen=%s', action, screen);
+    }, [screen]);
+
     const applySavedInterfacesState = React.useCallback((next: SavedInterfaceRecordV1[]) => {
         const normalized = sortAndCapSavedInterfaces(next);
         savedInterfacesRef.current = normalized;
@@ -435,6 +440,13 @@ export const AppShell: React.FC = () => {
         }
     }, [gatePhase]);
 
+    React.useEffect(() => {
+        if (!import.meta.env.DEV) return;
+        if (screen !== 'graph_loading') return;
+        if (sidebarFrozen) return;
+        console.warn('[SidebarFreezeGuard] invariant_failed screen=%s sidebarFrozen=%s', screen, String(sidebarFrozen));
+    }, [screen, sidebarFrozen]);
+
     const confirmGraphLoadingGate = React.useCallback(() => {
         if (screen !== 'graph_loading') return;
         if (gatePhase !== 'done') return;
@@ -557,33 +569,53 @@ export const AppShell: React.FC = () => {
                     frozen={sidebarFrozen}
                     dimAlpha={sidebarDimAlpha}
                     onToggle={() => {
-                        if (sidebarFrozen) return;
+                        if (sidebarFrozen) {
+                            warnFrozenSidebarAction('toggle');
+                            return;
+                        }
                         setIsSidebarExpanded((prev) => !prev);
                     }}
                     onCreateNew={() => {
-                        if (sidebarFrozen) return;
+                        if (sidebarFrozen) {
+                            warnFrozenSidebarAction('create_new');
+                            return;
+                        }
                         setPendingLoadInterface(null);
                         setPendingAnalysis(null);
                         transitionToScreen(getCreateNewTarget());
                     }}
                     onOpenSearchInterfaces={() => {
-                        if (sidebarFrozen) return;
+                        if (sidebarFrozen) {
+                            warnFrozenSidebarAction('open_search');
+                            return;
+                        }
                         openSearchInterfaces();
                     }}
                     disabled={sidebarDisabled}
                     showDocumentViewerButton={isGraphClassScreen(screen)}
                     onToggleDocumentViewer={() => {
-                        if (sidebarFrozen) return;
+                        if (sidebarFrozen) {
+                            warnFrozenSidebarAction('toggle_document_viewer');
+                            return;
+                        }
                         setDocumentViewerToggleToken((prev) => prev + 1);
                     }}
                     interfaces={sidebarInterfaces}
                     onRenameInterface={(id, newTitle) => {
-                        if (sidebarFrozen) return;
+                        if (sidebarFrozen) {
+                            warnFrozenSidebarAction('rename_interface');
+                            return;
+                        }
                         handleRenameInterface(id, newTitle);
                     }}
                     onDeleteInterface={(id) => {
                         if (isSearchInterfacesOpen) return;
-                        if (sidebarDisabled) return;
+                        if (sidebarDisabled) {
+                            if (sidebarFrozen) {
+                                warnFrozenSidebarAction('delete_interface');
+                            }
+                            return;
+                        }
                         const record = savedInterfaces.find((item) => item.id === id);
                         if (!record) return;
                         openDeleteConfirm(record.id, record.title);
@@ -591,7 +623,10 @@ export const AppShell: React.FC = () => {
                     }}
                     selectedInterfaceId={pendingLoadInterface?.id ?? undefined}
                     onSelectInterface={(id) => {
-                        if (sidebarFrozen) return;
+                        if (sidebarFrozen) {
+                            warnFrozenSidebarAction('select_interface');
+                            return;
+                        }
                         selectSavedInterfaceById(id);
                     }}
                     accountName={sidebarAccountName}

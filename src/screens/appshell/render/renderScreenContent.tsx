@@ -3,7 +3,7 @@ import { EnterPrompt } from '../../EnterPrompt';
 import { Welcome1 } from '../../Welcome1';
 import { Welcome2 } from '../../Welcome2';
 import { GraphScreenShell } from './GraphScreenShell';
-import type { AppScreen } from '../screenFlow/screenTypes';
+import { AppScreen, isGraphClassScreen } from '../screenFlow/screenTypes';
 import type {
     GraphPhysicsPlaygroundProps,
     PendingAnalysisPayload,
@@ -60,10 +60,11 @@ export function renderScreenContent(args: RenderScreenArgs): React.ReactNode {
         getSkipTarget,
     } = args;
 
-    if (screen === 'graph' || screen === 'graph_loading') {
+    if (isGraphClassScreen(screen)) {
         return (
             <Suspense fallback={<div style={fallbackStyle}>Loading graph...</div>}>
                 <GraphScreenShell sidebarExpanded={isSidebarExpanded}>
+                    {/* Warm-mount contract: graph-class screens must share this exact subtree shape with no screen key. */}
                     <GraphWithPending
                         enableDebugSidebar={false}
                         pendingAnalysisPayload={pendingAnalysis}

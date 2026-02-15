@@ -66,8 +66,9 @@ const SEARCH_OFFSET_TOP = -7.5;
 const MORE_OFFSET_TOP = -9.5;
 const EXPANDED_CONTENT_HIDDEN_OFFSET_PX = 3;
 const SESSION_TEXT_HIDDEN_OFFSET_PX = 2;
-// Your Name text horizontal offset: negative = left, positive = right (in px)
-const NAME_OFFSET_LEFT = -13;
+// Avatar name baseline paint offset to keep visual alignment without layout reflow.
+const AVATAR_NAME_BASE_OFFSET_PX = -13;
+const AVATAR_NAME_HIDDEN_OFFSET_PX = 2;
 // Close icon (expanded state) horizontal offset: negative = left, positive = right (in px)
 const CLOSE_ICON_OFFSET_LEFT = -10;
 const ICON_OPACITY_DEFAULT = 1.0;
@@ -185,6 +186,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     const isInMotionPhase = motionPhase === 'expanding' || motionPhase === 'collapsing';
     const shouldMountExpandedContent = isExpanded || motionPhase !== 'collapsed';
     const shouldShowSessionTitles = motionPhase === 'expanding' || motionPhase === 'expanded';
+    const shouldShowAvatarName = motionPhase === 'expanding' || motionPhase === 'expanded';
     const contentTransitionCss = prefersReducedMotion ? 'none' : getSidebarContentTransitionCss(isExpanded);
     const widthTransitionCss = prefersReducedMotion ? 'none' : getSidebarWidthTransitionCss(isExpanded);
     const visualRailTransitionCss = prefersReducedMotion ? 'none' : getSidebarVisualRailTransitionCss(isExpanded);
@@ -616,6 +618,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
         transform: shouldShowSessionTitles ? 'translateX(0px)' : `translateX(-${SESSION_TEXT_HIDDEN_OFFSET_PX}px)`,
         transition: contentTransitionCss,
         pointerEvents: shouldShowSessionTitles ? 'auto' : 'none',
+    };
+    const avatarNameRevealStyle: React.CSSProperties = {
+        opacity: shouldShowAvatarName ? 1 : 0,
+        transform: shouldShowAvatarName
+            ? `translateX(${AVATAR_NAME_BASE_OFFSET_PX}px)`
+            : `translateX(${AVATAR_NAME_BASE_OFFSET_PX - AVATAR_NAME_HIDDEN_OFFSET_PX}px)`,
+        transition: contentTransitionCss,
+        pointerEvents: shouldShowAvatarName ? 'auto' : 'none',
     };
 
     return (
@@ -1286,7 +1296,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                                 )}
                             </button>
                             {shouldMountExpandedContent && (
-                                <span style={{ ...AVATAR_NAME_STYLE, ...expandedContentStyle }} aria-hidden={!isExpanded}>
+                                <span style={{ ...AVATAR_NAME_STYLE, ...avatarNameRevealStyle }} aria-hidden={!isExpanded}>
                                     {displayAccountName}
                                 </span>
                             )}
@@ -1789,12 +1799,18 @@ const AVATAR_IMAGE_STYLE: React.CSSProperties = {
 };
 
 const AVATAR_NAME_STYLE: React.CSSProperties = {
+    display: 'block',
+    flex: 1,
+    minWidth: 0,
+    minHeight: '18px',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
     color: SIDEBAR_TEXT_COLOR,
     fontSize: `${FONT_SIZE_NAV}px`,
-    lineHeight: 1,
+    lineHeight: '18px',
     fontFamily: 'var(--font-ui)',
     opacity: 1,
-    marginLeft: `${NAME_OFFSET_LEFT}px`,
 };
 
 

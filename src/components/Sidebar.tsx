@@ -15,13 +15,9 @@ import { LAYER_SIDEBAR, LAYER_SIDEBAR_ROW_MENU } from '../ui/layers';
 import {
     SIDEBAR_COLLAPSED_WIDTH_CSS,
     SIDEBAR_COLLAPSE_DURATION_MS,
-    SIDEBAR_COLLAPSE_TIMING_FUNCTION,
     SIDEBAR_EXPAND_DURATION_MS,
-    SIDEBAR_EXPAND_TIMING_FUNCTION,
     SIDEBAR_EXPANDED_RESOLVED_WIDTH_CSS,
     getSidebarContentTransitionCss,
-    getSidebarVisualRailTransform,
-    getSidebarVisualRailTransitionCss,
     getSidebarWidthTransitionCss,
 } from '../screens/appshell/appShellStyles';
 
@@ -189,16 +185,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
     const shouldShowAvatarName = motionPhase === 'expanding' || motionPhase === 'expanded';
     const contentTransitionCss = prefersReducedMotion ? 'none' : getSidebarContentTransitionCss(isExpanded);
     const widthTransitionCss = prefersReducedMotion ? 'none' : getSidebarWidthTransitionCss(isExpanded);
-    const visualRailTransitionCss = prefersReducedMotion ? 'none' : getSidebarVisualRailTransitionCss(isExpanded);
-    const visualRailTransform = prefersReducedMotion ? 'translateX(0px)' : getSidebarVisualRailTransform(isExpanded);
-    const phaseDurationMs = isExpanded ? SIDEBAR_EXPAND_DURATION_MS : SIDEBAR_COLLAPSE_DURATION_MS;
-    const phaseTimingFunction = isExpanded ? SIDEBAR_EXPAND_TIMING_FUNCTION : SIDEBAR_COLLAPSE_TIMING_FUNCTION;
-    const layoutTransitionCss = prefersReducedMotion
-        ? 'none'
-        : `padding-left ${phaseDurationMs}ms ${phaseTimingFunction}, padding-right ${phaseDurationMs}ms ${phaseTimingFunction}`;
-    const profileRowLayoutTransitionCss = prefersReducedMotion
-        ? 'none'
-        : `width ${phaseDurationMs}ms ${phaseTimingFunction}, margin-right ${phaseDurationMs}ms ${phaseTimingFunction}`;
 
     const sidebarStyle: React.CSSProperties = {
         ...SIDEBAR_BASE_STYLE,
@@ -212,9 +198,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
         flexDirection: 'column',
         width: '100%',
         height: '100%',
-        transform: visualRailTransform,
-        transition: visualRailTransitionCss,
-        willChange: prefersReducedMotion ? undefined : 'transform',
     };
 
     const computeRowMenuPlacement = React.useCallback((rect: DOMRect) => {
@@ -602,9 +585,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
     const bottomSectionStyle: React.CSSProperties = {
         ...BOTTOM_SECTION_STYLE,
         alignItems: 'stretch',
-        paddingLeft: isExpanded ? `${8 - ICON_OFFSET_LEFT}px` : '0px',
-        paddingRight: isExpanded ? `${8 + ICON_OFFSET_LEFT}px` : '0px',
-        transition: layoutTransitionCss,
+        paddingLeft: `${8 - ICON_OFFSET_LEFT}px`,
+        paddingRight: `${8 + ICON_OFFSET_LEFT}px`,
     };
 
     const expandedContentStyle: React.CSSProperties = {
@@ -1241,12 +1223,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
                             data-avatar-trigger="1"
                             style={{
                                 ...PROFILE_ROW_STYLE,
-                                width: isExpanded ? 'calc(100% - 10px)' : '32px',
+                                width: '100%',
                                 margin: '0',
-                                marginRight: isExpanded ? '10px' : '0px',
                                 backgroundColor: avatarRowHover ? 'rgba(215, 245, 255, 0.14)' : 'transparent',
                                 cursor: canOpenAvatarMenu ? 'pointer' : 'default',
-                                transition: `${PROFILE_ROW_STYLE.transition}, ${profileRowLayoutTransitionCss}`,
+                                transition: PROFILE_ROW_STYLE.transition,
                             }}
                             onPointerDown={(e) => e.stopPropagation()}
                             onPointerUp={(e) => e.stopPropagation()}
@@ -1762,7 +1743,7 @@ const AVATAR_SECTION_STYLE: React.CSSProperties = {
     borderTop: '1px solid rgba(255, 255, 255, 0.1)',
     paddingTop: '8px',
     display: 'flex',
-    justifyContent: 'center',
+    justifyContent: 'flex-start',
 };
 
 const PROFILE_ROW_STYLE: React.CSSProperties = {

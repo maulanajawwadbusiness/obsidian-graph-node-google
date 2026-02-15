@@ -8,6 +8,7 @@
 18. Let users request a new analysis via a centered chat screen; after each request, store the analysis result and generated map.
 19. Add a share flow that saves map state and history so users can share their work later.
 20. Prioritize a visceral, nerve-and-bone user experience - if the user does not feel it, it is not done.
+21. Add premium 200ms fade for `enterprompt -> graph`, but only after loading-screen behavior is finalized so transition ownership and timing do not conflict.
 
 ## XPBD Consistency Fixes (Rest Length + Stiffness)
 

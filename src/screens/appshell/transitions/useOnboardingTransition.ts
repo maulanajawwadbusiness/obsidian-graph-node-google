@@ -1,5 +1,9 @@
 import React from 'react';
-import { ONBOARDING_SCREEN_FADE_MS } from './transitionTokens';
+import {
+    getTransitionPolicy,
+    ONBOARDING_FADE_MS,
+    type TransitionPhase,
+} from './transitionContract';
 import { AppScreen, isOnboardingScreen } from '../screenFlow/screenTypes';
 
 type UseOnboardingTransitionArgs<Screen extends AppScreen> = {
@@ -9,23 +13,29 @@ type UseOnboardingTransitionArgs<Screen extends AppScreen> = {
 
 type UseOnboardingTransitionResult<Screen extends AppScreen> = {
     transitionToScreen: (next: Screen) => void;
-    screenTransitionFrom: Screen | null;
-    screenTransitionReady: boolean;
-    effectiveScreenFadeMs: number;
-    isScreenTransitioning: boolean;
-    shouldBlockOnboardingInput: boolean;
+    phase: TransitionPhase;
+    fromScreen: Screen | null;
+    toScreen: Screen;
+    isFadeArmed: boolean;
+    isCrossfading: boolean;
+    effectiveFadeMs: number;
+    isBlockingInput: boolean;
 };
 
 export function useOnboardingTransition<Screen extends AppScreen>(
     args: UseOnboardingTransitionArgs<Screen>
 ): UseOnboardingTransitionResult<Screen> {
+    const debug = import.meta.env.DEV;
     const { screen, setScreen } = args;
-    const [screenTransitionFrom, setScreenTransitionFrom] = React.useState<Screen | null>(null);
-    const [screenTransitionReady, setScreenTransitionReady] = React.useState(false);
+    const [phase, setPhase] = React.useState<TransitionPhase>('idle');
+    const [fromScreen, setFromScreen] = React.useState<Screen | null>(null);
+    const [toScreen, setToScreen] = React.useState<Screen>(screen);
     const [prefersReducedMotion, setPrefersReducedMotion] = React.useState(false);
     const screenTransitionTimerRef = React.useRef<number | null>(null);
     const screenTransitionRafRef = React.useRef<number | null>(null);
     const screenTransitionEpochRef = React.useRef(0);
+    const policyBlockInputRef = React.useRef(false);
+    const lastLoggedPhaseRef = React.useRef<TransitionPhase>('idle');
 
     React.useEffect(() => {
         if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
@@ -41,7 +51,7 @@ export function useOnboardingTransition<Screen extends AppScreen>(
         return () => media.removeListener(listener);
     }, []);
 
-    const effectiveScreenFadeMs = prefersReducedMotion ? 0 : ONBOARDING_SCREEN_FADE_MS;
+    const effectiveFadeMs = prefersReducedMotion ? 0 : ONBOARDING_FADE_MS;
 
     const clearScreenTransition = React.useCallback(() => {
         if (screenTransitionTimerRef.current !== null) {
@@ -52,30 +62,35 @@ export function useOnboardingTransition<Screen extends AppScreen>(
             window.cancelAnimationFrame(screenTransitionRafRef.current);
             screenTransitionRafRef.current = null;
         }
-        setScreenTransitionReady(false);
-        setScreenTransitionFrom(null);
+        setPhase('idle');
+        setFromScreen(null);
+        policyBlockInputRef.current = false;
     }, []);
 
     const transitionToScreen = React.useCallback((next: Screen) => {
         if (next === screen) return;
         const current = screen;
-        const shouldAnimate = isOnboardingScreen(current) && isOnboardingScreen(next);
-        if (!shouldAnimate) {
+        const policy = getTransitionPolicy(current, next);
+        policyBlockInputRef.current = policy.blockInput;
+        if (debug) {
+            console.log(
+                '[OnboardingTransition] from=%s to=%s animate=%s blockInput=%s reason=%s',
+                current,
+                next,
+                policy.animate ? '1' : '0',
+                policy.blockInput ? '1' : '0',
+                policy.reason
+            );
+        }
+        if (!policy.animate) {
             clearScreenTransition();
             setScreen(next);
+            setToScreen(next);
             return;
         }
 
         screenTransitionEpochRef.current += 1;
         const epoch = screenTransitionEpochRef.current;
-        setScreenTransitionFrom(current);
-        setScreenTransitionReady(false);
-        setScreen(next);
-
-        if (effectiveScreenFadeMs <= 0) {
-            clearScreenTransition();
-            return;
-        }
 
         if (screenTransitionRafRef.current !== null) {
             window.cancelAnimationFrame(screenTransitionRafRef.current);
@@ -86,18 +101,27 @@ export function useOnboardingTransition<Screen extends AppScreen>(
             screenTransitionTimerRef.current = null;
         }
 
+        setFromScreen(current);
+        setToScreen(next);
+        setPhase('arming');
+        setScreen(next);
+
+        if (effectiveFadeMs <= 0) {
+            clearScreenTransition();
+            return;
+        }
+
         screenTransitionRafRef.current = window.requestAnimationFrame(() => {
             if (screenTransitionEpochRef.current !== epoch) return;
             screenTransitionRafRef.current = null;
-            setScreenTransitionReady(true);
+            setPhase('fading');
             screenTransitionTimerRef.current = window.setTimeout(() => {
                 if (screenTransitionEpochRef.current !== epoch) return;
                 screenTransitionTimerRef.current = null;
-                setScreenTransitionReady(false);
-                setScreenTransitionFrom(null);
-            }, effectiveScreenFadeMs);
+                clearScreenTransition();
+            }, effectiveFadeMs);
         });
-    }, [clearScreenTransition, effectiveScreenFadeMs, screen, setScreen]);
+    }, [clearScreenTransition, debug, effectiveFadeMs, screen, setScreen]);
 
     React.useEffect(() => {
         return () => {
@@ -110,15 +134,32 @@ export function useOnboardingTransition<Screen extends AppScreen>(
         };
     }, []);
 
-    const isScreenTransitioning = screenTransitionFrom !== null;
-    const shouldBlockOnboardingInput = isScreenTransitioning && isOnboardingScreen(screen);
+    React.useEffect(() => {
+        if (!debug) return;
+        if (lastLoggedPhaseRef.current === phase) return;
+        lastLoggedPhaseRef.current = phase;
+        console.log(
+            '[OnboardingTransition] phase=%s from=%s to=%s fadeMs=%d reduced=%s',
+            phase,
+            fromScreen ?? 'none',
+            toScreen,
+            effectiveFadeMs,
+            prefersReducedMotion ? '1' : '0'
+        );
+    }, [debug, effectiveFadeMs, fromScreen, phase, prefersReducedMotion, toScreen]);
+
+    const isCrossfading = phase !== 'idle';
+    const isFadeArmed = phase === 'fading';
+    const isBlockingInput = isCrossfading && policyBlockInputRef.current && isOnboardingScreen(screen);
 
     return {
         transitionToScreen,
-        screenTransitionFrom,
-        screenTransitionReady,
-        effectiveScreenFadeMs,
-        isScreenTransitioning,
-        shouldBlockOnboardingInput,
+        phase,
+        fromScreen,
+        toScreen,
+        isFadeArmed,
+        isCrossfading,
+        effectiveFadeMs,
+        isBlockingInput,
     };
 }

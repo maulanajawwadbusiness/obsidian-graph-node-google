@@ -2,10 +2,10 @@ import React from 'react';
 
 type OnboardingLayerHostProps<Screen extends string> = {
     screen: Screen;
-    screenTransitionFrom: Screen | null;
-    screenTransitionReady: boolean;
-    isScreenTransitioning: boolean;
-    effectiveScreenFadeMs: number;
+    fromScreen: Screen | null;
+    isFadeArmed: boolean;
+    isCrossfading: boolean;
+    fadeMs: number;
     fadeEasing: string;
     renderScreenContent: (targetScreen: Screen) => React.ReactNode;
 };
@@ -15,44 +15,44 @@ export function OnboardingLayerHost<Screen extends string>(
 ): React.ReactElement {
     const {
         screen,
-        screenTransitionFrom,
-        screenTransitionReady,
-        isScreenTransitioning,
-        effectiveScreenFadeMs,
+        fromScreen,
+        isFadeArmed,
+        isCrossfading,
+        fadeMs,
         fadeEasing,
         renderScreenContent,
     } = props;
+    const { fromOpacity, toOpacity } = getLayerOpacityState({ isCrossfading, isFadeArmed });
+    const fadeTransition = fadeMs > 0 ? `opacity ${fadeMs}ms ${fadeEasing}` : 'none';
 
     return (
         <div style={SCREEN_TRANSITION_CONTAINER_STYLE}>
-            {isScreenTransitioning && screenTransitionFrom ? (
+            {isCrossfading && fromScreen ? (
                 <div
-                    key={`transition-from-${screenTransitionFrom}`}
+                    key={`transition-from-${fromScreen}`}
                     style={{
                         ...SCREEN_TRANSITION_LAYER_STYLE,
-                        opacity: screenTransitionReady ? 0 : 1,
-                        transition: `opacity ${effectiveScreenFadeMs}ms ${fadeEasing}`,
+                        opacity: fromOpacity,
+                        transition: fadeTransition,
                         zIndex: 1,
                     }}
                 >
-                    {renderScreenContent(screenTransitionFrom)}
+                    {renderScreenContent(fromScreen)}
                 </div>
             ) : null}
             <div
                 key={`active-screen-${screen}`}
                 style={{
                     ...SCREEN_TRANSITION_ACTIVE_LAYER_STYLE,
-                    ...(isScreenTransitioning ? SCREEN_TRANSITION_ACTIVE_LAYER_TRANSITIONING_STYLE : null),
-                    opacity: isScreenTransitioning ? (screenTransitionReady ? 1 : 0) : 1,
-                    transition: isScreenTransitioning
-                        ? `opacity ${effectiveScreenFadeMs}ms ${fadeEasing}`
-                        : 'none',
+                    ...(isCrossfading ? SCREEN_TRANSITION_ACTIVE_LAYER_TRANSITIONING_STYLE : null),
+                    opacity: toOpacity,
+                    transition: isCrossfading ? fadeTransition : 'none',
                     zIndex: 0,
                 }}
             >
                 {renderScreenContent(screen)}
             </div>
-            {isScreenTransitioning ? (
+            {isCrossfading ? (
                 <div
                     style={SCREEN_TRANSITION_INPUT_SHIELD_STYLE}
                     onPointerDown={(event) => event.stopPropagation()}
@@ -63,6 +63,20 @@ export function OnboardingLayerHost<Screen extends string>(
             ) : null}
         </div>
     );
+}
+
+function getLayerOpacityState(args: { isCrossfading: boolean; isFadeArmed: boolean }): {
+    fromOpacity: number;
+    toOpacity: number;
+} {
+    const { isCrossfading, isFadeArmed } = args;
+    if (!isCrossfading) {
+        return { fromOpacity: 0, toOpacity: 1 };
+    }
+    return {
+        fromOpacity: isFadeArmed ? 0 : 1,
+        toOpacity: isFadeArmed ? 1 : 0,
+    };
 }
 
 const SCREEN_TRANSITION_CONTAINER_STYLE: React.CSSProperties = {

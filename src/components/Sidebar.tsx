@@ -199,7 +199,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     const shouldMountExpandedContent = isExpanded || motionPhase !== 'collapsed';
     const shouldShowSessionTitles = SIDEBAR_FLICKER_DEBUG && SIDEBAR_FLICKER_DEBUG_SWITCHES.showTitlesExpandedOnly
         ? motionPhase === 'expanded'
-        : motionPhase === 'expanding' || motionPhase === 'expanded';
+        : isExpanded || motionPhase === 'expanding' || motionPhase === 'expanded';
     const shouldShowAvatarName = motionPhase === 'expanding' || motionPhase === 'expanded';
     const contentTransitionCss = prefersReducedMotion ? 'none' : getSidebarContentTransitionCss(isExpanded);
     const widthTransitionCss = prefersReducedMotion ? 'none' : getSidebarWidthTransitionCss(isExpanded);
@@ -718,161 +718,160 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 <div style={TOP_SECTION_STYLE}>
                     {/* Logo / Toggle Row */}
                     <div style={LOGO_ROW_STYLE}>
-                    {/*
+                        {/*
                       Top-left logo uses layered mask crossfade so shape swap is a true 100ms fade.
                     */}
-                    <button
-                        type="button"
-                        style={ICON_BUTTON_STYLE}
-                        onMouseEnter={() => {
-                            if (isInMotionPhase) return;
-                            setLogoHover(true);
-                        }}
-                        onMouseLeave={() => setLogoHover(false)}
-                        onClick={!isExpanded ? onToggle : undefined}
-                        title={!isExpanded ? 'Open sidebar' : undefined}
-                    >
-                        <span
-                            aria-hidden="true"
-                            style={{
-                                position: 'relative',
-                                width: `${LOGO_SIZE}px`,
-                                height: `${LOGO_SIZE}px`,
-                                display: 'inline-block',
-                                pointerEvents: 'none',
-                            }}
-                        >
-                            <span
-                                style={{
-                                    position: 'absolute',
-                                    inset: 0,
-                                    display: 'inline-flex',
-                                }}
-                            >
-                                <MaskIcon
-                                    src={circleIcon}
-                                    size={LOGO_SIZE}
-                                    color={logoHover ? HOVER_ACCENT_COLOR : DEFAULT_ICON_COLOR}
-                                    opacity={!isExpanded && logoHover ? 0 : (logoHover ? ICON_OPACITY_HOVER : ICON_OPACITY_DEFAULT)}
-                                    transition={`opacity ${LOGO_SWAP_TRANSITION}, background-color ${SIDEBAR_HOVER_TRANSITION}`}
-                                />
-                            </span>
-                            <span
-                                style={{
-                                    position: 'absolute',
-                                    inset: 0,
-                                    display: 'inline-flex',
-                                }}
-                            >
-                                <MaskIcon
-                                    src={sidebarIcon}
-                                    size={LOGO_SIZE}
-                                    color={logoHover ? HOVER_ACCENT_COLOR : DEFAULT_ICON_COLOR}
-                                    opacity={!isExpanded && logoHover ? (logoHover ? ICON_OPACITY_HOVER : ICON_OPACITY_DEFAULT) : 0}
-                                    transition={`opacity ${LOGO_SWAP_TRANSITION}, background-color ${SIDEBAR_HOVER_TRANSITION}`}
-                                />
-                            </span>
-                        </span>
-                    </button>
-                    {shouldMountExpandedContent && (
                         <button
                             type="button"
-                            aria-hidden={!isExpanded}
-                            style={{
-                                ...ICON_BUTTON_STYLE,
-                                ...expandedContentStyle,
-                                marginLeft: 'auto',
-                                marginRight: `${-CLOSE_ICON_OFFSET_LEFT}px`,
-                            }}
+                            style={ICON_BUTTON_STYLE}
                             onMouseEnter={() => {
                                 if (isInMotionPhase) return;
-                                if (!closeHoverArmed) return;
-                                setCloseHover(true);
+                                setLogoHover(true);
                             }}
-                            onMouseLeave={() => setCloseHover(false)}
-                            onClick={onToggle}
-                            title="Close sidebar"
+                            onMouseLeave={() => setLogoHover(false)}
+                            onClick={!isExpanded ? onToggle : undefined}
+                            title={!isExpanded ? 'Open sidebar' : undefined}
                         >
-                            <svg
+                            <span
                                 aria-hidden="true"
-                                viewBox={CLOSE_ICON_VIEWBOX}
                                 style={{
-                                    width: `${CLOSE_ICON_SIZE_PX}px`,
-                                    height: `${CLOSE_ICON_SIZE_PX}px`,
-                                    display: 'block',
+                                    position: 'relative',
+                                    width: `${LOGO_SIZE}px`,
+                                    height: `${LOGO_SIZE}px`,
+                                    display: 'inline-block',
                                     pointerEvents: 'none',
                                 }}
                             >
-                                <path
-                                    d={CLOSE_ICON_PATH_D}
-                                    fill={closeHover ? HOVER_ACCENT_COLOR : DEFAULT_ICON_COLOR}
-                                    fillRule="evenodd"
+                                <span
                                     style={{
-                                        opacity: closeHover ? ICON_OPACITY_HOVER : ICON_OPACITY_DEFAULT,
-                                        transition: `fill ${SIDEBAR_HOVER_TRANSITION}, opacity ${SIDEBAR_HOVER_TRANSITION}`,
+                                        position: 'absolute',
+                                        inset: 0,
+                                        display: 'inline-flex',
                                     }}
-                                />
-                            </svg>
+                                >
+                                    <MaskIcon
+                                        src={circleIcon}
+                                        size={LOGO_SIZE}
+                                        color={logoHover ? HOVER_ACCENT_COLOR : DEFAULT_ICON_COLOR}
+                                        opacity={!isExpanded && logoHover ? 0 : (logoHover ? ICON_OPACITY_HOVER : ICON_OPACITY_DEFAULT)}
+                                        transition={`opacity ${LOGO_SWAP_TRANSITION}, background-color ${SIDEBAR_HOVER_TRANSITION}`}
+                                    />
+                                </span>
+                                <span
+                                    style={{
+                                        position: 'absolute',
+                                        inset: 0,
+                                        display: 'inline-flex',
+                                    }}
+                                >
+                                    <MaskIcon
+                                        src={sidebarIcon}
+                                        size={LOGO_SIZE}
+                                        color={logoHover ? HOVER_ACCENT_COLOR : DEFAULT_ICON_COLOR}
+                                        opacity={!isExpanded && logoHover ? (logoHover ? ICON_OPACITY_HOVER : ICON_OPACITY_DEFAULT) : 0}
+                                        transition={`opacity ${LOGO_SWAP_TRANSITION}, background-color ${SIDEBAR_HOVER_TRANSITION}`}
+                                    />
+                                </span>
+                            </span>
                         </button>
-                    )}
+                        {shouldMountExpandedContent && (
+                            <button
+                                type="button"
+                                aria-hidden={!isExpanded}
+                                style={{
+                                    ...ICON_BUTTON_STYLE,
+                                    ...expandedContentStyle,
+                                    marginLeft: 'auto',
+                                    marginRight: `${-CLOSE_ICON_OFFSET_LEFT}px`,
+                                }}
+                                onMouseEnter={() => {
+                                    if (isInMotionPhase) return;
+                                    if (!closeHoverArmed) return;
+                                    setCloseHover(true);
+                                }}
+                                onMouseLeave={() => setCloseHover(false)}
+                                onClick={onToggle}
+                                title="Close sidebar"
+                            >
+                                <svg
+                                    aria-hidden="true"
+                                    viewBox={CLOSE_ICON_VIEWBOX}
+                                    style={{
+                                        width: `${CLOSE_ICON_SIZE_PX}px`,
+                                        height: `${CLOSE_ICON_SIZE_PX}px`,
+                                        display: 'block',
+                                        pointerEvents: 'none',
+                                    }}
+                                >
+                                    <path
+                                        d={CLOSE_ICON_PATH_D}
+                                        fill={closeHover ? HOVER_ACCENT_COLOR : DEFAULT_ICON_COLOR}
+                                        fillRule="evenodd"
+                                        style={{
+                                            opacity: closeHover ? ICON_OPACITY_HOVER : ICON_OPACITY_DEFAULT,
+                                            transition: `fill ${SIDEBAR_HOVER_TRANSITION}, opacity ${SIDEBAR_HOVER_TRANSITION}`,
+                                        }}
+                                    />
+                                </svg>
+                            </button>
+                        )}
+                    </div>
+
+                    {/* Nav Items */}
+                    <div style={{ marginTop: `${CREATE_NEW_OFFSET_TOP}px` }}>
+                        <NavItem
+                            icon={createNewIcon}
+                            label="Create New"
+                            isExpanded={isExpanded}
+                            showExpandedContent={shouldMountExpandedContent}
+                            contentTransitionCss={contentTransitionCss}
+                            suppressHover={isInMotionPhase}
+                            isHovered={createNewHover}
+                            onMouseEnter={() => setCreateNewHover(true)}
+                            onMouseLeave={() => setCreateNewHover(false)}
+                            onClick={onCreateNew}
+                        />
+                    </div>
+                    <div style={{ marginTop: `${SEARCH_OFFSET_TOP}px` }}>
+                        <NavItem
+                            icon={searchIcon}
+                            label="Search Interfaces"
+                            isExpanded={isExpanded}
+                            showExpandedContent={shouldMountExpandedContent}
+                            contentTransitionCss={contentTransitionCss}
+                            suppressHover={isInMotionPhase}
+                            isHovered={searchHover}
+                            onMouseEnter={() => setSearchHover(true)}
+                            onMouseLeave={() => setSearchHover(false)}
+                            onClick={onOpenSearchInterfaces}
+                            hardShieldInput
+                        />
+                    </div>
+                    <div style={{ marginTop: `${MORE_OFFSET_TOP}px` }}>
+                        <NavItem
+                            buttonRef={moreTriggerRef}
+                            dataMoreTrigger
+                            icon={threeDotIcon}
+                            label="More"
+                            isExpanded={isExpanded}
+                            showExpandedContent={shouldMountExpandedContent}
+                            contentTransitionCss={contentTransitionCss}
+                            suppressHover={isInMotionPhase}
+                            isHovered={moreHover}
+                            onMouseEnter={() => setMoreHover(true)}
+                            onMouseLeave={() => setMoreHover(false)}
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                const trigger = e.currentTarget as HTMLButtonElement;
+                                toggleMoreMenuFromTrigger(trigger);
+                            }}
+                            hardShieldInput
+                        />
+                    </div>
+
                 </div>
 
-                {/* Nav Items */}
-                <div style={{ marginTop: `${CREATE_NEW_OFFSET_TOP}px` }}>
-                    <NavItem
-                        icon={createNewIcon}
-                        label="Create New"
-                        isExpanded={isExpanded}
-                        showExpandedContent={shouldMountExpandedContent}
-                        contentTransitionCss={contentTransitionCss}
-                        suppressHover={isInMotionPhase}
-                        isHovered={createNewHover}
-                        onMouseEnter={() => setCreateNewHover(true)}
-                        onMouseLeave={() => setCreateNewHover(false)}
-                        onClick={onCreateNew}
-                    />
-                </div>
-                <div style={{ marginTop: `${SEARCH_OFFSET_TOP}px` }}>
-                    <NavItem
-                        icon={searchIcon}
-                        label="Search Interfaces"
-                        isExpanded={isExpanded}
-                        showExpandedContent={shouldMountExpandedContent}
-                        contentTransitionCss={contentTransitionCss}
-                        suppressHover={isInMotionPhase}
-                        isHovered={searchHover}
-                        onMouseEnter={() => setSearchHover(true)}
-                        onMouseLeave={() => setSearchHover(false)}
-                        onClick={onOpenSearchInterfaces}
-                        hardShieldInput
-                    />
-                </div>
-                <div style={{ marginTop: `${MORE_OFFSET_TOP}px` }}>
-                    <NavItem
-                        buttonRef={moreTriggerRef}
-                        dataMoreTrigger
-                        icon={threeDotIcon}
-                        label="More"
-                        isExpanded={isExpanded}
-                        showExpandedContent={shouldMountExpandedContent}
-                        contentTransitionCss={contentTransitionCss}
-                        suppressHover={isInMotionPhase}
-                        isHovered={moreHover}
-                        onMouseEnter={() => setMoreHover(true)}
-                        onMouseLeave={() => setMoreHover(false)}
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            const trigger = e.currentTarget as HTMLButtonElement;
-                            toggleMoreMenuFromTrigger(trigger);
-                        }}
-                        hardShieldInput
-                    />
-                </div>
-
-            </div>
-
-            {/* Your Interfaces Section (expanded only, isolated scroll area) */}
-            {shouldMountExpandedContent && (
+                {/* Your Interfaces Section (always mounted to prevent layout-reflow jump) */}
                 <div style={{ ...INTERFACES_SECTION_STYLE, ...expandedContentStyle }} aria-hidden={!isExpanded}>
                     <div style={SECTION_HEADER_STYLE}>Your Interfaces</div>
                     <div style={INTERFACES_LIST_STYLE}>
@@ -1009,9 +1008,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         )}
                     </div>
                 </div>
-            )}
             </div>
-
             {openRowMenuId !== null && rowMenuPosition !== null ? (
                 <div
                     data-row-menu="1"

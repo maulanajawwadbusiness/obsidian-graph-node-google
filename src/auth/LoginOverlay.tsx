@@ -5,11 +5,14 @@ import { GoogleLoginButton } from '../components/GoogleLoginButton';
 import { SHOW_ONBOARDING_AUX_BUTTONS } from '../config/onboardingUiFlags';
 import { t } from '../i18n/t';
 import { LAYER_OVERLAY_LOGIN } from '../ui/layers';
+import {
+    isOverlayFadeEnabledForScreen,
+    ONBOARDING_FADE_EASING,
+    ONBOARDING_FADE_MS,
+} from '../screens/appshell/transitions/transitionContract';
 
 const SHOW_LOGIN_DEBUG_ERRORS =
     import.meta.env.VITE_SHOW_LOGIN_DEBUG_ERRORS === '1' || !import.meta.env.DEV;
-const OVERLAY_FADE_MS = 200;
-const OVERLAY_FADE_EASING = 'cubic-bezier(0.22, 1, 0.36, 1)';
 
 type LoginOverlayProps = {
     open: boolean;
@@ -28,6 +31,7 @@ export const LoginOverlay: React.FC<LoginOverlayProps> = ({
     onHide,
 }) => {
     const { user, loading, error } = useAuth();
+    const overlayFadeEnabled = isOverlayFadeEnabledForScreen('prompt');
     const [prefersReducedMotion, setPrefersReducedMotion] = React.useState(false);
     const [fadeInReady, setFadeInReady] = React.useState(false);
     const fadeRafRef = React.useRef<number | null>(null);
@@ -88,9 +92,9 @@ export const LoginOverlay: React.FC<LoginOverlayProps> = ({
             style={{
                 ...BACKDROP_STYLE,
                 opacity: fadeInReady ? 1 : 0,
-                transition: prefersReducedMotion
+                transition: prefersReducedMotion || !overlayFadeEnabled
                     ? 'none'
-                    : `opacity ${OVERLAY_FADE_MS}ms ${OVERLAY_FADE_EASING}`,
+                    : `opacity ${ONBOARDING_FADE_MS}ms ${ONBOARDING_FADE_EASING}`,
                 willChange: 'opacity',
             }}
             onPointerDown={(e) => e.stopPropagation()}

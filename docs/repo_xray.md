@@ -24,7 +24,7 @@ Update Note: 2026-02-12
 
 Update Note: 2026-02-14
 - Completed AppShell modularization runs 1-8.
-- `src/screens/AppShell.tsx` is orchestration-only at 447 lines.
+- `src/screens/AppShell.tsx` is orchestration-only at 432 lines.
 - Domain seams moved under `src/screens/appshell/*` (screenFlow, transitions, overlays, savedInterfaces, render, sidebar, helpers/styles).
 - See `docs/report_2026_02_14_appshell_modularization.md`.
 
@@ -35,17 +35,53 @@ Update Note: 2026-02-15
 - Route deps assembly lives in `src/server/src/server/depsBuilder.ts`.
 - Backend routes are split into `src/server/src/routes/*` (health/auth/profile/saved-interfaces/payments/webhook/llm).
 - Contract guards expanded and unified under `npm run test:contracts` in `src/server`.
+- Onboarding transition control hardened with a canonical route/timing contract and explicit phase machine.
+
+Update Note: 2026-02-15 (Graph Sidebar Layout)
+- Graph screen now routes through `GraphScreenShell` two-pane layout.
+- Left structural sidebar column width is bound to AppShell `isSidebarExpanded`.
+- Graph runtime root is container-relative (`100%` x `100%`) and fills graph pane.
+- Internal playground debug sidebar is gated by `enableDebugSidebar` and disabled on product graph path.
 
 ## 0.1 AppShell Seams (2026-02-14)
 
 - orchestrator: `src/screens/AppShell.tsx`
 - screen flow: `src/screens/appshell/screenFlow/*`
 - transitions: `src/screens/appshell/transitions/*`
+- transition contract: `src/screens/appshell/transitions/transitionContract.ts`
 - overlays and modals: `src/screens/appshell/overlays/*`
 - saved interfaces: `src/screens/appshell/savedInterfaces/*`
 - render mapping: `src/screens/appshell/render/renderScreenContent.tsx`
 - sidebar wiring: `src/screens/appshell/sidebar/*`
 - full details: `docs/report_2026_02_14_appshell_modularization.md`
+
+## 0.2 Graph Screen Topology (2026-02-15)
+
+Current runtime topology for graph screen:
+
+```text
+AppShell
+|- SidebarLayer (overlay product sidebar)
+|- NON_SIDEBAR_LAYER
+|  |- MAIN_SCREEN_CONTAINER
+|  |  |- renderScreenContent(screen='graph')
+|  |  |  |- Suspense
+|  |  |  |  |- GraphScreenShell(sidebarExpanded=isSidebarExpanded)
+|  |  |  |  |  |- graph-screen-layout (flex row)
+|  |  |  |  |  |  |- graph-screen-sidebar-pane (structural column; width follows sidebar state)
+|  |  |  |  |  |  |- graph-screen-graph-pane (hosts GraphWithPending)
+|  |  |- renderScreenContent(other screens)
+|  |     |- welcome1 / welcome2 / prompt (no GraphScreenShell)
+|- ModalLayer
+```
+
+Notes:
+- Left graph-screen column is structural and currently empty; it reserves space for future product Sidebar placement.
+- Product Sidebar remains overlay-driven (`SidebarLayer` -> `Sidebar`) on prompt and graph.
+- Graph runtime enters through `GraphWithPending` and reaches `GraphPhysicsPlaygroundShell`.
+- Internal debug sidebar in `GraphPhysicsPlaygroundShell` is debug-only:
+  - gated by `enableDebugSidebar`
+  - product graph path passes `enableDebugSidebar={false}`.
 
 ## 1. Repository Tree (Depth 4)
 Excluding: node_modules, dist, build, .git
@@ -302,7 +338,7 @@ Frontend orchestration seams:
 - `src/screens/appshell/screenFlow/*`
   - screen types, start policy, flow mapping, welcome1 font gate
 - `src/screens/appshell/transitions/*`
-  - onboarding transition machine, tokens, wheel guard, layer host
+  - onboarding transition contract, phase machine, wheel guard, layer host
 - `src/screens/appshell/overlays/*`
   - onboarding overlay/fullscreen chrome, modal state and modal layer, profile/logout controllers, search engine
 - `src/screens/appshell/savedInterfaces/*`

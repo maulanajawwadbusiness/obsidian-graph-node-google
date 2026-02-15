@@ -2,6 +2,9 @@ import React from 'react';
 
 export const SIDEBAR_COLLAPSED_WIDTH_PX = 35;
 export const SIDEBAR_COLLAPSED_WIDTH_CSS = `${SIDEBAR_COLLAPSED_WIDTH_PX}px`;
+export const SIDEBAR_EXPANDED_WIDTH_CSS = '10vw';
+export const SIDEBAR_EXPANDED_MIN_WIDTH_PX = 200;
+export const SIDEBAR_EXPANDED_MIN_WIDTH_CSS = `${SIDEBAR_EXPANDED_MIN_WIDTH_PX}px`;
 
 export const FALLBACK_STYLE: React.CSSProperties = {
     minHeight: '100vh',

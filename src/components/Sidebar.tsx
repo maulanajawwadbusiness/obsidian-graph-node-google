@@ -13,6 +13,7 @@ import suggestionFeedbackIcon from '../assets/suggestion_feedback_icon.png';
 import blogIcon from '../assets/blog_icon.png';
 import { LAYER_SIDEBAR, LAYER_SIDEBAR_ROW_MENU } from '../ui/layers';
 import {
+    SIDEBAR_COLLAPSED_WIDTH_PX,
     SIDEBAR_COLLAPSED_WIDTH_CSS,
     SIDEBAR_COLLAPSE_DURATION_MS,
     SIDEBAR_EXPAND_DURATION_MS,
@@ -44,6 +45,7 @@ const ICON_SIZE = 18 * SIDEBAR_SCALE;
 const LOGO_SCALE = 1.05;
 const LOGO_SIZE = 20 * SIDEBAR_SCALE * LOGO_SCALE;
 const CLOSE_ICON_SIZE_PX = Math.round(ICON_SIZE);
+const AVATAR_ICON_HITBOX_PX = 32;
 // Avatar size multiplier: 1.0 = base, 0.85 = 15% smaller
 const AVATAR_SCALE = 0.85;
 const AVATAR_SIZE = 28 * SIDEBAR_SCALE * AVATAR_SCALE;
@@ -586,7 +588,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
         ...BOTTOM_SECTION_STYLE,
         alignItems: 'stretch',
         paddingLeft: `${8 - ICON_OFFSET_LEFT}px`,
-        paddingRight: `${8 + ICON_OFFSET_LEFT}px`,
+        // Keep collapsed inner width >= avatar icon hitbox so avatar icon never clips or appears to drift.
+        paddingRight: `${SIDEBAR_COLLAPSED_WIDTH_PX - AVATAR_ICON_HITBOX_PX - (8 - ICON_OFFSET_LEFT)}px`,
     };
 
     const expandedContentStyle: React.CSSProperties = {
@@ -1250,8 +1253,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
                                 style={{
                                     ...ICON_BUTTON_STYLE,
                                     padding: '0',
-                                    width: '32px',
-                                    height: '32px',
+                                    width: `${AVATAR_ICON_HITBOX_PX}px`,
+                                    height: `${AVATAR_ICON_HITBOX_PX}px`,
                                     lineHeight: 0,
                                 }}
                                 onPointerDown={(e) => e.stopPropagation()}

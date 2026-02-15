@@ -11,8 +11,8 @@ import {
 } from '../store/savedInterfacesStore';
 import type { GraphPhysicsPlaygroundProps, PendingAnalysisPayload } from '../playground/modules/graphPhysicsTypes';
 import {
-    ONBOARDING_SCREEN_FADE_EASING,
-} from './appshell/transitions/transitionTokens';
+    ONBOARDING_FADE_EASING,
+} from './appshell/transitions/transitionContract';
 import { OnboardingLayerHost } from './appshell/transitions/OnboardingLayerHost';
 import { useOnboardingTransition } from './appshell/transitions/useOnboardingTransition';
 import { useOnboardingWheelGuard } from './appshell/transitions/useOnboardingWheelGuard';
@@ -101,11 +101,11 @@ export const AppShell: React.FC = () => {
     }, [authStorageId, isAuthReady, isLoggedIn]);
     const {
         transitionToScreen,
-        screenTransitionFrom,
-        screenTransitionReady,
-        effectiveScreenFadeMs,
-        isScreenTransitioning,
-        shouldBlockOnboardingInput,
+        fromScreen,
+        isFadeArmed,
+        effectiveFadeMs,
+        isCrossfading,
+        isBlockingInput,
     } = useOnboardingTransition<Screen>({ screen, setScreen });
     const {
         enterPromptOverlayOpen,
@@ -119,7 +119,7 @@ export const AppShell: React.FC = () => {
     const showPersistentSidebar = screen === 'prompt' || screen === 'graph';
     const loginBlockingActive = screen === 'prompt' && enterPromptOverlayOpen;
     const sidebarDisabled = (screen === 'graph' && graphIsLoading) || loginBlockingActive;
-    const onboardingActive = isOnboardingScreen(screen) || shouldBlockOnboardingInput;
+    const onboardingActive = isOnboardingScreen(screen) || isBlockingInput;
     const welcome1FontGateDone = useWelcome1FontGate({
         screen,
         timeoutMs: WELCOME1_FONT_TIMEOUT_MS,
@@ -311,6 +311,7 @@ export const AppShell: React.FC = () => {
 
     const renderScreenContentByScreen = (targetScreen: Screen): React.ReactNode => renderScreenContent({
         screen: targetScreen,
+        isSidebarExpanded,
         fallbackStyle: FALLBACK_STYLE,
         GraphWithPending,
         pendingAnalysis,
@@ -333,17 +334,17 @@ export const AppShell: React.FC = () => {
     });
 
     const shouldUseOnboardingLayerHost = isOnboardingScreen(screen)
-        || (isScreenTransitioning && screenTransitionFrom !== null && isOnboardingScreen(screenTransitionFrom));
+        || (isCrossfading && fromScreen !== null && isOnboardingScreen(fromScreen));
 
     const screenContent = shouldUseOnboardingLayerHost
         ? (
             <OnboardingLayerHost
                 screen={screen}
-                screenTransitionFrom={screenTransitionFrom}
-                screenTransitionReady={screenTransitionReady}
-                isScreenTransitioning={isScreenTransitioning}
-                effectiveScreenFadeMs={effectiveScreenFadeMs}
-                fadeEasing={ONBOARDING_SCREEN_FADE_EASING}
+                fromScreen={fromScreen}
+                isFadeArmed={isFadeArmed}
+                isCrossfading={isCrossfading}
+                fadeMs={effectiveFadeMs}
+                fadeEasing={ONBOARDING_FADE_EASING}
                 renderScreenContent={renderScreenContentByScreen}
             />
         )

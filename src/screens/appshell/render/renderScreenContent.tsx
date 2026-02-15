@@ -12,6 +12,7 @@ import type { SavedInterfaceRecordV1 } from '../../../store/savedInterfacesStore
 
 export type RenderScreenArgs = {
     screen: AppScreen;
+    isSidebarExpanded: boolean;
     fallbackStyle: React.CSSProperties;
     GraphWithPending: React.ComponentType<GraphPhysicsPlaygroundProps>;
     pendingAnalysis: PendingAnalysisPayload;
@@ -39,6 +40,7 @@ export type RenderScreenArgs = {
 export function renderScreenContent(args: RenderScreenArgs): React.ReactNode {
     const {
         screen,
+        isSidebarExpanded,
         fallbackStyle,
         GraphWithPending,
         pendingAnalysis,
@@ -61,7 +63,7 @@ export function renderScreenContent(args: RenderScreenArgs): React.ReactNode {
     if (screen === 'graph') {
         return (
             <Suspense fallback={<div style={fallbackStyle}>Loading graph...</div>}>
-                <GraphScreenShell>
+                <GraphScreenShell sidebarExpanded={isSidebarExpanded}>
                     <GraphWithPending
                         pendingAnalysisPayload={pendingAnalysis}
                         onPendingAnalysisConsumed={() => setPendingAnalysis(null)}

@@ -2,6 +2,7 @@ import React from 'react';
 import { SIDEBAR_COLLAPSED_WIDTH_CSS } from '../appShellStyles';
 
 type GraphScreenShellProps = {
+    sidebarExpanded: boolean;
     children: React.ReactNode;
 };
 
@@ -34,7 +35,8 @@ const GRAPH_SCREEN_PANE_STYLE: React.CSSProperties = {
     position: 'relative',
 };
 
-export function GraphScreenShell({ children }: GraphScreenShellProps): JSX.Element {
+export function GraphScreenShell({ sidebarExpanded, children }: GraphScreenShellProps): JSX.Element {
+    void sidebarExpanded;
     return (
         <div className="graph-screen-shell" data-graph-screen-root="1" style={GRAPH_SCREEN_SHELL_STYLE}>
             <div className="graph-screen-layout" style={GRAPH_SCREEN_LAYOUT_STYLE}>

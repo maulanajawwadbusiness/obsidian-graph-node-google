@@ -222,6 +222,32 @@ export function isGraphRuntimeLeaseTokenActive(token: string): boolean {
     return activeLease?.token === token;
 }
 
+export function assertActiveLeaseOwner(owner: GraphRuntimeOwner, token?: string): boolean {
+    if (!import.meta.env.DEV) return true;
+    const snapshot = buildSnapshot();
+    if (snapshot.activeOwner !== owner) {
+        warnDev(
+            'assert_owner_mismatch',
+            'expectedOwner=%s activeOwner=%s activeInstanceId=%s',
+            owner,
+            snapshot.activeOwner ?? 'none',
+            snapshot.activeInstanceId ?? 'none'
+        );
+        return false;
+    }
+    if (token && snapshot.activeToken !== token) {
+        warnDev(
+            'assert_token_mismatch',
+            'owner=%s expectedToken=%s activeToken=%s',
+            owner,
+            token,
+            snapshot.activeToken ?? 'none'
+        );
+        return false;
+    }
+    return true;
+}
+
 export function getGraphRuntimeLeaseDebugSnapshot(): {
     active: { owner: GraphRuntimeOwner; instanceId: string; token: string } | null;
     epoch: number;

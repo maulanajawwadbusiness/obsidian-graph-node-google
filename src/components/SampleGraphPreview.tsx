@@ -16,7 +16,10 @@ import {
 import { chainResult, err, ok, type Result } from '../lib/validation/result';
 import {
     acquireGraphRuntimeLease,
+    assertActiveLeaseOwner,
+    isGraphRuntimeLeaseTokenActive,
     releaseGraphRuntimeLease,
+    subscribeGraphRuntimeLease,
     type GraphRuntimeOwner,
 } from '../runtime/graphRuntimeLease';
 import {
@@ -98,6 +101,7 @@ type PreviewErrorBoundaryState = {
 type LeaseState =
     | { phase: 'checking' }
     | { phase: 'allowed'; token: string }
+    | { phase: 'paused'; reason: 'lost_lease' | 'denied' }
     | { phase: 'denied'; activeOwner: GraphRuntimeOwner; activeInstanceId: string };
 
 type SampleLoadSuccess = {
@@ -134,6 +138,9 @@ export const SampleGraphPreview: React.FC = () => {
         `prompt-preview:${Date.now().toString(36)}:${Math.random().toString(36).slice(2, 8)}`
     );
     const [leaseState, setLeaseState] = React.useState<LeaseState>({ phase: 'checking' });
+    const activeLeaseTokenRef = React.useRef<string | null>(null);
+    const leaseStateRef = React.useRef<LeaseState>({ phase: 'checking' });
+    const lastReacquireEpochRef = React.useRef<number>(-1);
     React.useEffect(() => {
         let active = true;
         import('../samples/sampleGraphPreview.export.json')
@@ -185,17 +192,64 @@ export const SampleGraphPreview: React.FC = () => {
     React.useLayoutEffect(() => {
         const result = acquireGraphRuntimeLease('prompt-preview', instanceIdRef.current);
         if (result.ok) {
-            setLeaseState({ phase: 'allowed', token: result.token });
+            activeLeaseTokenRef.current = result.token;
+            const nextState: LeaseState = { phase: 'allowed', token: result.token };
+            leaseStateRef.current = nextState;
+            setLeaseState(nextState);
             return () => {
                 releaseGraphRuntimeLease(result.token);
+                activeLeaseTokenRef.current = null;
             };
         }
-        setLeaseState({
+        const deniedState: LeaseState = {
             phase: 'denied',
             activeOwner: result.activeOwner,
             activeInstanceId: result.activeInstanceId,
-        });
+        };
+        leaseStateRef.current = deniedState;
+        setLeaseState(deniedState);
+        activeLeaseTokenRef.current = null;
         return undefined;
+    }, []);
+
+    React.useEffect(() => {
+        return subscribeGraphRuntimeLease((snapshot) => {
+            const token = activeLeaseTokenRef.current;
+            if (token) {
+                assertActiveLeaseOwner('prompt-preview', token);
+                const isActive = isGraphRuntimeLeaseTokenActive(token);
+                if (!isActive) {
+                    const pausedState: LeaseState = { phase: 'paused', reason: 'lost_lease' };
+                    leaseStateRef.current = pausedState;
+                    setLeaseState(pausedState);
+                    activeLeaseTokenRef.current = null;
+                }
+                return;
+            }
+
+            if (lastReacquireEpochRef.current === snapshot.epoch) return;
+            if (snapshot.activeOwner === 'graph-screen') return;
+
+            const currentPhase = leaseStateRef.current.phase;
+            if (currentPhase !== 'paused' && currentPhase !== 'denied' && currentPhase !== 'checking') return;
+
+            lastReacquireEpochRef.current = snapshot.epoch;
+            const reacquireResult = acquireGraphRuntimeLease('prompt-preview', instanceIdRef.current);
+            if (reacquireResult.ok) {
+                activeLeaseTokenRef.current = reacquireResult.token;
+                const allowedState: LeaseState = { phase: 'allowed', token: reacquireResult.token };
+                leaseStateRef.current = allowedState;
+                setLeaseState(allowedState);
+                return;
+            }
+            const deniedState: LeaseState = {
+                phase: 'denied',
+                activeOwner: reacquireResult.activeOwner,
+                activeInstanceId: reacquireResult.activeInstanceId,
+            };
+            leaseStateRef.current = deniedState;
+            setLeaseState(deniedState);
+        });
     }, []);
 
     React.useEffect(() => {
@@ -204,6 +258,7 @@ export const SampleGraphPreview: React.FC = () => {
     }, [sampleExportPayload]);
 
     const isLeaseDenied = leaseState.phase === 'denied';
+    const isLeasePaused = leaseState.phase === 'paused';
     const canMountRuntime = leaseState.phase === 'allowed' && portalRootEl && sampleLoadResult.ok;
     const sampleErrors: ValidationError[] = sampleLoadResult.ok ? [] : sampleLoadResult.errors;
     const isSampleLoading = sampleErrors.some((item) => item.code === 'SAMPLE_LOADING');
@@ -230,6 +285,10 @@ export const SampleGraphPreview: React.FC = () => {
                     ) : isLeaseDenied ? (
                         <div style={PREVIEW_FALLBACK_STYLE}>
                             preview paused (active: {leaseState.activeOwner})
+                        </div>
+                    ) : isLeasePaused ? (
+                        <div style={PREVIEW_FALLBACK_STYLE}>
+                            preview paused (graph active elsewhere)
                         </div>
                     ) : isSampleLoading ? (
                         <div style={PREVIEW_FALLBACK_STYLE}>loading sample...</div>

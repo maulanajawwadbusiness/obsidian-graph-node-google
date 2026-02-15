@@ -65,7 +65,6 @@ const SEARCH_OFFSET_TOP = -7.5;
 // More (3-dot) icon vertical offset: negative = up, positive = down (in px)
 const MORE_OFFSET_TOP = -9.5;
 const EXPANDED_CONTENT_HIDDEN_OFFSET_PX = 3;
-const SESSION_TEXT_HIDDEN_OFFSET_PX = 2;
 // Avatar name baseline paint offset to keep visual alignment without layout reflow.
 const AVATAR_NAME_BASE_OFFSET_PX = -13;
 const AVATAR_NAME_HIDDEN_OFFSET_PX = 2;
@@ -185,7 +184,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
     const canOpenAvatarMenu = Boolean(onOpenProfile || onRequestLogout);
     const isInMotionPhase = motionPhase === 'expanding' || motionPhase === 'collapsing';
     const shouldMountExpandedContent = isExpanded || motionPhase !== 'collapsed';
-    const shouldShowSessionTitles = motionPhase === 'expanding' || motionPhase === 'expanded';
     const shouldShowAvatarName = motionPhase === 'expanding' || motionPhase === 'expanded';
     const contentTransitionCss = prefersReducedMotion ? 'none' : getSidebarContentTransitionCss(isExpanded);
     const widthTransitionCss = prefersReducedMotion ? 'none' : getSidebarWidthTransitionCss(isExpanded);
@@ -534,7 +532,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         return () => media.removeListener(update);
     }, []);
 
-    React.useEffect(() => {
+    React.useLayoutEffect(() => {
         if (prefersReducedMotion) {
             setMotionPhase(isExpanded ? 'expanded' : 'collapsed');
             return;
@@ -599,12 +597,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
         transform: isExpanded ? 'translateX(0px)' : `translateX(-${EXPANDED_CONTENT_HIDDEN_OFFSET_PX}px)`,
         transition: contentTransitionCss,
         pointerEvents: isExpanded ? 'auto' : 'none',
-    };
-    const sessionTitleRevealStyle: React.CSSProperties = {
-        opacity: shouldShowSessionTitles ? 1 : 0,
-        transform: shouldShowSessionTitles ? 'translateX(0px)' : `translateX(-${SESSION_TEXT_HIDDEN_OFFSET_PX}px)`,
-        transition: contentTransitionCss,
-        pointerEvents: shouldShowSessionTitles ? 'auto' : 'none',
     };
     const avatarNameRevealStyle: React.CSSProperties = {
         opacity: shouldShowAvatarName ? 1 : 0,
@@ -865,7 +857,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                                                     />
                                                 </span>
                                             ) : (
-                                                <span style={{ ...INTERFACE_TEXT_STYLE, ...sessionTitleRevealStyle }}>{item.title}</span>
+                                                <span style={INTERFACE_TEXT_STYLE}>{item.title}</span>
                                             )}
                                             <span style={INTERFACE_ROW_MENU_SLOT_STYLE}>
                                                 <button

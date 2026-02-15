@@ -12,6 +12,8 @@ type GraphRuntimeLeaseCounters = {
     preempt: number;
     release: number;
     staleReleaseIgnored: number;
+    notifyCount: number;
+    tokenInactiveChecks: number;
 };
 
 export type GraphRuntimeLeaseAcquireSuccess = {
@@ -29,14 +31,27 @@ export type GraphRuntimeLeaseAcquireResult =
     | GraphRuntimeLeaseAcquireSuccess
     | GraphRuntimeLeaseAcquireFailure;
 
+export type GraphRuntimeLeaseSnapshot = {
+    activeOwner: GraphRuntimeOwner | null;
+    activeInstanceId: string | null;
+    activeToken: string | null;
+    epoch: number;
+};
+
+type GraphRuntimeLeaseSubscriber = (snapshot: GraphRuntimeLeaseSnapshot) => void;
+
 let activeLease: ActiveGraphRuntimeLease | null = null;
 let leaseCounter = 0;
+let leaseEpoch = 0;
+const leaseSubscribers = new Set<GraphRuntimeLeaseSubscriber>();
 const leaseCounters: GraphRuntimeLeaseCounters = {
     acquire: 0,
     deny: 0,
     preempt: 0,
     release: 0,
     staleReleaseIgnored: 0,
+    notifyCount: 0,
+    tokenInactiveChecks: 0,
 };
 
 function isDev(): boolean {
@@ -46,6 +61,27 @@ function isDev(): boolean {
 function nextToken(owner: GraphRuntimeOwner): string {
     leaseCounter += 1;
     return `graph_runtime_lease:${owner}:${leaseCounter}`;
+}
+
+function buildSnapshot(): GraphRuntimeLeaseSnapshot {
+    return {
+        activeOwner: activeLease?.owner ?? null,
+        activeInstanceId: activeLease?.instanceId ?? null,
+        activeToken: activeLease?.token ?? null,
+        epoch: leaseEpoch,
+    };
+}
+
+function notifyLeaseSubscribers(): void {
+    leaseCounters.notifyCount += 1;
+    const snapshot = buildSnapshot();
+    for (const subscriber of leaseSubscribers) {
+        try {
+            subscriber(snapshot);
+        } catch (error) {
+            warnDev('subscriber_error', 'error=%s', error instanceof Error ? error.message : 'unknown');
+        }
+    }
 }
 
 function logDev(event: string, message: string, ...args: Array<string | number>): void {
@@ -61,8 +97,10 @@ function warnDev(event: string, message: string, ...args: Array<string | number>
 function createLease(owner: GraphRuntimeOwner, instanceId: string): GraphRuntimeLeaseAcquireSuccess {
     const token = nextToken(owner);
     activeLease = { token, owner, instanceId };
+    leaseEpoch += 1;
     leaseCounters.acquire += 1;
     logDev('acquire', 'owner=%s instanceId=%s token=%s', owner, instanceId, token);
+    notifyLeaseSubscribers();
     return { ok: true, token };
 }
 
@@ -101,6 +139,7 @@ export function acquireGraphRuntimeLease(
             activeLease.owner,
             activeLease.instanceId
         );
+        notifyLeaseSubscribers();
         return {
             ok: false,
             activeOwner: activeLease.owner,
@@ -117,6 +156,7 @@ export function acquireGraphRuntimeLease(
         activeLease.owner,
         activeLease.instanceId
     );
+    notifyLeaseSubscribers();
     return {
         ok: false,
         activeOwner: activeLease.owner,
@@ -151,6 +191,8 @@ export function releaseGraphRuntimeLease(token: string): void {
         activeLease.token
     );
     activeLease = null;
+    leaseEpoch += 1;
+    notifyLeaseSubscribers();
 }
 
 export function getActiveGraphRuntimeLease(): {
@@ -164,14 +206,32 @@ export function getActiveGraphRuntimeLease(): {
     };
 }
 
+export function getGraphRuntimeLeaseSnapshot(): GraphRuntimeLeaseSnapshot {
+    return buildSnapshot();
+}
+
+export function subscribeGraphRuntimeLease(subscriber: GraphRuntimeLeaseSubscriber): () => void {
+    leaseSubscribers.add(subscriber);
+    return () => {
+        leaseSubscribers.delete(subscriber);
+    };
+}
+
+export function isGraphRuntimeLeaseTokenActive(token: string): boolean {
+    leaseCounters.tokenInactiveChecks += 1;
+    return activeLease?.token === token;
+}
+
 export function getGraphRuntimeLeaseDebugSnapshot(): {
-    active: { owner: GraphRuntimeOwner; instanceId: string } | null;
+    active: { owner: GraphRuntimeOwner; instanceId: string; token: string } | null;
+    epoch: number;
     counters: GraphRuntimeLeaseCounters;
 } {
     return {
         active: activeLease
-            ? { owner: activeLease.owner, instanceId: activeLease.instanceId }
+            ? { owner: activeLease.owner, instanceId: activeLease.instanceId, token: activeLease.token }
             : null,
+        epoch: leaseEpoch,
         counters: { ...leaseCounters },
     };
 }

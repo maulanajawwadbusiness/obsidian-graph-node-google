@@ -86,6 +86,7 @@ export const GraphLoadingGate: React.FC<GraphLoadingGateProps> = ({
     showBackToPrompt = false,
     onBackToPrompt,
 }) => {
+    const isDone = confirmEnabled;
     const confirmButtonRef = React.useRef<HTMLButtonElement>(null);
 
     React.useEffect(() => {
@@ -124,7 +125,9 @@ export const GraphLoadingGate: React.FC<GraphLoadingGateProps> = ({
             onContextMenu={(e) => e.preventDefault()}
             onKeyDownCapture={onGateKeyDownCapture}
         >
-            <div style={TEXT_STYLE}>Loading...</div>
+            <div role="status" aria-live="polite" style={TEXT_STYLE}>
+                {isDone ? 'Loading Complete' : 'Loading...'}
+            </div>
             {showBackToPrompt ? (
                 <button
                     type="button"

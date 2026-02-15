@@ -5,6 +5,7 @@ export const SIDEBAR_COLLAPSED_WIDTH_CSS = `${SIDEBAR_COLLAPSED_WIDTH_PX}px`;
 export const SIDEBAR_EXPANDED_WIDTH_CSS = '10vw';
 export const SIDEBAR_EXPANDED_MIN_WIDTH_PX = 200;
 export const SIDEBAR_EXPANDED_MIN_WIDTH_CSS = `${SIDEBAR_EXPANDED_MIN_WIDTH_PX}px`;
+// Shared sidebar motion for overlay Sidebar and graph structural column.
 export const SIDEBAR_TRANSITION_DURATION_MS = 180;
 export const SIDEBAR_TRANSITION_TIMING_FUNCTION = 'cubic-bezier(0.22, 0.0, 0.0, 1)';
 export const SIDEBAR_TRANSITION_CSS =

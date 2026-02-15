@@ -44,6 +44,7 @@ let activeLease: ActiveGraphRuntimeLease | null = null;
 let leaseCounter = 0;
 let leaseEpoch = 0;
 const leaseSubscribers = new Set<GraphRuntimeLeaseSubscriber>();
+let hasWarnedInvariant = false;
 const leaseCounters: GraphRuntimeLeaseCounters = {
     acquire: 0,
     deny: 0,
@@ -72,9 +73,28 @@ function buildSnapshot(): GraphRuntimeLeaseSnapshot {
     };
 }
 
+function runLeaseInvariantSelfCheck(snapshot: GraphRuntimeLeaseSnapshot): void {
+    if (!isDev()) return;
+    if (hasWarnedInvariant) return;
+    const activeFields = [snapshot.activeOwner, snapshot.activeInstanceId, snapshot.activeToken];
+    const activeCount = activeFields.filter((value) => value !== null).length;
+    const isConsistent = activeCount === 0 || activeCount === 3;
+    if (isConsistent) return;
+    hasWarnedInvariant = true;
+    warnDev(
+        'invariant_violation',
+        'owner=%s instanceId=%s token=%s epoch=%d',
+        snapshot.activeOwner ?? 'none',
+        snapshot.activeInstanceId ?? 'none',
+        snapshot.activeToken ?? 'none',
+        snapshot.epoch
+    );
+}
+
 function notifyLeaseSubscribers(): void {
     leaseCounters.notifyCount += 1;
     const snapshot = buildSnapshot();
+    runLeaseInvariantSelfCheck(snapshot);
     for (const subscriber of leaseSubscribers) {
         try {
             subscriber(snapshot);

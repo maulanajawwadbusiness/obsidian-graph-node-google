@@ -91,6 +91,7 @@ export const AppShell: React.FC = () => {
     const [seenLoadingTrue, setSeenLoadingTrue] = React.useState(false);
     const [documentViewerToggleToken, setDocumentViewerToggleToken] = React.useState(0);
     const [isSidebarExpanded, setIsSidebarExpanded] = React.useState(false);
+    const gatePhaseRef = React.useRef<GatePhase>('idle');
     const savedInterfacesRef = React.useRef<SavedInterfaceRecordV1[]>([]);
     const restoreReadPathActiveRef = React.useRef(false);
     const activeStorageKeyRef = React.useRef<string>(getSavedInterfacesStorageKey());
@@ -358,6 +359,46 @@ export const AppShell: React.FC = () => {
         }
     }, [graphIsLoading, pendingAnalysis, pendingLoadInterface, screen, seenLoadingTrue]);
 
+    React.useEffect(() => {
+        if (!isWarmMountDebugEnabled()) return;
+        const prev = gatePhaseRef.current;
+        if (prev !== gatePhase) {
+            console.log('[GatePhase] %s->%s', prev, gatePhase);
+            gatePhaseRef.current = gatePhase;
+        }
+    }, [gatePhase]);
+
+    const confirmGraphLoadingGate = React.useCallback(() => {
+        if (screen !== 'graph_loading') return;
+        if (gatePhase !== 'done') return;
+        setGatePhase('confirmed');
+        transitionToScreen('graph');
+    }, [gatePhase, screen, transitionToScreen]);
+
+    const backToPromptFromGate = React.useCallback(() => {
+        if (screen !== 'graph_loading') return;
+        transitionToScreen('prompt');
+    }, [screen, transitionToScreen]);
+
+    React.useEffect(() => {
+        if (screen !== 'graph_loading') return;
+        const onKeyDown = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') {
+                event.preventDefault();
+                backToPromptFromGate();
+                return;
+            }
+            if (event.key === 'Enter' && gatePhase === 'done') {
+                event.preventDefault();
+                confirmGraphLoadingGate();
+            }
+        };
+        window.addEventListener('keydown', onKeyDown);
+        return () => {
+            window.removeEventListener('keydown', onKeyDown);
+        };
+    }, [backToPromptFromGate, confirmGraphLoadingGate, gatePhase, screen]);
+
     const sidebarInterfaces = useSidebarInterfaces(savedInterfaces);
     const { filteredSearchResults } = useSearchInterfacesEngine({
         savedInterfaces,
@@ -396,9 +437,9 @@ export const AppShell: React.FC = () => {
         },
         gateConfirmVisible: gatePhase === 'done',
         gateConfirmEnabled: gatePhase === 'done',
-        onGateConfirm: undefined,
+        onGateConfirm: confirmGraphLoadingGate,
         gateShowBackToPrompt: targetScreen === 'graph_loading' && gatePhase !== 'done',
-        onGateBackToPrompt: () => transitionToScreen('prompt'),
+        onGateBackToPrompt: backToPromptFromGate,
         transitionToScreen,
         commitUpsertInterface,
         commitPatchLayoutByDocId,

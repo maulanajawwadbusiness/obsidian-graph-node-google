@@ -114,6 +114,7 @@ export const GraphLoadingGate: React.FC<GraphLoadingGateProps> = ({
                         type="button"
                         style={CONFIRM_BUTTON_STYLE}
                         disabled={!confirmEnabled}
+                        autoFocus={confirmVisible && confirmEnabled}
                         onPointerDown={(e) => e.stopPropagation()}
                         onClick={() => onConfirm?.()}
                     >

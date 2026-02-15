@@ -12,6 +12,7 @@ import {
 import type { GraphPhysicsPlaygroundProps, PendingAnalysisPayload } from '../playground/modules/graphPhysicsTypes';
 import {
     ONBOARDING_FADE_EASING,
+    getTransitionPolicy,
 } from './appshell/transitions/transitionContract';
 import { OnboardingLayerHost } from './appshell/transitions/OnboardingLayerHost';
 import { useOnboardingTransition } from './appshell/transitions/useOnboardingTransition';
@@ -349,8 +350,12 @@ export const AppShell: React.FC = () => {
         getSkipTarget,
     });
 
-    const shouldUseOnboardingLayerHost = isOnboardingScreen(screen)
-        || (isCrossfading && fromScreen !== null && isOnboardingScreen(fromScreen));
+    const shouldUseOnboardingLayerHost = (() => {
+        if (isOnboardingScreen(screen)) return true;
+        if (!isCrossfading || fromScreen === null) return false;
+        const policy = getTransitionPolicy(fromScreen, screen);
+        return policy.animate && isOnboardingScreen(fromScreen);
+    })();
 
     const screenContent = shouldUseOnboardingLayerHost
         ? (

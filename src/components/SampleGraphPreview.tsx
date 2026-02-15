@@ -2,6 +2,10 @@ import React from 'react';
 import { GraphPhysicsPlayground } from '../playground/GraphPhysicsPlayground';
 import { TooltipProvider } from '../ui/tooltip/TooltipProvider';
 import { PortalScopeProvider } from './portalScope/PortalScopeContext';
+import sampleGraphPreviewExport from '../samples/sampleGraphPreview.export.json';
+import { parseSavedInterfaceRecord } from '../store/savedInterfacesStore';
+import { devExportToSavedInterfaceRecordV1 } from '../lib/devExport/devExportToSavedInterfaceRecord';
+import { parseDevInterfaceExportV1 } from '../lib/devExport/devExportTypes';
 import {
     SAMPLE_GRAPH_PREVIEW_ROOT_ATTR,
     SAMPLE_GRAPH_PREVIEW_ROOT_VALUE
@@ -73,22 +77,33 @@ export const SampleGraphPreview: React.FC = () => {
         [SAMPLE_GRAPH_PREVIEW_ROOT_ATTR]: SAMPLE_GRAPH_PREVIEW_ROOT_VALUE,
     };
     const [portalRootEl, setPortalRootEl] = React.useState<HTMLDivElement | null>(null);
+    const parsedSampleRecord = React.useMemo(() => {
+        const parsedDev = parseDevInterfaceExportV1(sampleGraphPreviewExport);
+        if (!parsedDev) return null;
+        const candidateRecord = devExportToSavedInterfaceRecordV1(parsedDev, { preview: true });
+        return parseSavedInterfaceRecord(candidateRecord);
+    }, []);
+    const sampleLoadError = parsedSampleRecord === null;
 
     return (
         <div {...previewRootMarker} style={PREVIEW_ROOT_STYLE}>
             <div ref={setPortalRootEl} data-arnvoid-preview-portal-root="1" style={PREVIEW_PORTAL_ROOT_STYLE} />
             <PreviewErrorBoundary>
                 <div style={PREVIEW_SURFACE_STYLE}>
-                    {portalRootEl ? (
+                    {portalRootEl && parsedSampleRecord ? (
                         <PortalScopeProvider mode="container" portalRootEl={portalRootEl}>
                             <TooltipProvider>
                                 <GraphPhysicsPlayground
                                     pendingAnalysisPayload={null}
                                     onPendingAnalysisConsumed={() => {}}
+                                    pendingLoadInterface={parsedSampleRecord}
+                                    onPendingLoadInterfaceConsumed={() => {}}
                                     enableDebugSidebar={false}
                                 />
                             </TooltipProvider>
                         </PortalScopeProvider>
+                    ) : sampleLoadError ? (
+                        <div style={PREVIEW_FALLBACK_STYLE}>sample graph invalid payload</div>
                     ) : (
                         <div style={PREVIEW_FALLBACK_STYLE}>sample graph initializing...</div>
                     )}

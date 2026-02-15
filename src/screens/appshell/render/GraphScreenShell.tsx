@@ -13,6 +13,7 @@ const GRAPH_SCREEN_SHELL_STYLE: React.CSSProperties = {
 };
 
 const GRAPH_SCREEN_LAYOUT_STYLE: React.CSSProperties = {
+    // Graph screen uses two panes: reserved sidebar column on the left, graph runtime on the right.
     display: 'flex',
     flexDirection: 'row',
     width: '100%',

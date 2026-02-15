@@ -3,6 +3,7 @@ import {
     SIDEBAR_COLLAPSED_WIDTH_CSS,
     SIDEBAR_EXPANDED_MIN_WIDTH_CSS,
     SIDEBAR_EXPANDED_WIDTH_CSS,
+    SIDEBAR_TRANSITION_CSS,
 } from '../appShellStyles';
 
 type GraphScreenShellProps = {
@@ -40,6 +41,7 @@ export function GraphScreenShell({ sidebarExpanded, children }: GraphScreenShell
     const graphScreenSidebarPaneStyle: React.CSSProperties = {
         width: sidebarPaneWidth,
         minWidth: sidebarPaneMinWidth,
+        transition: SIDEBAR_TRANSITION_CSS,
         flex: '0 0 auto',
         height: '100%',
     };

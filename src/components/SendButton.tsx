@@ -1,5 +1,6 @@
 import React from 'react';
 import sendIcon from '../assets/send_icon.png';
+import { useTooltip } from '../ui/tooltip/useTooltip';
 
 /**
  * SendButton - Reusable send button component
@@ -44,14 +45,17 @@ const ICON_STYLE: React.CSSProperties = {
 };
 
 export const SendButton: React.FC<SendButtonProps> = ({ onClick, disabled = false }) => {
+    const sendTooltip = useTooltip('Send message', { disabled });
+
     return (
         <button
-            style={BUTTON_STYLE}
-            onClick={onClick}
-            onPointerDown={(e) => e.stopPropagation()}
+            {...sendTooltip.getAnchorProps({
+                style: BUTTON_STYLE,
+                onClick,
+                onPointerDown: (e) => e.stopPropagation(),
+                'aria-label': 'Send',
+            })}
             disabled={disabled}
-            title="Send message"
-            aria-label="Send"
         >
             <img src={sendIcon} alt="" style={ICON_STYLE} />
         </button>

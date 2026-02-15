@@ -6,6 +6,7 @@ import { ChatShortageNotif } from './ChatShortageNotif';
 import handoffIcon from '../assets/handoff_minichat.png';
 import type { PopupRect } from './popupTypes';
 import { t } from '../i18n/t';
+import { useTooltip } from '../ui/tooltip/useTooltip';
 
 /**
  * MiniChatbar - Small chat window next to popup
@@ -215,6 +216,8 @@ export const MiniChatbar: React.FC<MiniChatbarProps> = ({ messages, onSend, onCl
     const scrollTimeoutRef = useRef<number | null>(null);
     const chatbarRef = useRef<HTMLDivElement>(null);
     const { popupRect } = usePopup();
+    const closeTooltip = useTooltip(t('tooltip.close'));
+    const extendTooltip = useTooltip(t('miniChat.extendTooltip'));
 
     // Animate in
     useEffect(() => {
@@ -406,18 +409,19 @@ export const MiniChatbar: React.FC<MiniChatbarProps> = ({ messages, onSend, onCl
             <div style={HEADER_STYLE}>
                 <span style={{ fontSize: '13px', fontWeight: '300' }}>{t('miniChat.header')}</span>
                 <button
-                    style={{
-                        background: 'transparent',
-                        border: 'none',
-                        color: 'rgba(180, 190, 210, 0.7)',
-                        fontSize: '18px',
-                        fontWeight: 300,
-                        cursor: 'pointer',
-                        padding: '4px 8px',
-                    }}
-                    onClick={onClose}
-                    onPointerDown={stopPropagation}
-                    title={t('tooltip.close')}
+                    {...closeTooltip.getAnchorProps({
+                        style: {
+                            background: 'transparent',
+                            border: 'none',
+                            color: 'rgba(180, 190, 210, 0.7)',
+                            fontSize: '18px',
+                            fontWeight: 300,
+                            cursor: 'pointer',
+                            padding: '4px 8px',
+                        },
+                        onClick: onClose,
+                        onPointerDown: stopPropagation,
+                    })}
                 >
                     x
                 </button>
@@ -463,27 +467,28 @@ export const MiniChatbar: React.FC<MiniChatbarProps> = ({ messages, onSend, onCl
                 />
                 {MINICHAT_HANDOFF_ENABLED ? (
                     <button
-                        onClick={handleSendToFullChat}
-                        title={t('miniChat.extendTooltip')}
-                        aria-label={t('miniChat.extendAria')}
-                        style={{
-                            background: 'transparent',
-                            border: 'none',
-                            width: '31px',
-                            height: '31px',
-                            borderRadius: '50%',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            cursor: 'pointer',
-                            opacity: 0.5,
-                            flexShrink: 0,
-                            padding: 0,
-                            marginLeft: '4px',
-                        }}
-                        onMouseEnter={(e) => e.currentTarget.style.opacity = '0.8'}
-                        onMouseLeave={(e) => e.currentTarget.style.opacity = '0.5'}
-                        onPointerDown={stopPropagation}
+                        {...extendTooltip.getAnchorProps({
+                            onClick: handleSendToFullChat,
+                            'aria-label': t('miniChat.extendAria'),
+                            style: {
+                                background: 'transparent',
+                                border: 'none',
+                                width: '31px',
+                                height: '31px',
+                                borderRadius: '50%',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                cursor: 'pointer',
+                                opacity: 0.5,
+                                flexShrink: 0,
+                                padding: 0,
+                                marginLeft: '4px',
+                            },
+                            onMouseEnter: (e) => { e.currentTarget.style.opacity = '0.8'; },
+                            onMouseLeave: (e) => { e.currentTarget.style.opacity = '0.5'; },
+                            onPointerDown: stopPropagation,
+                        })}
                     >
                         <img
                             src={handoffIcon}

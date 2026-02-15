@@ -3,6 +3,7 @@ import { usePopup } from './PopupStore';
 import { ChatInput } from './ChatInput';
 import { ChatShortageNotif } from './ChatShortageNotif';
 import { t } from '../i18n/t';
+import { useTooltip } from '../ui/tooltip/useTooltip';
 
 const stopPropagation = (e: React.SyntheticEvent) => e.stopPropagation();
 
@@ -141,6 +142,7 @@ export const NodePopup: React.FC<NodePopupProps> = ({ trackNode, engineRef }) =>
     const popupRef = useRef<HTMLDivElement>(null);
     const [isVisible, setIsVisible] = useState(false);
     const [contentVisible, setContentVisible] = useState(false);
+    const closeTooltip = useTooltip(t('tooltip.close'));
 
     // Staged reveal
     useEffect(() => {
@@ -412,12 +414,13 @@ export const NodePopup: React.FC<NodePopupProps> = ({ trackNode, engineRef }) =>
                 <div style={{ ...HEADER_STYLE, ...contentTransition }}>
                     <span style={{ fontSize: '14px', opacity: 0.7 }}>{t('nodePopup.header')}</span>
                     <button
-                        style={CLOSE_BUTTON_STYLE}
-                        onClick={closePopup}
-                        onPointerDown={stopPropagation}
-                        onMouseEnter={(e) => (e.currentTarget.style.color = 'rgba(255, 255, 255, 0.9)')}
-                        onMouseLeave={(e) => (e.currentTarget.style.color = 'rgba(180, 190, 210, 0.7)')}
-                        title={t('tooltip.close')}
+                        {...closeTooltip.getAnchorProps({
+                            style: CLOSE_BUTTON_STYLE,
+                            onClick: closePopup,
+                            onPointerDown: stopPropagation,
+                            onMouseEnter: (e) => { e.currentTarget.style.color = 'rgba(255, 255, 255, 0.9)'; },
+                            onMouseLeave: (e) => { e.currentTarget.style.color = 'rgba(180, 190, 210, 0.7)'; },
+                        })}
                     >
                         x
                     </button>

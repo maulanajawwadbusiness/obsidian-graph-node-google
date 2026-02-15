@@ -66,7 +66,6 @@ export const FullChatToggle: React.FC = () => {
             onPointerDown={stopPropagation}
             onMouseDown={stopPropagation}
             aria-label={undefined}
-            title={undefined}
             onMouseEnter={() => setIsHovered(true)}
             onMouseLeave={() => setIsHovered(false)}
         >

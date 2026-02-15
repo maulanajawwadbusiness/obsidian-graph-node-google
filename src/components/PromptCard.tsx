@@ -4,6 +4,7 @@ import plusIcon from '../assets/plus_icon.png';
 import sendIcon from '../assets/send_icon_white.png';
 import clipIcon from '../assets/clip_icon.png';
 import fileMiniIcon from '../assets/file_mini_icon.png';
+import { useTooltip } from '../ui/tooltip/useTooltip';
 
 // Toggle: true = block submit when text is empty, false = allow empty submit path.
 const HARD_BLOCK_EMPTY_TEXT_SUBMIT = false;
@@ -36,6 +37,8 @@ export const PromptCard: React.FC<PromptCardProps> = ({
     const [inputText, setInputText] = React.useState(value);
     const popupRef = React.useRef<HTMLDivElement>(null);
     const fileInputRef = React.useRef<HTMLInputElement | null>(null);
+    const removeFileTooltip = useTooltip('Remove file');
+    const uploadDocumentTooltip = useTooltip('Upload Document', { disabled });
 
     React.useEffect(() => {
         setInputText(value);
@@ -112,10 +115,11 @@ export const PromptCard: React.FC<PromptCardProps> = ({
                                         <img src={fileMiniIcon} alt="" style={FILE_CHIP_ICON_STYLE} />
                                         <span style={FILE_CHIP_NAME_STYLE}>{file.name}</span>
                                         <button
-                                            type="button"
-                                            style={FILE_CHIP_DISMISS_STYLE}
-                                            onClick={() => onRemoveFile(index)}
-                                            title="Remove file"
+                                            {...removeFileTooltip.getAnchorProps({
+                                                type: 'button',
+                                                style: FILE_CHIP_DISMISS_STYLE,
+                                                onClick: () => onRemoveFile(index),
+                                            })}
                                         >
                                             x
                                         </button>
@@ -136,12 +140,13 @@ export const PromptCard: React.FC<PromptCardProps> = ({
                     <div style={ICON_ROW_STYLE}>
                         <div style={{ position: 'relative' }}>
                             <button
-                                type="button"
-                                style={ICON_BUTTON_STYLE}
-                                onMouseEnter={() => setPlusHover(true)}
-                                onMouseLeave={() => setPlusHover(false)}
-                                onClick={() => setShowUploadPopup(!showUploadPopup)}
-                                title="Upload Document"
+                                {...uploadDocumentTooltip.getAnchorProps({
+                                    type: 'button',
+                                    style: ICON_BUTTON_STYLE,
+                                    onMouseEnter: () => setPlusHover(true),
+                                    onMouseLeave: () => setPlusHover(false),
+                                    onClick: () => setShowUploadPopup(!showUploadPopup),
+                                })}
                                 disabled={disabled}
                             >
                                 <span

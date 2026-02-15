@@ -33,6 +33,7 @@ const GRAPH_SCREEN_PANE_STYLE: React.CSSProperties = {
 };
 
 export function GraphScreenShell({ sidebarExpanded, children }: GraphScreenShellProps): JSX.Element {
+    // Keep graph pane geometry synced to the same sidebar expanded state used by overlay Sidebar.
     const sidebarPaneWidth = sidebarExpanded ? SIDEBAR_EXPANDED_WIDTH_CSS : SIDEBAR_COLLAPSED_WIDTH_CSS;
     const sidebarPaneMinWidth = sidebarExpanded ? SIDEBAR_EXPANDED_MIN_WIDTH_CSS : SIDEBAR_COLLAPSED_WIDTH_CSS;
     const graphScreenSidebarPaneStyle: React.CSSProperties = {

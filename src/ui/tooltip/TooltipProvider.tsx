@@ -77,7 +77,7 @@ function toAnchorRect(rect: DOMRect): TooltipAnchorRect {
 }
 
 const TooltipRenderer: React.FC<{ state: TooltipState }> = ({ state }) => {
-    if (!state.open || !state.anchorRect) return null;
+    if (!state.open || !state.anchorRect || state.content.trim().length === 0) return null;
     const x = state.anchorRect.left + state.anchorRect.width / 2;
     const y = state.anchorRect.top;
     return (

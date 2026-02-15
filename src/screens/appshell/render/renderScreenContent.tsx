@@ -10,6 +10,16 @@ import type {
 } from '../../../playground/modules/graphPhysicsTypes';
 import type { SavedInterfaceRecordV1 } from '../../../store/savedInterfacesStore';
 
+type ScreenRenderBucket = 'onboarding' | 'graph_class';
+
+const SCREEN_RENDER_BUCKET: Record<AppScreen, ScreenRenderBucket> = {
+    welcome1: 'onboarding',
+    welcome2: 'onboarding',
+    prompt: 'onboarding',
+    graph_loading: 'graph_class',
+    graph: 'graph_class',
+};
+
 export type RenderScreenArgs = {
     screen: AppScreen;
     isSidebarExpanded: boolean;
@@ -60,7 +70,7 @@ export function renderScreenContent(args: RenderScreenArgs): React.ReactNode {
         getSkipTarget,
     } = args;
 
-    if (isGraphClassScreen(screen)) {
+    if (SCREEN_RENDER_BUCKET[screen] === 'graph_class' && isGraphClassScreen(screen)) {
         return (
             <Suspense fallback={<div style={fallbackStyle}>Loading graph...</div>}>
                 <GraphScreenShell sidebarExpanded={isSidebarExpanded}>

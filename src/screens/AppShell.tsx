@@ -62,6 +62,14 @@ const STORAGE_KEY = 'arnvoid_screen';
 const PERSIST_SCREEN = false;
 const DEBUG_ONBOARDING_SCROLL_GUARD = false;
 const WELCOME1_FONT_TIMEOUT_MS = 1500;
+const DEBUG_WARM_MOUNT_QUERY_KEY = 'debugWarmMount';
+
+function isWarmMountDebugEnabled(): boolean {
+    if (!import.meta.env.DEV) return false;
+    if (typeof window === 'undefined') return false;
+    const params = new URLSearchParams(window.location.search);
+    return params.get(DEBUG_WARM_MOUNT_QUERY_KEY) === '1';
+}
 
 export const AppShell: React.FC = () => {
     const { user, loading: authLoading, refreshMe, applyUserPatch, logout } = useAuth();
@@ -289,6 +297,21 @@ export const AppShell: React.FC = () => {
     const onProfileSave = React.useCallback(async () => {
         await onProfileSaveController(forceCloseProfileOverlay);
     }, [forceCloseProfileOverlay, onProfileSaveController]);
+
+    React.useEffect(() => {
+        if (!isWarmMountDebugEnabled()) return;
+        const debugWindow = window as Window & {
+            __arnvoid_setScreen?: (next: 'graph_loading' | 'graph') => void;
+        };
+        debugWindow.__arnvoid_setScreen = (next) => {
+            transitionToScreen(next);
+            console.log('[WarmMount] debug_set_screen next=%s current=%s', next, screen);
+        };
+        console.log('[WarmMount] debug_set_screen_ready current=%s', screen);
+        return () => {
+            delete debugWindow.__arnvoid_setScreen;
+        };
+    }, [screen, transitionToScreen]);
 
     React.useEffect(() => {
         const media = window.matchMedia('(prefers-reduced-motion: reduce)');

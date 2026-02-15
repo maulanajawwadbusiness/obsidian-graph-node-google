@@ -6,6 +6,14 @@ type ActiveGraphRuntimeLease = {
     instanceId: string;
 };
 
+type GraphRuntimeLeaseCounters = {
+    acquire: number;
+    deny: number;
+    preempt: number;
+    release: number;
+    staleReleaseIgnored: number;
+};
+
 export type GraphRuntimeLeaseAcquireSuccess = {
     ok: true;
     token: string;
@@ -23,6 +31,13 @@ export type GraphRuntimeLeaseAcquireResult =
 
 let activeLease: ActiveGraphRuntimeLease | null = null;
 let leaseCounter = 0;
+const leaseCounters: GraphRuntimeLeaseCounters = {
+    acquire: 0,
+    deny: 0,
+    preempt: 0,
+    release: 0,
+    staleReleaseIgnored: 0,
+};
 
 function isDev(): boolean {
     return import.meta.env.DEV;
@@ -46,6 +61,7 @@ function warnDev(event: string, message: string, ...args: Array<string | number>
 function createLease(owner: GraphRuntimeOwner, instanceId: string): GraphRuntimeLeaseAcquireSuccess {
     const token = nextToken(owner);
     activeLease = { token, owner, instanceId };
+    leaseCounters.acquire += 1;
     logDev('acquire', 'owner=%s instanceId=%s token=%s', owner, instanceId, token);
     return { ok: true, token };
 }
@@ -70,11 +86,13 @@ export function acquireGraphRuntimeLease(
                 prevOwner,
                 prevInstanceId
             );
+            leaseCounters.preempt += 1;
         }
         return createLease(owner, instanceId);
     }
 
     if (activeLease.owner === 'graph-screen') {
+        leaseCounters.deny += 1;
         warnDev(
             'deny',
             'requestOwner=%s requestInstanceId=%s activeOwner=%s activeInstanceId=%s',
@@ -90,6 +108,7 @@ export function acquireGraphRuntimeLease(
         };
     }
 
+    leaseCounters.deny += 1;
     warnDev(
         'deny',
         'requestOwner=%s requestInstanceId=%s activeOwner=%s activeInstanceId=%s',
@@ -107,10 +126,12 @@ export function acquireGraphRuntimeLease(
 
 export function releaseGraphRuntimeLease(token: string): void {
     if (!activeLease) {
+        leaseCounters.staleReleaseIgnored += 1;
         warnDev('stale_release_ignored', 'token=%s reason=no_active_lease', token);
         return;
     }
     if (activeLease.token !== token) {
+        leaseCounters.staleReleaseIgnored += 1;
         warnDev(
             'stale_release_ignored',
             'token=%s activeToken=%s activeOwner=%s activeInstanceId=%s',
@@ -121,6 +142,7 @@ export function releaseGraphRuntimeLease(token: string): void {
         );
         return;
     }
+    leaseCounters.release += 1;
     logDev(
         'release',
         'owner=%s instanceId=%s token=%s',
@@ -139,5 +161,17 @@ export function getActiveGraphRuntimeLease(): {
     return {
         activeOwner: activeLease.owner,
         activeInstanceId: activeLease.instanceId,
+    };
+}
+
+export function getGraphRuntimeLeaseDebugSnapshot(): {
+    active: { owner: GraphRuntimeOwner; instanceId: string } | null;
+    counters: GraphRuntimeLeaseCounters;
+} {
+    return {
+        active: activeLease
+            ? { owner: activeLease.owner, instanceId: activeLease.instanceId }
+            : null,
+        counters: { ...leaseCounters },
     };
 }

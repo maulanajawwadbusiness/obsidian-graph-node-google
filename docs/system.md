@@ -315,6 +315,45 @@ Layering and shielding guardrails:
 - `GraphScreenShell` and pane wrappers must not introduce new z-index layers above overlays or modals.
 - Overlay/modal/sidebar surfaces on top of graph must shield pointer and wheel so dot canvas never receives leaked input.
 
+## 2.7 Graph Runtime Lease Guard (2026-02-15)
+
+Purpose:
+- enforce single active graph runtime ownership across prompt preview and graph screen paths.
+- prevent double-runtime cross-talk on global channels during rapid prompt <-> graph transitions.
+
+Ownership model:
+- owner `prompt-preview`: `src/components/SampleGraphPreview.tsx`
+- owner `graph-screen`: graph-class runtime mount in `src/screens/appshell/render/renderScreenContent.tsx`
+
+Lease primitive:
+- `src/runtime/graphRuntimeLease.ts`
+- acquire API: `acquireGraphRuntimeLease(owner, instanceId)`
+- release API: `releaseGraphRuntimeLease(token)`
+- read API: `getActiveGraphRuntimeLease()`
+- debug snapshot: `getGraphRuntimeLeaseDebugSnapshot()`
+
+Priority policy:
+1. only one active lease at a time
+2. graph-screen acquisition preempts prompt-preview if active
+3. prompt-preview is denied while graph-screen lease is active
+4. stale release tokens are ignored safely
+
+Mount gate seam:
+- `src/runtime/GraphRuntimeLeaseBoundary.tsx`
+- preview uses deny-block behavior (runtime does not mount when denied)
+- graph-screen path mounts through graph-screen lease boundary with preemptive priority
+
+Dev instrumentation:
+- event logs (dev only): acquire, deny, preempt, release, stale_release_ignored
+- counters exposed through `getGraphRuntimeLeaseDebugSnapshot()`
+
+Manual verification checklist:
+1. open prompt screen: preview acquires lease and renders graph.
+2. navigate to graph-class screen: graph-screen preempts preview lease.
+3. navigate back to prompt: preview reacquires lease cleanly.
+4. rapid prompt <-> graph toggling: no simultaneous active owners.
+5. expected dev warnings are limited to deny/preempt/stale release events only.
+
 ## 3. Physics Architecture And Contract
 The graph is driven by a **Hybrid Solver** (`src/physics/`) prioritizing "Visual Dignity" over pure simulation accuracy.
 

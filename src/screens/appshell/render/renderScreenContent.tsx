@@ -65,6 +65,7 @@ export function renderScreenContent(args: RenderScreenArgs): React.ReactNode {
             <Suspense fallback={<div style={fallbackStyle}>Loading graph...</div>}>
                 <GraphScreenShell sidebarExpanded={isSidebarExpanded}>
                     <GraphWithPending
+                        enableDebugSidebar={false}
                         pendingAnalysisPayload={pendingAnalysis}
                         onPendingAnalysisConsumed={() => setPendingAnalysis(null)}
                         onLoadingStateChange={(v) => setGraphIsLoading(v)}

@@ -78,7 +78,6 @@ const SIDEBAR_TEXT_COLOR = '#D7F5FF';
 const ROW_MENU_DELETE_TEXT_COLOR = '#FF4B4E';
 const SIDEBAR_HOVER_TRANSITION = '250ms ease';
 const LOGO_SWAP_TRANSITION = '100ms ease';
-const SESSION_TITLE_REVEAL_TRANSITION = 'opacity 84ms cubic-bezier(0.22, 0.00, 0.00, 1.00), transform 84ms cubic-bezier(0.22, 0.00, 0.00, 1.00)';
 const CLOSE_ICON_VIEWBOX = '0 0 100 100';
 type RowMenuItemKey = 'rename' | 'delete';
 type MoreMenuItemKey = 'suggestion' | 'blog';
@@ -185,7 +184,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     const canOpenAvatarMenu = Boolean(onOpenProfile || onRequestLogout);
     const isInMotionPhase = motionPhase === 'expanding' || motionPhase === 'collapsing';
     const shouldMountExpandedContent = isExpanded || motionPhase !== 'collapsed';
-    const shouldShowSessionTitles = isExpanded && motionPhase === 'expanded';
+    const shouldShowSessionTitles = motionPhase === 'expanding' || motionPhase === 'expanded';
     const contentTransitionCss = prefersReducedMotion ? 'none' : getSidebarContentTransitionCss(isExpanded);
     const widthTransitionCss = prefersReducedMotion ? 'none' : getSidebarWidthTransitionCss(isExpanded);
     const visualRailTransitionCss = prefersReducedMotion ? 'none' : getSidebarVisualRailTransitionCss(isExpanded);
@@ -615,7 +614,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     const sessionTitleRevealStyle: React.CSSProperties = {
         opacity: shouldShowSessionTitles ? 1 : 0,
         transform: shouldShowSessionTitles ? 'translateX(0px)' : `translateX(-${SESSION_TEXT_HIDDEN_OFFSET_PX}px)`,
-        transition: prefersReducedMotion ? 'none' : SESSION_TITLE_REVEAL_TRANSITION,
+        transition: contentTransitionCss,
         pointerEvents: shouldShowSessionTitles ? 'auto' : 'none',
     };
 

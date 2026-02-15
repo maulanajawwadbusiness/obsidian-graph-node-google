@@ -341,6 +341,23 @@ export const AppShell: React.FC = () => {
         setGatePhase('idle');
     }, [screen]);
 
+    React.useEffect(() => {
+        if (screen !== 'graph_loading') return;
+        const hasPendingWork = pendingAnalysis !== null || pendingLoadInterface !== null;
+        if (graphIsLoading) {
+            setSeenLoadingTrue((prev) => (prev ? prev : true));
+            setGatePhase('loading');
+            return;
+        }
+        if (seenLoadingTrue) {
+            setGatePhase('done');
+            return;
+        }
+        if (!hasPendingWork) {
+            setGatePhase('done');
+        }
+    }, [graphIsLoading, pendingAnalysis, pendingLoadInterface, screen, seenLoadingTrue]);
+
     const sidebarInterfaces = useSidebarInterfaces(savedInterfaces);
     const { filteredSearchResults } = useSearchInterfacesEngine({
         savedInterfaces,
@@ -377,6 +394,11 @@ export const AppShell: React.FC = () => {
         setRestoreReadPathActive: (active) => {
             restoreReadPathActiveRef.current = active;
         },
+        gateConfirmVisible: gatePhase === 'done',
+        gateConfirmEnabled: gatePhase === 'done',
+        onGateConfirm: undefined,
+        gateShowBackToPrompt: targetScreen === 'graph_loading' && gatePhase !== 'done',
+        onGateBackToPrompt: () => transitionToScreen('prompt'),
         transitionToScreen,
         commitUpsertInterface,
         commitPatchLayoutByDocId,

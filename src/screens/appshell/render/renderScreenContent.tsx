@@ -35,6 +35,11 @@ export type RenderScreenArgs = {
     setWelcome1OverlayOpen: (open: boolean) => void;
     setEnterPromptOverlayOpen: (open: boolean) => void;
     setRestoreReadPathActive: (active: boolean) => void;
+    gateConfirmVisible: boolean;
+    gateConfirmEnabled: boolean;
+    onGateConfirm?: () => void;
+    gateShowBackToPrompt: boolean;
+    onGateBackToPrompt: () => void;
     transitionToScreen: (next: AppScreen) => void;
     commitUpsertInterface: (record: SavedInterfaceRecordV1, reason: string) => void;
     commitPatchLayoutByDocId: (
@@ -63,6 +68,11 @@ export function renderScreenContent(args: RenderScreenArgs): React.ReactNode {
         setWelcome1OverlayOpen,
         setEnterPromptOverlayOpen,
         setRestoreReadPathActive,
+        gateConfirmVisible,
+        gateConfirmEnabled,
+        onGateConfirm,
+        gateShowBackToPrompt,
+        onGateBackToPrompt,
         transitionToScreen,
         commitUpsertInterface,
         commitPatchLayoutByDocId,
@@ -92,7 +102,15 @@ export function renderScreenContent(args: RenderScreenArgs): React.ReactNode {
                             commitPatchLayoutByDocId(docId, layout, camera, reason)
                         }
                     />
-                    {screen === 'graph_loading' ? <GraphLoadingGate /> : null}
+                    {screen === 'graph_loading' ? (
+                        <GraphLoadingGate
+                            confirmVisible={gateConfirmVisible}
+                            confirmEnabled={gateConfirmEnabled}
+                            onConfirm={onGateConfirm}
+                            showBackToPrompt={gateShowBackToPrompt}
+                            onBackToPrompt={onGateBackToPrompt}
+                        />
+                    ) : null}
                 </GraphScreenShell>
             </Suspense>
         );

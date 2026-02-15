@@ -1,7 +1,11 @@
 import React from 'react';
 
 type GraphLoadingGateProps = {
-    showConfirmSlot?: boolean;
+    confirmVisible?: boolean;
+    confirmEnabled?: boolean;
+    onConfirm?: () => void;
+    showBackToPrompt?: boolean;
+    onBackToPrompt?: () => void;
 };
 
 const ROOT_STYLE: React.CSSProperties = {
@@ -43,11 +47,43 @@ const CONFIRM_SLOT_STYLE: React.CSSProperties = {
     color: 'rgba(231, 231, 231, 0.75)',
     fontSize: '14px',
     fontWeight: 500,
-    pointerEvents: 'none',
     userSelect: 'none',
 };
 
-export const GraphLoadingGate: React.FC<GraphLoadingGateProps> = ({ showConfirmSlot = true }) => {
+const CONFIRM_BUTTON_STYLE: React.CSSProperties = {
+    minWidth: '140px',
+    height: '42px',
+    borderRadius: '10px',
+    border: '1px solid rgba(255, 255, 255, 0.20)',
+    background: 'rgba(255, 255, 255, 0.08)',
+    color: '#f2f2f2',
+    fontSize: '14px',
+    fontWeight: 600,
+    cursor: 'pointer',
+};
+
+const BACK_BUTTON_STYLE: React.CSSProperties = {
+    position: 'absolute',
+    top: '24px',
+    left: '24px',
+    height: '36px',
+    borderRadius: '10px',
+    border: '1px solid rgba(255, 255, 255, 0.2)',
+    background: 'rgba(255, 255, 255, 0.06)',
+    color: '#e7e7e7',
+    padding: '0 14px',
+    fontSize: '13px',
+    fontWeight: 600,
+    cursor: 'pointer',
+};
+
+export const GraphLoadingGate: React.FC<GraphLoadingGateProps> = ({
+    confirmVisible = false,
+    confirmEnabled = false,
+    onConfirm,
+    showBackToPrompt = false,
+    onBackToPrompt,
+}) => {
     return (
         <div
             data-graph-loading-gate="1"
@@ -62,7 +98,31 @@ export const GraphLoadingGate: React.FC<GraphLoadingGateProps> = ({ showConfirmS
             onContextMenu={(e) => e.preventDefault()}
         >
             <div style={TEXT_STYLE}>Loading...</div>
-            {showConfirmSlot ? <div style={CONFIRM_SLOT_STYLE}>Confirm</div> : null}
+            {showBackToPrompt ? (
+                <button
+                    type="button"
+                    style={BACK_BUTTON_STYLE}
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onClick={() => onBackToPrompt?.()}
+                >
+                    Back to Prompt
+                </button>
+            ) : null}
+            <div style={CONFIRM_SLOT_STYLE}>
+                {confirmVisible ? (
+                    <button
+                        type="button"
+                        style={CONFIRM_BUTTON_STYLE}
+                        disabled={!confirmEnabled}
+                        onPointerDown={(e) => e.stopPropagation()}
+                        onClick={() => onConfirm?.()}
+                    >
+                        Confirm
+                    </button>
+                ) : (
+                    <span>Confirm</span>
+                )}
+            </div>
         </div>
     );
 };

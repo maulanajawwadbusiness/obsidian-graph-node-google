@@ -70,8 +70,8 @@ const TOOLTIP_BUBBLE_STYLE_BASE: React.CSSProperties = {
     position: 'fixed',
     transform: 'translate3d(0,0,0)',
     pointerEvents: 'none',
-    fontSize: '10px',
-    padding: '10px',
+    fontSize: '8.5px',
+    padding: '4.25px 8.5px',
     background: '#0D0D18',
     color: '#E7EEF8',
     borderRadius: '8px',
@@ -92,7 +92,8 @@ const INITIAL_TOOLTIP_STATE: TooltipState = {
 };
 
 const VIEWPORT_MARGIN = 8;
-const TOOLTIP_GAP = 8;
+const TOOLTIP_TOP_GAP = 0;
+const TOOLTIP_BOTTOM_GAP = 8;
 
 function toAnchorRect(rect: DOMRect): TooltipAnchorRect {
     return {
@@ -119,8 +120,8 @@ function computeTooltipPosition(input: {
     const tooltipW = Math.max(0, tooltipSize.width);
     const tooltipH = Math.max(0, tooltipSize.height);
 
-    const topCandidate = anchorRect.top - TOOLTIP_GAP - tooltipH;
-    const bottomCandidate = anchorRect.top + anchorRect.height + TOOLTIP_GAP;
+    const topCandidate = anchorRect.top - TOOLTIP_TOP_GAP - tooltipH;
+    const bottomCandidate = anchorRect.top + anchorRect.height + TOOLTIP_BOTTOM_GAP;
 
     const canFitTop = topCandidate >= VIEWPORT_MARGIN;
     const canFitBottom = bottomCandidate + tooltipH <= vh - VIEWPORT_MARGIN;

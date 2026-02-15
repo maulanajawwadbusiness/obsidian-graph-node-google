@@ -1,5 +1,6 @@
 import crypto from "crypto";
 import type express from "express";
+import type { MidtransRequestOptions, MidtransResult } from "../midtrans/client";
 
 type QueryResult = {
   rows: any[];
@@ -14,7 +15,10 @@ export type PaymentsRouteDeps = {
   getPool: () => Promise<QueryablePool>;
   requireAuth: express.RequestHandler;
   getBalance: (userId: string) => Promise<{ balance_idr: number; updated_at: unknown }>;
-  midtransRequest: (path: string, init?: unknown) => Promise<any>;
+  midtransRequest: <T = unknown>(
+    path: string,
+    opts?: MidtransRequestOptions
+  ) => Promise<MidtransResult<T>>;
   parseGrossAmount: (value: unknown, fallbackAmount: number) => number | null;
   applyTopupFromMidtrans: (args: {
     userId: string;

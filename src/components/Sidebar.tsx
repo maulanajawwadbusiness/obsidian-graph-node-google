@@ -14,7 +14,10 @@ import blogIcon from '../assets/blog_icon.png';
 import { LAYER_SIDEBAR, LAYER_SIDEBAR_ROW_MENU } from '../ui/layers';
 import {
     SIDEBAR_COLLAPSED_WIDTH_CSS,
-    SIDEBAR_CONTENT_COLLAPSE_TOTAL_MS,
+    SIDEBAR_COLLAPSE_DURATION_MS,
+    SIDEBAR_COLLAPSE_TIMING_FUNCTION,
+    SIDEBAR_EXPAND_DURATION_MS,
+    SIDEBAR_EXPAND_TIMING_FUNCTION,
     SIDEBAR_EXPANDED_RESOLVED_WIDTH_CSS,
     getSidebarContentTransitionCss,
     getSidebarVisualRailTransform,
@@ -77,6 +80,7 @@ const LOGO_SWAP_TRANSITION = '100ms ease';
 const CLOSE_ICON_VIEWBOX = '0 0 100 100';
 type RowMenuItemKey = 'rename' | 'delete';
 type MoreMenuItemKey = 'suggestion' | 'blog';
+type SidebarMotionPhase = 'collapsed' | 'expanding' | 'expanded' | 'collapsing';
 
 const roundedRectArcPath = (x: number, y: number, width: number, height: number, radius: number): string => {
     const r = Math.max(0, Math.min(radius, width / 2, height / 2));
@@ -164,6 +168,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     const [moreMenuPosition, setMoreMenuPosition] = React.useState<{ left: number; top: number } | null>(null);
     const [moreMenuPlacement, setMoreMenuPlacement] = React.useState<'up' | 'down' | null>(null);
     const [moreMenuHoverKey, setMoreMenuHoverKey] = React.useState<MoreMenuItemKey | null>(null);
+    const [motionPhase, setMotionPhase] = React.useState<SidebarMotionPhase>(isExpanded ? 'expanded' : 'collapsed');
     const renameInputRef = React.useRef<HTMLInputElement | null>(null);
     const avatarTriggerRef = React.useRef<HTMLDivElement | null>(null);
     const moreTriggerRef = React.useRef<HTMLButtonElement | null>(null);
@@ -174,14 +179,22 @@ export const Sidebar: React.FC<SidebarProps> = ({
         ],
         []
     );
-    const [showExpandedContent, setShowExpandedContent] = React.useState(isExpanded);
     const displayAccountName = accountName && accountName.trim() ? accountName.trim() : 'Your Name';
     const canOpenAvatarMenu = Boolean(onOpenProfile || onRequestLogout);
+    const isInMotionPhase = motionPhase === 'expanding' || motionPhase === 'collapsing';
+    const shouldMountExpandedContent = isExpanded || motionPhase !== 'collapsed';
     const contentTransitionCss = prefersReducedMotion ? 'none' : getSidebarContentTransitionCss(isExpanded);
     const widthTransitionCss = prefersReducedMotion ? 'none' : getSidebarWidthTransitionCss(isExpanded);
     const visualRailTransitionCss = prefersReducedMotion ? 'none' : getSidebarVisualRailTransitionCss(isExpanded);
     const visualRailTransform = prefersReducedMotion ? 'translateX(0px)' : getSidebarVisualRailTransform(isExpanded);
-    const contentCollapseTotalMs = prefersReducedMotion ? 0 : SIDEBAR_CONTENT_COLLAPSE_TOTAL_MS;
+    const phaseDurationMs = isExpanded ? SIDEBAR_EXPAND_DURATION_MS : SIDEBAR_COLLAPSE_DURATION_MS;
+    const phaseTimingFunction = isExpanded ? SIDEBAR_EXPAND_TIMING_FUNCTION : SIDEBAR_COLLAPSE_TIMING_FUNCTION;
+    const layoutTransitionCss = prefersReducedMotion
+        ? 'none'
+        : `padding-left ${phaseDurationMs}ms ${phaseTimingFunction}, padding-right ${phaseDurationMs}ms ${phaseTimingFunction}`;
+    const profileRowLayoutTransitionCss = prefersReducedMotion
+        ? 'none'
+        : `width ${phaseDurationMs}ms ${phaseTimingFunction}, margin-right ${phaseDurationMs}ms ${phaseTimingFunction}`;
 
     const sidebarStyle: React.CSSProperties = {
         ...SIDEBAR_BASE_STYLE,
@@ -531,16 +544,30 @@ export const Sidebar: React.FC<SidebarProps> = ({
     }, []);
 
     React.useEffect(() => {
-        if (isExpanded) {
-            setShowExpandedContent(true);
+        if (prefersReducedMotion) {
+            setMotionPhase(isExpanded ? 'expanded' : 'collapsed');
             return;
         }
-
+        const activePhase: SidebarMotionPhase = isExpanded ? 'expanding' : 'collapsing';
+        const settledPhase: SidebarMotionPhase = isExpanded ? 'expanded' : 'collapsed';
+        const settleDelayMs = isExpanded ? SIDEBAR_EXPAND_DURATION_MS : SIDEBAR_COLLAPSE_DURATION_MS;
+        setMotionPhase((prev) => (prev === settledPhase ? prev : activePhase));
         const timeoutId = window.setTimeout(() => {
-            setShowExpandedContent(false);
-        }, contentCollapseTotalMs);
+            setMotionPhase(settledPhase);
+        }, settleDelayMs);
         return () => window.clearTimeout(timeoutId);
-    }, [contentCollapseTotalMs, isExpanded]);
+    }, [isExpanded, prefersReducedMotion]);
+
+    React.useEffect(() => {
+        if (!isInMotionPhase) return;
+        setLogoHover(false);
+        setCreateNewHover(false);
+        setSearchHover(false);
+        setMoreHover(false);
+        setDocumentHover(false);
+        setAvatarRowHover(false);
+        setCloseHover(false);
+    }, [isInMotionPhase]);
 
     React.useEffect(() => {
         if (isExpanded) {
@@ -568,13 +595,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
     const bottomSectionStyle: React.CSSProperties = {
         ...BOTTOM_SECTION_STYLE,
-        alignItems: showExpandedContent ? 'stretch' : 'center',
-        ...(showExpandedContent
-            ? {}
-            : {
-                paddingLeft: '0px',
-                paddingRight: '0px',
-            }),
+        alignItems: 'stretch',
+        paddingLeft: isExpanded ? `${8 - ICON_OFFSET_LEFT}px` : '0px',
+        paddingRight: isExpanded ? `${8 + ICON_OFFSET_LEFT}px` : '0px',
+        transition: layoutTransitionCss,
     };
 
     const expandedContentStyle: React.CSSProperties = {
@@ -592,6 +616,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             data-row-menu-position-ready={rowMenuPosition ? '1' : '0'}
             data-row-menu-placement={menuPlacement ?? ''}
             data-row-menu-item-preview-count={String(menuItemPreview.length)}
+            data-motion-phase={motionPhase}
             style={sidebarStyle}
             onPointerDown={(e) => e.stopPropagation()}
             onWheelCapture={(e) => e.stopPropagation()}
@@ -608,7 +633,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     <button
                         type="button"
                         style={ICON_BUTTON_STYLE}
-                        onMouseEnter={() => setLogoHover(true)}
+                        onMouseEnter={() => {
+                            if (isInMotionPhase) return;
+                            setLogoHover(true);
+                        }}
                         onMouseLeave={() => setLogoHover(false)}
                         onClick={!isExpanded ? onToggle : undefined}
                         title={!isExpanded ? 'Open sidebar' : undefined}
@@ -655,7 +683,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                             </span>
                         </span>
                     </button>
-                    {showExpandedContent && (
+                    {shouldMountExpandedContent && (
                         <button
                             type="button"
                             aria-hidden={!isExpanded}
@@ -666,6 +694,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                                 marginRight: `${-CLOSE_ICON_OFFSET_LEFT}px`,
                             }}
                             onMouseEnter={() => {
+                                if (isInMotionPhase) return;
                                 if (!closeHoverArmed) return;
                                 setCloseHover(true);
                             }}
@@ -703,8 +732,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         icon={createNewIcon}
                         label="Create New"
                         isExpanded={isExpanded}
-                        showExpandedContent={showExpandedContent}
+                        showExpandedContent={shouldMountExpandedContent}
                         contentTransitionCss={contentTransitionCss}
+                        suppressHover={isInMotionPhase}
                         isHovered={createNewHover}
                         onMouseEnter={() => setCreateNewHover(true)}
                         onMouseLeave={() => setCreateNewHover(false)}
@@ -716,8 +746,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         icon={searchIcon}
                         label="Search Interfaces"
                         isExpanded={isExpanded}
-                        showExpandedContent={showExpandedContent}
+                        showExpandedContent={shouldMountExpandedContent}
                         contentTransitionCss={contentTransitionCss}
+                        suppressHover={isInMotionPhase}
                         isHovered={searchHover}
                         onMouseEnter={() => setSearchHover(true)}
                         onMouseLeave={() => setSearchHover(false)}
@@ -732,8 +763,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         icon={threeDotIcon}
                         label="More"
                         isExpanded={isExpanded}
-                        showExpandedContent={showExpandedContent}
+                        showExpandedContent={shouldMountExpandedContent}
                         contentTransitionCss={contentTransitionCss}
+                        suppressHover={isInMotionPhase}
                         isHovered={moreHover}
                         onMouseEnter={() => setMoreHover(true)}
                         onMouseLeave={() => setMoreHover(false)}
@@ -749,7 +781,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </div>
 
             {/* Your Interfaces Section (expanded only, isolated scroll area) */}
-            {showExpandedContent && (
+            {shouldMountExpandedContent && (
                 <div style={{ ...INTERFACES_SECTION_STYLE, ...expandedContentStyle }} aria-hidden={!isExpanded}>
                     <div style={SECTION_HEADER_STYLE}>Your Interfaces</div>
                     <div style={INTERFACES_LIST_STYLE}>
@@ -1150,7 +1182,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
                             }}
                             onClick={onToggleDocumentViewer}
                             onPointerDown={(e) => e.stopPropagation()}
-                            onMouseEnter={() => setDocumentHover(true)}
+                            onMouseEnter={() => {
+                                if (isInMotionPhase) return;
+                                setDocumentHover(true);
+                            }}
                             onMouseLeave={() => setDocumentHover(false)}
                             title="Open document viewer"
                         >
@@ -1160,7 +1195,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                                 color={documentHover ? HOVER_ACCENT_COLOR : DEFAULT_ICON_COLOR}
                                 opacity={documentHover ? ICON_OPACITY_HOVER : ICON_OPACITY_DEFAULT}
                             />
-                            {showExpandedContent && (
+                            {shouldMountExpandedContent && (
                                 <span
                                     aria-hidden={!isExpanded}
                                     style={{
@@ -1180,11 +1215,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
                             data-avatar-trigger="1"
                             style={{
                                 ...PROFILE_ROW_STYLE,
-                                width: showExpandedContent ? 'calc(100% - 10px)' : 'fit-content',
-                                margin: showExpandedContent ? undefined : '0',
-                                marginRight: showExpandedContent ? '10px' : undefined,
+                                width: isExpanded ? 'calc(100% - 10px)' : '32px',
+                                margin: '0',
+                                marginRight: isExpanded ? '10px' : '0px',
                                 backgroundColor: avatarRowHover ? 'rgba(215, 245, 255, 0.14)' : 'transparent',
                                 cursor: canOpenAvatarMenu ? 'pointer' : 'default',
+                                transition: `${PROFILE_ROW_STYLE.transition}, ${profileRowLayoutTransitionCss}`,
                             }}
                             onPointerDown={(e) => e.stopPropagation()}
                             onPointerUp={(e) => e.stopPropagation()}
@@ -1196,7 +1232,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
                                 const target = e.currentTarget as HTMLDivElement;
                                 toggleAvatarMenuFromTrigger(target);
                             }}
-                            onMouseEnter={() => setAvatarRowHover(true)}
+                            onMouseEnter={() => {
+                                if (isInMotionPhase) return;
+                                setAvatarRowHover(true);
+                            }}
                             onMouseLeave={() => setAvatarRowHover(false)}
                         >
                             <button
@@ -1230,7 +1269,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                                     </div>
                                 )}
                             </button>
-                            {showExpandedContent && (
+                            {shouldMountExpandedContent && (
                                 <span style={{ ...AVATAR_NAME_STYLE, ...expandedContentStyle }} aria-hidden={!isExpanded}>
                                     {displayAccountName}
                                 </span>
@@ -1252,6 +1291,7 @@ type NavItemProps = {
     isExpanded: boolean;
     showExpandedContent: boolean;
     contentTransitionCss: string;
+    suppressHover?: boolean;
     isHovered: boolean;
     onMouseEnter: () => void;
     onMouseLeave: () => void;
@@ -1267,6 +1307,7 @@ const NavItem: React.FC<NavItemProps> = ({
     isExpanded,
     showExpandedContent,
     contentTransitionCss,
+    suppressHover = false,
     isHovered,
     onMouseEnter,
     onMouseLeave,
@@ -1284,7 +1325,10 @@ const NavItem: React.FC<NavItemProps> = ({
         onPointerUp={hardShieldInput ? (e) => e.stopPropagation() : undefined}
         onWheelCapture={hardShieldInput ? (e) => e.stopPropagation() : undefined}
         onWheel={hardShieldInput ? (e) => e.stopPropagation() : undefined}
-        onMouseEnter={onMouseEnter}
+        onMouseEnter={() => {
+            if (suppressHover) return;
+            onMouseEnter();
+        }}
         onMouseLeave={onMouseLeave}
         onClick={(e) => {
             if (hardShieldInput) {

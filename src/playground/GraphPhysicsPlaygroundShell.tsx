@@ -1459,6 +1459,7 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
                 {FULLCHAT_ENABLED && <FullChatToggle />}
             </div>
 
+            {/* Debug-only sidebar for playground controls; product graph disables this via enableDebugSidebar={false}. */}
             {enableDebugSidebar && debugSidebarOpen && !fullChatOpen && (
                 <DebugSidebarControls
                     config={config}

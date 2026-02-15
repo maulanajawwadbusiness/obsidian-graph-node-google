@@ -1,4 +1,13 @@
-import React, { createContext, useCallback, useContext, useMemo, useState } from 'react';
+import React, {
+    createContext,
+    useCallback,
+    useContext,
+    useEffect,
+    useLayoutEffect,
+    useMemo,
+    useRef,
+    useState
+} from 'react';
 import { createPortal } from 'react-dom';
 import { LAYER_TOOLTIP } from '../layers';
 
@@ -21,6 +30,17 @@ type TooltipState = {
     anchorRect: TooltipAnchorRect | null;
     placement: TooltipPlacement;
     sourceId?: string;
+};
+
+type TooltipSize = {
+    width: number;
+    height: number;
+};
+
+type TooltipComputedPosition = {
+    left: number;
+    top: number;
+    placement: 'top' | 'bottom';
 };
 
 type ShowTooltipInput = {
@@ -48,7 +68,7 @@ const TOOLTIP_PORTAL_ROOT_STYLE: React.CSSProperties = {
 
 const TOOLTIP_BUBBLE_STYLE_BASE: React.CSSProperties = {
     position: 'fixed',
-    transform: 'translate(-50%, -100%)',
+    transform: 'translate3d(0,0,0)',
     pointerEvents: 'none',
     fontSize: '10px',
     padding: '10px',
@@ -67,6 +87,9 @@ const INITIAL_TOOLTIP_STATE: TooltipState = {
     placement: 'top',
 };
 
+const VIEWPORT_MARGIN = 8;
+const TOOLTIP_GAP = 8;
+
 function toAnchorRect(rect: DOMRect): TooltipAnchorRect {
     return {
         left: rect.left,
@@ -76,17 +99,114 @@ function toAnchorRect(rect: DOMRect): TooltipAnchorRect {
     };
 }
 
+function clamp(value: number, min: number, max: number): number {
+    if (max < min) return min;
+    return Math.min(max, Math.max(min, value));
+}
+
+function computeTooltipPosition(input: {
+    anchorRect: TooltipAnchorRect;
+    tooltipSize: TooltipSize;
+    preferredPlacement: TooltipPlacement;
+}): TooltipComputedPosition {
+    const { anchorRect, tooltipSize, preferredPlacement } = input;
+    const vw = typeof window !== 'undefined' ? window.innerWidth : 0;
+    const vh = typeof window !== 'undefined' ? window.innerHeight : 0;
+    const tooltipW = Math.max(0, tooltipSize.width);
+    const tooltipH = Math.max(0, tooltipSize.height);
+
+    const topCandidate = anchorRect.top - TOOLTIP_GAP - tooltipH;
+    const bottomCandidate = anchorRect.top + anchorRect.height + TOOLTIP_GAP;
+
+    const canFitTop = topCandidate >= VIEWPORT_MARGIN;
+    const canFitBottom = bottomCandidate + tooltipH <= vh - VIEWPORT_MARGIN;
+
+    let placement: 'top' | 'bottom' = 'top';
+    if (preferredPlacement === 'top') {
+        if (canFitTop) {
+            placement = 'top';
+        } else if (canFitBottom) {
+            placement = 'bottom';
+        } else {
+            const spaceAbove = anchorRect.top - VIEWPORT_MARGIN;
+            const spaceBelow = vh - VIEWPORT_MARGIN - (anchorRect.top + anchorRect.height);
+            placement = spaceAbove >= spaceBelow ? 'top' : 'bottom';
+        }
+    }
+
+    const centerX = anchorRect.left + anchorRect.width / 2;
+    const rawLeft = centerX - tooltipW / 2;
+    const maxLeft = Math.max(VIEWPORT_MARGIN, vw - VIEWPORT_MARGIN - tooltipW);
+    const left = clamp(rawLeft, VIEWPORT_MARGIN, maxLeft);
+
+    const rawTop = placement === 'top' ? topCandidate : bottomCandidate;
+    const maxTop = Math.max(VIEWPORT_MARGIN, vh - VIEWPORT_MARGIN - tooltipH);
+    const top = clamp(rawTop, VIEWPORT_MARGIN, maxTop);
+
+    return { left, top, placement };
+}
+
 const TooltipRenderer: React.FC<{ state: TooltipState }> = ({ state }) => {
     if (!state.open || !state.anchorRect || state.content.trim().length === 0) return null;
-    const x = state.anchorRect.left + state.anchorRect.width / 2;
-    const y = state.anchorRect.top;
+    const bubbleRef = useRef<HTMLDivElement | null>(null);
+    const [tooltipSize, setTooltipSize] = useState<TooltipSize>({ width: 0, height: 0 });
+    const resizeRafRef = useRef<number | null>(null);
+
+    const measureBubble = useCallback(() => {
+        const el = bubbleRef.current;
+        if (!el) return;
+        const width = el.offsetWidth;
+        const height = el.offsetHeight;
+        setTooltipSize((prev) => {
+            if (prev.width === width && prev.height === height) return prev;
+            return { width, height };
+        });
+    }, []);
+
+    useLayoutEffect(() => {
+        measureBubble();
+    }, [measureBubble, state.anchorRect, state.content, state.open]);
+
+    useEffect(() => {
+        if (!state.open || !bubbleRef.current) return;
+        if (typeof ResizeObserver === 'undefined') return;
+
+        const scheduleMeasure = () => {
+            if (resizeRafRef.current !== null) return;
+            resizeRafRef.current = window.requestAnimationFrame(() => {
+                resizeRafRef.current = null;
+                measureBubble();
+            });
+        };
+
+        const observer = new ResizeObserver(() => {
+            scheduleMeasure();
+        });
+        observer.observe(bubbleRef.current);
+        return () => {
+            observer.disconnect();
+            if (resizeRafRef.current !== null) {
+                window.cancelAnimationFrame(resizeRafRef.current);
+                resizeRafRef.current = null;
+            }
+        };
+    }, [measureBubble, state.open]);
+
+    const computed = computeTooltipPosition({
+        anchorRect: state.anchorRect,
+        tooltipSize,
+        preferredPlacement: state.placement,
+    });
+
     return (
         <div
+            ref={bubbleRef}
             data-tooltip-instance="1"
+            data-tooltip-placement={computed.placement}
             style={{
                 ...TOOLTIP_BUBBLE_STYLE_BASE,
-                left: `${x}px`,
-                top: `${y}px`,
+                left: `${computed.left}px`,
+                top: `${computed.top}px`,
             }}
         >
             {state.content}
@@ -106,8 +226,47 @@ const TooltipPortal: React.FC<{ state: TooltipState }> = ({ state }) => {
 
 export const TooltipProvider: React.FC<TooltipProviderProps> = ({ children }) => {
     const [state, setState] = useState<TooltipState>(INITIAL_TOOLTIP_STATE);
+    const anchorElRef = useRef<Element | null>(null);
+    const anchorUpdateRafRef = useRef<number | null>(null);
+    const anchorUpdateScheduledRef = useRef(false);
+
+    const updateAnchorRectFromAnchorEl = useCallback(() => {
+        const anchorEl = anchorElRef.current;
+        if (!anchorEl) return;
+        if (!anchorEl.isConnected) return;
+        const nextRect = toAnchorRect(anchorEl.getBoundingClientRect());
+        setState((prev) => {
+            if (!prev.open || !prev.anchorRect) return prev;
+            const sameRect =
+                prev.anchorRect.left === nextRect.left &&
+                prev.anchorRect.top === nextRect.top &&
+                prev.anchorRect.width === nextRect.width &&
+                prev.anchorRect.height === nextRect.height;
+            if (sameRect) return prev;
+            return {
+                ...prev,
+                anchorRect: nextRect,
+            };
+        });
+    }, []);
+
+    const scheduleAnchorRectUpdate = useCallback(() => {
+        if (anchorUpdateScheduledRef.current) return;
+        anchorUpdateScheduledRef.current = true;
+        anchorUpdateRafRef.current = window.requestAnimationFrame(() => {
+            anchorUpdateScheduledRef.current = false;
+            anchorUpdateRafRef.current = null;
+            updateAnchorRectFromAnchorEl();
+        });
+    }, [updateAnchorRectFromAnchorEl]);
 
     const hideTooltip = useCallback(() => {
+        anchorElRef.current = null;
+        if (anchorUpdateRafRef.current !== null) {
+            window.cancelAnimationFrame(anchorUpdateRafRef.current);
+            anchorUpdateRafRef.current = null;
+            anchorUpdateScheduledRef.current = false;
+        }
         setState((prev) => {
             if (!prev.open && prev.content === '' && prev.anchorRect === null) return prev;
             return {
@@ -125,9 +284,13 @@ export const TooltipProvider: React.FC<TooltipProviderProps> = ({ children }) =>
 
         let resolvedRect: TooltipAnchorRect | null = null;
         if (input.anchorRect) {
+            anchorElRef.current = null;
             resolvedRect = input.anchorRect;
         } else if (input.anchorEl) {
+            anchorElRef.current = input.anchorEl;
             resolvedRect = toAnchorRect(input.anchorEl.getBoundingClientRect());
+        } else {
+            anchorElRef.current = null;
         }
 
         if (!resolvedRect) return;
@@ -140,6 +303,41 @@ export const TooltipProvider: React.FC<TooltipProviderProps> = ({ children }) =>
             sourceId: input.sourceId,
         });
     }, []);
+
+    useEffect(() => {
+        if (!state.open) return;
+        if (!anchorElRef.current) return;
+
+        const handleViewportChange = () => {
+            scheduleAnchorRectUpdate();
+        };
+
+        window.addEventListener('resize', handleViewportChange);
+        window.addEventListener('scroll', handleViewportChange, true);
+
+        let anchorObserver: ResizeObserver | null = null;
+        if (typeof ResizeObserver !== 'undefined' && anchorElRef.current) {
+            anchorObserver = new ResizeObserver(() => {
+                scheduleAnchorRectUpdate();
+            });
+            anchorObserver.observe(anchorElRef.current);
+        }
+
+        scheduleAnchorRectUpdate();
+
+        return () => {
+            window.removeEventListener('resize', handleViewportChange);
+            window.removeEventListener('scroll', handleViewportChange, true);
+            if (anchorObserver) {
+                anchorObserver.disconnect();
+            }
+            if (anchorUpdateRafRef.current !== null) {
+                window.cancelAnimationFrame(anchorUpdateRafRef.current);
+                anchorUpdateRafRef.current = null;
+                anchorUpdateScheduledRef.current = false;
+            }
+        };
+    }, [scheduleAnchorRectUpdate, state.open]);
 
     const controllerValue = useMemo<TooltipControllerContextValue>(() => ({
         showTooltip,

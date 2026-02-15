@@ -28,6 +28,8 @@ interface PopupOverlayContainerProps {
 }
 
 export const PopupOverlayContainer: React.FC<PopupOverlayContainerProps> = ({ children }) => {
+    // TODO(sample-preview): Add optional container root target (instead of document.body)
+    // for boxed preview embed. Seam reference: src/components/sampleGraphPreviewSeams.ts.
     return createPortal(
         <div style={OVERLAY_STYLE}>
             {children}

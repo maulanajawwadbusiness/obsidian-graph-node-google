@@ -1,5 +1,9 @@
 import React from 'react';
 import { GraphPhysicsPlayground } from '../playground/GraphPhysicsPlayground';
+import {
+    SAMPLE_GRAPH_PREVIEW_ROOT_ATTR,
+    SAMPLE_GRAPH_PREVIEW_ROOT_VALUE
+} from './sampleGraphPreviewSeams';
 
 const PREVIEW_ROOT_STYLE: React.CSSProperties = {
     position: 'relative',
@@ -53,8 +57,12 @@ class PreviewErrorBoundary extends React.Component<React.PropsWithChildren, Prev
 }
 
 export const SampleGraphPreview: React.FC = () => {
+    const previewRootMarker: Record<string, string> = {
+        [SAMPLE_GRAPH_PREVIEW_ROOT_ATTR]: SAMPLE_GRAPH_PREVIEW_ROOT_VALUE,
+    };
+
     return (
-        <div data-arnvoid-graph-preview-root="1" style={PREVIEW_ROOT_STYLE}>
+        <div {...previewRootMarker} style={PREVIEW_ROOT_STYLE}>
             <PreviewErrorBoundary>
                 <div style={PREVIEW_SURFACE_STYLE}>
                     <GraphPhysicsPlayground

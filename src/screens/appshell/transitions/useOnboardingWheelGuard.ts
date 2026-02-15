@@ -14,6 +14,9 @@ export function useOnboardingWheelGuard(args: UseOnboardingWheelGuardArgs): void
         if (typeof window === 'undefined') return;
 
         const onWheel = (event: WheelEvent) => {
+            // TODO(sample-preview): Gate this preventDefault path when event target is inside
+            // preview root marker from src/components/sampleGraphPreviewSeams.ts so wheel
+            // input can be owned by embedded graph preview runtime.
             event.preventDefault();
             if (debug) {
                 console.log('[OnboardingGesture] wheel prevented');

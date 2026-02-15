@@ -351,8 +351,10 @@ export const AppShell: React.FC = () => {
     });
 
     const shouldUseOnboardingLayerHost = (() => {
+        if (isGraphClassScreen(screen)) return false;
         if (isOnboardingScreen(screen)) return true;
         if (!isCrossfading || fromScreen === null) return false;
+        if (isGraphClassScreen(fromScreen)) return false;
         const policy = getTransitionPolicy(fromScreen, screen);
         return policy.animate && isOnboardingScreen(fromScreen);
     })();

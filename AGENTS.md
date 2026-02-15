@@ -75,6 +75,28 @@ Invariant pins:
 - overlays and modals must shield pointer and wheel so canvas never reacts underneath.
 - saved interfaces: single writer, rename no reorder, restore read-only, payload timestamps are ordering truth, outbox retry + identity isolation.
 
+## 2.3 Graph Screen + Sidebar Layout Rules (2026-02-15)
+
+Graph screen layout ownership:
+- `src/screens/appshell/render/GraphScreenShell.tsx` owns graph screen geometry.
+- Graph screen uses two panes:
+  - left structural sidebar column
+  - right graph pane that hosts graph runtime.
+- Left column width follows AppShell `isSidebarExpanded` via shared tokens in `src/screens/appshell/appShellStyles.ts`.
+- Do not create duplicate sidebar state for graph layout.
+
+Sidebar behavior separation:
+- Product Sidebar is `SidebarLayer` -> `Sidebar` and remains overlay behavior on prompt and graph.
+- Non-graph screens keep overlay Sidebar pattern (no structural pane behavior there).
+- Internal debug sidebar inside `GraphPhysicsPlaygroundShell` is debug-only:
+  - gated by `enableDebugSidebar`
+  - must remain disabled on product graph path (`enableDebugSidebar={false}`).
+
+Layering and input doctrine for this layout:
+- Do not add z-index to `GraphScreenShell` or pane wrappers.
+- Keep overlay order intact: graph base -> graph-local overlays -> viewport overlays -> Sidebar overlay -> modal layer.
+- Any new overlay/panel above graph must shield pointer and wheel so dot canvas does not receive leaked input.
+
 ## 3. Safe Workflow
 
 1.  **Scan**: Read `docs/repo_xray.md`.

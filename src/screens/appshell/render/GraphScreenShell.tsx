@@ -1,5 +1,9 @@
 import React from 'react';
-import { SIDEBAR_COLLAPSED_WIDTH_CSS } from '../appShellStyles';
+import {
+    SIDEBAR_COLLAPSED_WIDTH_CSS,
+    SIDEBAR_EXPANDED_MIN_WIDTH_CSS,
+    SIDEBAR_EXPANDED_WIDTH_CSS,
+} from '../appShellStyles';
 
 type GraphScreenShellProps = {
     sidebarExpanded: boolean;
@@ -21,13 +25,6 @@ const GRAPH_SCREEN_LAYOUT_STYLE: React.CSSProperties = {
     height: '100%',
 };
 
-const GRAPH_SCREEN_SIDEBAR_PANE_STYLE: React.CSSProperties = {
-    width: SIDEBAR_COLLAPSED_WIDTH_CSS,
-    minWidth: SIDEBAR_COLLAPSED_WIDTH_CSS,
-    flex: '0 0 auto',
-    height: '100%',
-};
-
 const GRAPH_SCREEN_PANE_STYLE: React.CSSProperties = {
     flex: 1,
     minWidth: 0,
@@ -36,11 +33,19 @@ const GRAPH_SCREEN_PANE_STYLE: React.CSSProperties = {
 };
 
 export function GraphScreenShell({ sidebarExpanded, children }: GraphScreenShellProps): JSX.Element {
-    void sidebarExpanded;
+    const sidebarPaneWidth = sidebarExpanded ? SIDEBAR_EXPANDED_WIDTH_CSS : SIDEBAR_COLLAPSED_WIDTH_CSS;
+    const sidebarPaneMinWidth = sidebarExpanded ? SIDEBAR_EXPANDED_MIN_WIDTH_CSS : SIDEBAR_COLLAPSED_WIDTH_CSS;
+    const graphScreenSidebarPaneStyle: React.CSSProperties = {
+        width: sidebarPaneWidth,
+        minWidth: sidebarPaneMinWidth,
+        flex: '0 0 auto',
+        height: '100%',
+    };
+
     return (
         <div className="graph-screen-shell" data-graph-screen-root="1" style={GRAPH_SCREEN_SHELL_STYLE}>
             <div className="graph-screen-layout" style={GRAPH_SCREEN_LAYOUT_STYLE}>
-                <div className="graph-screen-sidebar-pane" style={GRAPH_SCREEN_SIDEBAR_PANE_STYLE} />
+                <div className="graph-screen-sidebar-pane" style={graphScreenSidebarPaneStyle} />
                 <div className="graph-screen-graph-pane" style={GRAPH_SCREEN_PANE_STYLE}>
                     {children}
                 </div>

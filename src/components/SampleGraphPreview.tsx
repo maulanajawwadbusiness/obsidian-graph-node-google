@@ -108,6 +108,12 @@ type SampleLoadSuccess = {
     record: SavedInterfaceRecordV1;
 };
 
+type PreviewLeaseDebugCounters = {
+    lostLeaseUnmountCount: number;
+    reacquireAttemptCount: number;
+    reacquireSuccessCount: number;
+};
+
 class PreviewErrorBoundary extends React.Component<React.PropsWithChildren, PreviewErrorBoundaryState> {
     state: PreviewErrorBoundaryState = { hasError: false };
 
@@ -141,6 +147,22 @@ export const SampleGraphPreview: React.FC = () => {
     const activeLeaseTokenRef = React.useRef<string | null>(null);
     const leaseStateRef = React.useRef<LeaseState>({ phase: 'checking' });
     const lastReacquireEpochRef = React.useRef<number>(-1);
+    const leaseDebugCountersRef = React.useRef<PreviewLeaseDebugCounters>({
+        lostLeaseUnmountCount: 0,
+        reacquireAttemptCount: 0,
+        reacquireSuccessCount: 0,
+    });
+
+    const logLeaseDebugCounters = React.useCallback(() => {
+        if (!import.meta.env.DEV) return;
+        const c = leaseDebugCountersRef.current;
+        console.log(
+            '[SampleGraphPreview][Lease] lostLeaseUnmountCount=%d reacquireAttemptCount=%d reacquireSuccessCount=%d',
+            c.lostLeaseUnmountCount,
+            c.reacquireAttemptCount,
+            c.reacquireSuccessCount
+        );
+    }, []);
     React.useEffect(() => {
         let active = true;
         import('../samples/sampleGraphPreview.export.json')
@@ -196,10 +218,7 @@ export const SampleGraphPreview: React.FC = () => {
             const nextState: LeaseState = { phase: 'allowed', token: result.token };
             leaseStateRef.current = nextState;
             setLeaseState(nextState);
-            return () => {
-                releaseGraphRuntimeLease(result.token);
-                activeLeaseTokenRef.current = null;
-            };
+            return;
         }
         const deniedState: LeaseState = {
             phase: 'denied',
@@ -209,7 +228,16 @@ export const SampleGraphPreview: React.FC = () => {
         leaseStateRef.current = deniedState;
         setLeaseState(deniedState);
         activeLeaseTokenRef.current = null;
-        return undefined;
+        return;
+    }, []);
+
+    React.useEffect(() => {
+        return () => {
+            const token = activeLeaseTokenRef.current;
+            if (!token) return;
+            releaseGraphRuntimeLease(token);
+            activeLeaseTokenRef.current = null;
+        };
     }, []);
 
     React.useEffect(() => {
@@ -219,10 +247,12 @@ export const SampleGraphPreview: React.FC = () => {
                 assertActiveLeaseOwner('prompt-preview', token);
                 const isActive = isGraphRuntimeLeaseTokenActive(token);
                 if (!isActive) {
+                    leaseDebugCountersRef.current.lostLeaseUnmountCount += 1;
                     const pausedState: LeaseState = { phase: 'paused', reason: 'lost_lease' };
                     leaseStateRef.current = pausedState;
                     setLeaseState(pausedState);
                     activeLeaseTokenRef.current = null;
+                    logLeaseDebugCounters();
                 }
                 return;
             }
@@ -234,12 +264,15 @@ export const SampleGraphPreview: React.FC = () => {
             if (currentPhase !== 'paused' && currentPhase !== 'denied' && currentPhase !== 'checking') return;
 
             lastReacquireEpochRef.current = snapshot.epoch;
+            leaseDebugCountersRef.current.reacquireAttemptCount += 1;
             const reacquireResult = acquireGraphRuntimeLease('prompt-preview', instanceIdRef.current);
             if (reacquireResult.ok) {
+                leaseDebugCountersRef.current.reacquireSuccessCount += 1;
                 activeLeaseTokenRef.current = reacquireResult.token;
                 const allowedState: LeaseState = { phase: 'allowed', token: reacquireResult.token };
                 leaseStateRef.current = allowedState;
                 setLeaseState(allowedState);
+                logLeaseDebugCounters();
                 return;
             }
             const deniedState: LeaseState = {
@@ -249,8 +282,9 @@ export const SampleGraphPreview: React.FC = () => {
             };
             leaseStateRef.current = deniedState;
             setLeaseState(deniedState);
+            logLeaseDebugCounters();
         });
-    }, []);
+    }, [logLeaseDebugCounters]);
 
     React.useEffect(() => {
         if (!sampleExportPayload) return;

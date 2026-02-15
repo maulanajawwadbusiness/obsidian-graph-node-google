@@ -347,12 +347,39 @@ Dev instrumentation:
 - event logs (dev only): acquire, deny, preempt, release, stale_release_ignored
 - counters exposed through `getGraphRuntimeLeaseDebugSnapshot()`
 
+Self-enforcing ownership additions (step4 bug fix):
+- lease snapshot API:
+  - `getGraphRuntimeLeaseSnapshot()`
+  - returns `activeOwner`, `activeInstanceId`, `activeToken`, `epoch`
+- subscription API:
+  - `subscribeGraphRuntimeLease(listener)`
+- token activity API:
+  - `isGraphRuntimeLeaseTokenActive(token)`
+- dev assertion helper:
+  - `assertActiveLeaseOwner(owner, token?)`
+
+Lease-loss unmount behavior:
+1. `SampleGraphPreview` acquires token and subscribes to lease updates.
+2. if token becomes inactive after preempt, preview immediately switches to paused state and unmounts graph runtime.
+3. preview reacquire is event-driven and epoch-gated (no polling).
+4. graph runtime boundary also watches token activity and can defensively reacquire.
+
+Expected debug counters/logs:
+- runtime lease counters:
+  - `notifyCount`
+  - `tokenInactiveChecks`
+- preview counters:
+  - `lostLeaseUnmountCount`
+  - `reacquireAttemptCount`
+  - `reacquireSuccessCount`
+
 Manual verification checklist:
 1. open prompt screen: preview acquires lease and renders graph.
 2. navigate to graph-class screen: graph-screen preempts preview lease.
 3. navigate back to prompt: preview reacquires lease cleanly.
 4. rapid prompt <-> graph toggling: no simultaneous active owners.
 5. expected dev warnings are limited to deny/preempt/stale release events only.
+6. if preview and graph overlap briefly, preview shows paused state and does not keep runtime mounted.
 
 ## 2.8 Sample Preview Restore Hardening (2026-02-15)
 

@@ -73,10 +73,14 @@ const TOOLTIP_BUBBLE_STYLE_BASE: React.CSSProperties = {
     fontSize: '10px',
     padding: '10px',
     background: '#0D0D18',
-    color: '#D7F5FF',
-    borderRadius: '6px',
-    lineHeight: 1.2,
-    whiteSpace: 'nowrap',
+    color: '#E7EEF8',
+    borderRadius: '8px',
+    border: '1px solid rgba(215, 245, 255, 0.14)',
+    boxShadow: '0 6px 18px rgba(0, 0, 0, 0.28)',
+    lineHeight: 1.35,
+    maxWidth: '280px',
+    whiteSpace: 'normal',
+    wordBreak: 'break-word',
     boxSizing: 'border-box',
 };
 

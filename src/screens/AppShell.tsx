@@ -38,8 +38,10 @@ import { useSavedInterfacesSync } from './appshell/savedInterfaces/useSavedInter
 import { resolveAuthStorageId, sortAndCapSavedInterfaces } from './appshell/appShellHelpers';
 import {
     FALLBACK_STYLE,
+    getNonSidebarDimTransitionCss,
     MAIN_SCREEN_CONTAINER_STYLE,
-    NON_SIDEBAR_DIMMED_STYLE,
+    NON_SIDEBAR_BASE_FILTER,
+    NON_SIDEBAR_DIMMED_FILTER,
     NON_SIDEBAR_LAYER_STYLE,
     SHELL_STYLE,
     WELCOME1_FONT_GATE_BLANK_STYLE,
@@ -61,6 +63,7 @@ const WELCOME1_FONT_TIMEOUT_MS = 1500;
 
 export const AppShell: React.FC = () => {
     const { user, loading: authLoading, refreshMe, applyUserPatch, logout } = useAuth();
+    const [prefersReducedMotion, setPrefersReducedMotion] = React.useState(false);
     const [screen, setScreen] = React.useState<Screen>(() => getInitialScreen({
         onboardingEnabled: ONBOARDING_ENABLED,
         onboardingStartScreen: ONBOARDING_START_SCREEN,
@@ -286,6 +289,18 @@ export const AppShell: React.FC = () => {
     }, [forceCloseProfileOverlay, onProfileSaveController]);
 
     React.useEffect(() => {
+        const media = window.matchMedia('(prefers-reduced-motion: reduce)');
+        const update = () => setPrefersReducedMotion(media.matches);
+        update();
+        if (typeof media.addEventListener === 'function') {
+            media.addEventListener('change', update);
+            return () => media.removeEventListener('change', update);
+        }
+        media.addListener(update);
+        return () => media.removeListener(update);
+    }, []);
+
+    React.useEffect(() => {
         savedInterfacesRef.current = savedInterfaces;
     }, [savedInterfaces]);
 
@@ -390,7 +405,8 @@ export const AppShell: React.FC = () => {
             <div
                 style={{
                     ...NON_SIDEBAR_LAYER_STYLE,
-                    ...(isSidebarExpanded ? NON_SIDEBAR_DIMMED_STYLE : null),
+                    filter: isSidebarExpanded ? NON_SIDEBAR_DIMMED_FILTER : NON_SIDEBAR_BASE_FILTER,
+                    transition: prefersReducedMotion ? 'none' : getNonSidebarDimTransitionCss(isSidebarExpanded),
                 }}
             >
                 <div data-main-screen-root="1" style={MAIN_SCREEN_CONTAINER_STYLE}>

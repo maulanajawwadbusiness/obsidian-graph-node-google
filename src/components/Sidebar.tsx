@@ -14,9 +14,12 @@ import blogIcon from '../assets/blog_icon.png';
 import { LAYER_SIDEBAR, LAYER_SIDEBAR_ROW_MENU } from '../ui/layers';
 import {
     SIDEBAR_COLLAPSED_WIDTH_CSS,
-    SIDEBAR_EXPANDED_MIN_WIDTH_CSS,
-    SIDEBAR_EXPANDED_WIDTH_CSS,
-    SIDEBAR_TRANSITION_CSS,
+    SIDEBAR_CONTENT_COLLAPSE_TOTAL_MS,
+    SIDEBAR_EXPANDED_RESOLVED_WIDTH_CSS,
+    getSidebarContentTransitionCss,
+    getSidebarVisualRailTransform,
+    getSidebarVisualRailTransitionCss,
+    getSidebarWidthTransitionCss,
 } from '../screens/appshell/appShellStyles';
 
 // ===========================================================================
@@ -58,6 +61,7 @@ const CREATE_NEW_OFFSET_TOP = -1;
 const SEARCH_OFFSET_TOP = -7.5;
 // More (3-dot) icon vertical offset: negative = up, positive = down (in px)
 const MORE_OFFSET_TOP = -9.5;
+const EXPANDED_CONTENT_HIDDEN_OFFSET_PX = 3;
 // Your Name text horizontal offset: negative = left, positive = right (in px)
 const NAME_OFFSET_LEFT = -13;
 // Close icon (expanded state) horizontal offset: negative = left, positive = right (in px)
@@ -148,6 +152,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     const [renamingRowId, setRenamingRowId] = React.useState<string | null>(null);
     const [renameDraft, setRenameDraft] = React.useState('');
     const [renameOriginal, setRenameOriginal] = React.useState('');
+    const [prefersReducedMotion, setPrefersReducedMotion] = React.useState(false);
     const [avatarRowHover, setAvatarRowHover] = React.useState(false);
     const [isAvatarMenuOpen, setIsAvatarMenuOpen] = React.useState(false);
     const [avatarMenuAnchorRect, setAvatarMenuAnchorRect] = React.useState<DOMRect | null>(null);
@@ -169,15 +174,30 @@ export const Sidebar: React.FC<SidebarProps> = ({
         ],
         []
     );
+    const [showExpandedContent, setShowExpandedContent] = React.useState(isExpanded);
     const displayAccountName = accountName && accountName.trim() ? accountName.trim() : 'Your Name';
     const canOpenAvatarMenu = Boolean(onOpenProfile || onRequestLogout);
+    const contentTransitionCss = prefersReducedMotion ? 'none' : getSidebarContentTransitionCss(isExpanded);
+    const widthTransitionCss = prefersReducedMotion ? 'none' : getSidebarWidthTransitionCss(isExpanded);
+    const visualRailTransitionCss = prefersReducedMotion ? 'none' : getSidebarVisualRailTransitionCss(isExpanded);
+    const visualRailTransform = prefersReducedMotion ? 'translateX(0px)' : getSidebarVisualRailTransform(isExpanded);
+    const contentCollapseTotalMs = prefersReducedMotion ? 0 : SIDEBAR_CONTENT_COLLAPSE_TOTAL_MS;
 
     const sidebarStyle: React.CSSProperties = {
         ...SIDEBAR_BASE_STYLE,
-        width: isExpanded ? SIDEBAR_EXPANDED_WIDTH_CSS : SIDEBAR_COLLAPSED_WIDTH_CSS,
-        minWidth: isExpanded ? SIDEBAR_EXPANDED_MIN_WIDTH_CSS : SIDEBAR_COLLAPSED_WIDTH_CSS,
-        transition: SIDEBAR_TRANSITION_CSS,
+        width: isExpanded ? SIDEBAR_EXPANDED_RESOLVED_WIDTH_CSS : SIDEBAR_COLLAPSED_WIDTH_CSS,
+        transition: widthTransitionCss,
+        willChange: prefersReducedMotion ? undefined : 'width',
         pointerEvents: disabled ? 'none' : 'auto',
+    };
+    const sidebarVisualRailStyle: React.CSSProperties = {
+        display: 'flex',
+        flexDirection: 'column',
+        width: '100%',
+        height: '100%',
+        transform: visualRailTransform,
+        transition: visualRailTransitionCss,
+        willChange: prefersReducedMotion ? undefined : 'transform',
     };
 
     const computeRowMenuPlacement = React.useCallback((rect: DOMRect) => {
@@ -499,6 +519,30 @@ export const Sidebar: React.FC<SidebarProps> = ({
     }, [closeMoreMenu, isMoreMenuOpen]);
 
     React.useEffect(() => {
+        const media = window.matchMedia('(prefers-reduced-motion: reduce)');
+        const update = () => setPrefersReducedMotion(media.matches);
+        update();
+        if (typeof media.addEventListener === 'function') {
+            media.addEventListener('change', update);
+            return () => media.removeEventListener('change', update);
+        }
+        media.addListener(update);
+        return () => media.removeListener(update);
+    }, []);
+
+    React.useEffect(() => {
+        if (isExpanded) {
+            setShowExpandedContent(true);
+            return;
+        }
+
+        const timeoutId = window.setTimeout(() => {
+            setShowExpandedContent(false);
+        }, contentCollapseTotalMs);
+        return () => window.clearTimeout(timeoutId);
+    }, [contentCollapseTotalMs, isExpanded]);
+
+    React.useEffect(() => {
         if (isExpanded) {
             setCloseHover(false);
             setCloseHoverArmed(false);
@@ -524,13 +568,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
     const bottomSectionStyle: React.CSSProperties = {
         ...BOTTOM_SECTION_STYLE,
-        alignItems: isExpanded ? 'stretch' : 'center',
-        ...(isExpanded
+        alignItems: showExpandedContent ? 'stretch' : 'center',
+        ...(showExpandedContent
             ? {}
             : {
                 paddingLeft: '0px',
                 paddingRight: '0px',
             }),
+    };
+
+    const expandedContentStyle: React.CSSProperties = {
+        opacity: isExpanded ? 1 : 0,
+        transform: isExpanded ? 'translateX(0px)' : `translateX(-${EXPANDED_CONTENT_HIDDEN_OFFSET_PX}px)`,
+        transition: contentTransitionCss,
+        pointerEvents: isExpanded ? 'auto' : 'none',
     };
 
     return (
@@ -546,10 +597,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
             onWheelCapture={(e) => e.stopPropagation()}
             onWheel={(e) => e.stopPropagation()}
         >
-            {/* Top Section */}
-            <div style={TOP_SECTION_STYLE}>
-                {/* Logo / Toggle Row */}
-                <div style={LOGO_ROW_STYLE}>
+            <div style={sidebarVisualRailStyle}>
+                {/* Top Section */}
+                <div style={TOP_SECTION_STYLE}>
+                    {/* Logo / Toggle Row */}
+                    <div style={LOGO_ROW_STYLE}>
                     {/*
                       Top-left logo uses layered mask crossfade so shape swap is a true 100ms fade.
                     */}
@@ -603,10 +655,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
                             </span>
                         </span>
                     </button>
-                    {isExpanded && (
+                    {showExpandedContent && (
                         <button
                             type="button"
-                            style={{ ...ICON_BUTTON_STYLE, marginLeft: 'auto', marginRight: `${-CLOSE_ICON_OFFSET_LEFT}px` }}
+                            aria-hidden={!isExpanded}
+                            style={{
+                                ...ICON_BUTTON_STYLE,
+                                ...expandedContentStyle,
+                                marginLeft: 'auto',
+                                marginRight: `${-CLOSE_ICON_OFFSET_LEFT}px`,
+                            }}
                             onMouseEnter={() => {
                                 if (!closeHoverArmed) return;
                                 setCloseHover(true);
@@ -645,6 +703,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         icon={createNewIcon}
                         label="Create New"
                         isExpanded={isExpanded}
+                        showExpandedContent={showExpandedContent}
+                        contentTransitionCss={contentTransitionCss}
                         isHovered={createNewHover}
                         onMouseEnter={() => setCreateNewHover(true)}
                         onMouseLeave={() => setCreateNewHover(false)}
@@ -656,6 +716,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         icon={searchIcon}
                         label="Search Interfaces"
                         isExpanded={isExpanded}
+                        showExpandedContent={showExpandedContent}
+                        contentTransitionCss={contentTransitionCss}
                         isHovered={searchHover}
                         onMouseEnter={() => setSearchHover(true)}
                         onMouseLeave={() => setSearchHover(false)}
@@ -670,6 +732,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         icon={threeDotIcon}
                         label="More"
                         isExpanded={isExpanded}
+                        showExpandedContent={showExpandedContent}
+                        contentTransitionCss={contentTransitionCss}
                         isHovered={moreHover}
                         onMouseEnter={() => setMoreHover(true)}
                         onMouseLeave={() => setMoreHover(false)}
@@ -685,8 +749,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </div>
 
             {/* Your Interfaces Section (expanded only, isolated scroll area) */}
-            {isExpanded && (
-                <div style={INTERFACES_SECTION_STYLE}>
+            {showExpandedContent && (
+                <div style={{ ...INTERFACES_SECTION_STYLE, ...expandedContentStyle }} aria-hidden={!isExpanded}>
                     <div style={SECTION_HEADER_STYLE}>Your Interfaces</div>
                     <div style={INTERFACES_LIST_STYLE}>
                         {!interfaces || interfaces.length === 0 ? (
@@ -812,6 +876,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     </div>
                 </div>
             )}
+            </div>
 
             {openRowMenuId !== null && rowMenuPosition !== null ? (
                 <div
@@ -1069,100 +1134,108 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 </div>
             ) : null}
 
-            {/* Bottom Section - User Avatar */}
-            <div
-                style={bottomSectionStyle}
-            >
-                {showDocumentViewerButton ? (
-                    <button
-                        type="button"
-                        style={{
-                            ...NAV_ITEM_STYLE,
-                            justifyContent: 'flex-start',
-                            alignSelf: 'stretch',
-                            marginBottom: '8px',
-                        }}
-                        onClick={onToggleDocumentViewer}
-                        onPointerDown={(e) => e.stopPropagation()}
-                        onMouseEnter={() => setDocumentHover(true)}
-                        onMouseLeave={() => setDocumentHover(false)}
-                        title="Open document viewer"
-                    >
-                        <MaskIcon
-                            src={documentIcon}
-                            size={ICON_SIZE}
-                            color={documentHover ? HOVER_ACCENT_COLOR : DEFAULT_ICON_COLOR}
-                            opacity={documentHover ? ICON_OPACITY_HOVER : ICON_OPACITY_DEFAULT}
-                        />
-                        {isExpanded && (
-                            <span
-                                style={{
-                                    ...NAV_LABEL_STYLE,
-                                    color: documentHover ? HOVER_ACCENT_COLOR : NAV_LABEL_STYLE.color,
-                                }}
-                            >
-                                Document Viewer
-                            </span>
-                        )}
-                    </button>
-                ) : null}
-                <div style={AVATAR_SECTION_STYLE}>
-                    <div
-                        ref={avatarTriggerRef}
-                        data-avatar-trigger="1"
-                        style={{
-                            ...PROFILE_ROW_STYLE,
-                            width: isExpanded ? 'calc(100% - 10px)' : 'fit-content',
-                            margin: isExpanded ? undefined : '0',
-                            marginRight: isExpanded ? '10px' : undefined,
-                            backgroundColor: avatarRowHover ? 'rgba(215, 245, 255, 0.14)' : 'transparent',
-                            cursor: canOpenAvatarMenu ? 'pointer' : 'default',
-                        }}
-                        onPointerDown={(e) => e.stopPropagation()}
-                        onPointerUp={(e) => e.stopPropagation()}
-                        onWheelCapture={(e) => e.stopPropagation()}
-                        onWheel={(e) => e.stopPropagation()}
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            if (!canOpenAvatarMenu) return;
-                            const target = e.currentTarget as HTMLDivElement;
-                            toggleAvatarMenuFromTrigger(target);
-                        }}
-                        onMouseEnter={() => setAvatarRowHover(true)}
-                        onMouseLeave={() => setAvatarRowHover(false)}
-                    >
+            <div style={sidebarVisualRailStyle}>
+                {/* Bottom Section - User Avatar */}
+                <div
+                    style={bottomSectionStyle}
+                >
+                    {showDocumentViewerButton ? (
                         <button
                             type="button"
                             style={{
-                                ...ICON_BUTTON_STYLE,
-                                padding: '0',
-                                width: '32px',
-                                height: '32px',
-                                lineHeight: 0,
+                                ...NAV_ITEM_STYLE,
+                                justifyContent: 'flex-start',
+                                alignSelf: 'stretch',
+                                marginBottom: '8px',
+                            }}
+                            onClick={onToggleDocumentViewer}
+                            onPointerDown={(e) => e.stopPropagation()}
+                            onMouseEnter={() => setDocumentHover(true)}
+                            onMouseLeave={() => setDocumentHover(false)}
+                            title="Open document viewer"
+                        >
+                            <MaskIcon
+                                src={documentIcon}
+                                size={ICON_SIZE}
+                                color={documentHover ? HOVER_ACCENT_COLOR : DEFAULT_ICON_COLOR}
+                                opacity={documentHover ? ICON_OPACITY_HOVER : ICON_OPACITY_DEFAULT}
+                            />
+                            {showExpandedContent && (
+                                <span
+                                    aria-hidden={!isExpanded}
+                                    style={{
+                                        ...NAV_LABEL_STYLE,
+                                        ...expandedContentStyle,
+                                        color: documentHover ? HOVER_ACCENT_COLOR : NAV_LABEL_STYLE.color,
+                                    }}
+                                >
+                                    Document Viewer
+                                </span>
+                            )}
+                        </button>
+                    ) : null}
+                    <div style={AVATAR_SECTION_STYLE}>
+                        <div
+                            ref={avatarTriggerRef}
+                            data-avatar-trigger="1"
+                            style={{
+                                ...PROFILE_ROW_STYLE,
+                                width: showExpandedContent ? 'calc(100% - 10px)' : 'fit-content',
+                                margin: showExpandedContent ? undefined : '0',
+                                marginRight: showExpandedContent ? '10px' : undefined,
+                                backgroundColor: avatarRowHover ? 'rgba(215, 245, 255, 0.14)' : 'transparent',
+                                cursor: canOpenAvatarMenu ? 'pointer' : 'default',
                             }}
                             onPointerDown={(e) => e.stopPropagation()}
                             onPointerUp={(e) => e.stopPropagation()}
                             onWheelCapture={(e) => e.stopPropagation()}
                             onWheel={(e) => e.stopPropagation()}
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                if (!canOpenAvatarMenu) return;
+                                const target = e.currentTarget as HTMLDivElement;
+                                toggleAvatarMenuFromTrigger(target);
+                            }}
+                            onMouseEnter={() => setAvatarRowHover(true)}
+                            onMouseLeave={() => setAvatarRowHover(false)}
                         >
-                            {accountImageUrl ? (
-                                <img
-                                    src={accountImageUrl}
-                                    alt="avatar"
-                                    style={AVATAR_IMAGE_STYLE}
-                                />
-                            ) : (
-                                <div
-                                    style={{
-                                        ...AVATAR_STYLE,
-                                        opacity: 1,
-                                    }}
-                                >
-                                    BA
-                                </div>
+                            <button
+                                type="button"
+                                style={{
+                                    ...ICON_BUTTON_STYLE,
+                                    padding: '0',
+                                    width: '32px',
+                                    height: '32px',
+                                    lineHeight: 0,
+                                }}
+                                onPointerDown={(e) => e.stopPropagation()}
+                                onPointerUp={(e) => e.stopPropagation()}
+                                onWheelCapture={(e) => e.stopPropagation()}
+                                onWheel={(e) => e.stopPropagation()}
+                            >
+                                {accountImageUrl ? (
+                                    <img
+                                        src={accountImageUrl}
+                                        alt="avatar"
+                                        style={AVATAR_IMAGE_STYLE}
+                                    />
+                                ) : (
+                                    <div
+                                        style={{
+                                            ...AVATAR_STYLE,
+                                            opacity: 1,
+                                        }}
+                                    >
+                                        BA
+                                    </div>
+                                )}
+                            </button>
+                            {showExpandedContent && (
+                                <span style={{ ...AVATAR_NAME_STYLE, ...expandedContentStyle }} aria-hidden={!isExpanded}>
+                                    {displayAccountName}
+                                </span>
                             )}
-                        </button>
-                        {isExpanded && <span style={AVATAR_NAME_STYLE}>{displayAccountName}</span>}
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1177,6 +1250,8 @@ type NavItemProps = {
     icon: string;
     label: string;
     isExpanded: boolean;
+    showExpandedContent: boolean;
+    contentTransitionCss: string;
     isHovered: boolean;
     onMouseEnter: () => void;
     onMouseLeave: () => void;
@@ -1190,6 +1265,8 @@ const NavItem: React.FC<NavItemProps> = ({
     icon,
     label,
     isExpanded,
+    showExpandedContent,
+    contentTransitionCss,
     isHovered,
     onMouseEnter,
     onMouseLeave,
@@ -1222,12 +1299,16 @@ const NavItem: React.FC<NavItemProps> = ({
             color={isHovered ? HOVER_ACCENT_COLOR : DEFAULT_ICON_COLOR}
             opacity={isHovered ? ICON_OPACITY_HOVER : ICON_OPACITY_DEFAULT}
         />
-        {isExpanded && (
+        {showExpandedContent && (
             <span
+                aria-hidden={!isExpanded}
                 style={{
                     ...NAV_LABEL_STYLE,
+                    opacity: isExpanded ? 1 : 0,
+                    transform: isExpanded ? 'translateX(0px)' : `translateX(-${EXPANDED_CONTENT_HIDDEN_OFFSET_PX}px)`,
+                    transition: contentTransitionCss,
                     color: isHovered ? HOVER_ACCENT_COLOR : NAV_LABEL_STYLE.color,
-                    opacity: 1,
+                    pointerEvents: isExpanded ? 'auto' : 'none',
                 }}
             >
                 {label}
@@ -1281,6 +1362,7 @@ const SIDEBAR_BASE_STYLE: React.CSSProperties = {
     flexDirection: 'column',
     zIndex: LAYER_SIDEBAR,
     boxSizing: 'border-box',
+    overflow: 'hidden',
 };
 
 const TOP_SECTION_STYLE: React.CSSProperties = {
@@ -1317,6 +1399,7 @@ const NAV_ITEM_STYLE: React.CSSProperties = {
     cursor: 'pointer',
     width: '100%',
     textAlign: 'left',
+    overflow: 'hidden',
 };
 
 const NAV_LABEL_STYLE: React.CSSProperties = {

@@ -1,9 +1,8 @@
 import React from 'react';
 import {
+    getSidebarWidthTransitionCss,
     SIDEBAR_COLLAPSED_WIDTH_CSS,
-    SIDEBAR_EXPANDED_MIN_WIDTH_CSS,
-    SIDEBAR_EXPANDED_WIDTH_CSS,
-    SIDEBAR_TRANSITION_CSS,
+    SIDEBAR_EXPANDED_RESOLVED_WIDTH_CSS,
 } from '../appShellStyles';
 
 type GraphScreenShellProps = {
@@ -35,14 +34,27 @@ const GRAPH_SCREEN_PANE_STYLE: React.CSSProperties = {
 };
 
 export function GraphScreenShell({ sidebarExpanded, children }: GraphScreenShellProps): JSX.Element {
+    const [prefersReducedMotion, setPrefersReducedMotion] = React.useState(false);
+
+    React.useEffect(() => {
+        const media = window.matchMedia('(prefers-reduced-motion: reduce)');
+        const update = () => setPrefersReducedMotion(media.matches);
+        update();
+        if (typeof media.addEventListener === 'function') {
+            media.addEventListener('change', update);
+            return () => media.removeEventListener('change', update);
+        }
+        media.addListener(update);
+        return () => media.removeListener(update);
+    }, []);
+
     // Keep graph pane geometry synced to the same sidebar expanded state used by overlay Sidebar.
-    const sidebarPaneWidth = sidebarExpanded ? SIDEBAR_EXPANDED_WIDTH_CSS : SIDEBAR_COLLAPSED_WIDTH_CSS;
-    const sidebarPaneMinWidth = sidebarExpanded ? SIDEBAR_EXPANDED_MIN_WIDTH_CSS : SIDEBAR_COLLAPSED_WIDTH_CSS;
+    const sidebarPaneWidth = sidebarExpanded ? SIDEBAR_EXPANDED_RESOLVED_WIDTH_CSS : SIDEBAR_COLLAPSED_WIDTH_CSS;
     const graphScreenSidebarPaneStyle: React.CSSProperties = {
         width: sidebarPaneWidth,
-        minWidth: sidebarPaneMinWidth,
-        transition: SIDEBAR_TRANSITION_CSS,
-        flex: '0 0 auto',
+        transition: prefersReducedMotion ? 'none' : getSidebarWidthTransitionCss(sidebarExpanded),
+        willChange: prefersReducedMotion ? undefined : 'width',
+        flexShrink: 0,
         height: '100%',
     };
 

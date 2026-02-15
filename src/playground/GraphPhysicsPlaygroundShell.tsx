@@ -64,6 +64,7 @@ export type GraphPhysicsPlaygroundProps = {
         camera: SavedInterfaceRecordV1['camera'],
         reason: string
     ) => void;
+    enableDebugSidebar?: boolean;
 };
 
 function inferTitleFromPastedText(text: string): string {
@@ -127,6 +128,7 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
     onRestoreReadPathChange,
     onSavedInterfaceUpsert,
     onSavedInterfaceLayoutPatch,
+    enableDebugSidebar = true,
 }) => {
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
     const [canvasReady, setCanvasReady] = useState(false);
@@ -1344,10 +1346,13 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
                     metrics={metrics}
                     onCloseDebug={() => setDebugOpen(false)}
                     onShowDebug={() => setDebugOpen(true)}
-                    onToggleSidebar={() => setSidebarOpen((v) => !v)}
+                    onToggleSidebar={() => {
+                        if (!enableDebugSidebar) return;
+                        setSidebarOpen((v) => !v);
+                    }}
                     onToggleTheme={() => setSkinMode(skinMode === 'elegant' ? 'normal' : 'elegant')}
                     showThemeToggle={SHOW_THEME_TOGGLE}
-                    sidebarOpen={sidebarOpen}
+                    sidebarOpen={enableDebugSidebar ? sidebarOpen : false}
                     skinMode={skinMode}
                     viewerOpen={documentContext.state.previewOpen}
                     cameraLocked={cameraLocked}
@@ -1454,7 +1459,7 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
                 {FULLCHAT_ENABLED && <FullChatToggle />}
             </div>
 
-            {sidebarOpen && !fullChatOpen && (
+            {enableDebugSidebar && sidebarOpen && !fullChatOpen && (
                 <SidebarControls
                     config={config}
                     onClose={() => setSidebarOpen(false)}
@@ -1491,7 +1496,8 @@ export const GraphPhysicsPlaygroundContainer: React.FC<GraphPhysicsPlaygroundPro
     onPendingLoadInterfaceConsumed,
     onRestoreReadPathChange,
     onSavedInterfaceUpsert,
-    onSavedInterfaceLayoutPatch
+    onSavedInterfaceLayoutPatch,
+    enableDebugSidebar,
 }) => (
     <DocumentProvider>
         <PopupProvider>
@@ -1506,6 +1512,7 @@ export const GraphPhysicsPlaygroundContainer: React.FC<GraphPhysicsPlaygroundPro
                     onRestoreReadPathChange={onRestoreReadPathChange}
                     onSavedInterfaceUpsert={onSavedInterfaceUpsert}
                     onSavedInterfaceLayoutPatch={onSavedInterfaceLayoutPatch}
+                    enableDebugSidebar={enableDebugSidebar}
                 />
             </FullChatProvider>
         </PopupProvider>

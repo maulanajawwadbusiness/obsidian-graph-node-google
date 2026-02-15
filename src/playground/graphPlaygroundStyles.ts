@@ -10,6 +10,7 @@ export const SHOW_BRAND_LABEL = false; // Set to false to hide the top-left bran
 // -----------------------------------------------------------------------------
 // Styles (Inline for simplicity, as requested)
 // -----------------------------------------------------------------------------
+// Root playground container fills its parent; outer bounds are owned by screen shell.
 export const CONTAINER_STYLE: React.CSSProperties = {
     display: 'flex',
     width: '100%',

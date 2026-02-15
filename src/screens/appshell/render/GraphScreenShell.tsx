@@ -5,6 +5,7 @@ type GraphScreenShellProps = {
 };
 
 const GRAPH_SCREEN_SHELL_STYLE: React.CSSProperties = {
+    // Graph shell currently anchors full viewport space; runtime fills this container.
     position: 'relative',
     width: '100%',
     height: '100vh',

@@ -16,6 +16,7 @@ import {
     SIDEBAR_COLLAPSED_WIDTH_CSS,
     SIDEBAR_EXPANDED_MIN_WIDTH_CSS,
     SIDEBAR_EXPANDED_WIDTH_CSS,
+    SIDEBAR_TRANSITION_CSS,
 } from '../screens/appshell/appShellStyles';
 
 // ===========================================================================
@@ -175,6 +176,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         ...SIDEBAR_BASE_STYLE,
         width: isExpanded ? SIDEBAR_EXPANDED_WIDTH_CSS : SIDEBAR_COLLAPSED_WIDTH_CSS,
         minWidth: isExpanded ? SIDEBAR_EXPANDED_MIN_WIDTH_CSS : SIDEBAR_COLLAPSED_WIDTH_CSS,
+        transition: SIDEBAR_TRANSITION_CSS,
         pointerEvents: disabled ? 'none' : 'auto',
     };
 

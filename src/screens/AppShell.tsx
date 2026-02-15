@@ -163,7 +163,7 @@ export const AppShell: React.FC = () => {
     const sidebarFrozen = SIDEBAR_INTERACTION_BY_SCREEN[screen] === 'frozen';
     const sidebarDimAlpha = SIDEBAR_DIM_ALPHA_BY_SCREEN[screen];
     const loginBlockingActive = screen === 'prompt' && enterPromptOverlayOpen;
-    const sidebarDisabled = (isGraphClassScreen(screen) && graphIsLoading) || loginBlockingActive;
+    const sidebarDisabled = sidebarFrozen || (isGraphClassScreen(screen) && graphIsLoading) || loginBlockingActive;
     const onboardingActive = isOnboardingScreen(screen) || isBlockingInput;
     const welcome1FontGateDone = useWelcome1FontGate({
         screen,
@@ -554,18 +554,33 @@ export const AppShell: React.FC = () => {
                 <SidebarLayer
                     show={showPersistentSidebar}
                     isExpanded={isSidebarExpanded}
-                    onToggle={() => setIsSidebarExpanded((prev) => !prev)}
+                    frozen={sidebarFrozen}
+                    dimAlpha={sidebarDimAlpha}
+                    onToggle={() => {
+                        if (sidebarFrozen) return;
+                        setIsSidebarExpanded((prev) => !prev);
+                    }}
                     onCreateNew={() => {
+                        if (sidebarFrozen) return;
                         setPendingLoadInterface(null);
                         setPendingAnalysis(null);
                         transitionToScreen(getCreateNewTarget());
                     }}
-                    onOpenSearchInterfaces={() => openSearchInterfaces()}
+                    onOpenSearchInterfaces={() => {
+                        if (sidebarFrozen) return;
+                        openSearchInterfaces();
+                    }}
                     disabled={sidebarDisabled}
                     showDocumentViewerButton={isGraphClassScreen(screen)}
-                    onToggleDocumentViewer={() => setDocumentViewerToggleToken((prev) => prev + 1)}
+                    onToggleDocumentViewer={() => {
+                        if (sidebarFrozen) return;
+                        setDocumentViewerToggleToken((prev) => prev + 1);
+                    }}
                     interfaces={sidebarInterfaces}
-                    onRenameInterface={handleRenameInterface}
+                    onRenameInterface={(id, newTitle) => {
+                        if (sidebarFrozen) return;
+                        handleRenameInterface(id, newTitle);
+                    }}
                     onDeleteInterface={(id) => {
                         if (isSearchInterfacesOpen) return;
                         if (sidebarDisabled) return;
@@ -575,7 +590,10 @@ export const AppShell: React.FC = () => {
                         console.log('[appshell] pending_delete_open id=%s', id);
                     }}
                     selectedInterfaceId={pendingLoadInterface?.id ?? undefined}
-                    onSelectInterface={(id) => selectSavedInterfaceById(id)}
+                    onSelectInterface={(id) => {
+                        if (sidebarFrozen) return;
+                        selectSavedInterfaceById(id);
+                    }}
                     accountName={sidebarAccountName}
                     accountImageUrl={sidebarAccountImageUrl}
                     onOpenProfile={isLoggedIn ? openProfileOverlay : undefined}

@@ -115,6 +115,8 @@ const CLOSE_ICON_PATH_D = [
 
 type SidebarProps = {
     isExpanded: boolean;
+    frozen?: boolean;
+    dimAlpha?: number;
     onToggle: () => void;
     onCreateNew?: () => void;
     onOpenSearchInterfaces?: () => void;
@@ -134,6 +136,8 @@ type SidebarProps = {
 
 export const Sidebar: React.FC<SidebarProps> = ({
     isExpanded,
+    frozen = false,
+    dimAlpha = 1,
     onToggle,
     onCreateNew,
     onOpenSearchInterfaces,
@@ -215,7 +219,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
         width: isExpanded ? SIDEBAR_EXPANDED_RESOLVED_WIDTH_CSS : SIDEBAR_COLLAPSED_WIDTH_CSS,
         transition: widthTransitionCss,
         willChange: prefersReducedMotion ? undefined : 'width',
-        pointerEvents: disabled ? 'none' : 'auto',
+        pointerEvents: frozen ? 'auto' : (disabled ? 'none' : 'auto'),
+        opacity: dimAlpha,
+        cursor: frozen ? 'default' : undefined,
     };
     const sidebarVisualRailStyle: React.CSSProperties = {
         display: 'flex',
@@ -398,6 +404,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
             closeMoreMenu();
         }
     }, [cancelRename, closeAvatarMenu, closeMoreMenu, closeRowMenu, disabled, isAvatarMenuOpen, isMoreMenuOpen, openRowMenuId, renamingRowId]);
+
+    React.useEffect(() => {
+        const sidebarEl = sidebarRootRef.current;
+        if (!sidebarEl) return;
+        (sidebarEl as HTMLElement & { inert?: boolean }).inert = frozen;
+        if (!frozen) return;
+        const activeEl = document.activeElement;
+        if (activeEl instanceof HTMLElement && sidebarEl.contains(activeEl)) {
+            activeEl.blur();
+        }
+    }, [frozen]);
 
     React.useEffect(() => {
         if (!openRowMenuId && !renamingRowId) return;
@@ -718,6 +735,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
             onPointerDown={(e) => e.stopPropagation()}
             onWheelCapture={(e) => e.stopPropagation()}
             onWheel={(e) => e.stopPropagation()}
+            onKeyDownCapture={(e) => {
+                if (!frozen) return;
+                e.preventDefault();
+                e.stopPropagation();
+            }}
+            aria-disabled={frozen ? true : undefined}
         >
             <div style={sidebarVisualRailStyle}>
                 {/* Top Section */}
@@ -1392,6 +1415,36 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     </div>
                 </div>
             </div>
+            {frozen ? (
+                <div
+                    data-sidebar-frozen-shield="1"
+                    style={SIDEBAR_FROZEN_SHIELD_STYLE}
+                    onPointerDownCapture={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                    }}
+                    onPointerMoveCapture={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                    }}
+                    onPointerUpCapture={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                    }}
+                    onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                    }}
+                    onWheelCapture={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                    }}
+                    onContextMenu={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                    }}
+                />
+            ) : null}
         </aside>
     );
 };
@@ -1552,6 +1605,15 @@ const SIDEBAR_BASE_STYLE: React.CSSProperties = {
     zIndex: LAYER_SIDEBAR,
     boxSizing: 'border-box',
     overflow: 'hidden',
+};
+
+const SIDEBAR_FROZEN_SHIELD_STYLE: React.CSSProperties = {
+    position: 'absolute',
+    inset: 0,
+    zIndex: 2,
+    pointerEvents: 'auto',
+    touchAction: 'none',
+    cursor: 'default',
 };
 
 const TOP_SECTION_STYLE: React.CSSProperties = {

@@ -4,6 +4,8 @@ import { Sidebar, SidebarInterfaceItem } from '../../../components/Sidebar';
 type SidebarLayerProps = {
     show: boolean;
     isExpanded: boolean;
+    frozen: boolean;
+    dimAlpha: number;
     onToggle: () => void;
     onCreateNew: () => void;
     onOpenSearchInterfaces: () => void;
@@ -25,6 +27,8 @@ export function SidebarLayer(props: SidebarLayerProps): React.ReactElement | nul
     const {
         show,
         isExpanded,
+        frozen,
+        dimAlpha,
         onToggle,
         onCreateNew,
         onOpenSearchInterfaces,
@@ -46,6 +50,8 @@ export function SidebarLayer(props: SidebarLayerProps): React.ReactElement | nul
     return (
         <Sidebar
             isExpanded={isExpanded}
+            frozen={frozen}
+            dimAlpha={dimAlpha}
             onToggle={onToggle}
             onCreateNew={onCreateNew}
             onOpenSearchInterfaces={onOpenSearchInterfaces}

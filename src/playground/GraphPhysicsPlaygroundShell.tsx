@@ -53,6 +53,7 @@ export type GraphPhysicsPlaygroundProps = {
     pendingAnalysisPayload: PendingAnalysisPayload;
     onPendingAnalysisConsumed: () => void;
     onLoadingStateChange?: (isLoading: boolean) => void;
+    legacyLoadingScreenMode?: 'enabled' | 'disabled';
     documentViewerToggleToken?: number;
     pendingLoadInterface?: SavedInterfaceRecordV1 | null;
     onPendingLoadInterfaceConsumed?: () => void;
@@ -122,6 +123,7 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
     pendingAnalysisPayload,
     onPendingAnalysisConsumed,
     onLoadingStateChange,
+    legacyLoadingScreenMode = 'enabled',
     documentViewerToggleToken,
     pendingLoadInterface = null,
     onPendingLoadInterfaceConsumed,
@@ -1311,7 +1313,7 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
         onLoadingStateChange?.(isGraphLoading);
     }, [isGraphLoading, onLoadingStateChange]);
 
-    if (isGraphLoading) {
+    if (legacyLoadingScreenMode === 'enabled' && isGraphLoading) {
         return <LoadingScreen errorMessage={aiErrorMessage || null} />;
     }
 
@@ -1492,6 +1494,7 @@ export const GraphPhysicsPlaygroundContainer: React.FC<GraphPhysicsPlaygroundPro
     pendingAnalysisPayload,
     onPendingAnalysisConsumed,
     onLoadingStateChange,
+    legacyLoadingScreenMode,
     documentViewerToggleToken,
     pendingLoadInterface,
     onPendingLoadInterfaceConsumed,
@@ -1507,6 +1510,7 @@ export const GraphPhysicsPlaygroundContainer: React.FC<GraphPhysicsPlaygroundPro
                     pendingAnalysisPayload={pendingAnalysisPayload}
                     onPendingAnalysisConsumed={onPendingAnalysisConsumed}
                     onLoadingStateChange={onLoadingStateChange}
+                    legacyLoadingScreenMode={legacyLoadingScreenMode}
                     documentViewerToggleToken={documentViewerToggleToken}
                     pendingLoadInterface={pendingLoadInterface}
                     onPendingLoadInterfaceConsumed={onPendingLoadInterfaceConsumed}

@@ -9,6 +9,12 @@ The core flow is the **Paper Essence Pipeline**:
 ## 1.1 ASCII Only
 Use pure ASCII characters in code, comments, logs, and documentation. Avoid Unicode arrows, ellipses, and typographic dashes to prevent mojibake.
 
+## 1.2 Worktree Collaboration Policy
+- This repo may be edited by multiple agents at the same time.
+- Unrelated modified or untracked files are expected and are not blockers.
+- Agents should continue task execution without pausing only because unrelated tree changes appear.
+- Scope edits to task-owned files and do not revert or mutate unrelated changes.
+
 ## 2. UI Surface Map & Ownership
 
 The application layers, ordered by z-index (lowest to highest):
@@ -641,6 +647,11 @@ Frontend:
   - `src/components/SampleGraphPreview.tsx`
   - mounts `GraphPhysicsPlayground` (same runtime path as graph screen)
   - root marker: `data-arnvoid-graph-preview-root="1"`
+- Portal scope seam (preview-only container mode):
+  - `src/components/portalScope/PortalScopeContext.tsx`
+  - `SampleGraphPreview` creates internal portal root: `data-arnvoid-preview-portal-root="1"`
+  - preview runtime is wrapped with `PortalScopeProvider mode="container"` + nested `TooltipProvider`
+  - graph screen path remains default app mode (`document.body` portal root)
 - Seam helper for future gating/scoping:
   - `src/components/sampleGraphPreviewSeams.ts`
   - exports root attr/value/selector and `isInsideSampleGraphPreviewRoot(...)`
@@ -649,17 +660,18 @@ Current known risks not fixed yet:
 1. Onboarding wheel guard:
    - `src/screens/appshell/transitions/useOnboardingWheelGuard.ts` uses window capture + `preventDefault`.
    - This can block wheel zoom over preview until target-aware gating is added.
-2. Portal escape:
-   - popup/tooltip/glyph/login overlays still portal to `document.body`.
-   - True boxed containment requires portal root scoping in follow-up work.
-3. Prompt overlays can mask preview:
+2. Prompt overlays can mask preview:
    - drag/error/login overlays in `src/screens/EnterPrompt.tsx` are fixed and can block visibility/input.
-4. Render-loop teardown gaps:
+3. Render-loop teardown gaps:
    - graph loop cleanup still needs follow-up for canvas wheel and `document.fonts` listener teardown.
 
 Manual verification checklist for follow-up runs:
 1. Prompt loads without crash and preview stays inside the 200px wrapper.
 2. Placeholder label is gone; preview runtime surface is visible.
-3. EnterPrompt overlays still behave as before (drag overlay, error overlay, login overlay).
-4. Repeated prompt visit cycles do not cause obvious listener/input regressions.
-5. Future wheel-gated build: wheel over preview zooms graph and does not leak page scroll.
+3. Click dot in preview: popup stays inside preview box.
+4. Hover tooltip in preview: tooltip stays inside preview box.
+5. No preview interaction renders fullscreen-ish UI outside preview box.
+6. Graph screen behavior remains unchanged (app mode portals).
+7. EnterPrompt overlays still behave as before (drag overlay, error overlay, login overlay).
+8. Repeated prompt visit cycles do not cause obvious listener/input regressions.
+9. Future wheel-gated build: wheel over preview zooms graph and does not leak page scroll.

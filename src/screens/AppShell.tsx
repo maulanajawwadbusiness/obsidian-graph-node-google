@@ -463,6 +463,14 @@ export const AppShell: React.FC = () => {
     const confirmGraphLoadingGate = React.useCallback(() => {
         if (screen !== 'graph_loading') return;
         if (gatePhase !== 'done') return;
+        const activeElement = document.activeElement;
+        if (
+            activeElement instanceof HTMLElement &&
+            graphLoadingGateRootRef.current &&
+            graphLoadingGateRootRef.current.contains(activeElement)
+        ) {
+            activeElement.blur();
+        }
         setGatePhase('confirmed');
         transitionToScreen('graph');
     }, [gatePhase, screen, transitionToScreen]);
@@ -498,6 +506,34 @@ export const AppShell: React.FC = () => {
             window.removeEventListener('keydown', onKeyDownCapture, true);
         };
     }, [backToPromptFromGate, confirmGraphLoadingGate, gatePhase, screen]);
+
+    React.useEffect(() => {
+        if (!import.meta.env.DEV) return;
+        if (screen !== 'graph_loading') return;
+        const rafId = window.requestAnimationFrame(() => {
+            const activeElement = document.activeElement;
+            const sidebarRoot = document.querySelector('[data-sidebar-root="1"]');
+            if (
+                activeElement instanceof HTMLElement &&
+                sidebarRoot instanceof HTMLElement &&
+                sidebarRoot.contains(activeElement)
+            ) {
+                console.warn('[FocusGuard] active_element_inside_sidebar_during_graph_loading');
+            }
+            const modalBlockingFocus = isProfileOpen || isLogoutConfirmOpen || pendingDeleteId !== null || isSearchInterfacesOpen;
+            if (modalBlockingFocus) return;
+            if (
+                activeElement instanceof HTMLElement &&
+                graphLoadingGateRootRef.current &&
+                !graphLoadingGateRootRef.current.contains(activeElement)
+            ) {
+                console.warn('[FocusGuard] active_element_outside_gate_during_graph_loading');
+            }
+        });
+        return () => {
+            window.cancelAnimationFrame(rafId);
+        };
+    }, [gatePhase, isLogoutConfirmOpen, isProfileOpen, isSearchInterfacesOpen, pendingDeleteId, screen]);
 
     const sidebarInterfaces = useSidebarInterfaces(savedInterfaces);
     const { filteredSearchResults } = useSearchInterfacesEngine({

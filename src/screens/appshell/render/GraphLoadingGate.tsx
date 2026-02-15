@@ -86,6 +86,13 @@ export const GraphLoadingGate: React.FC<GraphLoadingGateProps> = ({
     showBackToPrompt = false,
     onBackToPrompt,
 }) => {
+    const confirmButtonRef = React.useRef<HTMLButtonElement>(null);
+
+    React.useEffect(() => {
+        if (!confirmVisible || !confirmEnabled) return;
+        confirmButtonRef.current?.focus();
+    }, [confirmEnabled, confirmVisible]);
+
     const onGateKeyDownCapture = React.useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
         if (event.key === 'Escape') {
             event.preventDefault();
@@ -131,10 +138,10 @@ export const GraphLoadingGate: React.FC<GraphLoadingGateProps> = ({
             <div style={CONFIRM_SLOT_STYLE}>
                 {confirmVisible ? (
                     <button
+                        ref={confirmButtonRef}
                         type="button"
                         style={CONFIRM_BUTTON_STYLE}
                         disabled={!confirmEnabled}
-                        autoFocus={confirmVisible && confirmEnabled}
                         onPointerDown={(e) => e.stopPropagation()}
                         onClick={() => onConfirm?.()}
                     >

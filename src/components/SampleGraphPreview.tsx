@@ -4,8 +4,15 @@ import { TooltipProvider } from '../ui/tooltip/TooltipProvider';
 import { PortalScopeProvider } from './portalScope/PortalScopeContext';
 import sampleGraphPreviewExport from '../samples/sampleGraphPreview.export.json';
 import { parseSavedInterfaceRecord } from '../store/savedInterfacesStore';
+import type { SavedInterfaceRecordV1 } from '../store/savedInterfacesStore';
 import { devExportToSavedInterfaceRecordV1 } from '../lib/devExport/devExportToSavedInterfaceRecord';
 import { parseDevInterfaceExportV1 } from '../lib/devExport/devExportTypes';
+import {
+    PREVIEW_VALIDATION_ERROR_CODE,
+    createValidationError,
+    type ValidationError,
+} from '../lib/validation/errors';
+import { chainResult, err, ok, type Result } from '../lib/validation/result';
 import {
     acquireGraphRuntimeLease,
     releaseGraphRuntimeLease,
@@ -63,6 +70,10 @@ type LeaseState =
     | { phase: 'allowed'; token: string }
     | { phase: 'denied'; activeOwner: GraphRuntimeOwner; activeInstanceId: string };
 
+type SampleLoadSuccess = {
+    record: SavedInterfaceRecordV1;
+};
+
 class PreviewErrorBoundary extends React.Component<React.PropsWithChildren, PreviewErrorBoundaryState> {
     state: PreviewErrorBoundaryState = { hasError: false };
 
@@ -91,24 +102,38 @@ export const SampleGraphPreview: React.FC = () => {
         `prompt-preview:${Date.now().toString(36)}:${Math.random().toString(36).slice(2, 8)}`
     );
     const [leaseState, setLeaseState] = React.useState<LeaseState>({ phase: 'checking' });
-    const sampleLoadState = React.useMemo(() => {
+    const sampleLoadResult = React.useMemo<Result<SampleLoadSuccess>>(() => {
         const parsedDev = parseDevInterfaceExportV1(sampleGraphPreviewExport);
         if (!parsedDev) {
-            return { record: null, error: 'invalid_dev_export_payload' } as const;
+            return err(createValidationError(
+                PREVIEW_VALIDATION_ERROR_CODE.DEV_EXPORT_INVALID,
+                'sample dev export payload is invalid'
+            ));
         }
-        try {
-            const candidateRecord = devExportToSavedInterfaceRecordV1(parsedDev, { preview: true });
+
+        const adapted = (() => {
+            try {
+                return ok(devExportToSavedInterfaceRecordV1(parsedDev, { preview: true }));
+            } catch (error) {
+                const reason = error instanceof Error ? error.message : 'unknown_adapter_error';
+                return err(createValidationError(
+                    PREVIEW_VALIDATION_ERROR_CODE.ADAPTER_FAILED,
+                    `dev export adapter failed: ${reason}`
+                ));
+            }
+        })();
+
+        return chainResult(adapted, (candidateRecord) => {
             const parsedRecord = parseSavedInterfaceRecord(candidateRecord);
             if (!parsedRecord) {
-                return { record: null, error: 'invalid_saved_interface_payload' } as const;
+                return err(createValidationError(
+                    PREVIEW_VALIDATION_ERROR_CODE.SAVED_RECORD_INVALID,
+                    'saved interface parser rejected adapted record'
+                ));
             }
-            return { record: parsedRecord, error: null } as const;
-        } catch (error) {
-            const reason = error instanceof Error ? error.message : 'adapter_failed';
-            return { record: null, error: reason } as const;
-        }
+            return ok({ record: parsedRecord });
+        });
     }, []);
-    const sampleLoadError = sampleLoadState.error !== null;
 
     React.useLayoutEffect(() => {
         const result = acquireGraphRuntimeLease('prompt-preview', instanceIdRef.current);
@@ -127,7 +152,8 @@ export const SampleGraphPreview: React.FC = () => {
     }, []);
 
     const isLeaseDenied = leaseState.phase === 'denied';
-    const canMountRuntime = leaseState.phase === 'allowed' && portalRootEl && sampleLoadState.record;
+    const canMountRuntime = leaseState.phase === 'allowed' && portalRootEl && sampleLoadResult.ok;
+    const sampleErrors: ValidationError[] = sampleLoadResult.ok ? [] : sampleLoadResult.errors;
 
     return (
         <div {...previewRootMarker} style={PREVIEW_ROOT_STYLE}>
@@ -140,7 +166,7 @@ export const SampleGraphPreview: React.FC = () => {
                                 <GraphPhysicsPlayground
                                     pendingAnalysisPayload={null}
                                     onPendingAnalysisConsumed={() => {}}
-                                    pendingLoadInterface={sampleLoadState.record}
+                                    pendingLoadInterface={sampleLoadResult.value.record}
                                     onPendingLoadInterfaceConsumed={() => {}}
                                     enableDebugSidebar={false}
                                 />
@@ -150,8 +176,10 @@ export const SampleGraphPreview: React.FC = () => {
                         <div style={PREVIEW_FALLBACK_STYLE}>
                             preview paused (active: {leaseState.activeOwner})
                         </div>
-                    ) : sampleLoadError ? (
-                        <div style={PREVIEW_FALLBACK_STYLE}>sample graph invalid payload ({sampleLoadState.error})</div>
+                    ) : sampleErrors.length > 0 ? (
+                        <div style={PREVIEW_FALLBACK_STYLE}>
+                            sample graph invalid ({sampleErrors[0].code})
+                        </div>
                     ) : (
                         <div style={PREVIEW_FALLBACK_STYLE}>sample graph initializing...</div>
                     )}

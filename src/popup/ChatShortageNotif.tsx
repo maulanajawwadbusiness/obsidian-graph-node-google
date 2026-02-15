@@ -1,6 +1,6 @@
 import React from 'react';
 import { hideShortage, useShortageStore } from '../money/shortageStore';
-import { usePortalScopeMode } from '../components/portalScope/PortalScopeContext';
+import { usePortalBoundsRect, usePortalScopeMode } from '../components/portalScope/PortalScopeContext';
 
 type AnchoredShortageSurface = 'node-popup' | 'mini-chat';
 
@@ -52,6 +52,7 @@ function clamp(value: number, min: number, max: number): number {
 
 export const ChatShortageNotif: React.FC<ChatShortageNotifProps> = ({ surface, anchorRef, zIndex = 1003 }) => {
     const portalMode = usePortalScopeMode();
+    const portalBoundsRect = usePortalBoundsRect();
     const { open, context, surface: shortageSurface, token } = useShortageStore();
     const notifRef = React.useRef<HTMLDivElement>(null);
     const [position, setPosition] = React.useState<Position>({ left: -9999, top: -9999, ready: false });
@@ -90,15 +91,21 @@ export const ChatShortageNotif: React.FC<ChatShortageNotifProps> = ({ surface, a
 
             const anchorRect = anchorEl.getBoundingClientRect();
             const notifRect = notifEl.getBoundingClientRect();
-            const maxLeft = Math.max(EDGE_MARGIN, window.innerWidth - notifRect.width - EDGE_MARGIN);
-            const centeredLeft = anchorRect.left + anchorRect.width / 2 - notifRect.width / 2;
+            const viewportWidth = portalMode === 'container' && portalBoundsRect ? portalBoundsRect.width : window.innerWidth;
+            const viewportHeight = portalMode === 'container' && portalBoundsRect ? portalBoundsRect.height : window.innerHeight;
+            const anchorLeft =
+                portalMode === 'container' && portalBoundsRect ? anchorRect.left - portalBoundsRect.left : anchorRect.left;
+            const anchorTop =
+                portalMode === 'container' && portalBoundsRect ? anchorRect.top - portalBoundsRect.top : anchorRect.top;
+            const maxLeft = Math.max(EDGE_MARGIN, viewportWidth - notifRect.width - EDGE_MARGIN);
+            const centeredLeft = anchorLeft + anchorRect.width / 2 - notifRect.width / 2;
             const left = clamp(centeredLeft, EDGE_MARGIN, maxLeft);
 
-            let top = anchorRect.bottom + ANCHOR_GAP;
-            if (top + notifRect.height > window.innerHeight - EDGE_MARGIN) {
-                top = anchorRect.top - notifRect.height - ANCHOR_GAP;
+            let top = anchorTop + anchorRect.height + ANCHOR_GAP;
+            if (top + notifRect.height > viewportHeight - EDGE_MARGIN) {
+                top = anchorTop - notifRect.height - ANCHOR_GAP;
             }
-            const maxTop = Math.max(EDGE_MARGIN, window.innerHeight - notifRect.height - EDGE_MARGIN);
+            const maxTop = Math.max(EDGE_MARGIN, viewportHeight - notifRect.height - EDGE_MARGIN);
             top = clamp(top, EDGE_MARGIN, maxTop);
 
             setPosition({ left, top, ready: true });
@@ -125,7 +132,7 @@ export const ChatShortageNotif: React.FC<ChatShortageNotifProps> = ({ surface, a
             window.removeEventListener('scroll', scheduleUpdate, true);
             window.removeEventListener('graph-render-tick', scheduleUpdate);
         };
-    }, [anchorRef, isVisible, token]);
+    }, [anchorRef, isVisible, token, portalMode, portalBoundsRect]);
 
     if (!isVisible) {
         return null;

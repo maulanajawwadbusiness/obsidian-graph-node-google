@@ -4,7 +4,7 @@ import { ChatInput } from './ChatInput';
 import { ChatShortageNotif } from './ChatShortageNotif';
 import { t } from '../i18n/t';
 import { useTooltip } from '../ui/tooltip/useTooltip';
-import { usePortalScopeMode } from '../components/portalScope/PortalScopeContext';
+import { usePortalBoundsRect, usePortalScopeMode } from '../components/portalScope/PortalScopeContext';
 
 const stopPropagation = (e: React.SyntheticEvent) => e.stopPropagation();
 
@@ -106,30 +106,34 @@ const LABEL_STYLE: React.CSSProperties = {
 function computePopupPosition(
     anchor: { x: number; y: number; radius: number },
     popupWidth: number,
-    popupHeight: number
+    popupHeight: number,
+    mode: 'app' | 'container',
+    boundsRect: DOMRect | null
 ): { left: number; top: number; originX: number; originY: number } {
-    const viewportWidth = window.innerWidth;
-    const viewportHeight = window.innerHeight;
+    const viewportWidth = mode === 'container' && boundsRect ? boundsRect.width : window.innerWidth;
+    const viewportHeight = mode === 'container' && boundsRect ? boundsRect.height : window.innerHeight;
+    const anchorX = mode === 'container' && boundsRect ? anchor.x - boundsRect.left : anchor.x;
+    const anchorY = mode === 'container' && boundsRect ? anchor.y - boundsRect.top : anchor.y;
 
     let left: number;
-    if (anchor.x > viewportWidth / 2) {
-        left = anchor.x - anchor.radius - GAP_FROM_NODE - popupWidth;
+    if (anchorX > viewportWidth / 2) {
+        left = anchorX - anchor.radius - GAP_FROM_NODE - popupWidth;
     } else {
-        left = anchor.x + anchor.radius + GAP_FROM_NODE;
+        left = anchorX + anchor.radius + GAP_FROM_NODE;
     }
 
     const minLeft = 10;
     const maxLeft = viewportWidth - popupWidth - 10;
     left = Math.max(minLeft, Math.min(left, maxLeft));
 
-    let top = anchor.y - popupHeight / 2;
+    let top = anchorY - popupHeight / 2;
     const minTop = 10;
     const maxTop = viewportHeight - popupHeight - 10;
     top = Math.max(minTop, Math.min(top, maxTop));
 
     // Origin relative to popup's top-left corner
-    const originX = anchor.x - left;
-    const originY = anchor.y - top;
+    const originX = anchorX - left;
+    const originY = anchorY - top;
 
     return { left, top, originX, originY };
 }
@@ -145,6 +149,7 @@ interface NodePopupProps {
 
 export const NodePopup: React.FC<NodePopupProps> = ({ trackNode, engineRef }) => {
     const portalMode = usePortalScopeMode();
+    const portalBoundsRect = usePortalBoundsRect();
     const { selectedNodeId, anchorGeometry, closePopup, sendMessage, setPopupRect, content } = usePopup();
     const popupRef = useRef<HTMLDivElement>(null);
     const [isVisible, setIsVisible] = useState(false);
@@ -169,7 +174,9 @@ export const NodePopup: React.FC<NodePopupProps> = ({ trackNode, engineRef }) =>
         ? computePopupPosition(
             anchorGeometry,
             popupRef.current?.offsetWidth || 280,
-            popupRef.current?.offsetHeight || window.innerHeight * 0.8
+            popupRef.current?.offsetHeight || window.innerHeight * 0.8,
+            portalMode,
+            portalBoundsRect
         )
         : { left: 0, top: 0, originX: 0, originY: 0 };
 
@@ -333,7 +340,7 @@ export const NodePopup: React.FC<NodePopupProps> = ({ trackNode, engineRef }) =>
                     const height = popupRef.current.offsetHeight;
 
                     // Pure layout calculation
-                    const rawPos = computePopupPosition(geom, width, height);
+                    const rawPos = computePopupPosition(geom, width, height, portalMode, portalBoundsRect);
 
                     // FIX 25 & 26: Consistent Rounding & Shared Snapshot
                     // We adhere to the "Sacred 60" policy:
@@ -363,7 +370,7 @@ export const NodePopup: React.FC<NodePopupProps> = ({ trackNode, engineRef }) =>
                 if (geom) {
                     const width = popupRef.current.offsetWidth;
                     const height = popupRef.current.offsetHeight;
-                    const rawPos = computePopupPosition(geom, width, height);
+                    const rawPos = computePopupPosition(geom, width, height, portalMode, portalBoundsRect);
                     const dpr = window.devicePixelRatio || 1;
                     // Default to quantized for legacy path
                     finalLeft = quantizeToDevicePixel(rawPos.left, dpr);
@@ -385,7 +392,7 @@ export const NodePopup: React.FC<NodePopupProps> = ({ trackNode, engineRef }) =>
         window.addEventListener('graph-render-tick', handleSync);
 
         return () => window.removeEventListener('graph-render-tick', handleSync);
-    }, [selectedNodeId, trackNode, isVisible, engineRef]);
+    }, [selectedNodeId, trackNode, isVisible, engineRef, portalMode, portalBoundsRect]);
 
     const finalStyle: React.CSSProperties = {
         ...POPUP_STYLE,

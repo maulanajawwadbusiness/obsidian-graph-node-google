@@ -290,6 +290,7 @@ export const startGraphRenderLoop = (deps: GraphRenderLoopDeps) => {
     engine.updateBounds(canvas.width, canvas.height);
 
     const render = () => {
+        if (disposed) return;
         // FIX 36: Deferred Drag Start (First Frame Continuity)
         // Apply the grab using the EXACT camera/surface state of this frame.
         if (pendingPointerRef.current.pendingDragStart) {
@@ -334,7 +335,9 @@ export const startGraphRenderLoop = (deps: GraphRenderLoopDeps) => {
 
         const rect = canvas.getBoundingClientRect();
         if (rect.width <= 0 || rect.height <= 0) {
-            frameId = requestAnimationFrame(render);
+            if (!disposed) {
+                frameId = requestAnimationFrame(render);
+            }
             return;
         }
 
@@ -574,7 +577,9 @@ export const startGraphRenderLoop = (deps: GraphRenderLoopDeps) => {
 
         trackMetrics(now, engine);
 
-        frameId = requestAnimationFrame(render);
+        if (!disposed) {
+            frameId = requestAnimationFrame(render);
+        }
     };
 
     const handleBlur = () => {

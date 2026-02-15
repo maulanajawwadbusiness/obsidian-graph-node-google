@@ -83,6 +83,14 @@ const CLOSE_ICON_VIEWBOX = '0 0 100 100';
 type RowMenuItemKey = 'rename' | 'delete';
 type MoreMenuItemKey = 'suggestion' | 'blog';
 type SidebarMotionPhase = 'collapsed' | 'expanding' | 'expanded' | 'collapsing';
+const SIDEBAR_FLICKER_DEBUG = false;
+const SIDEBAR_FLICKER_DEBUG_SWITCHES = {
+    logFrames: false,
+    showTitlesExpandedOnly: false,
+    removeTitleTransform: false,
+    forceTitleOverflowClip: false,
+    disableHoverResetOnMotionStart: false,
+} as const;
 
 const roundedRectArcPath = (x: number, y: number, width: number, height: number, radius: number): string => {
     const r = Math.max(0, Math.min(radius, width / 2, height / 2));
@@ -174,6 +182,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
     const renameInputRef = React.useRef<HTMLInputElement | null>(null);
     const avatarTriggerRef = React.useRef<HTMLDivElement | null>(null);
     const moreTriggerRef = React.useRef<HTMLButtonElement | null>(null);
+    const sidebarRootRef = React.useRef<HTMLElement | null>(null);
+    const firstSessionTitleRef = React.useRef<HTMLSpanElement | null>(null);
+    const flickerLogSeqRef = React.useRef(0);
+    const flickerRafRef = React.useRef<number | null>(null);
     const menuItemPreview = React.useMemo<Array<{ key: RowMenuItemKey; icon: string; label: string; color: string }>>(
         () => [
             { key: 'rename', icon: renameIcon, label: 'Rename', color: SIDEBAR_TEXT_COLOR },
@@ -185,7 +197,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
     const canOpenAvatarMenu = Boolean(onOpenProfile || onRequestLogout);
     const isInMotionPhase = motionPhase === 'expanding' || motionPhase === 'collapsing';
     const shouldMountExpandedContent = isExpanded || motionPhase !== 'collapsed';
-    const shouldShowSessionTitles = motionPhase === 'expanding' || motionPhase === 'expanded';
+    const shouldShowSessionTitles = SIDEBAR_FLICKER_DEBUG && SIDEBAR_FLICKER_DEBUG_SWITCHES.showTitlesExpandedOnly
+        ? motionPhase === 'expanded'
+        : motionPhase === 'expanding' || motionPhase === 'expanded';
     const shouldShowAvatarName = motionPhase === 'expanding' || motionPhase === 'expanded';
     const contentTransitionCss = prefersReducedMotion ? 'none' : getSidebarContentTransitionCss(isExpanded);
     const widthTransitionCss = prefersReducedMotion ? 'none' : getSidebarWidthTransitionCss(isExpanded);
@@ -558,9 +572,69 @@ export const Sidebar: React.FC<SidebarProps> = ({
         setDocumentHover(false);
         setAvatarRowHover(false);
         setCloseHover(false);
-        setHoveredInterfaceId(null);
-        setHoveredEllipsisRowId(null);
+        if (!(SIDEBAR_FLICKER_DEBUG && SIDEBAR_FLICKER_DEBUG_SWITCHES.disableHoverResetOnMotionStart)) {
+            setHoveredInterfaceId(null);
+            setHoveredEllipsisRowId(null);
+        }
     }, [isInMotionPhase]);
+
+    React.useEffect(() => {
+        if (!(SIDEBAR_FLICKER_DEBUG && SIDEBAR_FLICKER_DEBUG_SWITCHES.logFrames)) return;
+        if (flickerRafRef.current !== null) {
+            window.cancelAnimationFrame(flickerRafRef.current);
+            flickerRafRef.current = null;
+        }
+        const seq = ++flickerLogSeqRef.current;
+        const direction = isExpanded ? 'expand' : 'collapse';
+        const maxFrames = 20;
+        let frame = 0;
+        const logFrame = () => {
+            frame += 1;
+            const titleEl = firstSessionTitleRef.current;
+            const sidebarEl = sidebarRootRef.current;
+            const titleStyle = titleEl ? window.getComputedStyle(titleEl) : null;
+            const sidebarStyleComputed = sidebarEl ? window.getComputedStyle(sidebarEl) : null;
+            const opacity = titleStyle?.opacity ?? 'na';
+            const transform = titleStyle?.transform ?? 'na';
+            const color = titleStyle?.color ?? 'na';
+            const textOverflow = titleStyle?.textOverflow ?? 'na';
+            const clientWidth = titleEl?.clientWidth ?? -1;
+            const scrollWidth = titleEl?.scrollWidth ?? -1;
+            const sidebarWidth = sidebarEl ? Number(sidebarEl.getBoundingClientRect().width.toFixed(2)) : -1;
+            const sidebarCssWidth = sidebarStyleComputed?.width ?? 'na';
+            console.log(
+                '[sidebar-flicker] seq=%d frame=%d dir=%s isExpanded=%s motionPhase=%s showTitles=%s opacity=%s transform=%s cw=%d sw=%d overflow=%s color=%s sidebarW=%s sidebarCssW=%s hoveredRow=%s hoveredEllipsis=%s',
+                seq,
+                frame,
+                direction,
+                isExpanded ? '1' : '0',
+                motionPhase,
+                shouldShowSessionTitles ? '1' : '0',
+                opacity,
+                transform,
+                clientWidth,
+                scrollWidth,
+                textOverflow,
+                color,
+                String(sidebarWidth),
+                sidebarCssWidth,
+                hoveredInterfaceId ?? '-',
+                hoveredEllipsisRowId ?? '-'
+            );
+            if (frame < maxFrames) {
+                flickerRafRef.current = window.requestAnimationFrame(logFrame);
+            } else {
+                flickerRafRef.current = null;
+            }
+        };
+        flickerRafRef.current = window.requestAnimationFrame(logFrame);
+        return () => {
+            if (flickerRafRef.current !== null) {
+                window.cancelAnimationFrame(flickerRafRef.current);
+                flickerRafRef.current = null;
+            }
+        };
+    }, [hoveredEllipsisRowId, hoveredInterfaceId, isExpanded, motionPhase, shouldShowSessionTitles]);
 
     React.useEffect(() => {
         if (isExpanded) {
@@ -602,10 +676,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
     };
     const sessionTitleRevealStyle: React.CSSProperties = {
         opacity: shouldShowSessionTitles ? 1 : 0,
-        transform: shouldShowSessionTitles ? 'translateX(0px)' : `translateX(-${SESSION_TEXT_HIDDEN_OFFSET_PX}px)`,
+        transform: SIDEBAR_FLICKER_DEBUG && SIDEBAR_FLICKER_DEBUG_SWITCHES.removeTitleTransform
+            ? 'none'
+            : (shouldShowSessionTitles ? 'translateX(0px)' : `translateX(-${SESSION_TEXT_HIDDEN_OFFSET_PX}px)`),
         transition: contentTransitionCss,
         pointerEvents: shouldShowSessionTitles ? 'auto' : 'none',
     };
+    const interfaceTitleStyle: React.CSSProperties = SIDEBAR_FLICKER_DEBUG && SIDEBAR_FLICKER_DEBUG_SWITCHES.forceTitleOverflowClip
+        ? { ...INTERFACE_TEXT_STYLE, textOverflow: 'clip' }
+        : INTERFACE_TEXT_STYLE;
     const avatarNameRevealStyle: React.CSSProperties = {
         opacity: shouldShowAvatarName ? 1 : 0,
         transform: shouldShowAvatarName
@@ -621,6 +700,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
     return (
         <aside
+            ref={sidebarRootRef}
             data-sidebar-root="1"
             data-row-menu-open={openRowMenuId ? '1' : '0'}
             data-row-menu-anchor-ready={rowMenuAnchorRect ? '1' : '0'}
@@ -799,7 +879,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         {!interfaces || interfaces.length === 0 ? (
                             <div style={INTERFACE_EMPTY_STATE_STYLE}>No saved interfaces yet.</div>
                         ) : (
-                            interfaces.map((item) => {
+                            interfaces.map((item, index) => {
                                 const isHovered = hoveredInterfaceId === item.id;
                                 const isSelected = selectedInterfaceId === item.id;
                                 const isRenaming = renamingRowId === item.id;
@@ -865,7 +945,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
                                                     />
                                                 </span>
                                             ) : (
-                                                <span style={{ ...INTERFACE_TEXT_STYLE, ...sessionTitleRevealStyle }}>{item.title}</span>
+                                                <span
+                                                    ref={index === 0 ? firstSessionTitleRef : undefined}
+                                                    style={{ ...interfaceTitleStyle, ...sessionTitleRevealStyle }}
+                                                >
+                                                    {item.title}
+                                                </span>
                                             )}
                                             <span style={INTERFACE_ROW_MENU_SLOT_STYLE}>
                                                 <button

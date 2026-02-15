@@ -474,20 +474,28 @@ export const AppShell: React.FC = () => {
 
     React.useEffect(() => {
         if (screen !== 'graph_loading') return;
-        const onKeyDown = (event: KeyboardEvent) => {
+        const onKeyDownCapture = (event: KeyboardEvent) => {
+            const gateRoot = graphLoadingGateRootRef.current;
+            const eventTarget = event.target as Node | null;
+            if (gateRoot && eventTarget && gateRoot.contains(eventTarget)) {
+                return;
+            }
             if (event.key === 'Escape') {
                 event.preventDefault();
+                event.stopPropagation();
                 backToPromptFromGate();
                 return;
             }
-            if (event.key === 'Enter' && gatePhase === 'done') {
+            if (event.key === 'Enter' || event.key === ' ') {
                 event.preventDefault();
+                event.stopPropagation();
+                if (gatePhase !== 'done') return;
                 confirmGraphLoadingGate();
             }
         };
-        window.addEventListener('keydown', onKeyDown);
+        window.addEventListener('keydown', onKeyDownCapture, true);
         return () => {
-            window.removeEventListener('keydown', onKeyDown);
+            window.removeEventListener('keydown', onKeyDownCapture, true);
         };
     }, [backToPromptFromGate, confirmGraphLoadingGate, gatePhase, screen]);
 

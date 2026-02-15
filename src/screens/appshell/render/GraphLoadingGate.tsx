@@ -86,6 +86,21 @@ export const GraphLoadingGate: React.FC<GraphLoadingGateProps> = ({
     showBackToPrompt = false,
     onBackToPrompt,
 }) => {
+    const onGateKeyDownCapture = React.useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
+        if (event.key === 'Escape') {
+            event.preventDefault();
+            event.stopPropagation();
+            onBackToPrompt?.();
+            return;
+        }
+        if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            event.stopPropagation();
+            if (!confirmEnabled) return;
+            onConfirm?.();
+        }
+    }, [confirmEnabled, onBackToPrompt, onConfirm]);
+
     return (
         <div
             ref={rootRef}
@@ -100,6 +115,7 @@ export const GraphLoadingGate: React.FC<GraphLoadingGateProps> = ({
                 e.stopPropagation();
             }}
             onContextMenu={(e) => e.preventDefault()}
+            onKeyDownCapture={onGateKeyDownCapture}
         >
             <div style={TEXT_STYLE}>Loading...</div>
             {showBackToPrompt ? (

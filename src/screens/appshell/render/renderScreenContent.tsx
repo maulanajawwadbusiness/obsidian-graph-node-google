@@ -3,6 +3,7 @@ import { EnterPrompt } from '../../EnterPrompt';
 import { Welcome1 } from '../../Welcome1';
 import { Welcome2 } from '../../Welcome2';
 import { GraphScreenShell } from './GraphScreenShell';
+import { GraphLoadingGate } from './GraphLoadingGate';
 import { AppScreen, isGraphClassScreen } from '../screenFlow/screenTypes';
 import type {
     GraphPhysicsPlaygroundProps,
@@ -91,6 +92,7 @@ export function renderScreenContent(args: RenderScreenArgs): React.ReactNode {
                             commitPatchLayoutByDocId(docId, layout, camera, reason)
                         }
                     />
+                    {screen === 'graph_loading' ? <GraphLoadingGate /> : null}
                 </GraphScreenShell>
             </Suspense>
         );

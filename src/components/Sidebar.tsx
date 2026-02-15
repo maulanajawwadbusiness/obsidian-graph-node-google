@@ -184,12 +184,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
     const moreTriggerRef = React.useRef<HTMLButtonElement | null>(null);
     const sidebarRootRef = React.useRef<HTMLElement | null>(null);
     const firstSessionTitleRef = React.useRef<HTMLSpanElement | null>(null);
-    const prevIsExpandedRef = React.useRef(isExpanded);
-    const phaseLogSeqRef = React.useRef(0);
-    const phaseRenderLogsRemainingRef = React.useRef(0);
-    const phasePaintLogsRemainingRef = React.useRef(0);
-    const phasePaintRafRef = React.useRef<number | null>(null);
-    const phaseDirectionRef = React.useRef<'expand' | 'collapse'>('expand');
+    const flickerLogSeqRef = React.useRef(0);
+    const flickerRafRef = React.useRef<number | null>(null);
     const menuItemPreview = React.useMemo<Array<{ key: RowMenuItemKey; icon: string; label: string; color: string }>>(
         () => [
             { key: 'rename', icon: renameIcon, label: 'Rename', color: SIDEBAR_TEXT_COLOR },
@@ -582,103 +578,63 @@ export const Sidebar: React.FC<SidebarProps> = ({
         }
     }, [isInMotionPhase]);
 
-    React.useLayoutEffect(() => {
-        if (!(SIDEBAR_FLICKER_DEBUG && SIDEBAR_FLICKER_DEBUG_SWITCHES.logFrames)) {
-            prevIsExpandedRef.current = isExpanded;
-            return;
+    React.useEffect(() => {
+        if (!(SIDEBAR_FLICKER_DEBUG && SIDEBAR_FLICKER_DEBUG_SWITCHES.logFrames)) return;
+        if (flickerRafRef.current !== null) {
+            window.cancelAnimationFrame(flickerRafRef.current);
+            flickerRafRef.current = null;
         }
-        if (prevIsExpandedRef.current === isExpanded) return;
-        prevIsExpandedRef.current = isExpanded;
-        phaseDirectionRef.current = isExpanded ? 'expand' : 'collapse';
-        phaseRenderLogsRemainingRef.current = 3;
-        phasePaintLogsRemainingRef.current = 3;
-        const seq = ++phaseLogSeqRef.current;
-        if (phasePaintRafRef.current !== null) {
-            window.cancelAnimationFrame(phasePaintRafRef.current);
-            phasePaintRafRef.current = null;
-        }
-        const logPaint = () => {
-            if (phasePaintLogsRemainingRef.current <= 0) {
-                phasePaintRafRef.current = null;
-                return;
-            }
-            const paintIndex = 4 - phasePaintLogsRemainingRef.current;
+        const seq = ++flickerLogSeqRef.current;
+        const direction = isExpanded ? 'expand' : 'collapse';
+        const maxFrames = 20;
+        let frame = 0;
+        const logFrame = () => {
+            frame += 1;
             const titleEl = firstSessionTitleRef.current;
             const sidebarEl = sidebarRootRef.current;
             const titleStyle = titleEl ? window.getComputedStyle(titleEl) : null;
             const sidebarStyleComputed = sidebarEl ? window.getComputedStyle(sidebarEl) : null;
             const opacity = titleStyle?.opacity ?? 'na';
             const transform = titleStyle?.transform ?? 'na';
+            const color = titleStyle?.color ?? 'na';
+            const textOverflow = titleStyle?.textOverflow ?? 'na';
             const clientWidth = titleEl?.clientWidth ?? -1;
             const scrollWidth = titleEl?.scrollWidth ?? -1;
             const sidebarWidth = sidebarEl ? Number(sidebarEl.getBoundingClientRect().width.toFixed(2)) : -1;
             const sidebarCssWidth = sidebarStyleComputed?.width ?? 'na';
             console.log(
-                '[sidebar-phase] seq=%d paint=%d dir=%s isExpanded=%s motionPhase=%s showTitles=%s transition=%s opacity=%s transform=%s cw=%d sw=%d sidebarW=%s sidebarCssW=%s hoveredRow=%s hoveredEllipsis=%s',
+                '[sidebar-flicker] seq=%d frame=%d dir=%s isExpanded=%s motionPhase=%s showTitles=%s opacity=%s transform=%s cw=%d sw=%d overflow=%s color=%s sidebarW=%s sidebarCssW=%s hoveredRow=%s hoveredEllipsis=%s',
                 seq,
-                paintIndex,
-                phaseDirectionRef.current,
+                frame,
+                direction,
                 isExpanded ? '1' : '0',
                 motionPhase,
                 shouldShowSessionTitles ? '1' : '0',
-                contentTransitionCss,
                 opacity,
                 transform,
                 clientWidth,
                 scrollWidth,
+                textOverflow,
+                color,
                 String(sidebarWidth),
                 sidebarCssWidth,
                 hoveredInterfaceId ?? '-',
                 hoveredEllipsisRowId ?? '-'
             );
-            phasePaintLogsRemainingRef.current -= 1;
-            if (phasePaintLogsRemainingRef.current > 0) {
-                phasePaintRafRef.current = window.requestAnimationFrame(logPaint);
+            if (frame < maxFrames) {
+                flickerRafRef.current = window.requestAnimationFrame(logFrame);
             } else {
-                phasePaintRafRef.current = null;
+                flickerRafRef.current = null;
             }
         };
-        phasePaintRafRef.current = window.requestAnimationFrame(logPaint);
+        flickerRafRef.current = window.requestAnimationFrame(logFrame);
         return () => {
-            if (phasePaintRafRef.current !== null) {
-                window.cancelAnimationFrame(phasePaintRafRef.current);
-                phasePaintRafRef.current = null;
+            if (flickerRafRef.current !== null) {
+                window.cancelAnimationFrame(flickerRafRef.current);
+                flickerRafRef.current = null;
             }
         };
-    }, [contentTransitionCss, hoveredEllipsisRowId, hoveredInterfaceId, isExpanded, motionPhase, shouldShowSessionTitles]);
-
-    React.useEffect(() => {
-        if (!(SIDEBAR_FLICKER_DEBUG && SIDEBAR_FLICKER_DEBUG_SWITCHES.logFrames)) return;
-        if (phaseRenderLogsRemainingRef.current <= 0) return;
-        const renderIndex = 4 - phaseRenderLogsRemainingRef.current;
-        const seq = phaseLogSeqRef.current;
-        const titleEl = firstSessionTitleRef.current;
-        const sidebarEl = sidebarRootRef.current;
-        const titleStyle = titleEl ? window.getComputedStyle(titleEl) : null;
-        const opacity = titleStyle?.opacity ?? 'na';
-        const transform = titleStyle?.transform ?? 'na';
-        const clientWidth = titleEl?.clientWidth ?? -1;
-        const scrollWidth = titleEl?.scrollWidth ?? -1;
-        const sidebarWidth = sidebarEl ? Number(sidebarEl.getBoundingClientRect().width.toFixed(2)) : -1;
-        console.log(
-            '[sidebar-phase] seq=%d render=%d dir=%s isExpanded=%s motionPhase=%s showTitles=%s transition=%s opacity=%s transform=%s cw=%d sw=%d sidebarW=%s hoveredRow=%s hoveredEllipsis=%s',
-            seq,
-            renderIndex,
-            phaseDirectionRef.current,
-            isExpanded ? '1' : '0',
-            motionPhase,
-            shouldShowSessionTitles ? '1' : '0',
-            contentTransitionCss,
-            opacity,
-            transform,
-            clientWidth,
-            scrollWidth,
-            String(sidebarWidth),
-            hoveredInterfaceId ?? '-',
-            hoveredEllipsisRowId ?? '-'
-        );
-        phaseRenderLogsRemainingRef.current -= 1;
-    });
+    }, [hoveredEllipsisRowId, hoveredInterfaceId, isExpanded, motionPhase, shouldShowSessionTitles]);
 
     React.useEffect(() => {
         if (isExpanded) {

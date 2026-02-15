@@ -8,6 +8,7 @@ import { devExportToSavedInterfaceRecordV1 } from '../lib/devExport/devExportToS
 import { parseDevInterfaceExportStrict } from '../lib/devExport/parseDevInterfaceExportStrict';
 import { parseSavedInterfaceRecordForPreview } from '../lib/devExport/parseSavedInterfaceRecordForPreview';
 import { validateSampleGraphSemantic } from '../lib/preview/validateSampleGraphSemantic';
+import { warnIfInvalidCurrentSamplePreviewExportOnce } from '../lib/preview/validateCurrentSamplePreviewExport';
 import {
     PREVIEW_VALIDATION_ERROR_CODE,
     createValidationError,
@@ -60,6 +61,35 @@ const PREVIEW_FALLBACK_STYLE: React.CSSProperties = {
     fontFamily: 'var(--font-ui)',
     textTransform: 'uppercase',
     letterSpacing: '0.4px',
+};
+
+const PREVIEW_ERROR_WRAP_STYLE: React.CSSProperties = {
+    width: '100%',
+    height: '100%',
+    display: 'flex',
+    flexDirection: 'column',
+    justifyContent: 'center',
+    alignItems: 'stretch',
+    gap: '4px',
+    padding: '8px 10px',
+    color: 'rgba(255, 255, 255, 0.72)',
+    fontSize: '11px',
+    fontFamily: 'var(--font-ui)',
+    lineHeight: 1.35,
+    overflow: 'hidden',
+};
+
+const PREVIEW_ERROR_TITLE_STYLE: React.CSSProperties = {
+    textTransform: 'uppercase',
+    letterSpacing: '0.35px',
+    color: 'rgba(255, 170, 170, 0.92)',
+    fontWeight: 600,
+};
+
+const PREVIEW_ERROR_LINE_STYLE: React.CSSProperties = {
+    whiteSpace: 'nowrap',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
 };
 
 type PreviewErrorBoundaryState = {
@@ -144,9 +174,15 @@ export const SampleGraphPreview: React.FC = () => {
         return undefined;
     }, []);
 
+    React.useEffect(() => {
+        warnIfInvalidCurrentSamplePreviewExportOnce();
+    }, []);
+
     const isLeaseDenied = leaseState.phase === 'denied';
     const canMountRuntime = leaseState.phase === 'allowed' && portalRootEl && sampleLoadResult.ok;
     const sampleErrors: ValidationError[] = sampleLoadResult.ok ? [] : sampleLoadResult.errors;
+    const shownErrors = sampleErrors.slice(0, 3);
+    const hiddenErrorCount = Math.max(sampleErrors.length - shownErrors.length, 0);
 
     return (
         <div {...previewRootMarker} style={PREVIEW_ROOT_STYLE}>
@@ -170,8 +206,16 @@ export const SampleGraphPreview: React.FC = () => {
                             preview paused (active: {leaseState.activeOwner})
                         </div>
                     ) : sampleErrors.length > 0 ? (
-                        <div style={PREVIEW_FALLBACK_STYLE}>
-                            sample graph invalid ({sampleErrors[0].code})
+                        <div style={PREVIEW_ERROR_WRAP_STYLE}>
+                            <div style={PREVIEW_ERROR_TITLE_STYLE}>sample graph invalid</div>
+                            {shownErrors.map((error, idx) => (
+                                <div key={`${error.code}-${idx}`} style={PREVIEW_ERROR_LINE_STYLE}>
+                                    [{error.code}] {error.message}
+                                </div>
+                            ))}
+                            {hiddenErrorCount > 0 ? (
+                                <div style={PREVIEW_ERROR_LINE_STYLE}>+{hiddenErrorCount} more</div>
+                            ) : null}
                         </div>
                     ) : (
                         <div style={PREVIEW_FALLBACK_STYLE}>sample graph initializing...</div>

@@ -2,6 +2,8 @@ import type { SavedInterfaceRecordV1 } from '../../store/savedInterfacesStore';
 import { createValidationError } from '../validation/errors';
 import { err, ok, type Result } from '../validation/result';
 
+export const SAMPLE_PREVIEW_REQUIRE_NONEMPTY_TOPOLOGY = true;
+
 function isFiniteNumber(value: unknown): value is number {
     return typeof value === 'number' && Number.isFinite(value);
 }
@@ -11,7 +13,7 @@ export function validateSampleGraphSemantic(record: SavedInterfaceRecordV1): Res
     const nodes = record.topology.nodes ?? [];
     const links = record.topology.links ?? [];
 
-    if (nodes.length <= 0) {
+    if (SAMPLE_PREVIEW_REQUIRE_NONEMPTY_TOPOLOGY && nodes.length <= 0) {
         errors.push(createValidationError('SEMANTIC_TOPOLOGY_EMPTY', 'topology.nodes must be non-empty', 'topology.nodes'));
     }
 

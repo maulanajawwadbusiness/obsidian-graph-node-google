@@ -5,6 +5,7 @@ import sendIcon from '../assets/send_icon_white.png';
 import clipIcon from '../assets/clip_icon.png';
 import fileMiniIcon from '../assets/file_mini_icon.png';
 import { useTooltip } from '../ui/tooltip/useTooltip';
+import { SampleGraphPreview } from './SampleGraphPreview';
 
 // Toggle: true = block submit when text is empty, false = allow empty submit path.
 const HARD_BLOCK_EMPTY_TEXT_SUBMIT = false;
@@ -85,7 +86,7 @@ export const PromptCard: React.FC<PromptCardProps> = ({
         <div style={CARD_STYLE}>
             <div style={CARD_INNER_STYLE}>
                 <div style={GRAPH_PREVIEW_PLACEHOLDER_STYLE}>
-                    <div style={PLACEHOLDER_LABEL_STYLE}>{t('onboarding.enterprompt.graph_preview_placeholder')}</div>
+                    <SampleGraphPreview />
                 </div>
 
                 <div style={HEADLINE_STYLE}>
@@ -278,14 +279,6 @@ const GRAPH_PREVIEW_PLACEHOLDER_STYLE: React.CSSProperties = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-};
-
-const PLACEHOLDER_LABEL_STYLE: React.CSSProperties = {
-    fontSize: '13px',
-    color: 'rgba(255, 255, 255, 0.35)',
-    fontFamily: 'var(--font-ui)',
-    textTransform: 'uppercase',
-    letterSpacing: '0.5px',
 };
 
 const INPUT_PILL_STYLE: React.CSSProperties = {

@@ -7,6 +7,7 @@ import handoffIcon from '../assets/handoff_minichat.png';
 import type { PopupRect } from './popupTypes';
 import { t } from '../i18n/t';
 import { useTooltip } from '../ui/tooltip/useTooltip';
+import { usePortalScopeMode } from '../components/portalScope/PortalScopeContext';
 
 /**
  * MiniChatbar - Small chat window next to popup
@@ -51,6 +52,11 @@ const CHATBAR_STYLE: React.CSSProperties = {
     transition: 'opacity 200ms ease-out, transform 200ms ease-out',
     opacity: 0,
     transform: 'scale(0.95) translateY(10px)',
+};
+
+const CHATBAR_STYLE_CONTAINER: React.CSSProperties = {
+    ...CHATBAR_STYLE,
+    position: 'absolute',
 };
 
 const CHATBAR_VISIBLE_STYLE: React.CSSProperties = {
@@ -207,6 +213,7 @@ function computeChatbarPosition(
 }
 
 export const MiniChatbar: React.FC<MiniChatbarProps> = ({ messages, onSend, onClose }) => {
+    const portalMode = usePortalScopeMode();
     const [isVisible, setIsVisible] = useState(false);
     const [inputText, setInputText] = useState('');
     const [chatbarSize, setChatbarSize] = useState<ChatbarSize | null>(null);
@@ -386,7 +393,7 @@ export const MiniChatbar: React.FC<MiniChatbarProps> = ({ messages, onSend, onCl
     const position = computeChatbarPosition(popupRect, chatbarSize);
 
     const finalStyle = {
-        ...CHATBAR_STYLE,
+        ...(portalMode === 'container' ? CHATBAR_STYLE_CONTAINER : CHATBAR_STYLE),
         ...(isVisible ? CHATBAR_VISIBLE_STYLE : {}),
         ...position,
     };

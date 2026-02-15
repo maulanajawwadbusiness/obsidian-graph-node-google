@@ -10,7 +10,7 @@ import React, {
 } from 'react';
 import { createPortal } from 'react-dom';
 import { LAYER_TOOLTIP } from '../layers';
-import { usePortalRootEl } from '../../components/portalScope/PortalScopeContext';
+import { usePortalRootEl, usePortalScopeMode } from '../../components/portalScope/PortalScopeContext';
 
 type TooltipProviderProps = {
     children: React.ReactNode;
@@ -60,14 +60,21 @@ type TooltipControllerContextValue = {
 
 const TooltipControllerContext = createContext<TooltipControllerContextValue | null>(null);
 
-const TOOLTIP_PORTAL_ROOT_STYLE: React.CSSProperties = {
+const TOOLTIP_PORTAL_ROOT_STYLE_APP: React.CSSProperties = {
     position: 'fixed',
     inset: 0,
     zIndex: LAYER_TOOLTIP,
     pointerEvents: 'none',
 };
 
-const TOOLTIP_BUBBLE_STYLE_BASE: React.CSSProperties = {
+const TOOLTIP_PORTAL_ROOT_STYLE_CONTAINER: React.CSSProperties = {
+    position: 'absolute',
+    inset: 0,
+    zIndex: LAYER_TOOLTIP,
+    pointerEvents: 'none',
+};
+
+const TOOLTIP_BUBBLE_STYLE_BASE_APP: React.CSSProperties = {
     position: 'fixed',
     transform: 'translate3d(0,0,0)',
     pointerEvents: 'none',
@@ -83,6 +90,11 @@ const TOOLTIP_BUBBLE_STYLE_BASE: React.CSSProperties = {
     whiteSpace: 'normal',
     wordBreak: 'break-word',
     boxSizing: 'border-box',
+};
+
+const TOOLTIP_BUBBLE_STYLE_BASE_CONTAINER: React.CSSProperties = {
+    ...TOOLTIP_BUBBLE_STYLE_BASE_APP,
+    position: 'absolute',
 };
 
 const INITIAL_TOOLTIP_STATE: TooltipState = {
@@ -152,7 +164,7 @@ function computeTooltipPosition(input: {
     return { left, top, placement };
 }
 
-const TooltipRenderer: React.FC<{ state: TooltipState }> = ({ state }) => {
+const TooltipRenderer: React.FC<{ state: TooltipState; mode: 'app' | 'container' }> = ({ state, mode }) => {
     if (!state.open || !state.anchorRect || state.content.trim().length === 0) return null;
     const bubbleRef = useRef<HTMLDivElement | null>(null);
     const [tooltipSize, setTooltipSize] = useState<TooltipSize>({ width: 0, height: 0 });
@@ -210,7 +222,7 @@ const TooltipRenderer: React.FC<{ state: TooltipState }> = ({ state }) => {
             data-tooltip-instance="1"
             data-tooltip-placement={computed.placement}
             style={{
-                ...TOOLTIP_BUBBLE_STYLE_BASE,
+                ...(mode === 'container' ? TOOLTIP_BUBBLE_STYLE_BASE_CONTAINER : TOOLTIP_BUBBLE_STYLE_BASE_APP),
                 left: `${computed.left}px`,
                 top: `${computed.top}px`,
             }}
@@ -222,9 +234,13 @@ const TooltipRenderer: React.FC<{ state: TooltipState }> = ({ state }) => {
 
 const TooltipPortal: React.FC<{ state: TooltipState }> = ({ state }) => {
     const portalRoot = usePortalRootEl();
+    const mode = usePortalScopeMode();
     return createPortal(
-        <div data-tooltip-layer-root="1" style={TOOLTIP_PORTAL_ROOT_STYLE}>
-            <TooltipRenderer state={state} />
+        <div
+            data-tooltip-layer-root="1"
+            style={mode === 'container' ? TOOLTIP_PORTAL_ROOT_STYLE_CONTAINER : TOOLTIP_PORTAL_ROOT_STYLE_APP}
+        >
+            <TooltipRenderer state={state} mode={mode} />
         </div>,
         portalRoot
     );

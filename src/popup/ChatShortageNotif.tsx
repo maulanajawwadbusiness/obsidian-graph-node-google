@@ -1,5 +1,6 @@
 import React from 'react';
 import { hideShortage, useShortageStore } from '../money/shortageStore';
+import { usePortalScopeMode } from '../components/portalScope/PortalScopeContext';
 
 type AnchoredShortageSurface = 'node-popup' | 'mini-chat';
 
@@ -36,6 +37,11 @@ const BASE_STYLE: React.CSSProperties = {
     transition: 'opacity 120ms ease',
 };
 
+const BASE_STYLE_CONTAINER: React.CSSProperties = {
+    ...BASE_STYLE,
+    position: 'absolute',
+};
+
 const stopPropagation = (event: React.SyntheticEvent) => {
     event.stopPropagation();
 };
@@ -45,6 +51,7 @@ function clamp(value: number, min: number, max: number): number {
 }
 
 export const ChatShortageNotif: React.FC<ChatShortageNotifProps> = ({ surface, anchorRef, zIndex = 1003 }) => {
+    const portalMode = usePortalScopeMode();
     const { open, context, surface: shortageSurface, token } = useShortageStore();
     const notifRef = React.useRef<HTMLDivElement>(null);
     const [position, setPosition] = React.useState<Position>({ left: -9999, top: -9999, ready: false });
@@ -129,6 +136,7 @@ export const ChatShortageNotif: React.FC<ChatShortageNotifProps> = ({ surface, a
             ref={notifRef}
             style={{
                 ...BASE_STYLE,
+                ...(portalMode === 'container' ? BASE_STYLE_CONTAINER : null),
                 left: `${position.left}px`,
                 top: `${position.top}px`,
                 zIndex,

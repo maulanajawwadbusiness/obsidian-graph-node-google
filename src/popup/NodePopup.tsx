@@ -4,6 +4,7 @@ import { ChatInput } from './ChatInput';
 import { ChatShortageNotif } from './ChatShortageNotif';
 import { t } from '../i18n/t';
 import { useTooltip } from '../ui/tooltip/useTooltip';
+import { usePortalScopeMode } from '../components/portalScope/PortalScopeContext';
 
 const stopPropagation = (e: React.SyntheticEvent) => e.stopPropagation();
 
@@ -90,6 +91,11 @@ const CONTENT_STYLE: React.CSSProperties = {
     lineHeight: '1.6',
 };
 
+const BACKDROP_STYLE_CONTAINER: React.CSSProperties = {
+    ...BACKDROP_STYLE,
+    position: 'absolute',
+};
+
 const LABEL_STYLE: React.CSSProperties = {
     fontSize: '16px',
     fontWeight: '300',
@@ -138,6 +144,7 @@ interface NodePopupProps {
 }
 
 export const NodePopup: React.FC<NodePopupProps> = ({ trackNode, engineRef }) => {
+    const portalMode = usePortalScopeMode();
     const { selectedNodeId, anchorGeometry, closePopup, sendMessage, setPopupRect, content } = usePopup();
     const popupRef = useRef<HTMLDivElement>(null);
     const [isVisible, setIsVisible] = useState(false);
@@ -392,7 +399,7 @@ export const NodePopup: React.FC<NodePopupProps> = ({ trackNode, engineRef }) =>
         <>
             {/* Backdrop - handles click-outside without document listener */}
             <div
-                style={BACKDROP_STYLE}
+                style={portalMode === 'container' ? BACKDROP_STYLE_CONTAINER : BACKDROP_STYLE}
                 onClick={closePopup}
                 onMouseDown={stopPropagation}
                 onPointerDown={stopPropagation}

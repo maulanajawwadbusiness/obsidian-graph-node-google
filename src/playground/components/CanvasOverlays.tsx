@@ -17,6 +17,7 @@ import fullscreenOpenIcon from '../../assets/fullscreen_open_icon.png';
 import fullscreenCloseIcon from '../../assets/fullscreen_close_icon.png';
 import { useFullscreen } from '../../hooks/useFullscreen';
 import { useTooltip } from '../../ui/tooltip/useTooltip';
+import { usePortalScopeMode } from '../../components/portalScope/PortalScopeContext';
 
 // Toggle to show/hide debug controls buttons (Debug, Theme, Controls)
 const SHOW_DEBUG_CONTROLS = false;
@@ -178,6 +179,8 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
     config,
     onConfigChange
 }) => {
+    const portalScopeMode = usePortalScopeMode();
+    const isContainerPortalMode = portalScopeMode === 'container';
     const { isFullscreen, toggleFullscreen } = useFullscreen();
     const showDebugTooltip = useTooltip('Show debug');
     const themeToggleTooltip = useTooltip('Toggle between normal and elegant theme');
@@ -267,6 +270,12 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
             setDotsMenuOpen(false);
         }
     }, [dotsMenuOpen]);
+
+    React.useEffect(() => {
+        if (isContainerPortalMode && dotsMenuOpen) {
+            setDotsMenuOpen(false);
+        }
+    }, [dotsMenuOpen, isContainerPortalMode]);
 
     const gridStyle: React.CSSProperties = isNarrow ? {
         display: 'flex',
@@ -373,7 +382,7 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
                     />
                 </button>
             )}
-            {SHOW_TOP_RIGHT_DOTS_ICON && (
+            {SHOW_TOP_RIGHT_DOTS_ICON && !isContainerPortalMode && (
                 <div
                     style={{
                         position: 'absolute',

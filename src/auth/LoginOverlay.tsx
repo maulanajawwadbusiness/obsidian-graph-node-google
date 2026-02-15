@@ -5,7 +5,7 @@ import { GoogleLoginButton } from '../components/GoogleLoginButton';
 import { SHOW_ONBOARDING_AUX_BUTTONS } from '../config/onboardingUiFlags';
 import { t } from '../i18n/t';
 import { LAYER_OVERLAY_LOGIN } from '../ui/layers';
-import { usePortalRootEl } from '../components/portalScope/PortalScopeContext';
+import { usePortalRootEl, usePortalScopeMode } from '../components/portalScope/PortalScopeContext';
 import {
     isOverlayFadeEnabledForScreen,
     ONBOARDING_FADE_EASING,
@@ -33,6 +33,7 @@ export const LoginOverlay: React.FC<LoginOverlayProps> = ({
 }) => {
     const { user, loading, error } = useAuth();
     const portalRoot = usePortalRootEl();
+    const portalMode = usePortalScopeMode();
     const overlayFadeEnabled = isOverlayFadeEnabledForScreen('prompt');
     const [prefersReducedMotion, setPrefersReducedMotion] = React.useState(false);
     const [fadeInReady, setFadeInReady] = React.useState(false);
@@ -53,13 +54,13 @@ export const LoginOverlay: React.FC<LoginOverlayProps> = ({
     }, []);
 
     React.useEffect(() => {
-        if (!open) return;
+        if (!open || portalMode === 'container') return;
         const previous = document.body.style.overflow;
         document.body.style.overflow = 'hidden';
         return () => {
             document.body.style.overflow = previous;
         };
-    }, [open]);
+    }, [open, portalMode]);
 
     React.useEffect(() => {
         if (fadeRafRef.current !== null) {
@@ -93,6 +94,7 @@ export const LoginOverlay: React.FC<LoginOverlayProps> = ({
         <div
             style={{
                 ...BACKDROP_STYLE,
+                ...(portalMode === 'container' ? BACKDROP_STYLE_CONTAINER : null),
                 opacity: fadeInReady ? 1 : 0,
                 transition: prefersReducedMotion || !overlayFadeEnabled
                     ? 'none'
@@ -209,6 +211,10 @@ const CARD_STYLE: React.CSSProperties = {
 const TITLE_STYLE: React.CSSProperties = {
     fontSize: '20px',
     fontWeight: 300,
+};
+
+const BACKDROP_STYLE_CONTAINER: React.CSSProperties = {
+    position: 'absolute',
 };
 
 const SUBTEXT_STYLE: React.CSSProperties = {

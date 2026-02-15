@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useDocument } from '../../store/documentStore';
-import { usePortalRootEl } from '../../components/portalScope/PortalScopeContext';
+import { usePortalRootEl, usePortalScopeMode } from '../../components/portalScope/PortalScopeContext';
 
 /**
  * Minimal AI activity indicator - tiny dot with subtle pulse
@@ -18,6 +18,11 @@ const getGlyphContainerStyle = (viewerOpen: boolean): React.CSSProperties => ({
     zIndex: 9999,  // Always on top
 });
 
+const getGlyphContainerStyleContainer = (viewerOpen: boolean): React.CSSProperties => ({
+    ...getGlyphContainerStyle(viewerOpen),
+    position: 'absolute',
+});
+
 const DOT_STYLE: React.CSSProperties = {
     width: '6px',
     height: '6px',
@@ -32,6 +37,7 @@ export const AIActivityGlyph: React.FC = () => {
     const { state } = useDocument();
     const [mounted, setMounted] = useState(false);
     const portalRoot = usePortalRootEl();
+    const mode = usePortalScopeMode();
 
     useEffect(() => {
         setMounted(true);
@@ -56,7 +62,7 @@ export const AIActivityGlyph: React.FC = () => {
 
     return createPortal(
         <div
-            style={getGlyphContainerStyle(state.previewOpen)}
+            style={mode === 'container' ? getGlyphContainerStyleContainer(state.previewOpen) : getGlyphContainerStyle(state.previewOpen)}
             onMouseDown={stopPropagation}
             onMouseMove={stopPropagation}
             onMouseUp={stopPropagation}

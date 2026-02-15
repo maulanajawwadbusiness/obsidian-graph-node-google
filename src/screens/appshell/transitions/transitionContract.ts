@@ -1,4 +1,4 @@
-import type { AppScreen } from '../screenFlow/screenTypes';
+import { AppScreen, isGraphClassScreen } from '../screenFlow/screenTypes';
 
 export const ONBOARDING_FADE_MS = 200;
 export const ONBOARDING_FADE_EASING = 'cubic-bezier(0.22, 1, 0.36, 1)';
@@ -17,10 +17,6 @@ function isAnimatedOnboardingPair(from: AppScreen, to: AppScreen): boolean {
     if (from === 'welcome2' && to === 'prompt') return true;
     if (from === 'prompt' && to === 'welcome2') return true;
     return false;
-}
-
-function isGraphClassScreen(screen: AppScreen): boolean {
-    return screen === 'graph_loading' || screen === 'graph';
 }
 
 export function getTransitionPolicy(from: AppScreen, to: AppScreen): TransitionPolicy {

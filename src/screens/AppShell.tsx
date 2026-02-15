@@ -16,7 +16,7 @@ import {
 import { OnboardingLayerHost } from './appshell/transitions/OnboardingLayerHost';
 import { useOnboardingTransition } from './appshell/transitions/useOnboardingTransition';
 import { useOnboardingWheelGuard } from './appshell/transitions/useOnboardingWheelGuard';
-import { AppScreen, isOnboardingScreen } from './appshell/screenFlow/screenTypes';
+import { AppScreen, isGraphClassScreen, isOnboardingScreen } from './appshell/screenFlow/screenTypes';
 import { getInitialScreen } from './appshell/screenFlow/screenStart';
 import { useWelcome1FontGate } from './appshell/screenFlow/useWelcome1FontGate';
 import {
@@ -118,12 +118,11 @@ export const AppShell: React.FC = () => {
         setEnterPromptOverlayOpen,
     } = useOnboardingOverlayState({ screen });
 
-    const isGraphClassScreen = screen === 'graph' || screen === 'graph_loading';
     const GraphWithPending = Graph as React.ComponentType<GraphPhysicsPlaygroundProps>;
-    const showMoneyUi = screen === 'prompt' || isGraphClassScreen;
-    const showPersistentSidebar = screen === 'prompt' || isGraphClassScreen;
+    const showMoneyUi = screen === 'prompt' || isGraphClassScreen(screen);
+    const showPersistentSidebar = screen === 'prompt' || isGraphClassScreen(screen);
     const loginBlockingActive = screen === 'prompt' && enterPromptOverlayOpen;
-    const sidebarDisabled = ((screen === 'graph' || screen === 'graph_loading') && graphIsLoading) || loginBlockingActive;
+    const sidebarDisabled = (isGraphClassScreen(screen) && graphIsLoading) || loginBlockingActive;
     const onboardingActive = isOnboardingScreen(screen) || isBlockingInput;
     const welcome1FontGateDone = useWelcome1FontGate({
         screen,
@@ -253,7 +252,7 @@ export const AppShell: React.FC = () => {
         const record = savedInterfaces.find((item) => item.id === id);
         if (!record) return;
         setPendingLoadInterface(record);
-        if (screen !== 'graph' && screen !== 'graph_loading') {
+        if (!isGraphClassScreen(screen)) {
             transitionToScreen('graph');
         }
         console.log('[appshell] pending_load_interface id=%s', id);
@@ -386,7 +385,7 @@ export const AppShell: React.FC = () => {
                     }}
                     onOpenSearchInterfaces={() => openSearchInterfaces()}
                     disabled={sidebarDisabled}
-                    showDocumentViewerButton={screen === 'graph' || screen === 'graph_loading'}
+                    showDocumentViewerButton={isGraphClassScreen(screen)}
                     onToggleDocumentViewer={() => setDocumentViewerToggleToken((prev) => prev + 1)}
                     interfaces={sidebarInterfaces}
                     onRenameInterface={handleRenameInterface}

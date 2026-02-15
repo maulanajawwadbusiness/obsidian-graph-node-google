@@ -110,10 +110,18 @@ export const GraphLoadingGate: React.FC<GraphLoadingGateProps> = ({
             return;
         }
         if (event.key === 'Enter' || event.key === ' ') {
+            const target = event.target as HTMLElement | null;
+            const isConfirmKeyTarget = Boolean(target?.closest('[data-gate-confirm="1"]'));
+            if (confirmEnabled && isConfirmKeyTarget) {
+                event.preventDefault();
+                event.stopPropagation();
+                onConfirm?.();
+                return;
+            }
             event.preventDefault();
             event.stopPropagation();
         }
-    }, [onBackToPrompt]);
+    }, [confirmEnabled, onBackToPrompt, onConfirm]);
 
     return (
         <div
@@ -148,6 +156,7 @@ export const GraphLoadingGate: React.FC<GraphLoadingGateProps> = ({
                 {confirmVisible ? (
                     <button
                         ref={confirmButtonRef}
+                        data-gate-confirm="1"
                         type="button"
                         style={{
                             ...CONFIRM_BUTTON_STYLE,

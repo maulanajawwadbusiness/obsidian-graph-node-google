@@ -199,6 +199,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         []
     );
     const displayAccountName = accountName && accountName.trim() ? accountName.trim() : 'Your Name';
+    const collapsedAvatarTooltip = useTooltip(displayAccountName, { disabled: isExpanded || displayAccountName.trim().length === 0 });
     const canOpenAvatarMenu = Boolean(onOpenProfile || onRequestLogout);
     const isInMotionPhase = motionPhase === 'expanding' || motionPhase === 'collapsing';
     const shouldMountExpandedContent = isExpanded || motionPhase !== 'collapsed';
@@ -829,6 +830,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         <NavItem
                             icon={createNewIcon}
                             label="Create New"
+                            collapsedTooltip="Create New"
                             isExpanded={isExpanded}
                             showExpandedContent={shouldMountExpandedContent}
                             contentTransitionCss={contentTransitionCss}
@@ -843,6 +845,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         <NavItem
                             icon={searchIcon}
                             label="Search Interfaces"
+                            collapsedTooltip="Search Interfaces"
                             isExpanded={isExpanded}
                             showExpandedContent={shouldMountExpandedContent}
                             contentTransitionCss={contentTransitionCss}
@@ -860,6 +863,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                             dataMoreTrigger
                             icon={threeDotIcon}
                             label="More"
+                            collapsedTooltip="More"
                             isExpanded={isExpanded}
                             showExpandedContent={shouldMountExpandedContent}
                             contentTransitionCss={contentTransitionCss}
@@ -1346,19 +1350,21 @@ export const Sidebar: React.FC<SidebarProps> = ({
                             onMouseLeave={() => setAvatarRowHover(false)}
                         >
                             <button
-                                type="button"
-                                style={{
-                                    ...ICON_BUTTON_STYLE,
-                                    ...AVATAR_ICON_PIN_STYLE,
-                                    padding: '0',
-                                    width: `${AVATAR_ICON_HITBOX_PX}px`,
-                                    height: `${AVATAR_ICON_HITBOX_PX}px`,
-                                    lineHeight: 0,
-                                }}
-                                onPointerDown={(e) => e.stopPropagation()}
-                                onPointerUp={(e) => e.stopPropagation()}
-                                onWheelCapture={(e) => e.stopPropagation()}
-                                onWheel={(e) => e.stopPropagation()}
+                                {...collapsedAvatarTooltip.getAnchorProps({
+                                    type: 'button',
+                                    style: {
+                                        ...ICON_BUTTON_STYLE,
+                                        ...AVATAR_ICON_PIN_STYLE,
+                                        padding: '0',
+                                        width: `${AVATAR_ICON_HITBOX_PX}px`,
+                                        height: `${AVATAR_ICON_HITBOX_PX}px`,
+                                        lineHeight: 0,
+                                    },
+                                    onPointerDown: (e) => e.stopPropagation(),
+                                    onPointerUp: (e) => e.stopPropagation(),
+                                    onWheelCapture: (e) => e.stopPropagation(),
+                                    onWheel: (e) => e.stopPropagation(),
+                                })}
                             >
                                 {accountImageUrl ? (
                                     <img
@@ -1407,6 +1413,7 @@ type NavItemProps = {
     hardShieldInput?: boolean;
     dataMoreTrigger?: boolean;
     buttonRef?: React.Ref<HTMLButtonElement>;
+    collapsedTooltip?: string;
 };
 
 const NavItem: React.FC<NavItemProps> = ({
@@ -1423,51 +1430,60 @@ const NavItem: React.FC<NavItemProps> = ({
     hardShieldInput = false,
     dataMoreTrigger = false,
     buttonRef,
-}) => (
-    <button
-        ref={buttonRef}
-        type="button"
-        data-more-trigger={dataMoreTrigger ? '1' : undefined}
-        style={NAV_ITEM_STYLE}
-        onPointerDown={(e) => e.stopPropagation()}
-        onPointerUp={hardShieldInput ? (e) => e.stopPropagation() : undefined}
-        onWheelCapture={hardShieldInput ? (e) => e.stopPropagation() : undefined}
-        onWheel={hardShieldInput ? (e) => e.stopPropagation() : undefined}
-        onMouseEnter={() => {
-            if (suppressHover) return;
-            onMouseEnter();
-        }}
-        onMouseLeave={onMouseLeave}
-        onClick={(e) => {
-            if (hardShieldInput) {
-                e.stopPropagation();
-            }
-            onClick?.(e);
-        }}
-    >
-        <MaskIcon
-            src={icon}
-            size={ICON_SIZE}
-            color={isHovered ? HOVER_ACCENT_COLOR : DEFAULT_ICON_COLOR}
-            opacity={isHovered ? ICON_OPACITY_HOVER : ICON_OPACITY_DEFAULT}
-        />
-        {showExpandedContent && (
-            <span
-                aria-hidden={!isExpanded}
-                style={{
-                    ...NAV_LABEL_STYLE,
-                    opacity: isExpanded ? 1 : 0,
-                    transform: isExpanded ? 'translateX(0px)' : `translateX(-${EXPANDED_CONTENT_HIDDEN_OFFSET_PX}px)`,
-                    transition: contentTransitionCss,
-                    color: isHovered ? HOVER_ACCENT_COLOR : NAV_LABEL_STYLE.color,
-                    pointerEvents: isExpanded ? 'auto' : 'none',
-                }}
-            >
-                {label}
-            </span>
-        )}
-    </button>
-);
+    collapsedTooltip,
+}) => {
+    const collapsedNavTooltip = useTooltip(collapsedTooltip ?? '', {
+        disabled: isExpanded || !collapsedTooltip || collapsedTooltip.trim().length === 0,
+    });
+
+    return (
+        <button
+            ref={buttonRef}
+            {...collapsedNavTooltip.getAnchorProps({
+                type: 'button',
+                'data-more-trigger': dataMoreTrigger ? '1' : undefined,
+                style: NAV_ITEM_STYLE,
+                onPointerDown: (e) => e.stopPropagation(),
+                onPointerUp: hardShieldInput ? (e) => e.stopPropagation() : undefined,
+                onWheelCapture: hardShieldInput ? (e) => e.stopPropagation() : undefined,
+                onWheel: hardShieldInput ? (e) => e.stopPropagation() : undefined,
+                onMouseEnter: () => {
+                    if (suppressHover) return;
+                    onMouseEnter();
+                },
+                onMouseLeave,
+                onClick: (e) => {
+                    if (hardShieldInput) {
+                        e.stopPropagation();
+                    }
+                    onClick?.(e);
+                },
+            })}
+        >
+            <MaskIcon
+                src={icon}
+                size={ICON_SIZE}
+                color={isHovered ? HOVER_ACCENT_COLOR : DEFAULT_ICON_COLOR}
+                opacity={isHovered ? ICON_OPACITY_HOVER : ICON_OPACITY_DEFAULT}
+            />
+            {showExpandedContent && (
+                <span
+                    aria-hidden={!isExpanded}
+                    style={{
+                        ...NAV_LABEL_STYLE,
+                        opacity: isExpanded ? 1 : 0,
+                        transform: isExpanded ? 'translateX(0px)' : `translateX(-${EXPANDED_CONTENT_HIDDEN_OFFSET_PX}px)`,
+                        transition: contentTransitionCss,
+                        color: isHovered ? HOVER_ACCENT_COLOR : NAV_LABEL_STYLE.color,
+                        pointerEvents: isExpanded ? 'auto' : 'none',
+                    }}
+                >
+                    {label}
+                </span>
+            )}
+        </button>
+    );
+};
 
 type MaskIconProps = {
     src: string;

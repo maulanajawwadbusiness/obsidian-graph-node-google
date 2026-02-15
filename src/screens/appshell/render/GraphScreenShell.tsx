@@ -7,7 +7,7 @@ type GraphScreenShellProps = {
 const GRAPH_SCREEN_SHELL_STYLE: React.CSSProperties = {
     position: 'relative',
     width: '100%',
-    minHeight: '100vh',
+    height: '100vh',
 };
 
 export function GraphScreenShell({ children }: GraphScreenShellProps): JSX.Element {

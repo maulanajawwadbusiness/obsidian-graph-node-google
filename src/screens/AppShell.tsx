@@ -214,6 +214,17 @@ export const AppShell: React.FC = () => {
         </>
     ) : null;
 
+    const transitionWithPromptGraphGuard = React.useCallback((next: Screen) => {
+        if (screen === 'prompt' && next === 'graph') {
+            if (import.meta.env.DEV) {
+                console.warn('[FlowGuard] blocked prompt->graph direct transition; rerouting to graph_loading');
+            }
+            transitionToScreen('graph_loading');
+            return;
+        }
+        transitionToScreen(next);
+    }, [screen, transitionToScreen]);
+
     const applySavedInterfacesState = React.useCallback((next: SavedInterfaceRecordV1[]) => {
         const normalized = sortAndCapSavedInterfaces(next);
         savedInterfacesRef.current = normalized;
@@ -266,10 +277,10 @@ export const AppShell: React.FC = () => {
         if (!record) return;
         setPendingLoadInterface(record);
         if (!isGraphClassScreen(screen)) {
-            transitionToScreen('graph');
+            transitionWithPromptGraphGuard('graph');
         }
         console.log('[appshell] pending_load_interface id=%s', id);
-    }, [savedInterfaces, screen, transitionToScreen]);
+    }, [savedInterfaces, screen, transitionWithPromptGraphGuard]);
     const confirmDelete = React.useCallback(() => {
         if (!pendingDeleteId) {
             console.log('[appshell] delete_interface_skipped reason=no_id');

@@ -643,6 +643,7 @@ export const startGraphRenderLoop = (deps: GraphRenderLoopDeps) => {
 
     return () => {
         window.removeEventListener('blur', handleBlur);
+        canvas.removeEventListener('wheel', handleWheel);
         canvas.style.cursor = 'default';
         cancelAnimationFrame(frameId);
     };

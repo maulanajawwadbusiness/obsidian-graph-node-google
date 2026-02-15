@@ -51,6 +51,8 @@ export const BalanceBadge: React.FC = () => {
         <div
             style={WRAP_STYLE}
             onPointerDown={(e) => e.stopPropagation()}
+            onWheelCapture={(e) => e.stopPropagation()}
+            onWheel={(e) => e.stopPropagation()}
             onClick={() => void refreshBalance({ force: true })}
         >
             <div style={LABEL_STYLE}>Saldo</div>

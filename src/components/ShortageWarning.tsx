@@ -23,8 +23,18 @@ export const ShortageWarning: React.FC = () => {
     if (context === 'chat' && (surface === 'node-popup' || surface === 'mini-chat')) return null;
 
     return (
-        <div style={BACKDROP_STYLE} onPointerDown={(e) => e.stopPropagation()}>
-            <div style={PANEL_STYLE} onPointerDown={(e) => e.stopPropagation()}>
+        <div
+            style={BACKDROP_STYLE}
+            onPointerDown={(e) => e.stopPropagation()}
+            onWheelCapture={(e) => e.stopPropagation()}
+            onWheel={(e) => e.stopPropagation()}
+        >
+            <div
+                style={PANEL_STYLE}
+                onPointerDown={(e) => e.stopPropagation()}
+                onWheelCapture={(e) => e.stopPropagation()}
+                onWheel={(e) => e.stopPropagation()}
+            >
                 <div style={TITLE_STYLE}>Saldo tidak cukup untuk {contextLabel(context)}</div>
                 <div style={SUBTITLE_STYLE}>Perkiraan biaya dan kekurangan saat ini</div>
 
@@ -50,6 +60,8 @@ export const ShortageWarning: React.FC = () => {
                             hideShortage();
                         }}
                         onPointerDown={(e) => e.stopPropagation()}
+                        onWheelCapture={(e) => e.stopPropagation()}
+                        onWheel={(e) => e.stopPropagation()}
                     >
                         Isi saldo
                     </button>
@@ -58,6 +70,8 @@ export const ShortageWarning: React.FC = () => {
                         style={SECONDARY_BUTTON_STYLE}
                         onClick={() => hideShortage()}
                         onPointerDown={(e) => e.stopPropagation()}
+                        onWheelCapture={(e) => e.stopPropagation()}
+                        onWheel={(e) => e.stopPropagation()}
                     >
                         Batal
                     </button>

@@ -12,6 +12,7 @@ import type {
 import type { SavedInterfaceRecordV1 } from '../../../store/savedInterfacesStore';
 
 type ScreenRenderBucket = 'onboarding' | 'graph_class';
+type LegacyLoadingScreenMode = 'enabled' | 'disabled';
 
 const SCREEN_RENDER_BUCKET: Record<AppScreen, ScreenRenderBucket> = {
     welcome1: 'onboarding',
@@ -19,6 +20,14 @@ const SCREEN_RENDER_BUCKET: Record<AppScreen, ScreenRenderBucket> = {
     prompt: 'onboarding',
     graph_loading: 'graph_class',
     graph: 'graph_class',
+};
+
+const LEGACY_LOADING_MODE_BY_SCREEN: Record<AppScreen, LegacyLoadingScreenMode> = {
+    welcome1: 'enabled',
+    welcome2: 'enabled',
+    prompt: 'enabled',
+    graph_loading: 'disabled',
+    graph: 'disabled',
 };
 
 export type RenderScreenArgs = {
@@ -88,7 +97,8 @@ export function renderScreenContent(args: RenderScreenArgs): React.ReactNode {
                     {/* Warm-mount contract: graph-class screens must share this exact subtree shape with no screen key. */}
                     <GraphWithPending
                         enableDebugSidebar={false}
-                        legacyLoadingScreenMode="disabled"
+                        // Product graph path contract: gate UI is the sole loading surface in graph-class screens.
+                        legacyLoadingScreenMode={LEGACY_LOADING_MODE_BY_SCREEN[screen]}
                         pendingAnalysisPayload={pendingAnalysis}
                         onPendingAnalysisConsumed={() => setPendingAnalysis(null)}
                         onLoadingStateChange={(v) => setGraphIsLoading(v)}

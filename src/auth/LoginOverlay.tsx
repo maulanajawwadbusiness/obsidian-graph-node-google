@@ -5,6 +5,7 @@ import { GoogleLoginButton } from '../components/GoogleLoginButton';
 import { SHOW_ONBOARDING_AUX_BUTTONS } from '../config/onboardingUiFlags';
 import { t } from '../i18n/t';
 import { LAYER_OVERLAY_LOGIN } from '../ui/layers';
+import { usePortalRootEl } from '../components/portalScope/PortalScopeContext';
 import {
     isOverlayFadeEnabledForScreen,
     ONBOARDING_FADE_EASING,
@@ -31,6 +32,7 @@ export const LoginOverlay: React.FC<LoginOverlayProps> = ({
     onHide,
 }) => {
     const { user, loading, error } = useAuth();
+    const portalRoot = usePortalRootEl();
     const overlayFadeEnabled = isOverlayFadeEnabledForScreen('prompt');
     const [prefersReducedMotion, setPrefersReducedMotion] = React.useState(false);
     const [fadeInReady, setFadeInReady] = React.useState(false);
@@ -176,7 +178,7 @@ export const LoginOverlay: React.FC<LoginOverlayProps> = ({
     if (typeof document === 'undefined') {
         return overlay;
     }
-    return createPortal(overlay, document.body);
+    return createPortal(overlay, portalRoot);
 };
 
 const BACKDROP_STYLE: React.CSSProperties = {

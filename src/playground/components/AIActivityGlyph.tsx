@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useDocument } from '../../store/documentStore';
+import { usePortalRootEl } from '../../components/portalScope/PortalScopeContext';
 
 /**
  * Minimal AI activity indicator - tiny dot with subtle pulse
@@ -30,6 +31,7 @@ const STYLE_TAG_ID = 'ai-activity-glyph-styles';
 export const AIActivityGlyph: React.FC = () => {
     const { state } = useDocument();
     const [mounted, setMounted] = useState(false);
+    const portalRoot = usePortalRootEl();
 
     useEffect(() => {
         setMounted(true);
@@ -52,10 +54,6 @@ export const AIActivityGlyph: React.FC = () => {
         return null;
     }
 
-    if (typeof document === 'undefined') {
-        return null;
-    }
-
     return createPortal(
         <div
             style={getGlyphContainerStyle(state.previewOpen)}
@@ -66,5 +64,5 @@ export const AIActivityGlyph: React.FC = () => {
         >
             <div style={DOT_STYLE} />
         </div>
-    , document.body);
+    , portalRoot);
 };

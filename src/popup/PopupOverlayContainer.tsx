@@ -1,5 +1,6 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
+import { usePortalRootEl } from '../components/portalScope/PortalScopeContext';
 
 /**
  * PopupOverlayContainer
@@ -28,13 +29,12 @@ interface PopupOverlayContainerProps {
 }
 
 export const PopupOverlayContainer: React.FC<PopupOverlayContainerProps> = ({ children }) => {
-    // TODO(sample-preview): Add optional container root target (instead of document.body)
-    // for boxed preview embed. Seam reference: src/components/sampleGraphPreviewSeams.ts.
+    const portalRoot = usePortalRootEl();
     return createPortal(
         <div style={OVERLAY_STYLE}>
             {children}
         </div>,
-        document.body
+        portalRoot
     );
 };
 

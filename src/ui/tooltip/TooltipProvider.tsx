@@ -10,6 +10,7 @@ import React, {
 } from 'react';
 import { createPortal } from 'react-dom';
 import { LAYER_TOOLTIP } from '../layers';
+import { usePortalRootEl } from '../../components/portalScope/PortalScopeContext';
 
 type TooltipProviderProps = {
     children: React.ReactNode;
@@ -220,12 +221,12 @@ const TooltipRenderer: React.FC<{ state: TooltipState }> = ({ state }) => {
 };
 
 const TooltipPortal: React.FC<{ state: TooltipState }> = ({ state }) => {
-    if (typeof document === 'undefined') return null;
+    const portalRoot = usePortalRootEl();
     return createPortal(
         <div data-tooltip-layer-root="1" style={TOOLTIP_PORTAL_ROOT_STYLE}>
             <TooltipRenderer state={state} />
         </div>,
-        document.body
+        portalRoot
     );
 };
 

@@ -3,7 +3,7 @@ import { AppScreen } from './screenTypes';
 export function getNextScreen(current: AppScreen): AppScreen | null {
     if (current === 'welcome1') return 'welcome2';
     if (current === 'welcome2') return 'prompt';
-    if (current === 'prompt') return 'graph';
+    if (current === 'prompt') return 'graph_loading';
     if (current === 'graph_loading') return 'graph';
     if (current === 'graph') return null;
     return null;

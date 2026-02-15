@@ -1,5 +1,8 @@
 import React from 'react';
 
+export const SIDEBAR_COLLAPSED_WIDTH_PX = 35;
+export const SIDEBAR_COLLAPSED_WIDTH_CSS = `${SIDEBAR_COLLAPSED_WIDTH_PX}px`;
+
 export const FALLBACK_STYLE: React.CSSProperties = {
     minHeight: '100vh',
     display: 'flex',

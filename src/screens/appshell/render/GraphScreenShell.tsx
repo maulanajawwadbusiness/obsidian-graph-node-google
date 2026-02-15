@@ -1,4 +1,5 @@
 import React from 'react';
+import { SIDEBAR_COLLAPSED_WIDTH_CSS } from '../appShellStyles';
 
 type GraphScreenShellProps = {
     children: React.ReactNode;
@@ -19,6 +20,9 @@ const GRAPH_SCREEN_LAYOUT_STYLE: React.CSSProperties = {
 };
 
 const GRAPH_SCREEN_SIDEBAR_PANE_STYLE: React.CSSProperties = {
+    width: SIDEBAR_COLLAPSED_WIDTH_CSS,
+    minWidth: SIDEBAR_COLLAPSED_WIDTH_CSS,
+    flex: '0 0 auto',
     height: '100%',
 };
 

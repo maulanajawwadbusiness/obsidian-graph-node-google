@@ -12,6 +12,7 @@ import logoutIcon from '../assets/logout_icon.png';
 import suggestionFeedbackIcon from '../assets/suggestion_feedback_icon.png';
 import blogIcon from '../assets/blog_icon.png';
 import { LAYER_SIDEBAR, LAYER_SIDEBAR_ROW_MENU } from '../ui/layers';
+import { SIDEBAR_COLLAPSED_WIDTH_CSS } from '../screens/appshell/appShellStyles';
 
 // ===========================================================================
 // Mock Data
@@ -31,7 +32,6 @@ export type SidebarInterfaceItem = {
 // Scale: 1.0 = base size, 0.5 = 50% smaller
 const SIDEBAR_SCALE = 0.8;
 
-const COLLAPSED_WIDTH = '35px';
 const EXPANDED_WIDTH = '10vw';
 const MIN_EXPANDED_WIDTH = '200px';
 const ICON_SIZE = 18 * SIDEBAR_SCALE;
@@ -171,8 +171,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
     const sidebarStyle: React.CSSProperties = {
         ...SIDEBAR_BASE_STYLE,
-        width: isExpanded ? EXPANDED_WIDTH : COLLAPSED_WIDTH,
-        minWidth: isExpanded ? MIN_EXPANDED_WIDTH : COLLAPSED_WIDTH,
+        width: isExpanded ? EXPANDED_WIDTH : SIDEBAR_COLLAPSED_WIDTH_CSS,
+        minWidth: isExpanded ? MIN_EXPANDED_WIDTH : SIDEBAR_COLLAPSED_WIDTH_CSS,
         pointerEvents: disabled ? 'none' : 'auto',
     };
 

@@ -18,7 +18,7 @@ function warnInvalidOnboardingStartScreenOnce(args: GetInitialScreenArgs): void 
     if (args.onboardingStartScreen !== null) return;
     hasWarnedInvalidStartScreen = true;
     console.warn(
-        '[OnboardingStart] invalid VITE_ONBOARDING_START_SCREEN="%s". Allowed: screen1|screen2|screen3|screen4|welcome1|welcome2|prompt|graph',
+        '[OnboardingStart] invalid VITE_ONBOARDING_START_SCREEN="%s". Allowed: screen1|screen2|screen3|screen4|welcome1|welcome2|prompt|graph_loading|graph',
         args.onboardingStartScreenRaw
     );
 }

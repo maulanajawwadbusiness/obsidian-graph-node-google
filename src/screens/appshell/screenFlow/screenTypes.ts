@@ -1,4 +1,4 @@
-export const APP_SCREENS = ['welcome1', 'welcome2', 'prompt', 'graph'] as const;
+export const APP_SCREENS = ['welcome1', 'welcome2', 'prompt', 'graph_loading', 'graph'] as const;
 
 export type AppScreen = (typeof APP_SCREENS)[number];
 

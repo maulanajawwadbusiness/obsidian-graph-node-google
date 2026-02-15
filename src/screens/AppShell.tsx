@@ -61,12 +61,34 @@ const Graph = React.lazy(() =>
 type Screen = AppScreen;
 type GatePhase = 'idle' | 'arming' | 'loading' | 'stalled' | 'done' | 'confirmed';
 type GateEntryIntent = 'analysis' | 'restore' | 'none';
+type SidebarInteractionState = 'active' | 'frozen';
 const STORAGE_KEY = 'arnvoid_screen';
 const PERSIST_SCREEN = false;
 const DEBUG_ONBOARDING_SCROLL_GUARD = false;
 const WELCOME1_FONT_TIMEOUT_MS = 1500;
 const DEBUG_WARM_MOUNT_QUERY_KEY = 'debugWarmMount';
 const GATE_LOADING_START_WATCHDOG_MS = 2000;
+const SIDEBAR_VISIBILITY_BY_SCREEN: Record<AppScreen, boolean> = {
+    welcome1: false,
+    welcome2: false,
+    prompt: true,
+    graph_loading: true,
+    graph: true,
+};
+const SIDEBAR_INTERACTION_BY_SCREEN: Record<AppScreen, SidebarInteractionState> = {
+    welcome1: 'active',
+    welcome2: 'active',
+    prompt: 'active',
+    graph_loading: 'frozen',
+    graph: 'active',
+};
+const SIDEBAR_DIM_ALPHA_BY_SCREEN: Record<AppScreen, number> = {
+    welcome1: 1,
+    welcome2: 1,
+    prompt: 1,
+    graph_loading: 0.5,
+    graph: 1,
+};
 
 function isWarmMountDebugEnabled(): boolean {
     if (!import.meta.env.DEV) return false;
@@ -137,7 +159,9 @@ export const AppShell: React.FC = () => {
 
     const GraphWithPending = Graph as React.ComponentType<GraphPhysicsPlaygroundProps>;
     const showMoneyUi = screen === 'prompt' || isGraphClassScreen(screen);
-    const showPersistentSidebar = screen === 'prompt' || screen === 'graph';
+    const showPersistentSidebar = SIDEBAR_VISIBILITY_BY_SCREEN[screen];
+    const sidebarFrozen = SIDEBAR_INTERACTION_BY_SCREEN[screen] === 'frozen';
+    const sidebarDimAlpha = SIDEBAR_DIM_ALPHA_BY_SCREEN[screen];
     const loginBlockingActive = screen === 'prompt' && enterPromptOverlayOpen;
     const sidebarDisabled = (isGraphClassScreen(screen) && graphIsLoading) || loginBlockingActive;
     const onboardingActive = isOnboardingScreen(screen) || isBlockingInput;
@@ -522,6 +546,8 @@ export const AppShell: React.FC = () => {
                 data-gate-phase={gatePhase}
                 data-gate-seen-loading={seenLoadingTrue ? '1' : '0'}
                 data-gate-entry-intent={gateEntryIntent}
+                data-sidebar-frozen={sidebarFrozen ? '1' : '0'}
+                data-sidebar-dim-alpha={String(sidebarDimAlpha)}
                 data-search-interfaces-open={isSearchInterfacesOpen ? '1' : '0'}
                 data-search-interfaces-query-len={String(searchInterfacesQuery.length)}
             >

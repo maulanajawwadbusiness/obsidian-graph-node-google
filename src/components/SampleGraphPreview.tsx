@@ -7,6 +7,11 @@ import { parseSavedInterfaceRecord } from '../store/savedInterfacesStore';
 import { devExportToSavedInterfaceRecordV1 } from '../lib/devExport/devExportToSavedInterfaceRecord';
 import { parseDevInterfaceExportV1 } from '../lib/devExport/devExportTypes';
 import {
+    acquireGraphRuntimeLease,
+    releaseGraphRuntimeLease,
+    type GraphRuntimeOwner,
+} from '../runtime/graphRuntimeLease';
+import {
     SAMPLE_GRAPH_PREVIEW_ROOT_ATTR,
     SAMPLE_GRAPH_PREVIEW_ROOT_VALUE
 } from './sampleGraphPreviewSeams';
@@ -53,6 +58,11 @@ type PreviewErrorBoundaryState = {
     hasError: boolean;
 };
 
+type LeaseState =
+    | { phase: 'checking' }
+    | { phase: 'allowed'; token: string }
+    | { phase: 'denied'; activeOwner: GraphRuntimeOwner; activeInstanceId: string };
+
 class PreviewErrorBoundary extends React.Component<React.PropsWithChildren, PreviewErrorBoundaryState> {
     state: PreviewErrorBoundaryState = { hasError: false };
 
@@ -77,6 +87,10 @@ export const SampleGraphPreview: React.FC = () => {
         [SAMPLE_GRAPH_PREVIEW_ROOT_ATTR]: SAMPLE_GRAPH_PREVIEW_ROOT_VALUE,
     };
     const [portalRootEl, setPortalRootEl] = React.useState<HTMLDivElement | null>(null);
+    const instanceIdRef = React.useRef(
+        `prompt-preview:${Date.now().toString(36)}:${Math.random().toString(36).slice(2, 8)}`
+    );
+    const [leaseState, setLeaseState] = React.useState<LeaseState>({ phase: 'checking' });
     const sampleLoadState = React.useMemo(() => {
         const parsedDev = parseDevInterfaceExportV1(sampleGraphPreviewExport);
         if (!parsedDev) {
@@ -96,12 +110,31 @@ export const SampleGraphPreview: React.FC = () => {
     }, []);
     const sampleLoadError = sampleLoadState.error !== null;
 
+    React.useLayoutEffect(() => {
+        const result = acquireGraphRuntimeLease('prompt-preview', instanceIdRef.current);
+        if (result.ok) {
+            setLeaseState({ phase: 'allowed', token: result.token });
+            return () => {
+                releaseGraphRuntimeLease(result.token);
+            };
+        }
+        setLeaseState({
+            phase: 'denied',
+            activeOwner: result.activeOwner,
+            activeInstanceId: result.activeInstanceId,
+        });
+        return undefined;
+    }, []);
+
+    const isLeaseDenied = leaseState.phase === 'denied';
+    const canMountRuntime = leaseState.phase === 'allowed' && portalRootEl && sampleLoadState.record;
+
     return (
         <div {...previewRootMarker} style={PREVIEW_ROOT_STYLE}>
             <div ref={setPortalRootEl} data-arnvoid-preview-portal-root="1" style={PREVIEW_PORTAL_ROOT_STYLE} />
             <PreviewErrorBoundary>
                 <div style={PREVIEW_SURFACE_STYLE}>
-                    {portalRootEl && sampleLoadState.record ? (
+                    {canMountRuntime ? (
                         <PortalScopeProvider mode="container" portalRootEl={portalRootEl}>
                             <TooltipProvider>
                                 <GraphPhysicsPlayground
@@ -113,6 +146,10 @@ export const SampleGraphPreview: React.FC = () => {
                                 />
                             </TooltipProvider>
                         </PortalScopeProvider>
+                    ) : isLeaseDenied ? (
+                        <div style={PREVIEW_FALLBACK_STYLE}>
+                            preview paused (active: {leaseState.activeOwner})
+                        </div>
                     ) : sampleLoadError ? (
                         <div style={PREVIEW_FALLBACK_STYLE}>sample graph invalid payload ({sampleLoadState.error})</div>
                     ) : (

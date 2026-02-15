@@ -1,4 +1,3 @@
-import sampleGraphPreviewExport from '../../samples/sampleGraphPreview.export.json';
 import { devExportToSavedInterfaceRecordV1 } from '../devExport/devExportToSavedInterfaceRecord';
 import { parseDevInterfaceExportStrict } from '../devExport/parseDevInterfaceExportStrict';
 import { parseSavedInterfaceRecordForPreview } from '../devExport/parseSavedInterfaceRecordForPreview';
@@ -7,8 +6,8 @@ import { validateSampleGraphSemantic } from './validateSampleGraphSemantic';
 
 let hasWarnedInvalidSample = false;
 
-export function validateCurrentSamplePreviewExport(): Result<void> {
-    const parsedDevResult = parseDevInterfaceExportStrict(sampleGraphPreviewExport);
+export function validateCurrentSamplePreviewExport(payload: unknown): Result<void> {
+    const parsedDevResult = parseDevInterfaceExportStrict(payload);
     if (!parsedDevResult.ok) return parsedDevResult;
 
     const adapted = (() => {
@@ -30,10 +29,10 @@ export function validateCurrentSamplePreviewExport(): Result<void> {
     );
 }
 
-export function warnIfInvalidCurrentSamplePreviewExportOnce(): void {
+export function warnIfInvalidCurrentSamplePreviewExportOnce(payload: unknown): void {
     if (!import.meta.env.DEV) return;
     if (hasWarnedInvalidSample) return;
-    const result = validateCurrentSamplePreviewExport();
+    const result = validateCurrentSamplePreviewExport(payload);
     if (result.ok) return;
     hasWarnedInvalidSample = true;
     const summary = result.errors.map((item) => item.code).join(', ');

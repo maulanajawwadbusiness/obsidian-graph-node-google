@@ -2,7 +2,6 @@ import React from 'react';
 import { GraphPhysicsPlayground } from '../playground/GraphPhysicsPlayground';
 import { TooltipProvider } from '../ui/tooltip/TooltipProvider';
 import { PortalScopeProvider } from './portalScope/PortalScopeContext';
-import sampleGraphPreviewExport from '../samples/sampleGraphPreview.export.json';
 import type { SavedInterfaceRecordV1 } from '../store/savedInterfacesStore';
 import { devExportToSavedInterfaceRecordV1 } from '../lib/devExport/devExportToSavedInterfaceRecord';
 import { parseDevInterfaceExportStrict } from '../lib/devExport/parseDevInterfaceExportStrict';
@@ -129,12 +128,37 @@ export const SampleGraphPreview: React.FC = () => {
         [SAMPLE_GRAPH_PREVIEW_ROOT_ATTR]: SAMPLE_GRAPH_PREVIEW_ROOT_VALUE,
     };
     const [portalRootEl, setPortalRootEl] = React.useState<HTMLDivElement | null>(null);
+    const [sampleExportPayload, setSampleExportPayload] = React.useState<unknown | null>(null);
+    const [sampleImportError, setSampleImportError] = React.useState<string | null>(null);
     const instanceIdRef = React.useRef(
         `prompt-preview:${Date.now().toString(36)}:${Math.random().toString(36).slice(2, 8)}`
     );
     const [leaseState, setLeaseState] = React.useState<LeaseState>({ phase: 'checking' });
+    React.useEffect(() => {
+        let active = true;
+        import('../samples/sampleGraphPreview.export.json')
+            .then((mod) => {
+                if (!active) return;
+                setSampleExportPayload(mod.default);
+            })
+            .catch((error) => {
+                if (!active) return;
+                const reason = error instanceof Error ? error.message : 'unknown_sample_import_error';
+                setSampleImportError(reason);
+            });
+        return () => {
+            active = false;
+        };
+    }, []);
+
     const sampleLoadResult = React.useMemo<Result<SampleLoadSuccess>>(() => {
-        const parsedDevResult = parseDevInterfaceExportStrict(sampleGraphPreviewExport);
+        if (sampleImportError) {
+            return err(createValidationError('SAMPLE_IMPORT_FAILED', `sample import failed: ${sampleImportError}`));
+        }
+        if (sampleExportPayload === null) {
+            return err(createValidationError('SAMPLE_LOADING', 'sample payload loading'));
+        }
+        const parsedDevResult = parseDevInterfaceExportStrict(sampleExportPayload);
         if (!parsedDevResult.ok) return parsedDevResult;
         const parsedDev = parsedDevResult.value;
 
@@ -156,7 +180,7 @@ export const SampleGraphPreview: React.FC = () => {
                 chainResult(validateSampleGraphSemantic(parsedRecord), () => ok({ record: parsedRecord }))
             );
         });
-    }, []);
+    }, [sampleExportPayload, sampleImportError]);
 
     React.useLayoutEffect(() => {
         const result = acquireGraphRuntimeLease('prompt-preview', instanceIdRef.current);
@@ -175,12 +199,14 @@ export const SampleGraphPreview: React.FC = () => {
     }, []);
 
     React.useEffect(() => {
-        warnIfInvalidCurrentSamplePreviewExportOnce();
-    }, []);
+        if (!sampleExportPayload) return;
+        warnIfInvalidCurrentSamplePreviewExportOnce(sampleExportPayload);
+    }, [sampleExportPayload]);
 
     const isLeaseDenied = leaseState.phase === 'denied';
     const canMountRuntime = leaseState.phase === 'allowed' && portalRootEl && sampleLoadResult.ok;
     const sampleErrors: ValidationError[] = sampleLoadResult.ok ? [] : sampleLoadResult.errors;
+    const isSampleLoading = sampleErrors.some((item) => item.code === 'SAMPLE_LOADING');
     const shownErrors = sampleErrors.slice(0, 3);
     const hiddenErrorCount = Math.max(sampleErrors.length - shownErrors.length, 0);
 
@@ -205,6 +231,8 @@ export const SampleGraphPreview: React.FC = () => {
                         <div style={PREVIEW_FALLBACK_STYLE}>
                             preview paused (active: {leaseState.activeOwner})
                         </div>
+                    ) : isSampleLoading ? (
+                        <div style={PREVIEW_FALLBACK_STYLE}>loading sample...</div>
                     ) : sampleErrors.length > 0 ? (
                         <div style={PREVIEW_ERROR_WRAP_STYLE}>
                             <div style={PREVIEW_ERROR_TITLE_STYLE}>sample graph invalid</div>

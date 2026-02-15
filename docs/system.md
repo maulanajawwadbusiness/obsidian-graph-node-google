@@ -354,6 +354,53 @@ Manual verification checklist:
 4. rapid prompt <-> graph toggling: no simultaneous active owners.
 5. expected dev warnings are limited to deny/preempt/stale release events only.
 
+## 2.8 Sample Preview Restore Hardening (2026-02-15)
+
+Purpose:
+- ensure EnterPrompt sample preview restore is fail-closed.
+- preview runtime mounts only when sample payload passes strict structural and semantic validation.
+
+Canonical preview pipeline:
+1. dynamic sample import in `src/components/SampleGraphPreview.tsx`
+2. strict dev export parse:
+   - `src/lib/devExport/parseDevInterfaceExportStrict.ts`
+3. adapter strict conversion:
+   - `src/lib/devExport/devExportToSavedInterfaceRecord.ts`
+   - no silent topology coercion by default
+4. preview-only saved record parse wrapper:
+   - `src/lib/devExport/parseSavedInterfaceRecordForPreview.ts`
+5. semantic validation:
+   - `src/lib/preview/validateSampleGraphSemantic.ts`
+6. mount:
+   - only if all stages return Result ok
+   - then pass `pendingLoadInterface` into `GraphPhysicsPlayground`
+
+Key hardening rules:
+1. no silent empty-topology fallback in strict preview path.
+2. empty topology is explicit failure in preview:
+   - `SAMPLE_PREVIEW_REQUIRE_NONEMPTY_TOPOLOGY = true`
+3. any validation failure shows explicit error UI and blocks runtime mount.
+4. preview validation is isolated; global saved-interface parser behavior is unchanged.
+
+How to swap sample safely:
+1. replace `src/samples/sampleGraphPreview.export.json` content with new dev export.
+2. keep `version`, `topology`, `layout.nodeWorld`, and `camera` present and sane.
+3. open prompt preview and check for validation errors in-box.
+4. if invalid in dev, one-time warning logs from:
+   - `warnIfInvalidCurrentSamplePreviewExportOnce(...)`
+
+Failure UI behavior:
+1. title: `sample graph invalid`
+2. first 3 errors shown with codes
+3. `+N more` shown when additional errors exist
+4. runtime does not mount on failure
+
+Manual verification checklist:
+1. valid sample: preview loads restored graph (not seed fallback).
+2. break sample topology or camera: preview shows explicit coded errors.
+3. invalid sample must not mount `GraphPhysicsPlayground`.
+4. restore valid sample: preview returns to normal mount path.
+
 ## 3. Physics Architecture And Contract
 The graph is driven by a **Hybrid Solver** (`src/physics/`) prioritizing "Visual Dignity" over pure simulation accuracy.
 

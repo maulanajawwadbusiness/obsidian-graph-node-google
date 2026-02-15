@@ -58,12 +58,14 @@ const Graph = React.lazy(() =>
 );
 
 type Screen = AppScreen;
-type GatePhase = 'idle' | 'arming' | 'loading' | 'done' | 'confirmed';
+type GatePhase = 'idle' | 'arming' | 'loading' | 'stalled' | 'done' | 'confirmed';
+type GateEntryIntent = 'analysis' | 'restore' | 'none';
 const STORAGE_KEY = 'arnvoid_screen';
 const PERSIST_SCREEN = false;
 const DEBUG_ONBOARDING_SCROLL_GUARD = false;
 const WELCOME1_FONT_TIMEOUT_MS = 1500;
 const DEBUG_WARM_MOUNT_QUERY_KEY = 'debugWarmMount';
+const GATE_LOADING_START_WATCHDOG_MS = 2000;
 
 function isWarmMountDebugEnabled(): boolean {
     if (!import.meta.env.DEV) return false;
@@ -89,6 +91,7 @@ export const AppShell: React.FC = () => {
     const [graphIsLoading, setGraphIsLoading] = React.useState(false);
     const [gatePhase, setGatePhase] = React.useState<GatePhase>('idle');
     const [seenLoadingTrue, setSeenLoadingTrue] = React.useState(false);
+    const [gateEntryIntent, setGateEntryIntent] = React.useState<GateEntryIntent>('none');
     const [documentViewerToggleToken, setDocumentViewerToggleToken] = React.useState(0);
     const [isSidebarExpanded, setIsSidebarExpanded] = React.useState(false);
     const gatePhaseRef = React.useRef<GatePhase>('idle');
@@ -346,16 +349,22 @@ export const AppShell: React.FC = () => {
 
     React.useEffect(() => {
         if (screen === 'graph_loading') {
+            const entryIntent: GateEntryIntent = pendingAnalysis !== null
+                ? 'analysis'
+                : pendingLoadInterface !== null
+                    ? 'restore'
+                    : 'none';
+            setGateEntryIntent(entryIntent);
             setGatePhase('arming');
             setSeenLoadingTrue(false);
             return;
         }
+        setGateEntryIntent('none');
         setGatePhase('idle');
-    }, [screen]);
+    }, [pendingAnalysis, pendingLoadInterface, screen]);
 
     React.useEffect(() => {
         if (screen !== 'graph_loading') return;
-        const hasPendingWork = pendingAnalysis !== null || pendingLoadInterface !== null;
         if (graphIsLoading) {
             setSeenLoadingTrue((prev) => (prev ? prev : true));
             setGatePhase('loading');
@@ -365,10 +374,32 @@ export const AppShell: React.FC = () => {
             setGatePhase('done');
             return;
         }
-        if (!hasPendingWork) {
+        if (gateEntryIntent === 'none') {
             setGatePhase('done');
         }
-    }, [graphIsLoading, pendingAnalysis, pendingLoadInterface, screen, seenLoadingTrue]);
+    }, [gateEntryIntent, graphIsLoading, screen, seenLoadingTrue]);
+
+    React.useEffect(() => {
+        if (screen !== 'graph_loading') return;
+        if (gateEntryIntent === 'none') return;
+        if (seenLoadingTrue) return;
+        const timeoutId = window.setTimeout(() => {
+            setGatePhase((current) => {
+                if (current === 'done' || current === 'confirmed') return current;
+                return 'stalled';
+            });
+            if (import.meta.env.DEV) {
+                console.warn(
+                    '[GatePhase] loading_watchdog_stalled intent=%s after=%dms',
+                    gateEntryIntent,
+                    GATE_LOADING_START_WATCHDOG_MS
+                );
+            }
+        }, GATE_LOADING_START_WATCHDOG_MS);
+        return () => {
+            window.clearTimeout(timeoutId);
+        };
+    }, [gateEntryIntent, screen, seenLoadingTrue]);
 
     React.useEffect(() => {
         if (!isWarmMountDebugEnabled()) return;
@@ -489,6 +520,7 @@ export const AppShell: React.FC = () => {
                 data-graph-loading={graphIsLoading ? '1' : '0'}
                 data-gate-phase={gatePhase}
                 data-gate-seen-loading={seenLoadingTrue ? '1' : '0'}
+                data-gate-entry-intent={gateEntryIntent}
                 data-search-interfaces-open={isSearchInterfacesOpen ? '1' : '0'}
                 data-search-interfaces-query-len={String(searchInterfacesQuery.length)}
             >

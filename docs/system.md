@@ -647,6 +647,17 @@ Frontend:
   - `src/components/SampleGraphPreview.tsx`
   - mounts `GraphPhysicsPlayground` (same runtime path as graph screen)
   - root marker: `data-arnvoid-graph-preview-root="1"`
+- Sample JSON restore pipeline (canonical):
+  - sample source file: `src/samples/sampleGraphPreview.export.json`
+  - dev export type + guard: `src/lib/devExport/devExportTypes.ts`
+  - adapter: `src/lib/devExport/devExportToSavedInterfaceRecord.ts`
+  - canonical validation: `parseSavedInterfaceRecord(...)` in `src/store/savedInterfacesStore.ts`
+  - runtime restore input: `pendingLoadInterface` in `GraphPhysicsPlayground`
+  - flow: `DevInterfaceExportV1 -> adapter -> SavedInterfaceRecordV1 -> parseSavedInterfaceRecord -> pendingLoadInterface`
+- How to swap sample map:
+  1. Replace `src/samples/sampleGraphPreview.export.json` with another DevInterfaceExportV1 file.
+  2. Keep top-level keys compatible (`version`, `exportedAt`, `title`, `parsedDocument`, `topology`, `layout`, `camera`, `analysisMeta`).
+  3. Reload app; preview adapter + parser validate before runtime mount.
 - Portal scope seam (preview-only container mode):
   - `src/components/portalScope/PortalScopeContext.tsx`
   - `SampleGraphPreview` creates internal portal root: `data-arnvoid-preview-portal-root="1"`
@@ -664,14 +675,20 @@ Current known risks not fixed yet:
    - drag/error/login overlays in `src/screens/EnterPrompt.tsx` are fixed and can block visibility/input.
 3. Render-loop teardown gaps:
    - graph loop cleanup still needs follow-up for canvas wheel and `document.fonts` listener teardown.
+4. Not in this step:
+   - no wheel-guard gating changes
+   - no render-loop cleanup fix
+   - no topology singleton refactor
+   - no performance retuning
 
 Manual verification checklist for follow-up runs:
 1. Prompt loads without crash and preview stays inside the 200px wrapper.
 2. Placeholder label is gone; preview runtime surface is visible.
-3. Click dot in preview: popup stays inside preview box.
-4. Hover tooltip in preview: tooltip stays inside preview box.
-5. No preview interaction renders fullscreen-ish UI outside preview box.
-6. Graph screen behavior remains unchanged (app mode portals).
-7. EnterPrompt overlays still behave as before (drag overlay, error overlay, login overlay).
-8. Repeated prompt visit cycles do not cause obvious listener/input regressions.
-9. Future wheel-gated build: wheel over preview zooms graph and does not leak page scroll.
+3. Preview labels/topology match the sample export (deterministic map, not seed-4 graph).
+4. Click dot in preview: popup stays inside preview box.
+5. Hover tooltip in preview: tooltip stays inside preview box.
+6. No preview interaction renders fullscreen-ish UI outside preview box.
+7. Graph screen behavior remains unchanged (app mode portals).
+8. EnterPrompt overlays still behave as before (drag overlay, error overlay, login overlay).
+9. Repeated prompt visit cycles do not cause obvious listener/input regressions.
+10. Future wheel-gated build: wheel over preview zooms graph and does not leak page scroll.

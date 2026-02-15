@@ -91,6 +91,7 @@ const SIDEBAR_FLICKER_DEBUG_SWITCHES = {
     forceTitleOverflowClip: false,
     disableHoverResetOnMotionStart: false,
 } as const;
+const useIsoLayoutEffect = typeof window !== 'undefined' ? React.useLayoutEffect : React.useEffect;
 
 const roundedRectArcPath = (x: number, y: number, width: number, height: number, radius: number): string => {
     const r = Math.max(0, Math.min(radius, width / 2, height / 2));
@@ -552,7 +553,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         return () => media.removeListener(update);
     }, []);
 
-    React.useEffect(() => {
+    useIsoLayoutEffect(() => {
         if (prefersReducedMotion) {
             setMotionPhase(isExpanded ? 'expanded' : 'collapsed');
             return;

@@ -118,11 +118,12 @@ export const AppShell: React.FC = () => {
         setEnterPromptOverlayOpen,
     } = useOnboardingOverlayState({ screen });
 
+    const isGraphClassScreen = screen === 'graph' || screen === 'graph_loading';
     const GraphWithPending = Graph as React.ComponentType<GraphPhysicsPlaygroundProps>;
-    const showMoneyUi = screen === 'prompt' || screen === 'graph';
-    const showPersistentSidebar = screen === 'prompt' || screen === 'graph';
+    const showMoneyUi = screen === 'prompt' || isGraphClassScreen;
+    const showPersistentSidebar = screen === 'prompt' || isGraphClassScreen;
     const loginBlockingActive = screen === 'prompt' && enterPromptOverlayOpen;
-    const sidebarDisabled = (screen === 'graph' && graphIsLoading) || loginBlockingActive;
+    const sidebarDisabled = ((screen === 'graph' || screen === 'graph_loading') && graphIsLoading) || loginBlockingActive;
     const onboardingActive = isOnboardingScreen(screen) || isBlockingInput;
     const welcome1FontGateDone = useWelcome1FontGate({
         screen,
@@ -252,7 +253,7 @@ export const AppShell: React.FC = () => {
         const record = savedInterfaces.find((item) => item.id === id);
         if (!record) return;
         setPendingLoadInterface(record);
-        if (screen !== 'graph') {
+        if (screen !== 'graph' && screen !== 'graph_loading') {
             transitionToScreen('graph');
         }
         console.log('[appshell] pending_load_interface id=%s', id);
@@ -385,7 +386,7 @@ export const AppShell: React.FC = () => {
                     }}
                     onOpenSearchInterfaces={() => openSearchInterfaces()}
                     disabled={sidebarDisabled}
-                    showDocumentViewerButton={screen === 'graph'}
+                    showDocumentViewerButton={screen === 'graph' || screen === 'graph_loading'}
                     onToggleDocumentViewer={() => setDocumentViewerToggleToken((prev) => prev + 1)}
                     interfaces={sidebarInterfaces}
                     onRenameInterface={handleRenameInterface}

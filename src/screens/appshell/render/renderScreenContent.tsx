@@ -60,7 +60,7 @@ export function renderScreenContent(args: RenderScreenArgs): React.ReactNode {
         getSkipTarget,
     } = args;
 
-    if (screen === 'graph') {
+    if (screen === 'graph' || screen === 'graph_loading') {
         return (
             <Suspense fallback={<div style={fallbackStyle}>Loading graph...</div>}>
                 <GraphScreenShell sidebarExpanded={isSidebarExpanded}>

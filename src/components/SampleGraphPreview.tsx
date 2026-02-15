@@ -6,6 +6,14 @@ const PREVIEW_ROOT_STYLE: React.CSSProperties = {
     width: '100%',
     height: '100%',
     overflow: 'hidden',
+    borderRadius: 'inherit',
+};
+
+const PREVIEW_SURFACE_STYLE: React.CSSProperties = {
+    position: 'absolute',
+    inset: 0,
+    width: '100%',
+    height: '100%',
 };
 
 const PREVIEW_FALLBACK_STYLE: React.CSSProperties = {
@@ -48,11 +56,13 @@ export const SampleGraphPreview: React.FC = () => {
     return (
         <div data-arnvoid-graph-preview-root="1" style={PREVIEW_ROOT_STYLE}>
             <PreviewErrorBoundary>
-                <GraphPhysicsPlayground
-                    pendingAnalysisPayload={null}
-                    onPendingAnalysisConsumed={() => {}}
-                    enableDebugSidebar={false}
-                />
+                <div style={PREVIEW_SURFACE_STYLE}>
+                    <GraphPhysicsPlayground
+                        pendingAnalysisPayload={null}
+                        onPendingAnalysisConsumed={() => {}}
+                        enableDebugSidebar={false}
+                    />
+                </div>
             </PreviewErrorBoundary>
         </div>
     );

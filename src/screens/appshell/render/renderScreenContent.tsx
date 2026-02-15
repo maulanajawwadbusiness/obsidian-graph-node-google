@@ -118,15 +118,15 @@ export function renderScreenContent(args: RenderScreenArgs): React.ReactNode {
     }
     const backFromPrompt = getBackScreen('prompt');
     const enterFromPrompt = getNextScreen('prompt');
-    const skipTarget = getSkipTarget();
+    const promptSkipTarget: AppScreen = 'graph_loading';
     return (
         <EnterPrompt
             onBack={() => {
                 if (!backFromPrompt) return;
                 transitionToScreen(backFromPrompt);
             }}
-            onEnter={() => transitionToScreen(enterFromPrompt ?? 'graph')}
-            onSkip={() => transitionToScreen(skipTarget)}
+            onEnter={() => transitionToScreen(enterFromPrompt ?? 'graph_loading')}
+            onSkip={() => transitionToScreen(promptSkipTarget)}
             onOverlayOpenChange={setEnterPromptOverlayOpen}
             onSubmitPromptText={(text) => {
                 setPendingAnalysis({ kind: 'text', text, createdAt: Date.now() });

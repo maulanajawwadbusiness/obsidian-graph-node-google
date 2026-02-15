@@ -80,7 +80,7 @@ Kupikir ini waktunya untuk kita memikirkan medium informasi yang berbeda di sini
         // Onboarding EnterPrompt
         "onboarding.enterprompt.sidebar_label": "Sidebar",
         "onboarding.enterprompt.graph_preview_placeholder": "Pratinjau graf contoh",
-        "onboarding.enterprompt.heading": "Telusuri kesulitan di dalam papermu di sini",
+        "onboarding.enterprompt.heading": "Dalami Keraguan di dalam Papermu",
         "onboarding.enterprompt.input_placeholder": "Tempel atau unggah dokumenmu untuk mulai melakukan analisis di sini",
         "onboarding.enterprompt.login.title": "Masuk",
         "onboarding.enterprompt.login.desc": "Kamu akan bisa menggunakan antarmuka pengetahuan cerdas Arnvoid.",

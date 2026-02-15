@@ -114,6 +114,12 @@ Layering and input doctrine for this layout:
     *   **ENV Exception**: Do NOT stage any untracked file if its path or filename contains `env`.
     *   **Auth Work**: Update `docs/report_2026_02_05_auth_session_postgres.md` when touching auth, session, or CORS behavior.
 
+### 3.2 Worktree Collaboration Override (Current Repo Policy)
+- The git worktree may be changed concurrently by other agents or the user.
+- Do NOT pause work only because unrelated modified or untracked files appear.
+- Continue your assigned task and ignore unrelated tree changes unless explicitly asked to coordinate them.
+- Do not revert or edit unrelated files; keep diffs scoped to the active task.
+
 ## 3.1 Backend Route Add Checklist
 
 When adding a new backend route:

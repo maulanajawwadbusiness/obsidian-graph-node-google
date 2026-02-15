@@ -21,6 +21,17 @@ const TRANSITION_CLASS_BY_SCREEN: Record<AppScreen, TransitionClass> = {
     graph: 'graph',
 };
 
+const TRANSITION_POLICY_BY_CLASS: Record<TransitionClass, Record<TransitionClass, TransitionPolicy>> = {
+    onboarding: {
+        onboarding: { animate: false, blockInput: false, reason: 'non_animated_pair' },
+        graph: { animate: false, blockInput: false, reason: 'graph_boundary' },
+    },
+    graph: {
+        onboarding: { animate: false, blockInput: false, reason: 'graph_boundary' },
+        graph: { animate: false, blockInput: false, reason: 'graph_boundary' },
+    },
+};
+
 function isAnimatedOnboardingPair(from: AppScreen, to: AppScreen): boolean {
     if (from === 'welcome1' && to === 'welcome2') return true;
     if (from === 'welcome2' && to === 'welcome1') return true;
@@ -41,9 +52,9 @@ export function getTransitionPolicy(from: AppScreen, to: AppScreen): TransitionP
         return { animate: true, blockInput: true, reason: 'onboarding_pair' };
     }
     if (isGraphBoundary(from, to)) {
-        return { animate: false, blockInput: false, reason: 'graph_boundary' };
+        return TRANSITION_POLICY_BY_CLASS.graph[TRANSITION_CLASS_BY_SCREEN[to]];
     }
-    return { animate: false, blockInput: false, reason: 'non_animated_pair' };
+    return TRANSITION_POLICY_BY_CLASS[TRANSITION_CLASS_BY_SCREEN[from]][TRANSITION_CLASS_BY_SCREEN[to]];
 }
 
 export function isOverlayFadeEnabledForScreen(screen: AppScreen): boolean {

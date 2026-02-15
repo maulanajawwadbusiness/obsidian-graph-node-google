@@ -129,7 +129,7 @@ export const AppShell: React.FC = () => {
 
     const GraphWithPending = Graph as React.ComponentType<GraphPhysicsPlaygroundProps>;
     const showMoneyUi = screen === 'prompt' || isGraphClassScreen(screen);
-    const showPersistentSidebar = screen === 'prompt' || isGraphClassScreen(screen);
+    const showPersistentSidebar = screen === 'prompt' || screen === 'graph';
     const loginBlockingActive = screen === 'prompt' && enterPromptOverlayOpen;
     const sidebarDisabled = (isGraphClassScreen(screen) && graphIsLoading) || loginBlockingActive;
     const onboardingActive = isOnboardingScreen(screen) || isBlockingInput;

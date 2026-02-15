@@ -65,6 +65,7 @@ const SEARCH_OFFSET_TOP = -7.5;
 // More (3-dot) icon vertical offset: negative = up, positive = down (in px)
 const MORE_OFFSET_TOP = -9.5;
 const EXPANDED_CONTENT_HIDDEN_OFFSET_PX = 3;
+const SESSION_TEXT_HIDDEN_OFFSET_PX = 2;
 // Your Name text horizontal offset: negative = left, positive = right (in px)
 const NAME_OFFSET_LEFT = -13;
 // Close icon (expanded state) horizontal offset: negative = left, positive = right (in px)
@@ -77,6 +78,7 @@ const SIDEBAR_TEXT_COLOR = '#D7F5FF';
 const ROW_MENU_DELETE_TEXT_COLOR = '#FF4B4E';
 const SIDEBAR_HOVER_TRANSITION = '250ms ease';
 const LOGO_SWAP_TRANSITION = '100ms ease';
+const SESSION_TITLE_REVEAL_TRANSITION = 'opacity 84ms cubic-bezier(0.22, 0.00, 0.00, 1.00), transform 84ms cubic-bezier(0.22, 0.00, 0.00, 1.00)';
 const CLOSE_ICON_VIEWBOX = '0 0 100 100';
 type RowMenuItemKey = 'rename' | 'delete';
 type MoreMenuItemKey = 'suggestion' | 'blog';
@@ -183,6 +185,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     const canOpenAvatarMenu = Boolean(onOpenProfile || onRequestLogout);
     const isInMotionPhase = motionPhase === 'expanding' || motionPhase === 'collapsing';
     const shouldMountExpandedContent = isExpanded || motionPhase !== 'collapsed';
+    const shouldShowSessionTitles = isExpanded && motionPhase === 'expanded';
     const contentTransitionCss = prefersReducedMotion ? 'none' : getSidebarContentTransitionCss(isExpanded);
     const widthTransitionCss = prefersReducedMotion ? 'none' : getSidebarWidthTransitionCss(isExpanded);
     const visualRailTransitionCss = prefersReducedMotion ? 'none' : getSidebarVisualRailTransitionCss(isExpanded);
@@ -567,6 +570,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
         setDocumentHover(false);
         setAvatarRowHover(false);
         setCloseHover(false);
+        setHoveredInterfaceId(null);
+        setHoveredEllipsisRowId(null);
     }, [isInMotionPhase]);
 
     React.useEffect(() => {
@@ -606,6 +611,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
         transform: isExpanded ? 'translateX(0px)' : `translateX(-${EXPANDED_CONTENT_HIDDEN_OFFSET_PX}px)`,
         transition: contentTransitionCss,
         pointerEvents: isExpanded ? 'auto' : 'none',
+    };
+    const sessionTitleRevealStyle: React.CSSProperties = {
+        opacity: shouldShowSessionTitles ? 1 : 0,
+        transform: shouldShowSessionTitles ? 'translateX(0px)' : `translateX(-${SESSION_TEXT_HIDDEN_OFFSET_PX}px)`,
+        transition: prefersReducedMotion ? 'none' : SESSION_TITLE_REVEAL_TRANSITION,
+        pointerEvents: shouldShowSessionTitles ? 'auto' : 'none',
     };
 
     return (
@@ -805,7 +816,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
                                         onPointerDown={(e) => e.stopPropagation()}
                                         onWheelCapture={(e) => e.stopPropagation()}
                                         onWheel={(e) => e.stopPropagation()}
-                                        onMouseEnter={() => setHoveredInterfaceId(item.id)}
+                                        onMouseEnter={() => {
+                                            if (isInMotionPhase) return;
+                                            setHoveredInterfaceId(item.id);
+                                        }}
                                         onMouseLeave={() => setHoveredInterfaceId(null)}
                                         onClick={() => {
                                             if (isRenaming) return;
@@ -851,7 +865,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                                                     />
                                                 </span>
                                             ) : (
-                                                <span style={INTERFACE_TEXT_STYLE}>{item.title}</span>
+                                                <span style={{ ...INTERFACE_TEXT_STYLE, ...sessionTitleRevealStyle }}>{item.title}</span>
                                             )}
                                             <span style={INTERFACE_ROW_MENU_SLOT_STYLE}>
                                                 <button
@@ -871,7 +885,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
                                                     onPointerUp={(e) => e.stopPropagation()}
                                                     onWheelCapture={(e) => e.stopPropagation()}
                                                     onWheel={(e) => e.stopPropagation()}
-                                                    onMouseEnter={() => setHoveredEllipsisRowId(item.id)}
+                                                    onMouseEnter={() => {
+                                                        if (isInMotionPhase) return;
+                                                        setHoveredEllipsisRowId(item.id);
+                                                    }}
                                                     onMouseLeave={() => setHoveredEllipsisRowId((curr) => (curr === item.id ? null : curr))}
                                                     onClick={(e) => {
                                                         e.preventDefault();
@@ -1505,12 +1522,14 @@ const INTERFACE_ROW_CONTENT_STYLE: React.CSSProperties = {
 };
 
 const INTERFACE_TEXT_STYLE: React.CSSProperties = {
+    display: 'block',
     flex: 1,
     minWidth: 0,
+    minHeight: '18px',
+    lineHeight: '18px',
     overflow: 'hidden',
     textOverflow: 'ellipsis',
-    whiteSpace: 'normal',
-    wordBreak: 'break-word',
+    whiteSpace: 'nowrap',
 };
 
 const INTERFACE_ROW_MENU_SLOT_STYLE: React.CSSProperties = {

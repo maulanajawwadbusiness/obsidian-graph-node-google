@@ -3,10 +3,10 @@ import { GraphPhysicsPlayground } from '../playground/GraphPhysicsPlayground';
 import { TooltipProvider } from '../ui/tooltip/TooltipProvider';
 import { PortalScopeProvider } from './portalScope/PortalScopeContext';
 import sampleGraphPreviewExport from '../samples/sampleGraphPreview.export.json';
-import { parseSavedInterfaceRecord } from '../store/savedInterfacesStore';
 import type { SavedInterfaceRecordV1 } from '../store/savedInterfacesStore';
 import { devExportToSavedInterfaceRecordV1 } from '../lib/devExport/devExportToSavedInterfaceRecord';
-import { parseDevInterfaceExportV1 } from '../lib/devExport/devExportTypes';
+import { parseDevInterfaceExportStrict } from '../lib/devExport/parseDevInterfaceExportStrict';
+import { parseSavedInterfaceRecordForPreview } from '../lib/devExport/parseSavedInterfaceRecordForPreview';
 import {
     PREVIEW_VALIDATION_ERROR_CODE,
     createValidationError,
@@ -103,13 +103,9 @@ export const SampleGraphPreview: React.FC = () => {
     );
     const [leaseState, setLeaseState] = React.useState<LeaseState>({ phase: 'checking' });
     const sampleLoadResult = React.useMemo<Result<SampleLoadSuccess>>(() => {
-        const parsedDev = parseDevInterfaceExportV1(sampleGraphPreviewExport);
-        if (!parsedDev) {
-            return err(createValidationError(
-                PREVIEW_VALIDATION_ERROR_CODE.DEV_EXPORT_INVALID,
-                'sample dev export payload is invalid'
-            ));
-        }
+        const parsedDevResult = parseDevInterfaceExportStrict(sampleGraphPreviewExport);
+        if (!parsedDevResult.ok) return parsedDevResult;
+        const parsedDev = parsedDevResult.value;
 
         const adapted = (() => {
             try {
@@ -124,14 +120,8 @@ export const SampleGraphPreview: React.FC = () => {
         })();
 
         return chainResult(adapted, (candidateRecord) => {
-            const parsedRecord = parseSavedInterfaceRecord(candidateRecord);
-            if (!parsedRecord) {
-                return err(createValidationError(
-                    PREVIEW_VALIDATION_ERROR_CODE.SAVED_RECORD_INVALID,
-                    'saved interface parser rejected adapted record'
-                ));
-            }
-            return ok({ record: parsedRecord });
+            const parsedPreviewRecord = parseSavedInterfaceRecordForPreview(candidateRecord);
+            return chainResult(parsedPreviewRecord, (parsedRecord) => ok({ record: parsedRecord }));
         });
     }, []);
 

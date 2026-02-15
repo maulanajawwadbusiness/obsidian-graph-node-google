@@ -7,6 +7,7 @@ import type { DevInterfaceExportV1 } from './devExportTypes';
 
 type DevExportAdapterOptions = {
     preview?: boolean;
+    allowEmptyTopology?: boolean;
 };
 
 function assertDevExportForAdapter(dev: DevInterfaceExportV1): void {
@@ -63,15 +64,23 @@ function ensureParsedDocument(
     };
 }
 
-function ensureTopology(topology: DevInterfaceExportV1['topology']): SavedInterfaceRecordV1['topology'] {
-    if (topology && Array.isArray(topology.nodes) && Array.isArray(topology.links)) {
-        return topology;
+function ensureTopology(
+    topology: DevInterfaceExportV1['topology'],
+    opts?: DevExportAdapterOptions
+): SavedInterfaceRecordV1['topology'] {
+    if (!topology) {
+        if (opts?.allowEmptyTopology) {
+            return { nodes: [], links: [], springs: [] };
+        }
+        throw new Error('DEVEXPORT_TOPOLOGY_MISSING');
     }
-    return {
-        nodes: [],
-        links: [],
-        springs: [],
-    };
+    if (!Array.isArray(topology.nodes) || !Array.isArray(topology.links)) {
+        if (opts?.allowEmptyTopology) {
+            return { nodes: [], links: [], springs: [] };
+        }
+        throw new Error('DEVEXPORT_TOPOLOGY_INVALID');
+    }
+    return topology;
 }
 
 export function devExportToSavedInterfaceRecordV1(
@@ -82,7 +91,7 @@ export function devExportToSavedInterfaceRecordV1(
     const exportedAt = Math.floor(dev.exportedAt);
     const title = (dev.title || 'Sample Preview').trim() || 'Sample Preview';
     const parsedDocument = ensureParsedDocument(dev.parsedDocument, title, exportedAt);
-    const topology = ensureTopology(dev.topology);
+    const topology = ensureTopology(dev.topology, opts);
     const previewNodeCount = topology.nodes.length;
     const previewLinkCount = topology.links.length;
     const previewCharCount = parsedDocument.text.length;

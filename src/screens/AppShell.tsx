@@ -46,6 +46,7 @@ import {
     SHELL_STYLE,
     WELCOME1_FONT_GATE_BLANK_STYLE,
 } from './appshell/appShellStyles';
+import { TooltipProvider } from '../ui/tooltip/TooltipProvider';
 import { SidebarLayer } from './appshell/sidebar/SidebarLayer';
 import { useSidebarInterfaces } from './appshell/sidebar/useSidebarInterfaces';
 
@@ -366,99 +367,101 @@ export const AppShell: React.FC = () => {
         : renderScreenContentByScreen(screen);
 
     return (
-        <div
-            style={SHELL_STYLE}
-            data-graph-loading={graphIsLoading ? '1' : '0'}
-            data-search-interfaces-open={isSearchInterfacesOpen ? '1' : '0'}
-            data-search-interfaces-query-len={String(searchInterfacesQuery.length)}
-        >
-            <SidebarLayer
-                show={showPersistentSidebar}
-                isExpanded={isSidebarExpanded}
-                onToggle={() => setIsSidebarExpanded((prev) => !prev)}
-                onCreateNew={() => {
-                    setPendingLoadInterface(null);
-                    setPendingAnalysis(null);
-                    transitionToScreen(getCreateNewTarget());
-                }}
-                onOpenSearchInterfaces={() => openSearchInterfaces()}
-                disabled={sidebarDisabled}
-                showDocumentViewerButton={screen === 'graph'}
-                onToggleDocumentViewer={() => setDocumentViewerToggleToken((prev) => prev + 1)}
-                interfaces={sidebarInterfaces}
-                onRenameInterface={handleRenameInterface}
-                onDeleteInterface={(id) => {
-                    if (isSearchInterfacesOpen) return;
-                    if (sidebarDisabled) return;
-                    const record = savedInterfaces.find((item) => item.id === id);
-                    if (!record) return;
-                    openDeleteConfirm(record.id, record.title);
-                    console.log('[appshell] pending_delete_open id=%s', id);
-                }}
-                selectedInterfaceId={pendingLoadInterface?.id ?? undefined}
-                onSelectInterface={(id) => selectSavedInterfaceById(id)}
-                accountName={sidebarAccountName}
-                accountImageUrl={sidebarAccountImageUrl}
-                onOpenProfile={isLoggedIn ? openProfileOverlay : undefined}
-                onRequestLogout={isLoggedIn ? openLogoutConfirm : undefined}
-            />
+        <TooltipProvider>
             <div
-                style={{
-                    ...NON_SIDEBAR_LAYER_STYLE,
-                    filter: isSidebarExpanded ? NON_SIDEBAR_DIMMED_FILTER : NON_SIDEBAR_BASE_FILTER,
-                    transition: prefersReducedMotion ? 'none' : getNonSidebarDimTransitionCss(isSidebarExpanded),
-                }}
+                style={SHELL_STYLE}
+                data-graph-loading={graphIsLoading ? '1' : '0'}
+                data-search-interfaces-open={isSearchInterfacesOpen ? '1' : '0'}
+                data-search-interfaces-query-len={String(searchInterfacesQuery.length)}
             >
-                <div data-main-screen-root="1" style={MAIN_SCREEN_CONTAINER_STYLE}>
-                    {screenContent}
-                </div>
-                <OnboardingChrome
-                    screen={screen}
-                    isOnboardingOverlayOpen={isOnboardingOverlayOpen}
+                <SidebarLayer
+                    show={showPersistentSidebar}
+                    isExpanded={isSidebarExpanded}
+                    onToggle={() => setIsSidebarExpanded((prev) => !prev)}
+                    onCreateNew={() => {
+                        setPendingLoadInterface(null);
+                        setPendingAnalysis(null);
+                        transitionToScreen(getCreateNewTarget());
+                    }}
+                    onOpenSearchInterfaces={() => openSearchInterfaces()}
+                    disabled={sidebarDisabled}
+                    showDocumentViewerButton={screen === 'graph'}
+                    onToggleDocumentViewer={() => setDocumentViewerToggleToken((prev) => prev + 1)}
+                    interfaces={sidebarInterfaces}
+                    onRenameInterface={handleRenameInterface}
+                    onDeleteInterface={(id) => {
+                        if (isSearchInterfacesOpen) return;
+                        if (sidebarDisabled) return;
+                        const record = savedInterfaces.find((item) => item.id === id);
+                        if (!record) return;
+                        openDeleteConfirm(record.id, record.title);
+                        console.log('[appshell] pending_delete_open id=%s', id);
+                    }}
+                    selectedInterfaceId={pendingLoadInterface?.id ?? undefined}
+                    onSelectInterface={(id) => selectSavedInterfaceById(id)}
+                    accountName={sidebarAccountName}
+                    accountImageUrl={sidebarAccountImageUrl}
+                    onOpenProfile={isLoggedIn ? openProfileOverlay : undefined}
+                    onRequestLogout={isLoggedIn ? openLogoutConfirm : undefined}
                 />
-                {moneyUi}
+                <div
+                    style={{
+                        ...NON_SIDEBAR_LAYER_STYLE,
+                        filter: isSidebarExpanded ? NON_SIDEBAR_DIMMED_FILTER : NON_SIDEBAR_BASE_FILTER,
+                        transition: prefersReducedMotion ? 'none' : getNonSidebarDimTransitionCss(isSidebarExpanded),
+                    }}
+                >
+                    <div data-main-screen-root="1" style={MAIN_SCREEN_CONTAINER_STYLE}>
+                        {screenContent}
+                    </div>
+                    <OnboardingChrome
+                        screen={screen}
+                        isOnboardingOverlayOpen={isOnboardingOverlayOpen}
+                    />
+                    {moneyUi}
+                </div>
+                <ModalLayer
+                    profile={{
+                        isProfileOpen,
+                        sidebarAccountImageUrl,
+                        profileDraftDisplayName,
+                        profileDraftUsername,
+                        profileError,
+                        profileSaving,
+                        setProfileDraftDisplayName,
+                        setProfileDraftUsername,
+                        setProfileError,
+                        closeProfileOverlay,
+                        onProfileSave,
+                    }}
+                    logout={{
+                        isLogoutConfirmOpen,
+                        logoutConfirmError,
+                        logoutConfirmBusy,
+                        closeLogoutConfirm,
+                        confirmLogout,
+                    }}
+                    deleteConfirm={{
+                        pendingDeleteId,
+                        pendingDeleteTitle,
+                        closeDeleteConfirm,
+                        confirmDelete,
+                    }}
+                    search={{
+                        isSearchInterfacesOpen,
+                        closeSearchInterfaces,
+                        searchInterfacesQuery,
+                        setSearchInterfacesQuery,
+                        searchInputFocused,
+                        setSearchInputFocused,
+                        searchHighlightedIndex,
+                        setSearchHighlightedIndex,
+                        filteredSearchResults,
+                        selectSearchResultById,
+                        searchInputRef,
+                    }}
+                />
             </div>
-            <ModalLayer
-                profile={{
-                    isProfileOpen,
-                    sidebarAccountImageUrl,
-                    profileDraftDisplayName,
-                    profileDraftUsername,
-                    profileError,
-                    profileSaving,
-                    setProfileDraftDisplayName,
-                    setProfileDraftUsername,
-                    setProfileError,
-                    closeProfileOverlay,
-                    onProfileSave,
-                }}
-                logout={{
-                    isLogoutConfirmOpen,
-                    logoutConfirmError,
-                    logoutConfirmBusy,
-                    closeLogoutConfirm,
-                    confirmLogout,
-                }}
-                deleteConfirm={{
-                    pendingDeleteId,
-                    pendingDeleteTitle,
-                    closeDeleteConfirm,
-                    confirmDelete,
-                }}
-                search={{
-                    isSearchInterfacesOpen,
-                    closeSearchInterfaces,
-                    searchInterfacesQuery,
-                    setSearchInterfacesQuery,
-                    searchInputFocused,
-                    setSearchInputFocused,
-                    searchHighlightedIndex,
-                    setSearchHighlightedIndex,
-                    filteredSearchResults,
-                    selectSearchResultById,
-                    searchInputRef,
-                }}
-            />
-        </div>
+        </TooltipProvider>
     );
 };

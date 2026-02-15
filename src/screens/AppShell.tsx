@@ -117,6 +117,8 @@ export const AppShell: React.FC = () => {
     const [gateEntryIntent, setGateEntryIntent] = React.useState<GateEntryIntent>('none');
     const [documentViewerToggleToken, setDocumentViewerToggleToken] = React.useState(0);
     const [isSidebarExpanded, setIsSidebarExpanded] = React.useState(false);
+    const sidebarExpandedAtGateEntryRef = React.useRef<boolean | null>(null);
+    const previousScreenRef = React.useRef<Screen>(screen);
     const gatePhaseRef = React.useRef<GatePhase>('idle');
     const graphLoadingGateRootRef = React.useRef<HTMLDivElement>(null);
     const savedInterfacesRef = React.useRef<SavedInterfaceRecordV1[]>([]);
@@ -163,6 +165,9 @@ export const AppShell: React.FC = () => {
     const showPersistentSidebar = SIDEBAR_VISIBILITY_BY_SCREEN[screen];
     const sidebarFrozen = SIDEBAR_INTERACTION_BY_SCREEN[screen] === 'frozen';
     const sidebarDimAlpha = SIDEBAR_DIM_ALPHA_BY_SCREEN[screen];
+    const sidebarExpandedForRender = screen === 'graph_loading' && sidebarExpandedAtGateEntryRef.current !== null
+        ? sidebarExpandedAtGateEntryRef.current
+        : isSidebarExpanded;
     const loginBlockingActive = screen === 'prompt' && enterPromptOverlayOpen;
     const sidebarDisabled = sidebarFrozen || (isGraphClassScreen(screen) && graphIsLoading) || loginBlockingActive;
     const onboardingActive = isOnboardingScreen(screen) || isBlockingInput;
@@ -379,6 +384,26 @@ export const AppShell: React.FC = () => {
     }, [savedInterfaces]);
 
     React.useEffect(() => {
+        const previousScreen = previousScreenRef.current;
+        const enteringGraphLoading = previousScreen !== 'graph_loading' && screen === 'graph_loading';
+        const leavingGraphLoading = previousScreen === 'graph_loading' && screen !== 'graph_loading';
+        if (enteringGraphLoading) {
+            sidebarExpandedAtGateEntryRef.current = isSidebarExpanded;
+        }
+        if (leavingGraphLoading) {
+            sidebarExpandedAtGateEntryRef.current = null;
+        }
+        previousScreenRef.current = screen;
+    }, [isSidebarExpanded, screen]);
+
+    React.useEffect(() => {
+        if (screen !== 'graph_loading') return;
+        if (sidebarExpandedAtGateEntryRef.current !== true) return;
+        if (isSidebarExpanded) return;
+        setIsSidebarExpanded(true);
+    }, [isSidebarExpanded, screen]);
+
+    React.useEffect(() => {
         if (screen === 'graph_loading') {
             const entryIntent: GateEntryIntent = pendingAnalysis !== null
                 ? 'analysis'
@@ -459,6 +484,14 @@ export const AppShell: React.FC = () => {
         if (sidebarFrozen) return;
         console.warn('[SidebarFreezeGuard] invariant_failed screen=%s sidebarFrozen=%s', screen, String(sidebarFrozen));
     }, [screen, sidebarFrozen]);
+
+    React.useEffect(() => {
+        if (!import.meta.env.DEV) return;
+        if (screen !== 'graph_loading') return;
+        if (sidebarExpandedAtGateEntryRef.current !== true) return;
+        if (sidebarExpandedForRender) return;
+        console.warn('[SidebarFreezeGuard] expanded_snapshot_drift_detected rendered=false');
+    }, [screen, sidebarExpandedForRender]);
 
     const confirmGraphLoadingGate = React.useCallback(() => {
         if (screen !== 'graph_loading') return;
@@ -557,7 +590,7 @@ export const AppShell: React.FC = () => {
 
     const renderScreenContentByScreen = (targetScreen: Screen): React.ReactNode => renderScreenContent({
         screen: targetScreen,
-        isSidebarExpanded,
+        isSidebarExpanded: sidebarExpandedForRender,
         fallbackStyle: FALLBACK_STYLE,
         GraphWithPending,
         pendingAnalysis,
@@ -623,7 +656,7 @@ export const AppShell: React.FC = () => {
             >
                 <SidebarLayer
                     show={showPersistentSidebar}
-                    isExpanded={isSidebarExpanded}
+                    isExpanded={sidebarExpandedForRender}
                     frozen={sidebarFrozen}
                     dimAlpha={sidebarDimAlpha}
                     onToggle={() => {
@@ -695,8 +728,8 @@ export const AppShell: React.FC = () => {
                 <div
                     style={{
                         ...NON_SIDEBAR_LAYER_STYLE,
-                        filter: isSidebarExpanded ? NON_SIDEBAR_DIMMED_FILTER : NON_SIDEBAR_BASE_FILTER,
-                        transition: prefersReducedMotion ? 'none' : getNonSidebarDimTransitionCss(isSidebarExpanded),
+                        filter: sidebarExpandedForRender ? NON_SIDEBAR_DIMMED_FILTER : NON_SIDEBAR_BASE_FILTER,
+                        transition: prefersReducedMotion ? 'none' : getNonSidebarDimTransitionCss(sidebarExpandedForRender),
                     }}
                 >
                     <div data-main-screen-root="1" style={MAIN_SCREEN_CONTAINER_STYLE}>

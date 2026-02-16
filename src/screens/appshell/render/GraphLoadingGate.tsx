@@ -1,7 +1,10 @@
 import React from 'react';
+import { type GatePhase } from './graphLoadingGateMachine';
 
 type GraphLoadingGateProps = {
     rootRef?: React.RefObject<HTMLDivElement>;
+    phase: GatePhase;
+    errorMessage?: string | null;
     confirmVisible?: boolean;
     confirmEnabled?: boolean;
     onConfirm?: () => void;
@@ -29,6 +32,11 @@ const TEXT_STYLE: React.CSSProperties = {
     fontSize: '20px',
     fontWeight: 500,
     letterSpacing: '0.3px',
+    textAlign: 'center',
+    lineHeight: 1.4,
+    maxWidth: '700px',
+    padding: '0 24px',
+    boxSizing: 'border-box',
 };
 
 const CONFIRM_SLOT_STYLE: React.CSSProperties = {
@@ -86,15 +94,38 @@ const BACK_BUTTON_STYLE: React.CSSProperties = {
     cursor: 'pointer',
 };
 
+const ERROR_TITLE_STYLE: React.CSSProperties = {
+    fontSize: '22px',
+    fontWeight: 700,
+    color: '#ffd5d5',
+    marginBottom: '8px',
+    textAlign: 'center',
+};
+
+const ERROR_MESSAGE_STYLE: React.CSSProperties = {
+    fontSize: '14px',
+    fontWeight: 500,
+    color: 'rgba(255, 235, 235, 0.92)',
+    textAlign: 'center',
+    lineHeight: 1.45,
+    maxWidth: '720px',
+    padding: '0 24px',
+    boxSizing: 'border-box',
+};
+
 export const GraphLoadingGate: React.FC<GraphLoadingGateProps> = ({
     rootRef,
+    phase,
+    errorMessage,
     confirmVisible = false,
     confirmEnabled = false,
     onConfirm,
     showBackToPrompt = false,
     onBackToPrompt,
 }) => {
-    const isDone = confirmEnabled;
+    const isDone = phase === 'done' || phase === 'confirmed';
+    const isError = phase === 'error';
+    const isStalled = phase === 'stalled';
     const confirmButtonRef = React.useRef<HTMLButtonElement>(null);
 
     React.useEffect(() => {
@@ -139,9 +170,16 @@ export const GraphLoadingGate: React.FC<GraphLoadingGateProps> = ({
             onContextMenu={(e) => e.preventDefault()}
             onKeyDownCapture={onGateKeyDownCapture}
         >
-            <div role="status" aria-live="polite" style={TEXT_STYLE}>
-                {isDone ? 'Loading Complete' : 'Loading...'}
-            </div>
+            {isError ? (
+                <div role="status" aria-live="assertive" style={TEXT_STYLE}>
+                    <div style={ERROR_TITLE_STYLE}>Loading Failed</div>
+                    <div style={ERROR_MESSAGE_STYLE}>{errorMessage || 'Analysis failed. Please try again.'}</div>
+                </div>
+            ) : (
+                <div role="status" aria-live="polite" style={TEXT_STYLE}>
+                    {isDone ? 'Loading Complete' : isStalled ? 'Loading stalled. Please go back to prompt.' : 'Loading...'}
+                </div>
+            )}
             {showBackToPrompt ? (
                 <button
                     type="button"
@@ -152,7 +190,7 @@ export const GraphLoadingGate: React.FC<GraphLoadingGateProps> = ({
                     Back to Prompt
                 </button>
             ) : null}
-            <div style={{ ...CONFIRM_SLOT_STYLE, opacity: confirmVisible ? 1 : 0.35 }}>
+            <div style={{ ...CONFIRM_SLOT_STYLE, opacity: confirmVisible && !isError ? 1 : 0.35 }}>
                 {confirmVisible ? (
                     <button
                         ref={confirmButtonRef}
@@ -162,7 +200,7 @@ export const GraphLoadingGate: React.FC<GraphLoadingGateProps> = ({
                             ...CONFIRM_BUTTON_STYLE,
                             ...(confirmEnabled ? CONFIRM_BUTTON_ENABLED_STYLE : CONFIRM_BUTTON_DISABLED_STYLE),
                         }}
-                        disabled={!confirmEnabled}
+                        disabled={!confirmEnabled || isError}
                         onPointerDown={(e) => e.stopPropagation()}
                         onClick={() => onConfirm?.()}
                     >

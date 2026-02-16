@@ -6,7 +6,7 @@ import { GraphScreenShell } from './GraphScreenShell';
 import { GraphLoadingGate } from './GraphLoadingGate';
 import { AppScreen, isGraphClassScreen } from '../screenFlow/screenTypes';
 import { GraphRuntimeLeaseBoundary } from '../../../runtime/GraphRuntimeLeaseBoundary';
-import { type RuntimeStatusSnapshot } from './graphLoadingGateMachine';
+import { type GatePhase, type RuntimeStatusSnapshot } from './graphLoadingGateMachine';
 import type {
     GraphPhysicsPlaygroundProps,
     PendingAnalysisPayload,
@@ -48,6 +48,8 @@ export type RenderScreenArgs = {
     setRestoreReadPathActive: (active: boolean) => void;
     promptAnalysisErrorMessage: string | null;
     clearPromptAnalysisError: () => void;
+    gatePhase: GatePhase;
+    gateErrorMessage: string | null;
     gateConfirmVisible: boolean;
     gateConfirmEnabled: boolean;
     gateRootRef?: React.RefObject<HTMLDivElement>;
@@ -84,6 +86,8 @@ export function renderScreenContent(args: RenderScreenArgs): React.ReactNode {
         setRestoreReadPathActive,
         promptAnalysisErrorMessage,
         clearPromptAnalysisError,
+        gatePhase,
+        gateErrorMessage,
         gateConfirmVisible,
         gateConfirmEnabled,
         gateRootRef,
@@ -134,6 +138,8 @@ export function renderScreenContent(args: RenderScreenArgs): React.ReactNode {
                     {screen === 'graph_loading' ? (
                         <GraphLoadingGate
                             rootRef={gateRootRef}
+                            phase={gatePhase}
+                            errorMessage={gateErrorMessage}
                             confirmVisible={gateConfirmVisible}
                             confirmEnabled={gateConfirmEnabled}
                             onConfirm={onGateConfirm}

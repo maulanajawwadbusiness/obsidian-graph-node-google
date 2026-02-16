@@ -667,6 +667,8 @@ export const AppShell: React.FC = () => {
         },
         promptAnalysisErrorMessage,
         clearPromptAnalysisError: () => setPromptAnalysisErrorMessage(null),
+        gatePhase,
+        gateErrorMessage: graphRuntimeStatus.aiErrorMessage,
         gateConfirmVisible: gateControls.allowConfirm,
         gateConfirmEnabled: gateControls.allowConfirm,
         gateRootRef: graphLoadingGateRootRef,

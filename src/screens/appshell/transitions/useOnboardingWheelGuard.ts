@@ -1,4 +1,5 @@
 import React from 'react';
+import { isInsideSampleGraphPreviewRoot } from '../../../components/sampleGraphPreviewSeams';
 
 type UseOnboardingWheelGuardArgs = {
     enabled: boolean;
@@ -13,10 +14,21 @@ export function useOnboardingWheelGuard(args: UseOnboardingWheelGuardArgs): void
         if (!enabled || !active) return;
         if (typeof window === 'undefined') return;
 
+        const isInsidePreviewPortalRoot = (target: EventTarget | null): boolean => {
+            if (!target || !(target instanceof Element)) return false;
+            return target.closest('[data-arnvoid-preview-portal-root="1"]') !== null;
+        };
+
         const onWheel = (event: WheelEvent) => {
-            // TODO(sample-preview): Gate this preventDefault path when event target is inside
-            // preview root marker from src/components/sampleGraphPreviewSeams.ts so wheel
-            // input can be owned by embedded graph preview runtime.
+            if (
+                isInsideSampleGraphPreviewRoot(event.target) ||
+                isInsidePreviewPortalRoot(event.target)
+            ) {
+                if (debug) {
+                    console.log('[OnboardingGesture] wheel allowed for preview');
+                }
+                return;
+            }
             event.preventDefault();
             if (debug) {
                 console.log('[OnboardingGesture] wheel prevented');

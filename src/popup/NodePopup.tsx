@@ -13,7 +13,11 @@ import {
 } from '../components/sampleGraphPreviewSeams';
 import { useGraphViewport, type GraphViewport } from '../runtime/viewport/graphViewport';
 import { getViewportSize, isBoxedViewport, recordBoxedClampCall } from '../runtime/viewport/viewportMath';
-import { BOXED_NODE_POPUP_SCALE, recordBoxedNodePopupScaleApplied } from '../runtime/ui/boxedUiPolicy';
+import {
+    BOXED_NODE_POPUP_SCALE,
+    recordBoxedNodePopupAnchorLocalPath,
+    recordBoxedNodePopupScaleApplied,
+} from '../runtime/ui/boxedUiPolicy';
 
 const stopPropagation = (e: React.SyntheticEvent) => e.stopPropagation();
 const stopOverlayWheelPropagation = (event: React.WheelEvent) => {
@@ -159,6 +163,9 @@ function computePopupPosition(
             x: mode === 'container' && boundsRect ? anchor.x - boundsRect.left : anchor.x,
             y: mode === 'container' && boundsRect ? anchor.y - boundsRect.top : anchor.y,
         };
+    if (boxed) {
+        recordBoxedNodePopupAnchorLocalPath();
+    }
     const anchorX = anchorLocal.x;
     const anchorY = anchorLocal.y;
     if (

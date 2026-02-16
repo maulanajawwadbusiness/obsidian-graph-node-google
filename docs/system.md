@@ -1079,6 +1079,7 @@ Step 11 boxed-only UI rules (2026-02-16):
   - `boxedBodyPortalRedirectCount`
   - `boxedSurfaceDisabledCount`
   - `boxedNodePopupScaleAppliedCount`
+  - `boxedNodePopupAnchorLocalPathCount`
 - PR checklist for new runtime overlays/panels:
   1. boxed branch must not use `document.body` portal target.
   2. boxed branch must avoid window-anchored `position: fixed` fullscreen assumptions.
@@ -1135,6 +1136,7 @@ Step 13 boxed smart contain (2026-02-16):
   - NodePopup uses a two-layer contract in boxed mode:
     - outer anchor wrapper is unscaled and owns `left/top` placement
     - inner panel owns visual scaling with `transformOrigin: top left`
+  - boxed NodePopup anchor coordinates are local to the graph viewport/canvas; do not run `toViewportLocalPoint` on them.
   - clamp math uses scaled dimensions derived from the unscaled panel size.
   - popup gap (`GAP_FROM_NODE`) is px-based and must not be multiplied by scale.
   - graph screen/app mode popup scale remains unchanged.

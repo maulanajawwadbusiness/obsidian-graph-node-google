@@ -235,6 +235,11 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
         energy: number;
         degradePct: number;
     }>>({});
+    const viewport = useGraphViewport();
+    const isBoxedRuntime = isBoxedUi(viewport);
+    const effectiveCameraLocked = cameraLocked || isBoxedRuntime;
+    const previousBoxedViewportSizeRef = useRef<{ width: number; height: number } | null>(null);
+    const warnedResizeSemanticNaNRef = useRef(false);
 
     const {
         handlePointerMove,
@@ -261,7 +266,7 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
         spawnCount,
         useVariedSize,
         skinMode,
-        cameraLocked,
+        cameraLocked: effectiveCameraLocked,
         showDebugGrid,
         pixelSnapping,
         debugNoRenderMotion,
@@ -270,9 +275,6 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
         markerIntensity,
         forceShowRestMarkers
     });
-    const viewport = useGraphViewport();
-    const isBoxedRuntime = isBoxedUi(viewport);
-    const previousBoxedViewportSizeRef = useRef<{ width: number; height: number } | null>(null);
 
     const setCanvasEl = React.useCallback((el: HTMLCanvasElement | null) => {
         canvasRef.current = el;
@@ -303,6 +305,10 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
             previousBoxedViewportSizeRef.current = { width: nextWidth, height: nextHeight };
             return;
         }
+        if (prevSize.width <= 1 || prevSize.height <= 1) {
+            previousBoxedViewportSizeRef.current = { width: nextWidth, height: nextHeight };
+            return;
+        }
         if (prevSize.width === nextWidth && prevSize.height === nextHeight) {
             return;
         }
@@ -323,6 +329,17 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
             },
         });
         if (
+            !Number.isFinite(nextCamera.panX) ||
+            !Number.isFinite(nextCamera.panY) ||
+            !Number.isFinite(nextCamera.zoom)
+        ) {
+            if (import.meta.env.DEV && !warnedResizeSemanticNaNRef.current) {
+                warnedResizeSemanticNaNRef.current = true;
+                console.warn('[ResizeSemantics] invalid camera computed after boxed resize; skipping apply');
+            }
+            return;
+        }
+        if (
             nextCamera.panX !== cameraSnapshot.panX ||
             nextCamera.panY !== cameraSnapshot.panY ||
             nextCamera.zoom !== cameraSnapshot.zoom
@@ -330,7 +347,14 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
             applyCameraSnapshot(nextCamera);
             recordBoxedResizeCameraAdjust();
         }
-    }, [applyCameraSnapshot, engineRef, getCameraSnapshot, viewport.height, viewport.mode, viewport.width]);
+    }, [
+        applyCameraSnapshot,
+        engineRef,
+        getCameraSnapshot,
+        viewport.height,
+        viewport.mode,
+        viewport.width,
+    ]);
 
     // FIX 36: Kill Layout Thrash (Single Rect Read)
     // Cache the rect using ResizeObserver so we don't force reflows during high-frequency pointer moves.
@@ -1437,7 +1461,7 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
                     sidebarOpen={enableDebugSidebar ? debugSidebarOpen : false}
                     skinMode={skinMode}
                     viewerOpen={documentContext.state.previewOpen}
-                    cameraLocked={cameraLocked}
+                    cameraLocked={effectiveCameraLocked}
                     showDebugGrid={showDebugGrid}
                     onToggleCameraLock={() => setCameraLocked(v => !v)}
                     onToggleDebugGrid={() => setShowDebugGrid(v => !v)}

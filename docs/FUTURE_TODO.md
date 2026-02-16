@@ -34,3 +34,21 @@
 2. Move screen-gate render exits (for example the `welcome1` font gate blank screen) below the full hook declaration zone to prevent future hook-order regressions.
 3. Add a local code comment near the first early-return gate stating that no new hooks may be added below conditional returns.
 4. Validate with onboarding flow replay (`welcome1 -> welcome2 -> prompt`) and confirm no `Rendered more hooks than during the previous render` runtime error.
+
+## Graph Loading Polish Backlog
+
+- [ ] Sidebar frozen look: remove whole-panel gray dim
+  - Do not dim the entire sidebar during frozen state.
+  - Only dim icons and avatar icon while frozen/disabled.
+
+- [ ] Keyboard keys currently do not work on loading screen
+  - Re-verify and harden keyboard behavior for loading screen path.
+
+- [ ] Loading screen typography weight
+  - All loading screen text should use font weight `300`.
+
+- [ ] UX tuning: 200ms loading screen fades
+  - Add 200ms fade when entering and exiting loading screen.
+
+- [ ] Loading screen polish pass
+  - Current loading screen feels too bare; refine to a sharper presentation later.

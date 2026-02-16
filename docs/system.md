@@ -20,8 +20,8 @@ Use pure ASCII characters in code, comments, logs, and documentation. Avoid Unic
 The application layers, ordered by z-index (lowest to highest):
 
 0.  **Onboarding Shell (Pre-Graph Startup Flow)**
-    *   Active only before `screen === 'graph'` in `src/screens/AppShell.tsx`.
-    *   Flow state machine: `welcome1 -> welcome2 -> prompt -> graph`.
+    *   Active only on onboarding-class screens (`welcome1`, `welcome2`, `prompt`) in `src/screens/AppShell.tsx`.
+    *   Flow state machine: `welcome1 -> welcome2 -> prompt -> graph_loading -> graph`.
     *   Transition control seams:
         *   canonical timing and route policy: `src/screens/appshell/transitions/transitionContract.ts`
         *   phase machine (idle, arming, fading): `src/screens/appshell/transitions/useOnboardingTransition.ts`
@@ -29,17 +29,17 @@ The application layers, ordered by z-index (lowest to highest):
     *   Animated route matrix:
         *   `welcome1 <-> welcome2`
         *   `welcome2 <-> prompt`
-        *   any transition touching `graph` is non-animated by policy.
+        *   any transition touching graph-class screens (`graph_loading` or `graph`) is non-animated by policy.
     *   Env gate: `ONBOARDING_ENABLED` (`src/config/env.ts`):
         *   `false` or not set: app starts directly in `graph`.
         *   `true` or `1`: app starts in `welcome1`.
     *   Dev start override: `VITE_ONBOARDING_START_SCREEN` (`src/config/env.ts`):
-        *   Canonical values: `welcome1`, `welcome2`, `prompt`, `graph`.
+        *   Canonical values: `welcome1`, `welcome2`, `prompt`, `graph_loading`, `graph`.
         *   Legacy aliases: `screen1`, `screen2`, `screen3`, `screen4`.
         *   Applies in DEV only. Invalid values fall back to `welcome1` and emit a single DEV warning.
     *   Persistence is currently disabled (`PERSIST_SCREEN = false`), so refresh resets onboarding to `welcome1` when onboarding is enabled.
-    *   Graph isolation contract: `GraphPhysicsPlayground` (thin wrapper) is lazy-loaded and mounted only when `screen === 'graph'`, then delegates to `GraphPhysicsPlaygroundContainer` in `src/playground/modules/GraphPhysicsPlaygroundContainer.tsx`. This keeps physics/rendering inactive during onboarding screens.
-    *   Money overlays mount only on `prompt` and `graph` screens:
+    *   Graph isolation contract: `GraphPhysicsPlayground` (thin wrapper) is lazy-loaded and mounted only for graph-class screens (`graph_loading` and `graph`), then delegates to `GraphPhysicsPlaygroundContainer` in `src/playground/modules/GraphPhysicsPlaygroundContainer.tsx`. This keeps physics/rendering inactive during onboarding screens.
+    *   Money overlays mount on `prompt` and graph-class screens:
         *   `ShortageWarning`
         *   `MoneyNoticeStack`
         *   `BalanceBadge` on `graph` by default, and on `prompt` only when enabled by UI flags.
@@ -98,7 +98,7 @@ The onboarding screens live in `src/screens/` and are orchestrated by `AppShell`
     *   Semantic cadence is applied as distributed pauses around word ends and sentence landings (not tick-per-char jitter).
     *   Cursor uses shared `TypingCursor` component with phase-driven mode mapping.
     *   No fixed auto-advance timer is authoritative for typed completion; timing truth comes from `BuiltTimeline.totalMs`.
-    *   Exposes `Back` (to `welcome1`) and `Skip` (to `graph`) actions.
+    *   Exposes `Back` (to `welcome1`) and `Skip` (to `graph_loading`) actions.
 *   **Role in flow**: Transitional explanation screen before `prompt`.
 
 ## 2.2 Welcome2 Typing Dataflow (Current)
@@ -132,8 +132,8 @@ Debug toggles:
     *   Continue button in LoginOverlay is a non-functional formal control (no click handler). Auth flow proceeds via session state update after sign-in.
     *   Login debug/error text is hidden by default in dev and visible by default in prod. Dev override: `VITE_SHOW_LOGIN_DEBUG_ERRORS=1`.
 *   **Role in flow**:
-    *   `onEnter` moves to `graph` (authenticated continue path).
-    *   `onSkip` can also move to `graph` (bypass path).
+    *   `onEnter` moves to `graph_loading` (authenticated continue path).
+    *   `onSkip` can also move to `graph_loading` (bypass path).
     *   `onBack` returns to `welcome2`.
 
 ## 2.3 Onboarding Fullscreen Safety (Current)
@@ -169,7 +169,7 @@ Current behavior:
   - analysis success path persists a saved interface record with full payload.
 - Restore:
   - selecting a saved interface sets pending restore intent and graph consumes it once.
-  - when selected from prompt screen, AppShell transitions to graph and restore runs on mount.
+  - when selected from prompt screen, AppShell transitions to `graph_loading`; restore runs on warm-mounted graph runtime and graph reveal still requires Confirm.
 - Rename:
   - inline rename UX in Sidebar; persisted through AppShell to storage helper.
   - rename does not reorder list (title patch does not bump `updatedAt`).
@@ -182,7 +182,7 @@ Current behavior:
   - Filter is in-memory from AppShell `savedInterfaces` (no localStorage reads per keystroke).
   - Overlay is shielded so pointer and wheel never leak to canvas.
 - Disabled state:
-  - when Sidebar is disabled (graph loading), row menu actions are non-actionable.
+  - when Sidebar is frozen during `graph_loading`, row menu actions are non-actionable.
 
 Saved interface payload contract (full, non-trimmed):
 - Record shape: `SavedInterfaceRecordV1` in `src/store/savedInterfacesStore.ts`
@@ -302,7 +302,7 @@ Sidebar modes (current behavior):
 - Product Sidebar:
   - owner path: `SidebarLayer` -> `Sidebar`
   - state: `isSidebarExpanded` in AppShell
-  - still rendered as overlay on `prompt` and `graph`
+  - rendered as overlay on `prompt`, `graph_loading`, and `graph`
   - graph screen also reserves structural left column width that follows the same state.
 - Non-graph screens:
   - continue using original overlay-only Sidebar pattern.
@@ -315,7 +315,63 @@ Layering and shielding guardrails:
 - `GraphScreenShell` and pane wrappers must not introduce new z-index layers above overlays or modals.
 - Overlay/modal/sidebar surfaces on top of graph must shield pointer and wheel so dot canvas never receives leaked input.
 
-## 2.7 Graph Runtime Lease Guard (2026-02-15)
+## 2.7 Graph Loading Gate (2026-02-15/16)
+
+Purpose:
+- `graph_loading` is a real screen state between `prompt` and `graph`.
+- it owns loading UX and reveal gating; graph screen reveal requires explicit Confirm.
+
+Flow and mount model:
+- forward graph spine: `prompt -> graph_loading -> graph`.
+- `graph_loading` and `graph` share one warm-mounted graph runtime subtree (no screen-key remount).
+- runtime loading signals continue flowing through `onLoadingStateChange` and drive gate phase changes.
+
+Gate UI surface:
+- full-viewport opaque surface (`#06060A`) mounted in graph-class render branch.
+- center status text:
+  - loading path: `Loading...`
+  - done path: `Loading Complete`
+- bottom-center Confirm control appears/enables only when gate reaches done.
+- gate never auto-continues to graph; reveal happens only by Confirm action.
+
+Gate state machine (high level):
+- phases: `idle`, `arming`, `loading`, `stalled`, `done`, `confirmed`.
+- entry intent snapshot: `analysis` | `restore` | `none`.
+- done unlock:
+  - real loading lifecycle (`graphIsLoading` true then false), or
+  - explicit no-work fallback only when entry intent is `none`.
+- watchdog:
+  - if loading never starts for analysis/restore intent, phase moves to `stalled` and escape remains available.
+
+Input, focus, and keyboard ownership:
+- gate wrapper blocks pointer and wheel so canvas does not react under loading surface.
+- gate root is focus anchor during `graph_loading`.
+- key capture policy:
+  - `Escape`: back to prompt
+  - `Enter` / `Space`: confirm only when enabled
+  - capture listeners stop propagation to prevent key leaks to canvas/sidebar
+- fallback window capture listener enforces same behavior if focus escapes gate root.
+
+Sidebar behavior during `graph_loading`:
+- sidebar remains visible as eye-stability anchor.
+- sidebar is frozen and dimmed (`alpha 0.5`), with inert + shield so pointer/wheel/focus do not leak.
+- temporary clamp policy:
+  - if sidebar was expanded on entry to `graph_loading`, it is temporarily collapsed during loading.
+  - on leave to `graph`, expanded state is restored to the pre-loading user state.
+
+Legacy runtime loading surface:
+- legacy `LoadingScreen` return path inside `GraphPhysicsPlaygroundShell` is suppressed for product graph-class path (`legacyLoadingScreenMode='disabled'` for `graph_loading` and `graph`).
+- loading callbacks/signals are unchanged and still feed gate state logic.
+
+DEV-only debug hooks:
+- `?debugWarmMount=1`:
+  - warm-mount logs (`[WarmMount] ... mountId=...`)
+  - gate phase logs (`[GatePhase] ...`)
+- optional DEV screen toggle hook:
+  - `window.__arnvoid_setScreen('graph_loading' | 'graph')`
+  - use only for local verification.
+
+## 2.8 Graph Runtime Lease Guard (2026-02-15)
 
 Purpose:
 - enforce single active graph runtime ownership across prompt preview and graph screen paths.

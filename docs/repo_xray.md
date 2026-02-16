@@ -43,6 +43,16 @@ Update Note: 2026-02-15 (Graph Sidebar Layout)
 - Graph runtime root is container-relative (`100%` x `100%`) and fills graph pane.
 - Internal playground debug sidebar is gated by `enableDebugSidebar` and disabled on product graph path.
 
+Update Note: 2026-02-16 (Graph Loading Real Screen, Steps 1-9)
+- Screen union now includes `graph_loading`.
+- Prompt forward spine routes to `graph_loading` (submit, skip, restore/select from prompt).
+- Graph-class render branch is unified: `graph_loading` and `graph` share one warm runtime subtree (no screen-key remount).
+- `GraphLoadingGate` is a real screen surface on top of warm runtime for `screen === 'graph_loading'`.
+- Gate phase model controls Confirm reveal/unlock; graph reveal is Confirm-driven.
+- Legacy in-runtime `LoadingScreen` is suppressed for product graph-class path.
+- Sidebar remains visible on `graph_loading` but is frozen/dimmed with shield ownership.
+- Focus/keyboard ownership is captured by gate (`Escape`, `Enter`, `Space`) with window-capture fallback guard.
+
 ## 0.1 AppShell Seams (2026-02-14)
 
 - orchestrator: `src/screens/AppShell.tsx`
@@ -55,7 +65,7 @@ Update Note: 2026-02-15 (Graph Sidebar Layout)
 - sidebar wiring: `src/screens/appshell/sidebar/*`
 - full details: `docs/report_2026_02_14_appshell_modularization.md`
 
-## 0.2 Graph Screen Topology (2026-02-15)
+## 0.2 Graph Screen Topology (2026-02-16)
 
 Current runtime topology for graph screen:
 
@@ -64,12 +74,13 @@ AppShell
 |- SidebarLayer (overlay product sidebar)
 |- NON_SIDEBAR_LAYER
 |  |- MAIN_SCREEN_CONTAINER
-|  |  |- renderScreenContent(screen='graph')
+|  |  |- renderScreenContent(screen='graph_loading'|'graph')
 |  |  |  |- Suspense
 |  |  |  |  |- GraphScreenShell(sidebarExpanded=isSidebarExpanded)
 |  |  |  |  |  |- graph-screen-layout (flex row)
 |  |  |  |  |  |  |- graph-screen-sidebar-pane (structural column; width follows sidebar state)
 |  |  |  |  |  |  |- graph-screen-graph-pane (hosts GraphWithPending)
+|  |  |  |  |  |- GraphLoadingGate (only when screen='graph_loading'; opaque input shield)
 |  |  |- renderScreenContent(other screens)
 |  |     |- welcome1 / welcome2 / prompt (no GraphScreenShell)
 |- ModalLayer
@@ -77,8 +88,10 @@ AppShell
 
 Notes:
 - Left graph-screen column is structural and currently empty; it reserves space for future product Sidebar placement.
-- Product Sidebar remains overlay-driven (`SidebarLayer` -> `Sidebar`) on prompt and graph.
+- Product Sidebar remains overlay-driven (`SidebarLayer` -> `Sidebar`) on `prompt`, `graph_loading`, and `graph`.
 - Graph runtime enters through `GraphWithPending` and reaches `GraphPhysicsPlaygroundShell`.
+- Product graph-class path passes `legacyLoadingScreenMode='disabled'` so gate is the only loading surface users see.
+- Warm-mount invariant: graph-class branch is shared for `graph_loading <-> graph` and runtime mount id remains stable under `?debugWarmMount=1`.
 - Internal debug sidebar in `GraphPhysicsPlaygroundShell` is debug-only:
   - gated by `enableDebugSidebar`
   - product graph path passes `enableDebugSidebar={false}`.

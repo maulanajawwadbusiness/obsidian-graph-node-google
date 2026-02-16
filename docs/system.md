@@ -578,6 +578,43 @@ Manual verification checklist:
 5. resizing preview container updates viewport values (`boxed`, `source='container'`).
 6. no `graph-runtime.*` tracker unbalance warnings appear on mount/unmount cycles.
 
+## 2.11 Boxed Viewport Consumption (Step 9, 2026-02-16)
+
+Purpose:
+- boxed preview screen-space math must consume `GraphViewport` contract values.
+- eliminate boxed fallback dependence on window viewport bounds in tooltip/popup paths.
+
+Changed subsystems:
+1. Tooltip clamp and anchor local conversion:
+   - `src/ui/tooltip/TooltipProvider.tsx`
+2. Node popup position and clamp:
+   - `src/popup/NodePopup.tsx`
+3. Mini chatbar position and clamp:
+   - `src/popup/MiniChatbar.tsx`
+4. Chat shortage notification clamp:
+   - `src/popup/ChatShortageNotif.tsx`
+5. Shared boxed math helper:
+   - `src/runtime/viewport/viewportMath.ts`
+
+Rules:
+- `viewport.mode === 'boxed'`:
+  - use `viewport.width`, `viewport.height`, and `viewport.boundsRect` origin for local conversion and clamp.
+- app mode keeps prior behavior path (portal/app/window fallback semantics unchanged).
+
+Dev invariants:
+- boxed counters are tracked in `viewportMath`:
+  - `boxedClampCalls`
+  - `boxedPointerNormCalls`
+  - `boxedTooltipClampCalls`
+- warn-once fallback if `viewport.mode === 'boxed'` and `boundsRect` is missing:
+  - `[ViewportMath] boxed viewport missing boundsRect; using origin 0,0 fallback`
+
+Verification checklist:
+1. EnterPrompt preview: tooltip stays inside preview box and clamps to box edges.
+2. EnterPrompt preview: node popup + mini chat stay inside preview box.
+3. EnterPrompt preview: pointer-driven popup placement remains aligned with dot movement.
+4. Graph screen: tooltip/popup behavior remains unchanged vs previous app mode behavior.
+
 ## 3. Physics Architecture And Contract
 The graph is driven by a **Hybrid Solver** (`src/physics/`) prioritizing "Visual Dignity" over pure simulation accuracy.
 

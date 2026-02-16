@@ -2,6 +2,20 @@ import type { GraphViewport } from './graphViewport';
 
 type ViewportSize = { w: number; h: number };
 type ViewportOrigin = { x0: number; y0: number; hasBounds: boolean };
+type BoxedCounterKey = 'boxedClampCalls' | 'boxedPointerNormCalls' | 'boxedTooltipClampCalls';
+
+const IS_DEV = typeof import.meta !== 'undefined' && import.meta.env.DEV;
+const boxedCounters: Record<BoxedCounterKey, number> = {
+    boxedClampCalls: 0,
+    boxedPointerNormCalls: 0,
+    boxedTooltipClampCalls: 0,
+};
+const warnedMissingBoundsKeys = new Set<string>();
+
+function bumpBoxedCounter(key: BoxedCounterKey): void {
+    if (!IS_DEV) return;
+    boxedCounters[key] += 1;
+}
 
 function clampMinOne(value: number): number {
     if (!Number.isFinite(value)) return 1;
@@ -23,7 +37,14 @@ export function getViewportSize(viewport: GraphViewport, fallbackW: number, fall
 }
 
 export function getViewportOrigin(viewport: GraphViewport): ViewportOrigin {
-    if (!isBoxedViewport(viewport) || !viewport.boundsRect) {
+    if (!isBoxedViewport(viewport)) {
+        return { x0: 0, y0: 0, hasBounds: false };
+    }
+    if (!viewport.boundsRect) {
+        if (IS_DEV && !warnedMissingBoundsKeys.has(viewport.mode)) {
+            warnedMissingBoundsKeys.add(viewport.mode);
+            console.warn('[ViewportMath] boxed viewport missing boundsRect; using origin 0,0 fallback');
+        }
         return { x0: 0, y0: 0, hasBounds: false };
     }
     return {
@@ -34,6 +55,9 @@ export function getViewportOrigin(viewport: GraphViewport): ViewportOrigin {
 }
 
 export function toViewportLocalPoint(clientX: number, clientY: number, viewport: GraphViewport): { x: number; y: number } {
+    if (isBoxedViewport(viewport)) {
+        bumpBoxedCounter('boxedPointerNormCalls');
+    }
     const origin = getViewportOrigin(viewport);
     if (!origin.hasBounds) {
         return { x: clientX, y: clientY };
@@ -45,7 +69,20 @@ export function toViewportLocalPoint(clientX: number, clientY: number, viewport:
 }
 
 export function clampToViewport(value: number, contentSize: number, viewportSize: number, margin: number): number {
+    bumpBoxedCounter('boxedClampCalls');
     const min = margin;
     const max = Math.max(margin, viewportSize - contentSize - margin);
     return Math.max(min, Math.min(value, max));
+}
+
+export function recordBoxedTooltipClampCall(): void {
+    bumpBoxedCounter('boxedTooltipClampCalls');
+}
+
+export function recordBoxedClampCall(): void {
+    bumpBoxedCounter('boxedClampCalls');
+}
+
+export function getBoxedViewportDebugCounters(): Record<BoxedCounterKey, number> {
+    return { ...boxedCounters };
 }

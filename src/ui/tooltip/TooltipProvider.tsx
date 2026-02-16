@@ -12,7 +12,13 @@ import { createPortal } from 'react-dom';
 import { LAYER_TOOLTIP } from '../layers';
 import { usePortalBoundsRect, usePortalRootEl, usePortalScopeMode } from '../../components/portalScope/PortalScopeContext';
 import { useGraphViewport, type GraphViewport } from '../../runtime/viewport/graphViewport';
-import { clampToViewport, getViewportSize, isBoxedViewport, toViewportLocalPoint } from '../../runtime/viewport/viewportMath';
+import {
+    clampToViewport,
+    getViewportSize,
+    isBoxedViewport,
+    recordBoxedTooltipClampCall,
+    toViewportLocalPoint
+} from '../../runtime/viewport/viewportMath';
 
 type TooltipProviderProps = {
     children: React.ReactNode;
@@ -171,6 +177,9 @@ function computeTooltipPosition(input: {
 
     const centerX = anchorLeft + anchorRect.width / 2;
     const rawLeft = centerX - tooltipW / 2;
+    if (boxed) {
+        recordBoxedTooltipClampCall();
+    }
     const left = boxed
         ? clampToViewport(rawLeft, tooltipW, vw, VIEWPORT_MARGIN)
         : clamp(rawLeft, VIEWPORT_MARGIN, Math.max(VIEWPORT_MARGIN, vw - VIEWPORT_MARGIN - tooltipW));

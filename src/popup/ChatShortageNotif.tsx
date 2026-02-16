@@ -2,7 +2,7 @@ import React from 'react';
 import { hideShortage, useShortageStore } from '../money/shortageStore';
 import { usePortalBoundsRect, usePortalScopeMode } from '../components/portalScope/PortalScopeContext';
 import { useGraphViewport } from '../runtime/viewport/graphViewport';
-import { getViewportSize, isBoxedViewport, toViewportLocalPoint } from '../runtime/viewport/viewportMath';
+import { getViewportSize, isBoxedViewport, recordBoxedClampCall, toViewportLocalPoint } from '../runtime/viewport/viewportMath';
 
 type AnchoredShortageSurface = 'node-popup' | 'mini-chat';
 
@@ -95,6 +95,9 @@ export const ChatShortageNotif: React.FC<ChatShortageNotifProps> = ({ surface, a
             const anchorRect = anchorEl.getBoundingClientRect();
             const notifRect = notifEl.getBoundingClientRect();
             const boxed = isBoxedViewport(viewport);
+            if (boxed) {
+                recordBoxedClampCall();
+            }
             const fallbackW = portalMode === 'container' && portalBoundsRect ? portalBoundsRect.width : window.innerWidth;
             const fallbackH = portalMode === 'container' && portalBoundsRect ? portalBoundsRect.height : window.innerHeight;
             const { w: viewportWidth, h: viewportHeight } = getViewportSize(viewport, fallbackW, fallbackH);

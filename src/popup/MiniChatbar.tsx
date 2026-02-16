@@ -9,7 +9,7 @@ import { t } from '../i18n/t';
 import { useTooltip } from '../ui/tooltip/useTooltip';
 import { usePortalBoundsRect, usePortalScopeMode } from '../components/portalScope/PortalScopeContext';
 import { useGraphViewport, type GraphViewport } from '../runtime/viewport/graphViewport';
-import { getViewportSize, isBoxedViewport, toViewportLocalPoint } from '../runtime/viewport/viewportMath';
+import { getViewportSize, isBoxedViewport, recordBoxedClampCall, toViewportLocalPoint } from '../runtime/viewport/viewportMath';
 
 /**
  * MiniChatbar - Small chat window next to popup
@@ -130,6 +130,9 @@ function computeChatbarPosition(
     viewport: GraphViewport
 ): React.CSSProperties {
     const boxed = isBoxedViewport(viewport);
+    if (boxed) {
+        recordBoxedClampCall();
+    }
     const fallbackW = mode === 'container' && boundsRect ? boundsRect.width : window.innerWidth;
     const fallbackH = mode === 'container' && boundsRect ? boundsRect.height : window.innerHeight;
     const { w: viewportWidth, h: viewportHeight } = getViewportSize(viewport, fallbackW, fallbackH);

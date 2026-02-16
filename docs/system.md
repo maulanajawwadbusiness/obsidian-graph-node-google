@@ -451,6 +451,10 @@ Dev-only resource tracker:
   - `trackResource(name)` -> idempotent release function
   - `getResourceTrackerSnapshot()`
   - `warnIfGraphRuntimeResourcesUnbalanced(source)`
+- hardening (2026-02-16):
+  - decrements can no longer drive counts below zero in DEV.
+  - invalid decrement attempts are clamped to `0` and warn once per resource name with a short stack excerpt.
+  - unbalance warnings are deduped once per source to reduce spam while preserving signal.
 
 Unmount invariant seam points:
 - `src/components/SampleGraphPreview.tsx` cleanup
@@ -541,10 +545,16 @@ API:
 - `useGraphViewport()`
 - `getGraphViewportDebugSnapshot(viewport)` (dev helper)
 
-Current wiring (step 7):
-1. graph-screen runtime subtree:
-   - `src/screens/appshell/render/renderScreenContent.tsx`
-   - wraps graph runtime with app-mode default viewport.
+Current wiring (step 7 hardened, 2026-02-16):
+1. graph-screen subtree:
+   - provider owner: `src/screens/appshell/render/GraphScreenShell.tsx`
+   - pane seam: `graph-screen-graph-pane` ref + one-shot rect snapshot via `src/runtime/viewport/useGraphPaneViewportSnapshot.ts`
+   - value behavior:
+     - first paint fallback: `defaultGraphViewport()` (`source='window'` or `unknown` on SSR)
+     - post-layout snapshot: app-mode pane rect (`source='container'`)
+   - provider scope now includes both:
+     - graph runtime boundary
+     - `GraphLoadingGate`
 2. preview runtime subtree:
    - `src/components/SampleGraphPreview.tsx`
    - wraps preview runtime with boxed-mode viewport from one-time container rect snapshot.

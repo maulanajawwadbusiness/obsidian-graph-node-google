@@ -61,7 +61,7 @@ import {
 import { TooltipProvider } from '../ui/tooltip/TooltipProvider';
 import { SidebarLayer } from './appshell/sidebar/SidebarLayer';
 import { useSidebarInterfaces } from './appshell/sidebar/useSidebarInterfaces';
-import { computeSidebarLockState } from './appshell/sidebar/sidebarLockPolicy';
+import { computeSidebarLockState, type SidebarLockReason } from './appshell/sidebar/sidebarLockPolicy';
 
 const Graph = React.lazy(() =>
     import('../playground/GraphPhysicsPlayground').then((mod) => ({
@@ -136,6 +136,7 @@ export const AppShell: React.FC = () => {
     const gatePhaseRef = React.useRef<GatePhase>('idle');
     const gateErrorBackRequestedRef = React.useRef(false);
     const gateErrorVisibleRef = React.useRef(false);
+    const sidebarLockReasonRef = React.useRef<SidebarLockReason>('none');
     const graphLoadingGateRootRef = React.useRef<HTMLDivElement>(null);
     const savedInterfacesRef = React.useRef<SavedInterfaceRecordV1[]>([]);
     const restoreReadPathActiveRef = React.useRef(false);
@@ -553,10 +554,30 @@ export const AppShell: React.FC = () => {
 
     React.useEffect(() => {
         if (!import.meta.env.DEV) return;
+        const prevReason = sidebarLockReasonRef.current;
+        const nextReason = sidebarLock.reason;
+        if (prevReason === nextReason) return;
+        console.log(
+            '[SidebarLock] prev=%s next=%s screen=%s loading=%s',
+            prevReason,
+            nextReason,
+            screen,
+            graphIsLoading ? '1' : '0'
+        );
+        sidebarLockReasonRef.current = nextReason;
+    }, [graphIsLoading, screen, sidebarLock.reason]);
+
+    React.useEffect(() => {
+        if (!import.meta.env.DEV) return;
         if (screen !== 'graph_loading') return;
         if (sidebarFrozenActive) return;
-        console.warn('[SidebarFreezeGuard] invariant_failed screen=%s sidebarFrozen=%s', screen, String(sidebarFrozenActive));
-    }, [screen, sidebarFrozenActive]);
+        console.warn(
+            '[SidebarFreezeGuard] invariant_failed screen=%s sidebarFrozen=%s reason=%s',
+            screen,
+            String(sidebarFrozenActive),
+            sidebarLock.reason
+        );
+    }, [screen, sidebarFrozenActive, sidebarLock.reason]);
 
     React.useEffect(() => {
         if (!import.meta.env.DEV) return;

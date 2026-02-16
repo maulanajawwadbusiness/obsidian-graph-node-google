@@ -1,6 +1,10 @@
 import React from 'react';
 import { hideShortage, useShortageStore } from '../money/shortageStore';
 import { usePortalBoundsRect, usePortalScopeMode } from '../components/portalScope/PortalScopeContext';
+import {
+    SAMPLE_GRAPH_PREVIEW_OVERLAY_INTERACTIVE_ATTR,
+    SAMPLE_GRAPH_PREVIEW_OVERLAY_INTERACTIVE_VALUE,
+} from '../components/sampleGraphPreviewSeams';
 import { useGraphViewport } from '../runtime/viewport/graphViewport';
 import { getViewportSize, isBoxedViewport, recordBoxedClampCall, toViewportLocalPoint } from '../runtime/viewport/viewportMath';
 
@@ -157,6 +161,7 @@ export const ChatShortageNotif: React.FC<ChatShortageNotifProps> = ({ surface, a
     return (
         <div
             ref={notifRef}
+            {...{ [SAMPLE_GRAPH_PREVIEW_OVERLAY_INTERACTIVE_ATTR]: SAMPLE_GRAPH_PREVIEW_OVERLAY_INTERACTIVE_VALUE }}
             style={{
                 ...BASE_STYLE,
                 ...(portalMode === 'container' ? BASE_STYLE_CONTAINER : null),
@@ -165,7 +170,9 @@ export const ChatShortageNotif: React.FC<ChatShortageNotifProps> = ({ surface, a
                 zIndex,
                 opacity: position.ready ? 1 : 0,
             }}
+            onPointerDownCapture={stopPropagation}
             onPointerDown={stopPropagation}
+            onWheelCapture={stopPropagation}
             onWheel={stopPropagation}
         >
             Saldo tidak cukup untuk chat

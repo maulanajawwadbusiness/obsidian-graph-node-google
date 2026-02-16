@@ -24,6 +24,7 @@ import {
 } from '../runtime/graphRuntimeLease';
 import { trackResource, warnIfGraphRuntimeResourcesUnbalanced } from '../runtime/resourceTracker';
 import {
+    isInsideSampleGraphPreviewOverlayInteractiveRoot,
     SAMPLE_GRAPH_PREVIEW_ROOT_ATTR,
     SAMPLE_GRAPH_PREVIEW_ROOT_VALUE,
     SAMPLE_GRAPH_PREVIEW_PORTAL_ROOT_ATTR,
@@ -330,6 +331,9 @@ export const SampleGraphPreview: React.FC = () => {
 
         const releaseWheelListener = trackResource('graph-runtime.preview.wheel-capture-listener');
         const onWheelCapture = (event: WheelEvent) => {
+            if (isInsideSampleGraphPreviewOverlayInteractiveRoot(event.target)) {
+                return;
+            }
             event.preventDefault();
         };
 

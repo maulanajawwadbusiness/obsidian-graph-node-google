@@ -8,6 +8,10 @@ import type { PopupRect } from './popupTypes';
 import { t } from '../i18n/t';
 import { useTooltip } from '../ui/tooltip/useTooltip';
 import { usePortalBoundsRect, usePortalScopeMode } from '../components/portalScope/PortalScopeContext';
+import {
+    SAMPLE_GRAPH_PREVIEW_OVERLAY_INTERACTIVE_ATTR,
+    SAMPLE_GRAPH_PREVIEW_OVERLAY_INTERACTIVE_VALUE,
+} from '../components/sampleGraphPreviewSeams';
 import { useGraphViewport, type GraphViewport } from '../runtime/viewport/graphViewport';
 import { getViewportSize, isBoxedViewport, recordBoxedClampCall, toViewportLocalPoint } from '../runtime/viewport/viewportMath';
 
@@ -438,15 +442,18 @@ export const MiniChatbar: React.FC<MiniChatbarProps> = ({ messages, onSend, onCl
         <>
         <div
             ref={chatbarRef}
+            {...{ [SAMPLE_GRAPH_PREVIEW_OVERLAY_INTERACTIVE_ATTR]: SAMPLE_GRAPH_PREVIEW_OVERLAY_INTERACTIVE_VALUE }}
             data-font="ui"
             style={finalStyle}
             onMouseDown={stopPropagation}
             onMouseMove={stopPropagation}
             onMouseUp={stopPropagation}
+            onPointerDownCapture={stopPropagation}
             onPointerDown={stopPropagation}
             onPointerMove={stopPropagation}
             onPointerUp={stopPropagation}
             onClick={stopPropagation}
+            onWheelCapture={stopPropagation}
             onWheel={stopPropagation}
         >
             <div style={HEADER_STYLE}>

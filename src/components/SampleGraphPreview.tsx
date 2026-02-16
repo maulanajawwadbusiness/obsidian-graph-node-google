@@ -33,6 +33,7 @@ import {
     GraphViewportProvider,
     type GraphViewport,
 } from '../runtime/viewport/graphViewport';
+import { useResizeObserverViewport } from '../runtime/viewport/useResizeObserverViewport';
 
 const PREVIEW_ROOT_STYLE: React.CSSProperties = {
     position: 'relative',
@@ -146,13 +147,18 @@ export const SampleGraphPreview: React.FC = () => {
     };
     const previewRootRef = React.useRef<HTMLDivElement | null>(null);
     const [portalRootEl, setPortalRootEl] = React.useState<HTMLDivElement | null>(null);
-    const [boxedViewport, setBoxedViewport] = React.useState<GraphViewport>({
+    const boxedViewportFallback = React.useMemo<GraphViewport>(() => ({
         mode: 'boxed',
         source: 'unknown',
         width: 1,
         height: 1,
         dpr: 1,
         boundsRect: null,
+    }), []);
+    const boxedViewport = useResizeObserverViewport(previewRootRef, {
+        mode: 'boxed',
+        source: 'container',
+        fallbackViewport: boxedViewportFallback,
     });
     const [sampleExportPayload, setSampleExportPayload] = React.useState<unknown | null>(null);
     const [sampleImportError, setSampleImportError] = React.useState<string | null>(null);
@@ -308,25 +314,6 @@ export const SampleGraphPreview: React.FC = () => {
         if (!sampleExportPayload) return;
         warnIfInvalidCurrentSamplePreviewExportOnce(sampleExportPayload);
     }, [sampleExportPayload]);
-
-    React.useLayoutEffect(() => {
-        const root = previewRootRef.current;
-        if (!root || typeof window === 'undefined') return;
-        const rect = root.getBoundingClientRect();
-        setBoxedViewport({
-            mode: 'boxed',
-            source: 'container',
-            width: Math.max(1, rect.width),
-            height: Math.max(1, rect.height),
-            dpr: Math.max(0.1, window.devicePixelRatio || 1),
-            boundsRect: {
-                left: rect.left,
-                top: rect.top,
-                width: rect.width,
-                height: rect.height,
-            },
-        });
-    }, []);
 
     const isLeaseDenied = leaseState.phase === 'denied';
     const isLeasePaused = leaseState.phase === 'paused';

@@ -25,6 +25,8 @@ import { FULLCHAT_ENABLED } from '../fullchat/fullChatFlags';
 import TestBackend from '../components/TestBackend';
 import { SessionExpiryBanner } from '../auth/SessionExpiryBanner';
 import { LoadingScreen } from '../screens/LoadingScreen';
+import { useGraphViewport } from '../runtime/viewport/graphViewport';
+import { countBoxedSurfaceDisabled, isBoxedUi } from '../runtime/ui/boxedUiPolicy';
 // RUN 4: Topology API imports
 import { setTopology, getTopologyVersion, getTopology } from '../graph/topologyControl'; // STEP3-RUN5-V3-FIX3: Added getTopology
 import { legacyToTopology } from '../graph/topologyAdapter';
@@ -261,6 +263,8 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
         markerIntensity,
         forceShowRestMarkers
     });
+    const viewport = useGraphViewport();
+    const isBoxedRuntime = isBoxedUi(viewport);
 
     const setCanvasEl = React.useCallback((el: HTMLCanvasElement | null) => {
         canvasRef.current = el;
@@ -693,6 +697,10 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
         if (!import.meta.env.DEV) {
             return;
         }
+        if (isBoxedRuntime) {
+            countBoxedSurfaceDisabled('GraphPhysicsPlaygroundShell.dev-download-json');
+            return;
+        }
         const engine = engineRef.current;
         const topology = getTopology();
         if (!engine || !topology || topology.nodes.length === 0) {
@@ -759,6 +767,7 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
         documentContext.state.activeDocument,
         documentContext.state.inferredTitle,
         hoverStateRef,
+        isBoxedRuntime,
     ]);
 
     useEffect(() => {

@@ -18,6 +18,8 @@ import fullscreenCloseIcon from '../../assets/fullscreen_close_icon.png';
 import { useFullscreen } from '../../hooks/useFullscreen';
 import { useTooltip } from '../../ui/tooltip/useTooltip';
 import { usePortalScopeMode } from '../../components/portalScope/PortalScopeContext';
+import { useGraphViewport } from '../../runtime/viewport/graphViewport';
+import { isBoxedUi } from '../../runtime/ui/boxedUiPolicy';
 
 // Toggle to show/hide debug controls buttons (Debug, Theme, Controls)
 const SHOW_DEBUG_CONTROLS = false;
@@ -181,6 +183,8 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
 }) => {
     const portalScopeMode = usePortalScopeMode();
     const isContainerPortalMode = portalScopeMode === 'container';
+    const viewport = useGraphViewport();
+    const isBoxedRuntime = isBoxedUi(viewport);
     const { isFullscreen, toggleFullscreen } = useFullscreen();
     const showDebugTooltip = useTooltip('Show debug');
     const themeToggleTooltip = useTooltip('Toggle between normal and elegant theme');
@@ -272,10 +276,16 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
     }, [dotsMenuOpen]);
 
     React.useEffect(() => {
-        if (isContainerPortalMode && dotsMenuOpen) {
+        if ((isContainerPortalMode || isBoxedRuntime) && dotsMenuOpen) {
             setDotsMenuOpen(false);
         }
-    }, [dotsMenuOpen, isContainerPortalMode]);
+    }, [dotsMenuOpen, isBoxedRuntime, isContainerPortalMode]);
+
+    React.useEffect(() => {
+        if (!isBoxedRuntime) return;
+        if (!debugOpen) return;
+        onCloseDebug();
+    }, [debugOpen, isBoxedRuntime, onCloseDebug]);
 
     const gridStyle: React.CSSProperties = isNarrow ? {
         display: 'flex',
@@ -344,7 +354,7 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
                 </button>
             )}
 
-            {import.meta.env.DEV && SHOW_DEV_DOWNLOAD_JSON_BUTTON && (
+            {import.meta.env.DEV && SHOW_DEV_DOWNLOAD_JSON_BUTTON && !isBoxedRuntime && (
                 <button
                     {...downloadJsonTooltip.getAnchorProps({
                         type: 'button',
@@ -382,7 +392,7 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
                     />
                 </button>
             )}
-            {SHOW_TOP_RIGHT_DOTS_ICON && !isContainerPortalMode && (
+            {SHOW_TOP_RIGHT_DOTS_ICON && !isContainerPortalMode && !isBoxedRuntime && (
                 <div
                     style={{
                         position: 'absolute',
@@ -468,7 +478,7 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
                     </button>
                 </div>
             )}
-            {dotsMenuOpen && dotsMenuPosition ? (
+            {dotsMenuOpen && dotsMenuPosition && !isBoxedRuntime ? (
                 <div
                     ref={dotsMenuRef}
                     data-dots-menu="1"
@@ -533,7 +543,7 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
                 </div>
             ) : null}
 
-            {debugOpen && (
+            {debugOpen && !isBoxedRuntime && (
                 <div
                     style={{
                         ...DEBUG_OVERLAY_STYLE,

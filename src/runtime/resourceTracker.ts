@@ -3,14 +3,33 @@ type ResourceSnapshot = Record<string, number>;
 const isDev = typeof import.meta !== 'undefined' && import.meta.env.DEV;
 const resourceCounts = new Map<string, number>();
 const warnedSignatures = new Set<string>();
+const warnedNegativeNames = new Set<string>();
+const warnedUnbalancedSources = new Set<string>();
 
 function bump(name: string, delta: 1 | -1): void {
     const current = resourceCounts.get(name) ?? 0;
+    if (delta === -1 && current <= 0) {
+        resourceCounts.set(name, 0);
+        if (!warnedNegativeNames.has(name)) {
+            warnedNegativeNames.add(name);
+            const stack = new Error().stack ?? '';
+            const stackLines = stack
+                .split('\n')
+                .slice(1, 4)
+                .join(' | ')
+                .trim();
+            console.warn(
+                '[ResourceTracker] attempted negative decrement clamped name=%s current=%d delta=%d stack=%s',
+                name,
+                current,
+                delta,
+                stackLines || '<none>'
+            );
+        }
+        return;
+    }
     const next = current + delta;
     resourceCounts.set(name, next);
-    if (next < 0) {
-        console.warn('[ResourceTracker] negative count name=%s count=%d', name, next);
-    }
 }
 
 export function trackResource(name: string): () => void {
@@ -44,7 +63,8 @@ export function warnIfGraphRuntimeResourcesUnbalanced(source: string): void {
     if (unbalanced.length === 0) return;
 
     const signature = `${source}:${unbalanced.map(([name, count]) => `${name}=${count}`).join('|')}`;
-    if (warnedSignatures.has(signature)) return;
+    if (warnedUnbalancedSources.has(source) || warnedSignatures.has(signature)) return;
+    warnedUnbalancedSources.add(source);
     warnedSignatures.add(signature);
     console.warn('[ResourceTracker] graph-runtime resources unbalanced at %s: %s', source, signature);
 }

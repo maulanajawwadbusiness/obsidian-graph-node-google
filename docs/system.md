@@ -545,30 +545,38 @@ API:
 - `useGraphViewport()`
 - `getGraphViewportDebugSnapshot(viewport)` (dev helper)
 
-Current wiring (step 7 hardened, 2026-02-16):
+Current wiring (step 8 live, 2026-02-16):
 1. graph-screen subtree:
    - provider owner: `src/screens/appshell/render/GraphScreenShell.tsx`
-   - pane seam: `graph-screen-graph-pane` ref + one-shot rect snapshot via `src/runtime/viewport/useGraphPaneViewportSnapshot.ts`
+   - pane seam: `graph-screen-graph-pane` ref + live ResizeObserver hook via `src/runtime/viewport/useResizeObserverViewport.ts`
    - value behavior:
      - first paint fallback: `defaultGraphViewport()` (`source='window'` or `unknown` on SSR)
-     - post-layout snapshot: app-mode pane rect (`source='container'`)
+     - live app-mode pane rect updates (`source='container'`) on container resize
    - provider scope now includes both:
      - graph runtime boundary
      - `GraphLoadingGate`
 2. preview runtime subtree:
    - `src/components/SampleGraphPreview.tsx`
-   - wraps preview runtime with boxed-mode viewport from one-time container rect snapshot.
+   - wraps preview runtime with boxed-mode live viewport updates from the same ResizeObserver hook.
+3. live measurement semantics:
+   - ResizeObserver callbacks are coalesced to max 1 update per animation frame (rAF batching).
+   - width/height are floored and clamped to `>=1`.
+   - cleanup disconnects observer and cancels pending rAF.
+   - DEV tracker names:
+     - `graph-runtime.viewport.resize-observer`
+     - `graph-runtime.viewport.resize-raf`
 
 Step boundary:
-- step 7 is contract/plumbing only.
-- no live ResizeObserver streaming yet (step 8).
+- step 8 now provides live viewport measurement only.
 - no clamp-site migration to this contract yet (step 9).
 
 Manual verification checklist:
 1. `npm run build` passes.
-2. graph screen renders with no visible behavior change.
-3. prompt preview still mounts and runs.
-4. viewport context exists for both paths (`app` on graph screen, `boxed` on preview).
+2. graph screen renders with no visible behavior change except accurate live viewport dims.
+3. prompt preview still mounts and runs with live boxed viewport dims.
+4. resizing graph pane updates viewport values (`app`, `source='container'`).
+5. resizing preview container updates viewport values (`boxed`, `source='container'`).
+6. no `graph-runtime.*` tracker unbalance warnings appear on mount/unmount cycles.
 
 ## 3. Physics Architecture And Contract
 The graph is driven by a **Hybrid Solver** (`src/physics/`) prioritizing "Visual Dignity" over pure simulation accuracy.

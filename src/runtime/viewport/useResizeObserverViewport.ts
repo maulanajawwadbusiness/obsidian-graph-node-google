@@ -13,6 +13,7 @@ type UseResizeObserverViewportOptions = {
     source: GraphViewportSource;
     fallbackViewport?: GraphViewport;
 };
+let warnedPendingRafAfterCleanup = false;
 
 function clampViewportDim(value: number): number {
     if (!Number.isFinite(value)) return 1;
@@ -132,6 +133,10 @@ export function useResizeObserverViewport<T extends HTMLElement>(
         return () => {
             disposed = true;
             cancelScheduledFrame();
+            if (import.meta.env.DEV && pendingRafIdRef.current !== null && !warnedPendingRafAfterCleanup) {
+                warnedPendingRafAfterCleanup = true;
+                console.warn('[ViewportResize] pending rAF remained after cleanup');
+            }
             observer.disconnect();
             releaseObserverTrack();
         };

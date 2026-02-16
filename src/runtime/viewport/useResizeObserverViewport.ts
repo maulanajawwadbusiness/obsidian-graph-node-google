@@ -14,6 +14,8 @@ type UseResizeObserverViewportOptions = {
     fallbackViewport?: GraphViewport;
 };
 let warnedPendingRafAfterCleanup = false;
+let warnedBoxedStuckTinyViewport = false;
+let warnedZeroOriginMismatch = false;
 type ObserverSizeSnapshot = {
     width: number;
     height: number;
@@ -161,6 +163,24 @@ export function useResizeObserverViewport<T extends HTMLElement>(
             if (!activeTarget.isConnected) return;
             const bcr = activeTarget.getBoundingClientRect();
             const nextViewport = makeViewport(options.mode, options.source, bcr, latestSizeRef.current);
+            if (
+                import.meta.env.DEV &&
+                options.mode === 'boxed' &&
+                nextViewport.boundsRect &&
+                nextViewport.boundsRect.left === 0 &&
+                nextViewport.boundsRect.top === 0 &&
+                (Math.abs(bcr.left) > 0.5 || Math.abs(bcr.top) > 0.5) &&
+                !warnedZeroOriginMismatch
+            ) {
+                warnedZeroOriginMismatch = true;
+                console.warn(
+                    '[ViewportResize] boxed origin mismatch: boundsRect=(%d,%d) bcr=(%d,%d)',
+                    nextViewport.boundsRect.left,
+                    nextViewport.boundsRect.top,
+                    bcr.left,
+                    bcr.top
+                );
+            }
             if (sameViewport(viewportRef.current, nextViewport)) return;
             viewportRef.current = nextViewport;
             setViewport(nextViewport);
@@ -188,9 +208,31 @@ export function useResizeObserverViewport<T extends HTMLElement>(
             height: target.getBoundingClientRect().height,
         };
         scheduleViewportUpdate();
+        let boxedTinyTimer: number | null = null;
+        if (import.meta.env.DEV && options.mode === 'boxed') {
+            boxedTinyTimer = window.setTimeout(() => {
+                if (disposed) return;
+                if (warnedBoxedStuckTinyViewport) return;
+                const snap = viewportRef.current;
+                const tiny = snap.width <= 1 || snap.height <= 1;
+                const missingBounds = !snap.boundsRect;
+                if (!tiny && !missingBounds) return;
+                warnedBoxedStuckTinyViewport = true;
+                console.warn(
+                    '[ViewportResize] boxed viewport still tiny/missing after 600ms w=%d h=%d hasBounds=%s source=%s',
+                    snap.width,
+                    snap.height,
+                    snap.boundsRect ? 'yes' : 'no',
+                    snap.source
+                );
+            }, 600);
+        }
 
         return () => {
             disposed = true;
+            if (boxedTinyTimer !== null) {
+                window.clearTimeout(boxedTinyTimer);
+            }
             cancelScheduledFrame();
             if (import.meta.env.DEV && pendingRafIdRef.current !== null && !warnedPendingRafAfterCleanup) {
                 warnedPendingRafAfterCleanup = true;

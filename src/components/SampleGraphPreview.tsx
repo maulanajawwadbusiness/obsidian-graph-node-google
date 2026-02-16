@@ -29,6 +29,10 @@ import {
     SAMPLE_GRAPH_PREVIEW_PORTAL_ROOT_ATTR,
     SAMPLE_GRAPH_PREVIEW_PORTAL_ROOT_VALUE
 } from './sampleGraphPreviewSeams';
+import {
+    GraphViewportProvider,
+    type GraphViewport,
+} from '../runtime/viewport/graphViewport';
 
 const PREVIEW_ROOT_STYLE: React.CSSProperties = {
     position: 'relative',
@@ -140,7 +144,16 @@ export const SampleGraphPreview: React.FC = () => {
     const previewRootMarker: Record<string, string> = {
         [SAMPLE_GRAPH_PREVIEW_ROOT_ATTR]: SAMPLE_GRAPH_PREVIEW_ROOT_VALUE,
     };
+    const previewRootRef = React.useRef<HTMLDivElement | null>(null);
     const [portalRootEl, setPortalRootEl] = React.useState<HTMLDivElement | null>(null);
+    const [boxedViewport, setBoxedViewport] = React.useState<GraphViewport>({
+        mode: 'boxed',
+        source: 'unknown',
+        width: 1,
+        height: 1,
+        dpr: 1,
+        boundsRect: null,
+    });
     const [sampleExportPayload, setSampleExportPayload] = React.useState<unknown | null>(null);
     const [sampleImportError, setSampleImportError] = React.useState<string | null>(null);
     const instanceIdRef = React.useRef(
@@ -296,6 +309,25 @@ export const SampleGraphPreview: React.FC = () => {
         warnIfInvalidCurrentSamplePreviewExportOnce(sampleExportPayload);
     }, [sampleExportPayload]);
 
+    React.useLayoutEffect(() => {
+        const root = previewRootRef.current;
+        if (!root || typeof window === 'undefined') return;
+        const rect = root.getBoundingClientRect();
+        setBoxedViewport({
+            mode: 'boxed',
+            source: 'container',
+            width: Math.max(1, rect.width),
+            height: Math.max(1, rect.height),
+            dpr: Math.max(0.1, window.devicePixelRatio || 1),
+            boundsRect: {
+                left: rect.left,
+                top: rect.top,
+                width: rect.width,
+                height: rect.height,
+            },
+        });
+    }, []);
+
     const isLeaseDenied = leaseState.phase === 'denied';
     const isLeasePaused = leaseState.phase === 'paused';
     const canMountRuntime = leaseState.phase === 'allowed' && portalRootEl && sampleLoadResult.ok;
@@ -305,53 +337,55 @@ export const SampleGraphPreview: React.FC = () => {
     const hiddenErrorCount = Math.max(sampleErrors.length - shownErrors.length, 0);
 
     return (
-        <div {...previewRootMarker} style={PREVIEW_ROOT_STYLE}>
+        <div ref={previewRootRef} {...previewRootMarker} style={PREVIEW_ROOT_STYLE}>
             <div
                 ref={setPortalRootEl}
                 {...{ [SAMPLE_GRAPH_PREVIEW_PORTAL_ROOT_ATTR]: SAMPLE_GRAPH_PREVIEW_PORTAL_ROOT_VALUE }}
                 style={PREVIEW_PORTAL_ROOT_STYLE}
             />
-            <PreviewErrorBoundary>
-                <div style={PREVIEW_SURFACE_STYLE}>
-                    {canMountRuntime ? (
-                        <PortalScopeProvider mode="container" portalRootEl={portalRootEl}>
-                            <TooltipProvider>
-                                <GraphPhysicsPlayground
-                                    pendingAnalysisPayload={null}
-                                    onPendingAnalysisConsumed={() => {}}
-                                    pendingLoadInterface={sampleLoadResult.value.record}
-                                    onPendingLoadInterfaceConsumed={() => {}}
-                                    enableDebugSidebar={false}
-                                />
-                            </TooltipProvider>
-                        </PortalScopeProvider>
-                    ) : isLeaseDenied ? (
-                        <div style={PREVIEW_FALLBACK_STYLE}>
-                            preview paused (active: {leaseState.activeOwner})
-                        </div>
-                    ) : isLeasePaused ? (
-                        <div style={PREVIEW_FALLBACK_STYLE}>
-                            preview paused (graph active elsewhere)
-                        </div>
-                    ) : isSampleLoading ? (
-                        <div style={PREVIEW_FALLBACK_STYLE}>loading sample...</div>
-                    ) : sampleErrors.length > 0 ? (
-                        <div style={PREVIEW_ERROR_WRAP_STYLE}>
-                            <div style={PREVIEW_ERROR_TITLE_STYLE}>sample graph invalid</div>
-                            {shownErrors.map((error, idx) => (
-                                <div key={`${error.code}-${idx}`} style={PREVIEW_ERROR_LINE_STYLE}>
-                                    [{error.code}] {error.message}
-                                </div>
-                            ))}
-                            {hiddenErrorCount > 0 ? (
-                                <div style={PREVIEW_ERROR_LINE_STYLE}>+{hiddenErrorCount} more</div>
-                            ) : null}
-                        </div>
-                    ) : (
-                        <div style={PREVIEW_FALLBACK_STYLE}>sample graph initializing...</div>
-                    )}
-                </div>
-            </PreviewErrorBoundary>
+            <GraphViewportProvider value={boxedViewport}>
+                <PreviewErrorBoundary>
+                    <div style={PREVIEW_SURFACE_STYLE}>
+                        {canMountRuntime ? (
+                            <PortalScopeProvider mode="container" portalRootEl={portalRootEl}>
+                                <TooltipProvider>
+                                    <GraphPhysicsPlayground
+                                        pendingAnalysisPayload={null}
+                                        onPendingAnalysisConsumed={() => {}}
+                                        pendingLoadInterface={sampleLoadResult.value.record}
+                                        onPendingLoadInterfaceConsumed={() => {}}
+                                        enableDebugSidebar={false}
+                                    />
+                                </TooltipProvider>
+                            </PortalScopeProvider>
+                        ) : isLeaseDenied ? (
+                            <div style={PREVIEW_FALLBACK_STYLE}>
+                                preview paused (active: {leaseState.activeOwner})
+                            </div>
+                        ) : isLeasePaused ? (
+                            <div style={PREVIEW_FALLBACK_STYLE}>
+                                preview paused (graph active elsewhere)
+                            </div>
+                        ) : isSampleLoading ? (
+                            <div style={PREVIEW_FALLBACK_STYLE}>loading sample...</div>
+                        ) : sampleErrors.length > 0 ? (
+                            <div style={PREVIEW_ERROR_WRAP_STYLE}>
+                                <div style={PREVIEW_ERROR_TITLE_STYLE}>sample graph invalid</div>
+                                {shownErrors.map((error, idx) => (
+                                    <div key={`${error.code}-${idx}`} style={PREVIEW_ERROR_LINE_STYLE}>
+                                        [{error.code}] {error.message}
+                                    </div>
+                                ))}
+                                {hiddenErrorCount > 0 ? (
+                                    <div style={PREVIEW_ERROR_LINE_STYLE}>+{hiddenErrorCount} more</div>
+                                ) : null}
+                            </div>
+                        ) : (
+                            <div style={PREVIEW_FALLBACK_STYLE}>sample graph initializing...</div>
+                        )}
+                    </div>
+                </PreviewErrorBoundary>
+            </GraphViewportProvider>
         </div>
     );
 };

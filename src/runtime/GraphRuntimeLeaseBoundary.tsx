@@ -34,9 +34,13 @@ export const GraphRuntimeLeaseBoundary: React.FC<GraphRuntimeLeaseBoundaryProps>
     const [leaseState, setLeaseState] = React.useState<LeaseBoundaryState>({ phase: 'checking' });
     const activeTokenRef = React.useRef<string | null>(null);
     const lastEpochAttemptRef = React.useRef<number>(-1);
+    const isDisposingRef = React.useRef(false);
     const layoutReleaseCountRef = React.useRef(0);
+    const disposeSubscriberHitCountRef = React.useRef(0);
+    const reacquireDuringDisposeWarnedRef = React.useRef(false);
 
     React.useLayoutEffect(() => {
+        isDisposingRef.current = false;
         const result = acquireGraphRuntimeLease(owner, instanceIdRef.current);
         if (result.ok) {
             activeTokenRef.current = result.token;
@@ -50,6 +54,7 @@ export const GraphRuntimeLeaseBoundary: React.FC<GraphRuntimeLeaseBoundaryProps>
             });
         }
         return () => {
+            isDisposingRef.current = true;
             const token = activeTokenRef.current;
             if (!token) return;
             activeTokenRef.current = null;
@@ -71,13 +76,34 @@ export const GraphRuntimeLeaseBoundary: React.FC<GraphRuntimeLeaseBoundaryProps>
         };
     }, []);
 
-    React.useEffect(() => {
+    React.useLayoutEffect(() => {
+        isDisposingRef.current = false;
         return subscribeGraphRuntimeLease((snapshot) => {
+            if (isDisposingRef.current) {
+                if (import.meta.env.DEV) {
+                    disposeSubscriberHitCountRef.current += 1;
+                    if (disposeSubscriberHitCountRef.current <= 3) {
+                        console.warn(
+                            '[GraphRuntimeLeaseBoundary] subscriber_while_disposing owner=%s count=%d',
+                            owner,
+                            disposeSubscriberHitCountRef.current
+                        );
+                    }
+                }
+                return;
+            }
             const token = activeTokenRef.current;
             if (token && isGraphRuntimeLeaseTokenActive(token)) return;
             if (snapshot.epoch === lastEpochAttemptRef.current) return;
             lastEpochAttemptRef.current = snapshot.epoch;
 
+            if (isDisposingRef.current) {
+                if (import.meta.env.DEV && !reacquireDuringDisposeWarnedRef.current) {
+                    reacquireDuringDisposeWarnedRef.current = true;
+                    console.warn('[GraphRuntimeLeaseBoundary] blocked_reacquire_during_dispose owner=%s', owner);
+                }
+                return;
+            }
             const reacquire = acquireGraphRuntimeLease(owner, instanceIdRef.current);
             if (reacquire.ok) {
                 activeTokenRef.current = reacquire.token;

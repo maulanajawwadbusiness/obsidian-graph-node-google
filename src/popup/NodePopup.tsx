@@ -33,6 +33,7 @@ const clamp = (value: number, min: number, max: number): number => {
     const safeMax = Math.max(min, max);
     return Math.max(min, Math.min(value, safeMax));
 };
+let warnedBoxedPopupAnchorLocalRange = false;
 
 // BACKDROP - Handles click-outside-to-close without document-level listener
 const BACKDROP_STYLE: React.CSSProperties = {
@@ -153,13 +154,28 @@ function computePopupPosition(
         : (mode === 'container' && boundsRect ? boundsRect.height : window.innerHeight);
     const { w: viewportWidth, h: viewportHeight } = getViewportSize(viewport, fallbackW, fallbackH);
     const anchorLocal = boxed
-        ? toViewportLocalPoint(anchor.x, anchor.y, viewport)
+        ? { x: anchor.x, y: anchor.y }
         : {
             x: mode === 'container' && boundsRect ? anchor.x - boundsRect.left : anchor.x,
             y: mode === 'container' && boundsRect ? anchor.y - boundsRect.top : anchor.y,
         };
     const anchorX = anchorLocal.x;
     const anchorY = anchorLocal.y;
+    if (
+        import.meta.env.DEV &&
+        boxed &&
+        !warnedBoxedPopupAnchorLocalRange &&
+        (anchorX < -5 || anchorY < -5 || anchorX > viewportWidth + 5 || anchorY > viewportHeight + 5)
+    ) {
+        warnedBoxedPopupAnchorLocalRange = true;
+        console.warn(
+            '[NodePopup] boxed local anchor out of range local=(%d,%d) viewport=(%d,%d)',
+            anchorX,
+            anchorY,
+            viewportWidth,
+            viewportHeight
+        );
+    }
 
     let left: number;
     if (anchorX > viewportWidth / 2) {

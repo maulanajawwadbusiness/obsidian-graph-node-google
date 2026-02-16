@@ -22,7 +22,7 @@ import {
     subscribeGraphRuntimeLease,
     type GraphRuntimeOwner,
 } from '../runtime/graphRuntimeLease';
-import { warnIfGraphRuntimeResourcesUnbalanced } from '../runtime/resourceTracker';
+import { trackResource, warnIfGraphRuntimeResourcesUnbalanced } from '../runtime/resourceTracker';
 import {
     SAMPLE_GRAPH_PREVIEW_ROOT_ATTR,
     SAMPLE_GRAPH_PREVIEW_ROOT_VALUE,
@@ -322,6 +322,23 @@ export const SampleGraphPreview: React.FC = () => {
     const isSampleLoading = sampleErrors.some((item) => item.code === 'SAMPLE_LOADING');
     const shownErrors = sampleErrors.slice(0, 3);
     const hiddenErrorCount = Math.max(sampleErrors.length - shownErrors.length, 0);
+
+    React.useEffect(() => {
+        if (!canMountRuntime) return;
+        const rootEl = previewRootRef.current;
+        if (!rootEl) return;
+
+        const releaseWheelListener = trackResource('graph-runtime.preview.wheel-capture-listener');
+        const onWheelCapture = (event: WheelEvent) => {
+            event.preventDefault();
+        };
+
+        rootEl.addEventListener('wheel', onWheelCapture, { capture: true, passive: false });
+        return () => {
+            rootEl.removeEventListener('wheel', onWheelCapture, true);
+            releaseWheelListener();
+        };
+    }, [canMountRuntime]);
 
     return (
         <div ref={previewRootRef} {...previewRootMarker} style={PREVIEW_ROOT_STYLE}>

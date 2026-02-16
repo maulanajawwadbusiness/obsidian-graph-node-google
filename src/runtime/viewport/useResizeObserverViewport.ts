@@ -76,6 +76,46 @@ function makeViewport(
     };
 }
 
+function readObserverSize(entry: ResizeObserverEntry): ObserverSizeSnapshot | null {
+    const anyEntry = entry as ResizeObserverEntry & {
+        contentBoxSize?: ResizeObserverSize | ResizeObserverSize[];
+    };
+    const box = anyEntry.contentBoxSize;
+    const normalized = Array.isArray(box) ? box[0] : box;
+    if (
+        normalized &&
+        Number.isFinite(normalized.inlineSize) &&
+        Number.isFinite(normalized.blockSize)
+    ) {
+        return {
+            width: normalized.inlineSize,
+            height: normalized.blockSize,
+        };
+    }
+    if (
+        Number.isFinite(entry.contentRect.width) &&
+        Number.isFinite(entry.contentRect.height)
+    ) {
+        return {
+            width: entry.contentRect.width,
+            height: entry.contentRect.height,
+        };
+    }
+    return null;
+}
+
+function pickEntryForTarget(
+    entries: ResizeObserverEntry[],
+    target: HTMLElement | null
+): ResizeObserverEntry | null {
+    if (entries.length === 0) return null;
+    if (!target) return entries[0];
+    for (let idx = 0; idx < entries.length; idx += 1) {
+        if (entries[idx].target === target) return entries[idx];
+    }
+    return entries[0];
+}
+
 export function useResizeObserverViewport<T extends HTMLElement>(
     elementRef: React.RefObject<T>,
     options: UseResizeObserverViewportOptions
@@ -118,6 +158,7 @@ export function useResizeObserverViewport<T extends HTMLElement>(
             if (disposed) return;
             const activeTarget = elementRef.current ?? latestTargetRef.current;
             if (!activeTarget) return;
+            if (!activeTarget.isConnected) return;
             const bcr = activeTarget.getBoundingClientRect();
             const nextViewport = makeViewport(options.mode, options.source, bcr, latestSizeRef.current);
             if (sameViewport(viewportRef.current, nextViewport)) return;
@@ -134,13 +175,10 @@ export function useResizeObserverViewport<T extends HTMLElement>(
 
         const observer = new ResizeObserver((entries) => {
             if (disposed) return;
-            const entry = entries[0];
+            const entry = pickEntryForTarget(entries, elementRef.current ?? latestTargetRef.current);
             if (!entry) return;
             latestTargetRef.current = entry.target as HTMLElement;
-            latestSizeRef.current = {
-                width: entry.contentRect.width,
-                height: entry.contentRect.height,
-            };
+            latestSizeRef.current = readObserverSize(entry);
             scheduleViewportUpdate();
         });
 
@@ -159,6 +197,8 @@ export function useResizeObserverViewport<T extends HTMLElement>(
                 console.warn('[ViewportResize] pending rAF remained after cleanup');
             }
             observer.disconnect();
+            latestTargetRef.current = null;
+            latestSizeRef.current = null;
             releaseObserverTrack();
         };
     }, [elementRef, target, options.mode, options.source]);

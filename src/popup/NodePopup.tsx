@@ -30,6 +30,10 @@ const stopOverlayWheelPropagation = (event: React.WheelEvent) => {
 };
 
 const GAP_FROM_NODE = 20;
+const clamp = (value: number, min: number, max: number): number => {
+    const safeMax = Math.max(min, max);
+    return Math.max(min, Math.min(value, safeMax));
+};
 
 // BACKDROP - Handles click-outside-to-close without document-level listener
 const BACKDROP_STYLE: React.CSSProperties = {
@@ -163,12 +167,12 @@ function computePopupPosition(
 
     const minLeft = 10;
     const maxLeft = viewportWidth - popupWidth - 10;
-    left = Math.max(minLeft, Math.min(left, maxLeft));
+    left = clamp(left, minLeft, maxLeft);
 
     let top = anchorY - popupHeight / 2;
     const minTop = 10;
     const maxTop = viewportHeight - popupHeight - 10;
-    top = Math.max(minTop, Math.min(top, maxTop));
+    top = clamp(top, minTop, maxTop);
 
     // Origin relative to popup's top-left corner
     const originX = anchorX - left;

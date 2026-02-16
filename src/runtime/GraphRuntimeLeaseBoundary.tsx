@@ -34,6 +34,7 @@ export const GraphRuntimeLeaseBoundary: React.FC<GraphRuntimeLeaseBoundaryProps>
     const [leaseState, setLeaseState] = React.useState<LeaseBoundaryState>({ phase: 'checking' });
     const activeTokenRef = React.useRef<string | null>(null);
     const lastEpochAttemptRef = React.useRef<number>(-1);
+    const layoutReleaseCountRef = React.useRef(0);
 
     React.useLayoutEffect(() => {
         const result = acquireGraphRuntimeLease(owner, instanceIdRef.current);
@@ -53,6 +54,14 @@ export const GraphRuntimeLeaseBoundary: React.FC<GraphRuntimeLeaseBoundaryProps>
             if (!token) return;
             activeTokenRef.current = null;
             releaseGraphRuntimeLease(token);
+            if (import.meta.env.DEV) {
+                layoutReleaseCountRef.current += 1;
+                console.log(
+                    '[GraphRuntimeLeaseBoundary] layout_release owner=%s count=%d',
+                    owner,
+                    layoutReleaseCountRef.current
+                );
+            }
         };
     }, [owner]);
 

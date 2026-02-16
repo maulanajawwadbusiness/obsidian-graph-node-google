@@ -7,5 +7,5 @@ export const logEnergyDebug = (_lifecycle: number, energy: number, effectiveDamp
         return;
     }
     lastLogTime = now;
-    console.log(`[Physics] Energy: ${(energy * 100).toFixed(1)}% | Damping: ${effectiveDamping.toFixed(2)} | MaxV: ${maxVelocityEffective.toFixed(0)}`);
+    //console.log(`[Physics] Energy: ${(energy * 100).toFixed(1)}% | Damping: ${effectiveDamping.toFixed(2)} | MaxV: ${maxVelocityEffective.toFixed(0)}`);
 };

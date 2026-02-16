@@ -106,12 +106,12 @@ function notifyLeaseSubscribers(): void {
 
 function logDev(event: string, message: string, ...args: Array<string | number>): void {
     if (!isDev()) return;
-    console.log(`[GraphRuntimeLease] ${event} ${message}`, ...args);
+    //console.log(`[GraphRuntimeLease] ${event} ${message}`, ...args);
 }
 
 function warnDev(event: string, message: string, ...args: Array<string | number>): void {
     if (!isDev()) return;
-    console.warn(`[GraphRuntimeLease] ${event} ${message}`, ...args);
+    //console.warn(`[GraphRuntimeLease] ${event} ${message}`, ...args);
 }
 
 function createLease(owner: GraphRuntimeOwner, instanceId: string): GraphRuntimeLeaseAcquireSuccess {

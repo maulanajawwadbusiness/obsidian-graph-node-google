@@ -315,7 +315,7 @@ export const startGraphRenderLoop = (deps: GraphRenderLoopDeps) => {
 
         const now = performance.now();
         if (!firstFrameLogged) {
-            console.log('[RenderLoop] first_frame');
+            //console.log('[RenderLoop] first_frame');
             firstFrameLogged = true;
         }
         const schedulerResult = runPhysicsScheduler(engine, schedulerState, overloadState, perfSample);

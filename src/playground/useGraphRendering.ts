@@ -147,17 +147,17 @@ export const useGraphRendering = ({
         const engine = engineRef.current;
 
         if (!canvasReady || !canvas || !engine) {
-            console.log(`[RenderLoop] skipped missing ${!canvas ? 'canvas' : 'engine'}`);
+            //console.log(`[RenderLoop] skipped missing ${!canvas ? 'canvas' : 'engine'}`);
             return;
         }
 
         const ctx = canvas.getContext('2d');
         if (!ctx) {
-            console.log('[RenderLoop] skipped missing 2d context');
+            //console.log('[RenderLoop] skipped missing 2d context');
             return;
         }
 
-        console.log(`[RenderLoop] start canvas=${canvas.clientWidth}x${canvas.clientHeight}`);
+        //console.log(`[RenderLoop] start canvas=${canvas.clientWidth}x${canvas.clientHeight}`);
         const stopLoop = startGraphRenderLoop({
             canvas,
             ctx,
@@ -185,7 +185,7 @@ export const useGraphRendering = ({
         });
 
         return () => {
-            console.log('[RenderLoop] stop');
+            //console.log('[RenderLoop] stop');
             stopLoop();
         };
     }, [canvasReady, config, onUserCameraInteraction, seed, setMetrics, spawnCount]);

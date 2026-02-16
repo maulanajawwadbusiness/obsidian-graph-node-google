@@ -1494,11 +1494,11 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
             aiErrorMessage,
         });
         if (import.meta.env.DEV) {
-            console.log(
-                '[GraphLoadingContract] loading=%s error=%s',
-                isGraphLoading ? '1' : '0',
-                aiErrorMessage ? 'present' : 'none'
-            );
+            //console.log(
+            //    '[GraphLoadingContract] loading=%s error=%s',
+            //    isGraphLoading ? '1' : '0',
+            //    aiErrorMessage ? 'present' : 'none'
+            //);
         }
     }, [aiErrorMessage, isGraphLoading, onRuntimeStatusChange]);
 

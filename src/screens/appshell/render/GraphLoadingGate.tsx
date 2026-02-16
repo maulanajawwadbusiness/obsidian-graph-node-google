@@ -1,9 +1,16 @@
 import React from 'react';
 import { type GatePhase } from './graphLoadingGateMachine';
+import { LOADING_TEXT_FONT_FAMILY, LOADING_TEXT_FONT_WEIGHT } from '../../../styles/loadingTypography';
+
+export type GateVisualPhase = 'entering' | 'visible' | 'exiting';
 
 type GraphLoadingGateProps = {
     rootRef?: React.RefObject<HTMLDivElement>;
     phase: GatePhase;
+    visualPhase?: GateVisualPhase;
+    fadeMs?: number;
+    fadeEasing?: string;
+    interactionLocked?: boolean;
     errorMessage?: string | null;
     confirmVisible?: boolean;
     confirmEnabled?: boolean;
@@ -22,7 +29,7 @@ const ROOT_STYLE: React.CSSProperties = {
     alignItems: 'center',
     justifyContent: 'center',
     color: '#e7e7e7',
-    fontFamily: 'var(--font-ui)',
+    fontFamily: LOADING_TEXT_FONT_FAMILY,
     pointerEvents: 'auto',
     touchAction: 'none',
     zIndex: 10,
@@ -30,7 +37,7 @@ const ROOT_STYLE: React.CSSProperties = {
 
 const TEXT_STYLE: React.CSSProperties = {
     fontSize: '20px',
-    fontWeight: 500,
+    fontWeight: LOADING_TEXT_FONT_WEIGHT,
     letterSpacing: '0.3px',
     textAlign: 'center',
     lineHeight: 1.4,
@@ -54,7 +61,7 @@ const CONFIRM_SLOT_STYLE: React.CSSProperties = {
     justifyContent: 'center',
     color: 'rgba(231, 231, 231, 0.75)',
     fontSize: '14px',
-    fontWeight: 500,
+    fontWeight: LOADING_TEXT_FONT_WEIGHT,
     userSelect: 'none',
 };
 
@@ -66,7 +73,7 @@ const CONFIRM_BUTTON_STYLE: React.CSSProperties = {
     background: 'rgba(255, 255, 255, 0.08)',
     color: '#f2f2f2',
     fontSize: '14px',
-    fontWeight: 600,
+    fontWeight: LOADING_TEXT_FONT_WEIGHT,
 };
 
 const CONFIRM_BUTTON_ENABLED_STYLE: React.CSSProperties = {
@@ -90,13 +97,13 @@ const BACK_BUTTON_STYLE: React.CSSProperties = {
     color: '#e7e7e7',
     padding: '0 14px',
     fontSize: '13px',
-    fontWeight: 600,
+    fontWeight: LOADING_TEXT_FONT_WEIGHT,
     cursor: 'pointer',
 };
 
 const ERROR_TITLE_STYLE: React.CSSProperties = {
     fontSize: '22px',
-    fontWeight: 700,
+    fontWeight: LOADING_TEXT_FONT_WEIGHT,
     color: '#ffd5d5',
     marginBottom: '8px',
     textAlign: 'center',
@@ -104,7 +111,7 @@ const ERROR_TITLE_STYLE: React.CSSProperties = {
 
 const ERROR_MESSAGE_STYLE: React.CSSProperties = {
     fontSize: '14px',
-    fontWeight: 500,
+    fontWeight: LOADING_TEXT_FONT_WEIGHT,
     color: 'rgba(255, 235, 235, 0.92)',
     textAlign: 'center',
     lineHeight: 1.45,
@@ -116,6 +123,10 @@ const ERROR_MESSAGE_STYLE: React.CSSProperties = {
 export const GraphLoadingGate: React.FC<GraphLoadingGateProps> = ({
     rootRef,
     phase,
+    visualPhase = 'visible',
+    fadeMs = 200,
+    fadeEasing = 'cubic-bezier(0.22, 1, 0.36, 1)',
+    interactionLocked = false,
     errorMessage,
     confirmVisible = false,
     confirmEnabled = false,
@@ -126,6 +137,9 @@ export const GraphLoadingGate: React.FC<GraphLoadingGateProps> = ({
     const isDone = phase === 'done' || phase === 'confirmed';
     const isError = phase === 'error';
     const isStalled = phase === 'stalled';
+    const isFadingOut = visualPhase === 'exiting';
+    const isFadingIn = visualPhase === 'entering';
+    const isInteractionBlocked = interactionLocked || isFadingOut;
     const confirmButtonRef = React.useRef<HTMLButtonElement>(null);
 
     React.useEffect(() => {
@@ -134,6 +148,11 @@ export const GraphLoadingGate: React.FC<GraphLoadingGateProps> = ({
     }, [confirmEnabled, confirmVisible]);
 
     const onGateKeyDownCapture = React.useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
+        if (isInteractionBlocked) {
+            event.preventDefault();
+            event.stopPropagation();
+            return;
+        }
         if (event.key === 'Escape') {
             event.preventDefault();
             event.stopPropagation();
@@ -152,14 +171,22 @@ export const GraphLoadingGate: React.FC<GraphLoadingGateProps> = ({
             event.preventDefault();
             event.stopPropagation();
         }
-    }, [confirmEnabled, onBackToPrompt, onConfirm]);
+    }, [confirmEnabled, isInteractionBlocked, onBackToPrompt, onConfirm]);
+
+    const rootVisualStyle: React.CSSProperties = {
+        ...ROOT_STYLE,
+        opacity: isFadingIn || isFadingOut ? 0 : 1,
+        transition: fadeMs > 0 ? `opacity ${fadeMs}ms ${fadeEasing}` : 'none',
+    };
 
     return (
         <div
             ref={rootRef}
             data-graph-loading-gate="1"
+            data-gate-visual-phase={visualPhase}
+            data-gate-interaction-locked={isInteractionBlocked ? '1' : '0'}
             tabIndex={-1}
-            style={ROOT_STYLE}
+            style={rootVisualStyle}
             onPointerDownCapture={(e) => e.stopPropagation()}
             onPointerMoveCapture={(e) => e.stopPropagation()}
             onPointerUpCapture={(e) => e.stopPropagation()}
@@ -183,9 +210,13 @@ export const GraphLoadingGate: React.FC<GraphLoadingGateProps> = ({
             {showBackToPrompt ? (
                 <button
                     type="button"
-                    style={BACK_BUTTON_STYLE}
+                    style={{ ...BACK_BUTTON_STYLE, opacity: isInteractionBlocked ? 0.6 : 1 }}
                     onPointerDown={(e) => e.stopPropagation()}
-                    onClick={() => onBackToPrompt?.()}
+                    onClick={() => {
+                        if (isInteractionBlocked) return;
+                        onBackToPrompt?.();
+                    }}
+                    disabled={isInteractionBlocked}
                 >
                     Back to Prompt
                 </button>
@@ -200,9 +231,12 @@ export const GraphLoadingGate: React.FC<GraphLoadingGateProps> = ({
                             ...CONFIRM_BUTTON_STYLE,
                             ...(confirmEnabled ? CONFIRM_BUTTON_ENABLED_STYLE : CONFIRM_BUTTON_DISABLED_STYLE),
                         }}
-                        disabled={!confirmEnabled || isError}
+                        disabled={!confirmEnabled || isError || isInteractionBlocked}
                         onPointerDown={(e) => e.stopPropagation()}
-                        onClick={() => onConfirm?.()}
+                        onClick={() => {
+                            if (isInteractionBlocked) return;
+                            onConfirm?.();
+                        }}
                     >
                         Confirm
                     </button>

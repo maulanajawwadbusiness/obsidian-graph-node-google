@@ -215,6 +215,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
     const shouldShowAvatarName = motionPhase === 'expanding' || motionPhase === 'expanded';
     const contentTransitionCss = prefersReducedMotion ? 'none' : getSidebarContentTransitionCss(isExpanded);
     const widthTransitionCss = prefersReducedMotion ? 'none' : getSidebarWidthTransitionCss(isExpanded);
+    const iconOpacityMultiplier = disabled ? Math.max(0, Math.min(1, dimAlpha)) : 1;
+    const applyIconOpacity = (baseOpacity: number): number => {
+        const safeBase = Math.max(0, Math.min(1, baseOpacity));
+        return safeBase * iconOpacityMultiplier;
+    };
 
     const sidebarStyle: React.CSSProperties = {
         ...SIDEBAR_BASE_STYLE,
@@ -222,7 +227,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
         transition: widthTransitionCss,
         willChange: prefersReducedMotion ? undefined : 'width',
         pointerEvents: frozen ? 'auto' : (disabled ? 'none' : 'auto'),
-        opacity: dimAlpha,
         cursor: frozen ? 'default' : undefined,
     };
     const sidebarVisualRailStyle: React.CSSProperties = {
@@ -744,6 +748,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             data-row-menu-item-preview-count={String(menuItemPreview.length)}
             data-motion-phase={motionPhase}
             data-sidebar-lock-reason={lockReason}
+            data-sidebar-icon-dim-multiplier={String(iconOpacityMultiplier)}
             style={sidebarStyle}
             onPointerDown={(e) => e.stopPropagation()}
             onWheelCapture={(e) => e.stopPropagation()}
@@ -796,7 +801,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                                         src={circleIcon}
                                         size={LOGO_SIZE}
                                         color={logoHover ? HOVER_ACCENT_COLOR : DEFAULT_ICON_COLOR}
-                                        opacity={!isExpanded && logoHover ? 0 : (logoHover ? ICON_OPACITY_HOVER : ICON_OPACITY_DEFAULT)}
+                                        opacity={applyIconOpacity(!isExpanded && logoHover ? 0 : (logoHover ? ICON_OPACITY_HOVER : ICON_OPACITY_DEFAULT))}
                                         transition={`opacity ${LOGO_SWAP_TRANSITION}, background-color ${SIDEBAR_HOVER_TRANSITION}`}
                                     />
                                 </span>
@@ -811,7 +816,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                                         src={sidebarIcon}
                                         size={LOGO_SIZE}
                                         color={logoHover ? HOVER_ACCENT_COLOR : DEFAULT_ICON_COLOR}
-                                        opacity={!isExpanded && logoHover ? (logoHover ? ICON_OPACITY_HOVER : ICON_OPACITY_DEFAULT) : 0}
+                                        opacity={applyIconOpacity(!isExpanded && logoHover ? (logoHover ? ICON_OPACITY_HOVER : ICON_OPACITY_DEFAULT) : 0)}
                                         transition={`opacity ${LOGO_SWAP_TRANSITION}, background-color ${SIDEBAR_HOVER_TRANSITION}`}
                                     />
                                 </span>
@@ -852,7 +857,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                                         fill={closeHover ? HOVER_ACCENT_COLOR : DEFAULT_ICON_COLOR}
                                         fillRule="evenodd"
                                         style={{
-                                            opacity: closeHover ? ICON_OPACITY_HOVER : ICON_OPACITY_DEFAULT,
+                                            opacity: applyIconOpacity(closeHover ? ICON_OPACITY_HOVER : ICON_OPACITY_DEFAULT),
                                             transition: `fill ${SIDEBAR_HOVER_TRANSITION}, opacity ${SIDEBAR_HOVER_TRANSITION}`,
                                         }}
                                     />
@@ -870,6 +875,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                             isExpanded={isExpanded}
                             showExpandedContent={shouldMountExpandedContent}
                             contentTransitionCss={contentTransitionCss}
+                            iconOpacityMultiplier={iconOpacityMultiplier}
                             suppressHover={isInMotionPhase}
                             isHovered={createNewHover}
                             onMouseEnter={() => setCreateNewHover(true)}
@@ -885,6 +891,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                             isExpanded={isExpanded}
                             showExpandedContent={shouldMountExpandedContent}
                             contentTransitionCss={contentTransitionCss}
+                            iconOpacityMultiplier={iconOpacityMultiplier}
                             suppressHover={isInMotionPhase}
                             isHovered={searchHover}
                             onMouseEnter={() => setSearchHover(true)}
@@ -903,6 +910,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                             isExpanded={isExpanded}
                             showExpandedContent={shouldMountExpandedContent}
                             contentTransitionCss={contentTransitionCss}
+                            iconOpacityMultiplier={iconOpacityMultiplier}
                             suppressHover={isInMotionPhase}
                             isHovered={moreHover}
                             onMouseEnter={() => setMoreHover(true)}
@@ -1045,7 +1053,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                                                         color={hoveredEllipsisRowId === item.id
                                                             ? HOVER_ACCENT_COLOR
                                                             : (isSelected ? HOVER_ACCENT_COLOR : 'rgba(255, 255, 255, 0.75)')}
-                                                        opacity={1}
+                                                        opacity={applyIconOpacity(1)}
                                                     />
                                                 </button>
                                             </span>
@@ -1118,7 +1126,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                                     color={menuItem.key === 'rename' && hoveredMenuItemKey === 'rename'
                                         ? HOVER_ACCENT_COLOR
                                         : menuItem.color}
-                                    opacity={1}
+                                    opacity={applyIconOpacity(1)}
                                 />
                                 <span
                                     style={{
@@ -1213,7 +1221,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                                 src={logoutIcon}
                                 size={14}
                                 color="#ff4b4e"
-                                opacity={1}
+                                opacity={applyIconOpacity(1)}
                             />
                             <span
                                 style={{
@@ -1265,7 +1273,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                                 src={suggestionFeedbackIcon}
                                 size={14}
                                 color={moreMenuHoverKey === 'suggestion' ? HOVER_ACCENT_COLOR : SIDEBAR_TEXT_COLOR}
-                                opacity={1}
+                                opacity={applyIconOpacity(1)}
                             />
                             <span
                                 style={{
@@ -1298,7 +1306,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                                 src={blogIcon}
                                 size={14}
                                 color={moreMenuHoverKey === 'blog' ? HOVER_ACCENT_COLOR : SIDEBAR_TEXT_COLOR}
-                                opacity={1}
+                                opacity={applyIconOpacity(1)}
                             />
                             <span
                                 style={{
@@ -1341,7 +1349,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                                 src={documentIcon}
                                 size={ICON_SIZE}
                                 color={documentHover ? HOVER_ACCENT_COLOR : DEFAULT_ICON_COLOR}
-                                opacity={documentHover ? ICON_OPACITY_HOVER : ICON_OPACITY_DEFAULT}
+                                opacity={applyIconOpacity(documentHover ? ICON_OPACITY_HOVER : ICON_OPACITY_DEFAULT)}
                             />
                             {shouldMountExpandedContent && (
                                 <span
@@ -1406,13 +1414,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
                                     <img
                                         src={accountImageUrl}
                                         alt="avatar"
-                                        style={AVATAR_IMAGE_STYLE}
+                                        style={{ ...AVATAR_IMAGE_STYLE, opacity: applyIconOpacity(1) }}
                                     />
                                 ) : (
                                     <div
                                         style={{
                                             ...AVATAR_STYLE,
-                                            opacity: 1,
+                                            opacity: applyIconOpacity(1),
                                         }}
                                     >
                                         BA
@@ -1471,6 +1479,7 @@ type NavItemProps = {
     isExpanded: boolean;
     showExpandedContent: boolean;
     contentTransitionCss: string;
+    iconOpacityMultiplier?: number;
     suppressHover?: boolean;
     isHovered: boolean;
     onMouseEnter: () => void;
@@ -1488,6 +1497,7 @@ const NavItem: React.FC<NavItemProps> = ({
     isExpanded,
     showExpandedContent,
     contentTransitionCss,
+    iconOpacityMultiplier = 1,
     suppressHover = false,
     isHovered,
     onMouseEnter,
@@ -1530,7 +1540,7 @@ const NavItem: React.FC<NavItemProps> = ({
                 src={icon}
                 size={ICON_SIZE}
                 color={isHovered ? HOVER_ACCENT_COLOR : DEFAULT_ICON_COLOR}
-                opacity={isHovered ? ICON_OPACITY_HOVER : ICON_OPACITY_DEFAULT}
+                opacity={(isHovered ? ICON_OPACITY_HOVER : ICON_OPACITY_DEFAULT) * iconOpacityMultiplier}
             />
             {showExpandedContent && (
                 <span

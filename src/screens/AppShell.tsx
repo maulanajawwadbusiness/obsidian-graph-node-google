@@ -14,6 +14,10 @@ import {
     ONBOARDING_FADE_EASING,
     getTransitionPolicy,
 } from './appshell/transitions/transitionContract';
+import {
+    GRAPH_LOADING_SCREEN_FADE_EASING,
+    GRAPH_LOADING_SCREEN_FADE_MS,
+} from './appshell/transitions/transitionTokens';
 import { OnboardingLayerHost } from './appshell/transitions/OnboardingLayerHost';
 import { useOnboardingTransition } from './appshell/transitions/useOnboardingTransition';
 import { useOnboardingWheelGuard } from './appshell/transitions/useOnboardingWheelGuard';
@@ -38,6 +42,7 @@ import {
     type GatePhase,
     type RuntimeStatusSnapshot,
 } from './appshell/render/graphLoadingGateMachine';
+import { type GateVisualPhase } from './appshell/render/GraphLoadingGate';
 import { useOnboardingOverlayState } from './appshell/overlays/useOnboardingOverlayState';
 import { OnboardingChrome } from './appshell/overlays/OnboardingChrome';
 import { useAppShellModals } from './appshell/overlays/useAppShellModals';
@@ -71,6 +76,7 @@ const Graph = React.lazy(() =>
 
 type Screen = AppScreen;
 type SidebarInteractionState = 'active' | 'frozen';
+type GateExitTarget = 'graph' | 'prompt';
 const STORAGE_KEY = 'arnvoid_screen';
 const PERSIST_SCREEN = false;
 const DEBUG_ONBOARDING_SCROLL_GUARD = false;
@@ -126,6 +132,8 @@ export const AppShell: React.FC = () => {
         aiErrorMessage: null,
     });
     const [gatePhase, setGatePhase] = React.useState<GatePhase>('idle');
+    const [gateVisualPhase, setGateVisualPhase] = React.useState<GateVisualPhase>('visible');
+    const [pendingGateExitTarget, setPendingGateExitTarget] = React.useState<GateExitTarget | null>(null);
     const [seenLoadingTrue, setSeenLoadingTrue] = React.useState(false);
     const [gateEntryIntent, setGateEntryIntent] = React.useState<GateEntryIntent>('none');
     const [promptAnalysisErrorMessage, setPromptAnalysisErrorMessage] = React.useState<string | null>(null);
@@ -136,8 +144,11 @@ export const AppShell: React.FC = () => {
     const gatePhaseRef = React.useRef<GatePhase>('idle');
     const gateErrorBackRequestedRef = React.useRef(false);
     const gateErrorVisibleRef = React.useRef(false);
+    const gateExitRequestedRef = React.useRef(false);
     const sidebarLockReasonRef = React.useRef<SidebarLockReason>('none');
     const graphLoadingGateRootRef = React.useRef<HTMLDivElement>(null);
+    const gateEnterRafRef = React.useRef<number | null>(null);
+    const gateExitTimerRef = React.useRef<number | null>(null);
     const savedInterfacesRef = React.useRef<SavedInterfaceRecordV1[]>([]);
     const restoreReadPathActiveRef = React.useRef(false);
     const activeStorageKeyRef = React.useRef<string>(getSavedInterfacesStorageKey());
@@ -186,6 +197,7 @@ export const AppShell: React.FC = () => {
         return trimmed.length > 0 ? trimmed : FALLBACK_GATE_ERROR_MESSAGE;
     }, [graphRuntimeStatus.aiErrorMessage]);
     const gateControls = React.useMemo(() => getGateControls(gatePhase), [gatePhase]);
+    const gateInteractionLocked = pendingGateExitTarget !== null || gateVisualPhase === 'exiting';
     const showMoneyUi = screen === 'prompt' || isGraphClassScreen(screen);
     const showPersistentSidebar = SIDEBAR_VISIBILITY_BY_SCREEN[screen];
     const sidebarFrozen = SIDEBAR_INTERACTION_BY_SCREEN[screen] === 'frozen';
@@ -288,6 +300,39 @@ export const AppShell: React.FC = () => {
         }
         transitionToScreen(next);
     }, [screen, transitionToScreen]);
+
+    const clearGateVisualTimers = React.useCallback(() => {
+        if (gateEnterRafRef.current !== null) {
+            window.cancelAnimationFrame(gateEnterRafRef.current);
+            gateEnterRafRef.current = null;
+        }
+        if (gateExitTimerRef.current !== null) {
+            window.clearTimeout(gateExitTimerRef.current);
+            gateExitTimerRef.current = null;
+        }
+    }, []);
+
+    const requestGateExit = React.useCallback((target: GateExitTarget) => {
+        if (screen !== 'graph_loading') return;
+        if (gateExitRequestedRef.current) return;
+        if (pendingGateExitTarget !== null) return;
+        gateExitRequestedRef.current = true;
+        setPendingGateExitTarget(target);
+        setGateVisualPhase('exiting');
+        if (import.meta.env.DEV) {
+            console.log('[GateFade] exit_start target=%s fadeMs=%d', target, GRAPH_LOADING_SCREEN_FADE_MS);
+        }
+        if (gateExitTimerRef.current !== null) {
+            window.clearTimeout(gateExitTimerRef.current);
+        }
+        gateExitTimerRef.current = window.setTimeout(() => {
+            gateExitTimerRef.current = null;
+            if (import.meta.env.DEV) {
+                console.log('[GateFade] exit_commit target=%s', target);
+            }
+            transitionToScreen(target);
+        }, GRAPH_LOADING_SCREEN_FADE_MS);
+    }, [pendingGateExitTarget, screen, transitionToScreen]);
 
     const warnFrozenSidebarAction = React.useCallback((action: string) => {
         if (!import.meta.env.DEV) return;
@@ -414,6 +459,12 @@ export const AppShell: React.FC = () => {
     }, [savedInterfaces]);
 
     React.useEffect(() => {
+        return () => {
+            clearGateVisualTimers();
+        };
+    }, [clearGateVisualTimers]);
+
+    React.useEffect(() => {
         const previousScreen = previousScreenRef.current;
         const enteringGraphLoading = previousScreen !== 'graph_loading' && screen === 'graph_loading';
         const leavingGraphLoading = previousScreen === 'graph_loading' && screen !== 'graph_loading';
@@ -432,6 +483,27 @@ export const AppShell: React.FC = () => {
         }
         previousScreenRef.current = screen;
     }, [isSidebarExpanded, screen]);
+
+    React.useEffect(() => {
+        clearGateVisualTimers();
+        setPendingGateExitTarget(null);
+        gateExitRequestedRef.current = false;
+        if (screen !== 'graph_loading') {
+            setGateVisualPhase('visible');
+            return;
+        }
+        setGateVisualPhase('entering');
+        if (import.meta.env.DEV) {
+            console.log('[GateFade] enter_start fadeMs=%d', GRAPH_LOADING_SCREEN_FADE_MS);
+        }
+        gateEnterRafRef.current = window.requestAnimationFrame(() => {
+            gateEnterRafRef.current = null;
+            setGateVisualPhase('visible');
+            if (import.meta.env.DEV) {
+                console.log('[GateFade] enter_visible');
+            }
+        });
+    }, [clearGateVisualTimers, screen]);
 
     React.useEffect(() => {
         if (screen === 'graph_loading') {
@@ -590,6 +662,7 @@ export const AppShell: React.FC = () => {
     const confirmGraphLoadingGate = React.useCallback(() => {
         if (screen !== 'graph_loading') return;
         if (gatePhase !== 'done') return;
+        if (gateInteractionLocked) return;
         const activeElement = document.activeElement;
         if (
             activeElement instanceof HTMLElement &&
@@ -599,17 +672,18 @@ export const AppShell: React.FC = () => {
             activeElement.blur();
         }
         setGatePhase('confirmed');
-        transitionToScreen('graph');
-    }, [gatePhase, screen, transitionToScreen]);
+        requestGateExit('graph');
+    }, [gateInteractionLocked, gatePhase, requestGateExit, screen]);
 
     const backToPromptFromGate = React.useCallback(() => {
         if (screen !== 'graph_loading') return;
+        if (gateInteractionLocked) return;
         if (gatePhase === 'error') {
             gateErrorBackRequestedRef.current = true;
             setPromptAnalysisErrorMessage(normalizedGateErrorMessage);
         }
-        transitionToScreen('prompt');
-    }, [gatePhase, normalizedGateErrorMessage, screen, transitionToScreen]);
+        requestGateExit('prompt');
+    }, [gateInteractionLocked, gatePhase, normalizedGateErrorMessage, requestGateExit, screen]);
 
     React.useEffect(() => {
         if (screen !== 'graph_loading') return;
@@ -703,6 +777,10 @@ export const AppShell: React.FC = () => {
         promptAnalysisErrorMessage,
         clearPromptAnalysisError: () => setPromptAnalysisErrorMessage(null),
         gatePhase,
+        gateVisualPhase,
+        gateFadeMs: GRAPH_LOADING_SCREEN_FADE_MS,
+        gateFadeEasing: GRAPH_LOADING_SCREEN_FADE_EASING,
+        gateInteractionLocked,
         gateErrorMessage: normalizedGateErrorMessage,
         gateConfirmVisible: gateControls.allowConfirm,
         gateConfirmEnabled: gateControls.allowConfirm,
@@ -747,6 +825,8 @@ export const AppShell: React.FC = () => {
                 style={SHELL_STYLE}
                 data-graph-loading={graphIsLoading ? '1' : '0'}
                 data-gate-phase={gatePhase}
+                data-gate-visual-phase={gateVisualPhase}
+                data-gate-exit-pending={pendingGateExitTarget ?? 'none'}
                 data-gate-seen-loading={seenLoadingTrue ? '1' : '0'}
                 data-gate-entry-intent={gateEntryIntent}
                 data-sidebar-frozen={sidebarFrozenActive ? '1' : '0'}

@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 import loadingIcon from '../assets/loading_icon.png';
+import { LOADING_TEXT_FONT_FAMILY, LOADING_TEXT_FONT_WEIGHT } from '../styles/loadingTypography';
 
 type LoadingScreenProps = {
     errorMessage?: string | null;
@@ -24,9 +25,9 @@ const SPINNER_STYLE: React.CSSProperties = {
 
 const TEXT_STYLE: React.CSSProperties = {
     color: 'rgba(255, 255, 255, 0.9)',
-    fontFamily: 'var(--font-ui)',
+    fontFamily: LOADING_TEXT_FONT_FAMILY,
     fontSize: '16px',
-    fontWeight: 500,
+    fontWeight: LOADING_TEXT_FONT_WEIGHT,
     letterSpacing: '0.5px',
 };
 

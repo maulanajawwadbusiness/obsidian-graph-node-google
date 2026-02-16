@@ -57,8 +57,15 @@ Update Note: 2026-02-16 (Graph Loading Real Screen, Steps 1-9)
   - gate renders explicit error state and runtime message
   - exit is explicit via Back (`Escape` shortcut) to prompt
   - prompt shows inline dismissible analysis error banner
+- Loading typography contract:
+  - all loading-surface text is `font-weight: 300` (`var(--font-ui)`)
+  - covered surfaces include `GraphLoadingGate`, legacy `LoadingScreen`, graph runtime fallbacks, and `AnalysisOverlay`
+- Loading fade contract:
+  - `GraphLoadingGate` uses fixed `200ms` enter/exit fade
+  - exit navigation (`graph_loading -> graph|prompt`) is deferred until fade-out completes
+  - gate keeps input lock during exit fade to prevent repeat actions
 - Legacy in-runtime `LoadingScreen` is suppressed for product graph-class path.
-- Sidebar remains visible on `graph_loading` but is frozen/dimmed with shield ownership.
+- Sidebar remains visible on `graph_loading` with shield ownership; disabled visual treatment is icon-only dim (`alpha 0.5`) while text/container stay full opacity.
 - Sidebar disable behavior is loading-only (error does not keep sidebar disabled).
 - Sidebar lock policy is centralized in `src/screens/appshell/sidebar/sidebarLockPolicy.ts`.
 - Lock reason is now explicit (`screen_frozen`, `graph_loading_activity`, `login_overlay_block`, `none`) and exposed via AppShell/Sidebar data markers.

@@ -1,4 +1,5 @@
 import React from 'react';
+import { LOADING_TEXT_FONT_FAMILY, LOADING_TEXT_FONT_WEIGHT } from '../../styles/loadingTypography';
 
 export const SIDEBAR_COLLAPSED_WIDTH_PX = 35;
 export const SIDEBAR_COLLAPSED_WIDTH_CSS = `${SIDEBAR_COLLAPSED_WIDTH_PX}px`;
@@ -65,6 +66,8 @@ export const FALLBACK_STYLE: React.CSSProperties = {
     background: '#0f1115',
     color: '#e7e7e7',
     fontSize: '14px',
+    fontFamily: LOADING_TEXT_FONT_FAMILY,
+    fontWeight: LOADING_TEXT_FONT_WEIGHT,
 };
 
 export const SHELL_STYLE: React.CSSProperties = {

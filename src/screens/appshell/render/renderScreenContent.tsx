@@ -7,6 +7,7 @@ import { GraphLoadingGate } from './GraphLoadingGate';
 import { AppScreen, isGraphClassScreen } from '../screenFlow/screenTypes';
 import { GraphRuntimeLeaseBoundary } from '../../../runtime/GraphRuntimeLeaseBoundary';
 import { type GatePhase, type RuntimeStatusSnapshot } from './graphLoadingGateMachine';
+import { type GateVisualPhase } from './GraphLoadingGate';
 import type {
     GraphPhysicsPlaygroundProps,
     PendingAnalysisPayload,
@@ -49,6 +50,10 @@ export type RenderScreenArgs = {
     promptAnalysisErrorMessage: string | null;
     clearPromptAnalysisError: () => void;
     gatePhase: GatePhase;
+    gateVisualPhase: GateVisualPhase;
+    gateFadeMs: number;
+    gateFadeEasing: string;
+    gateInteractionLocked: boolean;
     gateErrorMessage: string | null;
     gateConfirmVisible: boolean;
     gateConfirmEnabled: boolean;
@@ -87,6 +92,10 @@ export function renderScreenContent(args: RenderScreenArgs): React.ReactNode {
         promptAnalysisErrorMessage,
         clearPromptAnalysisError,
         gatePhase,
+        gateVisualPhase,
+        gateFadeMs,
+        gateFadeEasing,
+        gateInteractionLocked,
         gateErrorMessage,
         gateConfirmVisible,
         gateConfirmEnabled,
@@ -139,6 +148,10 @@ export function renderScreenContent(args: RenderScreenArgs): React.ReactNode {
                         <GraphLoadingGate
                             rootRef={gateRootRef}
                             phase={gatePhase}
+                            visualPhase={gateVisualPhase}
+                            fadeMs={gateFadeMs}
+                            fadeEasing={gateFadeEasing}
+                            interactionLocked={gateInteractionLocked}
                             errorMessage={gateErrorMessage}
                             confirmVisible={gateConfirmVisible}
                             confirmEnabled={gateConfirmEnabled}

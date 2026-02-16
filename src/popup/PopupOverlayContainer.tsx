@@ -1,6 +1,13 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
 import { usePortalRootEl, usePortalScopeMode } from '../components/portalScope/PortalScopeContext';
+import { useGraphViewport } from '../runtime/viewport/graphViewport';
+import {
+    assertNoBodyPortalInBoxed,
+    countBoxedSurfaceDisabled,
+    isBoxedUi,
+    resolveBoxedPortalTarget,
+} from '../runtime/ui/boxedUiPolicy';
 
 /**
  * PopupOverlayContainer
@@ -41,11 +48,27 @@ interface PopupOverlayContainerProps {
 export const PopupOverlayContainer: React.FC<PopupOverlayContainerProps> = ({ children }) => {
     const portalRoot = usePortalRootEl();
     const mode = usePortalScopeMode();
+    const viewport = useGraphViewport();
+    const boxed = isBoxedUi(viewport);
+    const portalTarget = React.useMemo(() => {
+        if (!boxed) return portalRoot;
+        const safeTarget = resolveBoxedPortalTarget(portalRoot, 'PopupOverlayContainer');
+        if (!safeTarget) return null;
+        assertNoBodyPortalInBoxed(safeTarget, 'PopupOverlayContainer');
+        return safeTarget;
+    }, [boxed, portalRoot]);
+
+    if (!portalTarget) {
+        if (boxed) {
+            countBoxedSurfaceDisabled('PopupOverlayContainer');
+        }
+        return null;
+    }
     return createPortal(
         <div style={mode === 'container' ? OVERLAY_STYLE_CONTAINER : OVERLAY_STYLE_APP}>
             {children}
         </div>,
-        portalRoot
+        portalTarget
     );
 };
 

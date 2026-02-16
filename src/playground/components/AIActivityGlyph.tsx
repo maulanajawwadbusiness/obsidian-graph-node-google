@@ -2,6 +2,13 @@ import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useDocument } from '../../store/documentStore';
 import { usePortalRootEl, usePortalScopeMode } from '../../components/portalScope/PortalScopeContext';
+import { useGraphViewport } from '../../runtime/viewport/graphViewport';
+import {
+    assertNoBodyPortalInBoxed,
+    countBoxedSurfaceDisabled,
+    isBoxedUi,
+    resolveBoxedPortalTarget,
+} from '../../runtime/ui/boxedUiPolicy';
 
 /**
  * Minimal AI activity indicator - tiny dot with subtle pulse
@@ -38,6 +45,15 @@ export const AIActivityGlyph: React.FC = () => {
     const [mounted, setMounted] = useState(false);
     const portalRoot = usePortalRootEl();
     const mode = usePortalScopeMode();
+    const viewport = useGraphViewport();
+    const boxed = isBoxedUi(viewport);
+    const portalTarget = React.useMemo(() => {
+        if (!boxed) return portalRoot;
+        const safeTarget = resolveBoxedPortalTarget(portalRoot, 'AIActivityGlyph');
+        if (!safeTarget) return null;
+        assertNoBodyPortalInBoxed(safeTarget, 'AIActivityGlyph');
+        return safeTarget;
+    }, [boxed, portalRoot]);
 
     useEffect(() => {
         setMounted(true);
@@ -59,6 +75,12 @@ export const AIActivityGlyph: React.FC = () => {
     if (!state.aiActivity || !mounted) {
         return null;
     }
+    if (!portalTarget) {
+        if (boxed) {
+            countBoxedSurfaceDisabled('AIActivityGlyph');
+        }
+        return null;
+    }
 
     return createPortal(
         <div
@@ -70,5 +92,5 @@ export const AIActivityGlyph: React.FC = () => {
         >
             <div style={DOT_STYLE} />
         </div>
-    , portalRoot);
+    , portalTarget);
 };

@@ -19,6 +19,12 @@ import {
     recordBoxedTooltipClampCall,
     toViewportLocalPoint
 } from '../../runtime/viewport/viewportMath';
+import {
+    assertNoBodyPortalInBoxed,
+    countBoxedSurfaceDisabled,
+    isBoxedUi,
+    resolveBoxedPortalTarget,
+} from '../../runtime/ui/boxedUiPolicy';
 
 type TooltipProviderProps = {
     children: React.ReactNode;
@@ -282,6 +288,21 @@ const TooltipPortal: React.FC<{ state: TooltipState }> = ({ state }) => {
     const mode = usePortalScopeMode();
     const boundsRect = usePortalBoundsRect();
     const viewport = useGraphViewport();
+    const boxed = isBoxedUi(viewport);
+    const portalTarget = useMemo(() => {
+        if (!boxed) return portalRoot;
+        const safeTarget = resolveBoxedPortalTarget(portalRoot, 'TooltipProvider');
+        if (!safeTarget) return null;
+        assertNoBodyPortalInBoxed(safeTarget, 'TooltipProvider');
+        return safeTarget;
+    }, [boxed, portalRoot]);
+
+    if (!portalTarget) {
+        if (boxed) {
+            countBoxedSurfaceDisabled('TooltipProvider');
+        }
+        return null;
+    }
     return createPortal(
         <div
             data-tooltip-layer-root="1"
@@ -289,7 +310,7 @@ const TooltipPortal: React.FC<{ state: TooltipState }> = ({ state }) => {
         >
             <TooltipRenderer state={state} mode={mode} boundsRect={boundsRect} viewport={viewport} />
         </div>,
-        portalRoot
+        portalTarget
     );
 };
 

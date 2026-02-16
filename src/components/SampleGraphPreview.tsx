@@ -42,6 +42,8 @@ const PREVIEW_ROOT_STYLE: React.CSSProperties = {
     height: '100%',
     overflow: 'hidden',
     borderRadius: 'inherit',
+    overscrollBehavior: 'contain',
+    touchAction: 'none',
 };
 
 const PREVIEW_SURFACE_STYLE: React.CSSProperties = {
@@ -143,6 +145,9 @@ class PreviewErrorBoundary extends React.Component<React.PropsWithChildren, Prev
 }
 
 export const SampleGraphPreview: React.FC = () => {
+    const stopPropagation = React.useCallback((event: React.SyntheticEvent) => {
+        event.stopPropagation();
+    }, []);
     const previewRootMarker: Record<string, string> = {
         [SAMPLE_GRAPH_PREVIEW_ROOT_ATTR]: SAMPLE_GRAPH_PREVIEW_ROOT_VALUE,
     };
@@ -345,7 +350,13 @@ export const SampleGraphPreview: React.FC = () => {
     }, [canMountRuntime]);
 
     return (
-        <div ref={previewRootRef} {...previewRootMarker} style={PREVIEW_ROOT_STYLE}>
+        <div
+            ref={previewRootRef}
+            {...previewRootMarker}
+            style={PREVIEW_ROOT_STYLE}
+            onPointerDown={stopPropagation}
+            onWheel={stopPropagation}
+        >
             <div
                 ref={setPortalRootEl}
                 {...{ [SAMPLE_GRAPH_PREVIEW_PORTAL_ROOT_ATTR]: SAMPLE_GRAPH_PREVIEW_PORTAL_ROOT_VALUE }}

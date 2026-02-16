@@ -3,10 +3,41 @@ import { usePopup } from './PopupStore';
 import { ChatInput } from './ChatInput';
 import { ChatShortageNotif } from './ChatShortageNotif';
 import { t } from '../i18n/t';
+import { usePortalBoundsRect, usePortalScopeMode } from '../components/portalScope/PortalScopeContext';
+import {
+    shouldAllowOverlayWheelDefault,
+    SAMPLE_GRAPH_PREVIEW_OVERLAY_INTERACTIVE_ATTR,
+    SAMPLE_GRAPH_PREVIEW_OVERLAY_INTERACTIVE_VALUE,
+    SAMPLE_GRAPH_PREVIEW_OVERLAY_SCROLLABLE_ATTR,
+    SAMPLE_GRAPH_PREVIEW_OVERLAY_SCROLLABLE_VALUE,
+} from '../components/sampleGraphPreviewSeams';
+import { useGraphViewport, type GraphViewport } from '../runtime/viewport/graphViewport';
+import { getViewportSize, isBoxedViewport, recordBoxedClampCall } from '../runtime/viewport/viewportMath';
+import {
+    BOXED_NODE_POPUP_SCALE,
+    recordBoxedNodePopupAnchorLocalPath,
+    recordBoxedNodePopupScaleApplied,
+} from '../runtime/ui/boxedUiPolicy';
 
 const stopPropagation = (e: React.SyntheticEvent) => e.stopPropagation();
+const stopOverlayWheelPropagation = (event: React.WheelEvent) => {
+    event.stopPropagation();
+    const allowOverlayDefault = shouldAllowOverlayWheelDefault({
+        target: event.target,
+        deltaX: event.deltaX,
+        deltaY: event.deltaY,
+    });
+    if (!allowOverlayDefault) {
+        event.preventDefault();
+    }
+};
 
 const GAP_FROM_NODE = 20;
+const clamp = (value: number, min: number, max: number): number => {
+    const safeMax = Math.max(min, max);
+    return Math.max(min, Math.min(value, safeMax));
+};
+let warnedBoxedPopupAnchorLocalRange = false;
 
 // BACKDROP - Handles click-outside-to-close without document-level listener
 const BACKDROP_STYLE: React.CSSProperties = {
@@ -20,21 +51,27 @@ const BACKDROP_STYLE: React.CSSProperties = {
     background: 'transparent',  // Invisible but clickable
 };
 
-// MEMBRANE ANIMATION - Initial (hidden) state
-const POPUP_STYLE: React.CSSProperties = {
+const POPUP_ANCHOR_STYLE: React.CSSProperties = {
     position: 'absolute',
+    pointerEvents: 'auto',
+    zIndex: 1001,
+};
+
+// MEMBRANE ANIMATION - Initial (hidden) state
+const POPUP_PANEL_STYLE: React.CSSProperties = {
     width: '20vw',
     minWidth: '280px',
     height: '80vh',
-    backgroundColor: 'rgba(20, 20, 30, 0.95)',
-    border: 'none',
+    backgroundColor: '#0a0a12',
+    border: '1px solid rgba(61, 72, 87, 0.55)',
     borderRadius: '8px',
     padding: '20px',
     color: 'rgba(180, 190, 210, 0.9)',
+    fontFamily: 'var(--font-ui)',
+    fontWeight: 300,
     backdropFilter: 'blur(0px)',
     boxShadow: '0 8px 32px rgba(0, 0, 0, 0)',
     pointerEvents: 'auto',
-    zIndex: 1001,
     display: 'flex',
     flexDirection: 'column',
     gap: '16px',
@@ -49,6 +86,7 @@ const POPUP_STYLE: React.CSSProperties = {
     opacity: 0,
     transform: 'scale(0.8)',
     filter: 'blur(8px)',
+    overscrollBehavior: 'contain',
 };
 
 // MEMBRANE ANIMATION - Final (visible) state
@@ -73,6 +111,7 @@ const CLOSE_BUTTON_STYLE: React.CSSProperties = {
     border: 'none',
     color: 'rgba(180, 190, 210, 0.7)',
     fontSize: '20px',
+    fontWeight: 300,
     cursor: 'pointer',
     padding: '4px 8px',
     transition: 'color 0.2s',
@@ -81,13 +120,20 @@ const CLOSE_BUTTON_STYLE: React.CSSProperties = {
 const CONTENT_STYLE: React.CSSProperties = {
     flex: 1,
     overflowY: 'auto',
+    overscrollBehavior: 'contain',
     fontSize: '14px',
+    fontWeight: 300,
     lineHeight: '1.6',
+};
+
+const BACKDROP_STYLE_CONTAINER: React.CSSProperties = {
+    ...BACKDROP_STYLE,
+    position: 'absolute',
 };
 
 const LABEL_STYLE: React.CSSProperties = {
     fontSize: '16px',
-    fontWeight: '600',
+    fontWeight: '300',
     marginBottom: '12px',
     color: 'rgba(99, 171, 255, 0.9)',
 };
@@ -95,30 +141,68 @@ const LABEL_STYLE: React.CSSProperties = {
 function computePopupPosition(
     anchor: { x: number; y: number; radius: number },
     popupWidth: number,
-    popupHeight: number
+    popupHeight: number,
+    mode: 'app' | 'container',
+    boundsRect: DOMRect | null,
+    viewport: GraphViewport
 ): { left: number; top: number; originX: number; originY: number } {
-    const viewportWidth = window.innerWidth;
-    const viewportHeight = window.innerHeight;
+    const boxed = isBoxedViewport(viewport);
+    if (boxed) {
+        recordBoxedClampCall();
+    }
+    const fallbackW = boxed
+        ? (boundsRect?.width ?? viewport.width ?? 1)
+        : (mode === 'container' && boundsRect ? boundsRect.width : window.innerWidth);
+    const fallbackH = boxed
+        ? (boundsRect?.height ?? viewport.height ?? 1)
+        : (mode === 'container' && boundsRect ? boundsRect.height : window.innerHeight);
+    const { w: viewportWidth, h: viewportHeight } = getViewportSize(viewport, fallbackW, fallbackH);
+    const anchorLocal = boxed
+        ? { x: anchor.x, y: anchor.y }
+        : {
+            x: mode === 'container' && boundsRect ? anchor.x - boundsRect.left : anchor.x,
+            y: mode === 'container' && boundsRect ? anchor.y - boundsRect.top : anchor.y,
+        };
+    if (boxed) {
+        recordBoxedNodePopupAnchorLocalPath();
+    }
+    const anchorX = anchorLocal.x;
+    const anchorY = anchorLocal.y;
+    if (
+        import.meta.env.DEV &&
+        boxed &&
+        !warnedBoxedPopupAnchorLocalRange &&
+        (anchorX < -5 || anchorY < -5 || anchorX > viewportWidth + 5 || anchorY > viewportHeight + 5)
+    ) {
+        warnedBoxedPopupAnchorLocalRange = true;
+        console.warn(
+            '[NodePopup] boxed local anchor out of range local=(%d,%d) viewport=(%d,%d)',
+            anchorX,
+            anchorY,
+            viewportWidth,
+            viewportHeight
+        );
+    }
 
     let left: number;
-    if (anchor.x > viewportWidth / 2) {
-        left = anchor.x - anchor.radius - GAP_FROM_NODE - popupWidth;
+    if (anchorX > viewportWidth / 2) {
+        left = anchorX - anchor.radius - GAP_FROM_NODE - popupWidth;
     } else {
-        left = anchor.x + anchor.radius + GAP_FROM_NODE;
+        left = anchorX + anchor.radius + GAP_FROM_NODE;
     }
 
     const minLeft = 10;
     const maxLeft = viewportWidth - popupWidth - 10;
-    left = Math.max(minLeft, Math.min(left, maxLeft));
+    left = clamp(left, minLeft, maxLeft);
 
-    let top = anchor.y - popupHeight / 2;
+    let top = anchorY - popupHeight / 2;
     const minTop = 10;
     const maxTop = viewportHeight - popupHeight - 10;
-    top = Math.max(minTop, Math.min(top, maxTop));
+    top = clamp(top, minTop, maxTop);
 
     // Origin relative to popup's top-left corner
-    const originX = anchor.x - left;
-    const originY = anchor.y - top;
+    const originX = anchorX - left;
+    const originY = anchorY - top;
 
     return { left, top, originX, originY };
 }
@@ -133,10 +217,23 @@ interface NodePopupProps {
 }
 
 export const NodePopup: React.FC<NodePopupProps> = ({ trackNode, engineRef }) => {
+    const portalMode = usePortalScopeMode();
+    const portalBoundsRect = usePortalBoundsRect();
+    const viewport = useGraphViewport();
+    const boxed = isBoxedViewport(viewport);
     const { selectedNodeId, anchorGeometry, closePopup, sendMessage, setPopupRect, content } = usePopup();
-    const popupRef = useRef<HTMLDivElement>(null);
+    const anchorRef = useRef<HTMLDivElement>(null);
+    const panelRef = useRef<HTMLDivElement>(null);
     const [isVisible, setIsVisible] = useState(false);
     const [contentVisible, setContentVisible] = useState(false);
+    const popupScale = boxed ? BOXED_NODE_POPUP_SCALE : 1;
+    const warnedBoxedAnchorOutOfBoundsRef = useRef(false);
+
+    useEffect(() => {
+        if (!selectedNodeId) return;
+        if (popupScale >= 1) return;
+        recordBoxedNodePopupScaleApplied();
+    }, [popupScale, selectedNodeId]);
 
     // Staged reveal
     useEffect(() => {
@@ -155,8 +252,20 @@ export const NodePopup: React.FC<NodePopupProps> = ({ trackNode, engineRef }) =>
     const position = anchorGeometry
         ? computePopupPosition(
             anchorGeometry,
-            popupRef.current?.offsetWidth || 280,
-            popupRef.current?.offsetHeight || window.innerHeight * 0.8
+            (panelRef.current?.offsetWidth || 280) * popupScale,
+            (
+                (
+                    panelRef.current?.offsetHeight ||
+                    (getViewportSize(
+                        viewport,
+                        boxed ? (viewport.width || 1) : window.innerWidth,
+                        boxed ? (viewport.height || 1) : window.innerHeight
+                    ).h * 0.8)
+                ) * popupScale
+            ),
+            portalMode,
+            portalBoundsRect,
+            viewport
         )
         : { left: 0, top: 0, originX: 0, originY: 0 };
 
@@ -177,11 +286,11 @@ export const NodePopup: React.FC<NodePopupProps> = ({ trackNode, engineRef }) =>
             setPopupRect(null);
             return;
         }
-        if (!popupRef.current) return;
+        if (!panelRef.current) return;
 
         const reportRect = () => {
-            if (!popupRef.current) return;
-            const rect = popupRef.current.getBoundingClientRect();
+            if (!panelRef.current) return;
+            const rect = panelRef.current.getBoundingClientRect();
             setPopupRect({
                 left: rect.left,
                 top: rect.top,
@@ -198,7 +307,7 @@ export const NodePopup: React.FC<NodePopupProps> = ({ trackNode, engineRef }) =>
             }
         };
 
-        const node = popupRef.current;
+        const node = panelRef.current;
         node.addEventListener('transitionend', handleTransitionEnd);
 
         return () => {
@@ -214,6 +323,30 @@ export const NodePopup: React.FC<NodePopupProps> = ({ trackNode, engineRef }) =>
     const contentTransition: React.CSSProperties = contentVisible
         ? { opacity: 1, transform: 'translateY(0)', transition: 'opacity 300ms ease-out, transform 300ms ease-out' }
         : { opacity: 0, transform: 'translateY(8px)', transition: 'opacity 300ms ease-out, transform 300ms ease-out' };
+
+    const warnIfBoxedAnchorOutOfBounds = (anchorX: number, anchorY: number, source: 'render-tick' | 'track-node') => {
+        if (!import.meta.env.DEV) return;
+        if (!boxed) return;
+        if (warnedBoxedAnchorOutOfBoundsRef.current) return;
+        const fallbackW = portalBoundsRect?.width ?? viewport.width ?? 1;
+        const fallbackH = portalBoundsRect?.height ?? viewport.height ?? 1;
+        const { w: viewportWidth, h: viewportHeight } = getViewportSize(viewport, fallbackW, fallbackH);
+        const outOfBounds =
+            anchorX < -16 ||
+            anchorY < -16 ||
+            anchorX > viewportWidth + 16 ||
+            anchorY > viewportHeight + 16;
+        if (!outOfBounds) return;
+        warnedBoxedAnchorOutOfBoundsRef.current = true;
+        console.warn(
+            '[NodePopup] boxed anchor outside viewport source=%s local=(%d,%d) viewport=(%d,%d)',
+            source,
+            anchorX,
+            anchorY,
+            viewportWidth,
+            viewportHeight
+        );
+    };
 
     // Fix 52 & 24: Direct Synchronous Alignment
     // Instead of an internal rAF loop (which lags by 1 frame), we trust that the Parent
@@ -278,7 +411,7 @@ export const NodePopup: React.FC<NodePopupProps> = ({ trackNode, engineRef }) =>
         if (!selectedNodeId || !isVisible) return;
 
         const handleSync = (e: Event) => {
-            if (!popupRef.current) return;
+            if (!anchorRef.current || !panelRef.current) return;
 
             // Prefer Event Detail (Exact Camera Snapshot)
             const detail = (e as CustomEvent<RenderTickDetail>).detail;
@@ -316,11 +449,12 @@ export const NodePopup: React.FC<NodePopupProps> = ({ trackNode, engineRef }) =>
                     const screenRadius = Math.sqrt(dx * dx + dy * dy);
 
                     const geom = { x, y, radius: screenRadius };
-                    const width = popupRef.current.offsetWidth;
-                    const height = popupRef.current.offsetHeight;
+                    warnIfBoxedAnchorOutOfBounds(geom.x, geom.y, 'render-tick');
+                    const width = panelRef.current.offsetWidth * popupScale;
+                    const height = panelRef.current.offsetHeight * popupScale;
 
                     // Pure layout calculation
-                    const rawPos = computePopupPosition(geom, width, height);
+                    const rawPos = computePopupPosition(geom, width, height, portalMode, portalBoundsRect, viewport);
 
                     // FIX 25 & 26: Consistent Rounding & Shared Snapshot
                     // We adhere to the "Sacred 60" policy:
@@ -348,9 +482,10 @@ export const NodePopup: React.FC<NodePopupProps> = ({ trackNode, engineRef }) =>
                 // We default to "Snapping" behavior here for stability, unless we know better.
                 const geom = trackNode(selectedNodeId);
                 if (geom) {
-                    const width = popupRef.current.offsetWidth;
-                    const height = popupRef.current.offsetHeight;
-                    const rawPos = computePopupPosition(geom, width, height);
+                    warnIfBoxedAnchorOutOfBounds(geom.x, geom.y, 'track-node');
+                    const width = panelRef.current.offsetWidth * popupScale;
+                    const height = panelRef.current.offsetHeight * popupScale;
+                    const rawPos = computePopupPosition(geom, width, height, portalMode, portalBoundsRect, viewport);
                     const dpr = window.devicePixelRatio || 1;
                     // Default to quantized for legacy path
                     finalLeft = quantizeToDevicePixel(rawPos.left, dpr);
@@ -362,9 +497,9 @@ export const NodePopup: React.FC<NodePopupProps> = ({ trackNode, engineRef }) =>
             }
 
             if (hasPosition) {
-                popupRef.current.style.left = `${finalLeft}px`;
-                popupRef.current.style.top = `${finalTop}px`;
-                popupRef.current.style.transformOrigin = `${finalOx}px ${finalOy}px`;
+                anchorRef.current.style.left = `${finalLeft}px`;
+                anchorRef.current.style.top = `${finalTop}px`;
+                panelRef.current.style.transformOrigin = boxed ? 'top left' : `${finalOx}px ${finalOy}px`;
             }
         };
 
@@ -372,37 +507,47 @@ export const NodePopup: React.FC<NodePopupProps> = ({ trackNode, engineRef }) =>
         window.addEventListener('graph-render-tick', handleSync);
 
         return () => window.removeEventListener('graph-render-tick', handleSync);
-    }, [selectedNodeId, trackNode, isVisible, engineRef]);
+    }, [boxed, selectedNodeId, trackNode, isVisible, engineRef, portalMode, portalBoundsRect, popupScale, viewport]);
 
-    const finalStyle: React.CSSProperties = {
-        ...POPUP_STYLE,
-        ...(isVisible ? POPUP_VISIBLE_STYLE : {}),
+    const popupTransform = `${isVisible ? 'scale(1)' : 'scale(0.8)'} scale(${popupScale})`;
+
+    const anchorStyle: React.CSSProperties = {
+        ...POPUP_ANCHOR_STYLE,
         left: `${position.left}px`,
         top: `${position.top}px`,
-        transformOrigin: `${position.originX}px ${position.originY}px`,
+    };
+    const panelStyle: React.CSSProperties = {
+        ...POPUP_PANEL_STYLE,
+        ...(isVisible ? POPUP_VISIBLE_STYLE : {}),
+        transformOrigin: boxed ? 'top left' : `${position.originX}px ${position.originY}px`,
+        transform: popupTransform,
     };
 
     return (
         <>
             {/* Backdrop - handles click-outside without document listener */}
             <div
-                style={BACKDROP_STYLE}
+                style={portalMode === 'container' ? BACKDROP_STYLE_CONTAINER : BACKDROP_STYLE}
                 onClick={closePopup}
                 onMouseDown={stopPropagation}
                 onPointerDown={stopPropagation}
             />
-            <div
+            <div style={anchorStyle}>
+                <div
                 id="arnvoid-node-popup"
-                ref={popupRef}
+                ref={panelRef}
+                {...{ [SAMPLE_GRAPH_PREVIEW_OVERLAY_INTERACTIVE_ATTR]: SAMPLE_GRAPH_PREVIEW_OVERLAY_INTERACTIVE_VALUE }}
                 data-font="ui"
-                style={finalStyle}
+                style={panelStyle}
                 onMouseDown={stopPropagation}
                 onMouseMove={stopPropagation}
                 onMouseUp={stopPropagation}
+                onPointerDownCapture={stopPropagation}
                 onPointerDown={stopPropagation}
                 onPointerMove={stopPropagation}
                 onPointerUp={stopPropagation}
                 onClick={stopPropagation}
+                onWheelCapture={stopOverlayWheelPropagation}
                 onWheel={stopPropagation}
             >
                 <div style={{ ...HEADER_STYLE, ...contentTransition }}>
@@ -411,15 +556,19 @@ export const NodePopup: React.FC<NodePopupProps> = ({ trackNode, engineRef }) =>
                         style={CLOSE_BUTTON_STYLE}
                         onClick={closePopup}
                         onPointerDown={stopPropagation}
-                        onMouseEnter={(e) => (e.currentTarget.style.color = 'rgba(255, 255, 255, 0.9)')}
-                        onMouseLeave={(e) => (e.currentTarget.style.color = 'rgba(180, 190, 210, 0.7)')}
-                        title={t('tooltip.close')}
+                        onMouseEnter={(e) => { e.currentTarget.style.color = 'rgba(255, 255, 255, 0.9)'; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.color = 'rgba(180, 190, 210, 0.7)'; }}
                     >
                         x
                     </button>
                 </div>
 
-                <div style={{ ...CONTENT_STYLE, ...contentTransition }}>
+                <div
+                    {...{
+                        [SAMPLE_GRAPH_PREVIEW_OVERLAY_SCROLLABLE_ATTR]: SAMPLE_GRAPH_PREVIEW_OVERLAY_SCROLLABLE_VALUE,
+                    }}
+                    style={{ ...CONTENT_STYLE, ...contentTransition }}
+                >
                     <div style={LABEL_STYLE} data-font="title">{displayTitle}</div>
                     <p>{displayBody}</p>
                 </div>
@@ -431,8 +580,9 @@ export const NodePopup: React.FC<NodePopupProps> = ({ trackNode, engineRef }) =>
                 }>
                     <ChatInput onSend={(text) => sendMessage(text, 'node-popup')} placeholder={t('nodePopup.inputPlaceholder')} />
                 </div>
+                </div>
             </div>
-            <ChatShortageNotif surface="node-popup" anchorRef={popupRef} zIndex={1003} />
+            <ChatShortageNotif surface="node-popup" anchorRef={panelRef} zIndex={1003} />
         </>
     );
 };

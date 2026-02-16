@@ -2,6 +2,7 @@ import React from 'react';
 import { DEFAULT_PHYSICS_CONFIG } from '../../physics/config';
 import { ForceConfig } from '../../physics/types';
 import { SIDEBAR_CLOSE_STYLE, SIDEBAR_STYLE } from '../graphPlaygroundStyles';
+import { useTooltip } from '../../ui/tooltip/useTooltip';
 
 type SidebarControlsProps = {
     config: ForceConfig;
@@ -35,14 +36,18 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
     setSpawnCount,
     spawnCount,
     useVariedSize
-}) => (
+}) => {
+    const closeControlsTooltip = useTooltip('Close');
+
+    return (
     <div className="gp-sidebar" style={SIDEBAR_STYLE} onWheel={(e) => e.stopPropagation()}>
         <button
-            type="button"
-            style={SIDEBAR_CLOSE_STYLE}
-            onClick={onClose}
-            aria-label="Close controls"
-            title="Close"
+            {...closeControlsTooltip.getAnchorProps({
+                type: 'button',
+                style: SIDEBAR_CLOSE_STYLE,
+                onClick: onClose,
+                'aria-label': 'Close controls',
+            })}
         >
             x
         </button>
@@ -161,4 +166,5 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
             );
         })}
     </div>
-);
+    );
+};

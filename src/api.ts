@@ -174,6 +174,15 @@ type SavedInterfacesDeleteResponse = {
   deleted?: unknown;
 };
 
+export type ProfileUser = {
+  sub?: string;
+  email?: string;
+  name?: string;
+  picture?: string;
+  displayName?: string;
+  username?: string;
+};
+
 type SavedInterfacesListItem = {
   client_interface_id?: unknown;
   title?: unknown;
@@ -234,6 +243,37 @@ export async function deleteSavedInterface(
   const data = (result.data || {}) as SavedInterfacesDeleteResponse;
   const deleted = typeof data.deleted === 'boolean' ? data.deleted : undefined;
   return deleted === undefined ? { ok: true } : { ok: true, deleted };
+}
+
+function toOptionalString(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  return trimmed ? trimmed : undefined;
+}
+
+export async function updateProfile(input: {
+  displayName: string;
+  username: string;
+}): Promise<ProfileUser> {
+  const result = await apiPost("/api/profile/update", {
+    displayName: input.displayName,
+    username: input.username,
+  });
+  if (!result.ok) {
+    throw new Error(buildApiErrorMessage("updateProfile", result));
+  }
+  const data = (result.data || {}) as { ok?: boolean; user?: Record<string, unknown> };
+  if (!data.ok || !data.user || typeof data.user !== "object") {
+    throw new Error("updateProfile failed: invalid response");
+  }
+  return {
+    sub: toOptionalString(data.user.sub),
+    email: toOptionalString(data.user.email),
+    name: toOptionalString(data.user.name),
+    picture: toOptionalString(data.user.picture),
+    displayName: toOptionalString(data.user.displayName),
+    username: toOptionalString(data.user.username),
+  };
 }
 
 // TODO(auth): add a client helper for POST /auth/logout (credentials include) when UI is added.

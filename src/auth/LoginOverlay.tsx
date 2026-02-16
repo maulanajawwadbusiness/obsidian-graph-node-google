@@ -1,8 +1,18 @@
 import React from 'react';
+import { createPortal } from 'react-dom';
 import { useAuth } from './AuthProvider';
 import { GoogleLoginButton } from '../components/GoogleLoginButton';
 import { SHOW_ONBOARDING_AUX_BUTTONS } from '../config/onboardingUiFlags';
 import { t } from '../i18n/t';
+import { LAYER_OVERLAY_LOGIN } from '../ui/layers';
+import { usePortalRootEl, usePortalScopeMode } from '../components/portalScope/PortalScopeContext';
+import {
+    isOverlayFadeEnabledForScreen,
+    ONBOARDING_FADE_EASING,
+    ONBOARDING_FADE_MS,
+} from '../screens/appshell/transitions/transitionContract';
+
+const LOGIN_OVERLAY_EXIT_FADE_MS = 200;
 
 const SHOW_LOGIN_DEBUG_ERRORS =
     import.meta.env.VITE_SHOW_LOGIN_DEBUG_ERRORS === '1' || !import.meta.env.DEV;
@@ -24,25 +34,112 @@ export const LoginOverlay: React.FC<LoginOverlayProps> = ({
     onHide,
 }) => {
     const { user, loading, error } = useAuth();
+    const portalRoot = usePortalRootEl();
+    const portalMode = usePortalScopeMode();
+    const overlayFadeEnabled = isOverlayFadeEnabledForScreen('prompt');
+    const [prefersReducedMotion, setPrefersReducedMotion] = React.useState(false);
+    const [isRendered, setIsRendered] = React.useState(open);
+    const [isVisible, setIsVisible] = React.useState(open);
+    const fadeRafRef = React.useRef<number | null>(null);
+    const exitTimerRef = React.useRef<number | null>(null);
 
     React.useEffect(() => {
-        if (!open) return;
+        if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
+        const media = window.matchMedia('(prefers-reduced-motion: reduce)');
+        const applyMatch = () => setPrefersReducedMotion(media.matches);
+        applyMatch();
+        const listener = () => applyMatch();
+        if (typeof media.addEventListener === 'function') {
+            media.addEventListener('change', listener);
+            return () => media.removeEventListener('change', listener);
+        }
+        media.addListener(listener);
+        return () => media.removeListener(listener);
+    }, []);
+
+    React.useEffect(() => {
+        if (!isRendered || portalMode === 'container') return;
         const previous = document.body.style.overflow;
         document.body.style.overflow = 'hidden';
         return () => {
             document.body.style.overflow = previous;
         };
-    }, [open]);
+    }, [isRendered, portalMode]);
 
-    if (!open) return null;
+    React.useEffect(() => {
+        if (fadeRafRef.current !== null) {
+            window.cancelAnimationFrame(fadeRafRef.current);
+            fadeRafRef.current = null;
+        }
+        if (exitTimerRef.current !== null) {
+            window.clearTimeout(exitTimerRef.current);
+            exitTimerRef.current = null;
+        }
+        if (open) {
+            setIsRendered(true);
+            if (prefersReducedMotion || !overlayFadeEnabled) {
+                setIsVisible(true);
+                return;
+            }
+            setIsVisible(false);
+            fadeRafRef.current = window.requestAnimationFrame(() => {
+                fadeRafRef.current = null;
+                setIsVisible(true);
+            });
+            return;
+        }
+        if (!isRendered) return;
+        if (prefersReducedMotion || !overlayFadeEnabled) {
+            setIsVisible(false);
+            setIsRendered(false);
+            return;
+        }
+        setIsVisible(false);
+        exitTimerRef.current = window.setTimeout(() => {
+            exitTimerRef.current = null;
+            setIsRendered(false);
+        }, LOGIN_OVERLAY_EXIT_FADE_MS);
+        return () => {
+            if (fadeRafRef.current !== null) {
+                window.cancelAnimationFrame(fadeRafRef.current);
+                fadeRafRef.current = null;
+            }
+            if (exitTimerRef.current !== null) {
+                window.clearTimeout(exitTimerRef.current);
+                exitTimerRef.current = null;
+            }
+        };
+    }, [open, isRendered, overlayFadeEnabled, prefersReducedMotion]);
 
-    return (
+    if (!isRendered) return null;
+
+    const fadeDurationMs = open ? ONBOARDING_FADE_MS : LOGIN_OVERLAY_EXIT_FADE_MS;
+    const fadeTransition =
+        prefersReducedMotion || !overlayFadeEnabled
+            ? 'none'
+            : `opacity ${fadeDurationMs}ms ${ONBOARDING_FADE_EASING}`;
+
+    const overlay = (
         <div
-            style={BACKDROP_STYLE}
+            style={{
+                ...BACKDROP_STYLE,
+                ...(portalMode === 'container' ? BACKDROP_STYLE_CONTAINER : null),
+                opacity: isVisible ? 1 : 0,
+                transition: fadeTransition,
+                willChange: 'opacity',
+            }}
             onPointerDown={(e) => e.stopPropagation()}
             onWheel={(e) => e.stopPropagation()}
         >
-            <div style={CARD_STYLE} onPointerDown={(e) => e.stopPropagation()}>
+            <div
+                style={{
+                    ...CARD_STYLE,
+                    opacity: isVisible ? 1 : 0,
+                    transition: fadeTransition,
+                    willChange: 'opacity',
+                }}
+                onPointerDown={(e) => e.stopPropagation()}
+            >
                 <div style={TITLE_STYLE}>{t('onboarding.enterprompt.login.title')}</div>
                 <div style={SUBTEXT_STYLE}>{t('onboarding.enterprompt.login.desc')}</div>
 
@@ -114,6 +211,11 @@ export const LoginOverlay: React.FC<LoginOverlayProps> = ({
             </div>
         </div>
     );
+
+    if (typeof document === 'undefined') {
+        return overlay;
+    }
+    return createPortal(overlay, portalRoot);
 };
 
 const BACKDROP_STYLE: React.CSSProperties = {
@@ -123,7 +225,7 @@ const BACKDROP_STYLE: React.CSSProperties = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    zIndex: 3000,
+    zIndex: LAYER_OVERLAY_LOGIN,
     pointerEvents: 'auto',
 };
 
@@ -143,7 +245,11 @@ const CARD_STYLE: React.CSSProperties = {
 
 const TITLE_STYLE: React.CSSProperties = {
     fontSize: '20px',
-    fontWeight: 700,
+    fontWeight: 300,
+};
+
+const BACKDROP_STYLE_CONTAINER: React.CSSProperties = {
+    position: 'absolute',
 };
 
 const SUBTEXT_STYLE: React.CSSProperties = {

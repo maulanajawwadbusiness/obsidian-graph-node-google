@@ -5,7 +5,7 @@ import { ForceConfig, PhysicsNode } from '../physics/types';
 import { DEFAULT_PHYSICS_CONFIG } from '../physics/config';
 import { DRAG_ENABLED, SkinMode, getTheme } from '../visual/theme';
 import { CanvasOverlays } from './components/CanvasOverlays';
-import { SidebarControls } from './components/SidebarControls';
+import { SidebarControls as DebugSidebarControls } from './components/SidebarControls';
 import { HalfLeftWindow } from './components/HalfLeftWindow';
 import { AIActivityGlyph } from './components/AIActivityGlyph';
 import { CONTAINER_STYLE, MAIN_STYLE, SHOW_THEME_TOGGLE, SHOW_MAP_TITLE, SHOW_BRAND_LABEL } from './graphPlaygroundStyles';
@@ -21,9 +21,26 @@ import { PopupProvider, usePopup } from '../popup/PopupStore';
 import { PopupPortal } from '../popup/PopupPortal';
 import { RotationCompass } from './components/RotationCompass';
 import { FullChatProvider, FullChatbar, FullChatToggle, useFullChat } from '../fullchat';
+import { FULLCHAT_ENABLED } from '../fullchat/fullChatFlags';
 import TestBackend from '../components/TestBackend';
 import { SessionExpiryBanner } from '../auth/SessionExpiryBanner';
 import { LoadingScreen } from '../screens/LoadingScreen';
+import { useGraphViewport } from '../runtime/viewport/graphViewport';
+import { countBoxedSurfaceDisabled, isBoxedUi } from '../runtime/ui/boxedUiPolicy';
+import {
+    computeCameraAfterResize,
+    DEFAULT_BOXED_RESIZE_SEMANTIC_MODE,
+    recordBoxedResizeCameraAdjust,
+    recordBoxedResizeEvent,
+} from '../runtime/viewport/resizeSemantics';
+import {
+    computeBoxedSmartContainCamera,
+    getDefaultBoxedSmartContainPadding,
+    getWorldBoundsFromNodes,
+    recordBoxedSmartContainApplied,
+    recordBoxedSmartContainSkippedUserInteracted,
+    recordBoxedSmartContainSkippedNoBounds,
+} from './rendering/boxedSmartContain';
 // RUN 4: Topology API imports
 import { setTopology, getTopologyVersion, getTopology } from '../graph/topologyControl'; // STEP3-RUN5-V3-FIX3: Added getTopology
 import { legacyToTopology } from '../graph/topologyAdapter';
@@ -48,10 +65,17 @@ export type PendingAnalysisPayload =
     | { kind: 'file'; file: File; createdAt: number }
     | null;
 
+export type GraphRuntimeStatusSnapshot = {
+    isLoading: boolean;
+    aiErrorMessage: string | null;
+};
+
 export type GraphPhysicsPlaygroundProps = {
     pendingAnalysisPayload: PendingAnalysisPayload;
     onPendingAnalysisConsumed: () => void;
     onLoadingStateChange?: (isLoading: boolean) => void;
+    onRuntimeStatusChange?: (status: GraphRuntimeStatusSnapshot) => void;
+    legacyLoadingScreenMode?: 'enabled' | 'disabled';
     documentViewerToggleToken?: number;
     pendingLoadInterface?: SavedInterfaceRecordV1 | null;
     onPendingLoadInterfaceConsumed?: () => void;
@@ -63,6 +87,7 @@ export type GraphPhysicsPlaygroundProps = {
         camera: SavedInterfaceRecordV1['camera'],
         reason: string
     ) => void;
+    enableDebugSidebar?: boolean;
 };
 
 function inferTitleFromPastedText(text: string): string {
@@ -120,12 +145,15 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
     pendingAnalysisPayload,
     onPendingAnalysisConsumed,
     onLoadingStateChange,
+    onRuntimeStatusChange,
+    legacyLoadingScreenMode = 'enabled',
     documentViewerToggleToken,
     pendingLoadInterface = null,
     onPendingLoadInterfaceConsumed,
     onRestoreReadPathChange,
     onSavedInterfaceUpsert,
     onSavedInterfaceLayoutPatch,
+    enableDebugSidebar = true,
 }) => {
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
     const [canvasReady, setCanvasReady] = useState(false);
@@ -158,7 +186,7 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
     const [config, setConfig] = useState<ForceConfig>(DEFAULT_PHYSICS_CONFIG);
 
     const [useVariedSize, setUseVariedSize] = useState(false); // Toggle State
-    const [sidebarOpen, setSidebarOpen] = useState(false); // Hidden by default
+    const [debugSidebarOpen, setDebugSidebarOpen] = useState(false); // Hidden by default
     const [debugOpen, setDebugOpen] = useState(false); // Hidden by default
     const [lastDroppedFile, setLastDroppedFile] = useState<File | null>(null);
     const [metrics, setMetrics] = useState<PlaygroundMetrics>({
@@ -215,6 +243,20 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
         energy: number;
         degradePct: number;
     }>>({});
+    const viewport = useGraphViewport();
+    const isBoxedRuntime = isBoxedUi(viewport);
+    const effectiveCameraLocked = cameraLocked || isBoxedRuntime;
+    const previousBoxedViewportSizeRef = useRef<{ width: number; height: number } | null>(null);
+    const didSmartContainRef = useRef(false);
+    const hasUserInteractedRef = useRef(false);
+    const lastSmartContainInterfaceIdRef = useRef<string | null>(null);
+    const skippedSmartContainForInteractionRef = useRef(false);
+    const warnedResizeSemanticNaNRef = useRef(false);
+    const warnedSmartContainNoBoundsRef = useRef(false);
+    const handleUserCameraInteraction = React.useCallback(() => {
+        if (!isBoxedRuntime) return;
+        hasUserInteractedRef.current = true;
+    }, [isBoxedRuntime]);
 
     const {
         handlePointerMove,
@@ -229,7 +271,8 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
         updateHoverSelection,
         handleDragStart,
         handleDragEnd,
-        applyCameraSnapshot
+        applyCameraSnapshot,
+        getCameraSnapshot
     } = useGraphRendering({
         canvasRef,
         canvasReady,
@@ -240,14 +283,15 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
         spawnCount,
         useVariedSize,
         skinMode,
-        cameraLocked,
+        cameraLocked: effectiveCameraLocked,
         showDebugGrid,
         pixelSnapping,
         debugNoRenderMotion,
         showRestMarkers,
         showConflictMarkers,
         markerIntensity,
-        forceShowRestMarkers
+        forceShowRestMarkers,
+        onUserCameraInteraction: handleUserCameraInteraction
     });
 
     const setCanvasEl = React.useCallback((el: HTMLCanvasElement | null) => {
@@ -265,6 +309,134 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
     useEffect(() => {
         hoverStateRef.current.hoverDisplayNodeId = hudDragTargetId;
     }, [hudDragTargetId, hoverStateRef]);
+
+    useEffect(() => {
+        if (viewport.mode !== 'boxed') {
+            previousBoxedViewportSizeRef.current = null;
+            return;
+        }
+
+        const nextWidth = Math.max(1, Math.floor(viewport.width || 1));
+        const nextHeight = Math.max(1, Math.floor(viewport.height || 1));
+        const prevSize = previousBoxedViewportSizeRef.current;
+        if (!prevSize) {
+            previousBoxedViewportSizeRef.current = { width: nextWidth, height: nextHeight };
+            return;
+        }
+        if (prevSize.width <= 1 || prevSize.height <= 1) {
+            previousBoxedViewportSizeRef.current = { width: nextWidth, height: nextHeight };
+            return;
+        }
+        if (prevSize.width === nextWidth && prevSize.height === nextHeight) {
+            return;
+        }
+
+        previousBoxedViewportSizeRef.current = { width: nextWidth, height: nextHeight };
+        recordBoxedResizeEvent();
+        const cameraSnapshot = getCameraSnapshot();
+        const centroid = engineRef.current.getCentroid();
+        const nextCamera = computeCameraAfterResize({
+            config: { mode: DEFAULT_BOXED_RESIZE_SEMANTIC_MODE },
+            prevViewport: prevSize,
+            nextViewport: { width: nextWidth, height: nextHeight },
+            camera: cameraSnapshot,
+            rotation: {
+                angleRad: engineRef.current.getGlobalAngle(),
+                pivotX: centroid.x,
+                pivotY: centroid.y,
+            },
+        });
+        if (
+            !Number.isFinite(nextCamera.panX) ||
+            !Number.isFinite(nextCamera.panY) ||
+            !Number.isFinite(nextCamera.zoom)
+        ) {
+            if (import.meta.env.DEV && !warnedResizeSemanticNaNRef.current) {
+                warnedResizeSemanticNaNRef.current = true;
+                console.warn('[ResizeSemantics] invalid camera computed after boxed resize; skipping apply');
+            }
+            return;
+        }
+        if (
+            nextCamera.panX !== cameraSnapshot.panX ||
+            nextCamera.panY !== cameraSnapshot.panY ||
+            nextCamera.zoom !== cameraSnapshot.zoom
+        ) {
+            applyCameraSnapshot(nextCamera);
+            recordBoxedResizeCameraAdjust();
+        }
+    }, [
+        applyCameraSnapshot,
+        engineRef,
+        getCameraSnapshot,
+        viewport.height,
+        viewport.mode,
+        viewport.width,
+    ]);
+
+    useEffect(() => {
+        if (!isBoxedRuntime) return;
+        const activeInterfaceId = pendingLoadInterface?.id ?? null;
+        if (lastSmartContainInterfaceIdRef.current !== activeInterfaceId) {
+            lastSmartContainInterfaceIdRef.current = activeInterfaceId;
+            didSmartContainRef.current = false;
+            hasUserInteractedRef.current = false;
+            skippedSmartContainForInteractionRef.current = false;
+            warnedSmartContainNoBoundsRef.current = false;
+        }
+        if (didSmartContainRef.current) return;
+        if (hasUserInteractedRef.current) {
+            if (!skippedSmartContainForInteractionRef.current) {
+                skippedSmartContainForInteractionRef.current = true;
+                recordBoxedSmartContainSkippedUserInteracted();
+            }
+            return;
+        }
+        const viewportWidth = Math.max(1, Math.floor(viewport.width || 1));
+        const viewportHeight = Math.max(1, Math.floor(viewport.height || 1));
+        if (viewportWidth <= 1 || viewportHeight <= 1) return;
+        const nodes = engineRef.current.getNodeList();
+        const bounds = getWorldBoundsFromNodes(nodes);
+        if (!bounds) {
+            if (import.meta.env.DEV && !warnedSmartContainNoBoundsRef.current) {
+                warnedSmartContainNoBoundsRef.current = true;
+                console.warn(
+                    '[BoxedSmartContain] skipped due to empty or invalid bounds interfaceId=%s nodes=%d',
+                    activeInterfaceId ?? 'none',
+                    nodes.length
+                );
+            }
+            recordBoxedSmartContainSkippedNoBounds();
+            return;
+        }
+        const centroid = engineRef.current.getCentroid();
+        const nextCamera = computeBoxedSmartContainCamera({
+            boundsWorld: bounds,
+            viewportPx: { width: viewportWidth, height: viewportHeight },
+            zoomMin: 0.8,
+            zoomMax: 10.0,
+            rotation: {
+                angleRad: engineRef.current.getGlobalAngle(),
+                pivotX: centroid.x,
+                pivotY: centroid.y,
+            },
+            paddingPx: getDefaultBoxedSmartContainPadding(),
+        });
+        if (!nextCamera) {
+            return;
+        }
+        applyCameraSnapshot(nextCamera);
+        didSmartContainRef.current = true;
+        recordBoxedSmartContainApplied();
+    }, [
+        applyCameraSnapshot,
+        engineRef,
+        isBoxedRuntime,
+        metrics.nodes,
+        pendingLoadInterface?.id,
+        viewport.height,
+        viewport.width,
+    ]);
 
     // FIX 36: Kill Layout Thrash (Single Rect Read)
     // Cache the rect using ResizeObserver so we don't force reflows during high-frequency pointer moves.
@@ -373,6 +545,9 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
         };
 
         if (hitId) {
+            if (isBoxedRuntime) {
+                hasUserInteractedRef.current = true;
+            }
             // FIX 36: Deferred Drag Start (First Frame Continuity)
             if (DRAG_ENABLED) {
                 console.log(`[PointerTrace] Queueing DragStart for ${hitId} at ${e.clientX},${e.clientY}`);
@@ -681,6 +856,10 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
         if (!import.meta.env.DEV) {
             return;
         }
+        if (isBoxedRuntime) {
+            countBoxedSurfaceDisabled('GraphPhysicsPlaygroundShell.dev-download-json');
+            return;
+        }
         const engine = engineRef.current;
         const topology = getTopology();
         if (!engine || !topology || topology.nodes.length === 0) {
@@ -747,6 +926,7 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
         documentContext.state.activeDocument,
         documentContext.state.inferredTitle,
         hoverStateRef,
+        isBoxedRuntime,
     ]);
 
     useEffect(() => {
@@ -1293,8 +1473,8 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
         toggleViewer();
     }, [documentViewerToggleToken]);
 
-    const aiErrorMessage = documentContext.state.aiErrorMessage;
-    const isGraphLoading = documentContext.state.aiActivity || Boolean(aiErrorMessage);
+    const aiErrorMessage = documentContext.state.aiErrorMessage ?? null;
+    const isGraphLoading = documentContext.state.aiActivity;
     const wasLoadingRef = useRef(false);
 
     useEffect(() => {
@@ -1308,7 +1488,21 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
         onLoadingStateChange?.(isGraphLoading);
     }, [isGraphLoading, onLoadingStateChange]);
 
-    if (isGraphLoading) {
+    useEffect(() => {
+        onRuntimeStatusChange?.({
+            isLoading: isGraphLoading,
+            aiErrorMessage,
+        });
+        if (import.meta.env.DEV) {
+            //console.log(
+            //    '[GraphLoadingContract] loading=%s error=%s',
+            //    isGraphLoading ? '1' : '0',
+            //    aiErrorMessage ? 'present' : 'none'
+            //);
+        }
+    }, [aiErrorMessage, isGraphLoading, onRuntimeStatusChange]);
+
+    if (legacyLoadingScreenMode === 'enabled' && isGraphLoading) {
         return <LoadingScreen errorMessage={aiErrorMessage || null} />;
     }
 
@@ -1343,13 +1537,16 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
                     metrics={metrics}
                     onCloseDebug={() => setDebugOpen(false)}
                     onShowDebug={() => setDebugOpen(true)}
-                    onToggleSidebar={() => setSidebarOpen((v) => !v)}
+                    onToggleSidebar={() => {
+                        if (!enableDebugSidebar) return;
+                        setDebugSidebarOpen((v) => !v);
+                    }}
                     onToggleTheme={() => setSkinMode(skinMode === 'elegant' ? 'normal' : 'elegant')}
                     showThemeToggle={SHOW_THEME_TOGGLE}
-                    sidebarOpen={sidebarOpen}
+                    sidebarOpen={enableDebugSidebar ? debugSidebarOpen : false}
                     skinMode={skinMode}
                     viewerOpen={documentContext.state.previewOpen}
-                    cameraLocked={cameraLocked}
+                    cameraLocked={effectiveCameraLocked}
                     showDebugGrid={showDebugGrid}
                     onToggleCameraLock={() => setCameraLocked(v => !v)}
                     onToggleDebugGrid={() => setShowDebugGrid(v => !v)}
@@ -1450,13 +1647,14 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
                     </div>
                 )}
 
-                <FullChatToggle />
+                {FULLCHAT_ENABLED && <FullChatToggle />}
             </div>
 
-            {sidebarOpen && !fullChatOpen && (
-                <SidebarControls
+            {/* Debug-only sidebar for playground controls; product graph disables this via enableDebugSidebar={false}. */}
+            {enableDebugSidebar && debugSidebarOpen && !fullChatOpen && (
+                <DebugSidebarControls
                     config={config}
-                    onClose={() => setSidebarOpen(false)}
+                    onClose={() => setDebugSidebarOpen(false)}
                     onConfigChange={handleConfigChange}
                     onLogPreset={handleLogPreset}
                     onReset={handleReset}
@@ -1472,7 +1670,7 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
                 />
             )}
 
-            {fullChatOpen && (
+            {FULLCHAT_ENABLED && fullChatOpen && (
                 <FullChatbar engineRef={engineRef} />
             )}
         </div>
@@ -1485,12 +1683,15 @@ export const GraphPhysicsPlaygroundContainer: React.FC<GraphPhysicsPlaygroundPro
     pendingAnalysisPayload,
     onPendingAnalysisConsumed,
     onLoadingStateChange,
+    onRuntimeStatusChange,
+    legacyLoadingScreenMode,
     documentViewerToggleToken,
     pendingLoadInterface,
     onPendingLoadInterfaceConsumed,
     onRestoreReadPathChange,
     onSavedInterfaceUpsert,
-    onSavedInterfaceLayoutPatch
+    onSavedInterfaceLayoutPatch,
+    enableDebugSidebar,
 }) => (
     <DocumentProvider>
         <PopupProvider>
@@ -1499,12 +1700,15 @@ export const GraphPhysicsPlaygroundContainer: React.FC<GraphPhysicsPlaygroundPro
                     pendingAnalysisPayload={pendingAnalysisPayload}
                     onPendingAnalysisConsumed={onPendingAnalysisConsumed}
                     onLoadingStateChange={onLoadingStateChange}
+                    onRuntimeStatusChange={onRuntimeStatusChange}
+                    legacyLoadingScreenMode={legacyLoadingScreenMode}
                     documentViewerToggleToken={documentViewerToggleToken}
                     pendingLoadInterface={pendingLoadInterface}
                     onPendingLoadInterfaceConsumed={onPendingLoadInterfaceConsumed}
                     onRestoreReadPathChange={onRestoreReadPathChange}
                     onSavedInterfaceUpsert={onSavedInterfaceUpsert}
                     onSavedInterfaceLayoutPatch={onSavedInterfaceLayoutPatch}
+                    enableDebugSidebar={enableDebugSidebar}
                 />
             </FullChatProvider>
         </PopupProvider>

@@ -40,6 +40,7 @@ type UseGraphRenderingProps = {
     showConflictMarkers: boolean;
     markerIntensity: number;
     forceShowRestMarkers: boolean;
+    onUserCameraInteraction?: (reason: 'wheel') => void;
 };
 
 export const useGraphRendering = ({
@@ -59,7 +60,8 @@ export const useGraphRendering = ({
     showRestMarkers,
     showConflictMarkers,
     markerIntensity,
-    forceShowRestMarkers
+    forceShowRestMarkers,
+    onUserCameraInteraction
 }: UseGraphRenderingProps) => {
     const cameraRef = useRef<CameraState>({
         panX: 0,
@@ -145,17 +147,17 @@ export const useGraphRendering = ({
         const engine = engineRef.current;
 
         if (!canvasReady || !canvas || !engine) {
-            console.log(`[RenderLoop] skipped missing ${!canvas ? 'canvas' : 'engine'}`);
+            //console.log(`[RenderLoop] skipped missing ${!canvas ? 'canvas' : 'engine'}`);
             return;
         }
 
         const ctx = canvas.getContext('2d');
         if (!ctx) {
-            console.log('[RenderLoop] skipped missing 2d context');
+            //console.log('[RenderLoop] skipped missing 2d context');
             return;
         }
 
-        console.log(`[RenderLoop] start canvas=${canvas.clientWidth}x${canvas.clientHeight}`);
+        //console.log(`[RenderLoop] start canvas=${canvas.clientWidth}x${canvas.clientHeight}`);
         const stopLoop = startGraphRenderLoop({
             canvas,
             ctx,
@@ -179,13 +181,14 @@ export const useGraphRendering = ({
             updateHoverSelection,
             clearHover,
             renderScratch: renderScratchRef.current,
+            onUserCameraInteraction,
         });
 
         return () => {
-            console.log('[RenderLoop] stop');
+            //console.log('[RenderLoop] stop');
             stopLoop();
         };
-    }, [canvasReady, config, seed, spawnCount, setMetrics]);
+    }, [canvasReady, config, onUserCameraInteraction, seed, setMetrics, spawnCount]);
 
     const handleDragStart = (nodeId: string, clientX: number, clientY: number) => {
         const engine = engineRef.current;
@@ -242,6 +245,15 @@ export const useGraphRendering = ({
         hoverStateRef.current.lastSelectionZoom = snapshot.zoom;
     }, []);
 
+    const getCameraSnapshot = useCallback(() => {
+        const camera = cameraRef.current;
+        return {
+            panX: camera.panX,
+            panY: camera.panY,
+            zoom: camera.zoom,
+        };
+    }, []);
+
     return {
         handlePointerMove,
         handlePointerEnter,
@@ -255,6 +267,7 @@ export const useGraphRendering = ({
         updateHoverSelection,
         handleDragStart,
         handleDragEnd,
-        applyCameraSnapshot
+        applyCameraSnapshot,
+        getCameraSnapshot
     };
 };

@@ -1,0 +1,269 @@
+{
+  "version": 1,
+  "exportedAt": 1771181846813,
+  "title": "Experiment on SitasiAI and Students’ Academic Writing Self-Efficacy",
+  "parsedDocument": {
+    "id": "42bebc80-9e87-44c8-addd-9ef7c970c2a3",
+    "fileName": "Draf Jurnal - Copy.docx",
+    "mimeType": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "sourceType": "docx",
+    "text": "Abstrak\n\n\n\nEksperimen kali ini mengukur pengaruh penggunaan aplikasi SitasiAI pada efikasi diri menulis akademis mahasiswa. Populasi yang dipilih di dalam eksperimen ini adalah mahasiswa UIN Maulana Malik Ibrahim Malang, dengan 30 mahasiswa terpilih sebagai sampel eksperimen melalui metode accidental sampling. Jenis eksperimen kali ini yaitu pre-eksperimental, dengan metode eksperimen berupa one-group pretest-posttest. Alat ukur SAWSES digunakan untuk mengukur efikasi diri subjek sebelum dan sesudah intervensi diberikan. Analisis statistic dilakukan menggunakan metode uji Wilcoxon Signed-Rank Test untuk mengukur signifikansi pengaruh penggunaan SitasiAI. Hasil analisis menunjukkan nilai (p = 0.017) dan (r = -0.046). Ini menunjukkan telah terjadi perubahan signifikan dari rata-rata skor efikasi menulis akademik subjek dari sesi pretest menuju posttest. Ini menunjukkan bahwa intervensi SitasiAI memiliki pengaruh signifikan dalam membentuk efikasi menulis akademis individu. Hal ini menjadi penting dalam memahami bagaimana efikasi diri mahasiswa dapat dibentuk dalam aktivitas menulis akademik, dan peranan alat digital seperti AI dalam membantu aktivitas akademik mahasiswa di era digital ini. Penelitian lebih lanjut akan diperlukan untuk memahami bagaimana efikasi diri menulis akademik mahasiswa dapat diubah melalui intervensi alat AI dalam skala akademik yang lebih luas.\n\n\n\nPendahuluan\n\n\n\nDi dalam era digital ini, alat – alat untuk melakukan sitasi telah berkembang secara canggih di dunia akademik. Mendeley dan Zotero dikembangkan untuk memudahkan individu mengelola daftar sitasi. Alat-alat lain, seperti teknologi kecerdasan buatan layaknya ChatGPT (OpenAI, 2022) atau Gemini (Google, 2023), dikembangkan untuk membantu individu mengembangkan konten tulisan artikel mereka berdasarkan kebutuhan bidang ilmu yang berbeda. Namun, kondisi di lapangan menunjukkan bahwa mahasiswa masih sering menemui kesulitan dalam menulis sitasi di dalam tulisan artikel akademik. Penelitian yang dilakukan Dewi dkk. (Dewi et al., 2022) melaporkan tentang mahasiswa yang mengalami hambatan dalam menulis bagian-bagian di dalam struktur sitasi, seperti bagian nama dan bagian tahun. Sementara itu, penelitian dari (Aslindah & Sari, 2021) dan (Faisal et al., 2020), menemukan bahwa mahasiswa seringkali mengalami kesulitan dalam menulis gaya kutipan dengan konsisten. Hambatan ini membuat mahasiswa mengalami ketidakpahaman dalam dalam menulis artikel akademik, menurunkan kemampuan mahasiswa dalam menyelesaikan tugas akademik.  \n\nBeberapa kesalahan umum yang sering dilakukan mahasiswa di dalam menulis sitasi adalah kesalahan penulisan format, seperti penulisan nama, tahun, titik koma, struktur, dan lain-lain. Contohnya, ketika (Aprianto et al., 2024) meneliti mengenai penulisan sitasi, mereka menemukan mahasiswa sering tidak konsisten dalam menulis gaya kutipan mereka. Mahasiswa seringkali menuliskan bagian-bagian kutipan mereka, seperti nama depan dan belakang penulis, dengan tidak berurutan. (Dewi et al., 2022) melaporkan hal serupa, di mana kesalahan urutan penulisan komponen sitasi merupakan merupakan kesalahan yang dilakukan oleh mahasiswa ketika menulis artikel akademik. Ini serupa dengan temuan yang ditemukan oleh (Dewanti & Syafrial, 2023; Hartono, 2019; Mardin et al., 2020; Tahir et al., 2025). Ketika membicarakan mengenai kesalahan menulis artikel akademik, (Tahir et al., 2025) menyatakan mahasiswa sering melakukan kesalahan dalam menuliskan nama penulis, posisi tahun, format sitasi, serta menulis tanda titik. Ini mewakili kekeliruan dan kemampuan umum mahasiswa dalam melakukan penulisan akademik.\n\nDi dalam psikologi kognitif, (Bandura, 1977) mendefinisikan efikasi diri sebagai keyakinan individu terhadap kemampuannya melakukan suatu aktivitas. Konsep ini Bandura gunakan untuk memahami bagaimana keyakinan diri membentuk perilaku fisik seseorang, seperti perilaku ketika individu berbicara pada lawan jenis atau berbicara di depan lokasi publik. Konsep ini dikembangkan oleh Bandura berdasarkan observasi yang dia lakukan pada para klien pengidap fobia di dalam rentetan terapi fobia yang dia terapkan (Bandura, 1977; Bandura et al., 1969). Di dalam terapi ini, Bandura memperhatikan bagaimana keyakinan mental membentuk bagaimana individu menilai sebuah situasi, yang mana membentuk apakah individu melakukan sebuah tindakan yang diperlukannya atau tidak. Bandura nantinya mengembangkan konsep ini lebih lanjut untuk memahami bagaimana keyakinan mental yang dibentuk seorang individu membentuk perilaku fisik yang dilakukan di dalam aktivitasnya. (Zimmerman & Bandura, 1994) nantinya menggunakan konsep efikasi diri ini untuk menjelaskan bagaimana keyakinan mental membentuk aktivitas menulis akademik yang dilakukan oleh mahasiswa perguruan tinggi. \n\n",
+    "warnings": [],
+    "meta": {
+      "wordCount": 622,
+      "charCount": 4794
+    }
+  },
+  "topology": {
+    "nodes": [
+      {
+        "id": "n1",
+        "label": "Testing an AI citation aid",
+        "meta": {
+          "role": "spine"
+        }
+      },
+      {
+        "id": "n2",
+        "label": "Bet: tools reshape confidence",
+        "meta": {
+          "role": "rib"
+        }
+      },
+      {
+        "id": "n3",
+        "label": "Bridge: Bandura plus pretest",
+        "meta": {
+          "role": "rib"
+        }
+      },
+      {
+        "id": "n4",
+        "label": "Hidden axioms and consequences",
+        "meta": {
+          "role": "fiber"
+        }
+      }
+    ],
+    "links": [
+      {
+        "from": "n1",
+        "to": "n2",
+        "kind": "supports",
+        "weight": 0.78,
+        "id": "n1->n2::supports::0"
+      },
+      {
+        "from": "n3",
+        "to": "n1",
+        "kind": "operationalizes",
+        "weight": 0.74,
+        "id": "n3->n1::operationalizes::0"
+      },
+      {
+        "from": "n2",
+        "to": "n3",
+        "kind": "depends_on",
+        "weight": 0.66,
+        "id": "n2->n3::depends_on::0"
+      },
+      {
+        "from": "n4",
+        "to": "n2",
+        "kind": "risks",
+        "weight": 0.83,
+        "id": "n4->n2::risks::0"
+      },
+      {
+        "from": "n3",
+        "to": "n4",
+        "kind": "enables",
+        "weight": 0.6,
+        "id": "n3->n4::enables::0"
+      }
+    ],
+    "springs": [
+      {
+        "a": "n1",
+        "b": "n2",
+        "restLen": 198.00000000000006,
+        "stiffness": 0.78,
+        "compliance": 0.01923076923076923,
+        "contributors": [
+          "n1->n2::supports::0"
+        ],
+        "meta": {
+          "policyParams": {
+            "restLength": 198.00000000000006,
+            "compliance": 0.015,
+            "dampingScale": 0.9,
+            "meta": {
+              "edgeType": "supports",
+              "policyName": "default",
+              "policyVersion": "1.0.0"
+            }
+          },
+          "edgeType": "supports",
+          "dampingScale": 0.9,
+          "allEdgeTypes": [
+            "supports"
+          ]
+        }
+      },
+      {
+        "a": "n1",
+        "b": "n3",
+        "restLen": 180.00000000000003,
+        "stiffness": 0.74,
+        "compliance": 0.013513513513513514,
+        "contributors": [
+          "n3->n1::operationalizes::0"
+        ],
+        "meta": {
+          "policyParams": {
+            "restLength": 180.00000000000003,
+            "compliance": 0.01,
+            "dampingScale": 1,
+            "meta": {
+              "edgeType": "operationalizes",
+              "policyName": "default",
+              "policyVersion": "1.0.0"
+            }
+          },
+          "edgeType": "operationalizes",
+          "dampingScale": 1,
+          "allEdgeTypes": [
+            "operationalizes"
+          ]
+        }
+      },
+      {
+        "a": "n2",
+        "b": "n3",
+        "restLen": 180.00000000000003,
+        "stiffness": 0.66,
+        "compliance": 0.015151515151515152,
+        "contributors": [
+          "n2->n3::depends_on::0"
+        ],
+        "meta": {
+          "policyParams": {
+            "restLength": 180.00000000000003,
+            "compliance": 0.01,
+            "dampingScale": 1,
+            "meta": {
+              "edgeType": "depends_on",
+              "policyName": "default",
+              "policyVersion": "1.0.0"
+            }
+          },
+          "edgeType": "depends_on",
+          "dampingScale": 1,
+          "allEdgeTypes": [
+            "depends_on"
+          ]
+        }
+      },
+      {
+        "a": "n2",
+        "b": "n4",
+        "restLen": 180.00000000000003,
+        "stiffness": 0.83,
+        "compliance": 0.012048192771084338,
+        "contributors": [
+          "n4->n2::risks::0"
+        ],
+        "meta": {
+          "policyParams": {
+            "restLength": 180.00000000000003,
+            "compliance": 0.01,
+            "dampingScale": 1,
+            "meta": {
+              "edgeType": "risks",
+              "policyName": "default",
+              "policyVersion": "1.0.0"
+            }
+          },
+          "edgeType": "risks",
+          "dampingScale": 1,
+          "allEdgeTypes": [
+            "risks"
+          ]
+        }
+      },
+      {
+        "a": "n3",
+        "b": "n4",
+        "restLen": 180.00000000000003,
+        "stiffness": 0.6,
+        "compliance": 0.016666666666666666,
+        "contributors": [
+          "n3->n4::enables::0"
+        ],
+        "meta": {
+          "policyParams": {
+            "restLength": 180.00000000000003,
+            "compliance": 0.01,
+            "dampingScale": 1,
+            "meta": {
+              "edgeType": "enables",
+              "policyName": "default",
+              "policyVersion": "1.0.0"
+            }
+          },
+          "edgeType": "enables",
+          "dampingScale": 1,
+          "allEdgeTypes": [
+            "enables"
+          ]
+        }
+      }
+    ]
+  },
+  "layout": {
+    "nodeWorld": {
+      "n1": {
+        "x": -122.3251850702823,
+        "y": 12.097791137497028
+      },
+      "n2": {
+        "x": -34.44039463617063,
+        "y": -105.08695022266929
+      },
+      "n3": {
+        "x": 17.86265458265499,
+        "y": 54.56389084122734
+      },
+      "n4": {
+        "x": 131.89896966824642,
+        "y": 17.204569501233824
+      }
+    }
+  },
+  "camera": {
+    "panX": -3.3090522159370295,
+    "panY": 25.262066660561025,
+    "zoom": 1
+  },
+  "analysisMeta": {
+    "version": 1,
+    "nodesById": {
+      "n1": {
+        "sourceTitle": "Testing an AI citation aid",
+        "sourceSummary": "The text reports an experiment examining whether using the SitasiAI application changes university students’ academic writing self-efficacy. It uses a pre-experimental one-group pretest–posttest design with 30 students from UIN Maulana Malik Ibrahim Malang selected via accidental (convenience) sampling. Self-efficacy is measured before and after the intervention using the SAWSES instrument. Statistical inference is conducted with the Wilcoxon Signed-Rank Test to assess whether the pre–post shift is significant. The abstract claims a significant change from pretest to posttest based on p = 0.017, interpreted as evidence of an intervention effect. The introduction situates the problem in persistent student difficulties with citation formatting and consistency despite the availability of tools like Mendeley, Zotero, and general AI systems. The framing connects citation struggles to broader academic writing performance and student confidence."
+      },
+      "n2": {
+        "sourceTitle": "Bet: tools reshape confidence",
+        "sourceSummary": "The core wager is that a digital AI tool for citation support can meaningfully build students’ belief in their academic writing capability, not merely reduce mechanical errors. The implied opponent is the assumption that writing self-efficacy is primarily a stable trait or is shaped mainly by traditional instruction rather than by workflow tools. It also challenges a narrower view that citation managers and AI assistants are peripheral conveniences with little psychological impact. By positioning self-efficacy as a lever for behavior, the text argues that improving perceived competence can alter engagement with academic writing tasks. The repeated references to common citation mistakes function as evidence that the bottleneck is widespread and consequential, creating space for a tool-based intervention. The thesis is not simply “AI helps,” but “AI can restructure the student’s appraisal of their capability,” which then influences writing behavior. This sets up the study as a test of psychological change rather than only technical correctness."
+      },
+      "n3": {
+        "sourceTitle": "Bridge: Bandura plus pretest",
+        "sourceSummary": "The text builds authority by bridging educational technology to cognitive psychology, using Bandura’s self-efficacy theory as the explanatory backbone. It cites the origin of self-efficacy in clinical observations and therapy contexts, then extends it to academic writing via Zimmerman & Bandura, suggesting the construct travels across domains. Methodologically, it operationalizes the construct with a named scale (SAWSES) and a before/after measurement scheme, translating a theoretical claim into measurable change. The Wilcoxon Signed-Rank Test supplies a nonparametric decision rule, presenting the outcome as statistically grounded rather than anecdotal. The bridge also relies on a problem-to-intervention pipeline: documented citation difficulties imply a need, and SitasiAI is cast as a targeted response to that need. By embedding literature on citation errors, the text turns individual student struggles into a generalized educational problem. The combined theory–measurement–test structure is the mechanism by which the paper converts a practical tool into a causal-sounding claim."
+      },
+      "n4": {
+        "sourceTitle": "Hidden axioms and consequences",
+        "sourceSummary": "A key unstated assumption is that a one-group pretest–posttest change can be attributed mainly to the SitasiAI intervention, despite threats like maturation, practice effects, or concurrent coursework influences. It also assumes the SAWSES score shift reflects a genuine change in self-efficacy rather than temporary optimism, demand characteristics, or measurement reactivity from taking the pretest. Another assumption is that improvements in citation workflow are psychologically salient enough to generalize into broader academic writing confidence, not just confidence about referencing. The reporting of r = -0.046 alongside a significant p-value suggests either an unconventional effect size interpretation or possible calculation/reporting issues, and the argument implicitly asks readers to prioritize significance over magnitude clarity. Downstream, the framing legitimizes adopting AI tools as educational interventions aimed at motivation and confidence, which can influence policy, curriculum design, and procurement decisions. The power is that it reframes AI from “shortcut” to “scaffold,” enabling institutions to justify tool integration as student development. The risk is flattening writing development into tool-mediated self-belief, potentially neglecting deeper instruction, equity of access, and the possibility that inflated self-efficacy could outpace actual competence."
+      }
+    }
+  }
+}

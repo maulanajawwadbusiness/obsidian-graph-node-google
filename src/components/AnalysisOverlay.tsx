@@ -1,6 +1,7 @@
 import React from 'react';
 import { useDocument } from '../store/documentStore';
 import loadingIcon from '../assets/loading_icon.png';
+import { LOADING_TEXT_FONT_FAMILY, LOADING_TEXT_FONT_WEIGHT } from '../styles/loadingTypography';
 
 const OVERLAY_STYLE: React.CSSProperties = {
     position: 'absolute',
@@ -28,9 +29,9 @@ const SPINNER_STYLE: React.CSSProperties = {
 
 const TEXT_STYLE: React.CSSProperties = {
     color: 'rgba(255, 255, 255, 0.9)',
-    fontFamily: 'system-ui, sans-serif',
+    fontFamily: LOADING_TEXT_FONT_FAMILY,
     fontSize: '16px',
-    fontWeight: 500,
+    fontWeight: LOADING_TEXT_FONT_WEIGHT,
     letterSpacing: '0.5px'
 };
 

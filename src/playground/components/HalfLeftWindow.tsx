@@ -3,6 +3,7 @@ import { useDocument } from '../../store/documentStore';
 import { ArnvoidDocumentViewer } from '../../ArnvoidDocumentViewer';
 import type { ViewerSource } from '../../ArnvoidDocumentViewer';
 import { t } from '../../i18n/t';
+import { useTooltip } from '../../ui/tooltip/useTooltip';
 
 type HalfLeftWindowProps = {
     open: boolean;
@@ -83,6 +84,7 @@ export const HalfLeftWindow: React.FC<HalfLeftWindowProps> = ({ open, onClose, r
         const formatHint = doc.sourceType === 'md' ? 'md' : 'txt';
         return { kind: 'text', text: doc.text, formatHint };
     }, [rawFile, state.activeDocument]);
+    const closeViewerTooltip = useTooltip(t('tooltip.closeViewer'));
 
     if (!open) return null;
 
@@ -123,7 +125,14 @@ export const HalfLeftWindow: React.FC<HalfLeftWindowProps> = ({ open, onClose, r
                 <div style={TITLE_STYLE} data-font="title">
                     {t('docViewer.title')}
                 </div>
-                <button type="button" style={CLOSE_BUTTON_STYLE} onClick={onClose} aria-label={t('tooltip.closeViewer')} title={t('tooltip.closeViewer')}>
+                <button
+                    {...closeViewerTooltip.getAnchorProps({
+                        type: 'button',
+                        style: CLOSE_BUTTON_STYLE,
+                        onClick: onClose,
+                        'aria-label': t('tooltip.closeViewer'),
+                    })}
+                >
                     x
                 </button>
             </div>

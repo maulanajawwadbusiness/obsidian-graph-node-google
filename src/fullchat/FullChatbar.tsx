@@ -21,6 +21,7 @@ import {
     TITLE_STYLE,
     VOID,
 } from './FullChatbarStyles';
+import { useTooltip } from '../ui/tooltip/useTooltip';
 
 /**
  * FullChatbar - Right-docked reasoning panel
@@ -112,6 +113,7 @@ export const FullChatbar: React.FC<FullChatbarProps> = ({ engineRef }) => {
     const pendingScrollRef = useRef<number | null>(null);
 
     const currentFocusNodeId = popupContext.isOpen ? popupContext.selectedNodeId : null;
+    const closeTooltip = useTooltip('Close');
 
     // Mounted Check
     useEffect(() => {
@@ -734,13 +736,14 @@ export const FullChatbar: React.FC<FullChatbarProps> = ({ engineRef }) => {
                     {t('fullChat.emptyStateTitle')}
                 </div>
                 <button
-                    type="button"
-                    style={CLOSE_BUTTON_STYLE}
-                    onClick={fullChat.closeFullChat}
-                    aria-label="Close"
-                    title="Close"
-                    onMouseEnter={(e) => e.currentTarget.style.color = VOID.textSoft}
-                    onMouseLeave={(e) => e.currentTarget.style.color = VOID.textDim}
+                    {...closeTooltip.getAnchorProps({
+                        type: 'button',
+                        style: CLOSE_BUTTON_STYLE,
+                        onClick: fullChat.closeFullChat,
+                        'aria-label': 'Close',
+                        onMouseEnter: (e) => { e.currentTarget.style.color = VOID.textSoft; },
+                        onMouseLeave: (e) => { e.currentTarget.style.color = VOID.textDim; },
+                    })}
                 >
                     x
                 </button>

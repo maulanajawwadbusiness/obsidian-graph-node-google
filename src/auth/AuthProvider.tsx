@@ -11,10 +11,13 @@ import {
 import { apiGet } from "../api";
 
 export type User = {
-  id: number;
+  id?: number | string;
+  sub?: string;
   email?: string;
   name?: string;
   picture?: string;
+  displayName?: string;
+  username?: string;
   [key: string]: unknown;
 };
 
@@ -29,6 +32,7 @@ type AuthContextValue = {
   loading: boolean;
   error: string | null;
   sessionExpired: boolean;
+  applyUserPatch: (patch: Partial<User>) => void;
   refreshMe: () => Promise<void>;
   logout: () => Promise<void>;
   dismissSessionExpired: () => void;
@@ -94,6 +98,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const applyUserPatch = useCallback((patch: Partial<User>) => {
+    setUser((previous) => {
+      if (!previous) return previous;
+      return {
+        ...previous,
+        ...patch
+      };
+    });
+    setSessionExpired(false);
+  }, []);
+
   const logout = useCallback(async () => {
     if (!API_BASE || !API_BASE.trim()) {
       throw new Error("VITE_API_BASE_URL is missing or empty");
@@ -150,11 +165,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       loading,
       error,
       sessionExpired,
+      applyUserPatch,
       refreshMe,
       logout,
       dismissSessionExpired
     }),
-    [user, loading, error, sessionExpired, refreshMe, logout, dismissSessionExpired]
+    [user, loading, error, sessionExpired, applyUserPatch, refreshMe, logout, dismissSessionExpired]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

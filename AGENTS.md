@@ -34,6 +34,69 @@ The Canvas (Graph) is the substrate. Panels (Chat, Docs) and the Loading Screen 
 | **DB Ops** | `docs/db.md`, `src/server/scripts`, `src/server/migrations` | Laptop-first DB workflow and migrations. |
 | **LLM Usage/Billing** | `src/server/src/llm/usage`, `src/server/src/llm/audit`, `src/server/src/pricing` | Usage tracking, audit persistence, and rupiah pricing. |
 
+## 2.2 Backend Runtime Mental Model (Post-Run14)
+
+- `src/server/src/serverMonolith.ts` is shell only.
+- `src/server/src/server/bootstrap.ts` owns app startup, middleware ordering, route registration order, and `startServer()`.
+- `src/server/src/server/depsBuilder.ts` is the route deps wiring hub.
+- Route logic lives in `src/server/src/routes/*`.
+- Core server seams live in `src/server/src/server/*`:
+  - `envConfig.ts`
+  - `jsonParsers.ts`
+  - `corsConfig.ts`
+  - `startupGates.ts`
+  - `cookies.ts`
+- Backend order invariants to preserve:
+  - payments webhook registration is pre-cors
+  - JSON parsers are applied before route registration
+  - startup gates complete before `app.listen(...)`
+
+## 2.1 AppShell Architecture (2026-02-14)
+
+- `src/screens/AppShell.tsx` is orchestration-only (current: 447 lines).
+- Domain logic lives in `src/screens/appshell/*`.
+- Full seam report: `docs/report_2026_02_14_appshell_modularization.md`.
+
+Where to edit X:
+- onboarding fade tokens: `src/screens/appshell/transitions/transitionTokens.ts`
+- onboarding transition logic: `src/screens/appshell/transitions/useOnboardingTransition.ts`
+- onboarding wheel guard: `src/screens/appshell/transitions/useOnboardingWheelGuard.ts`
+- screen start/flow policy: `src/screens/appshell/screenFlow/screenStart.ts`, `src/screens/appshell/screenFlow/screenFlowController.ts`
+- screen render mapping: `src/screens/appshell/render/renderScreenContent.tsx`
+- onboarding overlay and fullscreen chrome: `src/screens/appshell/overlays/useOnboardingOverlayState.ts`, `src/screens/appshell/overlays/OnboardingChrome.tsx`
+- non-onboarding modal state/render: `src/screens/appshell/overlays/useAppShellModals.ts`, `src/screens/appshell/overlays/ModalLayer.tsx`
+- search overlay ranking: `src/screens/appshell/overlays/useSearchInterfacesEngine.ts`
+- saved interface writes: `src/screens/appshell/savedInterfaces/savedInterfacesCommits.ts`
+- saved interface sync/outbox: `src/screens/appshell/savedInterfaces/useSavedInterfacesSync.ts`
+
+Invariant pins:
+- onboarding fades and reduced-motion behavior must stay parity-safe (no flicker, no remount pulse).
+- fullscreen is explicit-only and blocked while onboarding overlays are open.
+- overlays and modals must shield pointer and wheel so canvas never reacts underneath.
+- saved interfaces: single writer, rename no reorder, restore read-only, payload timestamps are ordering truth, outbox retry + identity isolation.
+
+## 2.3 Graph Screen + Sidebar Layout Rules (2026-02-15)
+
+Graph screen layout ownership:
+- `src/screens/appshell/render/GraphScreenShell.tsx` owns graph screen geometry.
+- Graph screen uses two panes:
+  - left structural sidebar column
+  - right graph pane that hosts graph runtime.
+- Left column width follows AppShell `isSidebarExpanded` via shared tokens in `src/screens/appshell/appShellStyles.ts`.
+- Do not create duplicate sidebar state for graph layout.
+
+Sidebar behavior separation:
+- Product Sidebar is `SidebarLayer` -> `Sidebar` and remains overlay behavior on prompt and graph.
+- Non-graph screens keep overlay Sidebar pattern (no structural pane behavior there).
+- Internal debug sidebar inside `GraphPhysicsPlaygroundShell` is debug-only:
+  - gated by `enableDebugSidebar`
+  - must remain disabled on product graph path (`enableDebugSidebar={false}`).
+
+Layering and input doctrine for this layout:
+- Do not add z-index to `GraphScreenShell` or pane wrappers.
+- Keep overlay order intact: graph base -> graph-local overlays -> viewport overlays -> Sidebar overlay -> modal layer.
+- Any new overlay/panel above graph must shield pointer and wheel so dot canvas does not receive leaked input.
+
 ## 3. Safe Workflow
 
 1.  **Scan**: Read `docs/repo_xray.md`.
@@ -50,6 +113,34 @@ The Canvas (Graph) is the substrate. Panels (Chat, Docs) and the Loading Screen 
     *   **Staging Rule**: When preparing a commit, stage all current untracked files by default to avoid conflict drift.
     *   **ENV Exception**: Do NOT stage any untracked file if its path or filename contains `env`.
     *   **Auth Work**: Update `docs/report_2026_02_05_auth_session_postgres.md` when touching auth, session, or CORS behavior.
+
+### 3.2 Worktree Collaboration Override (Current Repo Policy)
+- The git worktree may be changed concurrently by other agents or the user.
+- Do NOT pause work only because unrelated modified or untracked files appear.
+- Continue your assigned task and ignore unrelated tree changes unless explicitly asked to coordinate them.
+- Do not revert or edit unrelated files; keep diffs scoped to the active task.
+
+## 3.1 Backend Route Add Checklist
+
+When adding a new backend route:
+1. Create `src/server/src/routes/<newRoute>.ts` with `registerXRoutes(app, deps)`.
+2. Extend `src/server/src/server/depsBuilder.ts` to assemble deps for that route.
+3. Register route in `src/server/src/server/bootstrap.ts` in correct order (webhook pre-cors, parsers pre-routes, startup gates pre-listen).
+4. Add deterministic contract script in `src/server/scripts/`.
+5. Add npm script in `src/server/package.json`.
+6. Include the new contract script in `src/server/scripts/run-contract-suite.mjs` (`npm run test:contracts`).
+7. If route is order-sensitive, update `src/server/scripts/test-servermonolith-shell.mjs` markers.
+
+Backend verification commands (Windows-safe):
+- `npm run build` (from `src/server`)
+- `npm run test:contracts` (from `src/server`)
+- `test:contracts` uses `run-contract-suite.mjs`; on Windows the npm command resolves through shell to `npm.cmd`.
+
+Docs discipline for architecture changes:
+- If backend architecture/seams/order ownership changes, update in the same PR:
+  - `docs/system.md`
+  - `docs/repo_xray.md`
+- Keep per-run reports under `docs/` for major refactor blocks.
 
 ## 4. CRITICAL WARNINGS
 

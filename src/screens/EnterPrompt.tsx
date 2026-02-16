@@ -4,7 +4,6 @@ import { useAuth } from '../auth/AuthProvider';
 import { PromptCard } from '../components/PromptCard';
 import { PaymentGopayPanel } from '../components/PaymentGopayPanel';
 import { SHOW_ENTERPROMPT_PAYMENT_PANEL } from '../config/onboardingUiFlags';
-import { t } from '../i18n/t';
 import uploadOverlayIcon from '../assets/upload_overlay_icon.png';
 import errorIcon from '../assets/error_icon.png';
 
@@ -24,6 +23,8 @@ type EnterPromptProps = {
     onOverlayOpenChange?: (open: boolean) => void;
     onSubmitPromptText?: (text: string) => void;
     onSubmitPromptFile?: (file: File) => void;
+    analysisErrorMessage?: string | null;
+    onDismissAnalysisError?: () => void;
 };
 
 export const EnterPrompt: React.FC<EnterPromptProps> = ({
@@ -32,9 +33,11 @@ export const EnterPrompt: React.FC<EnterPromptProps> = ({
     onSkip,
     onOverlayOpenChange,
     onSubmitPromptText,
-    onSubmitPromptFile
+    onSubmitPromptFile,
+    analysisErrorMessage = null,
+    onDismissAnalysisError
 }) => {
-    const { user, logout } = useAuth();
+    const { user } = useAuth();
     const [isOverlayHidden, setIsOverlayHidden] = React.useState(false);
     const [promptText, setPromptText] = React.useState('');
     const [attachedFiles, setAttachedFiles] = React.useState<File[]>([]);
@@ -88,13 +91,7 @@ export const EnterPrompt: React.FC<EnterPromptProps> = ({
         }
     }, []);
 
-    const handleDrop = React.useCallback((e: React.DragEvent) => {
-        e.preventDefault();
-        e.stopPropagation();
-        dragCounterRef.current = 0;
-        setIsDragging(false);
-
-        const files = Array.from(e.dataTransfer.files);
+    const attachFromFiles = React.useCallback((files: File[]) => {
         const lastFile = files.length > 0 ? files[files.length - 1] : null;
         if (!lastFile) return;
 
@@ -107,15 +104,17 @@ export const EnterPrompt: React.FC<EnterPromptProps> = ({
         setTimeout(() => setShowUnsupportedError(false), 3000);
     }, []);
 
+    const handleDrop = React.useCallback((e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dragCounterRef.current = 0;
+        setIsDragging(false);
+        attachFromFiles(Array.from(e.dataTransfer.files));
+    }, [attachFromFiles]);
+
     React.useEffect(() => {
         onOverlayOpenChange?.(loginOverlayOpen);
     }, [loginOverlayOpen, onOverlayOpenChange]);
-
-    React.useEffect(() => {
-        return () => {
-            onOverlayOpenChange?.(false);
-        };
-    }, [onOverlayOpenChange]);
 
     return (
         <div
@@ -132,6 +131,9 @@ export const EnterPrompt: React.FC<EnterPromptProps> = ({
                 attachedFiles={attachedFiles}
                 canSubmitWithoutText={attachedFiles.length > 0}
                 onRemoveFile={handleRemoveFile}
+                onPickFiles={(files) => attachFromFiles(files)}
+                statusMessage={analysisErrorMessage ? { kind: 'error', text: analysisErrorMessage } : null}
+                onDismissStatusMessage={onDismissAnalysisError}
             />
             {SHOW_ENTERPROMPT_PAYMENT_PANEL ? <PaymentGopayPanel /> : null}
 
@@ -170,18 +172,6 @@ export const EnterPrompt: React.FC<EnterPromptProps> = ({
                 onHide={() => setIsOverlayHidden(true)}
             />}
 
-            {user ? (
-                <div style={LOGOUT_CORNER_WRAP_STYLE} onPointerDown={(e) => e.stopPropagation()}>
-                    <button
-                        type="button"
-                        style={LOGOUT_CORNER_BUTTON_STYLE}
-                        onPointerDown={(e) => e.stopPropagation()}
-                        onClick={() => void logout()}
-                    >
-                        {t("onboarding.enterprompt.login.google.button_logout")}
-                    </button>
-                </div>
-            ) : null}
         </div>
     );
 };
@@ -192,6 +182,8 @@ const ROOT_STYLE: React.CSSProperties = {
     minHeight: '100vh',
     background: '#06060A',
     color: '#e7e7e7',
+    fontWeight: 300,
+    fontFamily: 'var(--font-ui)',
     position: 'relative',
     boxSizing: 'border-box',
     paddingLeft: `${LEFT_RAIL_GUTTER_PX}px`,
@@ -213,6 +205,8 @@ const DRAG_OVERLAY_CONTENT_STYLE: React.CSSProperties = {
     flexDirection: 'column',
     alignItems: 'center',
     gap: '16px',
+    fontFamily: 'var(--font-ui)',
+    fontWeight: 300,
 };
 
 const DRAG_OVERLAY_ICON_STYLE: React.CSSProperties = {
@@ -223,13 +217,14 @@ const DRAG_OVERLAY_ICON_STYLE: React.CSSProperties = {
 
 const DRAG_OVERLAY_HEADER_STYLE: React.CSSProperties = {
     fontSize: '16px',
-    fontWeight: 600,
+    fontWeight: 300,
     color: '#e7e7e7',
     fontFamily: 'var(--font-ui)',
 };
 
 const DRAG_OVERLAY_DESC_STYLE: React.CSSProperties = {
     fontSize: '13px',
+    fontWeight: 300,
     color: 'rgba(255, 255, 255, 0.55)',
     fontFamily: 'var(--font-ui)',
 };
@@ -249,6 +244,8 @@ const ERROR_OVERLAY_CONTENT_STYLE: React.CSSProperties = {
     flexDirection: 'column',
     alignItems: 'center',
     gap: '12px',
+    fontFamily: 'var(--font-ui)',
+    fontWeight: 300,
 };
 
 // Resize knob for error overlay icon
@@ -261,32 +258,15 @@ const ERROR_OVERLAY_ICON_STYLE: React.CSSProperties = {
 
 const ERROR_OVERLAY_TEXT_STYLE: React.CSSProperties = {
     fontSize: '16px',
-    fontWeight: 600,
+    fontWeight: 300,
     color: 'rgba(255, 100, 100, 0.9)',
     fontFamily: 'var(--font-ui)',
 };
 
 const ERROR_OVERLAY_DESC_STYLE: React.CSSProperties = {
     fontSize: '13px',
+    fontWeight: 300,
     color: 'rgba(255, 255, 255, 0.55)',
     fontFamily: 'var(--font-ui)',
 };
 
-const LOGOUT_CORNER_WRAP_STYLE: React.CSSProperties = {
-    position: 'fixed',
-    right: '20px',
-    bottom: '20px',
-    zIndex: 1100,
-    pointerEvents: 'auto',
-};
-
-const LOGOUT_CORNER_BUTTON_STYLE: React.CSSProperties = {
-    fontSize: '12px',
-    padding: '7px 12px',
-    borderRadius: '8px',
-    border: '1px solid rgba(255,255,255,0.2)',
-    background: 'rgba(255,255,255,0.08)',
-    color: '#fff',
-    cursor: 'pointer',
-    fontFamily: 'var(--font-ui)',
-};

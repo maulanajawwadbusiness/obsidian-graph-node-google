@@ -7,7 +7,12 @@ export const MoneyNoticeStack: React.FC = () => {
     if (notices.length === 0) return null;
 
     return (
-        <div style={STACK_STYLE} onPointerDown={(e) => e.stopPropagation()}>
+        <div
+            style={STACK_STYLE}
+            onPointerDown={(e) => e.stopPropagation()}
+            onWheelCapture={(e) => e.stopPropagation()}
+            onWheel={(e) => e.stopPropagation()}
+        >
             {notices.map((notice) => (
                 <div key={notice.id} style={{ ...CARD_STYLE, ...statusStyles[notice.status] }}>
                     <div style={HEADER_STYLE}>

@@ -22,6 +22,30 @@ function useIsWideScreen(): boolean {
     return isWide;
 }
 
+const WELCOME1_FULLSCREEN_PROMPT_SEEN_KEY = 'arnvoid_welcome1_fullscreen_prompt_seen_v1';
+
+function canUseBrowserStorage(): boolean {
+    return typeof window !== 'undefined' && typeof window.localStorage !== 'undefined';
+}
+
+function hasSeenWelcome1FullscreenPrompt(): boolean {
+    if (!canUseBrowserStorage()) return false;
+    try {
+        return window.localStorage.getItem(WELCOME1_FULLSCREEN_PROMPT_SEEN_KEY) === '1';
+    } catch {
+        return false;
+    }
+}
+
+function markWelcome1FullscreenPromptSeen(): void {
+    if (!canUseBrowserStorage()) return;
+    try {
+        window.localStorage.setItem(WELCOME1_FULLSCREEN_PROMPT_SEEN_KEY, '1');
+    } catch {
+        // Ignore storage failures. Prompt behavior falls back safely.
+    }
+}
+
 type Welcome1Props = {
     onNext: () => void;
     onSkip: () => void;
@@ -32,14 +56,17 @@ export const Welcome1: React.FC<Welcome1Props> = ({ onNext, onSkip, onOverlayOpe
     void onSkip;
     const { enterFullscreen, isFullscreen } = useFullscreen();
     const isWideScreen = useIsWideScreen();
+    const shouldShowFullscreenPrompt = React.useMemo(() => {
+        if (!SHOW_WELCOME1_FULLSCREEN_PROMPT) return false;
+        if (isFullscreen) return false;
+        return !hasSeenWelcome1FullscreenPrompt();
+    }, [isFullscreen]);
 
     const TITLE_LINE_1 = t('onboarding.welcome1.brand_title_line1');
     const TITLE_LINE_2 = t('onboarding.welcome1.brand_title_line2');
     const CURSOR_DELAY_MS = 500;
-    const [hasFullscreenDecision, setHasFullscreenDecision] = React.useState(false);
-    const [isFullscreenPromptOpen, setIsFullscreenPromptOpen] = React.useState(
-        SHOW_WELCOME1_FULLSCREEN_PROMPT && !isFullscreen
-    );
+    const [hasFullscreenDecision, setHasFullscreenDecision] = React.useState(!shouldShowFullscreenPrompt);
+    const [isFullscreenPromptOpen, setIsFullscreenPromptOpen] = React.useState(shouldShowFullscreenPrompt);
     const [showCursor, setShowCursor] = React.useState(false);
 
     // Responsive card width
@@ -86,6 +113,7 @@ export const Welcome1: React.FC<Welcome1Props> = ({ onNext, onSkip, onOverlayOpe
     }, [onOverlayOpenChange]);
 
     const handleActivateFullscreen = React.useCallback(() => {
+        markWelcome1FullscreenPromptSeen();
         enterFullscreen()
             .catch((e: unknown) => {
                 console.warn('[welcome1] Fullscreen activation blocked:', e);
@@ -97,6 +125,7 @@ export const Welcome1: React.FC<Welcome1Props> = ({ onNext, onSkip, onOverlayOpe
     }, [enterFullscreen]);
 
     const handleStayWindowed = React.useCallback(() => {
+        markWelcome1FullscreenPromptSeen();
         setIsFullscreenPromptOpen(false);
         setHasFullscreenDecision(true);
     }, []);
@@ -164,6 +193,8 @@ const ROOT_STYLE: React.CSSProperties = {
     justifyContent: 'center',
     background: '#06060A',
     color: '#e7e7e7',
+    fontFamily: 'var(--font-ui)',
+    fontWeight: 300,
     overflow: 'hidden',
 };
 
@@ -178,7 +209,7 @@ const CONTENT_STYLE: React.CSSProperties = {
 
 const TITLE_STYLE: React.CSSProperties = {
     fontSize: '27px',
-    fontWeight: 900,
+    fontWeight: 300,
     letterSpacing: '1px',
     fontFamily: 'var(--font-ui)',
     color: '#b9bcc5',
@@ -194,7 +225,7 @@ const SUBTITLE_WRAPPER_STYLE: React.CSSProperties = {
 
 const SUBTITLE_TEXT_STYLE: React.CSSProperties = {
     fontSize: '27px',
-    fontWeight: 400,
+    fontWeight: 300,
     letterSpacing: '0.3px',
     fontFamily: 'var(--font-ui)',
     color: '#b9bcc5',
@@ -251,12 +282,13 @@ function getCardStyle(cardBaseWidth: number): React.CSSProperties {
         color: '#ffffff',
         textAlign: 'center',
         fontFamily: 'var(--font-ui)',
+        fontWeight: 300,
     };
 }
 
 const FULLSCREEN_PROMPT_TITLE_STYLE: React.CSSProperties = {
     fontSize: `${15 * CARD_SCALE * CONTENT_SCALE}px`,
-    fontWeight: 600,
+    fontWeight: 300,
     letterSpacing: `${0.5 * CARD_SCALE * CONTENT_SCALE}px`,
     lineHeight: 1.45,
     color: '#e7e7e7',
@@ -264,6 +296,7 @@ const FULLSCREEN_PROMPT_TITLE_STYLE: React.CSSProperties = {
 
 const FULLSCREEN_PROMPT_TEXT_STYLE: React.CSSProperties = {
     fontSize: `${13 * CARD_SCALE * CONTENT_SCALE}px`,
+    fontWeight: 300,
     lineHeight: 1.55,
     marginTop: `${TITLE_DESC_GAP * CARD_SCALE * CONTENT_SCALE}px`,
     color: 'rgba(255, 255, 255, 0.55)',
@@ -288,6 +321,7 @@ const FULLSCREEN_PROMPT_PRIMARY_BUTTON_STYLE: React.CSSProperties = {
     color: '#ffffff',
     fontSize: `${BUTTON_FONT_SIZE * CARD_SCALE * CONTENT_SCALE}px`,
     fontFamily: 'var(--font-ui)',
+    fontWeight: 300,
     cursor: 'pointer',
 };
 
@@ -300,5 +334,6 @@ const FULLSCREEN_PROMPT_SECONDARY_BUTTON_STYLE: React.CSSProperties = {
     color: 'rgba(255, 255, 255, 0.7)',
     fontSize: `${BUTTON_FONT_SIZE * CARD_SCALE * CONTENT_SCALE}px`,
     fontFamily: 'var(--font-ui)',
+    fontWeight: 300,
     cursor: 'pointer',
 };

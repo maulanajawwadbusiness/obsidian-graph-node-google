@@ -1,7 +1,7 @@
 # Arnvoid System Documentation
 
 ## 1. Introduction
-**Arnvoid** is a conversational graph interface designed for deep reasoning over complex knowledgebases. It acts as a "thinking partner" that lives inside the user's obsidian graph, providing context-aware synthesis and exploration.
+**Arnvoid** is a conversational graph interface designed for deep reasoning over complex knowledgebases. It acts as a "thinking partner" that lives inside the user's graph, providing context-aware synthesis and exploration.
 
 The core flow is the **Paper Essence Pipeline**:
 `Document (PDF/MD/TXT) -> AI Paper Analyzer -> Key Dots + Directed Links + Node Knowledge -> Interactive Graph -> Contextual Chat`.
@@ -9,29 +9,48 @@ The core flow is the **Paper Essence Pipeline**:
 ## 1.1 ASCII Only
 Use pure ASCII characters in code, comments, logs, and documentation. Avoid Unicode arrows, ellipses, and typographic dashes to prevent mojibake.
 
+## 1.2 Worktree Collaboration Policy
+- This repo may be edited by multiple agents at the same time.
+- Unrelated modified or untracked files are expected and are not blockers.
+- Agents should continue task execution without pausing only because unrelated tree changes appear.
+- Scope edits to task-owned files and do not revert or mutate unrelated changes.
+
 ## 2. UI Surface Map & Ownership
 
 The application layers, ordered by z-index (lowest to highest):
 
 0.  **Onboarding Shell (Pre-Graph Startup Flow)**
-    *   Active only before `screen === 'graph'` in `src/screens/AppShell.tsx`.
-    *   Flow state machine: `welcome1 -> welcome2 -> prompt -> graph`.
+    *   Active only on onboarding-class screens (`welcome1`, `welcome2`, `prompt`) in `src/screens/AppShell.tsx`.
+    *   Flow state machine: `welcome1 -> welcome2 -> prompt -> graph_loading -> graph`.
+    *   Transition control seams:
+        *   canonical timing and route policy: `src/screens/appshell/transitions/transitionContract.ts`
+        *   phase machine (idle, arming, fading): `src/screens/appshell/transitions/useOnboardingTransition.ts`
+        *   layer host and input shield: `src/screens/appshell/transitions/OnboardingLayerHost.tsx`
+    *   Animated route matrix:
+        *   `welcome1 <-> welcome2`
+        *   `welcome2 <-> prompt`
+        *   any transition touching graph-class screens (`graph_loading` or `graph`) is non-animated by policy.
     *   Env gate: `ONBOARDING_ENABLED` (`src/config/env.ts`):
         *   `false` or not set: app starts directly in `graph`.
         *   `true` or `1`: app starts in `welcome1`.
     *   Dev start override: `VITE_ONBOARDING_START_SCREEN` (`src/config/env.ts`):
-        *   Canonical values: `welcome1`, `welcome2`, `prompt`, `graph`.
+        *   Canonical values: `welcome1`, `welcome2`, `prompt`, `graph_loading`, `graph`.
         *   Legacy aliases: `screen1`, `screen2`, `screen3`, `screen4`.
         *   Applies in DEV only. Invalid values fall back to `welcome1` and emit a single DEV warning.
     *   Persistence is currently disabled (`PERSIST_SCREEN = false`), so refresh resets onboarding to `welcome1` when onboarding is enabled.
-    *   Graph isolation contract: `GraphPhysicsPlayground` (thin wrapper) is lazy-loaded and mounted only when `screen === 'graph'`, then delegates to `GraphPhysicsPlaygroundContainer` in `src/playground/modules/GraphPhysicsPlaygroundContainer.tsx`. This keeps physics/rendering inactive during onboarding screens.
-    *   Money overlays mount only on `prompt` and `graph` screens:
+    *   Graph isolation contract: `GraphPhysicsPlayground` (thin wrapper) is lazy-loaded and mounted only for graph-class screens (`graph_loading` and `graph`), then delegates to `GraphPhysicsPlaygroundContainer` in `src/playground/modules/GraphPhysicsPlaygroundContainer.tsx`. This keeps physics/rendering inactive during onboarding screens.
+    *   Money overlays mount on `prompt` and graph-class screens:
         *   `ShortageWarning`
         *   `MoneyNoticeStack`
         *   `BalanceBadge` on `graph` by default, and on `prompt` only when enabled by UI flags.
 
 1.  **The Canvas (Graph substrate)**
     *   **Rule**: Never under-reacts. If a panel or overlay is active, the canvas underneath MUST NOT receive pointer/wheel events.
+    *   **Cursor Contract (Graph Screen)**:
+        *   Empty graph space: `cursor: default`
+        *   Hovering a Dot: `cursor: pointer`
+        *   Active Dot drag: `cursor: grabbing`
+        *   Cursor state is derived from render-loop hover/drag truth and must not be hardcoded as a static hand cursor on the full graph container.
     *   Owned by: `PhysicsEngine`.
 
 2.  **Top-Left Brand (`BrandLabel`) & Bottom-Center Title (`MapTitleBlock`)**
@@ -79,7 +98,7 @@ The onboarding screens live in `src/screens/` and are orchestrated by `AppShell`
     *   Semantic cadence is applied as distributed pauses around word ends and sentence landings (not tick-per-char jitter).
     *   Cursor uses shared `TypingCursor` component with phase-driven mode mapping.
     *   No fixed auto-advance timer is authoritative for typed completion; timing truth comes from `BuiltTimeline.totalMs`.
-    *   Exposes `Back` (to `welcome1`) and `Skip` (to `graph`) actions.
+    *   Exposes `Back` (to `welcome1`) and `Skip` (to `graph_loading`) actions.
 *   **Role in flow**: Transitional explanation screen before `prompt`.
 
 ## 2.2 Welcome2 Typing Dataflow (Current)
@@ -108,13 +127,13 @@ Debug toggles:
 *   **Behavior**:
     *   Reads auth state from `useAuth()`.
     *   Payment panel visibility is controlled by `SHOW_ENTERPROMPT_PAYMENT_PANEL` in `src/config/onboardingUiFlags.ts`.
-    *   `LoginOverlay` is currently feature-gated off in EnterPrompt (`LOGIN_OVERLAY_ENABLED = false`).
-    *   When enabled, `LoginOverlay` blocks pointer/wheel interaction and locks page scroll while open.
+    *   `LoginOverlay` is currently enabled in EnterPrompt (`LOGIN_OVERLAY_ENABLED = true`).
+    *   `LoginOverlay` blocks pointer/wheel interaction and locks page scroll while open.
     *   Continue button in LoginOverlay is a non-functional formal control (no click handler). Auth flow proceeds via session state update after sign-in.
     *   Login debug/error text is hidden by default in dev and visible by default in prod. Dev override: `VITE_SHOW_LOGIN_DEBUG_ERRORS=1`.
 *   **Role in flow**:
-    *   `onEnter` moves to `graph` (authenticated continue path).
-    *   `onSkip` can also move to `graph` (bypass path).
+    *   `onEnter` moves to `graph_loading` (authenticated continue path).
+    *   `onSkip` can also move to `graph_loading` (bypass path).
     *   `onBack` returns to `welcome2`.
 
 ## 2.3 Onboarding Fullscreen Safety (Current)
@@ -132,6 +151,11 @@ Current fullscreen rules in onboarding:
 ## 2.4 Persistent Sidebar Sessions (Current)
 Saved interfaces in the left Sidebar are now local-first and AppShell-owned.
 
+AppShell architecture note (2026-02-14):
+- `src/screens/AppShell.tsx` is orchestration-only (`432` lines).
+- Domain logic lives under `src/screens/appshell/*` (screen flow, transitions, overlays, saved interfaces, render mapping, sidebar wiring).
+- See `docs/report_2026_02_14_appshell_modularization.md` for seam-by-seam ownership and commit history.
+
 Current behavior:
 - Source of truth:
   - Store module: `src/store/savedInterfacesStore.ts`
@@ -145,7 +169,7 @@ Current behavior:
   - analysis success path persists a saved interface record with full payload.
 - Restore:
   - selecting a saved interface sets pending restore intent and graph consumes it once.
-  - when selected from prompt screen, AppShell transitions to graph and restore runs on mount.
+  - when selected from prompt screen, AppShell transitions to `graph_loading`; restore runs on warm-mounted graph runtime and graph reveal still requires Confirm.
 - Rename:
   - inline rename UX in Sidebar; persisted through AppShell to storage helper.
   - rename does not reorder list (title patch does not bump `updatedAt`).
@@ -158,7 +182,7 @@ Current behavior:
   - Filter is in-memory from AppShell `savedInterfaces` (no localStorage reads per keystroke).
   - Overlay is shielded so pointer and wheel never leak to canvas.
 - Disabled state:
-  - when Sidebar is disabled (graph loading), row menu actions are non-actionable.
+  - when Sidebar is frozen during `graph_loading`, row menu actions are non-actionable.
 
 Saved interface payload contract (full, non-trimmed):
 - Record shape: `SavedInterfaceRecordV1` in `src/store/savedInterfacesStore.ts`
@@ -193,15 +217,18 @@ Remote memory (account-backed):
   - `POST /api/saved-interfaces/upsert`
   - `POST /api/saved-interfaces/delete`
 - Payload size limit:
-  - server guard constant `MAX_SAVED_INTERFACE_PAYLOAD_BYTES` (default 15 MB) in `src/server/src/serverMonolith.ts`
-- AppShell sync role:
+  - parser seam in `src/server/src/server/jsonParsers.ts` with saved-interfaces-specific 413 mapping.
+  - contract guard: `npm run test:jsonparsers-contracts` in `src/server`.
+  - user-facing 413 error body for saved-interfaces stays:
+    - `{ ok: false, error: "saved interface payload too large" }`
+- AppShell orchestration role:
   - Hydrates remote + local on auth-ready, merges, and persists into active local namespace.
   - Mirrors local save/rename/delete events to backend as best-effort background sync.
   - Logged-out mode skips remote calls completely.
 
 Unified write contract (current truth):
 - AppShell is the write owner for saved interface mutations.
-- Commit surfaces in `src/screens/AppShell.tsx`:
+- Commit surfaces live in `src/screens/appshell/savedInterfaces/savedInterfacesCommits.ts` and are wired from AppShell:
   - `commitUpsertInterface`
   - `commitPatchLayoutByDocId`
   - `commitRenameInterface`
@@ -210,7 +237,7 @@ Unified write contract (current truth):
 - Graph and node-binding emit callbacks to AppShell; they do not directly mutate saved interface storage anymore.
 
 Remote failure behavior (current truth):
-- Remote sync uses a persistent per-identity outbox in AppShell.
+- Remote sync uses a persistent per-identity outbox in `src/screens/appshell/savedInterfaces/useSavedInterfacesSync.ts` (wired by AppShell).
 - Local state + localStorage are UX truth; remote is mirror-only.
 - Outbox localStorage namespace:
   - `arnvoid_saved_interfaces_v1_remote_outbox_<identityKey>`
@@ -229,6 +256,7 @@ Ordering contract (critical):
 
 Input safety contract:
 - Sidebar root, row menu, row menu items, and delete confirm modal all stop pointer and wheel propagation.
+- Search overlay, profile modal, logout confirm modal, and delete confirm modal follow the same hard-shield pattern.
 - Modal/backdrop interactions must never leak to canvas input handlers.
 
 Restore purity contract:
@@ -236,6 +264,400 @@ Restore purity contract:
 - Restore applies saved `parsedDocument`, `topology`, `layout`, `camera`, and `analysisMeta`.
 - Restore must not enqueue save/upsert/delete/layout-patch side effects.
 - Structural restore-active guards exist in graph shell and AppShell commit layer.
+
+Critical gotchas (must not regress):
+- Do not reorder sessions on rename. Rename must not bump payload `updatedAt`.
+- Do not use DB row timestamps (`created_at`, `updated_at`) for UI ordering.
+- Do not write during restore path. Restore must remain read-only.
+
+## 2.5 AppShell Seams (2026-02-14)
+
+- AppShell orchestration entry: `src/screens/AppShell.tsx`
+- screen policy: `src/screens/appshell/screenFlow/*`
+- onboarding transitions: `src/screens/appshell/transitions/*`
+  - transition contract and route policy: `src/screens/appshell/transitions/transitionContract.ts`
+- overlays and modal rendering: `src/screens/appshell/overlays/*`
+- saved interface commits and sync: `src/screens/appshell/savedInterfaces/*`
+- screen render mapping: `src/screens/appshell/render/renderScreenContent.tsx`
+- sidebar wiring: `src/screens/appshell/sidebar/*`
+- full modularization report: `docs/report_2026_02_14_appshell_modularization.md`
+
+## 2.6 Graph Screen Layout And Sidebar Modes (2026-02-15)
+
+Current graph-screen layout contract:
+- Graph screen is hosted by `GraphScreenShell` from `src/screens/appshell/render/GraphScreenShell.tsx`.
+- `GraphScreenShell` uses a two-pane layout:
+  - left pane: structural sidebar column (`graph-screen-sidebar-pane`)
+  - right pane: graph pane (`graph-screen-graph-pane`) that hosts graph runtime
+- Left pane width is driven by the same AppShell state used by product Sidebar:
+  - state owner: `isSidebarExpanded` in `src/screens/AppShell.tsx`
+  - collapsed width: `35px`
+  - expanded width: `10vw` with min `200px`
+  - shared tokens live in `src/screens/appshell/appShellStyles.ts`
+- Graph runtime is container-relative:
+  - playground root fills parent container (`width: 100%`, `height: 100%`)
+  - viewport binding is owned by screen shell layout, not by playground root.
+
+Sidebar modes (current behavior):
+- Product Sidebar:
+  - owner path: `SidebarLayer` -> `Sidebar`
+  - state: `isSidebarExpanded` in AppShell
+  - rendered as overlay on `prompt`, `graph_loading`, and `graph`
+  - graph screen also reserves structural left column width that follows the same state.
+- Non-graph screens:
+  - continue using original overlay-only Sidebar pattern.
+- Internal debug sidebar:
+  - lives in `GraphPhysicsPlaygroundShell`
+  - debug-only controls panel, gated by `enableDebugSidebar`
+  - product graph path passes `enableDebugSidebar={false}`.
+
+Layering and shielding guardrails:
+- `GraphScreenShell` and pane wrappers must not introduce new z-index layers above overlays or modals.
+- Overlay/modal/sidebar surfaces on top of graph must shield pointer and wheel so dot canvas never receives leaked input.
+
+## 2.7 Graph Loading Gate (2026-02-15/16)
+
+Purpose:
+- `graph_loading` is a real screen state between `prompt` and `graph`.
+- it owns loading UX and reveal gating; graph screen reveal requires explicit Confirm.
+
+Flow and mount model:
+- forward graph spine: `prompt -> graph_loading -> graph`.
+- `graph_loading` and `graph` share one warm-mounted graph runtime subtree (no screen-key remount).
+- runtime status is split and reported as:
+  - loading signal: `aiActivity` only
+  - error signal: `aiErrorMessage` (independent from loading)
+- AppShell gate logic consumes the split status and does not treat error as loading.
+
+Gate UI surface:
+- full-viewport opaque surface (`#06060A`) mounted in graph-class render branch.
+- loading typography contract: all loading-surface text uses `font-weight: 300` with `var(--font-ui)`.
+- loading screen fade contract: gate fades in on enter and fades out on exit with fixed `200ms`.
+- center status text:
+  - loading path: `Loading...`
+  - done path: `Loading Complete`
+- bottom-center Confirm control appears/enables only when gate reaches done.
+- gate never auto-continues to graph; reveal happens only by Confirm action.
+
+Gate state machine (high level):
+- phases: `idle`, `arming`, `loading`, `stalled`, `error`, `done`, `confirmed`.
+- entry intent snapshot: `analysis` | `restore` | `none`.
+- done unlock:
+  - real loading lifecycle (`isLoading` true then false), or
+  - explicit no-work fallback only when entry intent is `none`.
+- error policy:
+  - for analysis/restore entry intent, runtime error moves gate to `error`.
+  - gate renders explicit error UI (`Loading Failed` + runtime error message).
+  - gate confirm is disabled in `error`.
+  - user exits error gate via explicit Back action (or `Escape`) to prompt.
+- watchdog:
+  - if loading never starts for analysis/restore intent, phase moves to `stalled` and escape remains available.
+  - watchdog never overrides `error`, `done`, or `confirmed`.
+
+Input, focus, and keyboard ownership:
+- gate wrapper blocks pointer and wheel so canvas does not react under loading surface.
+- gate root is focus anchor during `graph_loading`.
+- during exit fade, gate keeps input ownership and blocks repeated confirm/back triggers until transition commit.
+- key capture policy:
+  - `Escape`: back to prompt
+  - `Enter` / `Space`: confirm only when enabled
+  - capture listeners stop propagation to prevent key leaks to canvas/sidebar
+- fallback window capture listener enforces same behavior if focus escapes gate root.
+
+Sidebar behavior during `graph_loading`:
+- sidebar remains visible as eye-stability anchor.
+- sidebar is frozen with inert + shield so pointer/wheel/focus do not leak.
+- disabled visual treatment is icon-only: sidebar icons and avatar icon use `alpha 0.5` while text/container surfaces stay full opacity.
+- sidebar disabled rule is loading-only; runtime error state does not extend disabled state.
+- lock ownership is now contract-based (`computeSidebarLockState(...)`) with explicit reason codes:
+  - `screen_frozen`
+  - `graph_loading_activity`
+  - `login_overlay_block`
+  - `none`
+- temporary clamp policy:
+  - if sidebar was expanded on entry to `graph_loading`, it is temporarily collapsed during loading.
+  - on leave to `graph`, expanded state is restored to the pre-loading user state.
+
+Modal/search lock coupling:
+- AppShell modal engine now consumes full lock state instead of a raw disabled boolean.
+- Search/Profile/Logout overlays close on lock-edge activation (unlocked -> locked), not repeatedly while lock stays active.
+- open actions remain blocked while lock is active.
+
+Legacy runtime loading surface:
+- legacy `LoadingScreen` return path inside `GraphPhysicsPlaygroundShell` is suppressed for product graph-class path (`legacyLoadingScreenMode='disabled'` for `graph_loading` and `graph`).
+- compatibility callback `onLoadingStateChange` remains available.
+- runtime status callback now exposes `{ isLoading, aiErrorMessage }` for gate-grade handling.
+- fallback loading text (`Loading graph...`, `Starting graph runtime...`) and analysis overlay loading text follow the same `font-weight: 300` contract.
+
+Prompt error handoff:
+- when user exits error gate back to prompt, AppShell stores a transient prompt error message.
+- `EnterPrompt`/`PromptCard` render a dismissible inline error banner above the prompt input.
+- banner clears on dismiss, new submit, or prompt skip.
+
+DEV-only debug hooks:
+- `?debugWarmMount=1`:
+  - warm-mount logs (`[WarmMount] ... mountId=...`)
+  - gate phase logs (`[GatePhase] ...`)
+- optional DEV screen toggle hook:
+  - `window.__arnvoid_setScreen('graph_loading' | 'graph')`
+  - use only for local verification.
+
+## 2.8 Graph Runtime Lease Guard (2026-02-15)
+
+Purpose:
+- enforce single active graph runtime ownership across prompt preview and graph screen paths.
+- prevent double-runtime cross-talk on global channels during rapid prompt <-> graph transitions.
+
+Ownership model:
+- owner `prompt-preview`: `src/components/SampleGraphPreview.tsx`
+- owner `graph-screen`: graph-class runtime mount in `src/screens/appshell/render/renderScreenContent.tsx`
+
+Lease primitive:
+- `src/runtime/graphRuntimeLease.ts`
+- acquire API: `acquireGraphRuntimeLease(owner, instanceId)`
+- release API: `releaseGraphRuntimeLease(token)`
+- read API: `getActiveGraphRuntimeLease()`
+- debug snapshot: `getGraphRuntimeLeaseDebugSnapshot()`
+
+Priority policy:
+1. only one active lease at a time
+2. graph-screen acquisition preempts prompt-preview if active
+3. prompt-preview is denied while graph-screen lease is active
+4. stale release tokens are ignored safely
+
+Mount gate seam:
+- `src/runtime/GraphRuntimeLeaseBoundary.tsx`
+- preview uses deny-block behavior (runtime does not mount when denied)
+- graph-screen path mounts through graph-screen lease boundary with preemptive priority
+
+Dev instrumentation:
+- event logs (dev only): acquire, deny, preempt, release, stale_release_ignored
+- counters exposed through `getGraphRuntimeLeaseDebugSnapshot()`
+
+Self-enforcing ownership additions (step4 bug fix):
+- lease snapshot API:
+  - `getGraphRuntimeLeaseSnapshot()`
+  - returns `activeOwner`, `activeInstanceId`, `activeToken`, `epoch`
+- subscription API:
+  - `subscribeGraphRuntimeLease(listener)`
+- token activity API:
+  - `isGraphRuntimeLeaseTokenActive(token)`
+- dev assertion helper:
+  - `assertActiveLeaseOwner(owner, token?)`
+
+Lease-loss unmount behavior:
+1. `SampleGraphPreview` acquires token and subscribes to lease updates.
+2. if token becomes inactive after preempt, preview immediately switches to paused state and unmounts graph runtime.
+3. preview reacquire is event-driven and epoch-gated (no polling).
+4. graph runtime boundary also watches token activity and can defensively reacquire.
+
+Expected debug counters/logs:
+- runtime lease counters:
+  - `notifyCount`
+  - `tokenInactiveChecks`
+- preview counters:
+  - `lostLeaseUnmountCount`
+  - `reacquireAttemptCount`
+  - `reacquireSuccessCount`
+
+## 2.8 Graph Runtime Cleanup Hardening (2026-02-15)
+
+Purpose:
+- enforce balanced runtime cleanup across repeated prompt <-> graph mount cycles.
+- prevent listener and frame-loop accumulation in shared graph runtime path.
+
+Patched leak risks:
+1. `graphRenderingLoop` canvas wheel listener now has explicit teardown:
+   - add: `canvas.removeEventListener('wheel', handleWheel)`
+2. `graphRenderingLoop` font listener now has explicit teardown:
+   - add: `document.fonts.removeEventListener('loadingdone', handleFontLoad)`
+3. `graphRenderingLoop` now guards late async callbacks and frame reschedule after unmount:
+   - `disposed` guard in `handleFontLoad`
+   - `disposed` guard before all `requestAnimationFrame(render)` re-schedules
+
+Dev-only resource tracker:
+- file: `src/runtime/resourceTracker.ts`
+- tracked names are under `graph-runtime.*`
+- API:
+  - `trackResource(name)` -> idempotent release function
+  - `getResourceTrackerSnapshot()`
+  - `warnIfGraphRuntimeResourcesUnbalanced(source)`
+- hardening (2026-02-16):
+  - decrements can no longer drive counts below zero in DEV.
+  - invalid decrement attempts are clamped to `0` and warn once per resource name with a short stack excerpt.
+  - unbalance warnings are deduped once per source to reduce spam while preserving signal.
+
+Unmount invariant seam points:
+- `src/components/SampleGraphPreview.tsx` cleanup
+- `src/runtime/GraphRuntimeLeaseBoundary.tsx` cleanup
+- both call `warnIfGraphRuntimeResourcesUnbalanced(...)` in DEV to catch non-zero graph runtime counters.
+
+Manual verification checklist:
+1. Open prompt screen (preview mounts), then go to graph, then back to prompt several times.
+2. In DEV logs, verify no repeated unbalanced `graph-runtime.*` warnings grow over cycles.
+3. Confirm graph behavior remains unchanged (drag, hover, wheel, popup flow).
+4. Confirm preview and graph transitions still obey lease ownership rules.
+
+Manual verification checklist:
+1. open prompt screen: preview acquires lease and renders graph.
+2. navigate to graph-class screen: graph-screen preempts preview lease.
+3. navigate back to prompt: preview reacquires lease cleanly.
+4. rapid prompt <-> graph toggling: no simultaneous active owners.
+5. expected dev warnings are limited to deny/preempt/stale release events only.
+6. if preview and graph overlap briefly, preview shows paused state and does not keep runtime mounted.
+
+## 2.8 Sample Preview Restore Hardening (2026-02-15)
+
+Purpose:
+- ensure EnterPrompt sample preview restore is fail-closed.
+- preview runtime mounts only when sample payload passes strict structural and semantic validation.
+
+Canonical preview pipeline:
+1. dynamic sample import in `src/components/SampleGraphPreview.tsx`
+2. strict dev export parse:
+   - `src/lib/devExport/parseDevInterfaceExportStrict.ts`
+3. adapter strict conversion:
+   - `src/lib/devExport/devExportToSavedInterfaceRecord.ts`
+   - no silent topology coercion by default
+4. preview-only saved record parse wrapper:
+   - `src/lib/devExport/parseSavedInterfaceRecordForPreview.ts`
+5. semantic validation:
+   - `src/lib/preview/validateSampleGraphSemantic.ts`
+6. mount:
+   - only if all stages return Result ok
+   - then pass `pendingLoadInterface` into `GraphPhysicsPlayground`
+
+Key hardening rules:
+1. no silent empty-topology fallback in strict preview path.
+2. empty topology is explicit failure in preview:
+   - `SAMPLE_PREVIEW_REQUIRE_NONEMPTY_TOPOLOGY = true`
+3. any validation failure shows explicit error UI and blocks runtime mount.
+4. preview validation is isolated; global saved-interface parser behavior is unchanged.
+
+How to swap sample safely:
+1. replace `src/samples/sampleGraphPreview.export.json` content with new dev export.
+2. keep `version`, `topology`, `layout.nodeWorld`, and `camera` present and sane.
+3. open prompt preview and check for validation errors in-box.
+4. if invalid in dev, one-time warning logs from:
+   - `warnIfInvalidCurrentSamplePreviewExportOnce(...)`
+
+Failure UI behavior:
+1. title: `sample graph invalid`
+2. first 3 errors shown with codes
+3. `+N more` shown when additional errors exist
+4. runtime does not mount on failure
+
+Manual verification checklist:
+1. valid sample: preview loads restored graph (not seed fallback).
+2. break sample topology or camera: preview shows explicit coded errors.
+3. invalid sample must not mount `GraphPhysicsPlayground`.
+4. restore valid sample: preview returns to normal mount path.
+
+## 2.10 Graph Viewport Contract (2026-02-15)
+
+Purpose:
+- define one viewport contract across graph-screen and boxed preview runtime paths.
+- establish provider/hook plumbing before live resize and clamp migration work.
+
+Contract module:
+- `src/runtime/viewport/graphViewport.tsx`
+
+Fields:
+- `mode`: `app | boxed`
+- `source`: `window | container | unknown`
+- `width`: number
+- `height`: number
+- `dpr`: number
+- `boundsRect`: `{ left, top, width, height } | null`
+
+API:
+- `defaultGraphViewport()`
+- `GraphViewportProvider`
+- `useGraphViewport()`
+- `getGraphViewportDebugSnapshot(viewport)` (dev helper)
+
+Current wiring (step 8 live, 2026-02-16):
+1. graph-screen subtree:
+   - provider owner: `src/screens/appshell/render/GraphScreenShell.tsx`
+   - pane seam: `graph-screen-graph-pane` ref + live ResizeObserver hook via `src/runtime/viewport/useResizeObserverViewport.ts`
+   - value behavior:
+     - first paint fallback: `defaultGraphViewport()` (`source='window'` or `unknown` on SSR)
+     - live app-mode pane rect updates (`source='container'`) on container resize
+   - provider scope now includes both:
+     - graph runtime boundary
+     - `GraphLoadingGate`
+2. preview runtime subtree:
+   - `src/components/SampleGraphPreview.tsx`
+   - wraps preview runtime with boxed-mode live viewport updates from the same ResizeObserver hook.
+3. live measurement semantics:
+   - ResizeObserver callbacks are coalesced to max 1 update per animation frame (rAF batching).
+   - movement refresh is event-driven (window scroll/resize and visualViewport scroll/resize when available).
+   - interaction refresh is event-driven on target pointer/wheel activity (passive listeners; pointermove is throttled).
+   - mount stabilization runs as a bounded settle burst to catch early layout settling.
+   - settle continuation is visibility-safe: hidden document stops settle continuation; visibility return triggers one refresh.
+   - movement refresh uses bounded settle rAF bursts after origin changes (no permanent polling loop).
+   - origin source is element viewport geometry from `getBoundingClientRect()` (`left/top`).
+   - size source prefers ResizeObserver box size (`contentBoxSize` when present), then falls back to `contentRect.width/height`, then BCR size.
+   - width/height are floored and clamped to `>=1`.
+   - cleanup disconnects observer, removes movement listeners, and cancels pending rAF.
+   - DEV tracker names:
+     - `graph-runtime.viewport.resize-observer`
+     - `graph-runtime.viewport.resize-raf`
+     - `graph-runtime.viewport.position-listeners`
+     - `graph-runtime.viewport.position-interaction-listeners`
+     - `graph-runtime.viewport.position-settle-raf`
+   - DEV counters include flush reason buckets:
+     - `ro`, `scroll`, `vv`, `interaction`, `mount`, `visibility`
+
+Step boundary:
+- step 8 now provides live measurement with movement-aware origin refresh.
+- boxed clamp/origin correctness in step 9 depends on step 8 origin truth from BCR plus movement refresh.
+
+Manual verification checklist:
+1. `npm run build` passes.
+2. graph screen renders with no visible behavior change except accurate live viewport dims.
+3. prompt preview still mounts and runs with live boxed viewport dims.
+4. resizing graph pane updates viewport values (`app`, `source='container'`).
+5. resizing preview container updates viewport values (`boxed`, `source='container'`).
+6. no `graph-runtime.*` tracker unbalance warnings appear on mount/unmount cycles.
+
+## 2.11 Boxed Viewport Consumption (Step 9, 2026-02-16)
+
+Purpose:
+- boxed preview screen-space math must consume `GraphViewport` contract values.
+- eliminate boxed fallback dependence on window viewport bounds in tooltip/popup paths.
+
+Changed subsystems:
+1. Tooltip clamp and anchor local conversion:
+   - `src/ui/tooltip/TooltipProvider.tsx`
+2. Node popup position and clamp:
+   - `src/popup/NodePopup.tsx`
+3. Mini chatbar position and clamp:
+   - `src/popup/MiniChatbar.tsx`
+4. Chat shortage notification clamp:
+   - `src/popup/ChatShortageNotif.tsx`
+5. Shared boxed math helper:
+   - `src/runtime/viewport/viewportMath.ts`
+
+Rules:
+- `viewport.mode === 'boxed'`:
+  - use `viewport.width`, `viewport.height`, and `viewport.boundsRect` origin for local conversion and clamp.
+  - boxed fallbacks prefer viewport/bounds dimensions and avoid relying on window-sized assumptions.
+- app mode keeps prior behavior path (portal/app/window fallback semantics unchanged).
+
+Dev invariants:
+- boxed counters are tracked in `viewportMath`:
+  - `boxedClampCalls`
+  - `boxedPointerNormCalls`
+  - `boxedTooltipClampCalls`
+- warn-once fallback if `viewport.mode === 'boxed'` and `boundsRect` is missing:
+  - `[ViewportMath] boxed viewport missing boundsRect; using origin 0,0 fallback`
+
+Verification checklist:
+1. EnterPrompt preview: tooltip stays inside preview box and clamps to box edges.
+2. EnterPrompt preview: node popup + mini chat stay inside preview box.
+3. EnterPrompt preview: pointer-driven popup placement remains aligned with dot movement.
+4. Graph screen: tooltip/popup behavior remains unchanged vs previous app mode behavior.
 
 ## 3. Physics Architecture And Contract
 The graph is driven by a **Hybrid Solver** (`src/physics/`) prioritizing "Visual Dignity" over pure simulation accuracy.
@@ -433,6 +855,26 @@ for dot hover visuals (match pixels, no ghosting).
 ## Purpose
 Central operating notes for backend/frontend behavior, integration seams, and live environment assumptions.
 
+## Backend Runtime Architecture
+- Runtime shell entry: `src/server/src/serverMonolith.ts` (imports bootstrap and starts server).
+- Runtime orchestration and order ownership: `src/server/src/server/bootstrap.ts`.
+- Route modules: `src/server/src/routes/*.ts`:
+  - `authRoutes.ts`, `profileRoutes.ts`, `savedInterfacesRoutes.ts`
+  - `paymentsRoutes.ts`, `paymentsWebhookRoute.ts`
+  - `llmAnalyzeRoute.ts`, `llmPrefillRoute.ts`, `llmChatRoute.ts`
+  - `healthRoutes.ts`
+- Route deps assembly: `src/server/src/server/depsBuilder.ts`.
+- Core backend seams:
+  - env: `src/server/src/server/envConfig.ts`
+  - parsers: `src/server/src/server/jsonParsers.ts`
+  - cors: `src/server/src/server/corsConfig.ts`
+  - startup gates: `src/server/src/server/startupGates.ts`
+  - cookies: `src/server/src/server/cookies.ts`
+- Order invariants:
+  - payments webhook route is registered before CORS middleware.
+  - JSON parser chain is registered before route modules.
+  - startup gates complete before `app.listen(...)`.
+
 ## LLM Provider Policy
 - Provider routing is policy-driven (daily cohort + per-user cap + global pool).
 - See test verification report: `docs/report_2026_02_06_provider_step4_test_results.md`.
@@ -444,6 +886,14 @@ Backend LLM endpoints:
 - `POST /api/llm/paper-analyze`
 - `POST /api/llm/chat`
 - `POST /api/llm/prefill`
+- Route files:
+  - `src/server/src/routes/llmAnalyzeRoute.ts`
+  - `src/server/src/routes/llmChatRoute.ts`
+  - `src/server/src/routes/llmPrefillRoute.ts`
+- Shared request flow seam:
+  - `src/server/src/llm/requestFlow.ts`
+  - contract guard: `npm run test:requestflow-contracts`
+- Retry-After and API error header/order behavior are locked in the requestFlow seam and guard tests.
 
 ## LLM Audit
 - Per-request audit records are stored in `llm_request_audit`.
@@ -454,6 +904,11 @@ Backend:
 - `POST /api/payments/gopayqris/create`
 - `GET /api/payments/:orderId/status`
 - `POST /api/payments/webhook`
+- Route files:
+  - `src/server/src/routes/paymentsRoutes.ts`
+  - `src/server/src/routes/paymentsWebhookRoute.ts`
+- Midtrans helper seam:
+  - `src/server/src/payments/midtransUtils.ts`
 
 Frontend:
 - `src/components/PaymentGopayPanel.tsx`
@@ -467,20 +922,49 @@ Frontend:
   - auth calls are `${VITE_API_BASE_URL}/auth/google`, `${VITE_API_BASE_URL}/auth/logout`, and `${VITE_API_BASE_URL}/me`.
   - `/api/*` pathing is only true when `VITE_API_BASE_URL=/api` (for example behind Vercel rewrite).
 - Backend runtime route ownership:
-  - route logic lives in `src/server/src/serverMonolith.ts`.
-  - `src/server/src/index.ts` is a thin entry that imports `serverMonolith`.
+  - `src/server/src/index.ts` imports `src/server/src/serverMonolith.ts` (shell).
+  - shell calls `startServer` from `src/server/src/server/bootstrap.ts`.
+  - auth endpoints live in `src/server/src/routes/authRoutes.ts`.
+  - auth helper seams:
+    - `src/server/src/auth/googleToken.ts`
+    - `src/server/src/auth/requireAuth.ts`
 - `/me` payload contract:
-  - returns `sub`, `email`, `name`, `picture` for signed-in state.
+  - returns `sub`, `email`, `name`, `picture`, `displayName`, `username` for signed-in state.
+  - `picture` is the Google profile photo URL used by Sidebar and profile UI.
   - does not currently return DB numeric `id` in the `/me` response body.
   - frontend identity logic must support `sub` fallback for namespacing and sync isolation.
+- Profile update contract:
+  - endpoint: `POST /api/profile/update` (`requireAuth`) in `src/server/src/routes/profileRoutes.ts`.
+  - request fields: `displayName`, `username` with trim/max-length/regex validation.
+  - schema columns: `users.display_name`, `users.username` from migration `src/server/migrations/1770383500000_add_user_profile_fields.js`.
+  - UI owner: AppShell profile modal in `src/screens/AppShell.tsx` (opened from Sidebar avatar menu).
+  - save path uses `updateProfile(...)`, applies returned user fields locally, then runs `/me` refresh as reconciliation.
+- Logout UI contract:
+  - logout action is accessed from Sidebar avatar popup menu, not EnterPrompt.
+- logout confirmation is AppShell-owned centered modal that runs the same auth logout path.
+
+## Backend Contract Tests
+- Run from `src/server`:
+  - `npm run test:contracts`
+- Coverage summary:
+  - request flow mapping and API error/header behavior
+  - json parser split + saved-interfaces 413 mapping
+  - cors policy callback/preflight behavior
+  - startup gates ordering/shape
+  - route contracts: health, auth, profile, saved-interfaces, payments
+  - deps builder shape
+  - monolith shell/bootstrap order markers (`npm run test:servermonolith-shell`)
 
 ## Backend VPN Reminder
 - Before running backend commands in `src/server` (for example `npm run dev`, `npm run check:auth-schema`, DB scripts), turn VPN OFF.
 - VPN can block or slow Cloud SQL connector setup and cause startup timeout errors.
 
 ## Fonts
-- UI default: Quicksand (via CSS vars)
-- Titles: Segoe UI -> Public Sans -> system
+- Canonical entrypoint: `src/styles/fonts.css` imported once in `src/main.tsx`.
+- Quicksand is registered as `woff2` multi-weight faces (400/500/600/700).
+- Use CSS vars for global usage:
+  - `--font-ui`
+  - `--font-title`
 
 ## Scrollbar Theme (Frontend)
 - Arnvoid uses themed scrollbars. Do not use browser-default scrollbar styling on product UI surfaces.
@@ -498,3 +982,205 @@ Frontend:
 - Money notices for payment/balance/deduction outcomes.
 - Offline or backend-unreachable network failures do not emit balance/payment/chat money notices.
 - Reports: docs/report_2026_02_07_moneyux_final.md and step reports.
+
+## EnterPrompt Sample Graph Preview Mount (2026-02-15)
+- Mount seam:
+  - `src/components/PromptCard.tsx` keeps the existing preview wrapper `GRAPH_PREVIEW_PLACEHOLDER_STYLE`.
+  - Inner placeholder label has been replaced by `<SampleGraphPreview />`.
+- Preview component:
+  - `src/components/SampleGraphPreview.tsx`
+  - mounts `GraphPhysicsPlayground` (same runtime path as graph screen)
+  - root marker: `data-arnvoid-graph-preview-root="1"`
+- Sample JSON restore pipeline (canonical):
+  - sample source file: `src/samples/sampleGraphPreview.export.json`
+  - dev export type + guard: `src/lib/devExport/devExportTypes.ts`
+  - adapter: `src/lib/devExport/devExportToSavedInterfaceRecord.ts`
+  - canonical validation: `parseSavedInterfaceRecord(...)` in `src/store/savedInterfacesStore.ts`
+  - runtime restore input: `pendingLoadInterface` in `GraphPhysicsPlayground`
+  - flow: `DevInterfaceExportV1 -> adapter -> SavedInterfaceRecordV1 -> parseSavedInterfaceRecord -> pendingLoadInterface`
+- How to swap sample map:
+  1. Replace `src/samples/sampleGraphPreview.export.json` with another DevInterfaceExportV1 file.
+  2. Keep top-level keys compatible (`version`, `exportedAt`, `title`, `parsedDocument`, `topology`, `layout`, `camera`, `analysisMeta`).
+  3. Reload app; preview adapter + parser validate before runtime mount.
+- Portal scope seam (preview-only container mode):
+  - `src/components/portalScope/PortalScopeContext.tsx`
+  - `SampleGraphPreview` creates internal portal root: `data-arnvoid-preview-portal-root="1"`
+  - preview runtime is wrapped with `PortalScopeProvider mode="container"` + nested `TooltipProvider`
+  - graph screen path remains default app mode (`document.body` portal root)
+- Seam helper for future gating/scoping:
+  - `src/components/sampleGraphPreviewSeams.ts`
+  - exports preview root and preview portal root attr/value/selector helpers:
+    - `isInsideSampleGraphPreviewRoot(...)`
+    - `isInsideSampleGraphPreviewPortalRoot(...)`
+
+Onboarding wheel guard allowlist (Step 6):
+- guard hook: `src/screens/appshell/transitions/useOnboardingWheelGuard.ts`
+- guard remains active as a capture-phase window wheel listener during onboarding-active states.
+- allowlist exception:
+  - if wheel target is inside preview root OR preview portal root, guard returns early.
+  - this allows embedded graph runtime wheel handler to own zoom/pan input.
+- non-allowlist targets keep existing behavior (`preventDefault`) to block page scroll.
+
+Step 10 boxed input ownership (2026-02-16):
+- preview root ownership seam: `src/components/SampleGraphPreview.tsx`
+  - preview root now enforces `overscrollBehavior: 'contain'` and `touchAction: 'none'`.
+  - preview root installs native capture wheel guard (`passive: false`) while runtime is mounted.
+  - non-overlay wheel in preview calls `preventDefault` to block page scroll bleed.
+  - overlay wheel pass-through is scrollability-gated:
+    - if overlay scroll container can consume delta, allow default local scroll.
+    - if no local consumer can consume, force `preventDefault` (page scroll forbidden).
+- interactive overlay marker contract:
+  - marker: `data-arnvoid-overlay-interactive="1"`
+  - optional explicit scroll marker: `data-arnvoid-overlay-scrollable="1"`
+  - helper seam: `src/components/sampleGraphPreviewSeams.ts`
+  - interactive boxed roots currently marked:
+    - `src/popup/NodePopup.tsx`
+    - `src/popup/MiniChatbar.tsx`
+    - `src/popup/ChatShortageNotif.tsx`
+  - each marked root must own input with capture-phase shields:
+    - `onPointerDownCapture={(e) => e.stopPropagation()}`
+    - `onWheelCapture={(e) => e.stopPropagation()}`
+- portal containment contract:
+  - preview portal root stays inside preview root.
+  - preview portal root remains `pointerEvents: 'none'`.
+  - interactive overlay descendants use `pointerEvents: 'auto'`.
+- dev verification rails:
+  - preview counters (dev-only, non-spam) in `SampleGraphPreview`:
+    - `previewWheelPreventedNonOverlay`
+    - `previewWheelAllowedScrollableOverlay`
+    - `previewWheelPreventedNonScrollableOverlay`
+    - `previewPointerStopPropagationCount`
+  - onboarding guard warns once in dev if a preview-origin wheel reaches blocked path unexpectedly.
+
+Step 11 boxed-only UI rules (2026-02-16):
+- boxed UI policy seam: `src/runtime/ui/boxedUiPolicy.ts`
+  - `isBoxedUi(...)` is the primary runtime gate.
+  - `BOXED_NODE_POPUP_SCALE` is the single source of truth for boxed preview popup scale policy.
+  - `assertBoxedPortalTarget(...)` emits dev warn-once for missing/body portal targets.
+  - `resolveBoxedPortalTarget(...)` prevents boxed portal fallback to `document.body`.
+  - `assertNoBodyPortalInBoxed(...)` emits dev warn-once for body-portal attempts.
+  - `countBoxedSurfaceDisabled(...)` tracks intentional boxed disables when safe container target is missing.
+- portal safety contract in boxed mode:
+  - runtime portal surfaces must never mount to `document.body`.
+  - if safe preview portal root cannot be resolved, surface must return `null` (disable-safe).
+  - currently guarded runtime portal surfaces:
+    - `src/popup/PopupOverlayContainer.tsx`
+    - `src/ui/tooltip/TooltipProvider.tsx`
+    - `src/playground/components/AIActivityGlyph.tsx`
+- fullscreen-ish UI contract in boxed mode:
+  - disable fullscreen actions and window-anchored menu branches.
+  - disable runtime debug fixed overlays unless they are explicitly boxed-contained.
+  - block boxed dev paths that append DOM to `document.body` (for example dev JSON download anchor path).
+  - concrete boxed disables applied in:
+    - `src/playground/components/CanvasOverlays.tsx`
+    - `src/playground/GraphPhysicsPlaygroundShell.tsx`
+- dev counters (no-spam):
+  - `boxedBodyPortalAttempts`
+  - `boxedBodyPortalRedirectCount`
+  - `boxedSurfaceDisabledCount`
+  - `boxedNodePopupScaleAppliedCount`
+  - `boxedNodePopupAnchorLocalPathCount`
+- PR checklist for new runtime overlays/panels:
+  1. boxed branch must not use `document.body` portal target.
+  2. boxed branch must avoid window-anchored `position: fixed` fullscreen assumptions.
+  3. boxed branch must clamp/contain within viewport provider dimensions.
+  4. if containment is not reliable, disable that surface in boxed mode.
+  5. app mode behavior must remain unchanged.
+
+Step 12 boxed resize semantics (2026-02-16):
+- canonical contract seam: `src/runtime/viewport/resizeSemantics.ts`
+  - default boxed mode: `DEFAULT_BOXED_RESIZE_SEMANTIC_MODE = 'preserve-center-world'`
+  - contract function: `computeCameraAfterResize(...)`
+  - future modes are encoded but not enabled by default (`preserve-top-left-world`, `fit-world-bounds`).
+- behavior contract (boxed):
+  - resizing boxed preview preserves world anchor intent at viewport center.
+  - zoom remains constant across resize.
+  - resize is treated as changing the window around the same scene, not recentering/auto-fitting.
+- integration seam:
+  - camera apply path is in `src/playground/GraphPhysicsPlaygroundShell.tsx` (boxed viewport size change effect).
+  - camera read/apply ownership remains in `src/playground/useGraphRendering.ts` (`getCameraSnapshot`, `applyCameraSnapshot`).
+  - `useResizeObserverViewport` remains measurement-only and does not mutate camera state.
+- containment policy:
+  - boxed runtime uses effective camera lock (`cameraLocked || isBoxedRuntime`) to prevent per-frame auto-fit containment from overriding resize semantics.
+  - app mode containment behavior is unchanged.
+- dev counters and rails:
+  - resize counters live in `resizeSemantics.ts`:
+    - `boxedResizeEventCount`
+    - `boxedResizeCameraAdjustCount`
+  - boxed resize apply path has a dev warn-once for invalid camera outputs.
+
+Step 13 boxed smart contain (2026-02-16):
+- contract:
+  - boxed preview gets one-shot smart contain framing after real viewport measurement and valid graph bounds.
+  - smart contain is load-time only; it is not a continuous fit loop.
+  - resize after load stays governed by Step 12 preserve-center-world semantics.
+- implementation seams:
+  - pure fit math + bounds helper: `src/playground/rendering/boxedSmartContain.ts`
+    - `getWorldBoundsFromNodes(...)`
+    - `computeBoxedSmartContainCamera(...)`
+    - default asymmetric padding via `getDefaultBoxedSmartContainPadding()`
+  - boxed apply path + gating: `src/playground/GraphPhysicsPlaygroundShell.tsx`
+    - apply once when viewport is measured and bounds exist.
+    - reset only on interface id change.
+    - block re-fit after user interaction (`wheel`, drag start hit).
+  - wheel interaction seam for latch:
+    - `src/playground/rendering/graphRenderingLoop.ts`
+    - `src/playground/useGraphRendering.ts`
+- dev counters and rails:
+  - `boxedSmartContainAppliedCount`
+  - `boxedSmartContainSkippedUserInteractedCount`
+  - `boxedSmartContainSkippedNoBoundsCount`
+  - warn-once if smart contain attempted with empty/invalid bounds.
+- boxed preview NodePopup sizing policy:
+  - `src/popup/NodePopup.tsx` uses boxed-only scale from `BOXED_NODE_POPUP_SCALE`.
+  - NodePopup uses a two-layer contract in boxed mode:
+    - outer anchor wrapper is unscaled and owns `left/top` placement
+    - inner panel owns visual scaling with `transformOrigin: top left`
+  - boxed NodePopup anchor coordinates are local to the graph viewport/canvas; do not run `toViewportLocalPoint` on them.
+  - clamp math uses scaled dimensions derived from the unscaled panel size.
+  - popup gap (`GAP_FROM_NODE`) is px-based and must not be multiplied by scale.
+  - graph screen/app mode popup scale remains unchanged.
+- tuning rule:
+  - adjust boxed readability by editing only smart-contain padding constants.
+  - do not reintroduce per-frame contain/autofit in boxed mode.
+
+Current known risks not fixed yet:
+1. Prompt overlays can mask preview:
+   - drag/error/login overlays in `src/screens/EnterPrompt.tsx` are fixed and can block visibility/input.
+2. Not in this step:
+   - no render-loop cleanup fix
+   - no topology singleton refactor
+   - no performance retuning
+
+Manual verification checklist for follow-up runs:
+1. Prompt loads without crash and preview stays inside the 200px wrapper.
+2. Placeholder label is gone; preview runtime surface is visible.
+3. Preview labels/topology match the sample export (deterministic map, not seed-4 graph).
+4. Click dot in preview: popup stays inside preview box.
+5. Hover tooltip in preview: tooltip stays inside preview box.
+6. No preview interaction renders fullscreen-ish UI outside preview box.
+7. Graph screen behavior remains unchanged (app mode portals).
+8. EnterPrompt overlays still behave as before (drag overlay, error overlay, login overlay).
+9. Repeated prompt visit cycles do not cause obvious listener/input regressions.
+10. EnterPrompt wheel guard allowlist:
+    - wheel over preview zooms/pans graph.
+    - wheel outside preview remains guarded (page does not scroll).
+    - wheel over preview tooltip/popup/portal surfaces is treated as inside preview and remains allowed.
+11. Graph screen wheel behavior remains unchanged.
+12. Step 10 boxed ownership:
+    - wheel over preview non-overlay areas does not scroll page.
+    - wheel over marked interactive overlays scrolls locally only when consumer can consume.
+    - wheel over marked non-scrollable overlay zones does not scroll page.
+    - pointerdown in preview subtree does not click through to onboarding surfaces.
+13. Step 11 boxed UI rules:
+    - boxed runtime does not expose fullscreen action/menu paths.
+    - boxed runtime portal surfaces do not mount to `document.body`.
+    - if safe portal root is unavailable in boxed mode, affected surface is disabled safely.
+14. Step 12 boxed resize semantics:
+    - resizing preview larger/smaller does not teleport the camera.
+    - center-world intent is preserved across resize by default.
+    - zoom remains unchanged across resize.
+15. Step 13 boxed smart contain:
+    - boxed preview first load shows the full sample map with readable containment.
+    - once user wheels or starts drag interaction, smart contain does not re-apply.
+    - resizing after user interaction still follows Step 12 semantics (no refit teleport).

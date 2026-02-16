@@ -21,12 +21,11 @@ type Lens = {
 };
 
 const BASE_LENSES: Lens[] = [
-  { key: "what", description: "what the text is directly about" },
-  { key: "core_bet", description: "the real wager or thesis the text is staking" },
-  { key: "opponent", description: "the worldview or practice being challenged" },
-  { key: "bridge_weapon", description: "the method or framework translating claims into authority" },
-  { key: "hidden_axioms", description: "unstated assumptions required for the argument to work" },
-  { key: "downstream_power_risk", description: "what this enables and what it risks flattening or breaking" }
+  { key: "core_bet", description: "what the topic is about and the real wager or thesis the document is staking" },
+  { key: "opponent", description: "what the topic is about and the worldview or practice being challenged" },
+  { key: "bridge_weapon", description: "what the topic is about and the method or framework translating claims into authority" },
+  { key: "hidden_axioms", description: "what the topic is about and unstated assumptions required for the argument to work" },
+  { key: "downstream_power_risk", description: "what the topic is about and what this enables and what it risks flattening or breaking" }
 ];
 
 function normalizeNodeCount(nodeCount: number): number {
@@ -86,7 +85,7 @@ function buildCoreInstruction(nodeCountRaw: number, lang: AnalyzePromptLang): st
 
   return [
     "You are Arnvoid analyzer.",
-    "You are not only a summarizer. You produce undercurrent analysis.",
+    "You are not only a summarizer. You produce deep undercurrent analysis.",
     "",
     "Definition:",
     "- summary = what the text says.",

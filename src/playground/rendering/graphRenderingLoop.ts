@@ -23,6 +23,7 @@ import { createOverloadState, createPerfSample, recordPerfSample } from './rende
 import { runPhysicsScheduler, type SchedulerState } from './renderLoopScheduler';
 import { updateCanvasSurface } from './renderLoopSurface';
 import { enforceCameraSafety, stabilizeCentroid } from './renderLoopCamera';
+import { trackResource } from '../../runtime/resourceTracker';
 
 type Ref<T> = { current: T };
 
@@ -61,6 +62,7 @@ type GraphRenderLoopDeps = {
     updateHoverSelection: UpdateHoverSelection;
     clearHover: (reason: string, id: number, source: string) => void;
     renderScratch: RenderScratch;
+    onUserCameraInteraction?: (reason: 'wheel') => void;
 };
 
 const ensureSeededGraph = (engine: PhysicsEngine, config: ForceConfig, seed: number, spawnCount: number) => {
@@ -270,9 +272,11 @@ export const startGraphRenderLoop = (deps: GraphRenderLoopDeps) => {
         updateHoverSelection,
         clearHover,
         renderScratch,
+        onUserCameraInteraction,
     } = deps;
 
     let frameId = 0;
+    let disposed = false;
     const schedulerState: SchedulerState = {
         lastTime: performance.now(),
         accumulatorMs: 0,
@@ -282,11 +286,13 @@ export const startGraphRenderLoop = (deps: GraphRenderLoopDeps) => {
     const overloadState = createOverloadState();
     const trackMetrics = createMetricsTracker(setMetrics, () => renderDebugRef.current);
     let firstFrameLogged = false;
+    let lastAppliedCursor = '';
 
     ensureSeededGraph(engine, config, seed, spawnCount);
     engine.updateBounds(canvas.width, canvas.height);
 
     const render = () => {
+        if (disposed) return;
         // FIX 36: Deferred Drag Start (First Frame Continuity)
         // Apply the grab using the EXACT camera/surface state of this frame.
         if (pendingPointerRef.current.pendingDragStart) {
@@ -309,7 +315,7 @@ export const startGraphRenderLoop = (deps: GraphRenderLoopDeps) => {
 
         const now = performance.now();
         if (!firstFrameLogged) {
-            console.log('[RenderLoop] first_frame');
+            //console.log('[RenderLoop] first_frame');
             firstFrameLogged = true;
         }
         const schedulerResult = runPhysicsScheduler(engine, schedulerState, overloadState, perfSample);
@@ -331,7 +337,9 @@ export const startGraphRenderLoop = (deps: GraphRenderLoopDeps) => {
 
         const rect = canvas.getBoundingClientRect();
         if (rect.width <= 0 || rect.height <= 0) {
-            frameId = requestAnimationFrame(render);
+            if (!disposed) {
+                frameId = requestAnimationFrame(render);
+            }
             return;
         }
 
@@ -548,6 +556,16 @@ export const startGraphRenderLoop = (deps: GraphRenderLoopDeps) => {
 
         applyDragTargetSync(engine, hoverStateRef, clientToWorld, rect, camera);
 
+        const nextCursor = engine.draggedNodeId
+            ? 'grabbing'
+            : hoverStateRef.current.hoveredNodeId
+                ? 'pointer'
+                : 'default';
+        if (nextCursor !== lastAppliedCursor) {
+            canvas.style.cursor = nextCursor;
+            lastAppliedCursor = nextCursor;
+        }
+
         if (engine.draggedNodeId && Math.random() < 0.05) {
             const { cursorClientX, cursorClientY } = hoverStateRef.current;
             console.log(`[PointerTrace] Sync: Moving drag ${engine.draggedNodeId} to client=${cursorClientX.toFixed(0)},${cursorClientY.toFixed(0)}`);
@@ -561,13 +579,16 @@ export const startGraphRenderLoop = (deps: GraphRenderLoopDeps) => {
 
         trackMetrics(now, engine);
 
-        frameId = requestAnimationFrame(render);
+        if (!disposed) {
+            frameId = requestAnimationFrame(render);
+        }
     };
 
     const handleBlur = () => {
         clearHover('window blur', -1, 'unknown');
     };
     window.addEventListener('blur', handleBlur);
+    const releaseBlurListener = trackResource('graph-runtime.window-blur-listener');
 
     const handleWheel = (e: WheelEvent) => {
         // FIX 32: strict wheel ownership
@@ -616,22 +637,48 @@ export const startGraphRenderLoop = (deps: GraphRenderLoopDeps) => {
         camera.targetPanX += (rx - rxx);
         camera.targetPanY += (ry - ryy);
         camera.targetZoom = newZoom;
+        onUserCameraInteraction?.('wheel');
     };
     canvas.addEventListener('wheel', handleWheel, { passive: false });
+    const releaseWheelListener = trackResource('graph-runtime.canvas-wheel-listener');
 
     frameId = requestAnimationFrame(render);
+    const releaseRafLoop = trackResource('graph-runtime.raf-loop');
 
     const handleFontLoad = () => {
+        if (disposed) return;
         textMetricsCache.clear();
         // Force a re-render if needed, though the loop is running 60fps anyway.
     };
+    let releaseFontsReadyPending = () => {};
+    let releaseFontsLoadingDone = () => {};
     if (document.fonts) {
-        document.fonts.ready.then(handleFontLoad);
+        releaseFontsReadyPending = trackResource('graph-runtime.document-fonts-ready-pending');
+        document.fonts.ready
+            .then(() => {
+                handleFontLoad();
+                releaseFontsReadyPending();
+            })
+            .catch(() => {
+                releaseFontsReadyPending();
+            });
         document.fonts.addEventListener('loadingdone', handleFontLoad);
+        releaseFontsLoadingDone = trackResource('graph-runtime.document-fonts-loadingdone-listener');
     }
 
     return () => {
+        disposed = true;
         window.removeEventListener('blur', handleBlur);
+        releaseBlurListener();
+        canvas.removeEventListener('wheel', handleWheel);
+        releaseWheelListener();
+        if (document.fonts) {
+            document.fonts.removeEventListener('loadingdone', handleFontLoad);
+            releaseFontsLoadingDone();
+            releaseFontsReadyPending();
+        }
+        canvas.style.cursor = 'default';
         cancelAnimationFrame(frameId);
+        releaseRafLoop();
     };
 };

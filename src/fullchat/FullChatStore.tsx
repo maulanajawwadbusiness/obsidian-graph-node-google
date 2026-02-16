@@ -3,6 +3,7 @@ import type { FullChatState, FullChatContextValue, FullChatMessage, MiniChatCont
 import { makeSeedPrompt, refinePromptAsync } from './prefillSuggestion';
 import { generateResponseAsync } from './fullChatAi';
 import type { AiContext } from './fullChatTypes';
+import { FULLCHAT_ENABLED } from './fullChatFlags';
 
 /**
  * Full Chat Store - React Context for managing full chatbar state
@@ -12,8 +13,6 @@ import type { AiContext } from './fullChatTypes';
  * - Streaming updates (text grows over time)
  * - Smooth conversation flow
  */
-
-const FULLCHAT_ENABLED = false;
 
 const initialState: FullChatState = {
     isOpen: false,

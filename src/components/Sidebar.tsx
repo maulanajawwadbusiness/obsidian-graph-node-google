@@ -8,6 +8,19 @@ import documentIcon from '../assets/document_icon.png';
 import verticalElipsisIcon from '../assets/vertical_elipsis_icon.png';
 import renameIcon from '../assets/rename_icon.png';
 import deleteIcon from '../assets/delete_icon.png';
+import logoutIcon from '../assets/logout_icon.png';
+import suggestionFeedbackIcon from '../assets/suggestion_feedback_icon.png';
+import blogIcon from '../assets/blog_icon.png';
+import { LAYER_SIDEBAR, LAYER_SIDEBAR_ROW_MENU } from '../ui/layers';
+import { useTooltip } from '../ui/tooltip/useTooltip';
+import {
+    SIDEBAR_COLLAPSED_WIDTH_CSS,
+    SIDEBAR_COLLAPSE_DURATION_MS,
+    SIDEBAR_EXPAND_DURATION_MS,
+    SIDEBAR_EXPANDED_RESOLVED_WIDTH_CSS,
+    getSidebarContentTransitionCss,
+    getSidebarWidthTransitionCss,
+} from '../screens/appshell/appShellStyles';
 
 // ===========================================================================
 // Mock Data
@@ -27,13 +40,15 @@ export type SidebarInterfaceItem = {
 // Scale: 1.0 = base size, 0.5 = 50% smaller
 const SIDEBAR_SCALE = 0.8;
 
-const COLLAPSED_WIDTH = '35px';
-const EXPANDED_WIDTH = '10vw';
-const MIN_EXPANDED_WIDTH = '200px';
 const ICON_SIZE = 18 * SIDEBAR_SCALE;
 // Logo size multiplier: 1.0 = base, 1.5 = 50% larger
 const LOGO_SCALE = 1.05;
 const LOGO_SIZE = 20 * SIDEBAR_SCALE * LOGO_SCALE;
+const CLOSE_ICON_SIZE_PX = Math.round(ICON_SIZE);
+const AVATAR_ICON_HITBOX_PX = 32;
+const AVATAR_PIN_INSET_LEFT_PX = 1;
+const AVATAR_CONTENT_GAP_PX = 12;
+const AVATAR_CONTENT_LANE_OFFSET_PX = AVATAR_PIN_INSET_LEFT_PX + AVATAR_ICON_HITBOX_PX + AVATAR_CONTENT_GAP_PX;
 // Avatar size multiplier: 1.0 = base, 0.85 = 15% smaller
 const AVATAR_SCALE = 0.85;
 const AVATAR_SIZE = 28 * SIDEBAR_SCALE * AVATAR_SCALE;
@@ -50,19 +65,59 @@ const CREATE_NEW_OFFSET_TOP = -1;
 const SEARCH_OFFSET_TOP = -7.5;
 // More (3-dot) icon vertical offset: negative = up, positive = down (in px)
 const MORE_OFFSET_TOP = -9.5;
-// Your Name text horizontal offset: negative = left, positive = right (in px)
-const NAME_OFFSET_LEFT = -13;
+const EXPANDED_CONTENT_HIDDEN_OFFSET_PX = 3;
+const SESSION_TEXT_HIDDEN_OFFSET_PX = 2;
+// Avatar name baseline paint offset to keep visual alignment without layout reflow.
+const AVATAR_NAME_BASE_OFFSET_PX = -13;
+const AVATAR_NAME_HIDDEN_OFFSET_PX = 2;
 // Close icon (expanded state) horizontal offset: negative = left, positive = right (in px)
 const CLOSE_ICON_OFFSET_LEFT = -10;
 const ICON_OPACITY_DEFAULT = 1.0;
 const ICON_OPACITY_HOVER = 1.0;
 const HOVER_ACCENT_COLOR = '#63abff';
 const DEFAULT_ICON_COLOR = '#d7f5ff';
-const ROW_MENU_DELETE_TEXT_COLOR = '#ff4b4e';
+const SIDEBAR_TEXT_COLOR = '#D7F5FF';
+const ROW_MENU_DELETE_TEXT_COLOR = '#FF4B4E';
+const SIDEBAR_HOVER_TRANSITION = '250ms ease';
+const LOGO_SWAP_TRANSITION = '100ms ease';
+const CLOSE_ICON_VIEWBOX = '0 0 100 100';
 type RowMenuItemKey = 'rename' | 'delete';
+type MoreMenuItemKey = 'suggestion' | 'blog';
+type SidebarMotionPhase = 'collapsed' | 'expanding' | 'expanded' | 'collapsing';
+const SIDEBAR_FLICKER_DEBUG = false;
+const SIDEBAR_FLICKER_DEBUG_SWITCHES = {
+    logFrames: false,
+    showTitlesExpandedOnly: false,
+    removeTitleTransform: false,
+    forceTitleOverflowClip: false,
+    disableHoverResetOnMotionStart: false,
+} as const;
+
+const roundedRectArcPath = (x: number, y: number, width: number, height: number, radius: number): string => {
+    const r = Math.max(0, Math.min(radius, width / 2, height / 2));
+    const right = (x + width).toFixed(3);
+    const bottom = (y + height).toFixed(3);
+    const left = x.toFixed(3);
+    const top = y.toFixed(3);
+    const hStart = (x + r).toFixed(3);
+    const hEnd = (x + width - r).toFixed(3);
+    const vStart = (y + r).toFixed(3);
+    const vEnd = (y + height - r).toFixed(3);
+    const rText = r.toFixed(3);
+    return `M ${hStart} ${top} H ${hEnd} A ${rText} ${rText} 0 0 1 ${right} ${vStart} V ${vEnd} A ${rText} ${rText} 0 0 1 ${hEnd} ${bottom} H ${hStart} A ${rText} ${rText} 0 0 1 ${left} ${vEnd} V ${vStart} A ${rText} ${rText} 0 0 1 ${hStart} ${top} Z`;
+};
+
+const CLOSE_ICON_PATH_D = [
+    roundedRectArcPath(8, 12, 84, 76, 16),
+    roundedRectArcPath(17, 20, 14, 60, 7),
+    roundedRectArcPath(40, 20, 43, 60, 11),
+].join(' ');
 
 type SidebarProps = {
     isExpanded: boolean;
+    frozen?: boolean;
+    dimAlpha?: number;
+    lockReason?: string;
     onToggle: () => void;
     onCreateNew?: () => void;
     onOpenSearchInterfaces?: () => void;
@@ -74,10 +129,17 @@ type SidebarProps = {
     interfaces?: SidebarInterfaceItem[];
     selectedInterfaceId?: string;
     onSelectInterface?: (id: string) => void;
+    accountName?: string;
+    accountImageUrl?: string;
+    onOpenProfile?: () => void;
+    onRequestLogout?: () => void;
 };
 
 export const Sidebar: React.FC<SidebarProps> = ({
     isExpanded,
+    frozen = false,
+    dimAlpha = 1,
+    lockReason = 'none',
     onToggle,
     onCreateNew,
     onOpenSearchInterfaces,
@@ -89,13 +151,22 @@ export const Sidebar: React.FC<SidebarProps> = ({
     interfaces,
     selectedInterfaceId,
     onSelectInterface,
+    accountName,
+    accountImageUrl,
+    onOpenProfile,
+    onRequestLogout,
 }) => {
+    const openSidebarTooltip = useTooltip('Open sidebar', { disabled: isExpanded });
+    const closeSidebarTooltip = useTooltip('Close sidebar');
+    const sessionActionsTooltip = useTooltip('Session actions');
+    const openDocumentViewerTooltip = useTooltip('Open document viewer');
     const [logoHover, setLogoHover] = React.useState(false);
     const [createNewHover, setCreateNewHover] = React.useState(false);
     const [searchHover, setSearchHover] = React.useState(false);
     const [moreHover, setMoreHover] = React.useState(false);
     const [documentHover, setDocumentHover] = React.useState(false);
     const [closeHover, setCloseHover] = React.useState(false);
+    const [closeHoverArmed, setCloseHoverArmed] = React.useState(true);
     const [hoveredInterfaceId, setHoveredInterfaceId] = React.useState<string | null>(null);
     const [hoveredEllipsisRowId, setHoveredEllipsisRowId] = React.useState<string | null>(null);
     const [hoveredMenuItemKey, setHoveredMenuItemKey] = React.useState<RowMenuItemKey | null>(null);
@@ -106,21 +177,63 @@ export const Sidebar: React.FC<SidebarProps> = ({
     const [renamingRowId, setRenamingRowId] = React.useState<string | null>(null);
     const [renameDraft, setRenameDraft] = React.useState('');
     const [renameOriginal, setRenameOriginal] = React.useState('');
+    const [prefersReducedMotion, setPrefersReducedMotion] = React.useState(false);
     const [avatarRowHover, setAvatarRowHover] = React.useState(false);
+    const [isAvatarMenuOpen, setIsAvatarMenuOpen] = React.useState(false);
+    const [avatarMenuAnchorRect, setAvatarMenuAnchorRect] = React.useState<DOMRect | null>(null);
+    const [avatarMenuPosition, setAvatarMenuPosition] = React.useState<{ left: number; top: number } | null>(null);
+    const [avatarMenuPlacement, setAvatarMenuPlacement] = React.useState<'up' | 'down' | null>(null);
+    const [avatarMenuHoverKey, setAvatarMenuHoverKey] = React.useState<'profile' | 'logout' | null>(null);
+    const [isMoreMenuOpen, setIsMoreMenuOpen] = React.useState(false);
+    const [moreMenuAnchorRect, setMoreMenuAnchorRect] = React.useState<DOMRect | null>(null);
+    const [moreMenuPosition, setMoreMenuPosition] = React.useState<{ left: number; top: number } | null>(null);
+    const [moreMenuPlacement, setMoreMenuPlacement] = React.useState<'up' | 'down' | null>(null);
+    const [moreMenuHoverKey, setMoreMenuHoverKey] = React.useState<MoreMenuItemKey | null>(null);
+    const [motionPhase, setMotionPhase] = React.useState<SidebarMotionPhase>(isExpanded ? 'expanded' : 'collapsed');
     const renameInputRef = React.useRef<HTMLInputElement | null>(null);
+    const avatarTriggerRef = React.useRef<HTMLDivElement | null>(null);
+    const moreTriggerRef = React.useRef<HTMLButtonElement | null>(null);
+    const sidebarRootRef = React.useRef<HTMLElement | null>(null);
+    const firstSessionTitleRef = React.useRef<HTMLSpanElement | null>(null);
+    const flickerLogSeqRef = React.useRef(0);
+    const flickerRafRef = React.useRef<number | null>(null);
     const menuItemPreview = React.useMemo<Array<{ key: RowMenuItemKey; icon: string; label: string; color: string }>>(
         () => [
-            { key: 'rename', icon: renameIcon, label: 'Rename', color: '#e7e7e7' },
+            { key: 'rename', icon: renameIcon, label: 'Rename', color: SIDEBAR_TEXT_COLOR },
             { key: 'delete', icon: deleteIcon, label: 'Delete', color: ROW_MENU_DELETE_TEXT_COLOR },
         ],
         []
     );
+    const displayAccountName = accountName && accountName.trim() ? accountName.trim() : 'Your Name';
+    const collapsedAvatarTooltip = useTooltip(displayAccountName, { disabled: isExpanded || displayAccountName.trim().length === 0 });
+    const canOpenAvatarMenu = Boolean(onOpenProfile || onRequestLogout);
+    const isInMotionPhase = motionPhase === 'expanding' || motionPhase === 'collapsing';
+    const shouldMountExpandedContent = isExpanded || motionPhase !== 'collapsed';
+    const shouldShowSessionTitles = SIDEBAR_FLICKER_DEBUG && SIDEBAR_FLICKER_DEBUG_SWITCHES.showTitlesExpandedOnly
+        ? motionPhase === 'expanded'
+        : isExpanded || motionPhase === 'expanding' || motionPhase === 'expanded';
+    const shouldShowAvatarName = motionPhase === 'expanding' || motionPhase === 'expanded';
+    const contentTransitionCss = prefersReducedMotion ? 'none' : getSidebarContentTransitionCss(isExpanded);
+    const widthTransitionCss = prefersReducedMotion ? 'none' : getSidebarWidthTransitionCss(isExpanded);
+    const iconOpacityMultiplier = disabled ? Math.max(0, Math.min(1, dimAlpha)) : 1;
+    const applyIconOpacity = (baseOpacity: number): number => {
+        const safeBase = Math.max(0, Math.min(1, baseOpacity));
+        return safeBase * iconOpacityMultiplier;
+    };
 
     const sidebarStyle: React.CSSProperties = {
         ...SIDEBAR_BASE_STYLE,
-        width: isExpanded ? EXPANDED_WIDTH : COLLAPSED_WIDTH,
-        minWidth: isExpanded ? MIN_EXPANDED_WIDTH : COLLAPSED_WIDTH,
-        pointerEvents: disabled ? 'none' : 'auto',
+        width: isExpanded ? SIDEBAR_EXPANDED_RESOLVED_WIDTH_CSS : SIDEBAR_COLLAPSED_WIDTH_CSS,
+        transition: widthTransitionCss,
+        willChange: prefersReducedMotion ? undefined : 'width',
+        pointerEvents: frozen ? 'auto' : (disabled ? 'none' : 'auto'),
+        cursor: frozen ? 'default' : undefined,
+    };
+    const sidebarVisualRailStyle: React.CSSProperties = {
+        display: 'flex',
+        flexDirection: 'column',
+        width: '100%',
+        height: '100%',
     };
 
     const computeRowMenuPlacement = React.useCallback((rect: DOMRect) => {
@@ -147,6 +260,96 @@ export const Sidebar: React.FC<SidebarProps> = ({
         setRowMenuPosition(null);
         setMenuPlacement(null);
     }, []);
+
+    const computeAvatarMenuPlacement = React.useCallback((rect: DOMRect) => {
+        const gap = 8;
+        const viewportPadding = 8;
+        const menuWidth = 184;
+        const menuHeight = 90;
+        const preferredLeft = rect.left;
+        const maxLeft = Math.max(viewportPadding, window.innerWidth - menuWidth - viewportPadding);
+        const left = Math.max(viewportPadding, Math.min(preferredLeft, maxLeft));
+        const canOpenUp = rect.top - gap - menuHeight >= viewportPadding;
+        const top = canOpenUp
+            ? rect.top - gap - menuHeight
+            : Math.min(window.innerHeight - menuHeight - viewportPadding, rect.bottom + gap);
+        return {
+            left,
+            top,
+            placement: canOpenUp ? 'up' as const : 'down' as const,
+        };
+    }, []);
+
+    const closeAvatarMenu = React.useCallback(() => {
+        setIsAvatarMenuOpen(false);
+        setAvatarMenuAnchorRect(null);
+        setAvatarMenuPosition(null);
+        setAvatarMenuPlacement(null);
+        setAvatarMenuHoverKey(null);
+    }, []);
+
+    const computeMoreMenuPlacement = React.useCallback((rect: DOMRect) => {
+        const gap = 8;
+        const viewportPadding = 8;
+        const menuWidth = 208;
+        const menuHeight = 88;
+        const preferredLeft = rect.left;
+        const maxLeft = Math.max(viewportPadding, window.innerWidth - menuWidth - viewportPadding);
+        const left = Math.max(viewportPadding, Math.min(preferredLeft, maxLeft));
+        const canOpenDown = rect.bottom + gap + menuHeight <= window.innerHeight - viewportPadding;
+        const top = canOpenDown
+            ? Math.max(viewportPadding, rect.bottom + gap)
+            : Math.max(viewportPadding, rect.top - gap - menuHeight);
+        return {
+            left,
+            top,
+            placement: canOpenDown ? 'down' as const : 'up' as const,
+        };
+    }, []);
+
+    const closeMoreMenu = React.useCallback(() => {
+        setIsMoreMenuOpen(false);
+        setMoreMenuAnchorRect(null);
+        setMoreMenuPosition(null);
+        setMoreMenuPlacement(null);
+        setMoreMenuHoverKey(null);
+    }, []);
+
+    const toggleMoreMenuFromTrigger = React.useCallback((trigger: HTMLElement) => {
+        if (disabled) return;
+        if (isMoreMenuOpen) {
+            closeMoreMenu();
+            return;
+        }
+        closeRowMenu();
+        closeAvatarMenu();
+        const rect = trigger.getBoundingClientRect();
+        const placement = computeMoreMenuPlacement(rect);
+        setMoreMenuAnchorRect(rect);
+        setMoreMenuPosition({ left: placement.left, top: placement.top });
+        setMoreMenuPlacement(placement.placement);
+        setIsMoreMenuOpen(true);
+    }, [closeAvatarMenu, closeMoreMenu, closeRowMenu, computeMoreMenuPlacement, disabled, isMoreMenuOpen]);
+
+    const openAvatarMenuFromTrigger = React.useCallback((trigger: HTMLElement) => {
+        if (disabled) return;
+        if (!canOpenAvatarMenu) return;
+        closeMoreMenu();
+        const rect = trigger.getBoundingClientRect();
+        const placement = computeAvatarMenuPlacement(rect);
+        setAvatarMenuAnchorRect(rect);
+        setAvatarMenuPosition({ left: placement.left, top: placement.top });
+        setAvatarMenuPlacement(placement.placement);
+        setIsAvatarMenuOpen(true);
+    }, [canOpenAvatarMenu, closeMoreMenu, computeAvatarMenuPlacement, disabled]);
+
+    const toggleAvatarMenuFromTrigger = React.useCallback((trigger: HTMLElement) => {
+        if (isAvatarMenuOpen) {
+            closeAvatarMenu();
+            return;
+        }
+        openAvatarMenuFromTrigger(trigger);
+    }, [closeAvatarMenu, isAvatarMenuOpen, openAvatarMenuFromTrigger]);
 
     const cancelRename = React.useCallback(() => {
         setRenamingRowId(null);
@@ -183,13 +386,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
             closeRowMenu();
             return;
         }
+        closeMoreMenu();
         const rect = trigger.getBoundingClientRect();
         const placement = computeRowMenuPlacement(rect);
         setOpenRowMenuId(itemId);
         setRowMenuAnchorRect(rect);
         setRowMenuPosition({ left: placement.left, top: placement.top });
         setMenuPlacement(placement.placement);
-    }, [closeRowMenu, computeRowMenuPlacement, disabled, openRowMenuId]);
+    }, [closeMoreMenu, closeRowMenu, computeRowMenuPlacement, disabled, openRowMenuId]);
 
     React.useEffect(() => {
         if (!disabled) return;
@@ -199,7 +403,34 @@ export const Sidebar: React.FC<SidebarProps> = ({
         if (renamingRowId) {
             cancelRename();
         }
-    }, [cancelRename, closeRowMenu, disabled, openRowMenuId, renamingRowId]);
+        if (isAvatarMenuOpen) {
+            closeAvatarMenu();
+        }
+        if (isMoreMenuOpen) {
+            closeMoreMenu();
+        }
+    }, [cancelRename, closeAvatarMenu, closeMoreMenu, closeRowMenu, disabled, isAvatarMenuOpen, isMoreMenuOpen, openRowMenuId, renamingRowId]);
+
+    React.useEffect(() => {
+        const sidebarEl = sidebarRootRef.current;
+        if (!sidebarEl) return;
+        (sidebarEl as HTMLElement & { inert?: boolean }).inert = frozen;
+        if (!frozen) return;
+        const activeEl = document.activeElement;
+        if (activeEl instanceof HTMLElement && sidebarEl.contains(activeEl)) {
+            activeEl.blur();
+        }
+    }, [frozen]);
+
+    React.useEffect(() => {
+        if (!disabled) return;
+        const sidebarEl = sidebarRootRef.current;
+        if (!sidebarEl) return;
+        const activeEl = document.activeElement;
+        if (activeEl instanceof HTMLElement && sidebarEl.contains(activeEl)) {
+            activeEl.blur();
+        }
+    }, [disabled]);
 
     React.useEffect(() => {
         if (!openRowMenuId && !renamingRowId) return;
@@ -258,114 +489,451 @@ export const Sidebar: React.FC<SidebarProps> = ({
         return () => window.cancelAnimationFrame(id);
     }, [renamingRowId]);
 
+    React.useEffect(() => {
+        if (!isAvatarMenuOpen || !avatarMenuAnchorRect) return;
+        const update = () => {
+            if (!avatarMenuAnchorRect) return;
+            const placement = computeAvatarMenuPlacement(avatarMenuAnchorRect);
+            setAvatarMenuPosition({ left: placement.left, top: placement.top });
+            setAvatarMenuPlacement(placement.placement);
+        };
+        window.addEventListener('resize', update);
+        window.addEventListener('scroll', update, true);
+        return () => {
+            window.removeEventListener('resize', update);
+            window.removeEventListener('scroll', update, true);
+        };
+    }, [avatarMenuAnchorRect, computeAvatarMenuPlacement, isAvatarMenuOpen]);
+
+    React.useEffect(() => {
+        if (!isMoreMenuOpen || !moreMenuAnchorRect) return;
+        const update = () => {
+            if (!moreMenuAnchorRect) return;
+            const placement = computeMoreMenuPlacement(moreMenuAnchorRect);
+            setMoreMenuPosition({ left: placement.left, top: placement.top });
+            setMoreMenuPlacement(placement.placement);
+        };
+        window.addEventListener('resize', update);
+        window.addEventListener('scroll', update, true);
+        return () => {
+            window.removeEventListener('resize', update);
+            window.removeEventListener('scroll', update, true);
+        };
+    }, [computeMoreMenuPlacement, isMoreMenuOpen, moreMenuAnchorRect]);
+
+    React.useEffect(() => {
+        if (!isAvatarMenuOpen) return;
+
+        const onWindowPointerDown = (event: PointerEvent) => {
+            const target = event.target as Element | null;
+            if (!target) {
+                closeAvatarMenu();
+                return;
+            }
+            if (target.closest('[data-avatar-menu="1"]')) return;
+            if (target.closest('[data-avatar-trigger="1"]')) return;
+            closeAvatarMenu();
+        };
+
+        const onWindowKeyDown = (event: KeyboardEvent) => {
+            if (event.key !== 'Escape') return;
+            closeAvatarMenu();
+        };
+
+        window.addEventListener('pointerdown', onWindowPointerDown, true);
+        window.addEventListener('keydown', onWindowKeyDown, true);
+        return () => {
+            window.removeEventListener('pointerdown', onWindowPointerDown, true);
+            window.removeEventListener('keydown', onWindowKeyDown, true);
+        };
+    }, [closeAvatarMenu, isAvatarMenuOpen]);
+
+    React.useEffect(() => {
+        if (!isMoreMenuOpen) return;
+
+        const onWindowPointerDown = (event: PointerEvent) => {
+            const target = event.target as Element | null;
+            if (!target) {
+                closeMoreMenu();
+                return;
+            }
+            if (target.closest('[data-more-menu="1"]')) return;
+            if (target.closest('[data-more-trigger="1"]')) return;
+            closeMoreMenu();
+        };
+
+        const onWindowKeyDown = (event: KeyboardEvent) => {
+            if (event.key !== 'Escape') return;
+            closeMoreMenu();
+        };
+
+        window.addEventListener('pointerdown', onWindowPointerDown, true);
+        window.addEventListener('keydown', onWindowKeyDown, true);
+        return () => {
+            window.removeEventListener('pointerdown', onWindowPointerDown, true);
+            window.removeEventListener('keydown', onWindowKeyDown, true);
+        };
+    }, [closeMoreMenu, isMoreMenuOpen]);
+
+    React.useEffect(() => {
+        const media = window.matchMedia('(prefers-reduced-motion: reduce)');
+        const update = () => setPrefersReducedMotion(media.matches);
+        update();
+        if (typeof media.addEventListener === 'function') {
+            media.addEventListener('change', update);
+            return () => media.removeEventListener('change', update);
+        }
+        media.addListener(update);
+        return () => media.removeListener(update);
+    }, []);
+
+    React.useEffect(() => {
+        if (prefersReducedMotion) {
+            setMotionPhase(isExpanded ? 'expanded' : 'collapsed');
+            return;
+        }
+        const activePhase: SidebarMotionPhase = isExpanded ? 'expanding' : 'collapsing';
+        const settledPhase: SidebarMotionPhase = isExpanded ? 'expanded' : 'collapsed';
+        const settleDelayMs = isExpanded ? SIDEBAR_EXPAND_DURATION_MS : SIDEBAR_COLLAPSE_DURATION_MS;
+        setMotionPhase((prev) => (prev === settledPhase ? prev : activePhase));
+        const timeoutId = window.setTimeout(() => {
+            setMotionPhase(settledPhase);
+        }, settleDelayMs);
+        return () => window.clearTimeout(timeoutId);
+    }, [isExpanded, prefersReducedMotion]);
+
+    React.useEffect(() => {
+        if (!isInMotionPhase) return;
+        setLogoHover(false);
+        setCreateNewHover(false);
+        setSearchHover(false);
+        setMoreHover(false);
+        setDocumentHover(false);
+        setAvatarRowHover(false);
+        setCloseHover(false);
+        if (!(SIDEBAR_FLICKER_DEBUG && SIDEBAR_FLICKER_DEBUG_SWITCHES.disableHoverResetOnMotionStart)) {
+            setHoveredInterfaceId(null);
+            setHoveredEllipsisRowId(null);
+        }
+    }, [isInMotionPhase]);
+
+    React.useEffect(() => {
+        if (!(SIDEBAR_FLICKER_DEBUG && SIDEBAR_FLICKER_DEBUG_SWITCHES.logFrames)) return;
+        if (flickerRafRef.current !== null) {
+            window.cancelAnimationFrame(flickerRafRef.current);
+            flickerRafRef.current = null;
+        }
+        const seq = ++flickerLogSeqRef.current;
+        const direction = isExpanded ? 'expand' : 'collapse';
+        const maxFrames = 20;
+        let frame = 0;
+        const logFrame = () => {
+            frame += 1;
+            const titleEl = firstSessionTitleRef.current;
+            const sidebarEl = sidebarRootRef.current;
+            const titleStyle = titleEl ? window.getComputedStyle(titleEl) : null;
+            const sidebarStyleComputed = sidebarEl ? window.getComputedStyle(sidebarEl) : null;
+            const opacity = titleStyle?.opacity ?? 'na';
+            const transform = titleStyle?.transform ?? 'na';
+            const color = titleStyle?.color ?? 'na';
+            const textOverflow = titleStyle?.textOverflow ?? 'na';
+            const clientWidth = titleEl?.clientWidth ?? -1;
+            const scrollWidth = titleEl?.scrollWidth ?? -1;
+            const sidebarWidth = sidebarEl ? Number(sidebarEl.getBoundingClientRect().width.toFixed(2)) : -1;
+            const sidebarCssWidth = sidebarStyleComputed?.width ?? 'na';
+            console.log(
+                '[sidebar-flicker] seq=%d frame=%d dir=%s isExpanded=%s motionPhase=%s showTitles=%s opacity=%s transform=%s cw=%d sw=%d overflow=%s color=%s sidebarW=%s sidebarCssW=%s hoveredRow=%s hoveredEllipsis=%s',
+                seq,
+                frame,
+                direction,
+                isExpanded ? '1' : '0',
+                motionPhase,
+                shouldShowSessionTitles ? '1' : '0',
+                opacity,
+                transform,
+                clientWidth,
+                scrollWidth,
+                textOverflow,
+                color,
+                String(sidebarWidth),
+                sidebarCssWidth,
+                hoveredInterfaceId ?? '-',
+                hoveredEllipsisRowId ?? '-'
+            );
+            if (frame < maxFrames) {
+                flickerRafRef.current = window.requestAnimationFrame(logFrame);
+            } else {
+                flickerRafRef.current = null;
+            }
+        };
+        flickerRafRef.current = window.requestAnimationFrame(logFrame);
+        return () => {
+            if (flickerRafRef.current !== null) {
+                window.cancelAnimationFrame(flickerRafRef.current);
+                flickerRafRef.current = null;
+            }
+        };
+    }, [hoveredEllipsisRowId, hoveredInterfaceId, isExpanded, motionPhase, shouldShowSessionTitles]);
+
+    React.useEffect(() => {
+        if (isExpanded) {
+            setCloseHover(false);
+            setCloseHoverArmed(false);
+            return;
+        }
+
+        setCloseHover(false);
+        setCloseHoverArmed(true);
+    }, [isExpanded]);
+
+    React.useEffect(() => {
+        if (!isExpanded || closeHoverArmed) return;
+
+        const onFirstPointerMove = () => {
+            setCloseHoverArmed(true);
+        };
+
+        window.addEventListener('pointermove', onFirstPointerMove, { once: true });
+        return () => {
+            window.removeEventListener('pointermove', onFirstPointerMove);
+        };
+    }, [closeHoverArmed, isExpanded]);
+
     const bottomSectionStyle: React.CSSProperties = {
         ...BOTTOM_SECTION_STYLE,
-        alignItems: isExpanded ? 'stretch' : 'center',
-        ...(isExpanded
-            ? {}
-            : {
-                paddingLeft: '0px',
-                paddingRight: '0px',
-            }),
+        alignItems: 'stretch',
+        // Keep bottom icon anchors in fully valid bounds; avoid negative padding math.
+        paddingLeft: '0px',
+        paddingRight: '0px',
+    };
+
+    const expandedContentStyle: React.CSSProperties = {
+        opacity: isExpanded ? 1 : 0,
+        transform: isExpanded ? 'translateX(0px)' : `translateX(-${EXPANDED_CONTENT_HIDDEN_OFFSET_PX}px)`,
+        transition: contentTransitionCss,
+        pointerEvents: isExpanded ? 'auto' : 'none',
+    };
+    const sessionTitleRevealStyle: React.CSSProperties = {
+        opacity: shouldShowSessionTitles ? 1 : 0,
+        transform: SIDEBAR_FLICKER_DEBUG && SIDEBAR_FLICKER_DEBUG_SWITCHES.removeTitleTransform
+            ? 'none'
+            : (shouldShowSessionTitles ? 'translateX(0px)' : `translateX(-${SESSION_TEXT_HIDDEN_OFFSET_PX}px)`),
+        transition: contentTransitionCss,
+        pointerEvents: shouldShowSessionTitles ? 'auto' : 'none',
+    };
+    const interfaceTitleStyle: React.CSSProperties = SIDEBAR_FLICKER_DEBUG && SIDEBAR_FLICKER_DEBUG_SWITCHES.forceTitleOverflowClip
+        ? { ...INTERFACE_TEXT_STYLE, textOverflow: 'clip' }
+        : INTERFACE_TEXT_STYLE;
+    const avatarNameRevealStyle: React.CSSProperties = {
+        opacity: shouldShowAvatarName ? 1 : 0,
+        transform: shouldShowAvatarName
+            ? `translateX(${AVATAR_NAME_BASE_OFFSET_PX}px)`
+            : `translateX(${AVATAR_NAME_BASE_OFFSET_PX - AVATAR_NAME_HIDDEN_OFFSET_PX}px)`,
+        transition: contentTransitionCss,
+        pointerEvents: shouldShowAvatarName ? 'auto' : 'none',
+    };
+    const avatarNameLaneStyle: React.CSSProperties = {
+        ...AVATAR_NAME_LANE_STYLE,
+        marginLeft: `${AVATAR_CONTENT_LANE_OFFSET_PX}px`,
     };
 
     return (
         <aside
+            ref={sidebarRootRef}
             data-sidebar-root="1"
             data-row-menu-open={openRowMenuId ? '1' : '0'}
             data-row-menu-anchor-ready={rowMenuAnchorRect ? '1' : '0'}
             data-row-menu-position-ready={rowMenuPosition ? '1' : '0'}
             data-row-menu-placement={menuPlacement ?? ''}
             data-row-menu-item-preview-count={String(menuItemPreview.length)}
+            data-motion-phase={motionPhase}
+            data-sidebar-lock-reason={lockReason}
+            data-sidebar-icon-dim-multiplier={String(iconOpacityMultiplier)}
             style={sidebarStyle}
             onPointerDown={(e) => e.stopPropagation()}
             onWheelCapture={(e) => e.stopPropagation()}
             onWheel={(e) => e.stopPropagation()}
+            onKeyDownCapture={(e) => {
+                if (!frozen) return;
+                e.preventDefault();
+                e.stopPropagation();
+            }}
+            aria-disabled={frozen ? true : undefined}
         >
-            {/* Top Section */}
-            <div style={TOP_SECTION_STYLE}>
-                {/* Logo / Toggle Row */}
-                <div style={LOGO_ROW_STYLE}>
-                    <button
-                        type="button"
-                        style={ICON_BUTTON_STYLE}
-                        onMouseEnter={() => setLogoHover(true)}
-                        onMouseLeave={() => setLogoHover(false)}
-                        onClick={!isExpanded ? onToggle : undefined}
-                        title={!isExpanded ? 'Open sidebar' : undefined}
-                    >
-                        <MaskIcon
-                            src={!isExpanded && logoHover ? sidebarIcon : circleIcon}
-                            size={LOGO_SIZE}
-                            color={logoHover ? HOVER_ACCENT_COLOR : DEFAULT_ICON_COLOR}
-                            opacity={logoHover ? ICON_OPACITY_HOVER : ICON_OPACITY_DEFAULT}
-                        />
-                    </button>
-                    {isExpanded && (
+            <div style={sidebarVisualRailStyle}>
+                {/* Top Section */}
+                <div style={TOP_SECTION_STYLE}>
+                    {/* Logo / Toggle Row */}
+                    <div style={LOGO_ROW_STYLE}>
+                        {/*
+                      Top-left logo uses layered mask crossfade so shape swap is a true 100ms fade.
+                    */}
                         <button
-                            type="button"
-                            style={{ ...ICON_BUTTON_STYLE, marginLeft: 'auto', marginRight: `${-CLOSE_ICON_OFFSET_LEFT}px` }}
-                            onMouseEnter={() => setCloseHover(true)}
-                            onMouseLeave={() => setCloseHover(false)}
-                            onClick={onToggle}
-                            title="Close sidebar"
+                            {...openSidebarTooltip.getAnchorProps({
+                                type: 'button',
+                                style: ICON_BUTTON_STYLE,
+                                onMouseEnter: () => {
+                                    if (isInMotionPhase) return;
+                                    setLogoHover(true);
+                                },
+                                onMouseLeave: () => setLogoHover(false),
+                                onClick: !isExpanded ? onToggle : undefined,
+                            })}
                         >
-                            <MaskIcon
-                                src={sidebarIcon}
-                                size={ICON_SIZE}
-                                color={closeHover ? HOVER_ACCENT_COLOR : DEFAULT_ICON_COLOR}
-                                opacity={closeHover ? ICON_OPACITY_HOVER : ICON_OPACITY_DEFAULT}
-                            />
+                            <span
+                                aria-hidden="true"
+                                style={{
+                                    position: 'relative',
+                                    width: `${LOGO_SIZE}px`,
+                                    height: `${LOGO_SIZE}px`,
+                                    display: 'inline-block',
+                                    pointerEvents: 'none',
+                                }}
+                            >
+                                <span
+                                    style={{
+                                        position: 'absolute',
+                                        inset: 0,
+                                        display: 'inline-flex',
+                                    }}
+                                >
+                                    <MaskIcon
+                                        src={circleIcon}
+                                        size={LOGO_SIZE}
+                                        color={logoHover ? HOVER_ACCENT_COLOR : DEFAULT_ICON_COLOR}
+                                        opacity={applyIconOpacity(!isExpanded && logoHover ? 0 : (logoHover ? ICON_OPACITY_HOVER : ICON_OPACITY_DEFAULT))}
+                                        transition={`opacity ${LOGO_SWAP_TRANSITION}, background-color ${SIDEBAR_HOVER_TRANSITION}`}
+                                    />
+                                </span>
+                                <span
+                                    style={{
+                                        position: 'absolute',
+                                        inset: 0,
+                                        display: 'inline-flex',
+                                    }}
+                                >
+                                    <MaskIcon
+                                        src={sidebarIcon}
+                                        size={LOGO_SIZE}
+                                        color={logoHover ? HOVER_ACCENT_COLOR : DEFAULT_ICON_COLOR}
+                                        opacity={applyIconOpacity(!isExpanded && logoHover ? (logoHover ? ICON_OPACITY_HOVER : ICON_OPACITY_DEFAULT) : 0)}
+                                        transition={`opacity ${LOGO_SWAP_TRANSITION}, background-color ${SIDEBAR_HOVER_TRANSITION}`}
+                                    />
+                                </span>
+                            </span>
                         </button>
-                    )}
+                        {shouldMountExpandedContent && (
+                            <button
+                                {...closeSidebarTooltip.getAnchorProps({
+                                    type: 'button',
+                                    'aria-hidden': !isExpanded,
+                                    style: {
+                                        ...ICON_BUTTON_STYLE,
+                                        ...expandedContentStyle,
+                                        marginLeft: 'auto',
+                                        marginRight: `${-CLOSE_ICON_OFFSET_LEFT}px`,
+                                    },
+                                    onMouseEnter: () => {
+                                        if (isInMotionPhase) return;
+                                        if (!closeHoverArmed) return;
+                                        setCloseHover(true);
+                                    },
+                                    onMouseLeave: () => setCloseHover(false),
+                                    onClick: onToggle,
+                                })}
+                            >
+                                <svg
+                                    aria-hidden="true"
+                                    viewBox={CLOSE_ICON_VIEWBOX}
+                                    style={{
+                                        width: `${CLOSE_ICON_SIZE_PX}px`,
+                                        height: `${CLOSE_ICON_SIZE_PX}px`,
+                                        display: 'block',
+                                        pointerEvents: 'none',
+                                    }}
+                                >
+                                    <path
+                                        d={CLOSE_ICON_PATH_D}
+                                        fill={closeHover ? HOVER_ACCENT_COLOR : DEFAULT_ICON_COLOR}
+                                        fillRule="evenodd"
+                                        style={{
+                                            opacity: applyIconOpacity(closeHover ? ICON_OPACITY_HOVER : ICON_OPACITY_DEFAULT),
+                                            transition: `fill ${SIDEBAR_HOVER_TRANSITION}, opacity ${SIDEBAR_HOVER_TRANSITION}`,
+                                        }}
+                                    />
+                                </svg>
+                            </button>
+                        )}
+                    </div>
+
+                    {/* Nav Items */}
+                    <div style={{ marginTop: `${CREATE_NEW_OFFSET_TOP}px` }}>
+                        <NavItem
+                            icon={createNewIcon}
+                            label="Create New"
+                            collapsedTooltip="Create New"
+                            isExpanded={isExpanded}
+                            showExpandedContent={shouldMountExpandedContent}
+                            contentTransitionCss={contentTransitionCss}
+                            iconOpacityMultiplier={iconOpacityMultiplier}
+                            suppressHover={isInMotionPhase}
+                            isHovered={createNewHover}
+                            onMouseEnter={() => setCreateNewHover(true)}
+                            onMouseLeave={() => setCreateNewHover(false)}
+                            onClick={onCreateNew}
+                        />
+                    </div>
+                    <div style={{ marginTop: `${SEARCH_OFFSET_TOP}px` }}>
+                        <NavItem
+                            icon={searchIcon}
+                            label="Search Interfaces"
+                            collapsedTooltip="Search Interfaces"
+                            isExpanded={isExpanded}
+                            showExpandedContent={shouldMountExpandedContent}
+                            contentTransitionCss={contentTransitionCss}
+                            iconOpacityMultiplier={iconOpacityMultiplier}
+                            suppressHover={isInMotionPhase}
+                            isHovered={searchHover}
+                            onMouseEnter={() => setSearchHover(true)}
+                            onMouseLeave={() => setSearchHover(false)}
+                            onClick={onOpenSearchInterfaces}
+                            hardShieldInput
+                        />
+                    </div>
+                    <div style={{ marginTop: `${MORE_OFFSET_TOP}px` }}>
+                        <NavItem
+                            buttonRef={moreTriggerRef}
+                            dataMoreTrigger
+                            icon={threeDotIcon}
+                            label="More"
+                            collapsedTooltip="More"
+                            isExpanded={isExpanded}
+                            showExpandedContent={shouldMountExpandedContent}
+                            contentTransitionCss={contentTransitionCss}
+                            iconOpacityMultiplier={iconOpacityMultiplier}
+                            suppressHover={isInMotionPhase}
+                            isHovered={moreHover}
+                            onMouseEnter={() => setMoreHover(true)}
+                            onMouseLeave={() => setMoreHover(false)}
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                const trigger = e.currentTarget as HTMLButtonElement;
+                                toggleMoreMenuFromTrigger(trigger);
+                            }}
+                            hardShieldInput
+                        />
+                    </div>
+
                 </div>
 
-                {/* Nav Items */}
-                <div style={{ marginTop: `${CREATE_NEW_OFFSET_TOP}px` }}>
-                    <NavItem
-                        icon={createNewIcon}
-                        label="Create New"
-                        isExpanded={isExpanded}
-                        isHovered={createNewHover}
-                        onMouseEnter={() => setCreateNewHover(true)}
-                        onMouseLeave={() => setCreateNewHover(false)}
-                        onClick={onCreateNew}
-                    />
-                </div>
-                <div style={{ marginTop: `${SEARCH_OFFSET_TOP}px` }}>
-                    <NavItem
-                        icon={searchIcon}
-                        label="Search Interfaces"
-                        isExpanded={isExpanded}
-                        isHovered={searchHover}
-                        onMouseEnter={() => setSearchHover(true)}
-                        onMouseLeave={() => setSearchHover(false)}
-                        onClick={onOpenSearchInterfaces}
-                        hardShieldInput
-                    />
-                </div>
-                <div style={{ marginTop: `${MORE_OFFSET_TOP}px` }}>
-                    <NavItem
-                        icon={threeDotIcon}
-                        label="More"
-                        isExpanded={isExpanded}
-                        isHovered={moreHover}
-                        onMouseEnter={() => setMoreHover(true)}
-                        onMouseLeave={() => setMoreHover(false)}
-                    />
-                </div>
-
-            </div>
-
-            {/* Your Interfaces Section (expanded only, isolated scroll area) */}
-            {isExpanded && (
-                <div style={INTERFACES_SECTION_STYLE}>
+                {/* Your Interfaces Section (always mounted to prevent layout-reflow jump) */}
+                <div style={{ ...INTERFACES_SECTION_STYLE, ...expandedContentStyle }} aria-hidden={!isExpanded}>
                     <div style={SECTION_HEADER_STYLE}>Your Interfaces</div>
                     <div style={INTERFACES_LIST_STYLE}>
                         {!interfaces || interfaces.length === 0 ? (
                             <div style={INTERFACE_EMPTY_STATE_STYLE}>No saved interfaces yet.</div>
                         ) : (
-                            interfaces.map((item) => {
+                            interfaces.map((item, index) => {
                                 const isHovered = hoveredInterfaceId === item.id;
                                 const isSelected = selectedInterfaceId === item.id;
                                 const isRenaming = renamingRowId === item.id;
@@ -382,13 +950,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
                                         onPointerDown={(e) => e.stopPropagation()}
                                         onWheelCapture={(e) => e.stopPropagation()}
                                         onWheel={(e) => e.stopPropagation()}
-                                        onMouseEnter={() => setHoveredInterfaceId(item.id)}
+                                        onMouseEnter={() => {
+                                            if (isInMotionPhase) return;
+                                            setHoveredInterfaceId(item.id);
+                                        }}
                                         onMouseLeave={() => setHoveredInterfaceId(null)}
                                         onClick={() => {
                                             if (isRenaming) return;
                                             onSelectInterface?.(item.id);
                                         }}
-                                        title={item.subtitle}
                                     >
                                         <span style={INTERFACE_ROW_CONTENT_STYLE}>
                                             {isRenaming ? (
@@ -428,44 +998,54 @@ export const Sidebar: React.FC<SidebarProps> = ({
                                                     />
                                                 </span>
                                             ) : (
-                                                <span style={INTERFACE_TEXT_STYLE}>{item.title}</span>
+                                                <SidebarTooltipText
+                                                    content={item.subtitle ?? ''}
+                                                    style={{ ...interfaceTitleStyle, ...sessionTitleRevealStyle }}
+                                                    textRef={index === 0 ? firstSessionTitleRef : undefined}
+                                                >
+                                                    {item.title}
+                                                </SidebarTooltipText>
                                             )}
                                             <span style={INTERFACE_ROW_MENU_SLOT_STYLE}>
                                                 <button
-                                                    type="button"
+                                                    {...sessionActionsTooltip.getAnchorProps({
+                                                        type: 'button',
+                                                        'data-row-ellipsis': '1',
+                                                        'aria-label': `Open actions for ${item.title}`,
+                                                        style: {
+                                                            ...ROW_ELLIPSIS_BUTTON_STYLE,
+                                                            border: 'none',
+                                                            background: 'transparent',
+                                                            cursor: disabled ? 'default' : ROW_ELLIPSIS_BUTTON_STYLE.cursor,
+                                                            opacity: showRowEllipsis ? 1 : 0,
+                                                        },
+                                                        onPointerDown: (e) => e.stopPropagation(),
+                                                        onPointerUp: (e) => e.stopPropagation(),
+                                                        onWheelCapture: (e) => e.stopPropagation(),
+                                                        onWheel: (e) => e.stopPropagation(),
+                                                        onMouseEnter: () => {
+                                                            if (isInMotionPhase) return;
+                                                            setHoveredEllipsisRowId(item.id);
+                                                        },
+                                                        onMouseLeave: () => setHoveredEllipsisRowId((curr) => (curr === item.id ? null : curr)),
+                                                        onClick: (e) => {
+                                                            e.preventDefault();
+                                                            e.stopPropagation();
+                                                            if (disabled) return;
+                                                            const el = e.currentTarget as HTMLButtonElement;
+                                                            if (isRenaming) return;
+                                                            toggleRowMenuForItem(item.id, el);
+                                                        },
+                                                        onKeyDown: (e) => {
+                                                            if (e.key !== 'Enter' && e.key !== ' ') return;
+                                                            e.preventDefault();
+                                                            e.stopPropagation();
+                                                            if (disabled) return;
+                                                            const el = e.currentTarget as HTMLButtonElement;
+                                                            toggleRowMenuForItem(item.id, el);
+                                                        },
+                                                    })}
                                                     disabled={disabled}
-                                                    data-row-ellipsis="1"
-                                                    aria-label={`Open actions for ${item.title}`}
-                                                    title="Session actions"
-                                                    style={{
-                                                        ...ROW_ELLIPSIS_BUTTON_STYLE,
-                                                        border: 'none',
-                                                        background: 'transparent',
-                                                        cursor: disabled ? 'default' : ROW_ELLIPSIS_BUTTON_STYLE.cursor,
-                                                        opacity: showRowEllipsis ? 1 : 0,
-                                                    }}
-                                                    onPointerDown={(e) => e.stopPropagation()}
-                                                    onPointerUp={(e) => e.stopPropagation()}
-                                                    onWheelCapture={(e) => e.stopPropagation()}
-                                                    onWheel={(e) => e.stopPropagation()}
-                                                    onMouseEnter={() => setHoveredEllipsisRowId(item.id)}
-                                                    onMouseLeave={() => setHoveredEllipsisRowId((curr) => (curr === item.id ? null : curr))}
-                                                    onClick={(e) => {
-                                                        e.preventDefault();
-                                                        e.stopPropagation();
-                                                        if (disabled) return;
-                                                        const el = e.currentTarget as HTMLButtonElement;
-                                                        if (isRenaming) return;
-                                                        toggleRowMenuForItem(item.id, el);
-                                                    }}
-                                                    onKeyDown={(e) => {
-                                                        if (e.key !== 'Enter' && e.key !== ' ') return;
-                                                        e.preventDefault();
-                                                        e.stopPropagation();
-                                                        if (disabled) return;
-                                                        const el = e.currentTarget as HTMLButtonElement;
-                                                        toggleRowMenuForItem(item.id, el);
-                                                    }}
                                                 >
                                                     <MaskIcon
                                                         src={verticalElipsisIcon}
@@ -473,7 +1053,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                                                         color={hoveredEllipsisRowId === item.id
                                                             ? HOVER_ACCENT_COLOR
                                                             : (isSelected ? HOVER_ACCENT_COLOR : 'rgba(255, 255, 255, 0.75)')}
-                                                        opacity={1}
+                                                        opacity={applyIconOpacity(1)}
                                                     />
                                                 </button>
                                             </span>
@@ -484,8 +1064,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         )}
                     </div>
                 </div>
-            )}
-
+            </div>
             {openRowMenuId !== null && rowMenuPosition !== null ? (
                 <div
                     data-row-menu="1"
@@ -547,7 +1126,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                                     color={menuItem.key === 'rename' && hoveredMenuItemKey === 'rename'
                                         ? HOVER_ACCENT_COLOR
                                         : menuItem.color}
-                                    opacity={1}
+                                    opacity={applyIconOpacity(1)}
                                 />
                                 <span
                                     style={{
@@ -565,77 +1144,328 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 </div>
             ) : null}
 
-            {/* Bottom Section - User Avatar */}
-            <div
-                style={bottomSectionStyle}
-            >
-                {showDocumentViewerButton ? (
+            {isAvatarMenuOpen && avatarMenuPosition ? (
+                <div
+                    data-avatar-menu="1"
+                    style={{
+                        ...AVATAR_MENU_POPUP_STYLE,
+                        left: `${avatarMenuPosition.left}px`,
+                        top: `${avatarMenuPosition.top}px`,
+                        transformOrigin: avatarMenuPlacement === 'down' ? 'top left' : 'bottom left',
+                    }}
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onPointerUp={(e) => e.stopPropagation()}
+                    onClick={(e) => e.stopPropagation()}
+                    onWheelCapture={(e) => e.stopPropagation()}
+                    onWheel={(e) => e.stopPropagation()}
+                >
                     <button
                         type="button"
-                        style={{
-                            ...NAV_ITEM_STYLE,
-                            justifyContent: 'flex-start',
-                            alignSelf: 'stretch',
-                            marginBottom: '8px',
-                        }}
-                        onClick={onToggleDocumentViewer}
+                        style={AVATAR_MENU_ITEM_STYLE}
                         onPointerDown={(e) => e.stopPropagation()}
-                        onMouseEnter={() => setDocumentHover(true)}
-                        onMouseLeave={() => setDocumentHover(false)}
-                        title="Open document viewer"
+                        onPointerUp={(e) => e.stopPropagation()}
+                        onWheelCapture={(e) => e.stopPropagation()}
+                        onWheel={(e) => e.stopPropagation()}
+                        onMouseEnter={() => setAvatarMenuHoverKey('profile')}
+                        onMouseLeave={() => setAvatarMenuHoverKey((curr) => (curr === 'profile' ? null : curr))}
+                        onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            closeAvatarMenu();
+                            onOpenProfile?.();
+                        }}
                     >
-                        <MaskIcon
-                            src={documentIcon}
-                            size={ICON_SIZE}
-                            color={documentHover ? HOVER_ACCENT_COLOR : DEFAULT_ICON_COLOR}
-                            opacity={documentHover ? ICON_OPACITY_HOVER : ICON_OPACITY_DEFAULT}
-                        />
-                        {isExpanded && (
+                        <span style={AVATAR_MENU_ITEM_CONTENT_STYLE}>
+                            {accountImageUrl ? (
+                                <img
+                                    src={accountImageUrl}
+                                    alt="avatar"
+                                    style={AVATAR_MENU_ACCOUNT_PHOTO_STYLE}
+                                />
+                            ) : (
+                                <span style={AVATAR_MENU_ACCOUNT_FALLBACK_STYLE}>BA</span>
+                            )}
                             <span
                                 style={{
-                                    ...NAV_LABEL_STYLE,
-                                    color: documentHover ? HOVER_ACCENT_COLOR : NAV_LABEL_STYLE.color,
+                                    ...AVATAR_MENU_ACCOUNT_NAME_STYLE,
+                                    color: avatarMenuHoverKey === 'profile' ? HOVER_ACCENT_COLOR : SIDEBAR_TEXT_COLOR,
                                 }}
                             >
-                                Document Viewer
+                                {displayAccountName}
                             </span>
-                        )}
+                        </span>
                     </button>
-                ) : null}
-                <div style={AVATAR_SECTION_STYLE}>
-                    <div
-                        style={{
-                            ...PROFILE_ROW_STYLE,
-                            width: isExpanded ? PROFILE_ROW_STYLE.width : 'fit-content',
-                            margin: isExpanded ? undefined : '0',
-                            backgroundColor: avatarRowHover ? 'rgba(255, 255, 255, 0.14)' : 'transparent',
+                    <button
+                        type="button"
+                        style={AVATAR_MENU_ITEM_STYLE}
+                        onPointerDown={(e) => e.stopPropagation()}
+                        onPointerUp={(e) => e.stopPropagation()}
+                        onWheelCapture={(e) => e.stopPropagation()}
+                        onWheel={(e) => e.stopPropagation()}
+                        onMouseEnter={() => setAvatarMenuHoverKey('logout')}
+                        onMouseLeave={() => setAvatarMenuHoverKey((curr) => (curr === 'logout' ? null : curr))}
+                        onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            closeAvatarMenu();
+                            onRequestLogout?.();
                         }}
-                        onMouseEnter={() => setAvatarRowHover(true)}
-                        onMouseLeave={() => setAvatarRowHover(false)}
                     >
-                        <button
-                            type="button"
+                        <span
                             style={{
-                                ...ICON_BUTTON_STYLE,
-                                padding: '0',
-                                width: '32px',
-                                height: '32px',
-                                lineHeight: 0,
+                                ...AVATAR_MENU_ITEM_CONTENT_STYLE,
+                                opacity: avatarMenuHoverKey === 'logout' ? 0.5 : 1,
                             }}
                         >
-                            <div
+                            <MaskIcon
+                                src={logoutIcon}
+                                size={14}
+                                color="#ff4b4e"
+                                opacity={applyIconOpacity(1)}
+                            />
+                            <span
                                 style={{
-                                    ...AVATAR_STYLE,
-                                    opacity: 1,
+                                    ...AVATAR_MENU_ITEM_LABEL_STYLE,
+                                    color: SIDEBAR_TEXT_COLOR,
                                 }}
                             >
-                                BA
-                            </div>
+                                Log Out
+                            </span>
+                        </span>
+                    </button>
+                </div>
+            ) : null}
+
+            {isMoreMenuOpen && moreMenuPosition ? (
+                <div
+                    data-more-menu="1"
+                    style={{
+                        ...MORE_MENU_POPUP_STYLE,
+                        left: `${moreMenuPosition.left}px`,
+                        top: `${moreMenuPosition.top}px`,
+                        transformOrigin: moreMenuPlacement === 'down' ? 'top left' : 'bottom left',
+                    }}
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onPointerUp={(e) => e.stopPropagation()}
+                    onClick={(e) => e.stopPropagation()}
+                    onWheelCapture={(e) => e.stopPropagation()}
+                    onWheel={(e) => e.stopPropagation()}
+                >
+                    <button
+                        type="button"
+                        style={MORE_MENU_ITEM_STYLE}
+                        onPointerDown={(e) => e.stopPropagation()}
+                        onPointerUp={(e) => e.stopPropagation()}
+                        onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            closeMoreMenu();
+                            // TODO: implement Suggestion and Feedback UI flow.
+                            console.log('[sidebar] suggestion_feedback_clicked');
+                        }}
+                        onWheelCapture={(e) => e.stopPropagation()}
+                        onWheel={(e) => e.stopPropagation()}
+                        onMouseEnter={() => setMoreMenuHoverKey('suggestion')}
+                        onMouseLeave={() => setMoreMenuHoverKey((curr) => (curr === 'suggestion' ? null : curr))}
+                    >
+                        <span style={MORE_MENU_ITEM_CONTENT_STYLE}>
+                            <MaskIcon
+                                src={suggestionFeedbackIcon}
+                                size={14}
+                                color={moreMenuHoverKey === 'suggestion' ? HOVER_ACCENT_COLOR : SIDEBAR_TEXT_COLOR}
+                                opacity={applyIconOpacity(1)}
+                            />
+                            <span
+                                style={{
+                                    ...MORE_MENU_ITEM_LABEL_STYLE,
+                                    color: moreMenuHoverKey === 'suggestion' ? HOVER_ACCENT_COLOR : SIDEBAR_TEXT_COLOR,
+                                }}
+                            >
+                                Suggestion and Feedback
+                            </span>
+                        </span>
+                    </button>
+                    <button
+                        type="button"
+                        style={MORE_MENU_ITEM_STYLE}
+                        onPointerDown={(e) => e.stopPropagation()}
+                        onPointerUp={(e) => e.stopPropagation()}
+                        onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            closeMoreMenu();
+                            window.open('https://blog.arnvoid.com', '_blank', 'noopener,noreferrer');
+                        }}
+                        onWheelCapture={(e) => e.stopPropagation()}
+                        onWheel={(e) => e.stopPropagation()}
+                        onMouseEnter={() => setMoreMenuHoverKey('blog')}
+                        onMouseLeave={() => setMoreMenuHoverKey((curr) => (curr === 'blog' ? null : curr))}
+                    >
+                        <span style={MORE_MENU_ITEM_CONTENT_STYLE}>
+                            <MaskIcon
+                                src={blogIcon}
+                                size={14}
+                                color={moreMenuHoverKey === 'blog' ? HOVER_ACCENT_COLOR : SIDEBAR_TEXT_COLOR}
+                                opacity={applyIconOpacity(1)}
+                            />
+                            <span
+                                style={{
+                                    ...MORE_MENU_ITEM_LABEL_STYLE,
+                                    color: moreMenuHoverKey === 'blog' ? HOVER_ACCENT_COLOR : SIDEBAR_TEXT_COLOR,
+                                }}
+                            >
+                                Arnvoid Blog
+                            </span>
+                        </span>
+                    </button>
+                </div>
+            ) : null}
+
+            <div style={sidebarVisualRailStyle}>
+                {/* Bottom Section - User Avatar */}
+                <div
+                    style={bottomSectionStyle}
+                >
+                    {showDocumentViewerButton ? (
+                        <button
+                            {...openDocumentViewerTooltip.getAnchorProps({
+                                type: 'button',
+                                style: {
+                                    ...NAV_ITEM_STYLE,
+                                    justifyContent: 'flex-start',
+                                    alignSelf: 'stretch',
+                                    marginBottom: '8px',
+                                },
+                                onClick: onToggleDocumentViewer,
+                                onPointerDown: (e) => e.stopPropagation(),
+                                onMouseEnter: () => {
+                                    if (isInMotionPhase) return;
+                                    setDocumentHover(true);
+                                },
+                                onMouseLeave: () => setDocumentHover(false),
+                            })}
+                        >
+                            <MaskIcon
+                                src={documentIcon}
+                                size={ICON_SIZE}
+                                color={documentHover ? HOVER_ACCENT_COLOR : DEFAULT_ICON_COLOR}
+                                opacity={applyIconOpacity(documentHover ? ICON_OPACITY_HOVER : ICON_OPACITY_DEFAULT)}
+                            />
+                            {shouldMountExpandedContent && (
+                                <span
+                                    aria-hidden={!isExpanded}
+                                    style={{
+                                        ...NAV_LABEL_STYLE,
+                                        ...expandedContentStyle,
+                                        color: documentHover ? HOVER_ACCENT_COLOR : NAV_LABEL_STYLE.color,
+                                    }}
+                                >
+                                    Document Viewer
+                                </span>
+                            )}
                         </button>
-                        {isExpanded && <span style={AVATAR_NAME_STYLE}>Your Name</span>}
+                    ) : null}
+                    <div style={AVATAR_SECTION_STYLE}>
+                        <div
+                            ref={avatarTriggerRef}
+                            data-avatar-trigger="1"
+                            style={{
+                                ...PROFILE_ROW_STYLE,
+                                width: '100%',
+                                margin: '0',
+                                backgroundColor: avatarRowHover ? 'rgba(215, 245, 255, 0.14)' : 'transparent',
+                                cursor: canOpenAvatarMenu ? 'pointer' : 'default',
+                                transition: PROFILE_ROW_STYLE.transition,
+                            }}
+                            onPointerDown={(e) => e.stopPropagation()}
+                            onPointerUp={(e) => e.stopPropagation()}
+                            onWheelCapture={(e) => e.stopPropagation()}
+                            onWheel={(e) => e.stopPropagation()}
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                if (!canOpenAvatarMenu) return;
+                                const target = e.currentTarget as HTMLDivElement;
+                                toggleAvatarMenuFromTrigger(target);
+                            }}
+                            onMouseEnter={() => {
+                                if (isInMotionPhase) return;
+                                setAvatarRowHover(true);
+                            }}
+                            onMouseLeave={() => setAvatarRowHover(false)}
+                        >
+                            <button
+                                {...collapsedAvatarTooltip.getAnchorProps({
+                                    type: 'button',
+                                    style: {
+                                        ...ICON_BUTTON_STYLE,
+                                        ...AVATAR_ICON_PIN_STYLE,
+                                        padding: '0',
+                                        width: `${AVATAR_ICON_HITBOX_PX}px`,
+                                        height: `${AVATAR_ICON_HITBOX_PX}px`,
+                                        lineHeight: 0,
+                                    },
+                                    onPointerDown: (e) => e.stopPropagation(),
+                                    onPointerUp: (e) => e.stopPropagation(),
+                                    onWheelCapture: (e) => e.stopPropagation(),
+                                    onWheel: (e) => e.stopPropagation(),
+                                })}
+                            >
+                                {accountImageUrl ? (
+                                    <img
+                                        src={accountImageUrl}
+                                        alt="avatar"
+                                        style={{ ...AVATAR_IMAGE_STYLE, opacity: applyIconOpacity(1) }}
+                                    />
+                                ) : (
+                                    <div
+                                        style={{
+                                            ...AVATAR_STYLE,
+                                            opacity: applyIconOpacity(1),
+                                        }}
+                                    >
+                                        BA
+                                    </div>
+                                )}
+                            </button>
+                            {shouldMountExpandedContent && (
+                                <span style={{ ...AVATAR_NAME_STYLE, ...avatarNameLaneStyle, ...avatarNameRevealStyle }} aria-hidden={!isExpanded}>
+                                    {displayAccountName}
+                                </span>
+                            )}
+                        </div>
                     </div>
                 </div>
             </div>
+            {frozen ? (
+                <div
+                    data-sidebar-frozen-shield="1"
+                    style={SIDEBAR_FROZEN_SHIELD_STYLE}
+                    onPointerDownCapture={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                    }}
+                    onPointerMoveCapture={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                    }}
+                    onPointerUpCapture={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                    }}
+                    onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                    }}
+                    onWheelCapture={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                    }}
+                    onContextMenu={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                    }}
+                />
+            ) : null}
         </aside>
     );
 };
@@ -647,67 +1477,99 @@ type NavItemProps = {
     icon: string;
     label: string;
     isExpanded: boolean;
+    showExpandedContent: boolean;
+    contentTransitionCss: string;
+    iconOpacityMultiplier?: number;
+    suppressHover?: boolean;
     isHovered: boolean;
     onMouseEnter: () => void;
     onMouseLeave: () => void;
-    onClick?: () => void;
+    onClick?: (event: React.MouseEvent<HTMLButtonElement>) => void;
     hardShieldInput?: boolean;
+    dataMoreTrigger?: boolean;
+    buttonRef?: React.Ref<HTMLButtonElement>;
+    collapsedTooltip?: string;
 };
 
 const NavItem: React.FC<NavItemProps> = ({
     icon,
     label,
     isExpanded,
+    showExpandedContent,
+    contentTransitionCss,
+    iconOpacityMultiplier = 1,
+    suppressHover = false,
     isHovered,
     onMouseEnter,
     onMouseLeave,
     onClick,
     hardShieldInput = false,
-}) => (
-    <button
-        type="button"
-        style={NAV_ITEM_STYLE}
-        onPointerDown={(e) => e.stopPropagation()}
-        onPointerUp={hardShieldInput ? (e) => e.stopPropagation() : undefined}
-        onWheelCapture={hardShieldInput ? (e) => e.stopPropagation() : undefined}
-        onWheel={hardShieldInput ? (e) => e.stopPropagation() : undefined}
-        onMouseEnter={onMouseEnter}
-        onMouseLeave={onMouseLeave}
-        onClick={(e) => {
-            if (hardShieldInput) {
-                e.stopPropagation();
-            }
-            onClick?.();
-        }}
-    >
-        <MaskIcon
-            src={icon}
-            size={ICON_SIZE}
-            color={isHovered ? HOVER_ACCENT_COLOR : DEFAULT_ICON_COLOR}
-            opacity={isHovered ? ICON_OPACITY_HOVER : ICON_OPACITY_DEFAULT}
-        />
-        {isExpanded && (
-            <span
-                style={{
-                    ...NAV_LABEL_STYLE,
-                    color: isHovered ? HOVER_ACCENT_COLOR : NAV_LABEL_STYLE.color,
-                    opacity: 1,
-                }}
-            >
-                {label}
-            </span>
-        )}
-    </button>
-);
+    dataMoreTrigger = false,
+    buttonRef,
+    collapsedTooltip,
+}) => {
+    const collapsedNavTooltip = useTooltip(collapsedTooltip ?? '', {
+        disabled: isExpanded || !collapsedTooltip || collapsedTooltip.trim().length === 0,
+    });
+
+    return (
+        <button
+            ref={buttonRef}
+            {...collapsedNavTooltip.getAnchorProps({
+                type: 'button',
+                'data-more-trigger': dataMoreTrigger ? '1' : undefined,
+                style: NAV_ITEM_STYLE,
+                onPointerDown: (e) => e.stopPropagation(),
+                onPointerUp: hardShieldInput ? (e) => e.stopPropagation() : undefined,
+                onWheelCapture: hardShieldInput ? (e) => e.stopPropagation() : undefined,
+                onWheel: hardShieldInput ? (e) => e.stopPropagation() : undefined,
+                onMouseEnter: () => {
+                    if (suppressHover) return;
+                    onMouseEnter();
+                },
+                onMouseLeave,
+                onClick: (e) => {
+                    if (hardShieldInput) {
+                        e.stopPropagation();
+                    }
+                    onClick?.(e);
+                },
+            })}
+        >
+            <MaskIcon
+                src={icon}
+                size={ICON_SIZE}
+                color={isHovered ? HOVER_ACCENT_COLOR : DEFAULT_ICON_COLOR}
+                opacity={(isHovered ? ICON_OPACITY_HOVER : ICON_OPACITY_DEFAULT) * iconOpacityMultiplier}
+            />
+            {showExpandedContent && (
+                <span
+                    aria-hidden={!isExpanded}
+                    style={{
+                        ...NAV_LABEL_STYLE,
+                        opacity: isExpanded ? 1 : 0,
+                        transform: isExpanded ? 'translateX(0px)' : `translateX(-${EXPANDED_CONTENT_HIDDEN_OFFSET_PX}px)`,
+                        transition: contentTransitionCss,
+                        color: isHovered ? HOVER_ACCENT_COLOR : NAV_LABEL_STYLE.color,
+                        pointerEvents: isExpanded ? 'auto' : 'none',
+                    }}
+                >
+                    {label}
+                </span>
+            )}
+        </button>
+    );
+};
 
 type MaskIconProps = {
     src: string;
     size: number;
     color: string;
     opacity?: number;
+    transition?: string;
 };
 
-const MaskIcon: React.FC<MaskIconProps> = ({ src, size, color, opacity = 1 }) => (
+const MaskIcon: React.FC<MaskIconProps> = ({ src, size, color, opacity = 1, transition }) => (
     <span
         aria-hidden="true"
         style={{
@@ -725,9 +1587,31 @@ const MaskIcon: React.FC<MaskIconProps> = ({ src, size, color, opacity = 1 }) =>
             maskPosition: 'center',
             WebkitMaskSize: 'contain',
             maskSize: 'contain',
+            transition: transition ?? `background-color ${SIDEBAR_HOVER_TRANSITION}, opacity ${SIDEBAR_HOVER_TRANSITION}`,
         }}
     />
 );
+
+type SidebarTooltipTextProps = {
+    content: string;
+    style: React.CSSProperties;
+    children: React.ReactNode;
+    textRef?: React.Ref<HTMLSpanElement>;
+};
+
+const SidebarTooltipText: React.FC<SidebarTooltipTextProps> = ({ content, style, children, textRef }) => {
+    const tooltip = useTooltip(content, { disabled: content.trim().length === 0 });
+    return (
+        <span
+            {...tooltip.getAnchorProps({
+                style,
+            })}
+            ref={textRef}
+        >
+            {children}
+        </span>
+    );
+};
 
 // ===========================================================================
 // Styles
@@ -741,8 +1625,18 @@ const SIDEBAR_BASE_STYLE: React.CSSProperties = {
     borderRight: '1px solid rgba(255, 255, 255, 0.1)',
     display: 'flex',
     flexDirection: 'column',
-    zIndex: 50,
+    zIndex: LAYER_SIDEBAR,
     boxSizing: 'border-box',
+    overflow: 'hidden',
+};
+
+const SIDEBAR_FROZEN_SHIELD_STYLE: React.CSSProperties = {
+    position: 'absolute',
+    inset: 0,
+    zIndex: 2,
+    pointerEvents: 'auto',
+    touchAction: 'none',
+    cursor: 'default',
 };
 
 const TOP_SECTION_STYLE: React.CSSProperties = {
@@ -779,13 +1673,15 @@ const NAV_ITEM_STYLE: React.CSSProperties = {
     cursor: 'pointer',
     width: '100%',
     textAlign: 'left',
+    overflow: 'hidden',
 };
 
 const NAV_LABEL_STYLE: React.CSSProperties = {
-    color: '#e7e7e7',
+    color: SIDEBAR_TEXT_COLOR,
     fontSize: `${FONT_SIZE_NAV}px`,
     fontFamily: 'var(--font-ui)',
     whiteSpace: 'nowrap',
+    transition: `color ${SIDEBAR_HOVER_TRANSITION}`,
 };
 
 const INTERFACES_SECTION_STYLE: React.CSSProperties = {
@@ -800,7 +1696,7 @@ const INTERFACES_SECTION_STYLE: React.CSSProperties = {
 
 const SECTION_HEADER_STYLE: React.CSSProperties = {
     fontSize: `${FONT_SIZE_SECTION_HEADER}px`,
-    color: 'rgba(255, 255, 255, 0.4)',
+    color: 'rgba(215, 245, 255, 0.5)',
     fontFamily: 'var(--font-ui)',
     letterSpacing: '0.5px',
     padding: '8px 6px',
@@ -821,12 +1717,13 @@ const INTERFACE_ITEM_STYLE: React.CSSProperties = {
     padding: '8px 6px',
     background: 'transparent',
     border: 'none',
-    color: '#e7e7e7',
+    color: SIDEBAR_TEXT_COLOR,
     fontSize: `${FONT_SIZE_NAV}px`,
     fontFamily: 'var(--font-ui)',
     textAlign: 'left',
     cursor: 'pointer',
     opacity: 1,
+    transition: `color ${SIDEBAR_HOVER_TRANSITION}, background-color ${SIDEBAR_HOVER_TRANSITION}`,
 };
 
 const INTERFACE_ROW_CONTENT_STYLE: React.CSSProperties = {
@@ -838,12 +1735,14 @@ const INTERFACE_ROW_CONTENT_STYLE: React.CSSProperties = {
 };
 
 const INTERFACE_TEXT_STYLE: React.CSSProperties = {
+    display: 'block',
     flex: 1,
     minWidth: 0,
+    minHeight: '18px',
+    lineHeight: '18px',
     overflow: 'hidden',
     textOverflow: 'ellipsis',
-    whiteSpace: 'normal',
-    wordBreak: 'break-word',
+    whiteSpace: 'nowrap',
 };
 
 const INTERFACE_ROW_MENU_SLOT_STYLE: React.CSSProperties = {
@@ -863,7 +1762,7 @@ const ROW_ELLIPSIS_BUTTON_STYLE: React.CSSProperties = {
     border: 'none',
     background: 'transparent',
     cursor: 'pointer',
-    transition: 'opacity 140ms ease',
+    transition: `opacity ${SIDEBAR_HOVER_TRANSITION}`,
     borderRadius: '4px',
 };
 
@@ -875,7 +1774,7 @@ const ROW_MENU_POPUP_STYLE: React.CSSProperties = {
     border: '1px solid rgba(255, 255, 255, 0.1)',
     background: 'rgba(22, 24, 30, 0.98)',
     boxShadow: '0 14px 28px rgba(0, 0, 0, 0.45)',
-    zIndex: 1400,
+    zIndex: LAYER_SIDEBAR_ROW_MENU,
     display: 'flex',
     flexDirection: 'column',
     gap: '2px',
@@ -898,13 +1797,132 @@ const ROW_MENU_ITEM_CONTENT_STYLE: React.CSSProperties = {
     display: 'inline-flex',
     alignItems: 'center',
     gap: '10px',
-    transition: 'filter 140ms ease',
+    transition: `filter ${SIDEBAR_HOVER_TRANSITION}`,
 };
 
 const ROW_MENU_ITEM_LABEL_STYLE: React.CSSProperties = {
     fontFamily: 'var(--font-ui)',
     fontSize: `${FONT_SIZE_NAV}px`,
     lineHeight: 1.2,
+    color: SIDEBAR_TEXT_COLOR,
+    transition: `color ${SIDEBAR_HOVER_TRANSITION}`,
+};
+
+const AVATAR_MENU_POPUP_STYLE: React.CSSProperties = {
+    position: 'fixed',
+    width: '184px',
+    padding: '6px',
+    borderRadius: '10px',
+    border: '1px solid rgba(255, 255, 255, 0.1)',
+    background: 'rgba(22, 24, 30, 0.98)',
+    boxShadow: '0 14px 28px rgba(0, 0, 0, 0.45)',
+    zIndex: LAYER_SIDEBAR_ROW_MENU,
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '2px',
+};
+
+const AVATAR_MENU_ITEM_STYLE: React.CSSProperties = {
+    width: '100%',
+    display: 'flex',
+    alignItems: 'center',
+    padding: '8px 10px',
+    border: 'none',
+    borderRadius: '8px',
+    background: 'transparent',
+    textAlign: 'left',
+    cursor: 'pointer',
+};
+
+const AVATAR_MENU_ITEM_CONTENT_STYLE: React.CSSProperties = {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '10px',
+    transition: `filter ${SIDEBAR_HOVER_TRANSITION}`,
+};
+
+const AVATAR_MENU_ITEM_LABEL_STYLE: React.CSSProperties = {
+    fontFamily: 'var(--font-ui)',
+    fontSize: `${FONT_SIZE_NAV}px`,
+    lineHeight: 1.2,
+    color: SIDEBAR_TEXT_COLOR,
+    transition: `color ${SIDEBAR_HOVER_TRANSITION}`,
+};
+
+const AVATAR_MENU_ACCOUNT_PHOTO_STYLE: React.CSSProperties = {
+    width: '20px',
+    height: '20px',
+    borderRadius: '50%',
+    objectFit: 'cover',
+    display: 'block',
+    flexShrink: 0,
+};
+
+const AVATAR_MENU_ACCOUNT_FALLBACK_STYLE: React.CSSProperties = {
+    width: '20px',
+    height: '20px',
+    borderRadius: '50%',
+    background: '#2dd4bf',
+    color: SIDEBAR_TEXT_COLOR,
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontFamily: 'var(--font-ui)',
+    fontSize: '9px',
+    fontWeight: 700,
+    lineHeight: 1,
+    flexShrink: 0,
+};
+
+const AVATAR_MENU_ACCOUNT_NAME_STYLE: React.CSSProperties = {
+    ...AVATAR_MENU_ITEM_LABEL_STYLE,
+    minWidth: 0,
+    flex: 1,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+};
+
+const MORE_MENU_POPUP_STYLE: React.CSSProperties = {
+    position: 'fixed',
+    width: '208px',
+    padding: '6px',
+    borderRadius: '10px',
+    border: '1px solid rgba(255, 255, 255, 0.1)',
+    background: 'rgba(22, 24, 30, 0.98)',
+    boxShadow: '0 14px 28px rgba(0, 0, 0, 0.45)',
+    zIndex: LAYER_SIDEBAR_ROW_MENU,
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '2px',
+};
+
+const MORE_MENU_ITEM_STYLE: React.CSSProperties = {
+    width: '100%',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+    padding: '8px 10px',
+    border: 'none',
+    borderRadius: '8px',
+    background: 'transparent',
+    textAlign: 'left',
+    cursor: 'pointer',
+};
+
+const MORE_MENU_ITEM_CONTENT_STYLE: React.CSSProperties = {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '10px',
+    transition: `filter ${SIDEBAR_HOVER_TRANSITION}`,
+};
+
+const MORE_MENU_ITEM_LABEL_STYLE: React.CSSProperties = {
+    fontFamily: 'var(--font-ui)',
+    fontSize: `${FONT_SIZE_NAV}px`,
+    lineHeight: 1.2,
+    color: SIDEBAR_TEXT_COLOR,
+    transition: `color ${SIDEBAR_HOVER_TRANSITION}`,
 };
 
 const RENAME_CONTAINER_STYLE: React.CSSProperties = {
@@ -920,7 +1938,7 @@ const RENAME_INPUT_STYLE: React.CSSProperties = {
     borderRadius: '6px',
     border: '1px solid rgba(99, 171, 255, 0.45)',
     background: 'rgba(12, 15, 22, 0.95)',
-    color: '#e7e7e7',
+    color: SIDEBAR_TEXT_COLOR,
     fontFamily: 'var(--font-ui)',
     fontSize: `${FONT_SIZE_NAV}px`,
     lineHeight: 1.2,
@@ -930,7 +1948,7 @@ const RENAME_INPUT_STYLE: React.CSSProperties = {
 
 const INTERFACE_EMPTY_STATE_STYLE: React.CSSProperties = {
     ...INTERFACE_ITEM_STYLE,
-    color: 'rgba(255, 255, 255, 0.45)',
+    color: SIDEBAR_TEXT_COLOR,
     cursor: 'default',
     pointerEvents: 'none',
 };
@@ -948,18 +1966,34 @@ const AVATAR_SECTION_STYLE: React.CSSProperties = {
     borderTop: '1px solid rgba(255, 255, 255, 0.1)',
     paddingTop: '8px',
     display: 'flex',
-    justifyContent: 'center',
+    justifyContent: 'flex-start',
 };
 
 const PROFILE_ROW_STYLE: React.CSSProperties = {
     width: '100%',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '12px',
+    position: 'relative',
+    display: 'block',
     borderRadius: '10px',
     height: '36px',
     padding: '0',
-    transition: 'background-color 120ms ease',
+    overflow: 'hidden',
+    transition: `background-color ${SIDEBAR_HOVER_TRANSITION}`,
+};
+
+const AVATAR_ICON_PIN_STYLE: React.CSSProperties = {
+    position: 'absolute',
+    left: `${AVATAR_PIN_INSET_LEFT_PX}px`,
+    top: '50%',
+    transform: 'translateY(-50%)',
+};
+
+const AVATAR_NAME_LANE_STYLE: React.CSSProperties = {
+    display: 'block',
+    width: `calc(100% - ${AVATAR_CONTENT_LANE_OFFSET_PX}px)`,
+    height: '100%',
+    minHeight: '36px',
+    paddingTop: '9px',
+    boxSizing: 'border-box',
 };
 
 const AVATAR_STYLE: React.CSSProperties = {
@@ -972,17 +2006,31 @@ const AVATAR_STYLE: React.CSSProperties = {
     justifyContent: 'center',
     fontSize: `${FONT_SIZE_AVATAR}px`,
     fontWeight: 600,
-    color: '#000',
+    color: SIDEBAR_TEXT_COLOR,
     fontFamily: 'var(--font-ui)',
 };
 
+const AVATAR_IMAGE_STYLE: React.CSSProperties = {
+    width: `${AVATAR_SIZE}px`,
+    height: `${AVATAR_SIZE}px`,
+    borderRadius: '50%',
+    objectFit: 'cover',
+    display: 'block',
+};
+
 const AVATAR_NAME_STYLE: React.CSSProperties = {
-    color: '#e7e7e7',
+    display: 'block',
+    flex: 1,
+    minWidth: 0,
+    minHeight: '18px',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+    color: SIDEBAR_TEXT_COLOR,
     fontSize: `${FONT_SIZE_NAV}px`,
-    lineHeight: 1,
+    lineHeight: '18px',
     fontFamily: 'var(--font-ui)',
     opacity: 1,
-    marginLeft: `${NAME_OFFSET_LEFT}px`,
 };
 
 

@@ -11,10 +11,32 @@ import {
 } from '../graphPlaygroundStyles';
 import { IS_DEV } from '../rendering/debugUtils';
 import downloadDevModeIcon from '../../assets/download_dev_mode.png';
+import threeDotIcon from '../../assets/3_dot_icon.png';
+import shareIcon from '../../assets/share_icon.png';
+import fullscreenOpenIcon from '../../assets/fullscreen_open_icon.png';
+import fullscreenCloseIcon from '../../assets/fullscreen_close_icon.png';
+import { useFullscreen } from '../../hooks/useFullscreen';
+import { useTooltip } from '../../ui/tooltip/useTooltip';
+import { usePortalScopeMode } from '../../components/portalScope/PortalScopeContext';
+import { useGraphViewport } from '../../runtime/viewport/graphViewport';
+import { isBoxedUi } from '../../runtime/ui/boxedUiPolicy';
 
 // Toggle to show/hide debug controls buttons (Debug, Theme, Controls)
 const SHOW_DEBUG_CONTROLS = false;
 const SHOW_DEV_DOWNLOAD_JSON_BUTTON = true;
+const SHOW_TOP_RIGHT_DOTS_ICON = true;
+const TOP_RIGHT_ICON_SIZE_PX = 16;
+const FULLSCREEN_ICON_SCALE = 0.9;
+const TOP_RIGHT_ICON_BASE_TINT = '#d7f5ff';
+const TOP_RIGHT_ICON_IDLE_OPACITY = 0.5;
+const TOP_RIGHT_ICON_HOVER_OPACITY = 1;
+const TOP_RIGHT_ICON_OPACITY_TRANSITION = '200ms ease';
+const SHARE_MENU_VIEWPORT_PADDING_PX = 8;
+const SHARE_MENU_ANCHOR_GAP_PX = 8;
+const DOTS_MENU_SCALE = 0.85;
+const DOTS_MENU_PADDING_PX = 6;
+const DOTS_MENU_ESTIMATED_HEIGHT_PX = 52;
+const MENU_ESTIMATED_WIDTH_PX = 210;
 
 import type { ForceConfig } from '../../physics/types';
 
@@ -64,6 +86,63 @@ type CanvasOverlaysProps = {
     onDevDownloadJson?: () => void;
 };
 
+type MaskIconProps = {
+    src: string;
+    opacity: number;
+    sizePx?: number;
+};
+
+const MaskIcon: React.FC<MaskIconProps> = ({ src, opacity, sizePx = TOP_RIGHT_ICON_SIZE_PX }) => (
+    <span
+        aria-hidden="true"
+        style={{
+            width: `${sizePx}px`,
+            height: `${sizePx}px`,
+            display: 'inline-block',
+            flexShrink: 0,
+            backgroundColor: TOP_RIGHT_ICON_BASE_TINT,
+            opacity,
+            WebkitMaskImage: `url(${src})`,
+            maskImage: `url(${src})`,
+            WebkitMaskRepeat: 'no-repeat',
+            maskRepeat: 'no-repeat',
+            WebkitMaskPosition: 'center',
+            maskPosition: 'center',
+            WebkitMaskSize: 'contain',
+            maskSize: 'contain',
+            transition: `opacity ${TOP_RIGHT_ICON_OPACITY_TRANSITION}`,
+        }}
+    />
+);
+
+function computeAnchoredMenuPosition(rect: DOMRect, estimatedHeight: number, estimatedWidth: number): { right: number; top: number } {
+    const minRight = SHARE_MENU_VIEWPORT_PADDING_PX;
+    const maxRight = Math.max(
+        minRight,
+        window.innerWidth - SHARE_MENU_VIEWPORT_PADDING_PX - estimatedWidth
+    );
+    const right = Math.min(
+        maxRight,
+        Math.max(minRight, window.innerWidth - rect.right)
+    );
+    const downTop = rect.bottom + SHARE_MENU_ANCHOR_GAP_PX;
+    const upTop = rect.top - SHARE_MENU_ANCHOR_GAP_PX - estimatedHeight;
+    const maxTop = Math.max(
+        SHARE_MENU_VIEWPORT_PADDING_PX,
+        window.innerHeight - SHARE_MENU_VIEWPORT_PADDING_PX - estimatedHeight
+    );
+    const canOpenDown =
+        downTop + estimatedHeight <=
+        window.innerHeight - SHARE_MENU_VIEWPORT_PADDING_PX;
+    const canOpenUp = upTop >= SHARE_MENU_VIEWPORT_PADDING_PX;
+    const top = canOpenDown
+        ? downTop
+        : canOpenUp
+            ? upTop
+            : Math.min(maxTop, Math.max(SHARE_MENU_VIEWPORT_PADDING_PX, downTop));
+    return { right, top };
+}
+
 export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
     debugOpen,
     metrics,
@@ -102,6 +181,24 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
     config,
     onConfigChange
 }) => {
+    const portalScopeMode = usePortalScopeMode();
+    const isContainerPortalMode = portalScopeMode === 'container';
+    const viewport = useGraphViewport();
+    const isBoxedRuntime = isBoxedUi(viewport);
+    const { isFullscreen, toggleFullscreen } = useFullscreen();
+    const showDebugTooltip = useTooltip('Show debug');
+    const themeToggleTooltip = useTooltip('Toggle between normal and elegant theme');
+    const controlsToggleTooltip = useTooltip(sidebarOpen ? 'Hide controls' : 'Show controls');
+    const downloadJsonTooltip = useTooltip('Download graph json (dev)');
+    const shareTooltip = useTooltip('Share interface (coming soon)');
+    const graphActionMenuTooltip = useTooltip('Open graph action menu');
+    const hideDebugTooltip = useTooltip('Hide');
+    const closeDebugTooltip = useTooltip('Close');
+    const ghostVelocityTooltip = useTooltip('Peak inferred velocity from solver corrections (Projection / dt)');
+    const complianceTooltip = useTooltip('Compliance value in use (lower = stiffer)');
+    const alphaTooltip = useTooltip('Average alpha = compliance/dt^2 (higher = stronger correction)');
+    const restartSameSeedTooltip = useTooltip('Restart Same Seed');
+    const settleNewSeedTooltip = useTooltip('Wait, this is Settle Test. New Seed requires logic.');
     const hud = metrics.physicsHud;
     const formatRatio = (value: number, base?: number) => {
         if (!base || base <= 0) return '';
@@ -112,6 +209,11 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
     const [showAdvanced, setShowAdvanced] = React.useState(false);
     const [showLegacyControls, setShowLegacyControls] = React.useState(false);
     const [showLegacyDiagnostics, setShowLegacyDiagnostics] = React.useState(false);
+    const [hoveredTopRightIcon, setHoveredTopRightIcon] = React.useState<'dots' | 'share' | null>(null);
+    const [dotsMenuOpen, setDotsMenuOpen] = React.useState(false);
+    const [dotsMenuPosition, setDotsMenuPosition] = React.useState<{ right: number; top: number } | null>(null);
+    const dotsTriggerRef = React.useRef<HTMLButtonElement | null>(null);
+    const dotsMenuRef = React.useRef<HTMLDivElement | null>(null);
 
     // NEW: HUD Layout State
     const [isNarrow, setIsNarrow] = React.useState(typeof window !== 'undefined' ? window.innerWidth < 450 : false);
@@ -123,6 +225,67 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
         window.addEventListener('resize', handleResize);
         return () => window.removeEventListener('resize', handleResize);
     }, []);
+
+    React.useEffect(() => {
+        if (!dotsMenuOpen || !dotsTriggerRef.current) return;
+        const update = () => {
+            if (!dotsTriggerRef.current) return;
+            const triggerRect = dotsTriggerRef.current.getBoundingClientRect();
+            setDotsMenuPosition(
+                computeAnchoredMenuPosition(triggerRect, DOTS_MENU_ESTIMATED_HEIGHT_PX, MENU_ESTIMATED_WIDTH_PX)
+            );
+        };
+        update();
+        window.addEventListener('resize', update);
+        window.addEventListener('scroll', update, true);
+        return () => {
+            window.removeEventListener('resize', update);
+            window.removeEventListener('scroll', update, true);
+        };
+    }, [dotsMenuOpen]);
+
+    React.useEffect(() => {
+        if (!dotsMenuOpen) return;
+        const handleWindowPointerDown = (event: PointerEvent) => {
+            const target = event.target as Element | null;
+            if (!target) {
+                setDotsMenuOpen(false);
+                return;
+            }
+            if (target.closest('[data-dots-menu="1"]')) return;
+            if (target.closest('[data-toolbar-trigger="dots"]')) return;
+            setDotsMenuOpen(false);
+        };
+        const handleWindowKeyDown = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') {
+                setDotsMenuOpen(false);
+            }
+        };
+        window.addEventListener('pointerdown', handleWindowPointerDown, true);
+        window.addEventListener('keydown', handleWindowKeyDown, true);
+        return () => {
+            window.removeEventListener('pointerdown', handleWindowPointerDown, true);
+            window.removeEventListener('keydown', handleWindowKeyDown, true);
+        };
+    }, [dotsMenuOpen]);
+
+    React.useEffect(() => {
+        if (!SHOW_TOP_RIGHT_DOTS_ICON && dotsMenuOpen) {
+            setDotsMenuOpen(false);
+        }
+    }, [dotsMenuOpen]);
+
+    React.useEffect(() => {
+        if ((isContainerPortalMode || isBoxedRuntime) && dotsMenuOpen) {
+            setDotsMenuOpen(false);
+        }
+    }, [dotsMenuOpen, isBoxedRuntime, isContainerPortalMode]);
+
+    React.useEffect(() => {
+        if (!isBoxedRuntime) return;
+        if (!debugOpen) return;
+        onCloseDebug();
+    }, [debugOpen, isBoxedRuntime, onCloseDebug]);
 
     const gridStyle: React.CSSProperties = isNarrow ? {
         display: 'flex',
@@ -139,16 +302,17 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
         <>
             {SHOW_DEBUG_CONTROLS && !debugOpen && (
                 <button
-                    type="button"
-                    style={DEBUG_TOGGLE_STYLE}
-                    onMouseDown={stopPropagation}
-                    onPointerDown={stopPropagation}
-                    onClick={(e) => {
-                        stopPropagation(e);
-                        onShowDebug();
-                    }}
-                    aria-label="Show debug panel"
-                    title="Show debug"
+                    {...showDebugTooltip.getAnchorProps({
+                        type: 'button',
+                        style: DEBUG_TOGGLE_STYLE,
+                        onMouseDown: stopPropagation,
+                        onPointerDown: stopPropagation,
+                        onClick: (e) => {
+                            stopPropagation(e);
+                            onShowDebug();
+                        },
+                        'aria-label': 'Show debug panel',
+                    })}
                 >
                     Debug
                 </button>
@@ -156,16 +320,17 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
 
             {SHOW_DEBUG_CONTROLS && showThemeToggle && (
                 <button
-                    type="button"
-                    style={THEME_TOGGLE_STYLE}
-                    onMouseDown={stopPropagation}
-                    onPointerDown={stopPropagation}
-                    onClick={(e) => {
-                        stopPropagation(e);
-                        onToggleTheme();
-                    }}
-                    aria-label="Toggle theme"
-                    title="Toggle between normal and elegant theme"
+                    {...themeToggleTooltip.getAnchorProps({
+                        type: 'button',
+                        style: THEME_TOGGLE_STYLE,
+                        onMouseDown: stopPropagation,
+                        onPointerDown: stopPropagation,
+                        onClick: (e) => {
+                            stopPropagation(e);
+                            onToggleTheme();
+                        },
+                        'aria-label': 'Toggle theme',
+                    })}
                 >
                     Theme: {skinMode}
                 </button>
@@ -173,46 +338,48 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
 
             {SHOW_DEBUG_CONTROLS && (
                 <button
-                    type="button"
-                    style={SIDEBAR_TOGGLE_STYLE}
-                    onMouseDown={stopPropagation}
-                    onPointerDown={stopPropagation}
-                    onClick={(e) => {
-                        stopPropagation(e);
-                        onToggleSidebar();
-                    }}
-                    aria-label={sidebarOpen ? 'Hide controls' : 'Show controls'}
-                    title={sidebarOpen ? 'Hide controls' : 'Show controls'}
+                    {...controlsToggleTooltip.getAnchorProps({
+                        type: 'button',
+                        style: SIDEBAR_TOGGLE_STYLE,
+                        onMouseDown: stopPropagation,
+                        onPointerDown: stopPropagation,
+                        onClick: (e) => {
+                            stopPropagation(e);
+                            onToggleSidebar();
+                        },
+                        'aria-label': sidebarOpen ? 'Hide controls' : 'Show controls',
+                    })}
                 >
                     {sidebarOpen ? 'Hide Controls' : 'Controls'}
                 </button>
             )}
 
-            {import.meta.env.DEV && SHOW_DEV_DOWNLOAD_JSON_BUTTON && (
+            {import.meta.env.DEV && SHOW_DEV_DOWNLOAD_JSON_BUTTON && !isBoxedRuntime && (
                 <button
-                    type="button"
-                    style={{
-                        ...SIDEBAR_TOGGLE_STYLE,
-                        top: '56px',
-                        width: '32px',
-                        height: '32px',
-                        padding: '4px',
-                        background: 'transparent',
-                        border: 'none',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                    }}
-                    onPointerDown={stopPropagation}
-                    onPointerUp={stopPropagation}
-                    onWheelCapture={stopPropagation}
-                    onWheel={stopPropagation}
-                    onClick={(e) => {
-                        stopPropagation(e);
-                        onDevDownloadJson?.();
-                    }}
-                    aria-label="Download graph json (dev)"
-                    title="Download graph json (dev)"
+                    {...downloadJsonTooltip.getAnchorProps({
+                        type: 'button',
+                        style: {
+                            ...SIDEBAR_TOGGLE_STYLE,
+                            top: '56px',
+                            width: '32px',
+                            height: '32px',
+                            padding: '4px',
+                            background: 'transparent',
+                            border: 'none',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                        },
+                        onPointerDown: stopPropagation,
+                        onPointerUp: stopPropagation,
+                        onWheelCapture: stopPropagation,
+                        onWheel: stopPropagation,
+                        onClick: (e) => {
+                            stopPropagation(e);
+                            onDevDownloadJson?.();
+                        },
+                        'aria-label': 'Download graph json (dev)',
+                    })}
                 >
                     <img
                         src={downloadDevModeIcon}
@@ -225,8 +392,158 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
                     />
                 </button>
             )}
+            {SHOW_TOP_RIGHT_DOTS_ICON && !isContainerPortalMode && !isBoxedRuntime && (
+                <div
+                    style={{
+                        position: 'absolute',
+                        top: '24px',
+                        right: '24px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '12px',
+                        zIndex: 10,
+                        pointerEvents: 'none',
+                    }}
+                >
+                    <button
+                        data-toolbar-trigger="share"
+                        {...shareTooltip.getAnchorProps({
+                            type: 'button',
+                            'aria-label': 'Share interface (coming soon)',
+                            style: {
+                                pointerEvents: 'auto',
+                                display: 'inline-flex',
+                                padding: 0,
+                                margin: 0,
+                                border: 'none',
+                                background: 'transparent',
+                                cursor: 'pointer'
+                            },
+                            onPointerEnter: () => setHoveredTopRightIcon('share'),
+                            onPointerLeave: () => setHoveredTopRightIcon((current) => (current === 'share' ? null : current)),
+                            onPointerDown: (e) => e.stopPropagation(),
+                            onPointerUp: (e) => e.stopPropagation(),
+                            onWheelCapture: (e) => e.stopPropagation(),
+                            onWheel: (e) => e.stopPropagation(),
+                            onClick: (e) => {
+                                e.stopPropagation();
+                            },
+                        })}
+                    >
+                        <MaskIcon
+                            src={shareIcon}
+                            opacity={hoveredTopRightIcon === 'share' ? TOP_RIGHT_ICON_HOVER_OPACITY : TOP_RIGHT_ICON_IDLE_OPACITY}
+                        />
+                    </button>
+                    <button
+                        ref={dotsTriggerRef}
+                        data-toolbar-trigger="dots"
+                        {...graphActionMenuTooltip.getAnchorProps({
+                            type: 'button',
+                            'aria-label': 'Open graph action menu',
+                            style: {
+                                pointerEvents: 'auto',
+                                display: 'inline-flex',
+                                padding: 0,
+                                margin: 0,
+                                border: 'none',
+                                background: 'transparent',
+                                cursor: 'pointer'
+                            },
+                            onPointerEnter: () => setHoveredTopRightIcon('dots'),
+                            onPointerLeave: () => setHoveredTopRightIcon((current) => (current === 'dots' ? null : current)),
+                            onPointerDown: (e) => e.stopPropagation(),
+                            onPointerUp: (e) => e.stopPropagation(),
+                            onWheelCapture: (e) => e.stopPropagation(),
+                            onWheel: (e) => e.stopPropagation(),
+                            onClick: (e) => {
+                                e.stopPropagation();
+                                const triggerRect = e.currentTarget.getBoundingClientRect();
+                                setDotsMenuOpen((prev) => {
+                                    const next = !prev;
+                                    if (next) {
+                                        setDotsMenuPosition(
+                                            computeAnchoredMenuPosition(triggerRect, DOTS_MENU_ESTIMATED_HEIGHT_PX, MENU_ESTIMATED_WIDTH_PX)
+                                        );
+                                    }
+                                    return next;
+                                });
+                            },
+                        })}
+                    >
+                        <MaskIcon
+                            src={threeDotIcon}
+                            opacity={hoveredTopRightIcon === 'dots' ? TOP_RIGHT_ICON_HOVER_OPACITY : TOP_RIGHT_ICON_IDLE_OPACITY}
+                        />
+                    </button>
+                </div>
+            )}
+            {dotsMenuOpen && dotsMenuPosition && !isBoxedRuntime ? (
+                <div
+                    ref={dotsMenuRef}
+                    data-dots-menu="1"
+                    style={{
+                        position: 'fixed',
+                        right: `${dotsMenuPosition.right}px`,
+                        top: `${dotsMenuPosition.top}px`,
+                        width: 'max-content',
+                        maxWidth: `calc(100vw - ${SHARE_MENU_VIEWPORT_PADDING_PX * 2}px)`,
+                        padding: `${DOTS_MENU_PADDING_PX}px`,
+                        borderRadius: `${10 * DOTS_MENU_SCALE}px`,
+                        border: '1px solid rgba(255, 255, 255, 0.1)',
+                        background: '#0D0D18',
+                        boxShadow: '0 14px 28px rgba(0, 0, 0, 0.45)',
+                        zIndex: 1200,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '2px',
+                        pointerEvents: 'auto',
+                    }}
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onPointerUp={(e) => e.stopPropagation()}
+                    onWheelCapture={(e) => e.stopPropagation()}
+                    onWheel={(e) => e.stopPropagation()}
+                >
+                    <button
+                        type="button"
+                        style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            padding: `${8 * DOTS_MENU_SCALE}px 10px`,
+                            border: 'none',
+                            borderRadius: `${8 * DOTS_MENU_SCALE}px`,
+                            background: 'transparent',
+                            textAlign: 'left',
+                            cursor: 'pointer',
+                            color: '#D7F5FF',
+                            fontFamily: 'var(--font-ui)',
+                            fontSize: `${13 * DOTS_MENU_SCALE}px`,
+                            lineHeight: 1.2,
+                        }}
+                        onPointerDown={(e) => e.stopPropagation()}
+                        onPointerUp={(e) => e.stopPropagation()}
+                        onWheelCapture={(e) => e.stopPropagation()}
+                        onWheel={(e) => e.stopPropagation()}
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            setDotsMenuOpen(false);
+                            toggleFullscreen().catch((error: unknown) => {
+                                console.warn('[fullscreen] Toggle failed:', error);
+                            });
+                        }}
+                    >
+                        <MaskIcon
+                            src={isFullscreen ? fullscreenCloseIcon : fullscreenOpenIcon}
+                            opacity={TOP_RIGHT_ICON_HOVER_OPACITY}
+                            sizePx={TOP_RIGHT_ICON_SIZE_PX * FULLSCREEN_ICON_SCALE}
+                        />
+                        <span>Fullscreen</span>
+                    </button>
+                </div>
+            ) : null}
 
-            {debugOpen && (
+            {debugOpen && !isBoxedRuntime && (
                 <div
                     style={{
                         ...DEBUG_OVERLAY_STYLE,
@@ -246,25 +563,27 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
                             <strong>Time: T+{metrics.lifecycleMs}ms</strong>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                                 <button
-                                    type="button"
-                                    style={{
-                                        ...DEBUG_CLOSE_STYLE,
-                                        width: '44px',
-                                        fontSize: '11px',
-                                        padding: 0
-                                    }}
-                                    onClick={onCloseDebug}
-                                    aria-label="Hide debug panel"
-                                    title="Hide"
+                                    {...hideDebugTooltip.getAnchorProps({
+                                        type: 'button',
+                                        style: {
+                                            ...DEBUG_CLOSE_STYLE,
+                                            width: '44px',
+                                            fontSize: '11px',
+                                            padding: 0
+                                        },
+                                        onClick: onCloseDebug,
+                                        'aria-label': 'Hide debug panel',
+                                    })}
                                 >
                                     Hide
                                 </button>
                                 <button
-                                    type="button"
-                                    style={DEBUG_CLOSE_STYLE}
-                                    onClick={onCloseDebug}
-                                    aria-label="Close debug panel"
-                                    title="Close"
+                                    {...closeDebugTooltip.getAnchorProps({
+                                        type: 'button',
+                                        style: DEBUG_CLOSE_STYLE,
+                                        onClick: onCloseDebug,
+                                        'aria-label': 'Close debug panel',
+                                    })}
                                 >
                                     x
                                 </button>
@@ -504,9 +823,9 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
                                             solve: {(hud.xpbdSpringSolveMs || 0).toFixed(2)} ms {hud.xpbdEarlyBreaks ? `(Break: ${hud.xpbdEarlyBreaks})` : ''}<br />
                                             <span style={{ fontSize: '0.9em', color: '#888' }}>
                                                 drop: {hud.xpbdSpringSkipped}/{hud.xpbdSpringSingularity} | sync: {hud.xpbdGhostSyncs}<br />
-                                                <span title="Peak inferred velocity from solver corrections (Projection / dt)">ghost:</span> {(hud.xpbdGhostVelMax || 0).toFixed(1)}px/s (evt: {hud.xpbdGhostVelEvents})<br />
+                                                <span {...ghostVelocityTooltip.getAnchorProps()}>ghost:</span> {(hud.xpbdGhostVelMax || 0).toFixed(1)}px/s (evt: {hud.xpbdGhostVelEvents})<br />
                                                 inv: {hud.xpbdInvInvalid} | inf: {hud.xpbdInvNonFinite} | 0len: {hud.xpbdInvZero}<br />
-                                                <span title="Compliance value in use (lower = stiffer)">C:</span> {(hud.xpbdComplianceUsed || 0).toFixed(6)} | <span title="Average alpha = compliance/dt^2 (higher = stronger correction)">alpha:</span> {(hud.xpbdAlphaAvg || 0).toFixed(2)}<br />
+                                                <span {...complianceTooltip.getAnchorProps()}>C:</span> {(hud.xpbdComplianceUsed || 0).toFixed(6)} | <span {...alphaTooltip.getAnchorProps()}>alpha:</span> {(hud.xpbdAlphaAvg || 0).toFixed(2)}<br />
                                                 <span style={{ color: hud.xpbdDragActive ? '#00eeee' : '#666' }}>
                                                     drag: {hud.xpbdDragActive ? 'ON' : 'off'} (k={hud.xpbdDragKinematic ? '1' : '0'}, sync={hud.xpbdDragSyncs})
                                                 </span>
@@ -701,18 +1020,20 @@ export const CanvasOverlays: React.FC<CanvasOverlaysProps> = ({
                                             </button>
                                         ))}
                                         <button
-                                            type="button"
-                                            style={{ ...DEBUG_CLOSE_STYLE, width: '48px', color: '#8f8' }}
-                                            onClick={() => onSpawnPreset(metrics.nodes)}
-                                            title="Restart Same Seed"
+                                            {...restartSameSeedTooltip.getAnchorProps({
+                                                type: 'button',
+                                                style: { ...DEBUG_CLOSE_STYLE, width: '48px', color: '#8f8' },
+                                                onClick: () => onSpawnPreset(metrics.nodes),
+                                            })}
                                         >
                                             Same
                                         </button>
                                         <button
-                                            type="button"
-                                            style={{ ...DEBUG_CLOSE_STYLE, width: '48px', color: '#f88' }}
-                                            onClick={() => onRunSettleScenario()}
-                                            title="Wait, this is Settle Test. New Seed requires logic."
+                                            {...settleNewSeedTooltip.getAnchorProps({
+                                                type: 'button',
+                                                style: { ...DEBUG_CLOSE_STYLE, width: '48px', color: '#f88' },
+                                                onClick: () => onRunSettleScenario(),
+                                            })}
                                         >
                                             New
                                         </button>

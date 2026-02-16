@@ -179,6 +179,18 @@ body {
   scrollbar-color: #17263d #0D1118;
 }
 
+.search-interfaces-input::placeholder {
+  font-weight: 300;
+}
+
+.search-interfaces-input::-webkit-input-placeholder {
+  font-weight: 300;
+}
+
+.search-interfaces-input::-moz-placeholder {
+  font-weight: 300;
+}
+
 /* Onboarding needle cursor animation set */
 @keyframes cursorNeedleNormal {
   0%, 49% {
@@ -214,4 +226,9 @@ body {
   50% {
     opacity: 0.85;
   }
+}
+
+.profile-username-input::placeholder {
+  color: rgba(255, 255, 255, 0.5);
+  opacity: 1;
 }

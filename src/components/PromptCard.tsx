@@ -4,6 +4,8 @@ import plusIcon from '../assets/plus_icon.png';
 import sendIcon from '../assets/send_icon_white.png';
 import clipIcon from '../assets/clip_icon.png';
 import fileMiniIcon from '../assets/file_mini_icon.png';
+import { useTooltip } from '../ui/tooltip/useTooltip';
+import { SampleGraphPreview } from './SampleGraphPreview';
 
 // Toggle: true = block submit when text is empty, false = allow empty submit path.
 const HARD_BLOCK_EMPTY_TEXT_SUBMIT = false;
@@ -16,6 +18,9 @@ type PromptCardProps = {
     attachedFiles?: File[];
     canSubmitWithoutText?: boolean;
     onRemoveFile?: (index: number) => void;
+    onPickFiles?: (files: File[]) => void;
+    statusMessage?: { kind: 'error'; text: string } | null;
+    onDismissStatusMessage?: () => void;
 };
 
 export const PromptCard: React.FC<PromptCardProps> = ({
@@ -26,12 +31,19 @@ export const PromptCard: React.FC<PromptCardProps> = ({
     attachedFiles = [],
     canSubmitWithoutText = false,
     onRemoveFile = () => { },
+    onPickFiles = () => { },
+    statusMessage = null,
+    onDismissStatusMessage = () => { },
 }) => {
     const [plusHover, setPlusHover] = React.useState(false);
     const [sendHover, setSendHover] = React.useState(false);
     const [showUploadPopup, setShowUploadPopup] = React.useState(false);
+    const [uploadMenuHover, setUploadMenuHover] = React.useState(false);
     const [inputText, setInputText] = React.useState(value);
     const popupRef = React.useRef<HTMLDivElement>(null);
+    const fileInputRef = React.useRef<HTMLInputElement | null>(null);
+    const removeFileTooltip = useTooltip('Remove file');
+    const uploadDocumentTooltip = useTooltip('Upload Document', { disabled });
 
     React.useEffect(() => {
         setInputText(value);
@@ -78,14 +90,45 @@ export const PromptCard: React.FC<PromptCardProps> = ({
         <div style={CARD_STYLE}>
             <div style={CARD_INNER_STYLE}>
                 <div style={GRAPH_PREVIEW_PLACEHOLDER_STYLE}>
-                    <div style={PLACEHOLDER_LABEL_STYLE}>{t('onboarding.enterprompt.graph_preview_placeholder')}</div>
+                    <SampleGraphPreview />
                 </div>
 
                 <div style={HEADLINE_STYLE}>
                     {t('onboarding.enterprompt.heading')}
                 </div>
 
+                {statusMessage ? (
+                    <div
+                        style={PROMPT_STATUS_BANNER_STYLE}
+                        onPointerDown={(e) => e.stopPropagation()}
+                    >
+                        <span style={PROMPT_STATUS_TEXT_STYLE}>{statusMessage.text}</span>
+                        <button
+                            type="button"
+                            style={PROMPT_STATUS_DISMISS_STYLE}
+                            onPointerDown={(e) => e.stopPropagation()}
+                            onClick={() => onDismissStatusMessage()}
+                        >
+                            Dismiss
+                        </button>
+                    </div>
+                ) : null}
+
                 <div style={INPUT_PILL_STYLE}>
+                    <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept=".pdf,.docx,.md,.markdown,.txt"
+                        multiple={true}
+                        style={{ display: 'none' }}
+                        onChange={(e) => {
+                            const files = e.target.files ? Array.from(e.target.files) : [];
+                            if (files.length > 0) {
+                                onPickFiles(files);
+                            }
+                            e.currentTarget.value = '';
+                        }}
+                    />
                     {attachedFiles.length > 0 && (
                         <>
                             <div style={FILE_CHIPS_ROW_STYLE}>
@@ -94,10 +137,11 @@ export const PromptCard: React.FC<PromptCardProps> = ({
                                         <img src={fileMiniIcon} alt="" style={FILE_CHIP_ICON_STYLE} />
                                         <span style={FILE_CHIP_NAME_STYLE}>{file.name}</span>
                                         <button
-                                            type="button"
-                                            style={FILE_CHIP_DISMISS_STYLE}
-                                            onClick={() => onRemoveFile(index)}
-                                            title="Remove file"
+                                            {...removeFileTooltip.getAnchorProps({
+                                                type: 'button',
+                                                style: FILE_CHIP_DISMISS_STYLE,
+                                                onClick: () => onRemoveFile(index),
+                                            })}
                                         >
                                             x
                                         </button>
@@ -118,21 +162,71 @@ export const PromptCard: React.FC<PromptCardProps> = ({
                     <div style={ICON_ROW_STYLE}>
                         <div style={{ position: 'relative' }}>
                             <button
-                                type="button"
-                                style={ICON_BUTTON_STYLE}
-                                onMouseEnter={() => setPlusHover(true)}
-                                onMouseLeave={() => setPlusHover(false)}
-                                onClick={() => setShowUploadPopup(!showUploadPopup)}
-                                title="Upload Document"
+                                {...uploadDocumentTooltip.getAnchorProps({
+                                    type: 'button',
+                                    style: ICON_BUTTON_STYLE,
+                                    onMouseEnter: () => setPlusHover(true),
+                                    onMouseLeave: () => setPlusHover(false),
+                                    onClick: () => setShowUploadPopup(!showUploadPopup),
+                                })}
                                 disabled={disabled}
                             >
-                                <img src={plusIcon} alt="Add" style={{ ...PLUS_ICON_STYLE, opacity: plusHover ? 1 : 0.6 }} />
+                                <span
+                                    aria-hidden="true"
+                                    style={{
+                                        ...PLUS_ICON_STYLE,
+                                        backgroundColor: '#D7F5FF',
+                                        WebkitMaskImage: `url(${plusIcon})`,
+                                        maskImage: `url(${plusIcon})`,
+                                        opacity: plusHover ? 1 : 0.6
+                                    }}
+                                />
                             </button>
                             {showUploadPopup && (
-                                <div ref={popupRef} style={UPLOAD_POPUP_STYLE}>
-                                    <button type="button" style={UPLOAD_POPUP_ITEM_STYLE}>
-                                        <img src={clipIcon} alt="" style={CLIP_ICON_STYLE} />
-                                        <span>Upload document</span>
+                                <div
+                                    ref={popupRef}
+                                    style={UPLOAD_POPUP_STYLE}
+                                    onPointerDown={(e) => e.stopPropagation()}
+                                    onPointerUp={(e) => e.stopPropagation()}
+                                    onClick={(e) => e.stopPropagation()}
+                                    onWheelCapture={(e) => e.stopPropagation()}
+                                    onWheel={(e) => e.stopPropagation()}
+                                >
+                                    <button
+                                        type="button"
+                                        style={UPLOAD_POPUP_ITEM_STYLE}
+                                        onPointerDown={(e) => e.stopPropagation()}
+                                        onPointerUp={(e) => e.stopPropagation()}
+                                        onWheelCapture={(e) => e.stopPropagation()}
+                                        onWheel={(e) => e.stopPropagation()}
+                                        onMouseEnter={() => setUploadMenuHover(true)}
+                                        onMouseLeave={() => setUploadMenuHover(false)}
+                                        onClick={(e) => {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            setShowUploadPopup(false);
+                                            fileInputRef.current?.click();
+                                        }}
+                                    >
+                                        <span
+                                            aria-hidden="true"
+                                            style={{
+                                                ...UPLOAD_POPUP_ITEM_HOVER_PLATE_STYLE,
+                                                backgroundColor: uploadMenuHover ? 'rgba(215, 245, 255, 0.14)' : 'transparent',
+                                            }}
+                                        />
+                                        <span style={UPLOAD_POPUP_ITEM_CONTENT_STYLE}>
+                                            <span
+                                                aria-hidden="true"
+                                                style={{
+                                                    ...CLIP_ICON_STYLE,
+                                                    backgroundColor: '#D7F5FF',
+                                                    WebkitMaskImage: `url(${clipIcon})`,
+                                                    maskImage: `url(${clipIcon})`
+                                                }}
+                                            />
+                                            <span>Upload document</span>
+                                        </span>
                                     </button>
                                 </div>
                             )}
@@ -145,7 +239,16 @@ export const PromptCard: React.FC<PromptCardProps> = ({
                             onClick={handleSubmit}
                             disabled={disabled}
                         >
-                            <img src={sendIcon} alt="Send" style={{ ...SEND_ICON_STYLE, opacity: sendHover ? 0.8 : 0.4 }} />
+                            <span
+                                aria-hidden="true"
+                                style={{
+                                    ...SEND_ICON_STYLE,
+                                    backgroundColor: '#D7F5FF',
+                                    WebkitMaskImage: `url(${sendIcon})`,
+                                    maskImage: `url(${sendIcon})`,
+                                    opacity: sendHover ? 0.8 : 0.4
+                                }}
+                            />
                         </button>
                     </div>
                 </div>
@@ -179,10 +282,10 @@ const CARD_INNER_STYLE: React.CSSProperties = {
 
 const HEADLINE_STYLE: React.CSSProperties = {
     fontSize: '18px',
-    fontWeight: 600,
+    fontWeight: 300,
     lineHeight: 1.4,
     textAlign: 'center',
-    color: '#e7e7e7',
+    color: '#D7F5FF',
     fontFamily: 'var(--font-ui)',
     marginTop: 20,
     marginBottom: -20,
@@ -199,14 +302,6 @@ const GRAPH_PREVIEW_PLACEHOLDER_STYLE: React.CSSProperties = {
     justifyContent: 'center',
 };
 
-const PLACEHOLDER_LABEL_STYLE: React.CSSProperties = {
-    fontSize: '13px',
-    color: 'rgba(255, 255, 255, 0.35)',
-    fontFamily: 'var(--font-ui)',
-    textTransform: 'uppercase',
-    letterSpacing: '0.5px',
-};
-
 const INPUT_PILL_STYLE: React.CSSProperties = {
     width: '100%',
     maxWidth: '600px',
@@ -217,6 +312,39 @@ const INPUT_PILL_STYLE: React.CSSProperties = {
     display: 'flex',
     flexDirection: 'column',
     gap: '12px',
+};
+
+const PROMPT_STATUS_BANNER_STYLE: React.CSSProperties = {
+    width: '100%',
+    maxWidth: '600px',
+    padding: '10px 12px',
+    borderRadius: '10px',
+    background: 'rgba(185, 49, 49, 0.2)',
+    border: '1px solid rgba(255, 120, 120, 0.35)',
+    boxSizing: 'border-box',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: '10px',
+};
+
+const PROMPT_STATUS_TEXT_STYLE: React.CSSProperties = {
+    color: '#ffdede',
+    fontSize: '12px',
+    lineHeight: 1.4,
+    fontFamily: 'var(--font-ui)',
+    flex: 1,
+};
+
+const PROMPT_STATUS_DISMISS_STYLE: React.CSSProperties = {
+    border: '1px solid rgba(255, 255, 255, 0.22)',
+    background: 'rgba(255, 255, 255, 0.06)',
+    color: '#f5f5f5',
+    fontSize: '11px',
+    fontFamily: 'var(--font-ui)',
+    borderRadius: '8px',
+    padding: '6px 10px',
+    cursor: 'pointer',
 };
 
 const INPUT_STYLE: React.CSSProperties = {
@@ -251,17 +379,33 @@ const ICON_BUTTON_STYLE: React.CSSProperties = {
 const PLUS_ICON_STYLE: React.CSSProperties = {
     width: '15px',
     height: '15px',
+    display: 'inline-block',
+    WebkitMaskRepeat: 'no-repeat',
+    maskRepeat: 'no-repeat',
+    WebkitMaskPosition: 'center',
+    maskPosition: 'center',
+    WebkitMaskSize: 'contain',
+    maskSize: 'contain',
     opacity: 0.6,
 };
 
 const SEND_ICON_STYLE: React.CSSProperties = {
     width: '28px',
     height: '28px',
+    display: 'inline-block',
+    WebkitMaskRepeat: 'no-repeat',
+    maskRepeat: 'no-repeat',
+    WebkitMaskPosition: 'center',
+    maskPosition: 'center',
+    WebkitMaskSize: 'contain',
+    maskSize: 'contain',
     opacity: 0.4,
 };
 
 // Popup scale: adjust to make popup smaller/larger (1.0 = base, 0.8 = 20% smaller)
 const POPUP_SCALE = 0.85;
+const UPLOAD_POPUP_HOVER_EDGE_GAP_X_PX = 10;
+const UPLOAD_POPUP_HOVER_EDGE_GAP_Y_PX = 3;
 
 const UPLOAD_POPUP_STYLE: React.CSSProperties = {
     position: 'absolute',
@@ -274,6 +418,7 @@ const UPLOAD_POPUP_STYLE: React.CSSProperties = {
     boxShadow: '0 8px 24px rgba(0, 0, 0, 0.5)',
     minWidth: `${180 * POPUP_SCALE}px`,
     zIndex: 100,
+    overflow: 'hidden',
 };
 
 const UPLOAD_POPUP_ITEM_STYLE: React.CSSProperties = {
@@ -284,16 +429,46 @@ const UPLOAD_POPUP_ITEM_STYLE: React.CSSProperties = {
     padding: `${10 * POPUP_SCALE}px ${16 * POPUP_SCALE}px`,
     background: 'transparent',
     border: 'none',
-    color: '#e7e7e7',
+    color: '#b9d0d8',
     fontSize: `${14 * POPUP_SCALE}px`,
     fontFamily: 'var(--font-ui)',
     textAlign: 'left',
     cursor: 'pointer',
+    borderRadius: `${8 * POPUP_SCALE}px`,
+    position: 'relative',
+    overflow: 'hidden',
+};
+
+const UPLOAD_POPUP_ITEM_HOVER_PLATE_STYLE: React.CSSProperties = {
+    position: 'absolute',
+    top: `${UPLOAD_POPUP_HOVER_EDGE_GAP_Y_PX}px`,
+    right: `${UPLOAD_POPUP_HOVER_EDGE_GAP_X_PX}px`,
+    bottom: `${UPLOAD_POPUP_HOVER_EDGE_GAP_Y_PX}px`,
+    left: `${UPLOAD_POPUP_HOVER_EDGE_GAP_X_PX}px`,
+    borderRadius: `${8 * POPUP_SCALE}px`,
+    transition: 'background-color 100ms ease',
+    pointerEvents: 'none',
+    zIndex: 0,
+};
+
+const UPLOAD_POPUP_ITEM_CONTENT_STYLE: React.CSSProperties = {
+    position: 'relative',
+    zIndex: 1,
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: `${10 * POPUP_SCALE}px`,
 };
 
 const CLIP_ICON_STYLE: React.CSSProperties = {
     width: `${16 * POPUP_SCALE}px`,
     height: `${16 * POPUP_SCALE}px`,
+    display: 'inline-block',
+    WebkitMaskRepeat: 'no-repeat',
+    maskRepeat: 'no-repeat',
+    WebkitMaskPosition: 'center',
+    maskPosition: 'center',
+    WebkitMaskSize: 'contain',
+    maskSize: 'contain',
     opacity: 0.7,
 };
 

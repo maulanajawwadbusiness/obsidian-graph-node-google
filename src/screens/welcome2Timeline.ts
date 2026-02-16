@@ -50,6 +50,7 @@ type EmphasisAnalysis = {
 
 const DEBUG_WELCOME2_TIMELINE = false;
 const MIN_LETTER_DIGIT_DELAY_MS = 20;
+const MIN_REVEAL_GAP_MS = 28; // minimum allowed time gap between char i and char i+1
 const NEWLINE_POST_MIN_MS = 40;
 const NEWLINE_POST_MAX_FRACTION = 0.2;
 const NEWLINE_PREWAIT_MULTIPLIER = 2.5;
@@ -151,36 +152,33 @@ function analyzeEmphasis(
     };
 }
 
-function distributePause(totalMs: number, ratios: number[]): number[] {
-    const clampedTotal = clampMs(totalMs);
-    if (clampedTotal <= 0 || ratios.length === 0) {
-        return ratios.map(() => 0);
+function isBoundaryChar(ch: string): boolean {
+    return (
+        ch === ' ' ||
+        ch === '\n' ||
+        ch === '.' ||
+        ch === '?' ||
+        ch === '!' ||
+        ch === ',' ||
+        ch === ';' ||
+        ch === ':'
+    );
+}
+
+function buildNextBoundaryIndex(renderChars: string[]): number[] {
+    const len = renderChars.length;
+    const nextBoundaryIndex = new Array<number>(len).fill(-1);
+    let lastBoundary = -1;
+
+    for (let i = len - 1; i >= 0; i -= 1) {
+        const ch = renderChars[i];
+        if (isBoundaryChar(ch)) {
+            lastBoundary = i;
+        }
+        nextBoundaryIndex[i] = lastBoundary;
     }
 
-    const normalizedRatios = ratios.map((value) => Math.max(0, value));
-    const ratioSum = normalizedRatios.reduce((acc, value) => acc + value, 0);
-    if (ratioSum <= 0) {
-        const even = Math.floor(clampedTotal / ratios.length);
-        const out = ratios.map(() => even);
-        out[ratios.length - 1] += clampedTotal - even * ratios.length;
-        return out;
-    }
-
-    const raw = normalizedRatios.map((value) => (clampedTotal * value) / ratioSum);
-    const floored = raw.map((value) => Math.floor(value));
-    let remainder = clampedTotal - floored.reduce((acc, value) => acc + value, 0);
-
-    const priority = raw
-        .map((value, idx) => ({ idx, frac: value - floored[idx] }))
-        .sort((a, b) => b.frac - a.frac);
-    let cursor = 0;
-    while (remainder > 0 && priority.length > 0) {
-        floored[priority[cursor].idx] += 1;
-        remainder -= 1;
-        cursor = (cursor + 1) % priority.length;
-    }
-
-    return floored;
+    return nextBoundaryIndex;
 }
 
 function isDebugCadenceEnabled(): boolean {
@@ -326,6 +324,7 @@ export function buildWelcome2Timeline(rawText: string, cadence: CadenceConfig = 
     const tunedCadence = applySpeed(cadence, 1.0);
     const markerDefaultMs = clampMs(tunedCadence.markerPauseDefaultMs);
     const { renderChars, markerPauseByCharIndex, malformedMarkerFound } = buildRenderAndMarkerMap(rawText, markerDefaultMs);
+    const nextBoundaryIndex = buildNextBoundaryIndex(renderChars);
 
     if (malformedMarkerFound) {
         console.warn('[Welcome2Type] malformed pause marker; using markerPauseDefaultMs');
@@ -340,6 +339,8 @@ export function buildWelcome2Timeline(rawText: string, cadence: CadenceConfig = 
 
     if (tunedCadence.semantic) {
         const semantic = tunedCadence.semantic;
+        const wordEndPause = clampMs(semantic.wordEndPauseMs);
+        const heavyExtraPause = clampMs(semantic.heavyWordEndExtraPauseMs);
 
         for (let i = 0; i < renderChars.length; i += 1) {
             const char = renderChars[i];
@@ -347,47 +348,28 @@ export function buildWelcome2Timeline(rawText: string, cadence: CadenceConfig = 
             const isWordEnd = i + 1 >= renderChars.length || !isWordChar(renderChars[i + 1]);
             if (!isWordEnd) continue;
 
-            const prevIndex = i - 1;
-            const prevIsWordChar = prevIndex >= 0 && isWordChar(renderChars[prevIndex]);
-            const wordEndPause = clampMs(semantic.wordEndPauseMs);
-            if (prevIsWordChar) {
-                const [prevShare, endShare] = distributePause(wordEndPause, [0.15, 0.85]);
-                semanticPauseByIndex[prevIndex] += prevShare;
-                semanticPauseByIndex[i] += endShare;
-            } else {
-                semanticPauseByIndex[i] += wordEndPause;
+            const endIndex = i;
+            const boundaryIndex = nextBoundaryIndex[endIndex];
+            const finalBoundaryIndex = boundaryIndex >= 0 ? boundaryIndex : renderChars.length - 1;
+
+            if (finalBoundaryIndex < 0) {
+                continue;
+            }
+            if (wordEndPause > 0) {
+                semanticPauseByIndex[finalBoundaryIndex] += wordEndPause;
             }
 
-            if (emphasis.wordEndIsHeavyByIndex.get(i)) {
-                const heavyPause = clampMs(semantic.heavyWordEndExtraPauseMs);
-                if (prevIsWordChar) {
-                    const [prevShare, endShare] = distributePause(heavyPause, [0.15, 0.85]);
-                    semanticPauseByIndex[prevIndex] += prevShare;
-                    semanticPauseByIndex[i] += endShare;
-                } else {
-                    semanticPauseByIndex[i] += heavyPause;
-                }
+            const isHeavy = emphasis.wordEndIsHeavyByIndex.get(endIndex) === true;
+            if (isHeavy && heavyExtraPause > 0) {
+                semanticPauseByIndex[finalBoundaryIndex] += heavyExtraPause;
             }
         }
 
         const landingPause = clampMs(semantic.sentenceLandingExtraPauseMs);
         if (landingPause > 0) {
-            for (const indices of emphasis.landingTailByPunctuationIndex.values()) {
-                if (indices.length === 0) continue;
-                if (indices.length >= 3) {
-                    const [farShare, midShare, nearShare] = distributePause(landingPause, [0.2, 0.3, 0.5]);
-                    semanticPauseByIndex[indices[2]] += farShare;
-                    semanticPauseByIndex[indices[1]] += midShare;
-                    semanticPauseByIndex[indices[0]] += nearShare;
-                    continue;
-                }
-                if (indices.length === 2) {
-                    const [farShare, nearShare] = distributePause(landingPause, [0.4, 0.6]);
-                    semanticPauseByIndex[indices[1]] += farShare;
-                    semanticPauseByIndex[indices[0]] += nearShare;
-                    continue;
-                }
-                semanticPauseByIndex[indices[0]] += landingPause;
+            for (const punctuationIndex of emphasis.landingTailByPunctuationIndex.keys()) {
+                if (punctuationIndex < 0 || punctuationIndex >= renderChars.length) continue;
+                semanticPauseByIndex[punctuationIndex] += landingPause;
             }
         }
     }
@@ -485,6 +467,11 @@ export function buildWelcome2Timeline(rawText: string, cadence: CadenceConfig = 
         let charDelayMs = getCostBetweenChars(charClass, tunedCadence);
         if (charClass === 'letter' || charClass === 'digit') {
             charDelayMs = Math.max(MIN_LETTER_DIGIT_DELAY_MS, clampMs(charDelayMs));
+        }
+        const totalGapMs = charDelayMs + event.pauseAfterMs;
+        if (totalGapMs < MIN_REVEAL_GAP_MS) {
+            const neededExtra = MIN_REVEAL_GAP_MS - totalGapMs;
+            charDelayMs += neededExtra;
         }
 
         const eventTimeMs = event.tMs;

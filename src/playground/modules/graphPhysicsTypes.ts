@@ -1,4 +1,5 @@
 export type {
   GraphPhysicsPlaygroundProps,
-  PendingAnalysisPayload
+  PendingAnalysisPayload,
+  GraphRuntimeStatusSnapshot,
 } from '../GraphPhysicsPlaygroundShell';

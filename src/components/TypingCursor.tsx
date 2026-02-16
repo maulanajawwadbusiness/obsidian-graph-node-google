@@ -10,7 +10,7 @@ type TypingCursorProps = {
 };
 
 function getAnimationByMode(mode: TypingCursorMode): string {
-    if (mode === 'typing') return 'none';
+    if (mode === 'typing') return 'cursorNeedleTyping 0.52s step-end infinite';
     if (mode === 'pause') return 'cursorNeedlePause 1.05s step-end infinite';
     if (mode === 'holdFast') return 'cursorNeedleHoldFast 0.34s step-end infinite';
     return 'cursorNeedleNormal 0.85s step-end infinite';
@@ -43,8 +43,8 @@ const CURSOR_STYLE: React.CSSProperties = {
     background: '#63abff',
     borderRadius: '1px',
     verticalAlign: '-0.12em',
-    transform: 'translateZ(0)',
-    willChange: 'opacity',
+    // Text AA safety: do not add transform/translateZ/will-change/filter/backdrop-filter
+    // here. On Windows Chrome this can break subpixel AA and cause harsh text edges.
     flexShrink: 0,
     pointerEvents: 'none',
 };

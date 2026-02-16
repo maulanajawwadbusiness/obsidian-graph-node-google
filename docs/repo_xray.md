@@ -2,7 +2,7 @@
 
 Generated for External AI Context Loading
 Target: Deep Codebase Understanding without Repo Access
-Date: 2026-02-06
+Date: 2026-02-15
 
 Update Note: 2026-02-10
 - Added local-first saved interface system and extensive Sidebar session UX hardening.
@@ -16,6 +16,105 @@ Update Note: 2026-02-11
 - Added restore-read-only hardening (no save/sync side effects during restore).
 - Added per-identity persistent remote outbox with retry/backoff for mirror resilience.
 - Added remote outbox non-retryable guard for `payload_missing` to prevent infinite retries.
+
+Update Note: 2026-02-12
+- Added profile update endpoint + users profile columns integration (`display_name`, `username`).
+- Sidebar avatar flow now owns profile open and logout trigger path (with AppShell confirm modal).
+- Font system moved to Quicksand `woff2` multi-weight via `src/styles/fonts.css` and CSS vars.
+
+Update Note: 2026-02-14
+- Completed AppShell modularization runs 1-8.
+- `src/screens/AppShell.tsx` is orchestration-only at 432 lines.
+- Domain seams moved under `src/screens/appshell/*` (screenFlow, transitions, overlays, savedInterfaces, render, sidebar, helpers/styles).
+- See `docs/report_2026_02_14_appshell_modularization.md`.
+
+Update Note: 2026-02-15
+- Completed backend refactor runs 0-14.
+- `src/server/src/serverMonolith.ts` is now a shell that starts bootstrap.
+- Orchestration and ordering live in `src/server/src/server/bootstrap.ts`.
+- Route deps assembly lives in `src/server/src/server/depsBuilder.ts`.
+- Backend routes are split into `src/server/src/routes/*` (health/auth/profile/saved-interfaces/payments/webhook/llm).
+- Contract guards expanded and unified under `npm run test:contracts` in `src/server`.
+- Onboarding transition control hardened with a canonical route/timing contract and explicit phase machine.
+
+Update Note: 2026-02-15 (Graph Sidebar Layout)
+- Graph screen now routes through `GraphScreenShell` two-pane layout.
+- Left structural sidebar column width is bound to AppShell `isSidebarExpanded`.
+- Graph runtime root is container-relative (`100%` x `100%`) and fills graph pane.
+- Internal playground debug sidebar is gated by `enableDebugSidebar` and disabled on product graph path.
+
+Update Note: 2026-02-16 (Graph Loading Real Screen, Steps 1-9)
+- Screen union now includes `graph_loading`.
+- Prompt forward spine routes to `graph_loading` (submit, skip, restore/select from prompt).
+- Graph-class render branch is unified: `graph_loading` and `graph` share one warm runtime subtree (no screen-key remount).
+- `GraphLoadingGate` is a real screen surface on top of warm runtime for `screen === 'graph_loading'`.
+- Gate phase model controls Confirm reveal/unlock; graph reveal is Confirm-driven.
+- Gate runtime contract is split:
+  - loading truth uses `aiActivity` only
+  - error truth uses `aiErrorMessage` independently
+- Error policy in gate:
+  - analysis/restore error enters `error` phase
+  - gate renders explicit error state and runtime message
+  - exit is explicit via Back (`Escape` shortcut) to prompt
+  - prompt shows inline dismissible analysis error banner
+- Loading typography contract:
+  - all loading-surface text is `font-weight: 300` (`var(--font-ui)`)
+  - covered surfaces include `GraphLoadingGate`, legacy `LoadingScreen`, graph runtime fallbacks, and `AnalysisOverlay`
+- Loading fade contract:
+  - `GraphLoadingGate` uses fixed `200ms` enter/exit fade
+  - exit navigation (`graph_loading -> graph|prompt`) is deferred until fade-out completes
+  - gate keeps input lock during exit fade to prevent repeat actions
+- Legacy in-runtime `LoadingScreen` is suppressed for product graph-class path.
+- Sidebar remains visible on `graph_loading` with shield ownership; disabled visual treatment is icon-only dim (`alpha 0.5`) while text/container stay full opacity.
+- Sidebar disable behavior is loading-only (error does not keep sidebar disabled).
+- Sidebar lock policy is centralized in `src/screens/appshell/sidebar/sidebarLockPolicy.ts`.
+- Lock reason is now explicit (`screen_frozen`, `graph_loading_activity`, `login_overlay_block`, `none`) and exposed via AppShell/Sidebar data markers.
+- Focus/keyboard ownership is captured by gate (`Escape`, `Enter`, `Space`) with window-capture fallback guard.
+
+## 0.1 AppShell Seams (2026-02-14)
+
+- orchestrator: `src/screens/AppShell.tsx`
+- screen flow: `src/screens/appshell/screenFlow/*`
+- transitions: `src/screens/appshell/transitions/*`
+- transition contract: `src/screens/appshell/transitions/transitionContract.ts`
+- overlays and modals: `src/screens/appshell/overlays/*`
+- saved interfaces: `src/screens/appshell/savedInterfaces/*`
+- render mapping: `src/screens/appshell/render/renderScreenContent.tsx`
+- sidebar wiring: `src/screens/appshell/sidebar/*`
+- full details: `docs/report_2026_02_14_appshell_modularization.md`
+
+## 0.2 Graph Screen Topology (2026-02-16)
+
+Current runtime topology for graph screen:
+
+```text
+AppShell
+|- SidebarLayer (overlay product sidebar)
+|- NON_SIDEBAR_LAYER
+|  |- MAIN_SCREEN_CONTAINER
+|  |  |- renderScreenContent(screen='graph_loading'|'graph')
+|  |  |  |- Suspense
+|  |  |  |  |- GraphScreenShell(sidebarExpanded=isSidebarExpanded)
+|  |  |  |  |  |- graph-screen-layout (flex row)
+|  |  |  |  |  |  |- graph-screen-sidebar-pane (structural column; width follows sidebar state)
+|  |  |  |  |  |  |- graph-screen-graph-pane (hosts GraphWithPending)
+|  |  |  |  |  |- GraphLoadingGate (only when screen='graph_loading'; opaque input shield)
+|  |  |- renderScreenContent(other screens)
+|  |     |- welcome1 / welcome2 / prompt (no GraphScreenShell)
+|- ModalLayer
+```
+
+Notes:
+- Left graph-screen column is structural and currently empty; it reserves space for future product Sidebar placement.
+- Product Sidebar remains overlay-driven (`SidebarLayer` -> `Sidebar`) on `prompt`, `graph_loading`, and `graph`.
+- Graph runtime enters through `GraphWithPending` and reaches `GraphPhysicsPlaygroundShell`.
+- Product graph-class path passes `legacyLoadingScreenMode='disabled'` so gate is the only loading surface users see.
+- Runtime also emits `onRuntimeStatusChange({ isLoading, aiErrorMessage })`; AppShell gate consumes this split status.
+- AppShell modal engine consumes full sidebar lock state and closes search/profile/logout on lock-edge activation (not repeatedly).
+- Warm-mount invariant: graph-class branch is shared for `graph_loading <-> graph` and runtime mount id remains stable under `?debugWarmMount=1`.
+- Internal debug sidebar in `GraphPhysicsPlaygroundShell` is debug-only:
+  - gated by `enableDebugSidebar`
+  - product graph path passes `enableDebugSidebar={false}`.
 
 ## 1. Repository Tree (Depth 4)
 Excluding: node_modules, dist, build, .git
@@ -98,12 +197,12 @@ Note: Counts are estimated post-modularization.
 12. src/auth/AuthProvider.tsx - Auth context + /me bootstrap
 13. src/auth/SessionExpiryBanner.tsx - Session expiry UI
 14. src/api.ts - Backend fetch helper (credentials include)
-15. src/server/src/serverMonolith.ts - Auth routes, payments, LLM endpoints
-16. src/server/src/index.ts - Thin server composition entry
-17. src/server/src/llm/llmClient.ts - Server LLM client (Responses API)
-18. src/server/src/db.ts - Cloud SQL connector + pool
-19. src/server/src/llm/usage/usageTracker.ts - LLM usage tracker and tokenizer fallback
-20. src/server/src/llm/audit/llmAudit.ts - LLM audit persistence
+15. src/server/src/routes/llmAnalyzeRoute.ts (561 lines) - Analyze endpoint orchestration
+16. src/server/src/routes/paymentsRoutes.ts (227 lines) - Rupiah and payments create/status routes
+17. src/server/src/routes/authRoutes.ts (218 lines) - Auth endpoints (/auth/google, /me, /auth/logout)
+18. src/server/src/routes/savedInterfacesRoutes.ts (137 lines) - Saved interface CRUD routes
+19. src/server/src/server/bootstrap.ts (142 lines) - Backend startup/order orchestration
+20. src/server/src/server/depsBuilder.ts (120 lines) - Route deps assembly seam
 21. src/components/PaymentGopayPanel.tsx - QRIS payment UI panel
 22. src/components/PromptCard.tsx - EnterPrompt main card (input, attachments, submit control)
 
@@ -165,8 +264,12 @@ Key files:
 - `src/auth/SessionExpiryBanner.tsx` (expiry UI)
 - `src/components/GoogleLoginButton.tsx` (Google login entry)
 - `src/api.ts` (GET /me with `credentials: "include"`)
-- `src/server/src/index.ts` (thin entry, imports runtime server module)
-- `src/server/src/serverMonolith.ts` (auth routes, cookie, sessions)
+- `src/server/src/index.ts` (thin entry imports monolith shell)
+- `src/server/src/serverMonolith.ts` (shell only, starts bootstrap)
+- `src/server/src/server/bootstrap.ts` (runtime orchestration and order owner)
+- `src/server/src/routes/authRoutes.ts` (auth route logic)
+- `src/server/src/auth/requireAuth.ts` (session middleware)
+- `src/server/src/server/cookies.ts` (cookie parse/set/clear helpers)
 - `src/server/src/db.ts` (Postgres connection)
 
 Follow the auth flow:
@@ -183,12 +286,15 @@ Note:
 ## 7.1 Saved Interfaces Sync Map (Current)
 
 Primary files:
-- `src/screens/AppShell.tsx` (sync brain, unified commit paths, outbox)
+- `src/screens/AppShell.tsx` (orchestration and dependency wiring)
+- `src/screens/appshell/savedInterfaces/savedInterfacesCommits.ts` (single-writer commit surfaces)
+- `src/screens/appshell/savedInterfaces/useSavedInterfacesSync.ts` (hydrate + outbox retry engine)
 - `src/store/savedInterfacesStore.ts` (local storage schema + namespace helpers)
 - `src/playground/GraphPhysicsPlaygroundShell.tsx` (restore pipeline + callback emitters)
 - `src/document/nodeBinding.ts` (analysis record creation, callback emission)
 - `src/api.ts` (saved-interfaces API helpers)
-- `src/server/src/serverMonolith.ts` (requireAuth CRUD API)
+- `src/server/src/routes/savedInterfacesRoutes.ts` (requireAuth CRUD API)
+- `src/server/src/server/jsonParsers.ts` (saved-interfaces parser split + 413 mapping seam)
 - `src/server/migrations/1770383000000_add_saved_interfaces.js` (DB table)
 
 Current write ownership:
@@ -217,18 +323,92 @@ Payload and API contract:
   - `POST /api/saved-interfaces/upsert`
   - `POST /api/saved-interfaces/delete`
 - backend payload guard:
-  - `MAX_SAVED_INTERFACE_PAYLOAD_BYTES` default 15 MB
+  - parser seam in `src/server/src/server/jsonParsers.ts`
+  - 413 mapping guard: `npm run test:jsonparsers-contracts`
+  - route validation guard: `npm run test:saved-interfaces-contracts`
 
 Search overlay contract:
 - centered AppShell overlay opened from Sidebar Search row
 - in-memory search over AppShell saved list (no localStorage reads while typing)
 - strict pointer/wheel shielding to prevent canvas input leaks
 
+## 7.4 Important Files and Seams (Current)
+
+Backend API seams (canonical ownership map):
+- `src/server/src/serverMonolith.ts` (shell startup only)
+- `src/server/src/server/bootstrap.ts` (order and startup orchestration)
+- `src/server/src/server/depsBuilder.ts` (route deps assembly)
+- `src/server/src/server/envConfig.ts`
+- `src/server/src/server/jsonParsers.ts`
+- `src/server/src/server/corsConfig.ts`
+- `src/server/src/server/startupGates.ts`
+- `src/server/src/server/cookies.ts`
+- `src/server/src/routes/healthRoutes.ts`
+- `src/server/src/routes/authRoutes.ts`
+- `src/server/src/routes/profileRoutes.ts`
+- `src/server/src/routes/savedInterfacesRoutes.ts`
+- `src/server/src/routes/paymentsRoutes.ts`
+- `src/server/src/routes/paymentsWebhookRoute.ts`
+- `src/server/src/routes/llmAnalyzeRoute.ts`
+- `src/server/src/routes/llmPrefillRoute.ts`
+- `src/server/src/routes/llmChatRoute.ts`
+
+Backend migrations:
+- `src/server/migrations/1770383000000_add_saved_interfaces.js`
+- `src/server/migrations/1770383500000_add_user_profile_fields.js`
+
+Frontend API helpers:
+- `src/api.ts`
+  - `listSavedInterfaces`
+  - `upsertSavedInterface`
+  - `deleteSavedInterface`
+  - `updateProfile`
+
+Frontend orchestration seams:
+- `src/screens/AppShell.tsx`
+  - orchestration-only shell: screen wiring, auth and saved-interface dependency injection
+  - no monolithic domain internals
+- `src/screens/appshell/screenFlow/*`
+  - screen types, start policy, flow mapping, welcome1 font gate
+- `src/screens/appshell/transitions/*`
+  - onboarding transition contract, phase machine, wheel guard, layer host
+- `src/screens/appshell/overlays/*`
+  - onboarding overlay/fullscreen chrome, modal state and modal layer, profile/logout controllers, search engine
+- `src/screens/appshell/savedInterfaces/*`
+  - commit surfaces + sync engine split
+- `src/screens/appshell/render/renderScreenContent.tsx`
+  - pure screen-to-jsx mapping
+- `src/screens/appshell/sidebar/*`
+  - sidebar wiring layer and interface item mapping
+- `src/components/Sidebar.tsx`
+  - saved session row list + ellipsis menu (rename/delete)
+  - search overlay trigger wiring
+  - avatar menu wiring (profile/logout request)
+- `src/playground/GraphPhysicsPlaygroundShell.tsx`
+  - restore path application
+  - restore write guards (`restore_write_blocked`) to keep read-only restore
+
+## 7.5 Gotchas (Do Not Regress)
+
+- Do not reorder sessions on rename: rename must not bump payload `updatedAt`.
+- Do not use DB row timestamps (`created_at`, `updated_at`) for ordering or merge decisions.
+- Do not write during restore path: restore must stay read-only and block save/sync side effects.
+
+## 7.6 Backend Order Invariants
+
+- `registerPaymentsWebhookRoute(...)` must run before CORS middleware registration.
+- `applyJsonParsers(...)` must run before route registration.
+- startup gates must run before `app.listen(...)`.
+- full backend contract suite:
+  - `npm run test:contracts`
+- order guard script:
+  - `npm run test:servermonolith-shell`
+
 ## 7.2 Saved Interfaces Call Graph (Step 7-9)
 
 Write path (single writer):
 1. Graph/nodeBinding/sidebar intent
-2. AppShell commit surface (`commitUpsertInterface`, `commitPatchLayoutByDocId`, `commitRenameInterface`, `commitDeleteInterface`, `commitHydrateMerge`)
+2. AppShell-wired commit surface (`src/screens/appshell/savedInterfaces/savedInterfacesCommits.ts`)
 3. immediate in-memory list update
 4. immediate localStorage persist (active identity key)
 5. optional outbox enqueue (authenticated only)
@@ -260,12 +440,19 @@ Backend:
 - `POST /api/payments/gopayqris/create`
 - `GET /api/payments/:orderId/status`
 - `POST /api/payments/webhook`
+- Route ownership:
+  - `src/server/src/routes/paymentsRoutes.ts`
+  - `src/server/src/routes/paymentsWebhookRoute.ts`
 
 ## 9. LLM Endpoints (Server-Side)
 Backend:
 - `POST /api/llm/paper-analyze`
 - `POST /api/llm/chat`
 - `POST /api/llm/prefill`
+- Route ownership:
+  - `src/server/src/routes/llmAnalyzeRoute.ts`
+  - `src/server/src/routes/llmChatRoute.ts`
+  - `src/server/src/routes/llmPrefillRoute.ts`
 
 Client call sites:
 - `src/ai/paperAnalyzer.ts`

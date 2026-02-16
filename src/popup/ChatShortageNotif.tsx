@@ -1,6 +1,8 @@
 import React from 'react';
 import { hideShortage, useShortageStore } from '../money/shortageStore';
 import { usePortalBoundsRect, usePortalScopeMode } from '../components/portalScope/PortalScopeContext';
+import { useGraphViewport } from '../runtime/viewport/graphViewport';
+import { getViewportSize, isBoxedViewport, toViewportLocalPoint } from '../runtime/viewport/viewportMath';
 
 type AnchoredShortageSurface = 'node-popup' | 'mini-chat';
 
@@ -53,6 +55,7 @@ function clamp(value: number, min: number, max: number): number {
 export const ChatShortageNotif: React.FC<ChatShortageNotifProps> = ({ surface, anchorRef, zIndex = 1003 }) => {
     const portalMode = usePortalScopeMode();
     const portalBoundsRect = usePortalBoundsRect();
+    const viewport = useGraphViewport();
     const { open, context, surface: shortageSurface, token } = useShortageStore();
     const notifRef = React.useRef<HTMLDivElement>(null);
     const [position, setPosition] = React.useState<Position>({ left: -9999, top: -9999, ready: false });
@@ -91,12 +94,18 @@ export const ChatShortageNotif: React.FC<ChatShortageNotifProps> = ({ surface, a
 
             const anchorRect = anchorEl.getBoundingClientRect();
             const notifRect = notifEl.getBoundingClientRect();
-            const viewportWidth = portalMode === 'container' && portalBoundsRect ? portalBoundsRect.width : window.innerWidth;
-            const viewportHeight = portalMode === 'container' && portalBoundsRect ? portalBoundsRect.height : window.innerHeight;
-            const anchorLeft =
-                portalMode === 'container' && portalBoundsRect ? anchorRect.left - portalBoundsRect.left : anchorRect.left;
-            const anchorTop =
-                portalMode === 'container' && portalBoundsRect ? anchorRect.top - portalBoundsRect.top : anchorRect.top;
+            const boxed = isBoxedViewport(viewport);
+            const fallbackW = portalMode === 'container' && portalBoundsRect ? portalBoundsRect.width : window.innerWidth;
+            const fallbackH = portalMode === 'container' && portalBoundsRect ? portalBoundsRect.height : window.innerHeight;
+            const { w: viewportWidth, h: viewportHeight } = getViewportSize(viewport, fallbackW, fallbackH);
+            const anchorLocal = boxed
+                ? toViewportLocalPoint(anchorRect.left, anchorRect.top, viewport)
+                : {
+                    x: portalMode === 'container' && portalBoundsRect ? anchorRect.left - portalBoundsRect.left : anchorRect.left,
+                    y: portalMode === 'container' && portalBoundsRect ? anchorRect.top - portalBoundsRect.top : anchorRect.top,
+                };
+            const anchorLeft = anchorLocal.x;
+            const anchorTop = anchorLocal.y;
             const maxLeft = Math.max(EDGE_MARGIN, viewportWidth - notifRect.width - EDGE_MARGIN);
             const centeredLeft = anchorLeft + anchorRect.width / 2 - notifRect.width / 2;
             const left = clamp(centeredLeft, EDGE_MARGIN, maxLeft);
@@ -132,7 +141,7 @@ export const ChatShortageNotif: React.FC<ChatShortageNotifProps> = ({ surface, a
             window.removeEventListener('scroll', scheduleUpdate, true);
             window.removeEventListener('graph-render-tick', scheduleUpdate);
         };
-    }, [anchorRef, isVisible, token, portalMode, portalBoundsRect]);
+    }, [anchorRef, isVisible, token, portalMode, portalBoundsRect, viewport]);
 
     if (!isVisible) {
         return null;

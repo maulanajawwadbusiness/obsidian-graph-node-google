@@ -11,6 +11,8 @@ import React, {
 import { createPortal } from 'react-dom';
 import { LAYER_TOOLTIP } from '../layers';
 import { usePortalBoundsRect, usePortalRootEl, usePortalScopeMode } from '../../components/portalScope/PortalScopeContext';
+import { useGraphViewport, type GraphViewport } from '../../runtime/viewport/graphViewport';
+import { clampToViewport, getViewportSize, isBoxedViewport, toViewportLocalPoint } from '../../runtime/viewport/viewportMath';
 
 type TooltipProviderProps = {
     children: React.ReactNode;
@@ -128,14 +130,23 @@ function computeTooltipPosition(input: {
     preferredPlacement: TooltipPlacement;
     mode: 'app' | 'container';
     boundsRect: DOMRect | null;
+    viewport: GraphViewport;
 }): TooltipComputedPosition {
-    const { anchorRect, tooltipSize, preferredPlacement, mode, boundsRect } = input;
+    const { anchorRect, tooltipSize, preferredPlacement, mode, boundsRect, viewport } = input;
     const viewportWidth = typeof window !== 'undefined' ? window.innerWidth : 0;
     const viewportHeight = typeof window !== 'undefined' ? window.innerHeight : 0;
-    const vw = mode === 'container' && boundsRect ? boundsRect.width : viewportWidth;
-    const vh = mode === 'container' && boundsRect ? boundsRect.height : viewportHeight;
-    const anchorLeft = mode === 'container' && boundsRect ? anchorRect.left - boundsRect.left : anchorRect.left;
-    const anchorTop = mode === 'container' && boundsRect ? anchorRect.top - boundsRect.top : anchorRect.top;
+    const boxed = isBoxedViewport(viewport);
+    const fallbackW = mode === 'container' && boundsRect ? boundsRect.width : viewportWidth;
+    const fallbackH = mode === 'container' && boundsRect ? boundsRect.height : viewportHeight;
+    const { w: vw, h: vh } = getViewportSize(viewport, fallbackW, fallbackH);
+    const anchorLocal = boxed
+        ? toViewportLocalPoint(anchorRect.left, anchorRect.top, viewport)
+        : {
+            x: mode === 'container' && boundsRect ? anchorRect.left - boundsRect.left : anchorRect.left,
+            y: mode === 'container' && boundsRect ? anchorRect.top - boundsRect.top : anchorRect.top,
+        };
+    const anchorLeft = anchorLocal.x;
+    const anchorTop = anchorLocal.y;
     const tooltipW = Math.max(0, tooltipSize.width);
     const tooltipH = Math.max(0, tooltipSize.height);
 
@@ -160,20 +171,28 @@ function computeTooltipPosition(input: {
 
     const centerX = anchorLeft + anchorRect.width / 2;
     const rawLeft = centerX - tooltipW / 2;
-    const maxLeft = Math.max(VIEWPORT_MARGIN, vw - VIEWPORT_MARGIN - tooltipW);
-    const left = clamp(rawLeft, VIEWPORT_MARGIN, maxLeft);
+    const left = boxed
+        ? clampToViewport(rawLeft, tooltipW, vw, VIEWPORT_MARGIN)
+        : clamp(rawLeft, VIEWPORT_MARGIN, Math.max(VIEWPORT_MARGIN, vw - VIEWPORT_MARGIN - tooltipW));
 
     const rawTop = placement === 'top' ? topCandidate : bottomCandidate;
-    const maxTop = Math.max(VIEWPORT_MARGIN, vh - VIEWPORT_MARGIN - tooltipH);
-    const top = clamp(rawTop, VIEWPORT_MARGIN, maxTop);
+    const top = boxed
+        ? clampToViewport(rawTop, tooltipH, vh, VIEWPORT_MARGIN)
+        : clamp(rawTop, VIEWPORT_MARGIN, Math.max(VIEWPORT_MARGIN, vh - VIEWPORT_MARGIN - tooltipH));
 
     return { left, top, placement };
 }
 
-const TooltipRenderer: React.FC<{ state: TooltipState; mode: 'app' | 'container'; boundsRect: DOMRect | null }> = ({
+const TooltipRenderer: React.FC<{
+    state: TooltipState;
+    mode: 'app' | 'container';
+    boundsRect: DOMRect | null;
+    viewport: GraphViewport;
+}> = ({
     state,
     mode,
     boundsRect,
+    viewport,
 }) => {
     if (!state.open || !state.anchorRect || state.content.trim().length === 0) return null;
     const bubbleRef = useRef<HTMLDivElement | null>(null);
@@ -226,6 +245,7 @@ const TooltipRenderer: React.FC<{ state: TooltipState; mode: 'app' | 'container'
         preferredPlacement: state.placement,
         mode,
         boundsRect,
+        viewport,
     });
 
     return (
@@ -248,12 +268,13 @@ const TooltipPortal: React.FC<{ state: TooltipState }> = ({ state }) => {
     const portalRoot = usePortalRootEl();
     const mode = usePortalScopeMode();
     const boundsRect = usePortalBoundsRect();
+    const viewport = useGraphViewport();
     return createPortal(
         <div
             data-tooltip-layer-root="1"
             style={mode === 'container' ? TOOLTIP_PORTAL_ROOT_STYLE_CONTAINER : TOOLTIP_PORTAL_ROOT_STYLE_APP}
         >
-            <TooltipRenderer state={state} mode={mode} boundsRect={boundsRect} />
+            <TooltipRenderer state={state} mode={mode} boundsRect={boundsRect} viewport={viewport} />
         </div>,
         portalRoot
     );

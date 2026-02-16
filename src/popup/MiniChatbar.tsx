@@ -8,6 +8,8 @@ import type { PopupRect } from './popupTypes';
 import { t } from '../i18n/t';
 import { useTooltip } from '../ui/tooltip/useTooltip';
 import { usePortalBoundsRect, usePortalScopeMode } from '../components/portalScope/PortalScopeContext';
+import { useGraphViewport, type GraphViewport } from '../runtime/viewport/graphViewport';
+import { getViewportSize, isBoxedViewport, toViewportLocalPoint } from '../runtime/viewport/viewportMath';
 
 /**
  * MiniChatbar - Small chat window next to popup
@@ -35,8 +37,8 @@ const CHATBAR_STYLE: React.CSSProperties = {
     position: 'fixed',
     width: '300px',
     height: '400px',
-    backgroundColor: 'rgba(20, 20, 30, 0.95)',
-    border: 'none',
+    backgroundColor: '#0a0a12',
+    border: '1px solid rgba(61, 72, 87, 0.55)',
     borderRadius: '8px',
     padding: '16px',
     color: 'rgba(180, 190, 210, 0.9)',
@@ -124,11 +126,23 @@ function computeChatbarPosition(
     popupRect: PopupRect | null,
     chatbarSize: ChatbarSize | null,
     mode: 'app' | 'container',
-    boundsRect: DOMRect | null
+    boundsRect: DOMRect | null,
+    viewport: GraphViewport
 ): React.CSSProperties {
-    const viewportWidth = mode === 'container' && boundsRect ? boundsRect.width : window.innerWidth;
-    const viewportHeight = mode === 'container' && boundsRect ? boundsRect.height : window.innerHeight;
+    const boxed = isBoxedViewport(viewport);
+    const fallbackW = mode === 'container' && boundsRect ? boundsRect.width : window.innerWidth;
+    const fallbackH = mode === 'container' && boundsRect ? boundsRect.height : window.innerHeight;
+    const { w: viewportWidth, h: viewportHeight } = getViewportSize(viewport, fallbackW, fallbackH);
     const toLocalRect = (rect: PopupRect): PopupRect => {
+        if (boxed) {
+            const local = toViewportLocalPoint(rect.left, rect.top, viewport);
+            return {
+                left: local.x,
+                top: local.y,
+                width: rect.width,
+                height: rect.height,
+            };
+        }
         if (mode !== 'container' || !boundsRect) return rect;
         return {
             left: rect.left - boundsRect.left,
@@ -159,7 +173,7 @@ function computeChatbarPosition(
     const CHATBAR_HEIGHT = chatbarSize?.height ?? DEFAULT_CHATBAR_HEIGHT;
     const GAP = 20;  // Breathing room between popup and chatbar
     const MARGIN = 10;  // Screen edge margin
-    const viewport = viewportWidth;
+    const viewportW = viewportWidth;
 
     const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(value, max));
     const popupRight = localPopupRect.left + localPopupRect.width;
@@ -167,11 +181,11 @@ function computeChatbarPosition(
 
     // Step 1: Determine preference based on popup position
     const popupCenterX = localPopupRect.left + localPopupRect.width / 2;
-    const preferRight = popupCenterX < viewport / 2;
+    const preferRight = popupCenterX < viewportW / 2;
 
     const tryRight = () => {
         const left = popupRight + GAP;
-        if (left + CHATBAR_WIDTH > viewport - MARGIN) return null;
+        if (left + CHATBAR_WIDTH > viewportW - MARGIN) return null;
         const top = clamp(localPopupRect.top, MARGIN, viewportHeight - CHATBAR_HEIGHT - MARGIN);
         return { left, top };
     };
@@ -186,14 +200,14 @@ function computeChatbarPosition(
     const tryBelow = () => {
         const top = popupBottom + GAP;
         if (top + CHATBAR_HEIGHT > viewportHeight - MARGIN) return null;
-        const left = clamp(popupRect.left, MARGIN, viewport - CHATBAR_WIDTH - MARGIN);
+        const left = clamp(popupRect.left, MARGIN, viewportW - CHATBAR_WIDTH - MARGIN);
         return { left, top };
     };
 
     const tryAbove = () => {
         const top = localPopupRect.top - CHATBAR_HEIGHT - GAP;
         if (top < MARGIN) return null;
-        const left = clamp(localPopupRect.left, MARGIN, viewport - CHATBAR_WIDTH - MARGIN);
+        const left = clamp(localPopupRect.left, MARGIN, viewportW - CHATBAR_WIDTH - MARGIN);
         return { left, top };
     };
 
@@ -212,7 +226,7 @@ function computeChatbarPosition(
     }
 
     // Last resort: avoid overlap even if it means going offscreen
-    const rightSpace = viewport - popupRight - MARGIN;
+    const rightSpace = viewportW - popupRight - MARGIN;
     const leftSpace = localPopupRect.left - MARGIN;
     const left = rightSpace >= leftSpace
         ? popupRight + GAP
@@ -228,6 +242,7 @@ function computeChatbarPosition(
 export const MiniChatbar: React.FC<MiniChatbarProps> = ({ messages, onSend, onClose }) => {
     const portalMode = usePortalScopeMode();
     const portalBoundsRect = usePortalBoundsRect();
+    const viewport = useGraphViewport();
     const [isVisible, setIsVisible] = useState(false);
     const [inputText, setInputText] = useState('');
     const [chatbarSize, setChatbarSize] = useState<ChatbarSize | null>(null);
@@ -345,7 +360,7 @@ export const MiniChatbar: React.FC<MiniChatbarProps> = ({ messages, onSend, onCl
             const chatSize = { width: chatEl.offsetWidth, height: chatEl.offsetHeight };
 
             // Re-run positioning logic
-            const style = computeChatbarPosition(popupRect, chatSize, portalMode, portalBoundsRect);
+            const style = computeChatbarPosition(popupRect, chatSize, portalMode, portalBoundsRect, viewport);
 
             if (style.left && style.top) {
                 chatEl.style.left = style.left as string;
@@ -369,7 +384,7 @@ export const MiniChatbar: React.FC<MiniChatbarProps> = ({ messages, onSend, onCl
 
         window.addEventListener('graph-render-tick', handleSync);
         return () => window.removeEventListener('graph-render-tick', handleSync);
-    }, [isVisible, portalMode, portalBoundsRect]);
+    }, [isVisible, portalMode, portalBoundsRect, viewport]);
 
     const handleSend = () => {
         if (inputText.trim()) {
@@ -404,7 +419,7 @@ export const MiniChatbar: React.FC<MiniChatbarProps> = ({ messages, onSend, onCl
         console.log('[MiniChat] Sent context to Full Chat (v2)');
     };
 
-    const position = computeChatbarPosition(popupRect, chatbarSize, portalMode, portalBoundsRect);
+    const position = computeChatbarPosition(popupRect, chatbarSize, portalMode, portalBoundsRect, viewport);
 
     const finalStyle = {
         ...(portalMode === 'container' ? CHATBAR_STYLE_CONTAINER : CHATBAR_STYLE),

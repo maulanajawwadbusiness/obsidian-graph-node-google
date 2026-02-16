@@ -1106,6 +1106,32 @@ Step 12 boxed resize semantics (2026-02-16):
     - `boxedResizeCameraAdjustCount`
   - boxed resize apply path has a dev warn-once for invalid camera outputs.
 
+Step 13 boxed smart contain (2026-02-16):
+- contract:
+  - boxed preview gets one-shot smart contain framing after real viewport measurement and valid graph bounds.
+  - smart contain is load-time only; it is not a continuous fit loop.
+  - resize after load stays governed by Step 12 preserve-center-world semantics.
+- implementation seams:
+  - pure fit math + bounds helper: `src/playground/rendering/boxedSmartContain.ts`
+    - `getWorldBoundsFromNodes(...)`
+    - `computeBoxedSmartContainCamera(...)`
+    - default asymmetric padding via `getDefaultBoxedSmartContainPadding()`
+  - boxed apply path + gating: `src/playground/GraphPhysicsPlaygroundShell.tsx`
+    - apply once when viewport is measured and bounds exist.
+    - reset only on interface id change.
+    - block re-fit after user interaction (`wheel`, drag start hit).
+  - wheel interaction seam for latch:
+    - `src/playground/rendering/graphRenderingLoop.ts`
+    - `src/playground/useGraphRendering.ts`
+- dev counters and rails:
+  - `boxedSmartContainAppliedCount`
+  - `boxedSmartContainSkippedUserInteractedCount`
+  - `boxedSmartContainSkippedNoBoundsCount`
+  - warn-once if smart contain attempted with empty/invalid bounds.
+- tuning rule:
+  - adjust boxed readability by editing only smart-contain padding constants.
+  - do not reintroduce per-frame contain/autofit in boxed mode.
+
 Current known risks not fixed yet:
 1. Prompt overlays can mask preview:
    - drag/error/login overlays in `src/screens/EnterPrompt.tsx` are fixed and can block visibility/input.
@@ -1142,3 +1168,7 @@ Manual verification checklist for follow-up runs:
     - resizing preview larger/smaller does not teleport the camera.
     - center-world intent is preserved across resize by default.
     - zoom remains unchanged across resize.
+15. Step 13 boxed smart contain:
+    - boxed preview first load shows the full sample map with readable containment.
+    - once user wheels or starts drag interaction, smart contain does not re-apply.
+    - resizing after user interaction still follows Step 12 semantics (no refit teleport).

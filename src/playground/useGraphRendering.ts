@@ -40,6 +40,7 @@ type UseGraphRenderingProps = {
     showConflictMarkers: boolean;
     markerIntensity: number;
     forceShowRestMarkers: boolean;
+    onUserCameraInteraction?: (reason: 'wheel') => void;
 };
 
 export const useGraphRendering = ({
@@ -59,7 +60,8 @@ export const useGraphRendering = ({
     showRestMarkers,
     showConflictMarkers,
     markerIntensity,
-    forceShowRestMarkers
+    forceShowRestMarkers,
+    onUserCameraInteraction
 }: UseGraphRenderingProps) => {
     const cameraRef = useRef<CameraState>({
         panX: 0,
@@ -179,13 +181,14 @@ export const useGraphRendering = ({
             updateHoverSelection,
             clearHover,
             renderScratch: renderScratchRef.current,
+            onUserCameraInteraction,
         });
 
         return () => {
             console.log('[RenderLoop] stop');
             stopLoop();
         };
-    }, [canvasReady, config, seed, spawnCount, setMetrics]);
+    }, [canvasReady, config, onUserCameraInteraction, seed, setMetrics, spawnCount]);
 
     const handleDragStart = (nodeId: string, clientX: number, clientY: number) => {
         const engine = engineRef.current;

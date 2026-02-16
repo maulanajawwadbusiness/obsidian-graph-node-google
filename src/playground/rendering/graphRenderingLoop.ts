@@ -62,6 +62,7 @@ type GraphRenderLoopDeps = {
     updateHoverSelection: UpdateHoverSelection;
     clearHover: (reason: string, id: number, source: string) => void;
     renderScratch: RenderScratch;
+    onUserCameraInteraction?: (reason: 'wheel') => void;
 };
 
 const ensureSeededGraph = (engine: PhysicsEngine, config: ForceConfig, seed: number, spawnCount: number) => {
@@ -271,6 +272,7 @@ export const startGraphRenderLoop = (deps: GraphRenderLoopDeps) => {
         updateHoverSelection,
         clearHover,
         renderScratch,
+        onUserCameraInteraction,
     } = deps;
 
     let frameId = 0;
@@ -635,6 +637,7 @@ export const startGraphRenderLoop = (deps: GraphRenderLoopDeps) => {
         camera.targetPanX += (rx - rxx);
         camera.targetPanY += (ry - ryy);
         camera.targetZoom = newZoom;
+        onUserCameraInteraction?.('wheel');
     };
     canvas.addEventListener('wheel', handleWheel, { passive: false });
     const releaseWheelListener = trackResource('graph-runtime.canvas-wheel-listener');

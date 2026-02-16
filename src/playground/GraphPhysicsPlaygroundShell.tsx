@@ -38,6 +38,7 @@ import {
     getDefaultBoxedSmartContainPadding,
     getWorldBoundsFromNodes,
     recordBoxedSmartContainApplied,
+    recordBoxedSmartContainSkippedUserInteracted,
     recordBoxedSmartContainSkippedNoBounds,
 } from './rendering/boxedSmartContain';
 // RUN 4: Topology API imports
@@ -247,9 +248,15 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
     const effectiveCameraLocked = cameraLocked || isBoxedRuntime;
     const previousBoxedViewportSizeRef = useRef<{ width: number; height: number } | null>(null);
     const didSmartContainRef = useRef(false);
+    const hasUserInteractedRef = useRef(false);
     const lastSmartContainInterfaceIdRef = useRef<string | null>(null);
+    const skippedSmartContainForInteractionRef = useRef(false);
     const warnedResizeSemanticNaNRef = useRef(false);
     const warnedSmartContainNoBoundsRef = useRef(false);
+    const handleUserCameraInteraction = React.useCallback(() => {
+        if (!isBoxedRuntime) return;
+        hasUserInteractedRef.current = true;
+    }, [isBoxedRuntime]);
 
     const {
         handlePointerMove,
@@ -283,7 +290,8 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
         showRestMarkers,
         showConflictMarkers,
         markerIntensity,
-        forceShowRestMarkers
+        forceShowRestMarkers,
+        onUserCameraInteraction: handleUserCameraInteraction
     });
 
     const setCanvasEl = React.useCallback((el: HTMLCanvasElement | null) => {
@@ -372,9 +380,18 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
         if (lastSmartContainInterfaceIdRef.current !== activeInterfaceId) {
             lastSmartContainInterfaceIdRef.current = activeInterfaceId;
             didSmartContainRef.current = false;
+            hasUserInteractedRef.current = false;
+            skippedSmartContainForInteractionRef.current = false;
             warnedSmartContainNoBoundsRef.current = false;
         }
         if (didSmartContainRef.current) return;
+        if (hasUserInteractedRef.current) {
+            if (!skippedSmartContainForInteractionRef.current) {
+                skippedSmartContainForInteractionRef.current = true;
+                recordBoxedSmartContainSkippedUserInteracted();
+            }
+            return;
+        }
         const viewportWidth = Math.max(1, Math.floor(viewport.width || 1));
         const viewportHeight = Math.max(1, Math.floor(viewport.height || 1));
         if (viewportWidth <= 1 || viewportHeight <= 1) return;
@@ -528,6 +545,9 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
         };
 
         if (hitId) {
+            if (isBoxedRuntime) {
+                hasUserInteractedRef.current = true;
+            }
             // FIX 36: Deferred Drag Start (First Frame Continuity)
             if (DRAG_ENABLED) {
                 console.log(`[PointerTrace] Queueing DragStart for ${hitId} at ${e.clientX},${e.clientY}`);

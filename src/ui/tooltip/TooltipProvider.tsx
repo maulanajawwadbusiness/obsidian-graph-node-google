@@ -139,11 +139,15 @@ function computeTooltipPosition(input: {
     viewport: GraphViewport;
 }): TooltipComputedPosition {
     const { anchorRect, tooltipSize, preferredPlacement, mode, boundsRect, viewport } = input;
+    const boxed = isBoxedViewport(viewport);
     const viewportWidth = typeof window !== 'undefined' ? window.innerWidth : 0;
     const viewportHeight = typeof window !== 'undefined' ? window.innerHeight : 0;
-    const boxed = isBoxedViewport(viewport);
-    const fallbackW = mode === 'container' && boundsRect ? boundsRect.width : viewportWidth;
-    const fallbackH = mode === 'container' && boundsRect ? boundsRect.height : viewportHeight;
+    const fallbackW = boxed
+        ? (boundsRect?.width ?? viewport.width ?? 1)
+        : (mode === 'container' && boundsRect ? boundsRect.width : viewportWidth);
+    const fallbackH = boxed
+        ? (boundsRect?.height ?? viewport.height ?? 1)
+        : (mode === 'container' && boundsRect ? boundsRect.height : viewportHeight);
     const { w: vw, h: vh } = getViewportSize(viewport, fallbackW, fallbackH);
     const anchorLocal = boxed
         ? toViewportLocalPoint(anchorRect.left, anchorRect.top, viewport)

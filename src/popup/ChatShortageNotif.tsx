@@ -98,8 +98,12 @@ export const ChatShortageNotif: React.FC<ChatShortageNotifProps> = ({ surface, a
             if (boxed) {
                 recordBoxedClampCall();
             }
-            const fallbackW = portalMode === 'container' && portalBoundsRect ? portalBoundsRect.width : window.innerWidth;
-            const fallbackH = portalMode === 'container' && portalBoundsRect ? portalBoundsRect.height : window.innerHeight;
+            const fallbackW = boxed
+                ? (portalBoundsRect?.width ?? viewport.width ?? 1)
+                : (portalMode === 'container' && portalBoundsRect ? portalBoundsRect.width : window.innerWidth);
+            const fallbackH = boxed
+                ? (portalBoundsRect?.height ?? viewport.height ?? 1)
+                : (portalMode === 'container' && portalBoundsRect ? portalBoundsRect.height : window.innerHeight);
             const { w: viewportWidth, h: viewportHeight } = getViewportSize(viewport, fallbackW, fallbackH);
             const anchorLocal = boxed
                 ? toViewportLocalPoint(anchorRect.left, anchorRect.top, viewport)

@@ -560,18 +560,21 @@ Current wiring (step 8 live, 2026-02-16):
    - wraps preview runtime with boxed-mode live viewport updates from the same ResizeObserver hook.
 3. live measurement semantics:
    - ResizeObserver callbacks are coalesced to max 1 update per animation frame (rAF batching).
+   - movement refresh is event-driven (window scroll/resize and visualViewport scroll/resize when available).
+   - movement refresh uses bounded settle rAF bursts after origin changes (no permanent polling loop).
    - origin source is element viewport geometry from `getBoundingClientRect()` (`left/top`).
    - size source prefers ResizeObserver box size (`contentBoxSize` when present), then falls back to `contentRect.width/height`, then BCR size.
    - width/height are floored and clamped to `>=1`.
-   - cleanup disconnects observer and cancels pending rAF.
+   - cleanup disconnects observer, removes movement listeners, and cancels pending rAF.
    - DEV tracker names:
      - `graph-runtime.viewport.resize-observer`
      - `graph-runtime.viewport.resize-raf`
+     - `graph-runtime.viewport.position-listeners`
+     - `graph-runtime.viewport.position-settle-raf`
 
 Step boundary:
-- step 8 now provides live viewport measurement only.
-- no clamp-site migration to this contract yet (step 9).
-- boxed clamp/origin correctness in step 9 depends on step 8 origin truth from BCR.
+- step 8 now provides live measurement with movement-aware origin refresh.
+- boxed clamp/origin correctness in step 9 depends on step 8 origin truth from BCR plus movement refresh.
 
 Manual verification checklist:
 1. `npm run build` passes.
@@ -602,6 +605,7 @@ Changed subsystems:
 Rules:
 - `viewport.mode === 'boxed'`:
   - use `viewport.width`, `viewport.height`, and `viewport.boundsRect` origin for local conversion and clamp.
+  - boxed fallbacks prefer viewport/bounds dimensions and avoid relying on window-sized assumptions.
 - app mode keeps prior behavior path (portal/app/window fallback semantics unchanged).
 
 Dev invariants:

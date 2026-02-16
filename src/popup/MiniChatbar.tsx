@@ -133,8 +133,12 @@ function computeChatbarPosition(
     if (boxed) {
         recordBoxedClampCall();
     }
-    const fallbackW = mode === 'container' && boundsRect ? boundsRect.width : window.innerWidth;
-    const fallbackH = mode === 'container' && boundsRect ? boundsRect.height : window.innerHeight;
+    const fallbackW = boxed
+        ? (boundsRect?.width ?? viewport.width ?? 1)
+        : (mode === 'container' && boundsRect ? boundsRect.width : window.innerWidth);
+    const fallbackH = boxed
+        ? (boundsRect?.height ?? viewport.height ?? 1)
+        : (mode === 'container' && boundsRect ? boundsRect.height : window.innerHeight);
     const { w: viewportWidth, h: viewportHeight } = getViewportSize(viewport, fallbackW, fallbackH);
     const toLocalRect = (rect: PopupRect): PopupRect => {
         if (boxed) {

@@ -16,6 +16,8 @@ type UseResizeObserverViewportOptions = {
 let warnedBoxedStuckTinyViewport = false;
 let warnedZeroOriginMismatch = false;
 let warnedSettleCapReached = false;
+let viewportPositionRefreshEvents = 0;
+let viewportSettleFrames = 0;
 type ObserverSizeSnapshot = {
     width: number;
     height: number;
@@ -229,6 +231,9 @@ export function useResizeObserverViewport<T extends HTMLElement>(
 
             if (settleFramesLeftRef.current > 0 && settleFrameBudgetRef.current > 0) {
                 settleFrameBudgetRef.current -= 1;
+                if (import.meta.env.DEV) {
+                    viewportSettleFrames += 1;
+                }
                 if (!originChanged) {
                     settleFramesLeftRef.current -= 1;
                 } else {
@@ -258,6 +263,9 @@ export function useResizeObserverViewport<T extends HTMLElement>(
         };
         const triggerPositionRefresh = () => {
             if (disposed) return;
+            if (import.meta.env.DEV) {
+                viewportPositionRefreshEvents += 1;
+            }
             positionDirtyRef.current = true;
             scheduleViewportUpdate();
         };

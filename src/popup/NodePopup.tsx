@@ -117,8 +117,12 @@ function computePopupPosition(
     if (boxed) {
         recordBoxedClampCall();
     }
-    const fallbackW = mode === 'container' && boundsRect ? boundsRect.width : window.innerWidth;
-    const fallbackH = mode === 'container' && boundsRect ? boundsRect.height : window.innerHeight;
+    const fallbackW = boxed
+        ? (boundsRect?.width ?? viewport.width ?? 1)
+        : (mode === 'container' && boundsRect ? boundsRect.width : window.innerWidth);
+    const fallbackH = boxed
+        ? (boundsRect?.height ?? viewport.height ?? 1)
+        : (mode === 'container' && boundsRect ? boundsRect.height : window.innerHeight);
     const { w: viewportWidth, h: viewportHeight } = getViewportSize(viewport, fallbackW, fallbackH);
     const anchorLocal = boxed
         ? toViewportLocalPoint(anchor.x, anchor.y, viewport)
@@ -190,7 +194,11 @@ export const NodePopup: React.FC<NodePopupProps> = ({ trackNode, engineRef }) =>
             anchorGeometry,
             popupRef.current?.offsetWidth || 280,
             popupRef.current?.offsetHeight ||
-                getViewportSize(viewport, window.innerWidth, window.innerHeight).h * 0.8,
+                getViewportSize(
+                    viewport,
+                    isBoxedViewport(viewport) ? (viewport.width || 1) : window.innerWidth,
+                    isBoxedViewport(viewport) ? (viewport.height || 1) : window.innerHeight
+                ).h * 0.8,
             portalMode,
             portalBoundsRect,
             viewport

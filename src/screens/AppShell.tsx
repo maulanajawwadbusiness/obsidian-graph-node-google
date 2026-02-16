@@ -9,7 +9,11 @@ import {
     saveAllSavedInterfaces,
     type SavedInterfaceRecordV1
 } from '../store/savedInterfacesStore';
-import type { GraphPhysicsPlaygroundProps, PendingAnalysisPayload } from '../playground/modules/graphPhysicsTypes';
+import type {
+    GraphPhysicsPlaygroundProps,
+    PendingAnalysisPayload,
+    GraphRuntimeStatusSnapshot,
+} from '../playground/modules/graphPhysicsTypes';
 import {
     ONBOARDING_FADE_EASING,
     getTransitionPolicy,
@@ -106,6 +110,13 @@ const SIDEBAR_DIM_ALPHA_BY_SCREEN: Record<AppScreen, number> = {
 };
 const FALLBACK_GATE_ERROR_MESSAGE = 'Analysis failed. Please try again.';
 
+function hasSameRuntimeStatus(
+    left: RuntimeStatusSnapshot,
+    right: GraphRuntimeStatusSnapshot
+): boolean {
+    return left.isLoading === right.isLoading && left.aiErrorMessage === right.aiErrorMessage;
+}
+
 function isWarmMountDebugEnabled(): boolean {
     if (!import.meta.env.DEV) return false;
     if (typeof window === 'undefined') return false;
@@ -153,6 +164,10 @@ export const AppShell: React.FC = () => {
     const savedInterfacesRef = React.useRef<SavedInterfaceRecordV1[]>([]);
     const restoreReadPathActiveRef = React.useRef(false);
     const activeStorageKeyRef = React.useRef<string>(getSavedInterfacesStorageKey());
+    const appShellRenderCountRef = React.useRef(0);
+    const runtimeStatusEmitCountRef = React.useRef(0);
+    const runtimeStatusNoopCountRef = React.useRef(0);
+    const runtimeLoadingNoopCountRef = React.useRef(0);
     const authStorageId = React.useMemo(() => resolveAuthStorageId(user), [user]);
     const isAuthReady = !authLoading;
     const isLoggedIn = isAuthReady && user !== null && authStorageId !== null;
@@ -191,6 +206,53 @@ export const AppShell: React.FC = () => {
 
     const GraphWithPending = Graph as React.ComponentType<GraphPhysicsPlaygroundProps>;
     const graphIsLoading = graphRuntimeStatus.isLoading;
+    const handleGraphLoadingStateChange = React.useCallback((isLoading: boolean) => {
+        setGraphRuntimeStatus((prev) => {
+            if (prev.isLoading === isLoading) {
+                if (import.meta.env.DEV) {
+                    runtimeLoadingNoopCountRef.current += 1;
+                    if (runtimeLoadingNoopCountRef.current % 120 === 0) {
+                        console.log(
+                            '[RenderLoopGuard] loading_noop=%d runtime_noop=%d runtime_emit=%d',
+                            runtimeLoadingNoopCountRef.current,
+                            runtimeStatusNoopCountRef.current,
+                            runtimeStatusEmitCountRef.current
+                        );
+                    }
+                }
+                return prev;
+            }
+            return {
+                ...prev,
+                isLoading,
+            };
+        });
+    }, []);
+    const handleGraphRuntimeStatusChange = React.useCallback((status: GraphRuntimeStatusSnapshot) => {
+        if (import.meta.env.DEV) {
+            runtimeStatusEmitCountRef.current += 1;
+        }
+        setGraphRuntimeStatus((prev) => {
+            if (hasSameRuntimeStatus(prev, status)) {
+                if (import.meta.env.DEV) {
+                    runtimeStatusNoopCountRef.current += 1;
+                    if (runtimeStatusNoopCountRef.current % 120 === 0) {
+                        console.log(
+                            '[RenderLoopGuard] runtime_noop=%d loading_noop=%d runtime_emit=%d',
+                            runtimeStatusNoopCountRef.current,
+                            runtimeLoadingNoopCountRef.current,
+                            runtimeStatusEmitCountRef.current
+                        );
+                    }
+                }
+                return prev;
+            }
+            return {
+                isLoading: status.isLoading,
+                aiErrorMessage: status.aiErrorMessage,
+            };
+        });
+    }, []);
     const normalizedGateErrorMessage = React.useMemo(() => {
         const raw = graphRuntimeStatus.aiErrorMessage;
         if (typeof raw !== 'string') return FALLBACK_GATE_ERROR_MESSAGE;
@@ -792,9 +854,22 @@ export const AppShell: React.FC = () => {
         sessionStorage.setItem(STORAGE_KEY, screen);
     }, [screen]);
 
+    React.useEffect(() => {
+        if (!import.meta.env.DEV) return;
+        appShellRenderCountRef.current += 1;
+        if (appShellRenderCountRef.current % 120 !== 0) return;
+        console.log(
+            '[RenderLoopGuard] appshell_render=%d runtime_emit=%d runtime_noop=%d loading_noop=%d',
+            appShellRenderCountRef.current,
+            runtimeStatusEmitCountRef.current,
+            runtimeStatusNoopCountRef.current,
+            runtimeLoadingNoopCountRef.current
+        );
+    });
+
     if (screen === 'welcome1' && !welcome1FontGateDone) return <div style={WELCOME1_FONT_GATE_BLANK_STYLE} />;
 
-    const renderScreenContentByScreen = (targetScreen: Screen): React.ReactNode => renderScreenContent({
+    const renderScreenContentByScreen = React.useCallback((targetScreen: Screen): React.ReactNode => renderScreenContent({
         screen: targetScreen,
         isSidebarExpanded: sidebarExpandedForRender,
         fallbackStyle: FALLBACK_STYLE,
@@ -803,7 +878,8 @@ export const AppShell: React.FC = () => {
         documentViewerToggleToken,
         pendingLoadInterface,
         setPendingAnalysis,
-        setGraphRuntimeStatus,
+        onGraphLoadingStateChange: handleGraphLoadingStateChange,
+        onGraphRuntimeStatusChange: handleGraphRuntimeStatusChange,
         setPendingLoadInterface,
         setWelcome1OverlayOpen,
         setEnterPromptOverlayOpen,
@@ -830,7 +906,31 @@ export const AppShell: React.FC = () => {
         getNextScreen,
         getBackScreen,
         getSkipTarget,
-    });
+    }), [
+        backToPromptFromGate,
+        commitPatchLayoutByDocId,
+        commitUpsertInterface,
+        confirmGraphLoadingGate,
+        documentViewerToggleToken,
+        gateControls.allowBack,
+        gateControls.allowConfirm,
+        gateInteractionLocked,
+        gatePhase,
+        gateVisualPhase,
+        getBackScreen,
+        getNextScreen,
+        getSkipTarget,
+        GraphWithPending,
+        handleGraphLoadingStateChange,
+        handleGraphRuntimeStatusChange,
+        normalizedGateErrorMessage,
+        pendingAnalysis,
+        pendingLoadInterface,
+        promptAnalysisErrorMessage,
+        screen,
+        sidebarExpandedForRender,
+        transitionToScreen,
+    ]);
 
     const shouldUseOnboardingLayerHost = (() => {
         if (isGraphClassScreen(screen)) return false;

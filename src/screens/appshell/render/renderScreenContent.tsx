@@ -6,11 +6,12 @@ import { GraphScreenShell } from './GraphScreenShell';
 import { GraphLoadingGate } from './GraphLoadingGate';
 import { AppScreen, isGraphClassScreen } from '../screenFlow/screenTypes';
 import { GraphRuntimeLeaseBoundary } from '../../../runtime/GraphRuntimeLeaseBoundary';
-import { type GatePhase, type RuntimeStatusSnapshot } from './graphLoadingGateMachine';
+import { type GatePhase } from './graphLoadingGateMachine';
 import { type GateVisualPhase } from './GraphLoadingGate';
 import type {
     GraphPhysicsPlaygroundProps,
     PendingAnalysisPayload,
+    GraphRuntimeStatusSnapshot,
 } from '../../../playground/modules/graphPhysicsTypes';
 import type { SavedInterfaceRecordV1 } from '../../../store/savedInterfacesStore';
 
@@ -42,7 +43,8 @@ export type RenderScreenArgs = {
     documentViewerToggleToken: number;
     pendingLoadInterface: SavedInterfaceRecordV1 | null;
     setPendingAnalysis: React.Dispatch<React.SetStateAction<PendingAnalysisPayload>>;
-    setGraphRuntimeStatus: React.Dispatch<React.SetStateAction<RuntimeStatusSnapshot>>;
+    onGraphLoadingStateChange: (isLoading: boolean) => void;
+    onGraphRuntimeStatusChange: (status: GraphRuntimeStatusSnapshot) => void;
     setPendingLoadInterface: React.Dispatch<React.SetStateAction<SavedInterfaceRecordV1 | null>>;
     setWelcome1OverlayOpen: (open: boolean) => void;
     setEnterPromptOverlayOpen: (open: boolean) => void;
@@ -84,7 +86,8 @@ export function renderScreenContent(args: RenderScreenArgs): React.ReactNode {
         documentViewerToggleToken,
         pendingLoadInterface,
         setPendingAnalysis,
-        setGraphRuntimeStatus,
+        onGraphLoadingStateChange,
+        onGraphRuntimeStatusChange,
         setPendingLoadInterface,
         setWelcome1OverlayOpen,
         setEnterPromptOverlayOpen,
@@ -126,12 +129,8 @@ export function renderScreenContent(args: RenderScreenArgs): React.ReactNode {
                             legacyLoadingScreenMode={LEGACY_LOADING_MODE_BY_SCREEN[screen]}
                             pendingAnalysisPayload={pendingAnalysis}
                             onPendingAnalysisConsumed={() => setPendingAnalysis(null)}
-                            onLoadingStateChange={(v) => {
-                                setGraphRuntimeStatus((prev) => ({ ...prev, isLoading: v }));
-                            }}
-                            onRuntimeStatusChange={(status) => {
-                                setGraphRuntimeStatus(status);
-                            }}
+                            onLoadingStateChange={onGraphLoadingStateChange}
+                            onRuntimeStatusChange={onGraphRuntimeStatusChange}
                             documentViewerToggleToken={documentViewerToggleToken}
                             pendingLoadInterface={pendingLoadInterface}
                             onPendingLoadInterfaceConsumed={() => setPendingLoadInterface(null)}

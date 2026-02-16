@@ -104,12 +104,12 @@ function notifyLeaseSubscribers(): void {
     }
 }
 
-function logDev(event: string, message: string, ...args: Array<string | number>): void {
+function logDev(_event: string, _message: string, ..._args: Array<string | number>): void {
     if (!isDev()) return;
     //console.log(`[GraphRuntimeLease] ${event} ${message}`, ...args);
 }
 
-function warnDev(event: string, message: string, ...args: Array<string | number>): void {
+function warnDev(_event: string, _message: string, ..._args: Array<string | number>): void {
     if (!isDev()) return;
     //console.warn(`[GraphRuntimeLease] ${event} ${message}`, ...args);
 }

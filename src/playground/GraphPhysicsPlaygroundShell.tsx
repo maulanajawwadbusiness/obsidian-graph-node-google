@@ -33,6 +33,13 @@ import {
     recordBoxedResizeCameraAdjust,
     recordBoxedResizeEvent,
 } from '../runtime/viewport/resizeSemantics';
+import {
+    computeBoxedSmartContainCamera,
+    getDefaultBoxedSmartContainPadding,
+    getWorldBoundsFromNodes,
+    recordBoxedSmartContainApplied,
+    recordBoxedSmartContainSkippedNoBounds,
+} from './rendering/boxedSmartContain';
 // RUN 4: Topology API imports
 import { setTopology, getTopologyVersion, getTopology } from '../graph/topologyControl'; // STEP3-RUN5-V3-FIX3: Added getTopology
 import { legacyToTopology } from '../graph/topologyAdapter';
@@ -239,7 +246,10 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
     const isBoxedRuntime = isBoxedUi(viewport);
     const effectiveCameraLocked = cameraLocked || isBoxedRuntime;
     const previousBoxedViewportSizeRef = useRef<{ width: number; height: number } | null>(null);
+    const didSmartContainRef = useRef(false);
+    const lastSmartContainInterfaceIdRef = useRef<string | null>(null);
     const warnedResizeSemanticNaNRef = useRef(false);
+    const warnedSmartContainNoBoundsRef = useRef(false);
 
     const {
         handlePointerMove,
@@ -353,6 +363,61 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
         getCameraSnapshot,
         viewport.height,
         viewport.mode,
+        viewport.width,
+    ]);
+
+    useEffect(() => {
+        if (!isBoxedRuntime) return;
+        const activeInterfaceId = pendingLoadInterface?.id ?? null;
+        if (lastSmartContainInterfaceIdRef.current !== activeInterfaceId) {
+            lastSmartContainInterfaceIdRef.current = activeInterfaceId;
+            didSmartContainRef.current = false;
+            warnedSmartContainNoBoundsRef.current = false;
+        }
+        if (didSmartContainRef.current) return;
+        const viewportWidth = Math.max(1, Math.floor(viewport.width || 1));
+        const viewportHeight = Math.max(1, Math.floor(viewport.height || 1));
+        if (viewportWidth <= 1 || viewportHeight <= 1) return;
+        const nodes = engineRef.current.getNodeList();
+        const bounds = getWorldBoundsFromNodes(nodes);
+        if (!bounds) {
+            if (import.meta.env.DEV && !warnedSmartContainNoBoundsRef.current) {
+                warnedSmartContainNoBoundsRef.current = true;
+                console.warn(
+                    '[BoxedSmartContain] skipped due to empty or invalid bounds interfaceId=%s nodes=%d',
+                    activeInterfaceId ?? 'none',
+                    nodes.length
+                );
+            }
+            recordBoxedSmartContainSkippedNoBounds();
+            return;
+        }
+        const centroid = engineRef.current.getCentroid();
+        const nextCamera = computeBoxedSmartContainCamera({
+            boundsWorld: bounds,
+            viewportPx: { width: viewportWidth, height: viewportHeight },
+            zoomMin: 0.1,
+            zoomMax: 10.0,
+            rotation: {
+                angleRad: engineRef.current.getGlobalAngle(),
+                pivotX: centroid.x,
+                pivotY: centroid.y,
+            },
+            paddingPx: getDefaultBoxedSmartContainPadding(),
+        });
+        if (!nextCamera) {
+            return;
+        }
+        applyCameraSnapshot(nextCamera);
+        didSmartContainRef.current = true;
+        recordBoxedSmartContainApplied();
+    }, [
+        applyCameraSnapshot,
+        engineRef,
+        isBoxedRuntime,
+        metrics.nodes,
+        pendingLoadInterface?.id,
+        viewport.height,
         viewport.width,
     ]);
 

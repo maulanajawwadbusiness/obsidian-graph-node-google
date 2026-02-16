@@ -54,7 +54,8 @@ Update Note: 2026-02-16 (Graph Loading Real Screen, Steps 1-9)
   - error truth uses `aiErrorMessage` independently
 - Error policy in gate:
   - analysis/restore error enters `error` phase
-  - gate auto-forces back to prompt
+  - gate renders explicit error state and runtime message
+  - exit is explicit via Back (`Escape` shortcut) to prompt
   - prompt shows inline dismissible analysis error banner
 - Legacy in-runtime `LoadingScreen` is suppressed for product graph-class path.
 - Sidebar remains visible on `graph_loading` but is frozen/dimmed with shield ownership.

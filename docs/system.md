@@ -345,8 +345,9 @@ Gate state machine (high level):
   - explicit no-work fallback only when entry intent is `none`.
 - error policy:
   - for analysis/restore entry intent, runtime error moves gate to `error`.
+  - gate renders explicit error UI (`Loading Failed` + runtime error message).
   - gate confirm is disabled in `error`.
-  - gate action is forced back to prompt (`force_back_prompt`).
+  - user exits error gate via explicit Back action (or `Escape`) to prompt.
 - watchdog:
   - if loading never starts for analysis/restore intent, phase moves to `stalled` and escape remains available.
   - watchdog never overrides `error`, `done`, or `confirmed`.
@@ -374,7 +375,7 @@ Legacy runtime loading surface:
 - runtime status callback now exposes `{ isLoading, aiErrorMessage }` for gate-grade handling.
 
 Prompt error handoff:
-- when gate forces back to prompt due analysis/restore error, AppShell stores a transient prompt error message.
+- when user exits error gate back to prompt, AppShell stores a transient prompt error message.
 - `EnterPrompt`/`PromptCard` render a dismissible inline error banner above the prompt input.
 - banner clears on dismiss, new submit, or prompt skip.
 

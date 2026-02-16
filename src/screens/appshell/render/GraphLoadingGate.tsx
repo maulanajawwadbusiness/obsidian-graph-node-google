@@ -139,8 +139,22 @@ export const GraphLoadingGate: React.FC<GraphLoadingGateProps> = ({
     const isStalled = phase === 'stalled';
     const isFadingOut = visualPhase === 'exiting';
     const isFadingIn = visualPhase === 'entering';
-    const isInteractionBlocked = interactionLocked || isFadingOut;
+    const isInteractionBlocked = interactionLocked;
+    const shouldBlockInput = interactionLocked && !isFadingOut;
     const confirmButtonRef = React.useRef<HTMLButtonElement>(null);
+    const warnedFadePointerEventsRef = React.useRef(false);
+
+    React.useEffect(() => {
+        if (!import.meta.env.DEV) return;
+        const debugWindow = window as Window & {
+            __arnvoidDebugCounters?: Record<string, number>;
+        };
+        const counters = (debugWindow.__arnvoidDebugCounters ??= {});
+        counters.graphLoadingGateMountCount = (counters.graphLoadingGateMountCount ?? 0) + 1;
+        return () => {
+            counters.graphLoadingGateUnmountCount = (counters.graphLoadingGateUnmountCount ?? 0) + 1;
+        };
+    }, []);
 
     React.useEffect(() => {
         if (!confirmVisible || !confirmEnabled) return;
@@ -148,7 +162,7 @@ export const GraphLoadingGate: React.FC<GraphLoadingGateProps> = ({
     }, [confirmEnabled, confirmVisible]);
 
     const onGateKeyDownCapture = React.useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
-        if (isInteractionBlocked) {
+        if (shouldBlockInput) {
             event.preventDefault();
             event.stopPropagation();
             return;
@@ -171,26 +185,46 @@ export const GraphLoadingGate: React.FC<GraphLoadingGateProps> = ({
             event.preventDefault();
             event.stopPropagation();
         }
-    }, [confirmEnabled, isInteractionBlocked, onBackToPrompt, onConfirm]);
+    }, [confirmEnabled, onBackToPrompt, onConfirm, shouldBlockInput]);
 
     const rootVisualStyle: React.CSSProperties = {
         ...ROOT_STYLE,
+        pointerEvents: isFadingOut ? 'none' : 'auto',
         opacity: isFadingIn || isFadingOut ? 0 : 1,
         transition: fadeMs > 0 ? `opacity ${fadeMs}ms ${fadeEasing}` : 'none',
     };
+
+    React.useEffect(() => {
+        if (!import.meta.env.DEV) return;
+        if (!isFadingOut) return;
+        if (rootVisualStyle.pointerEvents === 'none') return;
+        if (warnedFadePointerEventsRef.current) return;
+        warnedFadePointerEventsRef.current = true;
+        console.warn('[GateInputInvariant] fading_out_pointer_events_must_be_none');
+    }, [isFadingOut, rootVisualStyle.pointerEvents]);
 
     return (
         <div
             ref={rootRef}
             data-graph-loading-gate="1"
             data-gate-visual-phase={visualPhase}
-            data-gate-interaction-locked={isInteractionBlocked ? '1' : '0'}
+            data-gate-interaction-locked={shouldBlockInput ? '1' : '0'}
             tabIndex={-1}
             style={rootVisualStyle}
-            onPointerDownCapture={(e) => e.stopPropagation()}
-            onPointerMoveCapture={(e) => e.stopPropagation()}
-            onPointerUpCapture={(e) => e.stopPropagation()}
+            onPointerDownCapture={(e) => {
+                if (!shouldBlockInput) return;
+                e.stopPropagation();
+            }}
+            onPointerMoveCapture={(e) => {
+                if (!shouldBlockInput) return;
+                e.stopPropagation();
+            }}
+            onPointerUpCapture={(e) => {
+                if (!shouldBlockInput) return;
+                e.stopPropagation();
+            }}
             onWheelCapture={(e) => {
+                if (!shouldBlockInput) return;
                 e.preventDefault();
                 e.stopPropagation();
             }}

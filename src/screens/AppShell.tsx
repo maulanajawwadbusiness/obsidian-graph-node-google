@@ -149,6 +149,7 @@ export const AppShell: React.FC = () => {
     const graphLoadingGateRootRef = React.useRef<HTMLDivElement>(null);
     const gateEnterRafRef = React.useRef<number | null>(null);
     const gateExitTimerRef = React.useRef<number | null>(null);
+    const gateExitFailsafeTimerRef = React.useRef<number | null>(null);
     const savedInterfacesRef = React.useRef<SavedInterfaceRecordV1[]>([]);
     const restoreReadPathActiveRef = React.useRef(false);
     const activeStorageKeyRef = React.useRef<string>(getSavedInterfacesStorageKey());
@@ -310,6 +311,10 @@ export const AppShell: React.FC = () => {
             window.clearTimeout(gateExitTimerRef.current);
             gateExitTimerRef.current = null;
         }
+        if (gateExitFailsafeTimerRef.current !== null) {
+            window.clearTimeout(gateExitFailsafeTimerRef.current);
+            gateExitFailsafeTimerRef.current = null;
+        }
     }, []);
 
     const requestGateExit = React.useCallback((target: GateExitTarget) => {
@@ -333,6 +338,37 @@ export const AppShell: React.FC = () => {
             transitionToScreen(target);
         }, GRAPH_LOADING_SCREEN_FADE_MS);
     }, [pendingGateExitTarget, screen, transitionToScreen]);
+
+    React.useEffect(() => {
+        if (screen !== 'graph_loading') return;
+        if (gateVisualPhase !== 'exiting') return;
+        if (pendingGateExitTarget === null) return;
+        if (gateExitFailsafeTimerRef.current !== null) {
+            window.clearTimeout(gateExitFailsafeTimerRef.current);
+            gateExitFailsafeTimerRef.current = null;
+        }
+        const failsafeMs = Math.max(1, GRAPH_LOADING_SCREEN_FADE_MS * 2);
+        gateExitFailsafeTimerRef.current = window.setTimeout(() => {
+            gateExitFailsafeTimerRef.current = null;
+            if (screen !== 'graph_loading') return;
+            if (gateVisualPhase !== 'exiting') return;
+            if (pendingGateExitTarget === null) return;
+            if (import.meta.env.DEV) {
+                console.warn(
+                    '[GateFadeFailsafe] forced_exit target=%s after=%dms',
+                    pendingGateExitTarget,
+                    failsafeMs
+                );
+            }
+            transitionToScreen(pendingGateExitTarget);
+        }, failsafeMs);
+        return () => {
+            if (gateExitFailsafeTimerRef.current !== null) {
+                window.clearTimeout(gateExitFailsafeTimerRef.current);
+                gateExitFailsafeTimerRef.current = null;
+            }
+        };
+    }, [gateVisualPhase, pendingGateExitTarget, screen, transitionToScreen]);
 
     const warnFrozenSidebarAction = React.useCallback((action: string) => {
         if (!import.meta.env.DEV) return;

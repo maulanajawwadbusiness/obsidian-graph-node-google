@@ -413,7 +413,7 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
         const nextCamera = computeBoxedSmartContainCamera({
             boundsWorld: bounds,
             viewportPx: { width: viewportWidth, height: viewportHeight },
-            zoomMin: 0.1,
+            zoomMin: 0.8,
             zoomMax: 10.0,
             rotation: {
                 angleRad: engineRef.current.getGlobalAngle(),

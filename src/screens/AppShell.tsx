@@ -61,6 +61,7 @@ import {
 import { TooltipProvider } from '../ui/tooltip/TooltipProvider';
 import { SidebarLayer } from './appshell/sidebar/SidebarLayer';
 import { useSidebarInterfaces } from './appshell/sidebar/useSidebarInterfaces';
+import { computeSidebarLockState } from './appshell/sidebar/sidebarLockPolicy';
 
 const Graph = React.lazy(() =>
     import('../playground/GraphPhysicsPlayground').then((mod) => ({
@@ -190,7 +191,14 @@ export const AppShell: React.FC = () => {
     const sidebarDimAlpha = SIDEBAR_DIM_ALPHA_BY_SCREEN[screen];
     const sidebarExpandedForRender = screen === 'graph_loading' ? false : isSidebarExpanded;
     const loginBlockingActive = screen === 'prompt' && enterPromptOverlayOpen;
-    const sidebarDisabled = sidebarFrozen || (isGraphClassScreen(screen) && graphIsLoading) || loginBlockingActive;
+    const sidebarLock = React.useMemo(() => computeSidebarLockState({
+        screen,
+        graphIsLoading,
+        loginBlockingActive,
+        isFrozenByScreen: sidebarFrozen,
+    }), [graphIsLoading, loginBlockingActive, screen, sidebarFrozen]);
+    const sidebarDisabled = sidebarLock.disabled;
+    const sidebarFrozenActive = sidebarLock.frozen;
     const onboardingActive = isOnboardingScreen(screen) || isBlockingInput;
     const welcome1FontGateDone = useWelcome1FontGate({
         screen,
@@ -546,9 +554,9 @@ export const AppShell: React.FC = () => {
     React.useEffect(() => {
         if (!import.meta.env.DEV) return;
         if (screen !== 'graph_loading') return;
-        if (sidebarFrozen) return;
-        console.warn('[SidebarFreezeGuard] invariant_failed screen=%s sidebarFrozen=%s', screen, String(sidebarFrozen));
-    }, [screen, sidebarFrozen]);
+        if (sidebarFrozenActive) return;
+        console.warn('[SidebarFreezeGuard] invariant_failed screen=%s sidebarFrozen=%s', screen, String(sidebarFrozenActive));
+    }, [screen, sidebarFrozenActive]);
 
     React.useEffect(() => {
         if (!import.meta.env.DEV) return;
@@ -720,25 +728,26 @@ export const AppShell: React.FC = () => {
                 data-gate-phase={gatePhase}
                 data-gate-seen-loading={seenLoadingTrue ? '1' : '0'}
                 data-gate-entry-intent={gateEntryIntent}
-                data-sidebar-frozen={sidebarFrozen ? '1' : '0'}
+                data-sidebar-frozen={sidebarFrozenActive ? '1' : '0'}
                 data-sidebar-dim-alpha={String(sidebarDimAlpha)}
+                data-sidebar-lock-reason={sidebarLock.reason}
                 data-search-interfaces-open={isSearchInterfacesOpen ? '1' : '0'}
                 data-search-interfaces-query-len={String(searchInterfacesQuery.length)}
             >
                 <SidebarLayer
                     show={showPersistentSidebar}
                     isExpanded={sidebarExpandedForRender}
-                    frozen={sidebarFrozen}
+                    frozen={sidebarFrozenActive}
                     dimAlpha={sidebarDimAlpha}
                     onToggle={() => {
-                        if (sidebarFrozen) {
+                        if (sidebarFrozenActive) {
                             warnFrozenSidebarAction('toggle');
                             return;
                         }
                         setIsSidebarExpanded((prev) => !prev);
                     }}
                     onCreateNew={() => {
-                        if (sidebarFrozen) {
+                        if (sidebarFrozenActive) {
                             warnFrozenSidebarAction('create_new');
                             return;
                         }
@@ -747,7 +756,7 @@ export const AppShell: React.FC = () => {
                         transitionToScreen(getCreateNewTarget());
                     }}
                     onOpenSearchInterfaces={() => {
-                        if (sidebarFrozen) {
+                        if (sidebarFrozenActive) {
                             warnFrozenSidebarAction('open_search');
                             return;
                         }
@@ -756,7 +765,7 @@ export const AppShell: React.FC = () => {
                     disabled={sidebarDisabled}
                     showDocumentViewerButton={isGraphClassScreen(screen)}
                     onToggleDocumentViewer={() => {
-                        if (sidebarFrozen) {
+                        if (sidebarFrozenActive) {
                             warnFrozenSidebarAction('toggle_document_viewer');
                             return;
                         }
@@ -764,7 +773,7 @@ export const AppShell: React.FC = () => {
                     }}
                     interfaces={sidebarInterfaces}
                     onRenameInterface={(id, newTitle) => {
-                        if (sidebarFrozen) {
+                        if (sidebarFrozenActive) {
                             warnFrozenSidebarAction('rename_interface');
                             return;
                         }
@@ -773,7 +782,7 @@ export const AppShell: React.FC = () => {
                     onDeleteInterface={(id) => {
                         if (isSearchInterfacesOpen) return;
                         if (sidebarDisabled) {
-                            if (sidebarFrozen) {
+                            if (sidebarFrozenActive) {
                                 warnFrozenSidebarAction('delete_interface');
                             }
                             return;
@@ -785,7 +794,7 @@ export const AppShell: React.FC = () => {
                     }}
                     selectedInterfaceId={pendingLoadInterface?.id ?? undefined}
                     onSelectInterface={(id) => {
-                        if (sidebarFrozen) {
+                        if (sidebarFrozenActive) {
                             warnFrozenSidebarAction('select_interface');
                             return;
                         }

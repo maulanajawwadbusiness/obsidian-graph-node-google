@@ -5,7 +5,7 @@ import {
     SIDEBAR_EXPANDED_RESOLVED_WIDTH_CSS,
 } from '../appShellStyles';
 import { GraphViewportProvider, defaultGraphViewport } from '../../../runtime/viewport/graphViewport';
-import { useGraphPaneViewportSnapshot } from '../../../runtime/viewport/useGraphPaneViewportSnapshot';
+import { useResizeObserverViewport } from '../../../runtime/viewport/useResizeObserverViewport';
 
 type GraphScreenShellProps = {
     sidebarExpanded: boolean;
@@ -39,7 +39,11 @@ export function GraphScreenShell({ sidebarExpanded, children }: GraphScreenShell
     const [prefersReducedMotion, setPrefersReducedMotion] = React.useState(false);
     const graphPaneRef = React.useRef<HTMLDivElement | null>(null);
     const fallbackViewport = React.useMemo(() => defaultGraphViewport(), []);
-    const graphPaneViewport = useGraphPaneViewportSnapshot(graphPaneRef, fallbackViewport);
+    const graphPaneViewport = useResizeObserverViewport(graphPaneRef, {
+        mode: 'app',
+        source: 'container',
+        fallbackViewport,
+    });
 
     React.useEffect(() => {
         const media = window.matchMedia('(prefers-reduced-motion: reduce)');

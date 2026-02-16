@@ -97,6 +97,7 @@ const SIDEBAR_DIM_ALPHA_BY_SCREEN: Record<AppScreen, number> = {
     graph_loading: 0.5,
     graph: 1,
 };
+const FALLBACK_GATE_ERROR_MESSAGE = 'Analysis failed. Please try again.';
 
 function isWarmMountDebugEnabled(): boolean {
     if (!import.meta.env.DEV) return false;
@@ -176,6 +177,12 @@ export const AppShell: React.FC = () => {
 
     const GraphWithPending = Graph as React.ComponentType<GraphPhysicsPlaygroundProps>;
     const graphIsLoading = graphRuntimeStatus.isLoading;
+    const normalizedGateErrorMessage = React.useMemo(() => {
+        const raw = graphRuntimeStatus.aiErrorMessage;
+        if (typeof raw !== 'string') return FALLBACK_GATE_ERROR_MESSAGE;
+        const trimmed = raw.trim();
+        return trimmed.length > 0 ? trimmed : FALLBACK_GATE_ERROR_MESSAGE;
+    }, [graphRuntimeStatus.aiErrorMessage]);
     const gateControls = React.useMemo(() => getGateControls(gatePhase), [gatePhase]);
     const showMoneyUi = screen === 'prompt' || isGraphClassScreen(screen);
     const showPersistentSidebar = SIDEBAR_VISIBILITY_BY_SCREEN[screen];
@@ -425,6 +432,7 @@ export const AppShell: React.FC = () => {
             );
             setGateEntryIntent(entryIntent);
             setGraphRuntimeStatus((prev) => ({ ...prev, aiErrorMessage: null }));
+            setPromptAnalysisErrorMessage(null);
             setGatePhase('arming');
             setSeenLoadingTrue(false);
             return;
@@ -569,12 +577,10 @@ export const AppShell: React.FC = () => {
         if (screen !== 'graph_loading') return;
         if (gatePhase === 'error') {
             gateErrorBackRequestedRef.current = true;
-            setPromptAnalysisErrorMessage(
-                graphRuntimeStatus.aiErrorMessage || 'Analysis failed. Please try again.'
-            );
+            setPromptAnalysisErrorMessage(normalizedGateErrorMessage);
         }
         transitionToScreen('prompt');
-    }, [gatePhase, graphRuntimeStatus.aiErrorMessage, screen, transitionToScreen]);
+    }, [gatePhase, normalizedGateErrorMessage, screen, transitionToScreen]);
 
     React.useEffect(() => {
         if (screen !== 'graph_loading') return;
@@ -668,7 +674,7 @@ export const AppShell: React.FC = () => {
         promptAnalysisErrorMessage,
         clearPromptAnalysisError: () => setPromptAnalysisErrorMessage(null),
         gatePhase,
-        gateErrorMessage: graphRuntimeStatus.aiErrorMessage,
+        gateErrorMessage: normalizedGateErrorMessage,
         gateConfirmVisible: gateControls.allowConfirm,
         gateConfirmEnabled: gateControls.allowConfirm,
         gateRootRef: graphLoadingGateRootRef,

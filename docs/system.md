@@ -331,6 +331,7 @@ Flow and mount model:
 
 Gate UI surface:
 - full-viewport opaque surface (`#06060A`) mounted in graph-class render branch.
+- loading typography contract: all loading-surface text uses `font-weight: 300` with `var(--font-ui)`.
 - center status text:
   - loading path: `Loading...`
   - done path: `Loading Complete`
@@ -363,7 +364,8 @@ Input, focus, and keyboard ownership:
 
 Sidebar behavior during `graph_loading`:
 - sidebar remains visible as eye-stability anchor.
-- sidebar is frozen and dimmed (`alpha 0.5`), with inert + shield so pointer/wheel/focus do not leak.
+- sidebar is frozen with inert + shield so pointer/wheel/focus do not leak.
+- disabled visual treatment is icon-only: sidebar icons and avatar icon use `alpha 0.5` while text/container surfaces stay full opacity.
 - sidebar disabled rule is loading-only; runtime error state does not extend disabled state.
 - lock ownership is now contract-based (`computeSidebarLockState(...)`) with explicit reason codes:
   - `screen_frozen`
@@ -383,6 +385,7 @@ Legacy runtime loading surface:
 - legacy `LoadingScreen` return path inside `GraphPhysicsPlaygroundShell` is suppressed for product graph-class path (`legacyLoadingScreenMode='disabled'` for `graph_loading` and `graph`).
 - compatibility callback `onLoadingStateChange` remains available.
 - runtime status callback now exposes `{ isLoading, aiErrorMessage }` for gate-grade handling.
+- fallback loading text (`Loading graph...`, `Starting graph runtime...`) and analysis overlay loading text follow the same `font-weight: 300` contract.
 
 Prompt error handoff:
 - when user exits error gate back to prompt, AppShell stores a transient prompt error message.
@@ -1042,6 +1045,36 @@ Step 10 boxed input ownership (2026-02-16):
     - `previewPointerStopPropagationCount`
   - onboarding guard warns once in dev if a preview-origin wheel reaches blocked path unexpectedly.
 
+Step 11 boxed-only UI rules (2026-02-16):
+- boxed UI policy seam: `src/runtime/ui/boxedUiPolicy.ts`
+  - `isBoxedUi(...)` is the primary runtime gate.
+  - `resolveBoxedPortalTarget(...)` prevents boxed portal fallback to `document.body`.
+  - `assertNoBodyPortalInBoxed(...)` emits dev warn-once for body-portal attempts.
+  - `countBoxedSurfaceDisabled(...)` tracks intentional boxed disables when safe container target is missing.
+- portal safety contract in boxed mode:
+  - runtime portal surfaces must never mount to `document.body`.
+  - if safe preview portal root cannot be resolved, surface must return `null` (disable-safe).
+  - currently guarded runtime portal surfaces:
+    - `src/popup/PopupOverlayContainer.tsx`
+    - `src/ui/tooltip/TooltipProvider.tsx`
+    - `src/playground/components/AIActivityGlyph.tsx`
+- fullscreen-ish UI contract in boxed mode:
+  - disable fullscreen actions and window-anchored menu branches.
+  - disable runtime debug fixed overlays unless they are explicitly boxed-contained.
+  - block boxed dev paths that append DOM to `document.body` (for example dev JSON download anchor path).
+  - concrete boxed disables applied in:
+    - `src/playground/components/CanvasOverlays.tsx`
+    - `src/playground/GraphPhysicsPlaygroundShell.tsx`
+- dev counters (no-spam):
+  - `boxedBodyPortalAttempts`
+  - `boxedSurfaceDisabledCount`
+- PR checklist for new runtime overlays/panels:
+  1. boxed branch must not use `document.body` portal target.
+  2. boxed branch must avoid window-anchored `position: fixed` fullscreen assumptions.
+  3. boxed branch must clamp/contain within viewport provider dimensions.
+  4. if containment is not reliable, disable that surface in boxed mode.
+  5. app mode behavior must remain unchanged.
+
 Current known risks not fixed yet:
 1. Prompt overlays can mask preview:
    - drag/error/login overlays in `src/screens/EnterPrompt.tsx` are fixed and can block visibility/input.
@@ -1069,3 +1102,7 @@ Manual verification checklist for follow-up runs:
     - wheel over preview non-overlay areas does not scroll page.
     - wheel over marked interactive overlays does not leak to onboarding/canvas underlay paths.
     - pointerdown in preview subtree does not click through to onboarding surfaces.
+13. Step 11 boxed UI rules:
+    - boxed runtime does not expose fullscreen action/menu paths.
+    - boxed runtime portal surfaces do not mount to `document.body`.
+    - if safe portal root is unavailable in boxed mode, affected surface is disabled safely.

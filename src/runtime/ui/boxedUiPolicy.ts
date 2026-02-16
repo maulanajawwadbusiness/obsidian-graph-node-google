@@ -5,6 +5,7 @@ type BoxedUiCounters = {
     boxedBodyPortalAttempts: number;
     boxedBodyPortalRedirectCount: number;
     boxedSurfaceDisabledCount: number;
+    boxedNodePopupScaleAppliedCount: number;
 };
 
 const isDev = typeof import.meta !== 'undefined' && import.meta.env.DEV;
@@ -12,6 +13,7 @@ const counters: BoxedUiCounters = {
     boxedBodyPortalAttempts: 0,
     boxedBodyPortalRedirectCount: 0,
     boxedSurfaceDisabledCount: 0,
+    boxedNodePopupScaleAppliedCount: 0,
 };
 const warnedBodyPortal = new Set<string>();
 const warnedMissingPortalTarget = new Set<string>();
@@ -95,10 +97,16 @@ export function countBoxedSurfaceDisabled(debugName: string): void {
     );
 }
 
+export function recordBoxedNodePopupScaleApplied(): void {
+    if (!isDev) return;
+    counters.boxedNodePopupScaleAppliedCount += 1;
+}
+
 export function getBoxedUiPolicyDebugSnapshot(): BoxedUiCounters {
     return {
         boxedBodyPortalAttempts: counters.boxedBodyPortalAttempts,
         boxedBodyPortalRedirectCount: counters.boxedBodyPortalRedirectCount,
         boxedSurfaceDisabledCount: counters.boxedSurfaceDisabledCount,
+        boxedNodePopupScaleAppliedCount: counters.boxedNodePopupScaleAppliedCount,
     };
 }

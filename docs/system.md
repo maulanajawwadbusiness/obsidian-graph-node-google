@@ -1055,6 +1055,7 @@ Step 10 boxed input ownership (2026-02-16):
 Step 11 boxed-only UI rules (2026-02-16):
 - boxed UI policy seam: `src/runtime/ui/boxedUiPolicy.ts`
   - `isBoxedUi(...)` is the primary runtime gate.
+  - `BOXED_NODE_POPUP_SCALE` is the single source of truth for boxed preview popup scale policy.
   - `assertBoxedPortalTarget(...)` emits dev warn-once for missing/body portal targets.
   - `resolveBoxedPortalTarget(...)` prevents boxed portal fallback to `document.body`.
   - `assertNoBodyPortalInBoxed(...)` emits dev warn-once for body-portal attempts.
@@ -1077,6 +1078,7 @@ Step 11 boxed-only UI rules (2026-02-16):
   - `boxedBodyPortalAttempts`
   - `boxedBodyPortalRedirectCount`
   - `boxedSurfaceDisabledCount`
+  - `boxedNodePopupScaleAppliedCount`
 - PR checklist for new runtime overlays/panels:
   1. boxed branch must not use `document.body` portal target.
   2. boxed branch must avoid window-anchored `position: fixed` fullscreen assumptions.
@@ -1128,6 +1130,10 @@ Step 13 boxed smart contain (2026-02-16):
   - `boxedSmartContainSkippedUserInteractedCount`
   - `boxedSmartContainSkippedNoBoundsCount`
   - warn-once if smart contain attempted with empty/invalid bounds.
+- boxed preview NodePopup sizing policy:
+  - `src/popup/NodePopup.tsx` uses boxed-only scale from `BOXED_NODE_POPUP_SCALE`.
+  - clamp math in popup positioning uses scaled dimensions to match transformed visual size.
+  - graph screen/app mode popup scale remains unchanged.
 - tuning rule:
   - adjust boxed readability by editing only smart-contain padding constants.
   - do not reintroduce per-frame contain/autofit in boxed mode.

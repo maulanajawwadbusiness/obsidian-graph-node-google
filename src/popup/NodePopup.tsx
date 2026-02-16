@@ -14,7 +14,7 @@ import {
 } from '../components/sampleGraphPreviewSeams';
 import { useGraphViewport, type GraphViewport } from '../runtime/viewport/graphViewport';
 import { getViewportSize, isBoxedViewport, recordBoxedClampCall, toViewportLocalPoint } from '../runtime/viewport/viewportMath';
-import { BOXED_NODE_POPUP_SCALE } from '../runtime/ui/boxedUiPolicy';
+import { BOXED_NODE_POPUP_SCALE, recordBoxedNodePopupScaleApplied } from '../runtime/ui/boxedUiPolicy';
 
 const stopPropagation = (e: React.SyntheticEvent) => e.stopPropagation();
 const stopOverlayWheelPropagation = (event: React.WheelEvent) => {
@@ -200,6 +200,12 @@ export const NodePopup: React.FC<NodePopupProps> = ({ trackNode, engineRef }) =>
     const [contentVisible, setContentVisible] = useState(false);
     const closeTooltip = useTooltip(t('tooltip.close'));
     const popupScale = isBoxedViewport(viewport) ? BOXED_NODE_POPUP_SCALE : 1;
+
+    useEffect(() => {
+        if (!selectedNodeId) return;
+        if (popupScale >= 1) return;
+        recordBoxedNodePopupScaleApplied();
+    }, [popupScale, selectedNodeId]);
 
     // Staged reveal
     useEffect(() => {

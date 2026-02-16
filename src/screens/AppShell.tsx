@@ -867,8 +867,6 @@ export const AppShell: React.FC = () => {
         );
     });
 
-    if (screen === 'welcome1' && !welcome1FontGateDone) return <div style={WELCOME1_FONT_GATE_BLANK_STYLE} />;
-
     const renderScreenContentByScreen = React.useCallback((targetScreen: Screen): React.ReactNode => renderScreenContent({
         screen: targetScreen,
         isSidebarExpanded: sidebarExpandedForRender,
@@ -931,6 +929,8 @@ export const AppShell: React.FC = () => {
         sidebarExpandedForRender,
         transitionToScreen,
     ]);
+
+    if (screen === 'welcome1' && !welcome1FontGateDone) return <div style={WELCOME1_FONT_GATE_BLANK_STYLE} />;
 
     const shouldUseOnboardingLayerHost = (() => {
         if (isGraphClassScreen(screen)) return false;

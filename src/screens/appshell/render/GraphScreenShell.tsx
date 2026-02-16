@@ -4,6 +4,8 @@ import {
     SIDEBAR_COLLAPSED_WIDTH_CSS,
     SIDEBAR_EXPANDED_RESOLVED_WIDTH_CSS,
 } from '../appShellStyles';
+import { GraphViewportProvider, defaultGraphViewport } from '../../../runtime/viewport/graphViewport';
+import { useGraphPaneViewportSnapshot } from '../../../runtime/viewport/useGraphPaneViewportSnapshot';
 
 type GraphScreenShellProps = {
     sidebarExpanded: boolean;
@@ -35,6 +37,9 @@ const GRAPH_SCREEN_PANE_STYLE: React.CSSProperties = {
 
 export function GraphScreenShell({ sidebarExpanded, children }: GraphScreenShellProps): JSX.Element {
     const [prefersReducedMotion, setPrefersReducedMotion] = React.useState(false);
+    const graphPaneRef = React.useRef<HTMLDivElement | null>(null);
+    const fallbackViewport = React.useMemo(() => defaultGraphViewport(), []);
+    const graphPaneViewport = useGraphPaneViewportSnapshot(graphPaneRef, fallbackViewport);
 
     React.useEffect(() => {
         const media = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -62,8 +67,10 @@ export function GraphScreenShell({ sidebarExpanded, children }: GraphScreenShell
         <div className="graph-screen-shell" data-graph-screen-root="1" style={GRAPH_SCREEN_SHELL_STYLE}>
             <div className="graph-screen-layout" style={GRAPH_SCREEN_LAYOUT_STYLE}>
                 <div className="graph-screen-sidebar-pane" style={graphScreenSidebarPaneStyle} />
-                <div className="graph-screen-graph-pane" style={GRAPH_SCREEN_PANE_STYLE}>
-                    {children}
+                <div ref={graphPaneRef} className="graph-screen-graph-pane" style={GRAPH_SCREEN_PANE_STYLE}>
+                    <GraphViewportProvider value={graphPaneViewport}>
+                        {children}
+                    </GraphViewportProvider>
                 </div>
             </div>
         </div>

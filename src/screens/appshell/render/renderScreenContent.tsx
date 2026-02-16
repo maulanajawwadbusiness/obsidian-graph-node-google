@@ -6,7 +6,6 @@ import { GraphScreenShell } from './GraphScreenShell';
 import { GraphLoadingGate } from './GraphLoadingGate';
 import { AppScreen, isGraphClassScreen } from '../screenFlow/screenTypes';
 import { GraphRuntimeLeaseBoundary } from '../../../runtime/GraphRuntimeLeaseBoundary';
-import { GraphViewportProvider, defaultGraphViewport } from '../../../runtime/viewport/graphViewport';
 import type {
     GraphPhysicsPlaygroundProps,
     PendingAnalysisPayload,
@@ -99,31 +98,29 @@ export function renderScreenContent(args: RenderScreenArgs): React.ReactNode {
             <Suspense fallback={<div style={fallbackStyle}>Loading graph...</div>}>
                 <GraphScreenShell sidebarExpanded={isSidebarExpanded}>
                     {/* Warm-mount contract: graph-class screens must share this exact subtree shape with no screen key. */}
-                    <GraphViewportProvider value={defaultGraphViewport()}>
-                        <GraphRuntimeLeaseBoundary
-                            owner="graph-screen"
-                            pendingFallback={<div style={fallbackStyle}>Starting graph runtime...</div>}
-                        >
-                            <GraphWithPending
-                                enableDebugSidebar={false}
-                                // Product graph path contract: gate UI is the sole loading surface in graph-class screens.
-                                legacyLoadingScreenMode={LEGACY_LOADING_MODE_BY_SCREEN[screen]}
-                                pendingAnalysisPayload={pendingAnalysis}
-                                onPendingAnalysisConsumed={() => setPendingAnalysis(null)}
-                                onLoadingStateChange={(v) => setGraphIsLoading(v)}
-                                documentViewerToggleToken={documentViewerToggleToken}
-                                pendingLoadInterface={pendingLoadInterface}
-                                onPendingLoadInterfaceConsumed={() => setPendingLoadInterface(null)}
-                                onRestoreReadPathChange={(active) => {
-                                    setRestoreReadPathActive(active);
-                                }}
-                                onSavedInterfaceUpsert={(record, reason) => commitUpsertInterface(record, reason)}
-                                onSavedInterfaceLayoutPatch={(docId, layout, camera, reason) =>
-                                    commitPatchLayoutByDocId(docId, layout, camera, reason)
-                                }
-                            />
-                        </GraphRuntimeLeaseBoundary>
-                    </GraphViewportProvider>
+                    <GraphRuntimeLeaseBoundary
+                        owner="graph-screen"
+                        pendingFallback={<div style={fallbackStyle}>Starting graph runtime...</div>}
+                    >
+                        <GraphWithPending
+                            enableDebugSidebar={false}
+                            // Product graph path contract: gate UI is the sole loading surface in graph-class screens.
+                            legacyLoadingScreenMode={LEGACY_LOADING_MODE_BY_SCREEN[screen]}
+                            pendingAnalysisPayload={pendingAnalysis}
+                            onPendingAnalysisConsumed={() => setPendingAnalysis(null)}
+                            onLoadingStateChange={(v) => setGraphIsLoading(v)}
+                            documentViewerToggleToken={documentViewerToggleToken}
+                            pendingLoadInterface={pendingLoadInterface}
+                            onPendingLoadInterfaceConsumed={() => setPendingLoadInterface(null)}
+                            onRestoreReadPathChange={(active) => {
+                                setRestoreReadPathActive(active);
+                            }}
+                            onSavedInterfaceUpsert={(record, reason) => commitUpsertInterface(record, reason)}
+                            onSavedInterfaceLayoutPatch={(docId, layout, camera, reason) =>
+                                commitPatchLayoutByDocId(docId, layout, camera, reason)
+                            }
+                        />
+                    </GraphRuntimeLeaseBoundary>
                     {screen === 'graph_loading' ? (
                         <GraphLoadingGate
                             rootRef={gateRootRef}

@@ -1055,6 +1055,7 @@ Step 10 boxed input ownership (2026-02-16):
 Step 11 boxed-only UI rules (2026-02-16):
 - boxed UI policy seam: `src/runtime/ui/boxedUiPolicy.ts`
   - `isBoxedUi(...)` is the primary runtime gate.
+  - `assertBoxedPortalTarget(...)` emits dev warn-once for missing/body portal targets.
   - `resolveBoxedPortalTarget(...)` prevents boxed portal fallback to `document.body`.
   - `assertNoBodyPortalInBoxed(...)` emits dev warn-once for body-portal attempts.
   - `countBoxedSurfaceDisabled(...)` tracks intentional boxed disables when safe container target is missing.
@@ -1074,6 +1075,7 @@ Step 11 boxed-only UI rules (2026-02-16):
     - `src/playground/GraphPhysicsPlaygroundShell.tsx`
 - dev counters (no-spam):
   - `boxedBodyPortalAttempts`
+  - `boxedBodyPortalRedirectCount`
   - `boxedSurfaceDisabledCount`
 - PR checklist for new runtime overlays/panels:
   1. boxed branch must not use `document.body` portal target.

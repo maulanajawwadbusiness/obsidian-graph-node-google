@@ -1,11 +1,13 @@
 import React from 'react';
 import { Sidebar, SidebarInterfaceItem } from '../../../components/Sidebar';
+import type { SidebarLockReason } from './sidebarLockPolicy';
 
 type SidebarLayerProps = {
     show: boolean;
     isExpanded: boolean;
     frozen: boolean;
     dimAlpha: number;
+    lockReason: SidebarLockReason;
     onToggle: () => void;
     onCreateNew: () => void;
     onOpenSearchInterfaces: () => void;
@@ -29,6 +31,7 @@ export function SidebarLayer(props: SidebarLayerProps): React.ReactElement | nul
         isExpanded,
         frozen,
         dimAlpha,
+        lockReason,
         onToggle,
         onCreateNew,
         onOpenSearchInterfaces,
@@ -52,6 +55,7 @@ export function SidebarLayer(props: SidebarLayerProps): React.ReactElement | nul
             isExpanded={isExpanded}
             frozen={frozen}
             dimAlpha={dimAlpha}
+            lockReason={lockReason}
             onToggle={onToggle}
             onCreateNew={onCreateNew}
             onOpenSearchInterfaces={onOpenSearchInterfaces}

@@ -760,6 +760,7 @@ export const AppShell: React.FC = () => {
                     isExpanded={sidebarExpandedForRender}
                     frozen={sidebarFrozenActive}
                     dimAlpha={sidebarDimAlpha}
+                    lockReason={sidebarLock.reason}
                     onToggle={() => {
                         if (sidebarFrozenActive) {
                             warnFrozenSidebarAction('toggle');

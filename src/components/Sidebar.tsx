@@ -117,6 +117,7 @@ type SidebarProps = {
     isExpanded: boolean;
     frozen?: boolean;
     dimAlpha?: number;
+    lockReason?: string;
     onToggle: () => void;
     onCreateNew?: () => void;
     onOpenSearchInterfaces?: () => void;
@@ -138,6 +139,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     isExpanded,
     frozen = false,
     dimAlpha = 1,
+    lockReason = 'none',
     onToggle,
     onCreateNew,
     onOpenSearchInterfaces,
@@ -415,6 +417,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
             activeEl.blur();
         }
     }, [frozen]);
+
+    React.useEffect(() => {
+        if (!disabled) return;
+        const sidebarEl = sidebarRootRef.current;
+        if (!sidebarEl) return;
+        const activeEl = document.activeElement;
+        if (activeEl instanceof HTMLElement && sidebarEl.contains(activeEl)) {
+            activeEl.blur();
+        }
+    }, [disabled]);
 
     React.useEffect(() => {
         if (!openRowMenuId && !renamingRowId) return;
@@ -731,6 +743,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             data-row-menu-placement={menuPlacement ?? ''}
             data-row-menu-item-preview-count={String(menuItemPreview.length)}
             data-motion-phase={motionPhase}
+            data-sidebar-lock-reason={lockReason}
             style={sidebarStyle}
             onPointerDown={(e) => e.stopPropagation()}
             onWheelCapture={(e) => e.stopPropagation()}

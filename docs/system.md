@@ -462,6 +462,48 @@ Manual verification checklist:
 3. invalid sample must not mount `GraphPhysicsPlayground`.
 4. restore valid sample: preview returns to normal mount path.
 
+## 2.10 Graph Viewport Contract (2026-02-15)
+
+Purpose:
+- define one viewport contract across graph-screen and boxed preview runtime paths.
+- establish provider/hook plumbing before live resize and clamp migration work.
+
+Contract module:
+- `src/runtime/viewport/graphViewport.tsx`
+
+Fields:
+- `mode`: `app | boxed`
+- `source`: `window | container | unknown`
+- `width`: number
+- `height`: number
+- `dpr`: number
+- `boundsRect`: `{ left, top, width, height } | null`
+
+API:
+- `defaultGraphViewport()`
+- `GraphViewportProvider`
+- `useGraphViewport()`
+- `getGraphViewportDebugSnapshot(viewport)` (dev helper)
+
+Current wiring (step 7):
+1. graph-screen runtime subtree:
+   - `src/screens/appshell/render/renderScreenContent.tsx`
+   - wraps graph runtime with app-mode default viewport.
+2. preview runtime subtree:
+   - `src/components/SampleGraphPreview.tsx`
+   - wraps preview runtime with boxed-mode viewport from one-time container rect snapshot.
+
+Step boundary:
+- step 7 is contract/plumbing only.
+- no live ResizeObserver streaming yet (step 8).
+- no clamp-site migration to this contract yet (step 9).
+
+Manual verification checklist:
+1. `npm run build` passes.
+2. graph screen renders with no visible behavior change.
+3. prompt preview still mounts and runs.
+4. viewport context exists for both paths (`app` on graph screen, `boxed` on preview).
+
 ## 3. Physics Architecture And Contract
 The graph is driven by a **Hybrid Solver** (`src/physics/`) prioritizing "Visual Dignity" over pure simulation accuracy.
 

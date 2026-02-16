@@ -97,3 +97,20 @@ export function useGraphViewport(): GraphViewport {
     return React.useContext(GraphViewportContext);
 }
 
+export function getGraphViewportDebugSnapshot(viewport: GraphViewport): GraphViewport {
+    return {
+        mode: viewport.mode,
+        source: viewport.source,
+        width: viewport.width,
+        height: viewport.height,
+        dpr: viewport.dpr,
+        boundsRect: viewport.boundsRect
+            ? {
+                left: viewport.boundsRect.left,
+                top: viewport.boundsRect.top,
+                width: viewport.boundsRect.width,
+                height: viewport.boundsRect.height,
+            }
+            : null,
+    };
+}

@@ -14,6 +14,7 @@ import {
 } from '../components/sampleGraphPreviewSeams';
 import { useGraphViewport, type GraphViewport } from '../runtime/viewport/graphViewport';
 import { getViewportSize, isBoxedViewport, recordBoxedClampCall, toViewportLocalPoint } from '../runtime/viewport/viewportMath';
+import { BOXED_NODE_POPUP_SCALE } from '../runtime/ui/boxedUiPolicy';
 
 const stopPropagation = (e: React.SyntheticEvent) => e.stopPropagation();
 const stopOverlayWheelPropagation = (event: React.WheelEvent) => {
@@ -194,6 +195,7 @@ export const NodePopup: React.FC<NodePopupProps> = ({ trackNode, engineRef }) =>
     const [isVisible, setIsVisible] = useState(false);
     const [contentVisible, setContentVisible] = useState(false);
     const closeTooltip = useTooltip(t('tooltip.close'));
+    const popupScale = isBoxedViewport(viewport) ? BOXED_NODE_POPUP_SCALE : 1;
 
     // Staged reveal
     useEffect(() => {
@@ -212,13 +214,17 @@ export const NodePopup: React.FC<NodePopupProps> = ({ trackNode, engineRef }) =>
     const position = anchorGeometry
         ? computePopupPosition(
             anchorGeometry,
-            popupRef.current?.offsetWidth || 280,
-            popupRef.current?.offsetHeight ||
-                getViewportSize(
-                    viewport,
-                    isBoxedViewport(viewport) ? (viewport.width || 1) : window.innerWidth,
-                    isBoxedViewport(viewport) ? (viewport.height || 1) : window.innerHeight
-                ).h * 0.8,
+            (popupRef.current?.offsetWidth || 280) * popupScale,
+            (
+                (
+                    popupRef.current?.offsetHeight ||
+                    (getViewportSize(
+                        viewport,
+                        isBoxedViewport(viewport) ? (viewport.width || 1) : window.innerWidth,
+                        isBoxedViewport(viewport) ? (viewport.height || 1) : window.innerHeight
+                    ).h * 0.8)
+                ) * popupScale
+            ),
             portalMode,
             portalBoundsRect,
             viewport
@@ -381,8 +387,8 @@ export const NodePopup: React.FC<NodePopupProps> = ({ trackNode, engineRef }) =>
                     const screenRadius = Math.sqrt(dx * dx + dy * dy);
 
                     const geom = { x, y, radius: screenRadius };
-                    const width = popupRef.current.offsetWidth;
-                    const height = popupRef.current.offsetHeight;
+                    const width = popupRef.current.offsetWidth * popupScale;
+                    const height = popupRef.current.offsetHeight * popupScale;
 
                     // Pure layout calculation
                     const rawPos = computePopupPosition(geom, width, height, portalMode, portalBoundsRect, viewport);
@@ -413,8 +419,8 @@ export const NodePopup: React.FC<NodePopupProps> = ({ trackNode, engineRef }) =>
                 // We default to "Snapping" behavior here for stability, unless we know better.
                 const geom = trackNode(selectedNodeId);
                 if (geom) {
-                    const width = popupRef.current.offsetWidth;
-                    const height = popupRef.current.offsetHeight;
+                    const width = popupRef.current.offsetWidth * popupScale;
+                    const height = popupRef.current.offsetHeight * popupScale;
                     const rawPos = computePopupPosition(geom, width, height, portalMode, portalBoundsRect, viewport);
                     const dpr = window.devicePixelRatio || 1;
                     // Default to quantized for legacy path
@@ -437,7 +443,9 @@ export const NodePopup: React.FC<NodePopupProps> = ({ trackNode, engineRef }) =>
         window.addEventListener('graph-render-tick', handleSync);
 
         return () => window.removeEventListener('graph-render-tick', handleSync);
-    }, [selectedNodeId, trackNode, isVisible, engineRef, portalMode, portalBoundsRect, viewport]);
+    }, [selectedNodeId, trackNode, isVisible, engineRef, portalMode, portalBoundsRect, popupScale, viewport]);
+
+    const popupTransform = `${isVisible ? 'scale(1)' : 'scale(0.8)'} scale(${popupScale})`;
 
     const finalStyle: React.CSSProperties = {
         ...POPUP_STYLE,
@@ -445,6 +453,7 @@ export const NodePopup: React.FC<NodePopupProps> = ({ trackNode, engineRef }) =>
         left: `${position.left}px`,
         top: `${position.top}px`,
         transformOrigin: `${position.originX}px ${position.originY}px`,
+        transform: popupTransform,
     };
 
     return (

@@ -40,24 +40,24 @@ export const GraphRuntimeLeaseBoundary: React.FC<GraphRuntimeLeaseBoundaryProps>
         if (result.ok) {
             activeTokenRef.current = result.token;
             setLeaseState({ phase: 'allowed', token: result.token });
-            return;
+        } else {
+            activeTokenRef.current = null;
+            setLeaseState({
+                phase: 'denied',
+                activeOwner: result.activeOwner,
+                activeInstanceId: result.activeInstanceId,
+            });
         }
-        activeTokenRef.current = null;
-        setLeaseState({
-            phase: 'denied',
-            activeOwner: result.activeOwner,
-            activeInstanceId: result.activeInstanceId,
-        });
-        return;
+        return () => {
+            const token = activeTokenRef.current;
+            if (!token) return;
+            activeTokenRef.current = null;
+            releaseGraphRuntimeLease(token);
+        };
     }, [owner]);
 
     React.useEffect(() => {
         return () => {
-            const token = activeTokenRef.current;
-            if (token) {
-                releaseGraphRuntimeLease(token);
-                activeTokenRef.current = null;
-            }
             warnIfGraphRuntimeResourcesUnbalanced('GraphRuntimeLeaseBoundary.unmount');
         };
     }, []);

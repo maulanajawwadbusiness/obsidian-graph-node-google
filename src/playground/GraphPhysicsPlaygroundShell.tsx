@@ -49,10 +49,16 @@ export type PendingAnalysisPayload =
     | { kind: 'file'; file: File; createdAt: number }
     | null;
 
+export type GraphRuntimeStatusSnapshot = {
+    isLoading: boolean;
+    aiErrorMessage: string | null;
+};
+
 export type GraphPhysicsPlaygroundProps = {
     pendingAnalysisPayload: PendingAnalysisPayload;
     onPendingAnalysisConsumed: () => void;
     onLoadingStateChange?: (isLoading: boolean) => void;
+    onRuntimeStatusChange?: (status: GraphRuntimeStatusSnapshot) => void;
     legacyLoadingScreenMode?: 'enabled' | 'disabled';
     documentViewerToggleToken?: number;
     pendingLoadInterface?: SavedInterfaceRecordV1 | null;
@@ -123,6 +129,7 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
     pendingAnalysisPayload,
     onPendingAnalysisConsumed,
     onLoadingStateChange,
+    onRuntimeStatusChange,
     legacyLoadingScreenMode = 'enabled',
     documentViewerToggleToken,
     pendingLoadInterface = null,
@@ -1298,8 +1305,8 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
         toggleViewer();
     }, [documentViewerToggleToken]);
 
-    const aiErrorMessage = documentContext.state.aiErrorMessage;
-    const isGraphLoading = documentContext.state.aiActivity || Boolean(aiErrorMessage);
+    const aiErrorMessage = documentContext.state.aiErrorMessage ?? null;
+    const isGraphLoading = documentContext.state.aiActivity;
     const wasLoadingRef = useRef(false);
 
     useEffect(() => {
@@ -1312,6 +1319,20 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
     useEffect(() => {
         onLoadingStateChange?.(isGraphLoading);
     }, [isGraphLoading, onLoadingStateChange]);
+
+    useEffect(() => {
+        onRuntimeStatusChange?.({
+            isLoading: isGraphLoading,
+            aiErrorMessage,
+        });
+        if (import.meta.env.DEV) {
+            console.log(
+                '[GraphLoadingContract] loading=%s error=%s',
+                isGraphLoading ? '1' : '0',
+                aiErrorMessage ? 'present' : 'none'
+            );
+        }
+    }, [aiErrorMessage, isGraphLoading, onRuntimeStatusChange]);
 
     if (legacyLoadingScreenMode === 'enabled' && isGraphLoading) {
         return <LoadingScreen errorMessage={aiErrorMessage || null} />;
@@ -1494,6 +1515,7 @@ export const GraphPhysicsPlaygroundContainer: React.FC<GraphPhysicsPlaygroundPro
     pendingAnalysisPayload,
     onPendingAnalysisConsumed,
     onLoadingStateChange,
+    onRuntimeStatusChange,
     legacyLoadingScreenMode,
     documentViewerToggleToken,
     pendingLoadInterface,
@@ -1510,6 +1532,7 @@ export const GraphPhysicsPlaygroundContainer: React.FC<GraphPhysicsPlaygroundPro
                     pendingAnalysisPayload={pendingAnalysisPayload}
                     onPendingAnalysisConsumed={onPendingAnalysisConsumed}
                     onLoadingStateChange={onLoadingStateChange}
+                    onRuntimeStatusChange={onRuntimeStatusChange}
                     legacyLoadingScreenMode={legacyLoadingScreenMode}
                     documentViewerToggleToken={documentViewerToggleToken}
                     pendingLoadInterface={pendingLoadInterface}

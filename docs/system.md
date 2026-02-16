@@ -1132,7 +1132,11 @@ Step 13 boxed smart contain (2026-02-16):
   - warn-once if smart contain attempted with empty/invalid bounds.
 - boxed preview NodePopup sizing policy:
   - `src/popup/NodePopup.tsx` uses boxed-only scale from `BOXED_NODE_POPUP_SCALE`.
-  - clamp math in popup positioning uses scaled dimensions to match transformed visual size.
+  - NodePopup uses a two-layer contract in boxed mode:
+    - outer anchor wrapper is unscaled and owns `left/top` placement
+    - inner panel owns visual scaling with `transformOrigin: top left`
+  - clamp math uses scaled dimensions derived from the unscaled panel size.
+  - popup gap (`GAP_FROM_NODE`) is px-based and must not be multiplied by scale.
   - graph screen/app mode popup scale remains unchanged.
 - tuning rule:
   - adjust boxed readability by editing only smart-contain padding constants.

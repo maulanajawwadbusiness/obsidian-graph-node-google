@@ -12,7 +12,7 @@ import {
     SAMPLE_GRAPH_PREVIEW_OVERLAY_SCROLLABLE_VALUE,
 } from '../components/sampleGraphPreviewSeams';
 import { useGraphViewport, type GraphViewport } from '../runtime/viewport/graphViewport';
-import { getViewportSize, isBoxedViewport, recordBoxedClampCall, toViewportLocalPoint } from '../runtime/viewport/viewportMath';
+import { getViewportSize, isBoxedViewport, recordBoxedClampCall } from '../runtime/viewport/viewportMath';
 import { BOXED_NODE_POPUP_SCALE, recordBoxedNodePopupScaleApplied } from '../runtime/ui/boxedUiPolicy';
 
 const stopPropagation = (e: React.SyntheticEvent) => e.stopPropagation();
@@ -324,19 +324,18 @@ export const NodePopup: React.FC<NodePopupProps> = ({ trackNode, engineRef }) =>
         const fallbackW = portalBoundsRect?.width ?? viewport.width ?? 1;
         const fallbackH = portalBoundsRect?.height ?? viewport.height ?? 1;
         const { w: viewportWidth, h: viewportHeight } = getViewportSize(viewport, fallbackW, fallbackH);
-        const local = toViewportLocalPoint(anchorX, anchorY, viewport);
         const outOfBounds =
-            local.x < -16 ||
-            local.y < -16 ||
-            local.x > viewportWidth + 16 ||
-            local.y > viewportHeight + 16;
+            anchorX < -16 ||
+            anchorY < -16 ||
+            anchorX > viewportWidth + 16 ||
+            anchorY > viewportHeight + 16;
         if (!outOfBounds) return;
         warnedBoxedAnchorOutOfBoundsRef.current = true;
         console.warn(
             '[NodePopup] boxed anchor outside viewport source=%s local=(%d,%d) viewport=(%d,%d)',
             source,
-            local.x,
-            local.y,
+            anchorX,
+            anchorY,
             viewportWidth,
             viewportHeight
         );

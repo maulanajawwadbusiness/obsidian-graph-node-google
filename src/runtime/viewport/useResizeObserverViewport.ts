@@ -149,10 +149,13 @@ export function useResizeObserverViewport<T extends HTMLElement>(
         let disposed = false;
         const releaseObserverTrack = trackResource('graph-runtime.viewport.resize-observer');
         const releasePositionListenersTrack = trackResource('graph-runtime.viewport.position-listeners');
+        const releaseInteractionListenersTrack = trackResource('graph-runtime.viewport.position-interaction-listeners');
         let releaseRafTrack: (() => void) | null = null;
         let releaseSettleRafTrack: (() => void) | null = null;
         const SETTLE_STABLE_FRAMES = 8;
         const SETTLE_MAX_FRAMES = 60;
+        const POINTER_MOVE_THROTTLE_MS = 120;
+        let lastPointerMoveMs = 0;
 
         const cancelScheduledFrame = () => {
             const rafId = pendingRafIdRef.current;
@@ -269,6 +272,26 @@ export function useResizeObserverViewport<T extends HTMLElement>(
             positionDirtyRef.current = true;
             scheduleViewportUpdate();
         };
+        const triggerInteractionRefresh = () => {
+            if (disposed) return;
+            triggerPositionRefresh();
+        };
+        const handlePointerEnter = () => {
+            if (disposed) return;
+            beginSettleTracking();
+            triggerInteractionRefresh();
+        };
+        const handlePointerMove = () => {
+            if (disposed) return;
+            const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
+            if (now - lastPointerMoveMs < POINTER_MOVE_THROTTLE_MS) return;
+            lastPointerMoveMs = now;
+            triggerInteractionRefresh();
+        };
+        const handleWheel = () => {
+            if (disposed) return;
+            triggerInteractionRefresh();
+        };
 
         const observer = new ResizeObserver((entries) => {
             if (disposed) return;
@@ -292,6 +315,9 @@ export function useResizeObserverViewport<T extends HTMLElement>(
             vv.addEventListener('scroll', triggerPositionRefresh, { passive: true });
             vv.addEventListener('resize', triggerPositionRefresh, { passive: true });
         }
+        target.addEventListener('pointerenter', handlePointerEnter, { passive: true });
+        target.addEventListener('pointermove', handlePointerMove, { passive: true });
+        target.addEventListener('wheel', handleWheel, { passive: true });
         let boxedTinyTimer: number | null = null;
         if (import.meta.env.DEV && options.mode === 'boxed') {
             boxedTinyTimer = window.setTimeout(() => {
@@ -323,7 +349,11 @@ export function useResizeObserverViewport<T extends HTMLElement>(
                 vv.removeEventListener('scroll', triggerPositionRefresh);
                 vv.removeEventListener('resize', triggerPositionRefresh);
             }
+            target.removeEventListener('pointerenter', handlePointerEnter);
+            target.removeEventListener('pointermove', handlePointerMove);
+            target.removeEventListener('wheel', handleWheel);
             releasePositionListenersTrack();
+            releaseInteractionListenersTrack();
             stopSettleTracking();
             cancelScheduledFrame();
             observer.disconnect();

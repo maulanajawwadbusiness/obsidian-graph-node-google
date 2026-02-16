@@ -125,6 +125,12 @@ type PreviewLeaseDebugCounters = {
     reacquireSuccessCount: number;
 };
 
+type PreviewInputDebugCounters = {
+    previewWheelPreventedCount: number;
+    previewWheelOverlayPassThroughCount: number;
+    previewPointerStopPropagationCount: number;
+};
+
 class PreviewErrorBoundary extends React.Component<React.PropsWithChildren, PreviewErrorBoundaryState> {
     state: PreviewErrorBoundaryState = { hasError: false };
 
@@ -145,7 +151,15 @@ class PreviewErrorBoundary extends React.Component<React.PropsWithChildren, Prev
 }
 
 export const SampleGraphPreview: React.FC = () => {
+    const previewInputDebugCountersRef = React.useRef<PreviewInputDebugCounters>({
+        previewWheelPreventedCount: 0,
+        previewWheelOverlayPassThroughCount: 0,
+        previewPointerStopPropagationCount: 0,
+    });
     const stopPropagation = React.useCallback((event: React.SyntheticEvent) => {
+        if (import.meta.env.DEV && event.type === 'pointerdown') {
+            previewInputDebugCountersRef.current.previewPointerStopPropagationCount += 1;
+        }
         event.stopPropagation();
     }, []);
     const previewRootMarker: Record<string, string> = {
@@ -337,7 +351,13 @@ export const SampleGraphPreview: React.FC = () => {
         const releaseWheelListener = trackResource('graph-runtime.preview.wheel-capture-listener');
         const onWheelCapture = (event: WheelEvent) => {
             if (isInsideSampleGraphPreviewOverlayInteractiveRoot(event.target)) {
+                if (import.meta.env.DEV) {
+                    previewInputDebugCountersRef.current.previewWheelOverlayPassThroughCount += 1;
+                }
                 return;
+            }
+            if (import.meta.env.DEV) {
+                previewInputDebugCountersRef.current.previewWheelPreventedCount += 1;
             }
             event.preventDefault();
         };

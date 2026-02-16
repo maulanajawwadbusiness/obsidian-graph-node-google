@@ -1006,6 +1006,32 @@ Onboarding wheel guard allowlist (Step 6):
   - this allows embedded graph runtime wheel handler to own zoom/pan input.
 - non-allowlist targets keep existing behavior (`preventDefault`) to block page scroll.
 
+Step 10 boxed input ownership (2026-02-16):
+- preview root ownership seam: `src/components/SampleGraphPreview.tsx`
+  - preview root now enforces `overscrollBehavior: 'contain'` and `touchAction: 'none'`.
+  - preview root installs native capture wheel guard (`passive: false`) while runtime is mounted.
+  - non-overlay wheel in preview calls `preventDefault` to block page scroll bleed.
+- interactive overlay marker contract:
+  - marker: `data-arnvoid-overlay-interactive="1"`
+  - helper seam: `src/components/sampleGraphPreviewSeams.ts`
+  - interactive boxed roots currently marked:
+    - `src/popup/NodePopup.tsx`
+    - `src/popup/MiniChatbar.tsx`
+    - `src/popup/ChatShortageNotif.tsx`
+  - each marked root must own input with capture-phase shields:
+    - `onPointerDownCapture={(e) => e.stopPropagation()}`
+    - `onWheelCapture={(e) => e.stopPropagation()}`
+- portal containment contract:
+  - preview portal root stays inside preview root.
+  - preview portal root remains `pointerEvents: 'none'`.
+  - interactive overlay descendants use `pointerEvents: 'auto'`.
+- dev verification rails:
+  - preview counters (dev-only, non-spam) in `SampleGraphPreview`:
+    - `previewWheelPreventedCount`
+    - `previewWheelOverlayPassThroughCount`
+    - `previewPointerStopPropagationCount`
+  - onboarding guard warns once in dev if a preview-origin wheel reaches blocked path unexpectedly.
+
 Current known risks not fixed yet:
 1. Prompt overlays can mask preview:
    - drag/error/login overlays in `src/screens/EnterPrompt.tsx` are fixed and can block visibility/input.
@@ -1029,3 +1055,7 @@ Manual verification checklist for follow-up runs:
     - wheel outside preview remains guarded (page does not scroll).
     - wheel over preview tooltip/popup/portal surfaces is treated as inside preview and remains allowed.
 11. Graph screen wheel behavior remains unchanged.
+12. Step 10 boxed ownership:
+    - wheel over preview non-overlay areas does not scroll page.
+    - wheel over marked interactive overlays does not leak to onboarding/canvas underlay paths.
+    - pointerdown in preview subtree does not click through to onboarding surfaces.

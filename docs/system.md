@@ -812,18 +812,22 @@ Frontend:
   - graph screen path remains default app mode (`document.body` portal root)
 - Seam helper for future gating/scoping:
   - `src/components/sampleGraphPreviewSeams.ts`
-  - exports root attr/value/selector and `isInsideSampleGraphPreviewRoot(...)`
+  - exports preview root and preview portal root attr/value/selector helpers:
+    - `isInsideSampleGraphPreviewRoot(...)`
+    - `isInsideSampleGraphPreviewPortalRoot(...)`
+
+Onboarding wheel guard allowlist (Step 6):
+- guard hook: `src/screens/appshell/transitions/useOnboardingWheelGuard.ts`
+- guard remains active as a capture-phase window wheel listener during onboarding-active states.
+- allowlist exception:
+  - if wheel target is inside preview root OR preview portal root, guard returns early.
+  - this allows embedded graph runtime wheel handler to own zoom/pan input.
+- non-allowlist targets keep existing behavior (`preventDefault`) to block page scroll.
 
 Current known risks not fixed yet:
-1. Onboarding wheel guard:
-   - `src/screens/appshell/transitions/useOnboardingWheelGuard.ts` uses window capture + `preventDefault`.
-   - This can block wheel zoom over preview until target-aware gating is added.
-2. Prompt overlays can mask preview:
+1. Prompt overlays can mask preview:
    - drag/error/login overlays in `src/screens/EnterPrompt.tsx` are fixed and can block visibility/input.
-3. Render-loop teardown gaps:
-   - graph loop cleanup still needs follow-up for canvas wheel and `document.fonts` listener teardown.
-4. Not in this step:
-   - no wheel-guard gating changes
+2. Not in this step:
    - no render-loop cleanup fix
    - no topology singleton refactor
    - no performance retuning
@@ -838,4 +842,8 @@ Manual verification checklist for follow-up runs:
 7. Graph screen behavior remains unchanged (app mode portals).
 8. EnterPrompt overlays still behave as before (drag overlay, error overlay, login overlay).
 9. Repeated prompt visit cycles do not cause obvious listener/input regressions.
-10. Future wheel-gated build: wheel over preview zooms graph and does not leak page scroll.
+10. EnterPrompt wheel guard allowlist:
+    - wheel over preview zooms/pans graph.
+    - wheel outside preview remains guarded (page does not scroll).
+    - wheel over preview tooltip/popup/portal surfaces is treated as inside preview and remains allowed.
+11. Graph screen wheel behavior remains unchanged.

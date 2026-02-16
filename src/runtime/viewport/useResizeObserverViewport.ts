@@ -18,6 +18,15 @@ let warnedZeroOriginMismatch = false;
 let warnedSettleCapReached = false;
 let viewportPositionRefreshEvents = 0;
 let viewportSettleFrames = 0;
+type FlushReason = 'ro' | 'scroll' | 'vv' | 'interaction' | 'mount' | 'visibility';
+const viewportFlushReason: Record<FlushReason, number> = {
+    ro: 0,
+    scroll: 0,
+    vv: 0,
+    interaction: 0,
+    mount: 0,
+    visibility: 0,
+};
 type ObserverSizeSnapshot = {
     width: number;
     height: number;
@@ -159,6 +168,10 @@ export function useResizeObserverViewport<T extends HTMLElement>(
         const SCROLL_OPTIONS: AddEventListenerOptions = { capture: true, passive: true };
         const PASSIVE_OPTIONS: AddEventListenerOptions = { passive: true };
         let lastPointerMoveMs = 0;
+        const bumpFlushReason = (reason: FlushReason) => {
+            if (!import.meta.env.DEV) return;
+            viewportFlushReason[reason] += 1;
+        };
 
         const cancelScheduledFrame = () => {
             const rafId = pendingRafIdRef.current;
@@ -258,30 +271,31 @@ export function useResizeObserverViewport<T extends HTMLElement>(
                         stopSettleTracking();
                         return;
                     }
-                    scheduleViewportUpdate();
+                    scheduleViewportUpdate('interaction');
                     return;
                 }
                 stopSettleTracking();
             }
         };
 
-        const scheduleViewportUpdate = () => {
+        const scheduleViewportUpdate = (reason: FlushReason) => {
             if (disposed) return;
+            bumpFlushReason(reason);
             if (pendingRafIdRef.current !== null) return;
             releaseRafTrack = trackResource('graph-runtime.viewport.resize-raf');
             pendingRafIdRef.current = window.requestAnimationFrame(flushViewportUpdate);
         };
-        const triggerPositionRefresh = () => {
+        const triggerPositionRefresh = (reason: FlushReason) => {
             if (disposed) return;
             if (import.meta.env.DEV) {
                 viewportPositionRefreshEvents += 1;
             }
             positionDirtyRef.current = true;
-            scheduleViewportUpdate();
+            scheduleViewportUpdate(reason);
         };
         const triggerInteractionRefresh = () => {
             if (disposed) return;
-            triggerPositionRefresh();
+            triggerPositionRefresh('interaction');
         };
         const handlePointerEnter = () => {
             if (disposed) return;
@@ -306,7 +320,16 @@ export function useResizeObserverViewport<T extends HTMLElement>(
                 stopSettleTracking();
                 return;
             }
-            triggerPositionRefresh();
+            triggerPositionRefresh('visibility');
+        };
+        const handleWindowScroll = () => {
+            triggerPositionRefresh('scroll');
+        };
+        const handleWindowResize = () => {
+            triggerPositionRefresh('scroll');
+        };
+        const handleVisualViewportChange = () => {
+            triggerPositionRefresh('vv');
         };
 
         const observer = new ResizeObserver((entries) => {
@@ -315,7 +338,7 @@ export function useResizeObserverViewport<T extends HTMLElement>(
             if (!entry) return;
             latestTargetRef.current = entry.target as HTMLElement;
             latestSizeRef.current = readObserverSize(entry);
-            scheduleViewportUpdate();
+            scheduleViewportUpdate('ro');
         });
 
         observer.observe(target);
@@ -323,17 +346,17 @@ export function useResizeObserverViewport<T extends HTMLElement>(
             width: target.getBoundingClientRect().width,
             height: target.getBoundingClientRect().height,
         };
-        scheduleViewportUpdate();
+        scheduleViewportUpdate('mount');
         beginSettleTracking(SETTLE_MOUNT_STABLE_FRAMES);
-        window.addEventListener('scroll', triggerPositionRefresh, SCROLL_OPTIONS);
-        window.addEventListener('resize', triggerPositionRefresh, PASSIVE_OPTIONS);
+        window.addEventListener('scroll', handleWindowScroll, SCROLL_OPTIONS);
+        window.addEventListener('resize', handleWindowResize, PASSIVE_OPTIONS);
         if (typeof document !== 'undefined') {
             document.addEventListener('visibilitychange', handleVisibilityChange);
         }
         const vv = window.visualViewport ?? null;
         if (vv) {
-            vv.addEventListener('scroll', triggerPositionRefresh, PASSIVE_OPTIONS);
-            vv.addEventListener('resize', triggerPositionRefresh, PASSIVE_OPTIONS);
+            vv.addEventListener('scroll', handleVisualViewportChange, PASSIVE_OPTIONS);
+            vv.addEventListener('resize', handleVisualViewportChange, PASSIVE_OPTIONS);
         }
         target.addEventListener('pointerenter', handlePointerEnter, PASSIVE_OPTIONS);
         target.addEventListener('pointermove', handlePointerMove, PASSIVE_OPTIONS);
@@ -363,14 +386,14 @@ export function useResizeObserverViewport<T extends HTMLElement>(
             if (boxedTinyTimer !== null) {
                 window.clearTimeout(boxedTinyTimer);
             }
-            window.removeEventListener('scroll', triggerPositionRefresh, SCROLL_OPTIONS);
-            window.removeEventListener('resize', triggerPositionRefresh, PASSIVE_OPTIONS);
+            window.removeEventListener('scroll', handleWindowScroll, SCROLL_OPTIONS);
+            window.removeEventListener('resize', handleWindowResize, PASSIVE_OPTIONS);
             if (typeof document !== 'undefined') {
                 document.removeEventListener('visibilitychange', handleVisibilityChange);
             }
             if (vv) {
-                vv.removeEventListener('scroll', triggerPositionRefresh, PASSIVE_OPTIONS);
-                vv.removeEventListener('resize', triggerPositionRefresh, PASSIVE_OPTIONS);
+                vv.removeEventListener('scroll', handleVisualViewportChange, PASSIVE_OPTIONS);
+                vv.removeEventListener('resize', handleVisualViewportChange, PASSIVE_OPTIONS);
             }
             target.removeEventListener('pointerenter', handlePointerEnter, PASSIVE_OPTIONS);
             target.removeEventListener('pointermove', handlePointerMove, PASSIVE_OPTIONS);

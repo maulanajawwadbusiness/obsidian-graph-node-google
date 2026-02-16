@@ -20,7 +20,7 @@ import {
     toViewportLocalPoint
 } from '../../runtime/viewport/viewportMath';
 import {
-    assertNoBodyPortalInBoxed,
+    assertBoxedPortalTarget,
     countBoxedSurfaceDisabled,
     isBoxedUi,
     resolveBoxedPortalTarget,
@@ -291,9 +291,9 @@ const TooltipPortal: React.FC<{ state: TooltipState }> = ({ state }) => {
     const boxed = isBoxedUi(viewport);
     const portalTarget = useMemo(() => {
         if (!boxed) return portalRoot;
+        assertBoxedPortalTarget(portalRoot, 'TooltipProvider');
         const safeTarget = resolveBoxedPortalTarget(portalRoot, 'TooltipProvider');
         if (!safeTarget) return null;
-        assertNoBodyPortalInBoxed(safeTarget, 'TooltipProvider');
         return safeTarget;
     }, [boxed, portalRoot]);
 

@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { usePortalRootEl, usePortalScopeMode } from '../components/portalScope/PortalScopeContext';
 import { useGraphViewport } from '../runtime/viewport/graphViewport';
 import {
-    assertNoBodyPortalInBoxed,
+    assertBoxedPortalTarget,
     countBoxedSurfaceDisabled,
     isBoxedUi,
     resolveBoxedPortalTarget,
@@ -52,9 +52,9 @@ export const PopupOverlayContainer: React.FC<PopupOverlayContainerProps> = ({ ch
     const boxed = isBoxedUi(viewport);
     const portalTarget = React.useMemo(() => {
         if (!boxed) return portalRoot;
+        assertBoxedPortalTarget(portalRoot, 'PopupOverlayContainer');
         const safeTarget = resolveBoxedPortalTarget(portalRoot, 'PopupOverlayContainer');
         if (!safeTarget) return null;
-        assertNoBodyPortalInBoxed(safeTarget, 'PopupOverlayContainer');
         return safeTarget;
     }, [boxed, portalRoot]);
 

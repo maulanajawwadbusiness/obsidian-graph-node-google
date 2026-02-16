@@ -4,7 +4,7 @@ import { useDocument } from '../../store/documentStore';
 import { usePortalRootEl, usePortalScopeMode } from '../../components/portalScope/PortalScopeContext';
 import { useGraphViewport } from '../../runtime/viewport/graphViewport';
 import {
-    assertNoBodyPortalInBoxed,
+    assertBoxedPortalTarget,
     countBoxedSurfaceDisabled,
     isBoxedUi,
     resolveBoxedPortalTarget,
@@ -49,9 +49,9 @@ export const AIActivityGlyph: React.FC = () => {
     const boxed = isBoxedUi(viewport);
     const portalTarget = React.useMemo(() => {
         if (!boxed) return portalRoot;
+        assertBoxedPortalTarget(portalRoot, 'AIActivityGlyph');
         const safeTarget = resolveBoxedPortalTarget(portalRoot, 'AIActivityGlyph');
         if (!safeTarget) return null;
-        assertNoBodyPortalInBoxed(safeTarget, 'AIActivityGlyph');
         return safeTarget;
     }, [boxed, portalRoot]);
 

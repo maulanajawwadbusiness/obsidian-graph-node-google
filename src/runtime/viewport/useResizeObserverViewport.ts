@@ -153,6 +153,7 @@ export function useResizeObserverViewport<T extends HTMLElement>(
         let releaseRafTrack: (() => void) | null = null;
         let releaseSettleRafTrack: (() => void) | null = null;
         const SETTLE_STABLE_FRAMES = 8;
+        const SETTLE_MOUNT_STABLE_FRAMES = 20;
         const SETTLE_MAX_FRAMES = 60;
         const POINTER_MOVE_THROTTLE_MS = 120;
         let lastPointerMoveMs = 0;
@@ -175,14 +176,14 @@ export function useResizeObserverViewport<T extends HTMLElement>(
                 releaseSettleRafTrack = null;
             }
         };
-        const beginSettleTracking = () => {
+        const beginSettleTracking = (stableFrames: number = SETTLE_STABLE_FRAMES) => {
             if (!releaseSettleRafTrack) {
                 releaseSettleRafTrack = trackResource('graph-runtime.viewport.position-settle-raf');
             }
             if (settleFrameBudgetRef.current <= 0) {
                 settleFrameBudgetRef.current = SETTLE_MAX_FRAMES;
             }
-            settleFramesLeftRef.current = SETTLE_STABLE_FRAMES;
+            settleFramesLeftRef.current = Math.max(1, Math.floor(stableFrames));
         };
 
         const flushViewportUpdate = () => {
@@ -251,6 +252,10 @@ export function useResizeObserverViewport<T extends HTMLElement>(
                     return;
                 }
                 if (settleFramesLeftRef.current > 0) {
+                    if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+                        stopSettleTracking();
+                        return;
+                    }
                     scheduleViewportUpdate();
                     return;
                 }
@@ -292,6 +297,14 @@ export function useResizeObserverViewport<T extends HTMLElement>(
             if (disposed) return;
             triggerInteractionRefresh();
         };
+        const handleVisibilityChange = () => {
+            if (disposed) return;
+            if (document.visibilityState === 'hidden') {
+                stopSettleTracking();
+                return;
+            }
+            triggerPositionRefresh();
+        };
 
         const observer = new ResizeObserver((entries) => {
             if (disposed) return;
@@ -308,8 +321,10 @@ export function useResizeObserverViewport<T extends HTMLElement>(
             height: target.getBoundingClientRect().height,
         };
         scheduleViewportUpdate();
+        beginSettleTracking(SETTLE_MOUNT_STABLE_FRAMES);
         window.addEventListener('scroll', triggerPositionRefresh, { capture: true, passive: true });
         window.addEventListener('resize', triggerPositionRefresh, { passive: true });
+        document.addEventListener('visibilitychange', handleVisibilityChange);
         const vv = window.visualViewport ?? null;
         if (vv) {
             vv.addEventListener('scroll', triggerPositionRefresh, { passive: true });
@@ -345,6 +360,7 @@ export function useResizeObserverViewport<T extends HTMLElement>(
             }
             window.removeEventListener('scroll', triggerPositionRefresh, true);
             window.removeEventListener('resize', triggerPositionRefresh);
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
             if (vv) {
                 vv.removeEventListener('scroll', triggerPositionRefresh);
                 vv.removeEventListener('resize', triggerPositionRefresh);

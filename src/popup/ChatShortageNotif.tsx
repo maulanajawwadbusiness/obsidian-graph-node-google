@@ -2,6 +2,7 @@ import React from 'react';
 import { hideShortage, useShortageStore } from '../money/shortageStore';
 import { usePortalBoundsRect, usePortalScopeMode } from '../components/portalScope/PortalScopeContext';
 import {
+    shouldAllowOverlayWheelDefault,
     SAMPLE_GRAPH_PREVIEW_OVERLAY_INTERACTIVE_ATTR,
     SAMPLE_GRAPH_PREVIEW_OVERLAY_INTERACTIVE_VALUE,
 } from '../components/sampleGraphPreviewSeams';
@@ -50,6 +51,17 @@ const BASE_STYLE_CONTAINER: React.CSSProperties = {
 
 const stopPropagation = (event: React.SyntheticEvent) => {
     event.stopPropagation();
+};
+const stopOverlayWheelPropagation = (event: React.WheelEvent) => {
+    event.stopPropagation();
+    const allowOverlayDefault = shouldAllowOverlayWheelDefault({
+        target: event.target,
+        deltaX: event.deltaX,
+        deltaY: event.deltaY,
+    });
+    if (!allowOverlayDefault) {
+        event.preventDefault();
+    }
 };
 
 function clamp(value: number, min: number, max: number): number {
@@ -172,7 +184,7 @@ export const ChatShortageNotif: React.FC<ChatShortageNotifProps> = ({ surface, a
             }}
             onPointerDownCapture={stopPropagation}
             onPointerDown={stopPropagation}
-            onWheelCapture={stopPropagation}
+            onWheelCapture={stopOverlayWheelPropagation}
             onWheel={stopPropagation}
         >
             Saldo tidak cukup untuk chat

@@ -6,6 +6,7 @@ import { t } from '../i18n/t';
 import { useTooltip } from '../ui/tooltip/useTooltip';
 import { usePortalBoundsRect, usePortalScopeMode } from '../components/portalScope/PortalScopeContext';
 import {
+    shouldAllowOverlayWheelDefault,
     SAMPLE_GRAPH_PREVIEW_OVERLAY_INTERACTIVE_ATTR,
     SAMPLE_GRAPH_PREVIEW_OVERLAY_INTERACTIVE_VALUE,
 } from '../components/sampleGraphPreviewSeams';
@@ -13,6 +14,17 @@ import { useGraphViewport, type GraphViewport } from '../runtime/viewport/graphV
 import { getViewportSize, isBoxedViewport, recordBoxedClampCall, toViewportLocalPoint } from '../runtime/viewport/viewportMath';
 
 const stopPropagation = (e: React.SyntheticEvent) => e.stopPropagation();
+const stopOverlayWheelPropagation = (event: React.WheelEvent) => {
+    event.stopPropagation();
+    const allowOverlayDefault = shouldAllowOverlayWheelDefault({
+        target: event.target,
+        deltaX: event.deltaX,
+        deltaY: event.deltaY,
+    });
+    if (!allowOverlayDefault) {
+        event.preventDefault();
+    }
+};
 
 const GAP_FROM_NODE = 20;
 
@@ -59,6 +71,7 @@ const POPUP_STYLE: React.CSSProperties = {
     opacity: 0,
     transform: 'scale(0.8)',
     filter: 'blur(8px)',
+    overscrollBehavior: 'contain',
 };
 
 // MEMBRANE ANIMATION - Final (visible) state
@@ -92,6 +105,7 @@ const CLOSE_BUTTON_STYLE: React.CSSProperties = {
 const CONTENT_STYLE: React.CSSProperties = {
     flex: 1,
     overflowY: 'auto',
+    overscrollBehavior: 'contain',
     fontSize: '14px',
     fontWeight: 300,
     lineHeight: '1.6',
@@ -454,7 +468,7 @@ export const NodePopup: React.FC<NodePopupProps> = ({ trackNode, engineRef }) =>
                 onPointerMove={stopPropagation}
                 onPointerUp={stopPropagation}
                 onClick={stopPropagation}
-                onWheelCapture={stopPropagation}
+                onWheelCapture={stopOverlayWheelPropagation}
                 onWheel={stopPropagation}
             >
                 <div style={{ ...HEADER_STYLE, ...contentTransition }}>

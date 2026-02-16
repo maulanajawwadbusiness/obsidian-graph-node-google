@@ -9,6 +9,7 @@ import { t } from '../i18n/t';
 import { useTooltip } from '../ui/tooltip/useTooltip';
 import { usePortalBoundsRect, usePortalScopeMode } from '../components/portalScope/PortalScopeContext';
 import {
+    shouldAllowOverlayWheelDefault,
     SAMPLE_GRAPH_PREVIEW_OVERLAY_INTERACTIVE_ATTR,
     SAMPLE_GRAPH_PREVIEW_OVERLAY_INTERACTIVE_VALUE,
 } from '../components/sampleGraphPreviewSeams';
@@ -36,6 +37,17 @@ interface MiniChatbarProps {
 type ChatbarSize = { width: number; height: number };
 
 const stopPropagation = (e: React.SyntheticEvent) => e.stopPropagation();
+const stopOverlayWheelPropagation = (event: React.WheelEvent) => {
+    event.stopPropagation();
+    const allowOverlayDefault = shouldAllowOverlayWheelDefault({
+        target: event.target,
+        deltaX: event.deltaX,
+        deltaY: event.deltaY,
+    });
+    if (!allowOverlayDefault) {
+        event.preventDefault();
+    }
+};
 
 const CHATBAR_STYLE: React.CSSProperties = {
     position: 'fixed',
@@ -58,6 +70,7 @@ const CHATBAR_STYLE: React.CSSProperties = {
     transition: 'opacity 200ms ease-out, transform 200ms ease-out',
     opacity: 0,
     transform: 'scale(0.95) translateY(10px)',
+    overscrollBehavior: 'contain',
 };
 
 const CHATBAR_STYLE_CONTAINER: React.CSSProperties = {
@@ -82,6 +95,7 @@ const MESSAGES_STYLE: React.CSSProperties = {
     flex: 1,
     minHeight: 0,
     overflowY: 'auto',
+    overscrollBehavior: 'contain',
     display: 'flex',
     flexDirection: 'column',
     gap: '12px',
@@ -453,7 +467,7 @@ export const MiniChatbar: React.FC<MiniChatbarProps> = ({ messages, onSend, onCl
             onPointerMove={stopPropagation}
             onPointerUp={stopPropagation}
             onClick={stopPropagation}
-            onWheelCapture={stopPropagation}
+            onWheelCapture={stopOverlayWheelPropagation}
             onWheel={stopPropagation}
         >
             <div style={HEADER_STYLE}>

@@ -1,5 +1,8 @@
 import React from 'react';
-import { isInsideSampleGraphPreviewRoot } from '../../../components/sampleGraphPreviewSeams';
+import {
+    isInsideSampleGraphPreviewPortalRoot,
+    isInsideSampleGraphPreviewRoot,
+} from '../../../components/sampleGraphPreviewSeams';
 
 type UseOnboardingWheelGuardArgs = {
     enabled: boolean;
@@ -15,24 +18,10 @@ export function useOnboardingWheelGuard(args: UseOnboardingWheelGuardArgs): void
         if (!enabled || !active) return;
         if (typeof window === 'undefined') return;
 
-        const toElement = (target: EventTarget | null): Element | null => {
-            if (!target) return null;
-            if (target instanceof Element) return target;
-            if (target instanceof Node) return target.parentElement;
-            return null;
-        };
-
-        const isInsidePreviewPortalRoot = (target: EventTarget | null): boolean => {
-            const element = toElement(target);
-            if (!element) return false;
-            return element.closest('[data-arnvoid-preview-portal-root="1"]') !== null;
-        };
-
         const onWheel = (event: WheelEvent) => {
-            const targetElement = toElement(event.target);
             if (
-                isInsideSampleGraphPreviewRoot(targetElement) ||
-                isInsidePreviewPortalRoot(targetElement)
+                isInsideSampleGraphPreviewRoot(event.target) ||
+                isInsideSampleGraphPreviewPortalRoot(event.target)
             ) {
                 if (import.meta.env.DEV) {
                     debugCountersRef.current.allowedPreviewWheelCount += 1;

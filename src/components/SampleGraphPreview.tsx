@@ -25,7 +25,9 @@ import {
 import { warnIfGraphRuntimeResourcesUnbalanced } from '../runtime/resourceTracker';
 import {
     SAMPLE_GRAPH_PREVIEW_ROOT_ATTR,
-    SAMPLE_GRAPH_PREVIEW_ROOT_VALUE
+    SAMPLE_GRAPH_PREVIEW_ROOT_VALUE,
+    SAMPLE_GRAPH_PREVIEW_PORTAL_ROOT_ATTR,
+    SAMPLE_GRAPH_PREVIEW_PORTAL_ROOT_VALUE
 } from './sampleGraphPreviewSeams';
 
 const PREVIEW_ROOT_STYLE: React.CSSProperties = {
@@ -304,7 +306,11 @@ export const SampleGraphPreview: React.FC = () => {
 
     return (
         <div {...previewRootMarker} style={PREVIEW_ROOT_STYLE}>
-            <div ref={setPortalRootEl} data-arnvoid-preview-portal-root="1" style={PREVIEW_PORTAL_ROOT_STYLE} />
+            <div
+                ref={setPortalRootEl}
+                {...{ [SAMPLE_GRAPH_PREVIEW_PORTAL_ROOT_ATTR]: SAMPLE_GRAPH_PREVIEW_PORTAL_ROOT_VALUE }}
+                style={PREVIEW_PORTAL_ROOT_STYLE}
+            />
             <PreviewErrorBoundary>
                 <div style={PREVIEW_SURFACE_STYLE}>
                     {canMountRuntime ? (

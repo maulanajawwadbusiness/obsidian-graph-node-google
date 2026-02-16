@@ -156,6 +156,8 @@ export function useResizeObserverViewport<T extends HTMLElement>(
         const SETTLE_MOUNT_STABLE_FRAMES = 20;
         const SETTLE_MAX_FRAMES = 60;
         const POINTER_MOVE_THROTTLE_MS = 120;
+        const SCROLL_OPTIONS: AddEventListenerOptions = { capture: true, passive: true };
+        const PASSIVE_OPTIONS: AddEventListenerOptions = { passive: true };
         let lastPointerMoveMs = 0;
 
         const cancelScheduledFrame = () => {
@@ -299,6 +301,7 @@ export function useResizeObserverViewport<T extends HTMLElement>(
         };
         const handleVisibilityChange = () => {
             if (disposed) return;
+            if (typeof document === 'undefined') return;
             if (document.visibilityState === 'hidden') {
                 stopSettleTracking();
                 return;
@@ -322,17 +325,19 @@ export function useResizeObserverViewport<T extends HTMLElement>(
         };
         scheduleViewportUpdate();
         beginSettleTracking(SETTLE_MOUNT_STABLE_FRAMES);
-        window.addEventListener('scroll', triggerPositionRefresh, { capture: true, passive: true });
-        window.addEventListener('resize', triggerPositionRefresh, { passive: true });
-        document.addEventListener('visibilitychange', handleVisibilityChange);
+        window.addEventListener('scroll', triggerPositionRefresh, SCROLL_OPTIONS);
+        window.addEventListener('resize', triggerPositionRefresh, PASSIVE_OPTIONS);
+        if (typeof document !== 'undefined') {
+            document.addEventListener('visibilitychange', handleVisibilityChange);
+        }
         const vv = window.visualViewport ?? null;
         if (vv) {
-            vv.addEventListener('scroll', triggerPositionRefresh, { passive: true });
-            vv.addEventListener('resize', triggerPositionRefresh, { passive: true });
+            vv.addEventListener('scroll', triggerPositionRefresh, PASSIVE_OPTIONS);
+            vv.addEventListener('resize', triggerPositionRefresh, PASSIVE_OPTIONS);
         }
-        target.addEventListener('pointerenter', handlePointerEnter, { passive: true });
-        target.addEventListener('pointermove', handlePointerMove, { passive: true });
-        target.addEventListener('wheel', handleWheel, { passive: true });
+        target.addEventListener('pointerenter', handlePointerEnter, PASSIVE_OPTIONS);
+        target.addEventListener('pointermove', handlePointerMove, PASSIVE_OPTIONS);
+        target.addEventListener('wheel', handleWheel, PASSIVE_OPTIONS);
         let boxedTinyTimer: number | null = null;
         if (import.meta.env.DEV && options.mode === 'boxed') {
             boxedTinyTimer = window.setTimeout(() => {
@@ -358,16 +363,18 @@ export function useResizeObserverViewport<T extends HTMLElement>(
             if (boxedTinyTimer !== null) {
                 window.clearTimeout(boxedTinyTimer);
             }
-            window.removeEventListener('scroll', triggerPositionRefresh, true);
-            window.removeEventListener('resize', triggerPositionRefresh);
-            document.removeEventListener('visibilitychange', handleVisibilityChange);
-            if (vv) {
-                vv.removeEventListener('scroll', triggerPositionRefresh);
-                vv.removeEventListener('resize', triggerPositionRefresh);
+            window.removeEventListener('scroll', triggerPositionRefresh, SCROLL_OPTIONS);
+            window.removeEventListener('resize', triggerPositionRefresh, PASSIVE_OPTIONS);
+            if (typeof document !== 'undefined') {
+                document.removeEventListener('visibilitychange', handleVisibilityChange);
             }
-            target.removeEventListener('pointerenter', handlePointerEnter);
-            target.removeEventListener('pointermove', handlePointerMove);
-            target.removeEventListener('wheel', handleWheel);
+            if (vv) {
+                vv.removeEventListener('scroll', triggerPositionRefresh, PASSIVE_OPTIONS);
+                vv.removeEventListener('resize', triggerPositionRefresh, PASSIVE_OPTIONS);
+            }
+            target.removeEventListener('pointerenter', handlePointerEnter, PASSIVE_OPTIONS);
+            target.removeEventListener('pointermove', handlePointerMove, PASSIVE_OPTIONS);
+            target.removeEventListener('wheel', handleWheel, PASSIVE_OPTIONS);
             releasePositionListenersTrack();
             releaseInteractionListenersTrack();
             stopSettleTracking();

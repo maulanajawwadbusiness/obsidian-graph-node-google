@@ -203,7 +203,7 @@ function computeChatbarPosition(
     const tryBelow = () => {
         const top = popupBottom + GAP;
         if (top + CHATBAR_HEIGHT > viewportHeight - MARGIN) return null;
-        const left = clamp(popupRect.left, MARGIN, viewportW - CHATBAR_WIDTH - MARGIN);
+        const left = clamp(localPopupRect.left, MARGIN, viewportW - CHATBAR_WIDTH - MARGIN);
         return { left, top };
     };
 

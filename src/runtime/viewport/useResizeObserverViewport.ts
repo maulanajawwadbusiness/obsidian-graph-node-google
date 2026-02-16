@@ -220,9 +220,11 @@ export function useResizeObserverViewport<T extends HTMLElement>(
                     bcr.top
                 );
             }
-            if (sameViewport(viewportRef.current, nextViewport)) return;
-            viewportRef.current = nextViewport;
-            setViewport(nextViewport);
+            const viewportChanged = !sameViewport(viewportRef.current, nextViewport);
+            if (viewportChanged) {
+                viewportRef.current = nextViewport;
+                setViewport(nextViewport);
+            }
             positionDirtyRef.current = false;
 
             if (settleFramesLeftRef.current > 0 && settleFrameBudgetRef.current > 0) {

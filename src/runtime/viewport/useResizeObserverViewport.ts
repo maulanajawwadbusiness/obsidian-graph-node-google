@@ -15,9 +15,14 @@ type UseResizeObserverViewportOptions = {
 };
 let warnedBoxedStuckTinyViewport = false;
 let warnedZeroOriginMismatch = false;
+let warnedSettleCapReached = false;
 type ObserverSizeSnapshot = {
     width: number;
     height: number;
+};
+type OriginSnapshot = {
+    left: number;
+    top: number;
 };
 
 function clampViewportDim(value: number): number {
@@ -128,6 +133,10 @@ export function useResizeObserverViewport<T extends HTMLElement>(
     const latestTargetRef = React.useRef<HTMLElement | null>(target ?? null);
     const latestSizeRef = React.useRef<ObserverSizeSnapshot | null>(null);
     const pendingRafIdRef = React.useRef<number | null>(null);
+    const positionDirtyRef = React.useRef(false);
+    const lastOriginRef = React.useRef<OriginSnapshot | null>(null);
+    const settleFramesLeftRef = React.useRef(0);
+    const settleFrameBudgetRef = React.useRef(0);
 
     React.useEffect(() => {
         if (!target) return;
@@ -137,7 +146,11 @@ export function useResizeObserverViewport<T extends HTMLElement>(
         latestTargetRef.current = target;
         let disposed = false;
         const releaseObserverTrack = trackResource('graph-runtime.viewport.resize-observer');
+        const releasePositionListenersTrack = trackResource('graph-runtime.viewport.position-listeners');
         let releaseRafTrack: (() => void) | null = null;
+        let releaseSettleRafTrack: (() => void) | null = null;
+        const SETTLE_STABLE_FRAMES = 8;
+        const SETTLE_MAX_FRAMES = 60;
 
         const cancelScheduledFrame = () => {
             const rafId = pendingRafIdRef.current;
@@ -148,6 +161,23 @@ export function useResizeObserverViewport<T extends HTMLElement>(
                 releaseRafTrack();
                 releaseRafTrack = null;
             }
+        };
+        const stopSettleTracking = () => {
+            settleFramesLeftRef.current = 0;
+            settleFrameBudgetRef.current = 0;
+            if (releaseSettleRafTrack) {
+                releaseSettleRafTrack();
+                releaseSettleRafTrack = null;
+            }
+        };
+        const beginSettleTracking = () => {
+            if (!releaseSettleRafTrack) {
+                releaseSettleRafTrack = trackResource('graph-runtime.viewport.position-settle-raf');
+            }
+            if (settleFrameBudgetRef.current <= 0) {
+                settleFrameBudgetRef.current = SETTLE_MAX_FRAMES;
+            }
+            settleFramesLeftRef.current = SETTLE_STABLE_FRAMES;
         };
 
         const flushViewportUpdate = () => {
@@ -161,6 +191,16 @@ export function useResizeObserverViewport<T extends HTMLElement>(
             if (!activeTarget) return;
             if (!activeTarget.isConnected) return;
             const bcr = activeTarget.getBoundingClientRect();
+            const currentOrigin: OriginSnapshot = { left: bcr.left, top: bcr.top };
+            const previousOrigin = lastOriginRef.current;
+            const originChanged =
+                !previousOrigin ||
+                Math.abs(previousOrigin.left - currentOrigin.left) > 0.1 ||
+                Math.abs(previousOrigin.top - currentOrigin.top) > 0.1;
+            lastOriginRef.current = currentOrigin;
+            if (originChanged) {
+                beginSettleTracking();
+            }
             const nextViewport = makeViewport(options.mode, options.source, bcr, latestSizeRef.current);
             if (
                 import.meta.env.DEV &&
@@ -183,6 +223,29 @@ export function useResizeObserverViewport<T extends HTMLElement>(
             if (sameViewport(viewportRef.current, nextViewport)) return;
             viewportRef.current = nextViewport;
             setViewport(nextViewport);
+            positionDirtyRef.current = false;
+
+            if (settleFramesLeftRef.current > 0 && settleFrameBudgetRef.current > 0) {
+                settleFrameBudgetRef.current -= 1;
+                if (!originChanged) {
+                    settleFramesLeftRef.current -= 1;
+                } else {
+                    settleFramesLeftRef.current = SETTLE_STABLE_FRAMES;
+                }
+                if (settleFrameBudgetRef.current <= 0) {
+                    if (import.meta.env.DEV && !warnedSettleCapReached) {
+                        warnedSettleCapReached = true;
+                        console.warn('[ViewportResize] settle frame cap reached; stopping settle loop');
+                    }
+                    stopSettleTracking();
+                    return;
+                }
+                if (settleFramesLeftRef.current > 0) {
+                    scheduleViewportUpdate();
+                    return;
+                }
+                stopSettleTracking();
+            }
         };
 
         const scheduleViewportUpdate = () => {
@@ -190,6 +253,11 @@ export function useResizeObserverViewport<T extends HTMLElement>(
             if (pendingRafIdRef.current !== null) return;
             releaseRafTrack = trackResource('graph-runtime.viewport.resize-raf');
             pendingRafIdRef.current = window.requestAnimationFrame(flushViewportUpdate);
+        };
+        const triggerPositionRefresh = () => {
+            if (disposed) return;
+            positionDirtyRef.current = true;
+            scheduleViewportUpdate();
         };
 
         const observer = new ResizeObserver((entries) => {
@@ -207,6 +275,13 @@ export function useResizeObserverViewport<T extends HTMLElement>(
             height: target.getBoundingClientRect().height,
         };
         scheduleViewportUpdate();
+        window.addEventListener('scroll', triggerPositionRefresh, { capture: true, passive: true });
+        window.addEventListener('resize', triggerPositionRefresh, { passive: true });
+        const vv = window.visualViewport ?? null;
+        if (vv) {
+            vv.addEventListener('scroll', triggerPositionRefresh, { passive: true });
+            vv.addEventListener('resize', triggerPositionRefresh, { passive: true });
+        }
         let boxedTinyTimer: number | null = null;
         if (import.meta.env.DEV && options.mode === 'boxed') {
             boxedTinyTimer = window.setTimeout(() => {
@@ -232,10 +307,20 @@ export function useResizeObserverViewport<T extends HTMLElement>(
             if (boxedTinyTimer !== null) {
                 window.clearTimeout(boxedTinyTimer);
             }
+            window.removeEventListener('scroll', triggerPositionRefresh, true);
+            window.removeEventListener('resize', triggerPositionRefresh);
+            if (vv) {
+                vv.removeEventListener('scroll', triggerPositionRefresh);
+                vv.removeEventListener('resize', triggerPositionRefresh);
+            }
+            releasePositionListenersTrack();
+            stopSettleTracking();
             cancelScheduledFrame();
             observer.disconnect();
             latestTargetRef.current = null;
             latestSizeRef.current = null;
+            lastOriginRef.current = null;
+            positionDirtyRef.current = false;
             releaseObserverTrack();
         };
     }, [elementRef, target, options.mode, options.source]);

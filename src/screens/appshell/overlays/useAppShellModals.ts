@@ -1,7 +1,8 @@
 import React from 'react';
+import type { SidebarLockState } from '../sidebar/sidebarLockPolicy';
 
 type UseAppShellModalsArgs = {
-    sidebarDisabled: boolean;
+    sidebarLock: SidebarLockState;
     isLoggedIn: boolean;
     hasUser: boolean;
     profileSaving: boolean;
@@ -36,7 +37,7 @@ type UseAppShellModalsResult = {
 };
 
 export function useAppShellModals(args: UseAppShellModalsArgs): UseAppShellModalsResult {
-    const { sidebarDisabled, isLoggedIn, hasUser, profileSaving, logoutConfirmBusy } = args;
+    const { sidebarLock, isLoggedIn, hasUser, profileSaving, logoutConfirmBusy } = args;
     const [isSearchInterfacesOpen, setIsSearchInterfacesOpen] = React.useState(false);
     const [searchInterfacesQuery, setSearchInterfacesQueryState] = React.useState('');
     const [searchHighlightedIndex, setSearchHighlightedIndex] = React.useState(0);
@@ -76,13 +77,13 @@ export function useAppShellModals(args: UseAppShellModalsArgs): UseAppShellModal
 
     const openSearchInterfaces = React.useCallback(() => {
         if (pendingDeleteId) return;
-        if (sidebarDisabled) return;
+        if (sidebarLock.disabled) return;
         didSelectThisOpenRef.current = false;
         setIsSearchInterfacesOpen(true);
         setSearchInterfacesQuery('');
         setSearchHighlightedIndex(0);
         console.log('[appshell] search_open');
-    }, [pendingDeleteId, setSearchInterfacesQuery, sidebarDisabled]);
+    }, [pendingDeleteId, setSearchInterfacesQuery, sidebarLock.disabled]);
 
     const openDeleteConfirm = React.useCallback((id: string, title: string) => {
         setPendingDeleteId(id);
@@ -100,7 +101,7 @@ export function useAppShellModals(args: UseAppShellModalsArgs): UseAppShellModal
 
     const openProfileOverlay = React.useCallback(() => {
         if (!isLoggedIn || !hasUser) return false;
-        if (sidebarDisabled) return false;
+        if (sidebarLock.disabled) return false;
         if (isSearchInterfacesOpen) {
             closeSearchInterfaces();
         }
@@ -116,7 +117,7 @@ export function useAppShellModals(args: UseAppShellModalsArgs): UseAppShellModal
         isLoggedIn,
         isSearchInterfacesOpen,
         pendingDeleteId,
-        sidebarDisabled,
+        sidebarLock.disabled,
     ]);
 
     const closeLogoutConfirm = React.useCallback(() => {
@@ -130,7 +131,7 @@ export function useAppShellModals(args: UseAppShellModalsArgs): UseAppShellModal
 
     const openLogoutConfirm = React.useCallback(() => {
         if (!isLoggedIn) return false;
-        if (sidebarDisabled) return false;
+        if (sidebarLock.disabled) return false;
         if (isSearchInterfacesOpen) {
             closeSearchInterfaces();
         }
@@ -150,7 +151,7 @@ export function useAppShellModals(args: UseAppShellModalsArgs): UseAppShellModal
         isProfileOpen,
         isSearchInterfacesOpen,
         pendingDeleteId,
-        sidebarDisabled,
+        sidebarLock.disabled,
     ]);
 
     const selectSearchResultById = React.useCallback((id: string, onSelect: (pickedId: string) => void) => {
@@ -166,11 +167,31 @@ export function useAppShellModals(args: UseAppShellModalsArgs): UseAppShellModal
         closeSearchInterfaces();
     }, [closeSearchInterfaces, isSearchInterfacesOpen, pendingDeleteId]);
 
+    const previousLockDisabledRef = React.useRef(sidebarLock.disabled);
+
     React.useEffect(() => {
-        if (!isSearchInterfacesOpen) return;
-        if (!sidebarDisabled) return;
-        closeSearchInterfaces();
-    }, [closeSearchInterfaces, isSearchInterfacesOpen, sidebarDisabled]);
+        const prevDisabled = previousLockDisabledRef.current;
+        const nextDisabled = sidebarLock.disabled;
+        previousLockDisabledRef.current = nextDisabled;
+        if (prevDisabled || !nextDisabled) return;
+        if (isSearchInterfacesOpen) {
+            closeSearchInterfaces();
+        }
+        if (isProfileOpen) {
+            closeProfileOverlay();
+        }
+        if (isLogoutConfirmOpen) {
+            closeLogoutConfirm();
+        }
+    }, [
+        closeLogoutConfirm,
+        closeProfileOverlay,
+        closeSearchInterfaces,
+        isLogoutConfirmOpen,
+        isProfileOpen,
+        isSearchInterfacesOpen,
+        sidebarLock.disabled,
+    ]);
 
     React.useEffect(() => {
         if (!isSearchInterfacesOpen) return;

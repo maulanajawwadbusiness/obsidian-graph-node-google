@@ -264,7 +264,7 @@ export const AppShell: React.FC = () => {
         forceCloseLogoutConfirm,
         selectSearchResultById: selectSearchResultByIdState,
     } = useAppShellModals({
-        sidebarDisabled,
+        sidebarLock,
         isLoggedIn,
         hasUser: user !== null,
         profileSaving,

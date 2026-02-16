@@ -1084,6 +1084,28 @@ Step 11 boxed-only UI rules (2026-02-16):
   4. if containment is not reliable, disable that surface in boxed mode.
   5. app mode behavior must remain unchanged.
 
+Step 12 boxed resize semantics (2026-02-16):
+- canonical contract seam: `src/runtime/viewport/resizeSemantics.ts`
+  - default boxed mode: `DEFAULT_BOXED_RESIZE_SEMANTIC_MODE = 'preserve-center-world'`
+  - contract function: `computeCameraAfterResize(...)`
+  - future modes are encoded but not enabled by default (`preserve-top-left-world`, `fit-world-bounds`).
+- behavior contract (boxed):
+  - resizing boxed preview preserves world anchor intent at viewport center.
+  - zoom remains constant across resize.
+  - resize is treated as changing the window around the same scene, not recentering/auto-fitting.
+- integration seam:
+  - camera apply path is in `src/playground/GraphPhysicsPlaygroundShell.tsx` (boxed viewport size change effect).
+  - camera read/apply ownership remains in `src/playground/useGraphRendering.ts` (`getCameraSnapshot`, `applyCameraSnapshot`).
+  - `useResizeObserverViewport` remains measurement-only and does not mutate camera state.
+- containment policy:
+  - boxed runtime uses effective camera lock (`cameraLocked || isBoxedRuntime`) to prevent per-frame auto-fit containment from overriding resize semantics.
+  - app mode containment behavior is unchanged.
+- dev counters and rails:
+  - resize counters live in `resizeSemantics.ts`:
+    - `boxedResizeEventCount`
+    - `boxedResizeCameraAdjustCount`
+  - boxed resize apply path has a dev warn-once for invalid camera outputs.
+
 Current known risks not fixed yet:
 1. Prompt overlays can mask preview:
    - drag/error/login overlays in `src/screens/EnterPrompt.tsx` are fixed and can block visibility/input.
@@ -1116,3 +1138,7 @@ Manual verification checklist for follow-up runs:
     - boxed runtime does not expose fullscreen action/menu paths.
     - boxed runtime portal surfaces do not mount to `document.body`.
     - if safe portal root is unavailable in boxed mode, affected surface is disabled safely.
+14. Step 12 boxed resize semantics:
+    - resizing preview larger/smaller does not teleport the camera.
+    - center-world intent is preserved across resize by default.
+    - zoom remains unchanged across resize.

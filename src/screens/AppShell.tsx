@@ -31,9 +31,12 @@ import { renderScreenContent } from './appshell/render/renderScreenContent';
 import {
     computeGraphLoadingGateBase,
     computeGraphLoadingWatchdogPhase,
+    getGateControls,
     getGateEntryIntent,
+    getGateNextAction,
     type GateEntryIntent,
     type GatePhase,
+    type RuntimeStatusSnapshot,
 } from './appshell/render/graphLoadingGateMachine';
 import { useOnboardingOverlayState } from './appshell/overlays/useOnboardingOverlayState';
 import { OnboardingChrome } from './appshell/overlays/OnboardingChrome';
@@ -116,7 +119,10 @@ export const AppShell: React.FC = () => {
     const [pendingAnalysis, setPendingAnalysis] = React.useState<PendingAnalysisPayload>(null);
     const [savedInterfaces, setSavedInterfaces] = React.useState<SavedInterfaceRecordV1[]>([]);
     const [pendingLoadInterface, setPendingLoadInterface] = React.useState<SavedInterfaceRecordV1 | null>(null);
-    const [graphIsLoading, setGraphIsLoading] = React.useState(false);
+    const [graphRuntimeStatus, setGraphRuntimeStatus] = React.useState<RuntimeStatusSnapshot>({
+        isLoading: false,
+        aiErrorMessage: null,
+    });
     const [gatePhase, setGatePhase] = React.useState<GatePhase>('idle');
     const [seenLoadingTrue, setSeenLoadingTrue] = React.useState(false);
     const [gateEntryIntent, setGateEntryIntent] = React.useState<GateEntryIntent>('none');
@@ -125,6 +131,7 @@ export const AppShell: React.FC = () => {
     const sidebarWasExpandedAtGateEntryRef = React.useRef<boolean | null>(null);
     const previousScreenRef = React.useRef<Screen>(screen);
     const gatePhaseRef = React.useRef<GatePhase>('idle');
+    const gateActionConsumedRef = React.useRef(false);
     const graphLoadingGateRootRef = React.useRef<HTMLDivElement>(null);
     const savedInterfacesRef = React.useRef<SavedInterfaceRecordV1[]>([]);
     const restoreReadPathActiveRef = React.useRef(false);
@@ -166,6 +173,7 @@ export const AppShell: React.FC = () => {
     } = useOnboardingOverlayState({ screen });
 
     const GraphWithPending = Graph as React.ComponentType<GraphPhysicsPlaygroundProps>;
+    const graphIsLoading = graphRuntimeStatus.isLoading;
     const showMoneyUi = screen === 'prompt' || isGraphClassScreen(screen);
     const showPersistentSidebar = SIDEBAR_VISIBILITY_BY_SCREEN[screen];
     const sidebarFrozen = SIDEBAR_INTERACTION_BY_SCREEN[screen] === 'frozen';
@@ -425,7 +433,7 @@ export const AppShell: React.FC = () => {
         const base = computeGraphLoadingGateBase({
             screen,
             entryIntent: gateEntryIntent,
-            runtime: { isLoading: graphIsLoading, aiErrorMessage: null },
+            runtime: graphRuntimeStatus,
             seenLoadingTrue,
             currentPhase: gatePhase,
         });
@@ -435,7 +443,7 @@ export const AppShell: React.FC = () => {
         if (base.nextPhase !== gatePhase) {
             setGatePhase(base.nextPhase);
         }
-    }, [gateEntryIntent, gatePhase, graphIsLoading, screen, seenLoadingTrue]);
+    }, [gateEntryIntent, gatePhase, graphRuntimeStatus, screen, seenLoadingTrue]);
 
     React.useEffect(() => {
         if (screen !== 'graph_loading') return;
@@ -460,6 +468,17 @@ export const AppShell: React.FC = () => {
             window.clearTimeout(timeoutId);
         };
     }, [gateEntryIntent, screen, seenLoadingTrue]);
+
+    React.useEffect(() => {
+        const nextAction = getGateNextAction(screen, gatePhase);
+        if (nextAction !== 'force_back_prompt') {
+            gateActionConsumedRef.current = false;
+            return;
+        }
+        if (gateActionConsumedRef.current) return;
+        gateActionConsumedRef.current = true;
+        transitionToScreen('prompt');
+    }, [gatePhase, screen, transitionToScreen]);
 
     React.useEffect(() => {
         if (!isWarmMountDebugEnabled()) return;
@@ -599,18 +618,18 @@ export const AppShell: React.FC = () => {
         documentViewerToggleToken,
         pendingLoadInterface,
         setPendingAnalysis,
-        setGraphIsLoading,
+        setGraphRuntimeStatus,
         setPendingLoadInterface,
         setWelcome1OverlayOpen,
         setEnterPromptOverlayOpen,
         setRestoreReadPathActive: (active) => {
             restoreReadPathActiveRef.current = active;
         },
-        gateConfirmVisible: gatePhase === 'done',
-        gateConfirmEnabled: gatePhase === 'done',
+        gateConfirmVisible: getGateControls(gatePhase).allowConfirm,
+        gateConfirmEnabled: getGateControls(gatePhase).allowConfirm,
         gateRootRef: graphLoadingGateRootRef,
         onGateConfirm: confirmGraphLoadingGate,
-        gateShowBackToPrompt: targetScreen === 'graph_loading' && gatePhase !== 'done',
+        gateShowBackToPrompt: targetScreen === 'graph_loading' && getGateControls(gatePhase).allowBack,
         onGateBackToPrompt: backToPromptFromGate,
         transitionToScreen,
         commitUpsertInterface,

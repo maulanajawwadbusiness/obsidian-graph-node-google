@@ -28,6 +28,13 @@ type GateWatchdogInput = {
     currentPhase: GatePhase;
 };
 
+type GateControls = {
+    allowConfirm: boolean;
+    allowBack: boolean;
+};
+
+type GateNextAction = 'none' | 'force_back_prompt';
+
 export function getGateEntryIntent(
     hasPendingAnalysis: boolean,
     hasPendingLoadInterface: boolean
@@ -46,6 +53,12 @@ export function computeGraphLoadingGateBase(input: GateBaseInput): GateBaseOutpu
         return {
             nextPhase: 'loading',
             nextSeenLoadingTrue: true,
+        };
+    }
+    if (!runtime.isLoading && runtime.aiErrorMessage && entryIntent !== 'none') {
+        return {
+            nextPhase: 'error',
+            nextSeenLoadingTrue: seenLoadingTrue,
         };
     }
     if (seenLoadingTrue) {
@@ -71,6 +84,19 @@ export function computeGraphLoadingWatchdogPhase(input: GateWatchdogInput): Gate
     if (screen !== 'graph_loading') return currentPhase;
     if (entryIntent === 'none') return currentPhase;
     if (seenLoadingTrue) return currentPhase;
-    if (currentPhase === 'done' || currentPhase === 'confirmed') return currentPhase;
+    if (currentPhase === 'done' || currentPhase === 'confirmed' || currentPhase === 'error') return currentPhase;
     return 'stalled';
+}
+
+export function getGateControls(phase: GatePhase): GateControls {
+    return {
+        allowConfirm: phase === 'done',
+        allowBack: phase !== 'done',
+    };
+}
+
+export function getGateNextAction(screen: AppScreen, phase: GatePhase): GateNextAction {
+    if (screen !== 'graph_loading') return 'none';
+    if (phase === 'error') return 'force_back_prompt';
+    return 'none';
 }

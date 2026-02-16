@@ -381,7 +381,7 @@ export const ELEGANT_THEME: ThemeConfig = {
     neighborDimOpacity: 0.2,         // 20% opacity for non-neighbors
     xThingNodeDimOpacity: 0.1,       // 50% more dim than edges (0.1 vs 0.2)
     neighborTransitionMs: 100,       // Smooth 100ms fade
-    hoveredBrightnessBoost: 1.7,     // 70% brightness boost for hovered/dragged dot
+    hoveredBrightnessBoost: 1.2,     // 70% brightness boost for hovered/dragged dot
     xThingGlowDimMul: 1.0,
     edgeHighlightAlphaCap: 0.8,
     xThingFlatRingEnabled: true,
@@ -392,7 +392,7 @@ export const ELEGANT_THEME: ThemeConfig = {
 
     // Hover scale (Apple-smooth enlargement)
     nodeScaleIdle: 1.0,
-    nodeScaleHover: 1.2,            // 20% larger on hover
+    nodeScaleHover: 1.1,            // 10% larger on hover
     glowBlurScaleBoost: 0.2,        // Glow breathes 20% wider at full energy
 
     // Text labels (Obsidian-style)

@@ -20,7 +20,7 @@ const warnedMissingPortalTarget = new Set<string>();
 const warnedMissingPreviewRoot = new Set<string>();
 const warnedSurfaceDisabled = new Set<string>();
 
-export const BOXED_NODE_POPUP_SCALE = 0.4;
+export const BOXED_NODE_POPUP_SCALE = 0.6;
 
 function warnOnce(set: Set<string>, key: string, message: string): void {
     if (!isDev) return;

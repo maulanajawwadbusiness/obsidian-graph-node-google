@@ -14,6 +14,10 @@ type UseResizeObserverViewportOptions = {
     fallbackViewport?: GraphViewport;
 };
 let warnedPendingRafAfterCleanup = false;
+type ObserverSizeSnapshot = {
+    width: number;
+    height: number;
+};
 
 function clampViewportDim(value: number): number {
     if (!Number.isFinite(value)) return 1;
@@ -27,12 +31,12 @@ function readDpr(): number {
     return Math.max(0.1, value);
 }
 
-function toViewportRect(rect: DOMRectReadOnly): GraphViewportRect {
+function toViewportRect(left: number, top: number, width: number, height: number): GraphViewportRect {
     return {
-        left: rect.left,
-        top: rect.top,
-        width: clampViewportDim(rect.width),
-        height: clampViewportDim(rect.height),
+        left,
+        top,
+        width: clampViewportDim(width),
+        height: clampViewportDim(height),
     };
 }
 
@@ -53,8 +57,15 @@ function sameViewport(a: GraphViewport, b: GraphViewport): boolean {
     );
 }
 
-function makeViewport(mode: GraphViewportMode, source: GraphViewportSource, rect: DOMRectReadOnly): GraphViewport {
-    const boundsRect = toViewportRect(rect);
+function makeViewport(
+    mode: GraphViewportMode,
+    source: GraphViewportSource,
+    bcr: DOMRectReadOnly,
+    size: ObserverSizeSnapshot | null
+): GraphViewport {
+    const width = size?.width ?? bcr.width;
+    const height = size?.height ?? bcr.height;
+    const boundsRect = toViewportRect(bcr.left, bcr.top, width, height);
     return {
         mode,
         source,
@@ -69,18 +80,20 @@ export function useResizeObserverViewport<T extends HTMLElement>(
     elementRef: React.RefObject<T>,
     options: UseResizeObserverViewportOptions
 ): GraphViewport {
+    const target = elementRef.current;
     const fallbackViewport = options.fallbackViewport ?? defaultGraphViewport();
     const [viewport, setViewport] = React.useState<GraphViewport>(fallbackViewport);
     const viewportRef = React.useRef<GraphViewport>(fallbackViewport);
-    const latestRectRef = React.useRef<DOMRectReadOnly | null>(null);
+    const latestTargetRef = React.useRef<HTMLElement | null>(target ?? null);
+    const latestSizeRef = React.useRef<ObserverSizeSnapshot | null>(null);
     const pendingRafIdRef = React.useRef<number | null>(null);
 
     React.useEffect(() => {
-        const target = elementRef.current;
         if (!target) return;
         if (typeof window === 'undefined') return;
         if (typeof ResizeObserver === 'undefined') return;
 
+        latestTargetRef.current = target;
         let disposed = false;
         const releaseObserverTrack = trackResource('graph-runtime.viewport.resize-observer');
         let releaseRafTrack: (() => void) | null = null;
@@ -103,9 +116,10 @@ export function useResizeObserverViewport<T extends HTMLElement>(
                 releaseRafTrack = null;
             }
             if (disposed) return;
-            const rect = latestRectRef.current;
-            if (!rect) return;
-            const nextViewport = makeViewport(options.mode, options.source, rect);
+            const activeTarget = elementRef.current ?? latestTargetRef.current;
+            if (!activeTarget) return;
+            const bcr = activeTarget.getBoundingClientRect();
+            const nextViewport = makeViewport(options.mode, options.source, bcr, latestSizeRef.current);
             if (sameViewport(viewportRef.current, nextViewport)) return;
             viewportRef.current = nextViewport;
             setViewport(nextViewport);
@@ -122,12 +136,19 @@ export function useResizeObserverViewport<T extends HTMLElement>(
             if (disposed) return;
             const entry = entries[0];
             if (!entry) return;
-            latestRectRef.current = entry.contentRect;
+            latestTargetRef.current = entry.target as HTMLElement;
+            latestSizeRef.current = {
+                width: entry.contentRect.width,
+                height: entry.contentRect.height,
+            };
             scheduleViewportUpdate();
         });
 
         observer.observe(target);
-        latestRectRef.current = target.getBoundingClientRect();
+        latestSizeRef.current = {
+            width: target.getBoundingClientRect().width,
+            height: target.getBoundingClientRect().height,
+        };
         scheduleViewportUpdate();
 
         return () => {
@@ -140,7 +161,7 @@ export function useResizeObserverViewport<T extends HTMLElement>(
             observer.disconnect();
             releaseObserverTrack();
         };
-    }, [elementRef, options.mode, options.source]);
+    }, [elementRef, target, options.mode, options.source]);
 
     return viewport;
 }

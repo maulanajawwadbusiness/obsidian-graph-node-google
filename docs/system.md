@@ -332,6 +332,7 @@ Flow and mount model:
 Gate UI surface:
 - full-viewport opaque surface (`#06060A`) mounted in graph-class render branch.
 - loading typography contract: all loading-surface text uses `font-weight: 300` with `var(--font-ui)`.
+- loading screen fade contract: gate fades in on enter and fades out on exit with fixed `200ms`.
 - center status text:
   - loading path: `Loading...`
   - done path: `Loading Complete`
@@ -356,6 +357,7 @@ Gate state machine (high level):
 Input, focus, and keyboard ownership:
 - gate wrapper blocks pointer and wheel so canvas does not react under loading surface.
 - gate root is focus anchor during `graph_loading`.
+- during exit fade, gate keeps input ownership and blocks repeated confirm/back triggers until transition commit.
 - key capture policy:
   - `Escape`: back to prompt
   - `Enter` / `Space`: confirm only when enabled
@@ -1024,8 +1026,12 @@ Step 10 boxed input ownership (2026-02-16):
   - preview root now enforces `overscrollBehavior: 'contain'` and `touchAction: 'none'`.
   - preview root installs native capture wheel guard (`passive: false`) while runtime is mounted.
   - non-overlay wheel in preview calls `preventDefault` to block page scroll bleed.
+  - overlay wheel pass-through is scrollability-gated:
+    - if overlay scroll container can consume delta, allow default local scroll.
+    - if no local consumer can consume, force `preventDefault` (page scroll forbidden).
 - interactive overlay marker contract:
   - marker: `data-arnvoid-overlay-interactive="1"`
+  - optional explicit scroll marker: `data-arnvoid-overlay-scrollable="1"`
   - helper seam: `src/components/sampleGraphPreviewSeams.ts`
   - interactive boxed roots currently marked:
     - `src/popup/NodePopup.tsx`
@@ -1040,8 +1046,9 @@ Step 10 boxed input ownership (2026-02-16):
   - interactive overlay descendants use `pointerEvents: 'auto'`.
 - dev verification rails:
   - preview counters (dev-only, non-spam) in `SampleGraphPreview`:
-    - `previewWheelPreventedCount`
-    - `previewWheelOverlayPassThroughCount`
+    - `previewWheelPreventedNonOverlay`
+    - `previewWheelAllowedScrollableOverlay`
+    - `previewWheelPreventedNonScrollableOverlay`
     - `previewPointerStopPropagationCount`
   - onboarding guard warns once in dev if a preview-origin wheel reaches blocked path unexpectedly.
 
@@ -1100,7 +1107,8 @@ Manual verification checklist for follow-up runs:
 11. Graph screen wheel behavior remains unchanged.
 12. Step 10 boxed ownership:
     - wheel over preview non-overlay areas does not scroll page.
-    - wheel over marked interactive overlays does not leak to onboarding/canvas underlay paths.
+    - wheel over marked interactive overlays scrolls locally only when consumer can consume.
+    - wheel over marked non-scrollable overlay zones does not scroll page.
     - pointerdown in preview subtree does not click through to onboarding surfaces.
 13. Step 11 boxed UI rules:
     - boxed runtime does not expose fullscreen action/menu paths.

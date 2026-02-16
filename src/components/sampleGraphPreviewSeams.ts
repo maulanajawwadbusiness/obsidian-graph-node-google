@@ -47,13 +47,34 @@ function hasScrollableOverflow(value: string): boolean {
     return value === 'auto' || value === 'scroll' || value === 'overlay';
 }
 
-function isVerticallyScrollable(el: HTMLElement, style: CSSStyleDeclaration): boolean {
-    if (!hasScrollableOverflow(style.overflowY)) return false;
+type OverflowCapability = {
+    vertical: boolean;
+    horizontal: boolean;
+};
+
+const overflowCapabilityCache = new WeakMap<HTMLElement, OverflowCapability>();
+
+function getOverflowCapability(el: HTMLElement): OverflowCapability {
+    const cached = overflowCapabilityCache.get(el);
+    if (cached) return cached;
+    const style = window.getComputedStyle(el);
+    const next: OverflowCapability = {
+        vertical: hasScrollableOverflow(style.overflowY),
+        horizontal: hasScrollableOverflow(style.overflowX),
+    };
+    overflowCapabilityCache.set(el, next);
+    return next;
+}
+
+function isVerticallyScrollable(el: HTMLElement): boolean {
+    const overflow = getOverflowCapability(el);
+    if (!overflow.vertical) return false;
     return el.scrollHeight > el.clientHeight + 1;
 }
 
-function isHorizontallyScrollable(el: HTMLElement, style: CSSStyleDeclaration): boolean {
-    if (!hasScrollableOverflow(style.overflowX)) return false;
+function isHorizontallyScrollable(el: HTMLElement): boolean {
+    const overflow = getOverflowCapability(el);
+    if (!overflow.horizontal) return false;
     return el.scrollWidth > el.clientWidth + 1;
 }
 
@@ -116,9 +137,8 @@ export function findScrollableWheelConsumer(args: {
                 (verticalScrollable && canConsumeVertical(current, deltaY)) ||
                 (horizontalScrollable && canConsumeHorizontal(current, deltaX));
         } else {
-            const style = window.getComputedStyle(current);
-            const verticalScrollable = isVerticallyScrollable(current, style);
-            const horizontalScrollable = isHorizontallyScrollable(current, style);
+            const verticalScrollable = isVerticallyScrollable(current);
+            const horizontalScrollable = isHorizontallyScrollable(current);
             canConsume =
                 (verticalScrollable && canConsumeVertical(current, deltaY)) ||
                 (horizontalScrollable && canConsumeHorizontal(current, deltaX));

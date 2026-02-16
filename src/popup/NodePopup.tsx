@@ -3,7 +3,6 @@ import { usePopup } from './PopupStore';
 import { ChatInput } from './ChatInput';
 import { ChatShortageNotif } from './ChatShortageNotif';
 import { t } from '../i18n/t';
-import { useTooltip } from '../ui/tooltip/useTooltip';
 import { usePortalBoundsRect, usePortalScopeMode } from '../components/portalScope/PortalScopeContext';
 import {
     shouldAllowOverlayWheelDefault,
@@ -47,9 +46,14 @@ const BACKDROP_STYLE: React.CSSProperties = {
     background: 'transparent',  // Invisible but clickable
 };
 
-// MEMBRANE ANIMATION - Initial (hidden) state
-const POPUP_STYLE: React.CSSProperties = {
+const POPUP_ANCHOR_STYLE: React.CSSProperties = {
     position: 'absolute',
+    pointerEvents: 'auto',
+    zIndex: 1001,
+};
+
+// MEMBRANE ANIMATION - Initial (hidden) state
+const POPUP_PANEL_STYLE: React.CSSProperties = {
     width: '20vw',
     minWidth: '280px',
     height: '80vh',
@@ -63,7 +67,6 @@ const POPUP_STYLE: React.CSSProperties = {
     backdropFilter: 'blur(0px)',
     boxShadow: '0 8px 32px rgba(0, 0, 0, 0)',
     pointerEvents: 'auto',
-    zIndex: 1001,
     display: 'flex',
     flexDirection: 'column',
     gap: '16px',
@@ -194,12 +197,13 @@ export const NodePopup: React.FC<NodePopupProps> = ({ trackNode, engineRef }) =>
     const portalMode = usePortalScopeMode();
     const portalBoundsRect = usePortalBoundsRect();
     const viewport = useGraphViewport();
+    const boxed = isBoxedViewport(viewport);
     const { selectedNodeId, anchorGeometry, closePopup, sendMessage, setPopupRect, content } = usePopup();
-    const popupRef = useRef<HTMLDivElement>(null);
+    const anchorRef = useRef<HTMLDivElement>(null);
+    const panelRef = useRef<HTMLDivElement>(null);
     const [isVisible, setIsVisible] = useState(false);
     const [contentVisible, setContentVisible] = useState(false);
-    const closeTooltip = useTooltip(t('tooltip.close'));
-    const popupScale = isBoxedViewport(viewport) ? BOXED_NODE_POPUP_SCALE : 1;
+    const popupScale = boxed ? BOXED_NODE_POPUP_SCALE : 1;
 
     useEffect(() => {
         if (!selectedNodeId) return;
@@ -224,14 +228,14 @@ export const NodePopup: React.FC<NodePopupProps> = ({ trackNode, engineRef }) =>
     const position = anchorGeometry
         ? computePopupPosition(
             anchorGeometry,
-            (popupRef.current?.offsetWidth || 280) * popupScale,
+            (panelRef.current?.offsetWidth || 280) * popupScale,
             (
                 (
-                    popupRef.current?.offsetHeight ||
+                    panelRef.current?.offsetHeight ||
                     (getViewportSize(
                         viewport,
-                        isBoxedViewport(viewport) ? (viewport.width || 1) : window.innerWidth,
-                        isBoxedViewport(viewport) ? (viewport.height || 1) : window.innerHeight
+                        boxed ? (viewport.width || 1) : window.innerWidth,
+                        boxed ? (viewport.height || 1) : window.innerHeight
                     ).h * 0.8)
                 ) * popupScale
             ),
@@ -258,11 +262,11 @@ export const NodePopup: React.FC<NodePopupProps> = ({ trackNode, engineRef }) =>
             setPopupRect(null);
             return;
         }
-        if (!popupRef.current) return;
+        if (!panelRef.current) return;
 
         const reportRect = () => {
-            if (!popupRef.current) return;
-            const rect = popupRef.current.getBoundingClientRect();
+            if (!panelRef.current) return;
+            const rect = panelRef.current.getBoundingClientRect();
             setPopupRect({
                 left: rect.left,
                 top: rect.top,
@@ -279,7 +283,7 @@ export const NodePopup: React.FC<NodePopupProps> = ({ trackNode, engineRef }) =>
             }
         };
 
-        const node = popupRef.current;
+        const node = panelRef.current;
         node.addEventListener('transitionend', handleTransitionEnd);
 
         return () => {
@@ -359,7 +363,7 @@ export const NodePopup: React.FC<NodePopupProps> = ({ trackNode, engineRef }) =>
         if (!selectedNodeId || !isVisible) return;
 
         const handleSync = (e: Event) => {
-            if (!popupRef.current) return;
+            if (!anchorRef.current || !panelRef.current) return;
 
             // Prefer Event Detail (Exact Camera Snapshot)
             const detail = (e as CustomEvent<RenderTickDetail>).detail;
@@ -397,8 +401,8 @@ export const NodePopup: React.FC<NodePopupProps> = ({ trackNode, engineRef }) =>
                     const screenRadius = Math.sqrt(dx * dx + dy * dy);
 
                     const geom = { x, y, radius: screenRadius };
-                    const width = popupRef.current.offsetWidth * popupScale;
-                    const height = popupRef.current.offsetHeight * popupScale;
+                    const width = panelRef.current.offsetWidth * popupScale;
+                    const height = panelRef.current.offsetHeight * popupScale;
 
                     // Pure layout calculation
                     const rawPos = computePopupPosition(geom, width, height, portalMode, portalBoundsRect, viewport);
@@ -429,8 +433,8 @@ export const NodePopup: React.FC<NodePopupProps> = ({ trackNode, engineRef }) =>
                 // We default to "Snapping" behavior here for stability, unless we know better.
                 const geom = trackNode(selectedNodeId);
                 if (geom) {
-                    const width = popupRef.current.offsetWidth * popupScale;
-                    const height = popupRef.current.offsetHeight * popupScale;
+                    const width = panelRef.current.offsetWidth * popupScale;
+                    const height = panelRef.current.offsetHeight * popupScale;
                     const rawPos = computePopupPosition(geom, width, height, portalMode, portalBoundsRect, viewport);
                     const dpr = window.devicePixelRatio || 1;
                     // Default to quantized for legacy path
@@ -443,9 +447,9 @@ export const NodePopup: React.FC<NodePopupProps> = ({ trackNode, engineRef }) =>
             }
 
             if (hasPosition) {
-                popupRef.current.style.left = `${finalLeft}px`;
-                popupRef.current.style.top = `${finalTop}px`;
-                popupRef.current.style.transformOrigin = `${finalOx}px ${finalOy}px`;
+                anchorRef.current.style.left = `${finalLeft}px`;
+                anchorRef.current.style.top = `${finalTop}px`;
+                panelRef.current.style.transformOrigin = boxed ? 'top left' : `${finalOx}px ${finalOy}px`;
             }
         };
 
@@ -453,16 +457,19 @@ export const NodePopup: React.FC<NodePopupProps> = ({ trackNode, engineRef }) =>
         window.addEventListener('graph-render-tick', handleSync);
 
         return () => window.removeEventListener('graph-render-tick', handleSync);
-    }, [selectedNodeId, trackNode, isVisible, engineRef, portalMode, portalBoundsRect, popupScale, viewport]);
+    }, [boxed, selectedNodeId, trackNode, isVisible, engineRef, portalMode, portalBoundsRect, popupScale, viewport]);
 
     const popupTransform = `${isVisible ? 'scale(1)' : 'scale(0.8)'} scale(${popupScale})`;
 
-    const finalStyle: React.CSSProperties = {
-        ...POPUP_STYLE,
-        ...(isVisible ? POPUP_VISIBLE_STYLE : {}),
+    const anchorStyle: React.CSSProperties = {
+        ...POPUP_ANCHOR_STYLE,
         left: `${position.left}px`,
         top: `${position.top}px`,
-        transformOrigin: `${position.originX}px ${position.originY}px`,
+    };
+    const panelStyle: React.CSSProperties = {
+        ...POPUP_PANEL_STYLE,
+        ...(isVisible ? POPUP_VISIBLE_STYLE : {}),
+        transformOrigin: boxed ? 'top left' : `${position.originX}px ${position.originY}px`,
         transform: popupTransform,
     };
 
@@ -475,12 +482,13 @@ export const NodePopup: React.FC<NodePopupProps> = ({ trackNode, engineRef }) =>
                 onMouseDown={stopPropagation}
                 onPointerDown={stopPropagation}
             />
-            <div
+            <div style={anchorStyle}>
+                <div
                 id="arnvoid-node-popup"
-                ref={popupRef}
+                ref={panelRef}
                 {...{ [SAMPLE_GRAPH_PREVIEW_OVERLAY_INTERACTIVE_ATTR]: SAMPLE_GRAPH_PREVIEW_OVERLAY_INTERACTIVE_VALUE }}
                 data-font="ui"
-                style={finalStyle}
+                style={panelStyle}
                 onMouseDown={stopPropagation}
                 onMouseMove={stopPropagation}
                 onMouseUp={stopPropagation}
@@ -495,13 +503,11 @@ export const NodePopup: React.FC<NodePopupProps> = ({ trackNode, engineRef }) =>
                 <div style={{ ...HEADER_STYLE, ...contentTransition }}>
                     <span style={{ fontSize: '14px', opacity: 0.7 }}>{t('nodePopup.header')}</span>
                     <button
-                        {...closeTooltip.getAnchorProps({
-                            style: CLOSE_BUTTON_STYLE,
-                            onClick: closePopup,
-                            onPointerDown: stopPropagation,
-                            onMouseEnter: (e) => { e.currentTarget.style.color = 'rgba(255, 255, 255, 0.9)'; },
-                            onMouseLeave: (e) => { e.currentTarget.style.color = 'rgba(180, 190, 210, 0.7)'; },
-                        })}
+                        style={CLOSE_BUTTON_STYLE}
+                        onClick={closePopup}
+                        onPointerDown={stopPropagation}
+                        onMouseEnter={(e) => { e.currentTarget.style.color = 'rgba(255, 255, 255, 0.9)'; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.color = 'rgba(180, 190, 210, 0.7)'; }}
                     >
                         x
                     </button>
@@ -524,8 +530,9 @@ export const NodePopup: React.FC<NodePopupProps> = ({ trackNode, engineRef }) =>
                 }>
                     <ChatInput onSend={(text) => sendMessage(text, 'node-popup')} placeholder={t('nodePopup.inputPlaceholder')} />
                 </div>
+                </div>
             </div>
-            <ChatShortageNotif surface="node-popup" anchorRef={popupRef} zIndex={1003} />
+            <ChatShortageNotif surface="node-popup" anchorRef={panelRef} zIndex={1003} />
         </>
     );
 };

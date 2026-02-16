@@ -9,6 +9,8 @@ import {
     shouldAllowOverlayWheelDefault,
     SAMPLE_GRAPH_PREVIEW_OVERLAY_INTERACTIVE_ATTR,
     SAMPLE_GRAPH_PREVIEW_OVERLAY_INTERACTIVE_VALUE,
+    SAMPLE_GRAPH_PREVIEW_OVERLAY_SCROLLABLE_ATTR,
+    SAMPLE_GRAPH_PREVIEW_OVERLAY_SCROLLABLE_VALUE,
 } from '../components/sampleGraphPreviewSeams';
 import { useGraphViewport, type GraphViewport } from '../runtime/viewport/graphViewport';
 import { getViewportSize, isBoxedViewport, recordBoxedClampCall, toViewportLocalPoint } from '../runtime/viewport/viewportMath';
@@ -486,7 +488,12 @@ export const NodePopup: React.FC<NodePopupProps> = ({ trackNode, engineRef }) =>
                     </button>
                 </div>
 
-                <div style={{ ...CONTENT_STYLE, ...contentTransition }}>
+                <div
+                    {...{
+                        [SAMPLE_GRAPH_PREVIEW_OVERLAY_SCROLLABLE_ATTR]: SAMPLE_GRAPH_PREVIEW_OVERLAY_SCROLLABLE_VALUE,
+                    }}
+                    style={{ ...CONTENT_STYLE, ...contentTransition }}
+                >
                     <div style={LABEL_STYLE} data-font="title">{displayTitle}</div>
                     <p>{displayBody}</p>
                 </div>

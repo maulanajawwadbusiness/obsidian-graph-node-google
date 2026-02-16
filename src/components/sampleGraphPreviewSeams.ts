@@ -10,6 +10,10 @@ export const SAMPLE_GRAPH_PREVIEW_OVERLAY_INTERACTIVE_ATTR = 'data-arnvoid-overl
 export const SAMPLE_GRAPH_PREVIEW_OVERLAY_INTERACTIVE_VALUE = '1';
 export const SAMPLE_GRAPH_PREVIEW_OVERLAY_INTERACTIVE_SELECTOR =
     `[${SAMPLE_GRAPH_PREVIEW_OVERLAY_INTERACTIVE_ATTR}="${SAMPLE_GRAPH_PREVIEW_OVERLAY_INTERACTIVE_VALUE}"]`;
+export const SAMPLE_GRAPH_PREVIEW_OVERLAY_SCROLLABLE_ATTR = 'data-arnvoid-overlay-scrollable';
+export const SAMPLE_GRAPH_PREVIEW_OVERLAY_SCROLLABLE_VALUE = '1';
+export const SAMPLE_GRAPH_PREVIEW_OVERLAY_SCROLLABLE_SELECTOR =
+    `[${SAMPLE_GRAPH_PREVIEW_OVERLAY_SCROLLABLE_ATTR}="${SAMPLE_GRAPH_PREVIEW_OVERLAY_SCROLLABLE_VALUE}"]`;
 
 function toElement(target: EventTarget | null): Element | null {
     if (!target) return null;
@@ -73,6 +77,13 @@ function canConsumeHorizontal(el: HTMLElement, deltaX: number): boolean {
     return false;
 }
 
+function isExplicitScrollableCandidate(el: HTMLElement): boolean {
+    return (
+        el.getAttribute(SAMPLE_GRAPH_PREVIEW_OVERLAY_SCROLLABLE_ATTR) ===
+        SAMPLE_GRAPH_PREVIEW_OVERLAY_SCROLLABLE_VALUE
+    );
+}
+
 export function findClosestOverlayInteractiveRoot(target: EventTarget | null): HTMLElement | null {
     if (typeof window === 'undefined') return null;
     const element = toElement(target);
@@ -96,12 +107,22 @@ export function findScrollableWheelConsumer(args: {
 
     let current: HTMLElement | null = startEl;
     while (current) {
-        const style = window.getComputedStyle(current);
-        const verticalScrollable = isVerticallyScrollable(current, style);
-        const horizontalScrollable = isHorizontallyScrollable(current, style);
-        const canConsume =
-            (verticalScrollable && canConsumeVertical(current, deltaY)) ||
-            (horizontalScrollable && canConsumeHorizontal(current, deltaX));
+        const explicitScrollable = isExplicitScrollableCandidate(current);
+        let canConsume = false;
+        if (explicitScrollable) {
+            const verticalScrollable = current.scrollHeight > current.clientHeight + 1;
+            const horizontalScrollable = current.scrollWidth > current.clientWidth + 1;
+            canConsume =
+                (verticalScrollable && canConsumeVertical(current, deltaY)) ||
+                (horizontalScrollable && canConsumeHorizontal(current, deltaX));
+        } else {
+            const style = window.getComputedStyle(current);
+            const verticalScrollable = isVerticallyScrollable(current, style);
+            const horizontalScrollable = isHorizontallyScrollable(current, style);
+            canConsume =
+                (verticalScrollable && canConsumeVertical(current, deltaY)) ||
+                (horizontalScrollable && canConsumeHorizontal(current, deltaX));
+        }
         if (canConsume) {
             return current;
         }

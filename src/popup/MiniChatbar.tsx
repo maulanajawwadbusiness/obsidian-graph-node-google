@@ -12,6 +12,8 @@ import {
     shouldAllowOverlayWheelDefault,
     SAMPLE_GRAPH_PREVIEW_OVERLAY_INTERACTIVE_ATTR,
     SAMPLE_GRAPH_PREVIEW_OVERLAY_INTERACTIVE_VALUE,
+    SAMPLE_GRAPH_PREVIEW_OVERLAY_SCROLLABLE_ATTR,
+    SAMPLE_GRAPH_PREVIEW_OVERLAY_SCROLLABLE_VALUE,
 } from '../components/sampleGraphPreviewSeams';
 import { useGraphViewport, type GraphViewport } from '../runtime/viewport/graphViewport';
 import { getViewportSize, isBoxedViewport, recordBoxedClampCall, toViewportLocalPoint } from '../runtime/viewport/viewportMath';
@@ -505,6 +507,9 @@ export const MiniChatbar: React.FC<MiniChatbarProps> = ({ messages, onSend, onCl
             >
                 <div
                     ref={messagesRef}
+                    {...{
+                        [SAMPLE_GRAPH_PREVIEW_OVERLAY_SCROLLABLE_ATTR]: SAMPLE_GRAPH_PREVIEW_OVERLAY_SCROLLABLE_VALUE,
+                    }}
                     className="arnvoid-scroll"
                     style={MESSAGES_STYLE}
                 >

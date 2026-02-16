@@ -24,6 +24,7 @@ import {
 } from '../runtime/graphRuntimeLease';
 import { trackResource, warnIfGraphRuntimeResourcesUnbalanced } from '../runtime/resourceTracker';
 import {
+    findClosestOverlayInteractiveRoot,
     shouldAllowOverlayWheelDefault,
     SAMPLE_GRAPH_PREVIEW_ROOT_ATTR,
     SAMPLE_GRAPH_PREVIEW_ROOT_VALUE,
@@ -126,8 +127,9 @@ type PreviewLeaseDebugCounters = {
 };
 
 type PreviewInputDebugCounters = {
-    previewWheelPreventedCount: number;
-    previewWheelOverlayPassThroughCount: number;
+    previewWheelPreventedNonOverlay: number;
+    previewWheelAllowedScrollableOverlay: number;
+    previewWheelPreventedNonScrollableOverlay: number;
     previewPointerStopPropagationCount: number;
 };
 
@@ -152,8 +154,9 @@ class PreviewErrorBoundary extends React.Component<React.PropsWithChildren, Prev
 
 export const SampleGraphPreview: React.FC = () => {
     const previewInputDebugCountersRef = React.useRef<PreviewInputDebugCounters>({
-        previewWheelPreventedCount: 0,
-        previewWheelOverlayPassThroughCount: 0,
+        previewWheelPreventedNonOverlay: 0,
+        previewWheelAllowedScrollableOverlay: 0,
+        previewWheelPreventedNonScrollableOverlay: 0,
         previewPointerStopPropagationCount: 0,
     });
     const stopPropagation = React.useCallback((event: React.SyntheticEvent) => {
@@ -350,6 +353,7 @@ export const SampleGraphPreview: React.FC = () => {
 
         const releaseWheelListener = trackResource('graph-runtime.preview.wheel-capture-listener');
         const onWheelCapture = (event: WheelEvent) => {
+            const overlayRoot = findClosestOverlayInteractiveRoot(event.target);
             const allowOverlayScrollDefault = shouldAllowOverlayWheelDefault({
                 target: event.target,
                 deltaX: event.deltaX,
@@ -357,12 +361,16 @@ export const SampleGraphPreview: React.FC = () => {
             });
             if (allowOverlayScrollDefault) {
                 if (import.meta.env.DEV) {
-                    previewInputDebugCountersRef.current.previewWheelOverlayPassThroughCount += 1;
+                    previewInputDebugCountersRef.current.previewWheelAllowedScrollableOverlay += 1;
                 }
                 return;
             }
             if (import.meta.env.DEV) {
-                previewInputDebugCountersRef.current.previewWheelPreventedCount += 1;
+                if (overlayRoot) {
+                    previewInputDebugCountersRef.current.previewWheelPreventedNonScrollableOverlay += 1;
+                } else {
+                    previewInputDebugCountersRef.current.previewWheelPreventedNonOverlay += 1;
+                }
             }
             event.preventDefault();
         };

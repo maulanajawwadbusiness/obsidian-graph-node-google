@@ -204,6 +204,7 @@ export const NodePopup: React.FC<NodePopupProps> = ({ trackNode, engineRef }) =>
     const [isVisible, setIsVisible] = useState(false);
     const [contentVisible, setContentVisible] = useState(false);
     const popupScale = boxed ? BOXED_NODE_POPUP_SCALE : 1;
+    const warnedBoxedAnchorOutOfBoundsRef = useRef(false);
 
     useEffect(() => {
         if (!selectedNodeId) return;
@@ -299,6 +300,31 @@ export const NodePopup: React.FC<NodePopupProps> = ({ trackNode, engineRef }) =>
     const contentTransition: React.CSSProperties = contentVisible
         ? { opacity: 1, transform: 'translateY(0)', transition: 'opacity 300ms ease-out, transform 300ms ease-out' }
         : { opacity: 0, transform: 'translateY(8px)', transition: 'opacity 300ms ease-out, transform 300ms ease-out' };
+
+    const warnIfBoxedAnchorOutOfBounds = (anchorX: number, anchorY: number, source: 'render-tick' | 'track-node') => {
+        if (!import.meta.env.DEV) return;
+        if (!boxed) return;
+        if (warnedBoxedAnchorOutOfBoundsRef.current) return;
+        const fallbackW = portalBoundsRect?.width ?? viewport.width ?? 1;
+        const fallbackH = portalBoundsRect?.height ?? viewport.height ?? 1;
+        const { w: viewportWidth, h: viewportHeight } = getViewportSize(viewport, fallbackW, fallbackH);
+        const local = toViewportLocalPoint(anchorX, anchorY, viewport);
+        const outOfBounds =
+            local.x < -16 ||
+            local.y < -16 ||
+            local.x > viewportWidth + 16 ||
+            local.y > viewportHeight + 16;
+        if (!outOfBounds) return;
+        warnedBoxedAnchorOutOfBoundsRef.current = true;
+        console.warn(
+            '[NodePopup] boxed anchor outside viewport source=%s local=(%d,%d) viewport=(%d,%d)',
+            source,
+            local.x,
+            local.y,
+            viewportWidth,
+            viewportHeight
+        );
+    };
 
     // Fix 52 & 24: Direct Synchronous Alignment
     // Instead of an internal rAF loop (which lags by 1 frame), we trust that the Parent
@@ -401,6 +427,7 @@ export const NodePopup: React.FC<NodePopupProps> = ({ trackNode, engineRef }) =>
                     const screenRadius = Math.sqrt(dx * dx + dy * dy);
 
                     const geom = { x, y, radius: screenRadius };
+                    warnIfBoxedAnchorOutOfBounds(geom.x, geom.y, 'render-tick');
                     const width = panelRef.current.offsetWidth * popupScale;
                     const height = panelRef.current.offsetHeight * popupScale;
 
@@ -433,6 +460,7 @@ export const NodePopup: React.FC<NodePopupProps> = ({ trackNode, engineRef }) =>
                 // We default to "Snapping" behavior here for stability, unless we know better.
                 const geom = trackNode(selectedNodeId);
                 if (geom) {
+                    warnIfBoxedAnchorOutOfBounds(geom.x, geom.y, 'track-node');
                     const width = panelRef.current.offsetWidth * popupScale;
                     const height = panelRef.current.offsetHeight * popupScale;
                     const rawPos = computePopupPosition(geom, width, height, portalMode, portalBoundsRect, viewport);

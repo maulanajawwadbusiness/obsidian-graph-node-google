@@ -60,6 +60,8 @@ Update Note: 2026-02-16 (Graph Loading Real Screen, Steps 1-9)
 - Legacy in-runtime `LoadingScreen` is suppressed for product graph-class path.
 - Sidebar remains visible on `graph_loading` but is frozen/dimmed with shield ownership.
 - Sidebar disable behavior is loading-only (error does not keep sidebar disabled).
+- Sidebar lock policy is centralized in `src/screens/appshell/sidebar/sidebarLockPolicy.ts`.
+- Lock reason is now explicit (`screen_frozen`, `graph_loading_activity`, `login_overlay_block`, `none`) and exposed via AppShell/Sidebar data markers.
 - Focus/keyboard ownership is captured by gate (`Escape`, `Enter`, `Space`) with window-capture fallback guard.
 
 ## 0.1 AppShell Seams (2026-02-14)
@@ -101,6 +103,7 @@ Notes:
 - Graph runtime enters through `GraphWithPending` and reaches `GraphPhysicsPlaygroundShell`.
 - Product graph-class path passes `legacyLoadingScreenMode='disabled'` so gate is the only loading surface users see.
 - Runtime also emits `onRuntimeStatusChange({ isLoading, aiErrorMessage })`; AppShell gate consumes this split status.
+- AppShell modal engine consumes full sidebar lock state and closes search/profile/logout on lock-edge activation (not repeatedly).
 - Warm-mount invariant: graph-class branch is shared for `graph_loading <-> graph` and runtime mount id remains stable under `?debugWarmMount=1`.
 - Internal debug sidebar in `GraphPhysicsPlaygroundShell` is debug-only:
   - gated by `enableDebugSidebar`

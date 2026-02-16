@@ -365,9 +365,19 @@ Sidebar behavior during `graph_loading`:
 - sidebar remains visible as eye-stability anchor.
 - sidebar is frozen and dimmed (`alpha 0.5`), with inert + shield so pointer/wheel/focus do not leak.
 - sidebar disabled rule is loading-only; runtime error state does not extend disabled state.
+- lock ownership is now contract-based (`computeSidebarLockState(...)`) with explicit reason codes:
+  - `screen_frozen`
+  - `graph_loading_activity`
+  - `login_overlay_block`
+  - `none`
 - temporary clamp policy:
   - if sidebar was expanded on entry to `graph_loading`, it is temporarily collapsed during loading.
   - on leave to `graph`, expanded state is restored to the pre-loading user state.
+
+Modal/search lock coupling:
+- AppShell modal engine now consumes full lock state instead of a raw disabled boolean.
+- Search/Profile/Logout overlays close on lock-edge activation (unlocked -> locked), not repeatedly while lock stays active.
+- open actions remain blocked while lock is active.
 
 Legacy runtime loading surface:
 - legacy `LoadingScreen` return path inside `GraphPhysicsPlaygroundShell` is suppressed for product graph-class path (`legacyLoadingScreenMode='disabled'` for `graph_loading` and `graph`).

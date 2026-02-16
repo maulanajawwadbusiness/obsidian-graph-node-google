@@ -19,6 +19,8 @@ type PromptCardProps = {
     canSubmitWithoutText?: boolean;
     onRemoveFile?: (index: number) => void;
     onPickFiles?: (files: File[]) => void;
+    statusMessage?: { kind: 'error'; text: string } | null;
+    onDismissStatusMessage?: () => void;
 };
 
 export const PromptCard: React.FC<PromptCardProps> = ({
@@ -30,6 +32,8 @@ export const PromptCard: React.FC<PromptCardProps> = ({
     canSubmitWithoutText = false,
     onRemoveFile = () => { },
     onPickFiles = () => { },
+    statusMessage = null,
+    onDismissStatusMessage = () => { },
 }) => {
     const [plusHover, setPlusHover] = React.useState(false);
     const [sendHover, setSendHover] = React.useState(false);
@@ -92,6 +96,23 @@ export const PromptCard: React.FC<PromptCardProps> = ({
                 <div style={HEADLINE_STYLE}>
                     {t('onboarding.enterprompt.heading')}
                 </div>
+
+                {statusMessage ? (
+                    <div
+                        style={PROMPT_STATUS_BANNER_STYLE}
+                        onPointerDown={(e) => e.stopPropagation()}
+                    >
+                        <span style={PROMPT_STATUS_TEXT_STYLE}>{statusMessage.text}</span>
+                        <button
+                            type="button"
+                            style={PROMPT_STATUS_DISMISS_STYLE}
+                            onPointerDown={(e) => e.stopPropagation()}
+                            onClick={() => onDismissStatusMessage()}
+                        >
+                            Dismiss
+                        </button>
+                    </div>
+                ) : null}
 
                 <div style={INPUT_PILL_STYLE}>
                     <input
@@ -291,6 +312,39 @@ const INPUT_PILL_STYLE: React.CSSProperties = {
     display: 'flex',
     flexDirection: 'column',
     gap: '12px',
+};
+
+const PROMPT_STATUS_BANNER_STYLE: React.CSSProperties = {
+    width: '100%',
+    maxWidth: '600px',
+    padding: '10px 12px',
+    borderRadius: '10px',
+    background: 'rgba(185, 49, 49, 0.2)',
+    border: '1px solid rgba(255, 120, 120, 0.35)',
+    boxSizing: 'border-box',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: '10px',
+};
+
+const PROMPT_STATUS_TEXT_STYLE: React.CSSProperties = {
+    color: '#ffdede',
+    fontSize: '12px',
+    lineHeight: 1.4,
+    fontFamily: 'var(--font-ui)',
+    flex: 1,
+};
+
+const PROMPT_STATUS_DISMISS_STYLE: React.CSSProperties = {
+    border: '1px solid rgba(255, 255, 255, 0.22)',
+    background: 'rgba(255, 255, 255, 0.06)',
+    color: '#f5f5f5',
+    fontSize: '11px',
+    fontFamily: 'var(--font-ui)',
+    borderRadius: '8px',
+    padding: '6px 10px',
+    cursor: 'pointer',
 };
 
 const INPUT_STYLE: React.CSSProperties = {

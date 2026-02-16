@@ -126,6 +126,7 @@ export const AppShell: React.FC = () => {
     const [gatePhase, setGatePhase] = React.useState<GatePhase>('idle');
     const [seenLoadingTrue, setSeenLoadingTrue] = React.useState(false);
     const [gateEntryIntent, setGateEntryIntent] = React.useState<GateEntryIntent>('none');
+    const [promptAnalysisErrorMessage, setPromptAnalysisErrorMessage] = React.useState<string | null>(null);
     const [documentViewerToggleToken, setDocumentViewerToggleToken] = React.useState(0);
     const [isSidebarExpanded, setIsSidebarExpanded] = React.useState(false);
     const sidebarWasExpandedAtGateEntryRef = React.useRef<boolean | null>(null);
@@ -477,8 +478,11 @@ export const AppShell: React.FC = () => {
         }
         if (gateActionConsumedRef.current) return;
         gateActionConsumedRef.current = true;
+        setPromptAnalysisErrorMessage(
+            graphRuntimeStatus.aiErrorMessage || 'Analysis failed. Please try again.'
+        );
         transitionToScreen('prompt');
-    }, [gatePhase, screen, transitionToScreen]);
+    }, [gatePhase, graphRuntimeStatus.aiErrorMessage, screen, transitionToScreen]);
 
     React.useEffect(() => {
         if (!isWarmMountDebugEnabled()) return;
@@ -625,6 +629,8 @@ export const AppShell: React.FC = () => {
         setRestoreReadPathActive: (active) => {
             restoreReadPathActiveRef.current = active;
         },
+        promptAnalysisErrorMessage,
+        clearPromptAnalysisError: () => setPromptAnalysisErrorMessage(null),
         gateConfirmVisible: getGateControls(gatePhase).allowConfirm,
         gateConfirmEnabled: getGateControls(gatePhase).allowConfirm,
         gateRootRef: graphLoadingGateRootRef,

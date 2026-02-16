@@ -46,6 +46,8 @@ export type RenderScreenArgs = {
     setWelcome1OverlayOpen: (open: boolean) => void;
     setEnterPromptOverlayOpen: (open: boolean) => void;
     setRestoreReadPathActive: (active: boolean) => void;
+    promptAnalysisErrorMessage: string | null;
+    clearPromptAnalysisError: () => void;
     gateConfirmVisible: boolean;
     gateConfirmEnabled: boolean;
     gateRootRef?: React.RefObject<HTMLDivElement>;
@@ -80,6 +82,8 @@ export function renderScreenContent(args: RenderScreenArgs): React.ReactNode {
         setWelcome1OverlayOpen,
         setEnterPromptOverlayOpen,
         setRestoreReadPathActive,
+        promptAnalysisErrorMessage,
+        clearPromptAnalysisError,
         gateConfirmVisible,
         gateConfirmEnabled,
         gateRootRef,
@@ -183,13 +187,20 @@ export function renderScreenContent(args: RenderScreenArgs): React.ReactNode {
                 transitionToScreen(backFromPrompt);
             }}
             onEnter={() => transitionToScreen(enterFromPrompt ?? 'graph_loading')}
-            onSkip={() => transitionToScreen(promptSkipTarget)}
+            onSkip={() => {
+                clearPromptAnalysisError();
+                transitionToScreen(promptSkipTarget);
+            }}
             onOverlayOpenChange={setEnterPromptOverlayOpen}
+            analysisErrorMessage={promptAnalysisErrorMessage}
+            onDismissAnalysisError={clearPromptAnalysisError}
             onSubmitPromptText={(text) => {
+                clearPromptAnalysisError();
                 setPendingAnalysis({ kind: 'text', text, createdAt: Date.now() });
                 console.log(`[appshell] pending_analysis_set kind=text len=${text.length}`);
             }}
             onSubmitPromptFile={(file) => {
+                clearPromptAnalysisError();
                 setPendingAnalysis({ kind: 'file', file, createdAt: Date.now() });
                 console.log('[appshell] pending_analysis_set kind=file name=%s size=%d', file.name, file.size);
             }}

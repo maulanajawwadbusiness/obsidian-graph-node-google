@@ -23,6 +23,8 @@ type EnterPromptProps = {
     onOverlayOpenChange?: (open: boolean) => void;
     onSubmitPromptText?: (text: string) => void;
     onSubmitPromptFile?: (file: File) => void;
+    analysisErrorMessage?: string | null;
+    onDismissAnalysisError?: () => void;
 };
 
 export const EnterPrompt: React.FC<EnterPromptProps> = ({
@@ -31,7 +33,9 @@ export const EnterPrompt: React.FC<EnterPromptProps> = ({
     onSkip,
     onOverlayOpenChange,
     onSubmitPromptText,
-    onSubmitPromptFile
+    onSubmitPromptFile,
+    analysisErrorMessage = null,
+    onDismissAnalysisError
 }) => {
     const { user } = useAuth();
     const [isOverlayHidden, setIsOverlayHidden] = React.useState(false);
@@ -128,6 +132,8 @@ export const EnterPrompt: React.FC<EnterPromptProps> = ({
                 canSubmitWithoutText={attachedFiles.length > 0}
                 onRemoveFile={handleRemoveFile}
                 onPickFiles={(files) => attachFromFiles(files)}
+                statusMessage={analysisErrorMessage ? { kind: 'error', text: analysisErrorMessage } : null}
+                onDismissStatusMessage={onDismissAnalysisError}
             />
             {SHOW_ENTERPROMPT_PAYMENT_PANEL ? <PaymentGopayPanel /> : null}
 

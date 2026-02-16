@@ -27,6 +27,12 @@ import { SessionExpiryBanner } from '../auth/SessionExpiryBanner';
 import { LoadingScreen } from '../screens/LoadingScreen';
 import { useGraphViewport } from '../runtime/viewport/graphViewport';
 import { countBoxedSurfaceDisabled, isBoxedUi } from '../runtime/ui/boxedUiPolicy';
+import {
+    computeCameraAfterResize,
+    DEFAULT_BOXED_RESIZE_SEMANTIC_MODE,
+    recordBoxedResizeCameraAdjust,
+    recordBoxedResizeEvent,
+} from '../runtime/viewport/resizeSemantics';
 // RUN 4: Topology API imports
 import { setTopology, getTopologyVersion, getTopology } from '../graph/topologyControl'; // STEP3-RUN5-V3-FIX3: Added getTopology
 import { legacyToTopology } from '../graph/topologyAdapter';
@@ -243,7 +249,8 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
         updateHoverSelection,
         handleDragStart,
         handleDragEnd,
-        applyCameraSnapshot
+        applyCameraSnapshot,
+        getCameraSnapshot
     } = useGraphRendering({
         canvasRef,
         canvasReady,
@@ -265,6 +272,7 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
     });
     const viewport = useGraphViewport();
     const isBoxedRuntime = isBoxedUi(viewport);
+    const previousBoxedViewportSizeRef = useRef<{ width: number; height: number } | null>(null);
 
     const setCanvasEl = React.useCallback((el: HTMLCanvasElement | null) => {
         canvasRef.current = el;
@@ -281,6 +289,48 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
     useEffect(() => {
         hoverStateRef.current.hoverDisplayNodeId = hudDragTargetId;
     }, [hudDragTargetId, hoverStateRef]);
+
+    useEffect(() => {
+        if (viewport.mode !== 'boxed') {
+            previousBoxedViewportSizeRef.current = null;
+            return;
+        }
+
+        const nextWidth = Math.max(1, Math.floor(viewport.width || 1));
+        const nextHeight = Math.max(1, Math.floor(viewport.height || 1));
+        const prevSize = previousBoxedViewportSizeRef.current;
+        if (!prevSize) {
+            previousBoxedViewportSizeRef.current = { width: nextWidth, height: nextHeight };
+            return;
+        }
+        if (prevSize.width === nextWidth && prevSize.height === nextHeight) {
+            return;
+        }
+
+        previousBoxedViewportSizeRef.current = { width: nextWidth, height: nextHeight };
+        recordBoxedResizeEvent();
+        const cameraSnapshot = getCameraSnapshot();
+        const centroid = engineRef.current.getCentroid();
+        const nextCamera = computeCameraAfterResize({
+            config: { mode: DEFAULT_BOXED_RESIZE_SEMANTIC_MODE },
+            prevViewport: prevSize,
+            nextViewport: { width: nextWidth, height: nextHeight },
+            camera: cameraSnapshot,
+            rotation: {
+                angleRad: engineRef.current.getGlobalAngle(),
+                pivotX: centroid.x,
+                pivotY: centroid.y,
+            },
+        });
+        if (
+            nextCamera.panX !== cameraSnapshot.panX ||
+            nextCamera.panY !== cameraSnapshot.panY ||
+            nextCamera.zoom !== cameraSnapshot.zoom
+        ) {
+            applyCameraSnapshot(nextCamera);
+            recordBoxedResizeCameraAdjust();
+        }
+    }, [applyCameraSnapshot, engineRef, getCameraSnapshot, viewport.height, viewport.mode, viewport.width]);
 
     // FIX 36: Kill Layout Thrash (Single Rect Read)
     // Cache the rect using ResizeObserver so we don't force reflows during high-frequency pointer moves.

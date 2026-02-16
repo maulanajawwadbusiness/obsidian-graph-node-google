@@ -242,6 +242,15 @@ export const useGraphRendering = ({
         hoverStateRef.current.lastSelectionZoom = snapshot.zoom;
     }, []);
 
+    const getCameraSnapshot = useCallback(() => {
+        const camera = cameraRef.current;
+        return {
+            panX: camera.panX,
+            panY: camera.panY,
+            zoom: camera.zoom,
+        };
+    }, []);
+
     return {
         handlePointerMove,
         handlePointerEnter,
@@ -255,6 +264,7 @@ export const useGraphRendering = ({
         updateHoverSelection,
         handleDragStart,
         handleDragEnd,
-        applyCameraSnapshot
+        applyCameraSnapshot,
+        getCameraSnapshot
     };
 };

@@ -324,7 +324,10 @@ Purpose:
 Flow and mount model:
 - forward graph spine: `prompt -> graph_loading -> graph`.
 - `graph_loading` and `graph` share one warm-mounted graph runtime subtree (no screen-key remount).
-- runtime loading signals continue flowing through `onLoadingStateChange` and drive gate phase changes.
+- runtime status is split and reported as:
+  - loading signal: `aiActivity` only
+  - error signal: `aiErrorMessage` (independent from loading)
+- AppShell gate logic consumes the split status and does not treat error as loading.
 
 Gate UI surface:
 - full-viewport opaque surface (`#06060A`) mounted in graph-class render branch.
@@ -335,13 +338,18 @@ Gate UI surface:
 - gate never auto-continues to graph; reveal happens only by Confirm action.
 
 Gate state machine (high level):
-- phases: `idle`, `arming`, `loading`, `stalled`, `done`, `confirmed`.
+- phases: `idle`, `arming`, `loading`, `stalled`, `error`, `done`, `confirmed`.
 - entry intent snapshot: `analysis` | `restore` | `none`.
 - done unlock:
-  - real loading lifecycle (`graphIsLoading` true then false), or
+  - real loading lifecycle (`isLoading` true then false), or
   - explicit no-work fallback only when entry intent is `none`.
+- error policy:
+  - for analysis/restore entry intent, runtime error moves gate to `error`.
+  - gate confirm is disabled in `error`.
+  - gate action is forced back to prompt (`force_back_prompt`).
 - watchdog:
   - if loading never starts for analysis/restore intent, phase moves to `stalled` and escape remains available.
+  - watchdog never overrides `error`, `done`, or `confirmed`.
 
 Input, focus, and keyboard ownership:
 - gate wrapper blocks pointer and wheel so canvas does not react under loading surface.
@@ -355,13 +363,20 @@ Input, focus, and keyboard ownership:
 Sidebar behavior during `graph_loading`:
 - sidebar remains visible as eye-stability anchor.
 - sidebar is frozen and dimmed (`alpha 0.5`), with inert + shield so pointer/wheel/focus do not leak.
+- sidebar disabled rule is loading-only; runtime error state does not extend disabled state.
 - temporary clamp policy:
   - if sidebar was expanded on entry to `graph_loading`, it is temporarily collapsed during loading.
   - on leave to `graph`, expanded state is restored to the pre-loading user state.
 
 Legacy runtime loading surface:
 - legacy `LoadingScreen` return path inside `GraphPhysicsPlaygroundShell` is suppressed for product graph-class path (`legacyLoadingScreenMode='disabled'` for `graph_loading` and `graph`).
-- loading callbacks/signals are unchanged and still feed gate state logic.
+- compatibility callback `onLoadingStateChange` remains available.
+- runtime status callback now exposes `{ isLoading, aiErrorMessage }` for gate-grade handling.
+
+Prompt error handoff:
+- when gate forces back to prompt due analysis/restore error, AppShell stores a transient prompt error message.
+- `EnterPrompt`/`PromptCard` render a dismissible inline error banner above the prompt input.
+- banner clears on dismiss, new submit, or prompt skip.
 
 DEV-only debug hooks:
 - `?debugWarmMount=1`:
@@ -561,6 +576,9 @@ Current wiring (step 8 live, 2026-02-16):
 3. live measurement semantics:
    - ResizeObserver callbacks are coalesced to max 1 update per animation frame (rAF batching).
    - movement refresh is event-driven (window scroll/resize and visualViewport scroll/resize when available).
+   - interaction refresh is event-driven on target pointer/wheel activity (passive listeners; pointermove is throttled).
+   - mount stabilization runs as a bounded settle burst to catch early layout settling.
+   - settle continuation is visibility-safe: hidden document stops settle continuation; visibility return triggers one refresh.
    - movement refresh uses bounded settle rAF bursts after origin changes (no permanent polling loop).
    - origin source is element viewport geometry from `getBoundingClientRect()` (`left/top`).
    - size source prefers ResizeObserver box size (`contentBoxSize` when present), then falls back to `contentRect.width/height`, then BCR size.
@@ -570,7 +588,10 @@ Current wiring (step 8 live, 2026-02-16):
      - `graph-runtime.viewport.resize-observer`
      - `graph-runtime.viewport.resize-raf`
      - `graph-runtime.viewport.position-listeners`
+     - `graph-runtime.viewport.position-interaction-listeners`
      - `graph-runtime.viewport.position-settle-raf`
+   - DEV counters include flush reason buckets:
+     - `ro`, `scroll`, `vv`, `interaction`, `mount`, `visibility`
 
 Step boundary:
 - step 8 now provides live measurement with movement-aware origin refresh.

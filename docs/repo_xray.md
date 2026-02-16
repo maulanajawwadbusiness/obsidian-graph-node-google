@@ -49,8 +49,16 @@ Update Note: 2026-02-16 (Graph Loading Real Screen, Steps 1-9)
 - Graph-class render branch is unified: `graph_loading` and `graph` share one warm runtime subtree (no screen-key remount).
 - `GraphLoadingGate` is a real screen surface on top of warm runtime for `screen === 'graph_loading'`.
 - Gate phase model controls Confirm reveal/unlock; graph reveal is Confirm-driven.
+- Gate runtime contract is split:
+  - loading truth uses `aiActivity` only
+  - error truth uses `aiErrorMessage` independently
+- Error policy in gate:
+  - analysis/restore error enters `error` phase
+  - gate auto-forces back to prompt
+  - prompt shows inline dismissible analysis error banner
 - Legacy in-runtime `LoadingScreen` is suppressed for product graph-class path.
 - Sidebar remains visible on `graph_loading` but is frozen/dimmed with shield ownership.
+- Sidebar disable behavior is loading-only (error does not keep sidebar disabled).
 - Focus/keyboard ownership is captured by gate (`Escape`, `Enter`, `Space`) with window-capture fallback guard.
 
 ## 0.1 AppShell Seams (2026-02-14)
@@ -91,6 +99,7 @@ Notes:
 - Product Sidebar remains overlay-driven (`SidebarLayer` -> `Sidebar`) on `prompt`, `graph_loading`, and `graph`.
 - Graph runtime enters through `GraphWithPending` and reaches `GraphPhysicsPlaygroundShell`.
 - Product graph-class path passes `legacyLoadingScreenMode='disabled'` so gate is the only loading surface users see.
+- Runtime also emits `onRuntimeStatusChange({ isLoading, aiErrorMessage })`; AppShell gate consumes this split status.
 - Warm-mount invariant: graph-class branch is shared for `graph_loading <-> graph` and runtime mount id remains stable under `?debugWarmMount=1`.
 - Internal debug sidebar in `GraphPhysicsPlaygroundShell` is debug-only:
   - gated by `enableDebugSidebar`

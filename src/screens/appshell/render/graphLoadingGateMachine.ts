@@ -55,19 +55,19 @@ export function computeGraphLoadingGateBase(input: GateBaseInput): GateBaseOutpu
             nextSeenLoadingTrue: true,
         };
     }
-    if (!runtime.isLoading && runtime.aiErrorMessage && entryIntent !== 'none') {
+    if (entryIntent === 'none') {
+        return {
+            nextPhase: 'done',
+            nextSeenLoadingTrue: seenLoadingTrue,
+        };
+    }
+    if (!runtime.isLoading && runtime.aiErrorMessage) {
         return {
             nextPhase: 'error',
             nextSeenLoadingTrue: seenLoadingTrue,
         };
     }
     if (seenLoadingTrue) {
-        return {
-            nextPhase: 'done',
-            nextSeenLoadingTrue: seenLoadingTrue,
-        };
-    }
-    if (entryIntent === 'none') {
         return {
             nextPhase: 'done',
             nextSeenLoadingTrue: seenLoadingTrue,

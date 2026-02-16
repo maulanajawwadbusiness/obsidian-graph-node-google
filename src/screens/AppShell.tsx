@@ -175,6 +175,7 @@ export const AppShell: React.FC = () => {
 
     const GraphWithPending = Graph as React.ComponentType<GraphPhysicsPlaygroundProps>;
     const graphIsLoading = graphRuntimeStatus.isLoading;
+    const gateControls = React.useMemo(() => getGateControls(gatePhase), [gatePhase]);
     const showMoneyUi = screen === 'prompt' || isGraphClassScreen(screen);
     const showPersistentSidebar = SIDEBAR_VISIBILITY_BY_SCREEN[screen];
     const sidebarFrozen = SIDEBAR_INTERACTION_BY_SCREEN[screen] === 'frozen';
@@ -422,6 +423,7 @@ export const AppShell: React.FC = () => {
                 pendingLoadInterface !== null
             );
             setGateEntryIntent(entryIntent);
+            setGraphRuntimeStatus((prev) => ({ ...prev, aiErrorMessage: null }));
             setGatePhase('arming');
             setSeenLoadingTrue(false);
             return;
@@ -483,6 +485,26 @@ export const AppShell: React.FC = () => {
         );
         transitionToScreen('prompt');
     }, [gatePhase, graphRuntimeStatus.aiErrorMessage, screen, transitionToScreen]);
+
+    React.useEffect(() => {
+        if (!import.meta.env.DEV) return;
+        if (screen !== 'graph_loading') return;
+        console.log(
+            '[GateContract] phase=%s loading=%s error=%s intent=%s seen=%s',
+            gatePhase,
+            graphRuntimeStatus.isLoading ? '1' : '0',
+            graphRuntimeStatus.aiErrorMessage ? 'present' : 'none',
+            gateEntryIntent,
+            seenLoadingTrue ? '1' : '0'
+        );
+    }, [
+        gateEntryIntent,
+        gatePhase,
+        graphRuntimeStatus.aiErrorMessage,
+        graphRuntimeStatus.isLoading,
+        screen,
+        seenLoadingTrue,
+    ]);
 
     React.useEffect(() => {
         if (!isWarmMountDebugEnabled()) return;
@@ -631,11 +653,11 @@ export const AppShell: React.FC = () => {
         },
         promptAnalysisErrorMessage,
         clearPromptAnalysisError: () => setPromptAnalysisErrorMessage(null),
-        gateConfirmVisible: getGateControls(gatePhase).allowConfirm,
-        gateConfirmEnabled: getGateControls(gatePhase).allowConfirm,
+        gateConfirmVisible: gateControls.allowConfirm,
+        gateConfirmEnabled: gateControls.allowConfirm,
         gateRootRef: graphLoadingGateRootRef,
         onGateConfirm: confirmGraphLoadingGate,
-        gateShowBackToPrompt: targetScreen === 'graph_loading' && getGateControls(gatePhase).allowBack,
+        gateShowBackToPrompt: targetScreen === 'graph_loading' && gateControls.allowBack,
         onGateBackToPrompt: backToPromptFromGate,
         transitionToScreen,
         commitUpsertInterface,

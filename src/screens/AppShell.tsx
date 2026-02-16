@@ -28,6 +28,13 @@ import {
     getSkipTarget,
 } from './appshell/screenFlow/screenFlowController';
 import { renderScreenContent } from './appshell/render/renderScreenContent';
+import {
+    computeGraphLoadingGateBase,
+    computeGraphLoadingWatchdogPhase,
+    getGateEntryIntent,
+    type GateEntryIntent,
+    type GatePhase,
+} from './appshell/render/graphLoadingGateMachine';
 import { useOnboardingOverlayState } from './appshell/overlays/useOnboardingOverlayState';
 import { OnboardingChrome } from './appshell/overlays/OnboardingChrome';
 import { useAppShellModals } from './appshell/overlays/useAppShellModals';
@@ -59,8 +66,6 @@ const Graph = React.lazy(() =>
 );
 
 type Screen = AppScreen;
-type GatePhase = 'idle' | 'arming' | 'loading' | 'stalled' | 'done' | 'confirmed';
-type GateEntryIntent = 'analysis' | 'restore' | 'none';
 type SidebarInteractionState = 'active' | 'frozen';
 const STORAGE_KEY = 'arnvoid_screen';
 const PERSIST_SCREEN = false;
@@ -117,7 +122,7 @@ export const AppShell: React.FC = () => {
     const [gateEntryIntent, setGateEntryIntent] = React.useState<GateEntryIntent>('none');
     const [documentViewerToggleToken, setDocumentViewerToggleToken] = React.useState(0);
     const [isSidebarExpanded, setIsSidebarExpanded] = React.useState(false);
-    const sidebarExpandedAtGateEntryRef = React.useRef<boolean | null>(null);
+    const sidebarWasExpandedAtGateEntryRef = React.useRef<boolean | null>(null);
     const previousScreenRef = React.useRef<Screen>(screen);
     const gatePhaseRef = React.useRef<GatePhase>('idle');
     const graphLoadingGateRootRef = React.useRef<HTMLDivElement>(null);
@@ -165,9 +170,7 @@ export const AppShell: React.FC = () => {
     const showPersistentSidebar = SIDEBAR_VISIBILITY_BY_SCREEN[screen];
     const sidebarFrozen = SIDEBAR_INTERACTION_BY_SCREEN[screen] === 'frozen';
     const sidebarDimAlpha = SIDEBAR_DIM_ALPHA_BY_SCREEN[screen];
-    const sidebarExpandedForRender = screen === 'graph_loading' && sidebarExpandedAtGateEntryRef.current !== null
-        ? sidebarExpandedAtGateEntryRef.current
-        : isSidebarExpanded;
+    const sidebarExpandedForRender = screen === 'graph_loading' ? false : isSidebarExpanded;
     const loginBlockingActive = screen === 'prompt' && enterPromptOverlayOpen;
     const sidebarDisabled = sidebarFrozen || (isGraphClassScreen(screen) && graphIsLoading) || loginBlockingActive;
     const onboardingActive = isOnboardingScreen(screen) || isBlockingInput;
@@ -388,28 +391,27 @@ export const AppShell: React.FC = () => {
         const enteringGraphLoading = previousScreen !== 'graph_loading' && screen === 'graph_loading';
         const leavingGraphLoading = previousScreen === 'graph_loading' && screen !== 'graph_loading';
         if (enteringGraphLoading) {
-            sidebarExpandedAtGateEntryRef.current = isSidebarExpanded;
+            sidebarWasExpandedAtGateEntryRef.current = isSidebarExpanded;
+            if (isSidebarExpanded) {
+                setIsSidebarExpanded(false);
+            }
         }
         if (leavingGraphLoading) {
-            sidebarExpandedAtGateEntryRef.current = null;
+            const shouldRestoreExpanded = sidebarWasExpandedAtGateEntryRef.current === true;
+            sidebarWasExpandedAtGateEntryRef.current = null;
+            if (shouldRestoreExpanded) {
+                setIsSidebarExpanded(true);
+            }
         }
         previousScreenRef.current = screen;
     }, [isSidebarExpanded, screen]);
 
     React.useEffect(() => {
-        if (screen !== 'graph_loading') return;
-        if (sidebarExpandedAtGateEntryRef.current !== true) return;
-        if (isSidebarExpanded) return;
-        setIsSidebarExpanded(true);
-    }, [isSidebarExpanded, screen]);
-
-    React.useEffect(() => {
         if (screen === 'graph_loading') {
-            const entryIntent: GateEntryIntent = pendingAnalysis !== null
-                ? 'analysis'
-                : pendingLoadInterface !== null
-                    ? 'restore'
-                    : 'none';
+            const entryIntent = getGateEntryIntent(
+                pendingAnalysis !== null,
+                pendingLoadInterface !== null
+            );
             setGateEntryIntent(entryIntent);
             setGatePhase('arming');
             setSeenLoadingTrue(false);
@@ -420,30 +422,32 @@ export const AppShell: React.FC = () => {
     }, [pendingAnalysis, pendingLoadInterface, screen]);
 
     React.useEffect(() => {
-        if (screen !== 'graph_loading') return;
-        if (graphIsLoading) {
-            setSeenLoadingTrue((prev) => (prev ? prev : true));
-            setGatePhase('loading');
-            return;
+        const base = computeGraphLoadingGateBase({
+            screen,
+            entryIntent: gateEntryIntent,
+            runtime: { isLoading: graphIsLoading, aiErrorMessage: null },
+            seenLoadingTrue,
+            currentPhase: gatePhase,
+        });
+        if (base.nextSeenLoadingTrue !== seenLoadingTrue) {
+            setSeenLoadingTrue(base.nextSeenLoadingTrue);
         }
-        if (seenLoadingTrue) {
-            setGatePhase('done');
-            return;
+        if (base.nextPhase !== gatePhase) {
+            setGatePhase(base.nextPhase);
         }
-        if (gateEntryIntent === 'none') {
-            setGatePhase('done');
-        }
-    }, [gateEntryIntent, graphIsLoading, screen, seenLoadingTrue]);
+    }, [gateEntryIntent, gatePhase, graphIsLoading, screen, seenLoadingTrue]);
 
     React.useEffect(() => {
         if (screen !== 'graph_loading') return;
         if (gateEntryIntent === 'none') return;
         if (seenLoadingTrue) return;
         const timeoutId = window.setTimeout(() => {
-            setGatePhase((current) => {
-                if (current === 'done' || current === 'confirmed') return current;
-                return 'stalled';
-            });
+            setGatePhase((current) => computeGraphLoadingWatchdogPhase({
+                screen,
+                entryIntent: gateEntryIntent,
+                seenLoadingTrue,
+                currentPhase: current,
+            }));
             if (import.meta.env.DEV) {
                 console.warn(
                     '[GatePhase] loading_watchdog_stalled intent=%s after=%dms',
@@ -488,9 +492,9 @@ export const AppShell: React.FC = () => {
     React.useEffect(() => {
         if (!import.meta.env.DEV) return;
         if (screen !== 'graph_loading') return;
-        if (sidebarExpandedAtGateEntryRef.current !== true) return;
-        if (sidebarExpandedForRender) return;
-        console.warn('[SidebarFreezeGuard] expanded_snapshot_drift_detected rendered=false');
+        if (sidebarWasExpandedAtGateEntryRef.current !== true) return;
+        if (!sidebarExpandedForRender) return;
+        console.warn('[SidebarFreezeGuard] collapsed_clamp_expected_but_rendered_expanded=true');
     }, [screen, sidebarExpandedForRender]);
 
     const confirmGraphLoadingGate = React.useCallback(() => {

@@ -13,7 +13,6 @@ type UseResizeObserverViewportOptions = {
     source: GraphViewportSource;
     fallbackViewport?: GraphViewport;
 };
-let warnedPendingRafAfterCleanup = false;
 let warnedBoxedStuckTinyViewport = false;
 let warnedZeroOriginMismatch = false;
 type ObserverSizeSnapshot = {
@@ -234,10 +233,6 @@ export function useResizeObserverViewport<T extends HTMLElement>(
                 window.clearTimeout(boxedTinyTimer);
             }
             cancelScheduledFrame();
-            if (import.meta.env.DEV && pendingRafIdRef.current !== null && !warnedPendingRafAfterCleanup) {
-                warnedPendingRafAfterCleanup = true;
-                console.warn('[ViewportResize] pending rAF remained after cleanup');
-            }
             observer.disconnect();
             latestTargetRef.current = null;
             latestSizeRef.current = null;

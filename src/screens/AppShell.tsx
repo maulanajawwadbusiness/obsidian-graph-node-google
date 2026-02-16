@@ -132,7 +132,8 @@ export const AppShell: React.FC = () => {
     const sidebarWasExpandedAtGateEntryRef = React.useRef<boolean | null>(null);
     const previousScreenRef = React.useRef<Screen>(screen);
     const gatePhaseRef = React.useRef<GatePhase>('idle');
-    const gateActionConsumedRef = React.useRef(false);
+    const gateErrorBackRequestedRef = React.useRef(false);
+    const gateErrorVisibleRef = React.useRef(false);
     const graphLoadingGateRootRef = React.useRef<HTMLDivElement>(null);
     const savedInterfacesRef = React.useRef<SavedInterfaceRecordV1[]>([]);
     const restoreReadPathActiveRef = React.useRef(false);
@@ -474,17 +475,24 @@ export const AppShell: React.FC = () => {
 
     React.useEffect(() => {
         const nextAction = getGateNextAction(screen, gatePhase);
-        if (nextAction !== 'force_back_prompt') {
-            gateActionConsumedRef.current = false;
+        if (nextAction !== 'none' && import.meta.env.DEV) {
+            console.warn('[GateContract] unexpected_gate_next_action action=%s', nextAction);
+        }
+    }, [gatePhase, screen]);
+
+    React.useEffect(() => {
+        if (screen === 'graph_loading' && gatePhase === 'error') {
+            gateErrorVisibleRef.current = true;
             return;
         }
-        if (gateActionConsumedRef.current) return;
-        gateActionConsumedRef.current = true;
-        setPromptAnalysisErrorMessage(
-            graphRuntimeStatus.aiErrorMessage || 'Analysis failed. Please try again.'
-        );
-        transitionToScreen('prompt');
-    }, [gatePhase, graphRuntimeStatus.aiErrorMessage, screen, transitionToScreen]);
+        if (gateErrorVisibleRef.current && screen !== 'graph_loading') {
+            if (import.meta.env.DEV && !gateErrorBackRequestedRef.current) {
+                console.warn('[GateContract] exited_error_gate_without_explicit_back');
+            }
+            gateErrorVisibleRef.current = false;
+            gateErrorBackRequestedRef.current = false;
+        }
+    }, [gatePhase, screen]);
 
     React.useEffect(() => {
         if (!import.meta.env.DEV) return;
@@ -559,8 +567,14 @@ export const AppShell: React.FC = () => {
 
     const backToPromptFromGate = React.useCallback(() => {
         if (screen !== 'graph_loading') return;
+        if (gatePhase === 'error') {
+            gateErrorBackRequestedRef.current = true;
+            setPromptAnalysisErrorMessage(
+                graphRuntimeStatus.aiErrorMessage || 'Analysis failed. Please try again.'
+            );
+        }
         transitionToScreen('prompt');
-    }, [screen, transitionToScreen]);
+    }, [gatePhase, graphRuntimeStatus.aiErrorMessage, screen, transitionToScreen]);
 
     React.useEffect(() => {
         if (screen !== 'graph_loading') return;

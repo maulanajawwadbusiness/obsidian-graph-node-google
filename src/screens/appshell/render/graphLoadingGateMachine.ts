@@ -33,7 +33,7 @@ type GateControls = {
     allowBack: boolean;
 };
 
-type GateNextAction = 'none' | 'force_back_prompt';
+type GateNextAction = 'none';
 
 export function getGateEntryIntent(
     hasPendingAnalysis: boolean,
@@ -97,6 +97,6 @@ export function getGateControls(phase: GatePhase): GateControls {
 
 export function getGateNextAction(screen: AppScreen, phase: GatePhase): GateNextAction {
     if (screen !== 'graph_loading') return 'none';
-    if (phase === 'error') return 'force_back_prompt';
+    if (phase === 'error') return 'none';
     return 'none';
 }

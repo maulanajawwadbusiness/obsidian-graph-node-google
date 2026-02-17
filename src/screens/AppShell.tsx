@@ -87,7 +87,8 @@ type SidebarInteractionState = 'active' | 'frozen';
 type GateExitTarget = 'graph' | 'prompt';
 type PendingFadeAction =
     | { kind: 'restoreInterface'; record: SavedInterfaceRecordV1 }
-    | { kind: 'createNew' };
+    | { kind: 'createNew' }
+    | { kind: 'switchGraph'; record: SavedInterfaceRecordV1 };
 const STORAGE_KEY = 'arnvoid_screen';
 const PERSIST_SCREEN = false;
 const DEBUG_ONBOARDING_SCROLL_GUARD = false;
@@ -503,12 +504,31 @@ export const AppShell: React.FC = () => {
             console.log('[B1Fade] start id=%s from=%s', record.id, screen);
             return;
         }
+        if (isGraphClassScreen(screen)) {
+            if (contentFadePhase !== 'idle') return;
+            if (graphRuntimeStatus.isLoading) {
+                console.log('[B2Fade] blocked: aiActivity');
+                return;
+            }
+            if (pendingLoadInterface?.id === record.id) return;
+            pendingFadeActionRef.current = { kind: 'switchGraph', record };
+            setContentFadePhase('fadingOut');
+            console.log('[B2Fade] start id=%s from=%s', record.id, screen);
+            return;
+        }
         setPendingLoadInterface(record);
         if (!isGraphClassScreen(screen)) {
             transitionWithPromptGraphGuard('graph');
         }
         console.log('[appshell] pending_load_interface id=%s', id);
-    }, [contentFadePhase, savedInterfaces, screen, transitionWithPromptGraphGuard]);
+    }, [
+        contentFadePhase,
+        graphRuntimeStatus.isLoading,
+        pendingLoadInterface?.id,
+        savedInterfaces,
+        screen,
+        transitionWithPromptGraphGuard,
+    ]);
     const onContentFadeOutDone = React.useCallback(() => {
         const action = pendingFadeActionRef.current;
         pendingFadeActionRef.current = null;
@@ -525,6 +545,9 @@ export const AppShell: React.FC = () => {
             setPendingAnalysis(null);
             transitionToScreen('prompt');
             console.log('[B1ReverseFade] commit');
+        } else if (action.kind === 'switchGraph') {
+            setPendingLoadInterface(action.record);
+            console.log('[B2Fade] commit id=%s', action.record.id);
         }
         setContentFadePhase('fadingIn');
     }, [transitionToScreen]);

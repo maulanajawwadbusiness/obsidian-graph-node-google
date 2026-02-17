@@ -899,6 +899,39 @@ Backend LLM endpoints:
 - Per-request audit records are stored in `llm_request_audit`.
 - Audit includes provider/model, token counts, rupiah cost, and free pool metadata.
 
+## Beta Free Mode Toggle (Ops)
+- Purpose: temporary production-safe payment gate bypass when payment stack is degraded.
+- Backend toggle (source of truth):
+  - env var: `BETA_FREE_MODE`
+  - enabled when `BETA_FREE_MODE=1`
+  - disabled when unset or `BETA_FREE_MODE=0`
+- Frontend toggle (optional UI preflight bypass only):
+  - env var: `VITE_BETA_FREE_MODE`
+  - enabled when `VITE_BETA_FREE_MODE=1`
+  - disabled when unset or `VITE_BETA_FREE_MODE=0`
+
+### Enable beta free mode
+1. Backend service env: set `BETA_FREE_MODE=1`.
+2. Redeploy backend.
+3. Optional: set frontend env `VITE_BETA_FREE_MODE=1`.
+4. Redeploy frontend.
+
+Expected behavior:
+- Backend `POST /api/llm/paper-analyze`, `POST /api/llm/prefill`, `POST /api/llm/chat` keep `requireAuth` and bypass rupiah precheck/charge gates.
+- Backend no longer returns 402 `insufficient_rupiah` from balance gating while this mode is on.
+- Frontend optional toggle only suppresses client preflight shortage interruptions. Backend still decides final access.
+
+### Re-enable payment gates (rollback)
+1. Backend service env: unset `BETA_FREE_MODE` or set `BETA_FREE_MODE=0`.
+2. Redeploy backend.
+3. Optional: unset `VITE_BETA_FREE_MODE` or set `VITE_BETA_FREE_MODE=0`.
+4. Redeploy frontend.
+
+Expected rollback behavior:
+- Billing precheck and charge paths return to normal with no code changes.
+- Insufficient-balance 402 behavior resumes only when backend toggle is off.
+- Audit labeling remains explicit (`bypassed_beta` only while beta toggle is active).
+
 ## Payments (GoPay QRIS)
 Backend:
 - `POST /api/payments/gopayqris/create`

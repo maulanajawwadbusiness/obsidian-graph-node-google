@@ -4,6 +4,13 @@ import { chargeForLlm, getBalance } from "../rupiah/rupiahService";
 import { recordTokenSpend } from "./freePoolAccounting";
 import type { ProviderPolicyMeta } from "./providerRouter";
 
+export type BalanceBypassReason = "dev" | "beta" | null;
+
+export function getBypassChargeStatus(reason: BalanceBypassReason): "bypassed_dev" | "bypassed_beta" {
+  if (reason === "beta") return "bypassed_beta";
+  return "bypassed_dev";
+}
+
 export async function estimateWithFx(opts: {
   model: string;
   inputTokens: number;
@@ -46,6 +53,7 @@ export async function chargeUsage(opts: {
   totalTokens: number;
   amountIdr: number;
   bypassBalance: boolean;
+  bypassReason: BalanceBypassReason;
 }) {
   if (opts.bypassBalance) {
     return {
@@ -53,7 +61,7 @@ export async function chargeUsage(opts: {
       rupiahCost: 0,
       rupiahBefore: null as number | null,
       rupiahAfter: null as number | null,
-      chargeStatus: "bypassed_dev" as const
+      chargeStatus: getBypassChargeStatus(opts.bypassReason)
     };
   }
 

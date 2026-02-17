@@ -21,6 +21,7 @@ export type ServerEnvConfig = {
   savedInterfaceJsonLimit: string;
   isProd: boolean;
   devBypassBalanceEnabled: boolean;
+  betaFreeModeEnabled: boolean;
   shouldWarnMissingAllowedOriginsInProd: boolean;
   isOpenrouterAnalyzeAllowed: (model: string) => boolean;
 };
@@ -68,6 +69,7 @@ export function loadServerEnvConfig(): ServerEnvConfig {
     savedInterfaceJsonLimit: process.env.SAVED_INTERFACE_JSON_LIMIT || "15mb",
     isProd,
     devBypassBalanceEnabled: !isProd && process.env.DEV_BYPASS_BALANCE === "1",
+    betaFreeModeEnabled: process.env.BETA_FREE_MODE === "1",
     shouldWarnMissingAllowedOriginsInProd: isProd && allowedOriginsRaw.length === 0,
     isOpenrouterAnalyzeAllowed
   };

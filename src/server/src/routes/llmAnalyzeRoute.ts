@@ -8,6 +8,7 @@ import {
   applyFreepoolLedger,
   chargeUsage,
   estimateWithFx,
+  getBypassChargeStatus,
   precheckBalance
 } from "../llm/billingFlow";
 import { type LlmError } from "../llm/llmClient";
@@ -215,7 +216,10 @@ app.post("/api/llm/paper-analyze", deps.requireAuth, async (req, res) => {
     fxRate = estimate.fxRate;
     auditFxRate = fxRate;
     const estimated = estimate.pricing;
-    const bypassBalance = deps.isDevBalanceBypassEnabled();
+    const devBypassEnabled = deps.isDevBalanceBypassEnabled();
+    const betaFreeModeEnabled = deps.isBetaFreeModeEnabled();
+    const bypassReason = betaFreeModeEnabled ? "beta" : devBypassEnabled ? "dev" : null;
+    const bypassBalance = bypassReason !== null;
     const precheck = await precheckBalance({
       userId,
       neededIdr: estimated.idrCostRounded,
@@ -262,7 +266,7 @@ app.post("/api/llm/paper-analyze", deps.requireAuth, async (req, res) => {
         });
         return;
     } else if (bypassBalance) {
-      auditChargeStatus = "bypassed_dev";
+      auditChargeStatus = getBypassChargeStatus(bypassReason);
       auditChargeError = null;
       auditCostIdr = 0;
       auditBalanceBefore = null;
@@ -475,7 +479,8 @@ app.post("/api/llm/paper-analyze", deps.requireAuth, async (req, res) => {
       model: validation.model,
       totalTokens: pricing.totalTokens,
       amountIdr: pricing.idrCostRounded,
-      bypassBalance
+      bypassBalance,
+      bypassReason
     });
     if (!charge.ok) {
       auditCostIdr = 0;

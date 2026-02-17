@@ -155,6 +155,28 @@ Do NOT use `&&` in the terminal. It breaks the parser. Use separate commands or 
 When running backend commands from `src/server` (for example `npm run dev`, `npm run check:auth-schema`, DB scripts), turn VPN OFF first.
 Reason: VPN can block or delay Google Cloud SQL connector setup and trigger startup timeout errors.
 
+### CLOUD RUN DEPLOY SAFETY (NON-NEGOTIABLE)
+When changing backend env vars on Cloud Run, do NOT use `--set-env-vars` unless you are explicitly re-supplying the full non-secret env set.  
+Reason: `--set-env-vars` replaces all existing non-secret env vars in the revision template and can remove required DB/runtime vars, causing startup failure.
+
+Safe pattern:
+1. Inspect current env first:
+   - `gcloud run services describe <service> --region <region> --format="yaml(spec.template.spec.containers[0].env,status.traffic,status.latestReadyRevisionName)"`
+2. Prefer additive update:
+   - `gcloud run services update <service> --region <region> --update-env-vars "KEY=VALUE"`
+3. If replacement is required (`--set-env-vars`), include all required non-secret vars in one command.
+4. Verify rollout:
+   - latest ready revision is the new one
+   - traffic is 100% to latest revision
+   - no startup fatal in logs
+
+Minimum backend vars that must remain present for Arnvoid API startup:
+- `INSTANCE_CONNECTION_NAME`
+- `DB_NAME`
+- `DB_USER`
+- `GOOGLE_CLIENT_ID`
+- plus required secrets (`DB_PASSWORD`, `OPENAI_API_KEY`) via Secret Manager refs
+
 ### ASCII ONLY
 Use pure ASCII characters in code, comments, logs, and docs. Avoid Unicode arrows, ellipses, and typographic dashes to prevent mojibake.
 

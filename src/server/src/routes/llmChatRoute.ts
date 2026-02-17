@@ -5,6 +5,7 @@ import {
   applyFreepoolLedger,
   chargeUsage,
   estimateWithFx,
+  getBypassChargeStatus,
   precheckBalance
 } from "../llm/billingFlow";
 import { type LlmError } from "../llm/llmClient";
@@ -177,7 +178,10 @@ app.post("/api/llm/chat", deps.requireAuth, async (req, res) => {
   let firstTokenAt: number | null = null;
   let terminationReason = "success";
   let chatInput = "";
-  let bypassBalance = deps.isDevBalanceBypassEnabled() || deps.isBetaFreeModeEnabled();
+  const devBypassEnabled = deps.isDevBalanceBypassEnabled();
+  const betaFreeModeEnabled = deps.isBetaFreeModeEnabled();
+  const bypassReason = betaFreeModeEnabled ? "beta" : devBypassEnabled ? "dev" : null;
+  let bypassBalance = bypassReason !== null;
   let usageTracker: ReturnType<typeof initUsageTracker> | null = null;
   let stream: { providerUsagePromise?: Promise<ProviderUsage | null> } | null = null;
   req.on("close", () => {
@@ -267,7 +271,7 @@ app.post("/api/llm/chat", deps.requireAuth, async (req, res) => {
         return;
       }
     } else {
-      auditChargeStatus = "bypassed_dev";
+      auditChargeStatus = getBypassChargeStatus(bypassReason);
       auditChargeError = null;
       auditCostIdr = 0;
       auditBalanceBefore = null;
@@ -370,7 +374,8 @@ app.post("/api/llm/chat", deps.requireAuth, async (req, res) => {
       model: validation.model,
       totalTokens: pricing.totalTokens,
       amountIdr: pricing.idrCostRounded,
-      bypassBalance
+      bypassBalance,
+      bypassReason
     });
     if (charge.ok) {
       rupiahCost = charge.rupiahCost;

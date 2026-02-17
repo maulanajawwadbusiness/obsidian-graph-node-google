@@ -36,7 +36,7 @@ const ROOT_STYLE: React.CSSProperties = {
 };
 
 const TEXT_STYLE: React.CSSProperties = {
-    fontSize: '20px',
+    fontSize: '14px',
     fontWeight: LOADING_TEXT_FONT_WEIGHT,
     letterSpacing: '0.3px',
     textAlign: 'center',
@@ -70,7 +70,7 @@ const CONFIRM_BUTTON_STYLE: React.CSSProperties = {
     height: '42px',
     borderRadius: '10px',
     border: '1px solid rgba(255, 255, 255, 0.20)',
-    background: 'rgba(255, 255, 255, 0.08)',
+    background: '#0D0D18',
     color: '#f2f2f2',
     fontSize: '14px',
     fontWeight: LOADING_TEXT_FONT_WEIGHT,
@@ -93,10 +93,10 @@ const BACK_BUTTON_STYLE: React.CSSProperties = {
     height: '36px',
     borderRadius: '10px',
     border: '1px solid rgba(255, 255, 255, 0.2)',
-    background: 'rgba(255, 255, 255, 0.06)',
+    background: '#0D0D18',
     color: '#e7e7e7',
     padding: '0 14px',
-    fontSize: '13px',
+    fontSize: '14px',
     fontWeight: LOADING_TEXT_FONT_WEIGHT,
     cursor: 'pointer',
 };

@@ -9,6 +9,29 @@ import { SampleGraphPreview } from './SampleGraphPreview';
 
 // Toggle: true = block submit when text is empty, false = allow empty submit path.
 const HARD_BLOCK_EMPTY_TEXT_SUBMIT = false;
+const ENTERPROMPT_LONG_PLACEHOLDER_SEEN_KEY = 'arnvoid_enterprompt_placeholder_seen_v1';
+
+function canUseBrowserStorage(): boolean {
+    return typeof window !== 'undefined' && typeof window.localStorage !== 'undefined';
+}
+
+function hasSeenEnterPromptLongPlaceholder(): boolean {
+    if (!canUseBrowserStorage()) return false;
+    try {
+        return window.localStorage.getItem(ENTERPROMPT_LONG_PLACEHOLDER_SEEN_KEY) === '1';
+    } catch {
+        return false;
+    }
+}
+
+function markEnterPromptLongPlaceholderSeen(): void {
+    if (!canUseBrowserStorage()) return;
+    try {
+        window.localStorage.setItem(ENTERPROMPT_LONG_PLACEHOLDER_SEEN_KEY, '1');
+    } catch {
+        // Ignore storage failures; UI still switches for this runtime session.
+    }
+}
 
 type PromptCardProps = {
     value?: string;
@@ -40,6 +63,7 @@ export const PromptCard: React.FC<PromptCardProps> = ({
     const [showUploadPopup, setShowUploadPopup] = React.useState(false);
     const [uploadMenuHover, setUploadMenuHover] = React.useState(false);
     const [inputText, setInputText] = React.useState(value);
+    const [hasSeenLongPlaceholder, setHasSeenLongPlaceholder] = React.useState(() => hasSeenEnterPromptLongPlaceholder());
     const popupRef = React.useRef<HTMLDivElement>(null);
     const fileInputRef = React.useRef<HTMLInputElement | null>(null);
     const removeFileTooltip = useTooltip('Remove file');
@@ -85,6 +109,17 @@ export const PromptCard: React.FC<PromptCardProps> = ({
             handleSubmit();
         }
     }, [handleSubmit]);
+
+    const handleInputFocus = React.useCallback(() => {
+        if (hasSeenLongPlaceholder) return;
+        setHasSeenLongPlaceholder(true);
+        markEnterPromptLongPlaceholderSeen();
+    }, [hasSeenLongPlaceholder]);
+
+    const placeholderKey: 'onboarding.enterprompt.input_placeholder' | 'onboarding.enterprompt.input_placeholder_intro' =
+        hasSeenLongPlaceholder
+            ? 'onboarding.enterprompt.input_placeholder'
+            : 'onboarding.enterprompt.input_placeholder_intro';
 
     return (
         <div style={CARD_STYLE}>
@@ -151,11 +186,12 @@ export const PromptCard: React.FC<PromptCardProps> = ({
                         </>
                     )}
                     <textarea
-                        placeholder={t('onboarding.enterprompt.input_placeholder')}
+                        placeholder={t(placeholderKey)}
                         style={INPUT_STYLE}
                         rows={6}
                         value={inputText}
                         onChange={(e) => handleInputChange(e.target.value)}
+                        onFocus={handleInputFocus}
                         onKeyDown={handleInputKeyDown}
                         disabled={disabled}
                     />

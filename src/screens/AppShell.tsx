@@ -19,6 +19,7 @@ import {
     getTransitionPolicy,
 } from './appshell/transitions/transitionContract';
 import {
+    B2_GRAPH_SWITCH_FADE_MS,
     GRAPH_LOADING_SCREEN_FADE_EASING,
     GRAPH_LOADING_SCREEN_FADE_MS,
 } from './appshell/transitions/transitionTokens';
@@ -153,6 +154,7 @@ export const AppShell: React.FC = () => {
     const [gatePhase, setGatePhase] = React.useState<GatePhase>('idle');
     const [gateVisualPhase, setGateVisualPhase] = React.useState<GateVisualPhase>('visible');
     const [contentFadePhase, setContentFadePhase] = React.useState<ContentFadePhase>('idle');
+    const [contentFadeMs, setContentFadeMs] = React.useState<number>(GRAPH_LOADING_SCREEN_FADE_MS);
     const [pendingGateExitTarget, setPendingGateExitTarget] = React.useState<GateExitTarget | null>(null);
     const [seenLoadingTrue, setSeenLoadingTrue] = React.useState(false);
     const [gateEntryIntent, setGateEntryIntent] = React.useState<GateEntryIntent>('none');
@@ -500,6 +502,7 @@ export const AppShell: React.FC = () => {
         if (screen === 'prompt') {
             if (contentFadePhase !== 'idle') return;
             pendingFadeActionRef.current = { kind: 'restoreInterface', record };
+            setContentFadeMs(GRAPH_LOADING_SCREEN_FADE_MS);
             setContentFadePhase('fadingOut');
             console.log('[B1Fade] start id=%s from=%s', record.id, screen);
             return;
@@ -512,6 +515,7 @@ export const AppShell: React.FC = () => {
             }
             if (pendingLoadInterface?.id === record.id) return;
             pendingFadeActionRef.current = { kind: 'switchGraph', record };
+            setContentFadeMs(B2_GRAPH_SWITCH_FADE_MS);
             setContentFadePhase('fadingOut');
             console.log('[B2Fade] start id=%s from=%s', record.id, screen);
             return;
@@ -1061,6 +1065,7 @@ export const AppShell: React.FC = () => {
                         if (contentFadePhase !== 'idle') return;
                         if (isGraphClassScreen(screen)) {
                             pendingFadeActionRef.current = { kind: 'createNew' };
+                            setContentFadeMs(GRAPH_LOADING_SCREEN_FADE_MS);
                             setContentFadePhase('fadingOut');
                             console.log('[B1ReverseFade] start from=%s', screen);
                             return;
@@ -1136,7 +1141,7 @@ export const AppShell: React.FC = () => {
                     {moneyUi}
                     <ContentFadeOverlay
                         phase={contentFadePhase}
-                        fadeMs={GRAPH_LOADING_SCREEN_FADE_MS}
+                        fadeMs={contentFadeMs}
                         fadeEasing={GRAPH_LOADING_SCREEN_FADE_EASING}
                         onFadeOutDone={onContentFadeOutDone}
                         onFadeInDone={onContentFadeInDone}

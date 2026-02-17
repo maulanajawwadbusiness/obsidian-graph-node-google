@@ -5,3 +5,4 @@ export {
 
 export const GRAPH_LOADING_SCREEN_FADE_MS = 200;
 export const GRAPH_LOADING_SCREEN_FADE_EASING = 'cubic-bezier(0.22, 1, 0.36, 1)';
+export const B2_GRAPH_SWITCH_FADE_MS = 150;

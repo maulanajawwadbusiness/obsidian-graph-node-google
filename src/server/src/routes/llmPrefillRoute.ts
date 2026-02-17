@@ -221,7 +221,7 @@ app.post("/api/llm/prefill", deps.requireAuth, async (req, res) => {
     });
     fxRate = estimate.fxRate;
     const estimated = estimate.pricing;
-    const bypassBalance = deps.isDevBalanceBypassEnabled();
+    const bypassBalance = deps.isDevBalanceBypassEnabled() || deps.isBetaFreeModeEnabled();
     const precheck = await precheckBalance({
       userId,
       neededIdr: estimated.idrCostRounded,

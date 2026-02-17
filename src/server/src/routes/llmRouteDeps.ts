@@ -77,6 +77,7 @@ export type LlmRouteCommonDeps = {
   getUsageFieldList: (usage: ProviderUsage | null | undefined) => string[];
   getPriceUsdPerM: (model: string) => number | null;
   isDevBalanceBypassEnabled: () => boolean;
+  isBetaFreeModeEnabled: () => boolean;
   incRequestsTotal: () => void;
   incRequestsInflight: () => void;
   decRequestsInflight: () => void;

@@ -215,7 +215,7 @@ app.post("/api/llm/paper-analyze", deps.requireAuth, async (req, res) => {
     fxRate = estimate.fxRate;
     auditFxRate = fxRate;
     const estimated = estimate.pricing;
-    const bypassBalance = deps.isDevBalanceBypassEnabled();
+    const bypassBalance = deps.isDevBalanceBypassEnabled() || deps.isBetaFreeModeEnabled();
     const precheck = await precheckBalance({
       userId,
       neededIdr: estimated.idrCostRounded,

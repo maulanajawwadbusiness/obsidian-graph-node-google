@@ -63,6 +63,14 @@ function isDevBalanceBypassEnabled() {
   return serverEnv.devBypassBalanceEnabled;
 }
 
+function isBetaFreeModeEnabled() {
+  return serverEnv.betaFreeModeEnabled;
+}
+
+if (isBetaFreeModeEnabled()) {
+  console.log("[billing] BETA_FREE_MODE enabled: bypassing payment gates");
+}
+
 const verifyGoogleIdToken = makeVerifyGoogleIdToken();
 const requireAuth = makeRequireAuth({
   getPool,
@@ -95,6 +103,7 @@ const llmRouteCommonDeps = {
   getUsageFieldList,
   getPriceUsdPerM,
   isDevBalanceBypassEnabled,
+  isBetaFreeModeEnabled,
   incRequestsTotal: llmRuntime.incRequestsTotal,
   incRequestsInflight: llmRuntime.incRequestsInflight,
   decRequestsInflight: llmRuntime.decRequestsInflight

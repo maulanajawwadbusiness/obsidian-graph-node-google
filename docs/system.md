@@ -932,6 +932,34 @@ Expected rollback behavior:
 - Insufficient-balance 402 behavior resumes only when backend toggle is off.
 - Audit labeling remains explicit (`bypassed_beta` only while beta toggle is active).
 
+### Cloud Run redeploy safety for env changes
+Use this sequence when asking an agent to deploy backend env changes:
+
+1. Confirm active target:
+   - project: `arnvoid-project`
+   - service: `arnvoid-api`
+   - region: `asia-southeast2`
+2. Inspect current env + traffic before change:
+   - `gcloud run services describe arnvoid-api --platform=managed --region=asia-southeast2 --format="yaml(spec.template.spec.containers[0].env,status.traffic,status.latestReadyRevisionName)"`
+3. Prefer additive update (safe):
+   - `gcloud run services update arnvoid-api --platform=managed --region=asia-southeast2 --update-env-vars "BETA_FREE_MODE=1"`
+4. If agent must use `--set-env-vars`, it must include all required non-secret vars in one command (otherwise startup can fail).
+5. Verify rollout after update:
+   - latest ready revision is new
+   - 100% traffic on latest revision
+   - no startup fatal errors in revision logs
+
+Critical note:
+- `--set-env-vars` replaces existing non-secret env vars in the service template.
+- Missing DB/runtime vars can cause startup failure (for example `INSTANCE_CONNECTION_NAME is empty`).
+
+Required backend envs that must remain present for startup:
+- `INSTANCE_CONNECTION_NAME`
+- `DB_NAME`
+- `DB_USER`
+- `GOOGLE_CLIENT_ID`
+- plus secret refs for `DB_PASSWORD` and `OPENAI_API_KEY`
+
 ## Payments (GoPay QRIS)
 Backend:
 - `POST /api/payments/gopayqris/create`

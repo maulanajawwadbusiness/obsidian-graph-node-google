@@ -2,7 +2,8 @@ import { getBalanceState, refreshBalance } from '../store/balanceStore';
 import { showShortage, type ShortageContext, type ShortageSurface } from './shortageStore';
 
 function isDevBalanceBypassEnabled(): boolean {
-    return import.meta.env.DEV && import.meta.env.VITE_DEV_BYPASS_BALANCE === '1';
+    return (import.meta.env.DEV && import.meta.env.VITE_DEV_BYPASS_BALANCE === '1')
+        || import.meta.env.VITE_BETA_FREE_MODE === '1';
 }
 
 async function waitForBalance(timeoutMs: number): Promise<number | null> {

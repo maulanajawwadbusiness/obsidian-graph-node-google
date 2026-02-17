@@ -85,6 +85,9 @@ const Graph = React.lazy(() =>
 type Screen = AppScreen;
 type SidebarInteractionState = 'active' | 'frozen';
 type GateExitTarget = 'graph' | 'prompt';
+type PendingFadeAction =
+    | { kind: 'restoreInterface'; record: SavedInterfaceRecordV1 }
+    | { kind: 'createNew' };
 const STORAGE_KEY = 'arnvoid_screen';
 const PERSIST_SCREEN = false;
 const DEBUG_ONBOARDING_SCROLL_GUARD = false;
@@ -166,7 +169,7 @@ export const AppShell: React.FC = () => {
     const gateEnterRafRef = React.useRef<number | null>(null);
     const gateExitTimerRef = React.useRef<number | null>(null);
     const gateExitFailsafeTimerRef = React.useRef<number | null>(null);
-    const pendingRestoreRef = React.useRef<SavedInterfaceRecordV1 | null>(null);
+    const pendingFadeActionRef = React.useRef<PendingFadeAction | null>(null);
     const savedInterfacesRef = React.useRef<SavedInterfaceRecordV1[]>([]);
     const restoreReadPathActiveRef = React.useRef(false);
     const activeStorageKeyRef = React.useRef<string>(getSavedInterfacesStorageKey());
@@ -494,7 +497,8 @@ export const AppShell: React.FC = () => {
         const record = savedInterfaces.find((item) => item.id === id);
         if (!record) return;
         if (screen === 'prompt') {
-            pendingRestoreRef.current = record;
+            if (contentFadePhase !== 'idle') return;
+            pendingFadeActionRef.current = { kind: 'restoreInterface', record };
             setContentFadePhase('fadingOut');
             console.log('[B1Fade] start id=%s from=%s', record.id, screen);
             return;
@@ -504,22 +508,29 @@ export const AppShell: React.FC = () => {
             transitionWithPromptGraphGuard('graph');
         }
         console.log('[appshell] pending_load_interface id=%s', id);
-    }, [savedInterfaces, screen, transitionWithPromptGraphGuard]);
+    }, [contentFadePhase, savedInterfaces, screen, transitionWithPromptGraphGuard]);
     const onContentFadeOutDone = React.useCallback(() => {
-        const pendingRestore = pendingRestoreRef.current;
-        pendingRestoreRef.current = null;
-        if (!pendingRestore) {
+        const action = pendingFadeActionRef.current;
+        pendingFadeActionRef.current = null;
+        if (!action) {
             setContentFadePhase('idle');
             return;
         }
-        setPendingLoadInterface(pendingRestore);
-        transitionToScreen('graph');
+        if (action.kind === 'restoreInterface') {
+            setPendingLoadInterface(action.record);
+            transitionToScreen('graph');
+            console.log('[B1Fade] commit id=%s', action.record.id);
+        } else if (action.kind === 'createNew') {
+            setPendingLoadInterface(null);
+            setPendingAnalysis(null);
+            transitionToScreen('prompt');
+            console.log('[B1ReverseFade] commit');
+        }
         setContentFadePhase('fadingIn');
-        console.log('[B1Fade] commit id=%s', pendingRestore.id);
     }, [transitionToScreen]);
     const onContentFadeInDone = React.useCallback(() => {
         setContentFadePhase('idle');
-        console.log('[B1Fade] done');
+        console.log('[NavFade] done');
     }, []);
     const confirmDelete = React.useCallback(() => {
         if (!pendingDeleteId) {
@@ -1022,6 +1033,13 @@ export const AppShell: React.FC = () => {
                     onCreateNew={() => {
                         if (sidebarFrozenActive) {
                             warnFrozenSidebarAction('create_new');
+                            return;
+                        }
+                        if (contentFadePhase !== 'idle') return;
+                        if (isGraphClassScreen(screen)) {
+                            pendingFadeActionRef.current = { kind: 'createNew' };
+                            setContentFadePhase('fadingOut');
+                            console.log('[B1ReverseFade] start from=%s', screen);
                             return;
                         }
                         setPendingLoadInterface(null);

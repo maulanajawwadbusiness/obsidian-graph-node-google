@@ -19,6 +19,7 @@ import {
     getTransitionPolicy,
 } from './appshell/transitions/transitionContract';
 import {
+    B2_GRAPH_SWITCH_FADE_MS,
     GRAPH_LOADING_SCREEN_FADE_EASING,
     GRAPH_LOADING_SCREEN_FADE_MS,
 } from './appshell/transitions/transitionTokens';
@@ -36,6 +37,10 @@ import {
     getSkipTarget,
 } from './appshell/screenFlow/screenFlowController';
 import { renderScreenContent } from './appshell/render/renderScreenContent';
+import {
+    ContentFadeOverlay,
+    type ContentFadePhase,
+} from './appshell/render/ContentFadeOverlay';
 import {
     computeGraphLoadingGateBase,
     computeGraphLoadingWatchdogPhase,
@@ -81,6 +86,10 @@ const Graph = React.lazy(() =>
 type Screen = AppScreen;
 type SidebarInteractionState = 'active' | 'frozen';
 type GateExitTarget = 'graph' | 'prompt';
+type PendingFadeAction =
+    | { kind: 'restoreInterface'; record: SavedInterfaceRecordV1 }
+    | { kind: 'createNew' }
+    | { kind: 'switchGraph'; record: SavedInterfaceRecordV1 };
 const STORAGE_KEY = 'arnvoid_screen';
 const PERSIST_SCREEN = false;
 const DEBUG_ONBOARDING_SCROLL_GUARD = false;
@@ -144,6 +153,8 @@ export const AppShell: React.FC = () => {
     });
     const [gatePhase, setGatePhase] = React.useState<GatePhase>('idle');
     const [gateVisualPhase, setGateVisualPhase] = React.useState<GateVisualPhase>('visible');
+    const [contentFadePhase, setContentFadePhase] = React.useState<ContentFadePhase>('idle');
+    const [contentFadeMs, setContentFadeMs] = React.useState<number>(GRAPH_LOADING_SCREEN_FADE_MS);
     const [pendingGateExitTarget, setPendingGateExitTarget] = React.useState<GateExitTarget | null>(null);
     const [seenLoadingTrue, setSeenLoadingTrue] = React.useState(false);
     const [gateEntryIntent, setGateEntryIntent] = React.useState<GateEntryIntent>('none');
@@ -161,6 +172,7 @@ export const AppShell: React.FC = () => {
     const gateEnterRafRef = React.useRef<number | null>(null);
     const gateExitTimerRef = React.useRef<number | null>(null);
     const gateExitFailsafeTimerRef = React.useRef<number | null>(null);
+    const pendingFadeActionRef = React.useRef<PendingFadeAction | null>(null);
     const savedInterfacesRef = React.useRef<SavedInterfaceRecordV1[]>([]);
     const restoreReadPathActiveRef = React.useRef(false);
     const activeStorageKeyRef = React.useRef<string>(getSavedInterfacesStorageKey());
@@ -487,12 +499,66 @@ export const AppShell: React.FC = () => {
     const selectSavedInterfaceById = React.useCallback((id: string) => {
         const record = savedInterfaces.find((item) => item.id === id);
         if (!record) return;
+        if (screen === 'prompt') {
+            if (contentFadePhase !== 'idle') return;
+            pendingFadeActionRef.current = { kind: 'restoreInterface', record };
+            setContentFadeMs(GRAPH_LOADING_SCREEN_FADE_MS);
+            setContentFadePhase('fadingOut');
+            console.log('[B1Fade] start id=%s from=%s', record.id, screen);
+            return;
+        }
+        if (isGraphClassScreen(screen)) {
+            if (contentFadePhase !== 'idle') return;
+            if (graphRuntimeStatus.isLoading) {
+                console.log('[B2Fade] blocked: aiActivity');
+                return;
+            }
+            if (pendingLoadInterface?.id === record.id) return;
+            pendingFadeActionRef.current = { kind: 'switchGraph', record };
+            setContentFadeMs(B2_GRAPH_SWITCH_FADE_MS);
+            setContentFadePhase('fadingOut');
+            console.log('[B2Fade] start id=%s from=%s', record.id, screen);
+            return;
+        }
         setPendingLoadInterface(record);
         if (!isGraphClassScreen(screen)) {
             transitionWithPromptGraphGuard('graph');
         }
         console.log('[appshell] pending_load_interface id=%s', id);
-    }, [savedInterfaces, screen, transitionWithPromptGraphGuard]);
+    }, [
+        contentFadePhase,
+        graphRuntimeStatus.isLoading,
+        pendingLoadInterface?.id,
+        savedInterfaces,
+        screen,
+        transitionWithPromptGraphGuard,
+    ]);
+    const onContentFadeOutDone = React.useCallback(() => {
+        const action = pendingFadeActionRef.current;
+        pendingFadeActionRef.current = null;
+        if (!action) {
+            setContentFadePhase('idle');
+            return;
+        }
+        if (action.kind === 'restoreInterface') {
+            setPendingLoadInterface(action.record);
+            transitionToScreen('graph');
+            console.log('[B1Fade] commit id=%s', action.record.id);
+        } else if (action.kind === 'createNew') {
+            setPendingLoadInterface(null);
+            setPendingAnalysis(null);
+            transitionToScreen('prompt');
+            console.log('[B1ReverseFade] commit');
+        } else if (action.kind === 'switchGraph') {
+            setPendingLoadInterface(action.record);
+            console.log('[B2Fade] commit id=%s', action.record.id);
+        }
+        setContentFadePhase('fadingIn');
+    }, [transitionToScreen]);
+    const onContentFadeInDone = React.useCallback(() => {
+        setContentFadePhase('idle');
+        console.log('[NavFade] done');
+    }, []);
     const confirmDelete = React.useCallback(() => {
         if (!pendingDeleteId) {
             console.log('[appshell] delete_interface_skipped reason=no_id');
@@ -757,6 +823,13 @@ export const AppShell: React.FC = () => {
         console.warn('[SidebarFreezeGuard] collapsed_clamp_expected_but_rendered_expanded=true');
     }, [screen, sidebarExpandedForRender]);
 
+    React.useEffect(() => {
+        if (!import.meta.env.DEV) return;
+        if (screen !== 'graph_loading') return;
+        if (!pendingLoadInterface) return;
+        console.warn('[Invariant] restore routed to graph_loading; should be direct graph for b1');
+    }, [pendingLoadInterface, screen]);
+
     const confirmGraphLoadingGate = React.useCallback(() => {
         if (screen !== 'graph_loading') return;
         if (gatePhase !== 'done') return;
@@ -989,6 +1062,14 @@ export const AppShell: React.FC = () => {
                             warnFrozenSidebarAction('create_new');
                             return;
                         }
+                        if (contentFadePhase !== 'idle') return;
+                        if (isGraphClassScreen(screen)) {
+                            pendingFadeActionRef.current = { kind: 'createNew' };
+                            setContentFadeMs(GRAPH_LOADING_SCREEN_FADE_MS);
+                            setContentFadePhase('fadingOut');
+                            console.log('[B1ReverseFade] start from=%s', screen);
+                            return;
+                        }
                         setPendingLoadInterface(null);
                         setPendingAnalysis(null);
                         transitionToScreen(getCreateNewTarget());
@@ -1058,6 +1139,13 @@ export const AppShell: React.FC = () => {
                         isOnboardingOverlayOpen={isOnboardingOverlayOpen}
                     />
                     {moneyUi}
+                    <ContentFadeOverlay
+                        phase={contentFadePhase}
+                        fadeMs={contentFadeMs}
+                        fadeEasing={GRAPH_LOADING_SCREEN_FADE_EASING}
+                        onFadeOutDone={onContentFadeOutDone}
+                        onFadeInDone={onContentFadeInDone}
+                    />
                 </div>
                 <ModalLayer
                     profile={{

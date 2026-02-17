@@ -17,9 +17,11 @@ import { chainResult, err, ok, type Result } from '../lib/validation/result';
 import {
     acquireGraphRuntimeLease,
     assertActiveLeaseOwner,
+    getGraphRuntimeLeaseSnapshot,
     isGraphRuntimeLeaseTokenActive,
     releaseGraphRuntimeLease,
     subscribeGraphRuntimeLease,
+    type GraphRuntimeLeaseSnapshot,
     type GraphRuntimeOwner,
 } from '../runtime/graphRuntimeLease';
 import { trackResource, warnIfGraphRuntimeResourcesUnbalanced } from '../runtime/resourceTracker';
@@ -122,8 +124,13 @@ type SampleLoadSuccess = {
 
 type PreviewLeaseDebugCounters = {
     lostLeaseUnmountCount: number;
+    deniedGraphOwnerCount: number;
     reacquireAttemptCount: number;
     reacquireSuccessCount: number;
+    snapshotBootstrapAttemptCount: number;
+    snapshotBootstrapSuccessCount: number;
+    rafRetryAttemptCount: number;
+    rafRetrySuccessCount: number;
 };
 
 type PreviewInputDebugCounters = {
@@ -192,22 +199,67 @@ export const SampleGraphPreview: React.FC = () => {
     const activeLeaseTokenRef = React.useRef<string | null>(null);
     const leaseStateRef = React.useRef<LeaseState>({ phase: 'checking' });
     const lastReacquireEpochRef = React.useRef<number>(-1);
+    const deniedRetryRafRef = React.useRef<number | null>(null);
     const leaseDebugCountersRef = React.useRef<PreviewLeaseDebugCounters>({
         lostLeaseUnmountCount: 0,
+        deniedGraphOwnerCount: 0,
         reacquireAttemptCount: 0,
         reacquireSuccessCount: 0,
+        snapshotBootstrapAttemptCount: 0,
+        snapshotBootstrapSuccessCount: 0,
+        rafRetryAttemptCount: 0,
+        rafRetrySuccessCount: 0,
     });
 
     const logLeaseDebugCounters = React.useCallback(() => {
         if (!import.meta.env.DEV) return;
         const c = leaseDebugCountersRef.current;
         console.log(
-            '[SampleGraphPreview][Lease] lostLeaseUnmountCount=%d reacquireAttemptCount=%d reacquireSuccessCount=%d',
+            '[SampleGraphPreview][Lease] lostLeaseUnmountCount=%d deniedGraphOwnerCount=%d reacquireAttemptCount=%d reacquireSuccessCount=%d bootstrapAttempt=%d bootstrapSuccess=%d rafRetryAttempt=%d rafRetrySuccess=%d',
             c.lostLeaseUnmountCount,
+            c.deniedGraphOwnerCount,
             c.reacquireAttemptCount,
-            c.reacquireSuccessCount
+            c.reacquireSuccessCount,
+            c.snapshotBootstrapAttemptCount,
+            c.snapshotBootstrapSuccessCount,
+            c.rafRetryAttemptCount,
+            c.rafRetrySuccessCount
         );
     }, []);
+
+    const setDeniedLeaseState = React.useCallback((activeOwner: GraphRuntimeOwner, activeInstanceId: string) => {
+        const deniedState: LeaseState = {
+            phase: 'denied',
+            activeOwner,
+            activeInstanceId,
+        };
+        leaseStateRef.current = deniedState;
+        setLeaseState(deniedState);
+    }, []);
+
+    const tryAcquirePreviewLeaseFromSnapshot = React.useCallback((snapshot: GraphRuntimeLeaseSnapshot): boolean => {
+        if (activeLeaseTokenRef.current) return false;
+        if (lastReacquireEpochRef.current === snapshot.epoch) return false;
+        if (snapshot.activeOwner === 'graph-screen') return false;
+        const currentPhase = leaseStateRef.current.phase;
+        if (currentPhase !== 'paused' && currentPhase !== 'denied' && currentPhase !== 'checking') return false;
+
+        lastReacquireEpochRef.current = snapshot.epoch;
+        leaseDebugCountersRef.current.reacquireAttemptCount += 1;
+        const reacquireResult = acquireGraphRuntimeLease('prompt-preview', instanceIdRef.current);
+        if (reacquireResult.ok) {
+            leaseDebugCountersRef.current.reacquireSuccessCount += 1;
+            activeLeaseTokenRef.current = reacquireResult.token;
+            const allowedState: LeaseState = { phase: 'allowed', token: reacquireResult.token };
+            leaseStateRef.current = allowedState;
+            setLeaseState(allowedState);
+            logLeaseDebugCounters();
+            return true;
+        }
+        setDeniedLeaseState(reacquireResult.activeOwner, reacquireResult.activeInstanceId);
+        logLeaseDebugCounters();
+        return false;
+    }, [logLeaseDebugCounters, setDeniedLeaseState]);
     React.useEffect(() => {
         let active = true;
         import('../samples/sampleGraphPreview.export.json')
@@ -265,19 +317,31 @@ export const SampleGraphPreview: React.FC = () => {
             setLeaseState(nextState);
             return;
         }
-        const deniedState: LeaseState = {
-            phase: 'denied',
-            activeOwner: result.activeOwner,
-            activeInstanceId: result.activeInstanceId,
-        };
-        leaseStateRef.current = deniedState;
-        setLeaseState(deniedState);
+        if (import.meta.env.DEV && result.activeOwner === 'graph-screen') {
+            leaseDebugCountersRef.current.deniedGraphOwnerCount += 1;
+        }
+        setDeniedLeaseState(result.activeOwner, result.activeInstanceId);
         activeLeaseTokenRef.current = null;
+        if (result.activeOwner === 'graph-screen' && deniedRetryRafRef.current === null) {
+            deniedRetryRafRef.current = window.requestAnimationFrame(() => {
+                deniedRetryRafRef.current = null;
+                leaseDebugCountersRef.current.rafRetryAttemptCount += 1;
+                const acquired = tryAcquirePreviewLeaseFromSnapshot(getGraphRuntimeLeaseSnapshot());
+                if (acquired) {
+                    leaseDebugCountersRef.current.rafRetrySuccessCount += 1;
+                    logLeaseDebugCounters();
+                }
+            });
+        }
         return;
-    }, []);
+    }, [logLeaseDebugCounters, setDeniedLeaseState, tryAcquirePreviewLeaseFromSnapshot]);
 
     React.useEffect(() => {
         return () => {
+            if (deniedRetryRafRef.current !== null) {
+                window.cancelAnimationFrame(deniedRetryRafRef.current);
+                deniedRetryRafRef.current = null;
+            }
             const token = activeLeaseTokenRef.current;
             if (token) {
                 releaseGraphRuntimeLease(token);
@@ -288,7 +352,7 @@ export const SampleGraphPreview: React.FC = () => {
     }, []);
 
     React.useEffect(() => {
-        return subscribeGraphRuntimeLease((snapshot) => {
+        const handleLeaseSnapshot = (snapshot: GraphRuntimeLeaseSnapshot) => {
             const token = activeLeaseTokenRef.current;
             if (token) {
                 assertActiveLeaseOwner('prompt-preview', token);
@@ -303,35 +367,18 @@ export const SampleGraphPreview: React.FC = () => {
                 }
                 return;
             }
+            tryAcquirePreviewLeaseFromSnapshot(snapshot);
+        };
 
-            if (lastReacquireEpochRef.current === snapshot.epoch) return;
-            if (snapshot.activeOwner === 'graph-screen') return;
-
-            const currentPhase = leaseStateRef.current.phase;
-            if (currentPhase !== 'paused' && currentPhase !== 'denied' && currentPhase !== 'checking') return;
-
-            lastReacquireEpochRef.current = snapshot.epoch;
-            leaseDebugCountersRef.current.reacquireAttemptCount += 1;
-            const reacquireResult = acquireGraphRuntimeLease('prompt-preview', instanceIdRef.current);
-            if (reacquireResult.ok) {
-                leaseDebugCountersRef.current.reacquireSuccessCount += 1;
-                activeLeaseTokenRef.current = reacquireResult.token;
-                const allowedState: LeaseState = { phase: 'allowed', token: reacquireResult.token };
-                leaseStateRef.current = allowedState;
-                setLeaseState(allowedState);
-                logLeaseDebugCounters();
-                return;
-            }
-            const deniedState: LeaseState = {
-                phase: 'denied',
-                activeOwner: reacquireResult.activeOwner,
-                activeInstanceId: reacquireResult.activeInstanceId,
-            };
-            leaseStateRef.current = deniedState;
-            setLeaseState(deniedState);
+        const unsubscribe = subscribeGraphRuntimeLease(handleLeaseSnapshot);
+        leaseDebugCountersRef.current.snapshotBootstrapAttemptCount += 1;
+        const bootstrapAcquired = tryAcquirePreviewLeaseFromSnapshot(getGraphRuntimeLeaseSnapshot());
+        if (bootstrapAcquired) {
+            leaseDebugCountersRef.current.snapshotBootstrapSuccessCount += 1;
             logLeaseDebugCounters();
-        });
-    }, [logLeaseDebugCounters]);
+        }
+        return unsubscribe;
+    }, [logLeaseDebugCounters, tryAcquirePreviewLeaseFromSnapshot]);
 
     React.useEffect(() => {
         if (!sampleExportPayload) return;

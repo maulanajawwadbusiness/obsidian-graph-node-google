@@ -34,41 +34,76 @@ export const GraphRuntimeLeaseBoundary: React.FC<GraphRuntimeLeaseBoundaryProps>
     const [leaseState, setLeaseState] = React.useState<LeaseBoundaryState>({ phase: 'checking' });
     const activeTokenRef = React.useRef<string | null>(null);
     const lastEpochAttemptRef = React.useRef<number>(-1);
+    const isDisposingRef = React.useRef(false);
+    const layoutReleaseCountRef = React.useRef(0);
+    const disposeSubscriberHitCountRef = React.useRef(0);
+    const reacquireDuringDisposeWarnedRef = React.useRef(false);
 
     React.useLayoutEffect(() => {
+        isDisposingRef.current = false;
         const result = acquireGraphRuntimeLease(owner, instanceIdRef.current);
         if (result.ok) {
             activeTokenRef.current = result.token;
             setLeaseState({ phase: 'allowed', token: result.token });
-            return;
+        } else {
+            activeTokenRef.current = null;
+            setLeaseState({
+                phase: 'denied',
+                activeOwner: result.activeOwner,
+                activeInstanceId: result.activeInstanceId,
+            });
         }
-        activeTokenRef.current = null;
-        setLeaseState({
-            phase: 'denied',
-            activeOwner: result.activeOwner,
-            activeInstanceId: result.activeInstanceId,
-        });
-        return;
+        return () => {
+            isDisposingRef.current = true;
+            const token = activeTokenRef.current;
+            if (!token) return;
+            activeTokenRef.current = null;
+            releaseGraphRuntimeLease(token);
+            if (import.meta.env.DEV) {
+                layoutReleaseCountRef.current += 1;
+                console.log(
+                    '[GraphRuntimeLeaseBoundary] layout_release owner=%s count=%d',
+                    owner,
+                    layoutReleaseCountRef.current
+                );
+            }
+        };
     }, [owner]);
 
     React.useEffect(() => {
         return () => {
-            const token = activeTokenRef.current;
-            if (token) {
-                releaseGraphRuntimeLease(token);
-                activeTokenRef.current = null;
-            }
             warnIfGraphRuntimeResourcesUnbalanced('GraphRuntimeLeaseBoundary.unmount');
         };
     }, []);
 
-    React.useEffect(() => {
+    React.useLayoutEffect(() => {
+        isDisposingRef.current = false;
         return subscribeGraphRuntimeLease((snapshot) => {
+            if (isDisposingRef.current) {
+                if (import.meta.env.DEV) {
+                    disposeSubscriberHitCountRef.current += 1;
+                    if (disposeSubscriberHitCountRef.current <= 3) {
+                        console.warn(
+                            '[GraphRuntimeLeaseBoundary] subscriber_while_disposing owner=%s count=%d',
+                            owner,
+                            disposeSubscriberHitCountRef.current
+                        );
+                    }
+                }
+                return;
+            }
             const token = activeTokenRef.current;
             if (token && isGraphRuntimeLeaseTokenActive(token)) return;
             if (snapshot.epoch === lastEpochAttemptRef.current) return;
             lastEpochAttemptRef.current = snapshot.epoch;
 
+            if (isDisposingRef.current) {
+                if (import.meta.env.DEV && !reacquireDuringDisposeWarnedRef.current) {
+                    reacquireDuringDisposeWarnedRef.current = true;
+                    console.warn('[GraphRuntimeLeaseBoundary] blocked_reacquire_during_dispose owner=%s', owner);
+                }
+                return;
+            }
             const reacquire = acquireGraphRuntimeLease(owner, instanceIdRef.current);
             if (reacquire.ok) {
                 activeTokenRef.current = reacquire.token;

@@ -1253,7 +1253,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 >
                     <button
                         type="button"
-                        style={MORE_MENU_ITEM_STYLE}
+                        disabled={true}
+                        aria-disabled="true"
+                        style={{
+                            ...MORE_MENU_ITEM_STYLE,
+                            opacity: 0.5,
+                            pointerEvents: 'none',
+                            cursor: 'default',
+                        }}
                         onPointerDown={(e) => e.stopPropagation()}
                         onPointerUp={(e) => e.stopPropagation()}
                         onClick={(e) => {
@@ -1287,7 +1294,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     </button>
                     <button
                         type="button"
-                        style={MORE_MENU_ITEM_STYLE}
+                        disabled={true}
+                        aria-disabled="true"
+                        style={{
+                            ...MORE_MENU_ITEM_STYLE,
+                            opacity: 0.5,
+                            pointerEvents: 'none',
+                            cursor: 'default',
+                        }}
                         onPointerDown={(e) => e.stopPropagation()}
                         onPointerUp={(e) => e.stopPropagation()}
                         onClick={(e) => {

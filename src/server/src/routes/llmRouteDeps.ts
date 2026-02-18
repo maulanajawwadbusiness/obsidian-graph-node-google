@@ -14,6 +14,8 @@ export type ApiErrorCode =
   | "too_large"
   | "unauthorized"
   | "insufficient_rupiah"
+  | "beta_cap_exceeded"
+  | "beta_daily_exceeded"
   | "rate_limited"
   | "upstream_error"
   | "timeout"
@@ -25,6 +27,7 @@ export type ApiError = {
   request_id: string;
   code: ApiErrorCode;
   error: string;
+  [key: string]: unknown;
 };
 
 export type LlmRequestLogFields = {
@@ -60,6 +63,13 @@ export type LlmRequestLogFields = {
 };
 
 export type LlmRouteCommonDeps = {
+  getPool: () => Promise<{
+    query: (sql: string, params?: unknown[]) => Promise<{ rows: any[]; rowCount?: number }>;
+    connect: () => Promise<{
+      query: (sql: string, params?: unknown[]) => Promise<{ rows: any[]; rowCount?: number }>;
+      release: () => void;
+    }>;
+  }>;
   requireAuth: express.RequestHandler;
   getUserId: (user: AuthContext) => string;
   acquireLlmSlot: (userId: string) => boolean;
@@ -78,6 +88,7 @@ export type LlmRouteCommonDeps = {
   getPriceUsdPerM: (model: string) => number | null;
   isDevBalanceBypassEnabled: () => boolean;
   isBetaFreeModeEnabled: () => boolean;
+  isBetaCapsModeEnabled: () => boolean;
   incRequestsTotal: () => void;
   incRequestsInflight: () => void;
   decRequestsInflight: () => void;

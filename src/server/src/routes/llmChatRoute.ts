@@ -1,6 +1,7 @@
 import crypto from "crypto";
 import type express from "express";
 import { buildAuditState } from "../llm/auditState";
+import { checkCaps, computeWordCount, recordUsage } from "../llm/betaCaps";
 import {
   applyFreepoolLedger,
   chargeUsage,
@@ -178,6 +179,9 @@ app.post("/api/llm/chat", deps.requireAuth, async (req, res) => {
   let firstTokenAt: number | null = null;
   let terminationReason = "success";
   let chatInput = "";
+  let capsDateKey = "";
+  let capsSubmittedWordCount = 0;
+  let capsCheckPassed = false;
   const devBypassEnabled = deps.isDevBalanceBypassEnabled();
   const betaFreeModeEnabled = deps.isBetaFreeModeEnabled();
   const bypassReason = betaFreeModeEnabled ? "beta" : devBypassEnabled ? "dev" : null;
@@ -191,6 +195,59 @@ app.post("/api/llm/chat", deps.requireAuth, async (req, res) => {
   try {
     auditLogicalModel = validation.model;
     auditPriceUsdPerM = deps.getPriceUsdPerM(validation.model);
+    capsSubmittedWordCount =
+      typeof validation.submitted_word_count === "number"
+        ? validation.submitted_word_count
+        : computeWordCount(validation.userPrompt);
+    const capsCheck = await checkCaps({
+      db: await deps.getPool(),
+      userId,
+      submittedWordCount: capsSubmittedWordCount,
+      requestId,
+      capsEnabled: deps.isBetaCapsModeEnabled()
+    });
+    capsDateKey = capsCheck.dateKey;
+    if (!capsCheck.ok) {
+      const failedCheck = capsCheck as Extract<typeof capsCheck, { ok: false }>;
+      auditHttpStatus = 429;
+      auditTerminationReason = "rate_limited";
+      auditChargeStatus = "skipped";
+      await writeAudit();
+      deps.sendApiError(res, 429, {
+        ok: false,
+        request_id: requestId,
+        code: failedCheck.code,
+        error:
+          failedCheck.code === "beta_cap_exceeded"
+            ? "document exceeds beta per-doc word limit"
+            : "beta daily word limit reached",
+        per_doc_limit: failedCheck.perDocLimit,
+        daily_limit: failedCheck.dailyLimit,
+        submitted_word_count: failedCheck.submittedWordCount,
+        daily_used: failedCheck.dailyUsed,
+        daily_remaining: failedCheck.dailyRemaining,
+        date_key: failedCheck.dateKey,
+        reset_note: failedCheck.resetNote
+      });
+      deps.logLlmRequest({
+        request_id: requestId,
+        endpoint: "/api/llm/chat",
+        user_id: userId,
+        model: validation.model,
+        input_chars: validation.userPrompt.length,
+        output_chars: 0,
+        duration_ms: Date.now() - startedAt,
+        status_code: 429,
+        termination_reason: "rate_limited",
+        rupiah_cost: null,
+        rupiah_balance_before: null,
+        rupiah_balance_after: null
+      });
+      statusCode = 429;
+      terminationReason = "rate_limited";
+      return;
+    }
+    capsCheckPassed = true;
     const router = await pickProviderForRequest({ userId, endpointKind: "chat" });
     const provider = router.provider;
     providerName = provider.name;
@@ -386,6 +443,20 @@ app.post("/api/llm/chat", deps.requireAuth, async (req, res) => {
       auditBalanceAfter = charge.rupiahAfter;
       auditChargeStatus = charge.chargeStatus;
       auditChargeError = null;
+      if (statusCode === 200 && capsCheckPassed) {
+        try {
+          await recordUsage({
+            db: await deps.getPool(),
+            userId,
+            dateKey: capsDateKey,
+            deltaWords: capsSubmittedWordCount,
+            requestId,
+            capsEnabled: deps.isBetaCapsModeEnabled()
+          });
+        } catch (error) {
+          console.warn(`[caps] record_failed request_id=${requestId} endpoint=/api/llm/chat error=${String(error)}`);
+        }
+      }
     } else {
       terminationReason = "insufficient_rupiah";
       auditCostIdr = 0;

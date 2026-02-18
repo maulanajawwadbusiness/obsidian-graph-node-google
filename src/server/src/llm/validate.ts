@@ -13,12 +13,14 @@ export type PaperAnalyzeInput = {
   nodeCount: number;
   model: LogicalModel;
   lang?: "id" | "en";
+  submitted_word_count?: number;
 };
 
 export type ChatInput = {
   userPrompt: string;
   model: LogicalModel;
   systemPrompt?: string;
+  submitted_word_count?: number;
   context: {
     nodeLabel?: string | null;
     documentText?: string | null;
@@ -30,6 +32,7 @@ export type ChatInput = {
 export type PrefillInput = {
   nodeLabel: string;
   model: LogicalModel;
+  submitted_word_count?: number;
   miniChatMessages?: Array<{ role: "user" | "ai"; text: string }>;
   content?: { title: string; summary: string } | null;
 };
@@ -55,6 +58,15 @@ function isString(value: unknown): value is string {
 
 function invalidType(field: string): ValidationError {
   return { ok: false, status: 400, code: "bad_request", error: `invalid ${field}` };
+}
+
+function parseSubmittedWordCount(body: any): number | ValidationError | undefined {
+  if (body?.submitted_word_count === undefined) return undefined;
+  const parsed = Number(body.submitted_word_count);
+  if (!Number.isFinite(parsed)) return invalidType("submitted_word_count");
+  if (!Number.isInteger(parsed)) return invalidType("submitted_word_count");
+  if (parsed < 0) return invalidType("submitted_word_count");
+  return parsed;
 }
 
 export function validatePaperAnalyze(body: any): PaperAnalyzeInput | ValidationError {
@@ -87,7 +99,19 @@ export function validatePaperAnalyze(body: any): PaperAnalyzeInput | ValidationE
     lang = body.lang;
   }
 
-  return { text: body.text, nodeCount, model: resolvedModel, lang };
+  const submittedWordCountParsed = parseSubmittedWordCount(body);
+  if (submittedWordCountParsed !== undefined && typeof submittedWordCountParsed !== "number") {
+    return submittedWordCountParsed;
+  }
+  const submittedWordCount = submittedWordCountParsed as number | undefined;
+
+  return {
+    text: body.text,
+    nodeCount,
+    model: resolvedModel,
+    lang,
+    submitted_word_count: submittedWordCount
+  };
 }
 
 export function validateChat(body: any): ChatInput | ValidationError {
@@ -101,6 +125,11 @@ export function validateChat(body: any): ChatInput | ValidationError {
   if (typeof resolvedModel !== "string") return resolvedModel;
 
   const context = body.context && typeof body.context === "object" ? body.context : {};
+  const submittedWordCountParsed = parseSubmittedWordCount(body);
+  if (submittedWordCountParsed !== undefined && typeof submittedWordCountParsed !== "number") {
+    return submittedWordCountParsed;
+  }
+  const submittedWordCount = submittedWordCountParsed as number | undefined;
   const systemPrompt = isString(body.systemPrompt) ? body.systemPrompt : undefined;
   if (systemPrompt && systemPrompt.length > LLM_LIMITS.chatSystemPromptMax) {
     return { ok: false, status: 413, code: "too_large", error: "systemPrompt too large" };
@@ -133,6 +162,7 @@ export function validateChat(body: any): ChatInput | ValidationError {
     userPrompt: body.userPrompt,
     model: resolvedModel,
     systemPrompt,
+    submitted_word_count: submittedWordCount,
     context: {
       nodeLabel,
       documentText,
@@ -151,6 +181,11 @@ export function validatePrefill(body: any): PrefillInput | ValidationError {
 
   const resolvedModel = resolveModel(body.model, DEFAULT_LOGICAL_MODELS.prefill);
   if (typeof resolvedModel !== "string") return resolvedModel;
+  const submittedWordCountParsed = parseSubmittedWordCount(body);
+  if (submittedWordCountParsed !== undefined && typeof submittedWordCountParsed !== "number") {
+    return submittedWordCountParsed;
+  }
+  const submittedWordCount = submittedWordCountParsed as number | undefined;
 
   const content = body.content && typeof body.content === "object" ? body.content : null;
   if (content) {
@@ -176,6 +211,7 @@ export function validatePrefill(body: any): PrefillInput | ValidationError {
   return {
     nodeLabel: body.nodeLabel,
     model: resolvedModel,
+    submitted_word_count: submittedWordCount,
     miniChatMessages,
     content: content ?? null
   };

@@ -8,6 +8,8 @@ export type ApiErrorCode =
   | "too_large"
   | "unauthorized"
   | "insufficient_rupiah"
+  | "beta_cap_exceeded"
+  | "beta_daily_exceeded"
   | "rate_limited"
   | "upstream_error"
   | "timeout"
@@ -19,6 +21,7 @@ export type ApiError = {
   request_id: string;
   code: ApiErrorCode;
   error: string;
+  [key: string]: unknown;
 };
 
 export function sendApiError(

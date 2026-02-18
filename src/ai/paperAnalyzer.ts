@@ -61,6 +61,12 @@ function normalizeText(value: string): string {
     return value.trim().toLowerCase().replace(/\s+/g, ' ');
 }
 
+function countWords(value: string): number {
+    const trimmed = value.trim();
+    if (!trimmed) return 0;
+    return trimmed.split(/\s+/).filter(Boolean).length;
+}
+
 function assertSemanticAnalyzeJson(root: Record<string, unknown>, nodeCountRaw: number): void {
     const nodeCount = normalizeNodeCount(nodeCountRaw);
     const mainPoints = root.main_points as unknown[];
@@ -257,6 +263,7 @@ export async function analyzeDocument(text: string, opts?: { nodeCount?: number 
     const nodeCount = Math.max(2, Math.min(12, opts?.nodeCount ?? 5));
     const useDevDirectAnalyze = isDevDirectAnalyzeEnabled();
     const lang: AnalyzePromptLang = getLang() === 'en' ? 'en' : 'id';
+    const submittedWordCount = countWords(text);
 
     // Safety truncation (keep costs low while maintaining context)
     // Take first 6000 chars (approx 1500 tokens) - usually covers abstract + intro
@@ -281,7 +288,8 @@ export async function analyzeDocument(text: string, opts?: { nodeCount?: number 
             text: safeText,
             nodeCount,
             model: AI_MODELS.ANALYZER,
-            lang
+            lang,
+            submitted_word_count: submittedWordCount
         });
 
         if (result.status === 401 || result.status === 403) {

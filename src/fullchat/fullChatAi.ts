@@ -28,6 +28,12 @@ export interface AiResponse {
 
 const MODEL = AI_MODELS.CHAT;
 
+function countWords(text: string): number {
+    const trimmed = text.trim();
+    if (!trimmed) return 0;
+    return trimmed.split(/\s+/).filter(Boolean).length;
+}
+
 // =============================================================================
 // PUBLIC API
 // =============================================================================
@@ -252,6 +258,7 @@ function fetchChatStream(opts: {
             body: JSON.stringify({
                 model: opts.model,
                 userPrompt: opts.userPrompt,
+                submitted_word_count: countWords(opts.userPrompt),
                 context: opts.context,
                 systemPrompt: opts.systemPrompt
             }),

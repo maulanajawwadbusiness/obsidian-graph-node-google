@@ -12,6 +12,7 @@ import { showShortage } from '../money/shortageStore';
 import { pushMoneyNotice } from '../money/moneyNotices';
 import { getLang } from '../i18n/lang';
 import { buildStructuredAnalyzeInput, type AnalyzePromptLang } from '../server/src/llm/analyze/prompt';
+import { applyAnalyzeInputPolicy } from './analyzeInputPolicy';
 
 export interface AnalysisPoint {
     index: number;   // 0-based index (maps to node index)
@@ -264,10 +265,14 @@ export async function analyzeDocument(text: string, opts?: { nodeCount?: number 
     const useDevDirectAnalyze = isDevDirectAnalyzeEnabled();
     const lang: AnalyzePromptLang = getLang() === 'en' ? 'en' : 'id';
     const submittedWordCount = countWords(text);
-
-    // Safety truncation (keep costs low while maintaining context)
-    // Take first 6000 chars (approx 1500 tokens) - usually covers abstract + intro
-    const safeText = text.slice(0, 6000);
+    const analyzeInput = applyAnalyzeInputPolicy(text);
+    const safeText = analyzeInput.text;
+    if (analyzeInput.truncationApplied) {
+        console.log(
+            `[PaperAnalyzer] truncation_applied original_chars=${analyzeInput.originalLength} ` +
+            `final_chars=${analyzeInput.finalLength} max_chars=${analyzeInput.maxChars}`
+        );
+    }
 
     let estimatedCost = 0;
     if (!useDevDirectAnalyze) {

@@ -795,6 +795,12 @@ Arnvoid uses a unified AI layer (`src/ai/`) that abstracts provider details behi
 ### C. Paper Analyzer Output (Directed Map)
 *   **Prompt + Schema**: `src/ai/paperAnalyzer.ts` now requires both points and directed links.
 *   **Single Prompt Truth Source**: Analyzer prompt instructions are centralized in `src/server/src/llm/analyze/prompt.ts` and reused by backend analyze plus frontend DEV direct analyze.
+*   **Analyze Input Truncation Policy**:
+    *   Policy source of truth: `src/config/analyzeInputPolicy.ts`
+    *   Apply seam: `src/ai/analyzeInputPolicy.ts` via `applyAnalyzeInputPolicy(...)`
+    *   Current default keeps truncation enabled at `6000` chars for analyzer input (`ENABLE_ANALYZE_INPUT_TRUNCATION = true`).
+    *   Purpose: bound prompt size and cost for analysis requests while keeping behavior explicit and code-controlled.
+    *   To disable truncation deliberately, flip `ENABLE_ANALYZE_INPUT_TRUNCATION` in `src/config/analyzeInputPolicy.ts`.
 *   **Output Fields**:
     *   `main_points`: indexed points (0..N-1), each with title and explanation.
     *   `links`: directed edges using `from_index` and `to_index`.

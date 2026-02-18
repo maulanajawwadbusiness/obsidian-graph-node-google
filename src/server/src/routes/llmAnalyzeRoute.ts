@@ -4,6 +4,7 @@ import { buildAnalyzeJsonSchema, validateAnalyzeJson } from "../llm/analyze/sche
 import { runOpenrouterAnalyze } from "../llm/analyze/openrouterAnalyze";
 import { buildStructuredAnalyzeInput } from "../llm/analyze/prompt";
 import { buildAuditState } from "../llm/auditState";
+import { checkCaps, computeWordCount, recordUsage } from "../llm/betaCaps";
 import {
   applyFreepoolLedger,
   chargeUsage,
@@ -174,6 +175,55 @@ app.post("/api/llm/paper-analyze", deps.requireAuth, async (req, res) => {
   try {
     auditLogicalModel = validation.model;
     auditPriceUsdPerM = deps.getPriceUsdPerM(validation.model);
+    const submittedWordCount =
+      typeof validation.submitted_word_count === "number"
+        ? validation.submitted_word_count
+        : computeWordCount(validation.text);
+    const capsCheck = await checkCaps({
+      db: await deps.getPool(),
+      userId,
+      submittedWordCount,
+      requestId,
+      capsEnabled: deps.isBetaCapsModeEnabled()
+    });
+    if (!capsCheck.ok) {
+      const failedCheck = capsCheck as Extract<typeof capsCheck, { ok: false }>;
+      auditHttpStatus = 429;
+      auditTerminationReason = "rate_limited";
+      auditChargeStatus = "skipped";
+      await writeAudit();
+      deps.sendApiError(res, 429, {
+        ok: false,
+        request_id: requestId,
+        code: failedCheck.code,
+        error:
+          failedCheck.code === "beta_cap_exceeded"
+            ? "document exceeds beta per-doc word limit"
+            : "beta daily word limit reached",
+        per_doc_limit: failedCheck.perDocLimit,
+        daily_limit: failedCheck.dailyLimit,
+        submitted_word_count: failedCheck.submittedWordCount,
+        daily_used: failedCheck.dailyUsed,
+        daily_remaining: failedCheck.dailyRemaining,
+        date_key: failedCheck.dateKey,
+        reset_note: failedCheck.resetNote
+      });
+      deps.logLlmRequest({
+        request_id: requestId,
+        endpoint: "/api/llm/paper-analyze",
+        user_id: userId,
+        model: validation.model,
+        input_chars: validation.text.length,
+        output_chars: 0,
+        duration_ms: Date.now() - startedAt,
+        status_code: 429,
+        termination_reason: "rate_limited",
+        rupiah_cost: null,
+        rupiah_balance_before: null,
+        rupiah_balance_after: null
+      });
+      return;
+    }
     const router = await pickProviderForRequest({ userId, endpointKind: "analyze" });
     let provider = router.provider;
     let structuredOutputMode = provider.name === "openai" ? "openai_native" : "openrouter_prompt_json";
@@ -540,6 +590,18 @@ app.post("/api/llm/paper-analyze", deps.requireAuth, async (req, res) => {
     auditFreepoolApplied = freepoolApplied ?? false;
     auditFreepoolDecrement = freepoolDecrement ?? 0;
     auditFreepoolReason = freepoolReason;
+    try {
+      await recordUsage({
+        db: await deps.getPool(),
+        userId,
+        dateKey: capsCheck.dateKey,
+        deltaWords: submittedWordCount,
+        requestId,
+        capsEnabled: deps.isBetaCapsModeEnabled()
+      });
+    } catch (error) {
+      console.warn(`[caps] record_failed request_id=${requestId} endpoint=/api/llm/paper-analyze error=${String(error)}`);
+    }
 
     res.setHeader("X-Request-Id", requestId);
     res.json({ ok: true, request_id: requestId, json: resultJson });

@@ -6,6 +6,7 @@ import type { ProfileRouteDeps } from "../routes/profileRoutes";
 import type { SavedInterfacesRouteDeps } from "../routes/savedInterfacesRoutes";
 import type { PaymentsRouteDeps } from "../routes/paymentsRoutes";
 import type { PaymentsWebhookDeps } from "../routes/paymentsWebhookRoute";
+import type { BetaCapsRouteDeps } from "../routes/betaCapsRoutes";
 import type {
   LlmAnalyzeRouteDeps,
   LlmPrefillRouteDeps,
@@ -41,6 +42,7 @@ export type BuiltRouteDeps = {
   savedInterfaces: SavedInterfacesRouteDeps;
   payments: PaymentsRouteDeps;
   paymentsWebhook: PaymentsWebhookDeps;
+  betaCaps: BetaCapsRouteDeps;
   llmAnalyze: LlmAnalyzeRouteDeps;
   llmPrefill: LlmPrefillRouteDeps;
   llmChat: LlmChatRouteDeps;
@@ -105,6 +107,13 @@ export function buildRouteDeps(args: {
     isPaidStatus: services.isPaidStatus
   };
 
+  const betaCaps: BetaCapsRouteDeps = {
+    getPool: services.getPool,
+    requireAuth: services.requireAuth,
+    getUserId: services.llmCommon.getUserId,
+    isBetaCapsModeEnabled: services.llmCommon.isBetaCapsModeEnabled
+  };
+
   const llmPrefill: LlmPrefillRouteDeps = {
     ...services.llmCommon
   };
@@ -126,6 +135,7 @@ export function buildRouteDeps(args: {
     savedInterfaces,
     payments,
     paymentsWebhook,
+    betaCaps,
     llmAnalyze,
     llmPrefill,
     llmChat

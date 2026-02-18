@@ -4,8 +4,12 @@ import { useAuth } from '../auth/AuthProvider';
 import { PromptCard } from '../components/PromptCard';
 import { PaymentGopayPanel } from '../components/PaymentGopayPanel';
 import { SHOW_ENTERPROMPT_PAYMENT_PANEL } from '../config/onboardingUiFlags';
+import { BETA_CAPS_MODE_ENABLED, betaDailyWordLimit, betaPerDocWordLimit } from '../config/betaCaps';
+import { apiGet } from '../api';
+import { WorkerClient } from '../document/workerClient';
 import uploadOverlayIcon from '../assets/upload_overlay_icon.png';
 import errorIcon from '../assets/error_icon.png';
+import { t } from '../i18n/t';
 
 const LOGIN_OVERLAY_ENABLED = true;
 const ACCEPTED_EXTENSIONS = ['.pdf', '.docx', '.md', '.markdown', '.txt'];
@@ -15,6 +19,12 @@ const isFileSupported = (file: File): boolean => {
     const ext = file.name.toLowerCase().match(/\.[^.]+$/)?.[0];
     return ext ? ACCEPTED_EXTENSIONS.includes(ext) : false;
 };
+
+function countWords(text: string): number {
+    const trimmed = text.trim();
+    if (!trimmed) return 0;
+    return trimmed.split(/\s+/).filter(Boolean).length;
+}
 
 type EnterPromptProps = {
     onEnter: () => void;
@@ -35,7 +45,7 @@ export const EnterPrompt: React.FC<EnterPromptProps> = ({
     onSubmitPromptText,
     onSubmitPromptFile,
     analysisErrorMessage = null,
-    onDismissAnalysisError
+    onDismissAnalysisError: _onDismissAnalysisError
 }) => {
     const { user } = useAuth();
     const [isOverlayHidden, setIsOverlayHidden] = React.useState(false);
@@ -43,8 +53,16 @@ export const EnterPrompt: React.FC<EnterPromptProps> = ({
     const [attachedFiles, setAttachedFiles] = React.useState<File[]>([]);
     const [isDragging, setIsDragging] = React.useState(false);
     const [showUnsupportedError, setShowUnsupportedError] = React.useState(false);
+    const [betaUsageStatus, setBetaUsageStatus] = React.useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
+    const [betaDailyRemainingWords, setBetaDailyRemainingWords] = React.useState<number>(betaDailyWordLimit);
+    const [betaCapsEnabledOnServer, setBetaCapsEnabledOnServer] = React.useState<boolean>(false);
+    const [attachedFileWordCount, setAttachedFileWordCount] = React.useState<number | null>(null);
+    const [attachedFileParseStatus, setAttachedFileParseStatus] = React.useState<'idle' | 'pending' | 'ready' | 'error'>('idle');
     const loginOverlayOpen = LOGIN_OVERLAY_ENABLED && !user && !isOverlayHidden;
     const dragCounterRef = React.useRef(0);
+    const workerClientRef = React.useRef<WorkerClient | null>(null);
+    const parseRunIdRef = React.useRef(0);
+    const promptWordCount = React.useMemo(() => countWords(promptText), [promptText]);
 
     const handlePromptSubmit = React.useCallback((submittedText: string) => {
         const trimmed = submittedText.trim();
@@ -66,6 +84,9 @@ export const EnterPrompt: React.FC<EnterPromptProps> = ({
 
     const handleRemoveFile = React.useCallback((index: number) => {
         setAttachedFiles(prev => prev.filter((_, i) => i !== index));
+        parseRunIdRef.current += 1;
+        setAttachedFileWordCount(null);
+        setAttachedFileParseStatus('idle');
     }, []);
 
     const handleDragEnter = React.useCallback((e: React.DragEvent) => {
@@ -97,9 +118,39 @@ export const EnterPrompt: React.FC<EnterPromptProps> = ({
 
         if (isFileSupported(lastFile)) {
             setAttachedFiles([lastFile]);
+            if (!BETA_CAPS_MODE_ENABLED) {
+                setAttachedFileWordCount(null);
+                setAttachedFileParseStatus('idle');
+                return;
+            }
+            setAttachedFileWordCount(null);
+            setAttachedFileParseStatus('pending');
+            const runId = parseRunIdRef.current + 1;
+            parseRunIdRef.current = runId;
+            const workerClient = workerClientRef.current;
+            if (!workerClient) {
+                setAttachedFileParseStatus('error');
+                return;
+            }
+            void workerClient.parseFile(lastFile)
+                .then((parsed) => {
+                    if (parseRunIdRef.current !== runId) return;
+                    setAttachedFileWordCount(parsed.meta.wordCount);
+                    setAttachedFileParseStatus('ready');
+                    console.log(`[caps] file_parse_ready name=${lastFile.name} words=${parsed.meta.wordCount}`);
+                })
+                .catch(() => {
+                    if (parseRunIdRef.current !== runId) return;
+                    setAttachedFileWordCount(null);
+                    setAttachedFileParseStatus('error');
+                    console.warn(`[caps] file_parse_failed name=${lastFile.name}`);
+                });
             return;
         }
 
+        parseRunIdRef.current += 1;
+        setAttachedFileWordCount(null);
+        setAttachedFileParseStatus('idle');
         setShowUnsupportedError(true);
         setTimeout(() => setShowUnsupportedError(false), 3000);
     }, []);
@@ -116,6 +167,88 @@ export const EnterPrompt: React.FC<EnterPromptProps> = ({
         onOverlayOpenChange?.(loginOverlayOpen);
     }, [loginOverlayOpen, onOverlayOpenChange]);
 
+    React.useEffect(() => {
+        if (!BETA_CAPS_MODE_ENABLED) return;
+        let cancelled = false;
+        setBetaUsageStatus('loading');
+        void apiGet('/api/beta/usage/today')
+            .then((result) => {
+                if (cancelled) return;
+                if (!result.ok || !result.data || typeof result.data !== 'object') {
+                    setBetaUsageStatus('error');
+                    return;
+                }
+                const payload = result.data as {
+                    remaining_words?: number;
+                    caps_enabled?: boolean;
+                };
+                setBetaDailyRemainingWords(
+                    typeof payload.remaining_words === 'number' ? Math.max(0, payload.remaining_words) : betaDailyWordLimit
+                );
+                setBetaCapsEnabledOnServer(payload.caps_enabled === true);
+                setBetaUsageStatus('ready');
+            })
+            .catch(() => {
+                if (cancelled) return;
+                setBetaUsageStatus('error');
+            });
+
+        return () => {
+            cancelled = true;
+        };
+    }, []);
+
+    React.useEffect(() => {
+        if (!BETA_CAPS_MODE_ENABLED) return;
+        workerClientRef.current = new WorkerClient();
+        return () => {
+            workerClientRef.current?.terminate();
+            workerClientRef.current = null;
+        };
+    }, []);
+
+    const hasTextSubmission = promptText.trim().length > 0;
+    const hasFileSubmission = !hasTextSubmission && attachedFiles.length > 0;
+    const submittedWordCount = hasTextSubmission
+        ? promptWordCount
+        : hasFileSubmission
+            ? attachedFileWordCount ?? 0
+            : 0;
+    const betaTextOverLimit = BETA_CAPS_MODE_ENABLED && submittedWordCount > betaPerDocWordLimit;
+    const betaDailyExceeded = BETA_CAPS_MODE_ENABLED
+        && betaUsageStatus === 'ready'
+        && betaCapsEnabledOnServer
+        && betaDailyRemainingWords <= 0;
+    const betaUsagePending = BETA_CAPS_MODE_ENABLED && betaUsageStatus === 'loading';
+    const betaUsageError = BETA_CAPS_MODE_ENABLED && betaUsageStatus === 'error';
+    const betaDocumentParsing = BETA_CAPS_MODE_ENABLED && hasFileSubmission && attachedFileParseStatus === 'pending';
+    const betaDocumentParseError = BETA_CAPS_MODE_ENABLED && hasFileSubmission && attachedFileParseStatus === 'error';
+    const capsSendDisabled = betaTextOverLimit || betaDailyExceeded || betaUsagePending || betaUsageError || betaDocumentParsing || betaDocumentParseError;
+    const betaInfoText = t('onboarding.enterprompt.beta.info');
+    const betaDailyExceededText = t('onboarding.enterprompt.beta.daily_exceeded');
+    const betaUsageLoadingText = t('onboarding.enterprompt.beta.usage_loading');
+    const betaUsageErrorText = t('onboarding.enterprompt.beta.usage_error');
+    const betaDocParsingText = t('onboarding.enterprompt.beta.doc_parsing');
+    const betaDocParseErrorText = t('onboarding.enterprompt.beta.doc_parse_error');
+    const betaDocOverLimitText = t('onboarding.enterprompt.beta.doc_over_limit');
+    const statusMessage = analysisErrorMessage
+        ? { kind: 'error' as const, text: analysisErrorMessage }
+        : !BETA_CAPS_MODE_ENABLED
+            ? null
+            : betaDocumentParsing
+                ? { kind: 'info' as const, text: betaDocParsingText }
+                : betaDocumentParseError
+                    ? { kind: 'error' as const, text: betaDocParseErrorText }
+                    : betaTextOverLimit
+                ? { kind: 'error' as const, text: betaDocOverLimitText }
+                : betaDailyExceeded
+                    ? { kind: 'error' as const, text: betaDailyExceededText }
+                    : betaUsagePending
+                        ? { kind: 'info' as const, text: betaUsageLoadingText }
+                        : betaUsageError
+                            ? { kind: 'error' as const, text: betaUsageErrorText }
+                            : { kind: 'info' as const, text: betaInfoText };
+
     return (
         <div
             style={ROOT_STYLE}
@@ -128,12 +261,12 @@ export const EnterPrompt: React.FC<EnterPromptProps> = ({
                 value={promptText}
                 onChange={setPromptText}
                 onSubmit={handlePromptSubmit}
+                disabled={capsSendDisabled}
                 attachedFiles={attachedFiles}
                 canSubmitWithoutText={attachedFiles.length > 0}
                 onRemoveFile={handleRemoveFile}
                 onPickFiles={(files) => attachFromFiles(files)}
-                statusMessage={analysisErrorMessage ? { kind: 'error', text: analysisErrorMessage } : null}
-                onDismissStatusMessage={onDismissAnalysisError}
+                statusMessage={statusMessage}
             />
             {SHOW_ENTERPROMPT_PAYMENT_PANEL ? <PaymentGopayPanel /> : null}
 

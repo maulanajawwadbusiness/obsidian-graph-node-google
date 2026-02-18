@@ -12,6 +12,7 @@ import { showShortage } from '../money/shortageStore';
 import { pushMoneyNotice } from '../money/moneyNotices';
 import { getLang } from '../i18n/lang';
 import { buildStructuredAnalyzeInput, type AnalyzePromptLang } from '../server/src/llm/analyze/prompt';
+import { applyAnalyzeInputPolicy } from './analyzeInputPolicy';
 
 export interface AnalysisPoint {
     index: number;   // 0-based index (maps to node index)
@@ -59,6 +60,12 @@ function normalizeNodeCount(nodeCount: number): number {
 
 function normalizeText(value: string): string {
     return value.trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+function countWords(value: string): number {
+    const trimmed = value.trim();
+    if (!trimmed) return 0;
+    return trimmed.split(/\s+/).filter(Boolean).length;
 }
 
 function assertSemanticAnalyzeJson(root: Record<string, unknown>, nodeCountRaw: number): void {
@@ -257,10 +264,15 @@ export async function analyzeDocument(text: string, opts?: { nodeCount?: number 
     const nodeCount = Math.max(2, Math.min(12, opts?.nodeCount ?? 5));
     const useDevDirectAnalyze = isDevDirectAnalyzeEnabled();
     const lang: AnalyzePromptLang = getLang() === 'en' ? 'en' : 'id';
-
-    // Safety truncation (keep costs low while maintaining context)
-    // Take first 6000 chars (approx 1500 tokens) - usually covers abstract + intro
-    const safeText = text.slice(0, 6000);
+    const submittedWordCount = countWords(text);
+    const analyzeInput = applyAnalyzeInputPolicy(text);
+    const safeText = analyzeInput.text;
+    if (analyzeInput.truncationApplied) {
+        console.log(
+            `[PaperAnalyzer] truncation_applied original_chars=${analyzeInput.originalLength} ` +
+            `final_chars=${analyzeInput.finalLength} max_chars=${analyzeInput.maxChars}`
+        );
+    }
 
     let estimatedCost = 0;
     if (!useDevDirectAnalyze) {
@@ -281,7 +293,8 @@ export async function analyzeDocument(text: string, opts?: { nodeCount?: number 
             text: safeText,
             nodeCount,
             model: AI_MODELS.ANALYZER,
-            lang
+            lang,
+            submitted_word_count: submittedWordCount
         });
 
         if (result.status === 401 || result.status === 403) {

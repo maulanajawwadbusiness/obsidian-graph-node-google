@@ -177,6 +177,16 @@ Minimum backend vars that must remain present for Arnvoid API startup:
 - `GOOGLE_CLIENT_ID`
 - plus required secrets (`DB_PASSWORD`, `OPENAI_API_KEY`) via Secret Manager refs
 
+### BETA MODE REDEPLOY ORDER (NON-NEGOTIABLE)
+When deploying beta mode toggles (`BETA_FREE_MODE`, `BETA_CAPS_MODE`, `VITE_BETA_FREE_MODE`, `VITE_BETA_CAPS_MODE`):
+1. Backend first, frontend second.
+2. Use backend additive env updates (`--update-env-vars`), not replacement, unless full env set is supplied.
+3. Verify backend latest revision and traffic before touching frontend.
+4. After frontend deploy, run smoke checks:
+   - `GET /api/beta/usage/today` succeeds for authenticated user.
+   - LLM routes still require auth.
+   - expected cap behavior or bypass behavior matches current env toggle state.
+
 ### ASCII ONLY
 Use pure ASCII characters in code, comments, logs, and docs. Avoid Unicode arrows, ellipses, and typographic dashes to prevent mojibake.
 

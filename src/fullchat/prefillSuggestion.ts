@@ -20,6 +20,12 @@ export interface PrefillContext {
     content?: { title: string; summary: string } | null;
 }
 
+function countWords(text: string): number {
+    const trimmed = text.trim();
+    if (!trimmed) return 0;
+    return trimmed.split(/\s+/).filter(Boolean).length;
+}
+
 /**
  * Generates an instantaneous seed prompt based on local heuristics.
  * This MUST be fast (sync string ops only).
@@ -99,6 +105,7 @@ async function refinePromptWithReal(context: PrefillContext, options: { signal?:
             apiPost('/api/llm/prefill', {
                 model: AI_MODELS.PREFILL,
                 nodeLabel: context.nodeLabel,
+                submitted_word_count: countWords(`${context.nodeLabel}\n${context.content?.summary ?? ''}`),
                 miniChatMessages: context.miniChatMessages,
                 content: context.content ?? null
             }),

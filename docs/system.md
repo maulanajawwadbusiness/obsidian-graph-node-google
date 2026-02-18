@@ -960,6 +960,59 @@ Required backend envs that must remain present for startup:
 - `GOOGLE_CLIENT_ID`
 - plus secret refs for `DB_PASSWORD` and `OPENAI_API_KEY`
 
+## Beta Caps Mode Toggle (Ops)
+- Purpose: enforce beta spend caps while payment bypass is active.
+- Backend toggle (authoritative enforcement):
+  - env var: `BETA_CAPS_MODE`
+  - enabled when `BETA_CAPS_MODE=1`
+  - disabled when unset or `BETA_CAPS_MODE=0`
+- Frontend toggle (optional UX mirror only):
+  - env var: `VITE_BETA_CAPS_MODE`
+  - enabled when `VITE_BETA_CAPS_MODE=1`
+  - disabled when unset or `VITE_BETA_CAPS_MODE=0`
+- Limits:
+  - per document: 7500 words
+  - per user per UTC day: 150000 words
+  - reset note: `00:00 UTC (07:00 WIB)`
+
+### Enable beta caps in production
+1. Backend service env: set `BETA_CAPS_MODE=1`.
+2. Redeploy backend and verify new latest ready revision.
+3. Optional UX mirror: set frontend env `VITE_BETA_CAPS_MODE=1`.
+4. Redeploy frontend.
+
+Expected behavior:
+- Backend LLM routes enforce caps and return `429` with:
+  - `error.code = beta_cap_exceeded` or `error.code = beta_daily_exceeded`
+- Frontend prompt shows beta balloon and disables send when over limit.
+- Backend remains source of truth even if frontend flag is off.
+
+### Disable beta caps later (env-only rollback)
+1. Backend service env: unset `BETA_CAPS_MODE` or set `BETA_CAPS_MODE=0`.
+2. Redeploy backend.
+3. Optional UX rollback: unset `VITE_BETA_CAPS_MODE` or set `VITE_BETA_CAPS_MODE=0`.
+4. Redeploy frontend.
+
+Expected rollback behavior:
+- No server 429 blocks from caps checks.
+- Prompt behavior returns to existing non-caps path.
+
+### Agent redeploy runbook (backend first, frontend second)
+Use this exact sequence when asking a future agent to deploy env toggles:
+1. Describe current backend service state first:
+   - `gcloud run services describe arnvoid-api --platform=managed --region=asia-southeast2 --format="yaml(spec.template.spec.containers[0].env,status.traffic,status.latestReadyRevisionName)"`
+2. Apply backend env changes with additive update:
+   - `gcloud run services update arnvoid-api --platform=managed --region=asia-southeast2 --update-env-vars "BETA_FREE_MODE=1,BETA_CAPS_MODE=1"`
+3. Verify backend rollout:
+   - latest ready revision changed
+   - traffic is 100 percent on latest
+   - no startup fatal logs
+4. Deploy frontend env changes separately (for example set `VITE_BETA_FREE_MODE=1` and `VITE_BETA_CAPS_MODE=1` in frontend runtime config), then verify prompt UX.
+5. Perform a post-deploy smoke check:
+   - authenticated request to `GET /api/beta/usage/today` returns success
+   - LLM routes are auth-protected
+   - over-limit request returns `429` with beta cap code
+
 ## Payments (GoPay QRIS)
 Backend:
 - `POST /api/payments/gopayqris/create`

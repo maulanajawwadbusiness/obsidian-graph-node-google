@@ -14,6 +14,7 @@ const CONTRACT_SCRIPTS = [
   "test:auth-me-contracts",
   "test:auth-google-contracts",
   "test:profile-contracts",
+  "test:beta-caps-usage-contracts",
   "test:saved-interfaces-contracts",
   "test:payments-contracts",
   "test:depsbuilder-contracts",

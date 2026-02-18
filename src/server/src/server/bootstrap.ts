@@ -33,6 +33,7 @@ import {
 import { registerPaymentsWebhookRoute } from "../routes/paymentsWebhookRoute";
 import { registerHealthRoutes } from "../routes/healthRoutes";
 import { registerAuthRoutes } from "../routes/authRoutes";
+import { registerBetaCapsRoutes } from "../routes/betaCapsRoutes";
 import { registerProfileRoutes } from "../routes/profileRoutes";
 import { registerSavedInterfacesRoutes } from "../routes/savedInterfacesRoutes";
 import { buildCorsOptions } from "./corsConfig";
@@ -150,6 +151,7 @@ registerAuthRoutes(app, routeDeps.auth);
 registerProfileRoutes(app, routeDeps.profile);
 
 registerSavedInterfacesRoutes(app, routeDeps.savedInterfaces);
+registerBetaCapsRoutes(app, routeDeps.betaCaps);
 
 registerRupiahAndPaymentsCreateRoutes(app, routeDeps.payments);
 

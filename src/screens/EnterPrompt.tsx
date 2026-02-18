@@ -6,6 +6,7 @@ import { PaymentGopayPanel } from '../components/PaymentGopayPanel';
 import { SHOW_ENTERPROMPT_PAYMENT_PANEL } from '../config/onboardingUiFlags';
 import { BETA_CAPS_MODE_ENABLED, betaDailyWordLimit, betaPerDocWordLimit } from '../config/betaCaps';
 import { apiGet } from '../api';
+import { WorkerClient } from '../document/workerClient';
 import uploadOverlayIcon from '../assets/upload_overlay_icon.png';
 import errorIcon from '../assets/error_icon.png';
 
@@ -22,6 +23,8 @@ const BETA_INFO_TEXT = 'beta limit: max 7,500 words per document. daily: 150,000
 const BETA_DAILY_EXCEEDED_TEXT = 'daily beta limit reached (150,000 words). resets 07:00 wib.';
 const BETA_USAGE_LOADING_TEXT = 'checking beta usage...';
 const BETA_USAGE_ERROR_TEXT = 'failed to check beta usage';
+const BETA_DOC_PARSING_TEXT = 'checking document...';
+const BETA_DOC_PARSE_ERROR_TEXT = 'failed to parse document';
 
 function countWords(text: string): number {
     const trimmed = text.trim();
@@ -59,8 +62,12 @@ export const EnterPrompt: React.FC<EnterPromptProps> = ({
     const [betaUsageStatus, setBetaUsageStatus] = React.useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
     const [betaDailyRemainingWords, setBetaDailyRemainingWords] = React.useState<number>(betaDailyWordLimit);
     const [betaCapsEnabledOnServer, setBetaCapsEnabledOnServer] = React.useState<boolean>(false);
+    const [attachedFileWordCount, setAttachedFileWordCount] = React.useState<number | null>(null);
+    const [attachedFileParseStatus, setAttachedFileParseStatus] = React.useState<'idle' | 'pending' | 'ready' | 'error'>('idle');
     const loginOverlayOpen = LOGIN_OVERLAY_ENABLED && !user && !isOverlayHidden;
     const dragCounterRef = React.useRef(0);
+    const workerClientRef = React.useRef<WorkerClient | null>(null);
+    const parseRunIdRef = React.useRef(0);
     const promptWordCount = React.useMemo(() => countWords(promptText), [promptText]);
 
     const handlePromptSubmit = React.useCallback((submittedText: string) => {
@@ -83,6 +90,9 @@ export const EnterPrompt: React.FC<EnterPromptProps> = ({
 
     const handleRemoveFile = React.useCallback((index: number) => {
         setAttachedFiles(prev => prev.filter((_, i) => i !== index));
+        parseRunIdRef.current += 1;
+        setAttachedFileWordCount(null);
+        setAttachedFileParseStatus('idle');
     }, []);
 
     const handleDragEnter = React.useCallback((e: React.DragEvent) => {
@@ -114,9 +124,39 @@ export const EnterPrompt: React.FC<EnterPromptProps> = ({
 
         if (isFileSupported(lastFile)) {
             setAttachedFiles([lastFile]);
+            if (!BETA_CAPS_MODE_ENABLED) {
+                setAttachedFileWordCount(null);
+                setAttachedFileParseStatus('idle');
+                return;
+            }
+            setAttachedFileWordCount(null);
+            setAttachedFileParseStatus('pending');
+            const runId = parseRunIdRef.current + 1;
+            parseRunIdRef.current = runId;
+            const workerClient = workerClientRef.current;
+            if (!workerClient) {
+                setAttachedFileParseStatus('error');
+                return;
+            }
+            void workerClient.parseFile(lastFile)
+                .then((parsed) => {
+                    if (parseRunIdRef.current !== runId) return;
+                    setAttachedFileWordCount(parsed.meta.wordCount);
+                    setAttachedFileParseStatus('ready');
+                    console.log(`[caps] file_parse_ready name=${lastFile.name} words=${parsed.meta.wordCount}`);
+                })
+                .catch(() => {
+                    if (parseRunIdRef.current !== runId) return;
+                    setAttachedFileWordCount(null);
+                    setAttachedFileParseStatus('error');
+                    console.warn(`[caps] file_parse_failed name=${lastFile.name}`);
+                });
             return;
         }
 
+        parseRunIdRef.current += 1;
+        setAttachedFileWordCount(null);
+        setAttachedFileParseStatus('idle');
         setShowUnsupportedError(true);
         setTimeout(() => setShowUnsupportedError(false), 3000);
     }, []);
@@ -164,19 +204,41 @@ export const EnterPrompt: React.FC<EnterPromptProps> = ({
         };
     }, []);
 
-    const betaTextOverLimit = BETA_CAPS_MODE_ENABLED && promptWordCount > betaPerDocWordLimit;
+    React.useEffect(() => {
+        if (!BETA_CAPS_MODE_ENABLED) return;
+        workerClientRef.current = new WorkerClient();
+        return () => {
+            workerClientRef.current?.terminate();
+            workerClientRef.current = null;
+        };
+    }, []);
+
+    const hasTextSubmission = promptText.trim().length > 0;
+    const hasFileSubmission = !hasTextSubmission && attachedFiles.length > 0;
+    const submittedWordCount = hasTextSubmission
+        ? promptWordCount
+        : hasFileSubmission
+            ? attachedFileWordCount ?? 0
+            : 0;
+    const betaTextOverLimit = BETA_CAPS_MODE_ENABLED && submittedWordCount > betaPerDocWordLimit;
     const betaDailyExceeded = BETA_CAPS_MODE_ENABLED
         && betaUsageStatus === 'ready'
         && betaCapsEnabledOnServer
         && betaDailyRemainingWords <= 0;
     const betaUsagePending = BETA_CAPS_MODE_ENABLED && betaUsageStatus === 'loading';
     const betaUsageError = BETA_CAPS_MODE_ENABLED && betaUsageStatus === 'error';
-    const capsSendDisabled = betaTextOverLimit || betaDailyExceeded || betaUsagePending || betaUsageError;
+    const betaDocumentParsing = BETA_CAPS_MODE_ENABLED && hasFileSubmission && attachedFileParseStatus === 'pending';
+    const betaDocumentParseError = BETA_CAPS_MODE_ENABLED && hasFileSubmission && attachedFileParseStatus === 'error';
+    const capsSendDisabled = betaTextOverLimit || betaDailyExceeded || betaUsagePending || betaUsageError || betaDocumentParsing || betaDocumentParseError;
     const statusMessage = analysisErrorMessage
         ? { kind: 'error' as const, text: analysisErrorMessage }
         : !BETA_CAPS_MODE_ENABLED
             ? null
-            : betaTextOverLimit
+            : betaDocumentParsing
+                ? { kind: 'info' as const, text: BETA_DOC_PARSING_TEXT }
+                : betaDocumentParseError
+                    ? { kind: 'error' as const, text: BETA_DOC_PARSE_ERROR_TEXT }
+                    : betaTextOverLimit
                 ? { kind: 'error' as const, text: 'Document is more than 7500 words' }
                 : betaDailyExceeded
                     ? { kind: 'error' as const, text: BETA_DAILY_EXCEEDED_TEXT }

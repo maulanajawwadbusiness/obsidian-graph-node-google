@@ -4,6 +4,8 @@ import { useAuth } from '../auth/AuthProvider';
 import { PromptCard } from '../components/PromptCard';
 import { PaymentGopayPanel } from '../components/PaymentGopayPanel';
 import { SHOW_ENTERPROMPT_PAYMENT_PANEL } from '../config/onboardingUiFlags';
+import { BETA_CAPS_MODE_ENABLED, betaDailyWordLimit, betaPerDocWordLimit } from '../config/betaCaps';
+import { apiGet } from '../api';
 import uploadOverlayIcon from '../assets/upload_overlay_icon.png';
 import errorIcon from '../assets/error_icon.png';
 
@@ -15,6 +17,17 @@ const isFileSupported = (file: File): boolean => {
     const ext = file.name.toLowerCase().match(/\.[^.]+$/)?.[0];
     return ext ? ACCEPTED_EXTENSIONS.includes(ext) : false;
 };
+
+const BETA_INFO_TEXT = 'beta limit: max 7,500 words per document. daily: 150,000 words (resets 07:00 wib).';
+const BETA_DAILY_EXCEEDED_TEXT = 'daily beta limit reached (150,000 words). resets 07:00 wib.';
+const BETA_USAGE_LOADING_TEXT = 'checking beta usage...';
+const BETA_USAGE_ERROR_TEXT = 'failed to check beta usage';
+
+function countWords(text: string): number {
+    const trimmed = text.trim();
+    if (!trimmed) return 0;
+    return trimmed.split(/\s+/).filter(Boolean).length;
+}
 
 type EnterPromptProps = {
     onEnter: () => void;
@@ -43,8 +56,12 @@ export const EnterPrompt: React.FC<EnterPromptProps> = ({
     const [attachedFiles, setAttachedFiles] = React.useState<File[]>([]);
     const [isDragging, setIsDragging] = React.useState(false);
     const [showUnsupportedError, setShowUnsupportedError] = React.useState(false);
+    const [betaUsageStatus, setBetaUsageStatus] = React.useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
+    const [betaDailyRemainingWords, setBetaDailyRemainingWords] = React.useState<number>(betaDailyWordLimit);
+    const [betaCapsEnabledOnServer, setBetaCapsEnabledOnServer] = React.useState<boolean>(false);
     const loginOverlayOpen = LOGIN_OVERLAY_ENABLED && !user && !isOverlayHidden;
     const dragCounterRef = React.useRef(0);
+    const promptWordCount = React.useMemo(() => countWords(promptText), [promptText]);
 
     const handlePromptSubmit = React.useCallback((submittedText: string) => {
         const trimmed = submittedText.trim();
@@ -116,6 +133,59 @@ export const EnterPrompt: React.FC<EnterPromptProps> = ({
         onOverlayOpenChange?.(loginOverlayOpen);
     }, [loginOverlayOpen, onOverlayOpenChange]);
 
+    React.useEffect(() => {
+        if (!BETA_CAPS_MODE_ENABLED) return;
+        let cancelled = false;
+        setBetaUsageStatus('loading');
+        void apiGet('/api/beta/usage/today')
+            .then((result) => {
+                if (cancelled) return;
+                if (!result.ok || !result.data || typeof result.data !== 'object') {
+                    setBetaUsageStatus('error');
+                    return;
+                }
+                const payload = result.data as {
+                    remaining_words?: number;
+                    caps_enabled?: boolean;
+                };
+                setBetaDailyRemainingWords(
+                    typeof payload.remaining_words === 'number' ? Math.max(0, payload.remaining_words) : betaDailyWordLimit
+                );
+                setBetaCapsEnabledOnServer(payload.caps_enabled === true);
+                setBetaUsageStatus('ready');
+            })
+            .catch(() => {
+                if (cancelled) return;
+                setBetaUsageStatus('error');
+            });
+
+        return () => {
+            cancelled = true;
+        };
+    }, []);
+
+    const betaTextOverLimit = BETA_CAPS_MODE_ENABLED && promptWordCount > betaPerDocWordLimit;
+    const betaDailyExceeded = BETA_CAPS_MODE_ENABLED
+        && betaUsageStatus === 'ready'
+        && betaCapsEnabledOnServer
+        && betaDailyRemainingWords <= 0;
+    const betaUsagePending = BETA_CAPS_MODE_ENABLED && betaUsageStatus === 'loading';
+    const betaUsageError = BETA_CAPS_MODE_ENABLED && betaUsageStatus === 'error';
+    const capsSendDisabled = betaTextOverLimit || betaDailyExceeded || betaUsagePending || betaUsageError;
+    const statusMessage = analysisErrorMessage
+        ? { kind: 'error' as const, text: analysisErrorMessage }
+        : !BETA_CAPS_MODE_ENABLED
+            ? null
+            : betaTextOverLimit
+                ? { kind: 'error' as const, text: 'Document is more than 7500 words' }
+                : betaDailyExceeded
+                    ? { kind: 'error' as const, text: BETA_DAILY_EXCEEDED_TEXT }
+                    : betaUsagePending
+                        ? { kind: 'info' as const, text: BETA_USAGE_LOADING_TEXT }
+                        : betaUsageError
+                            ? { kind: 'error' as const, text: BETA_USAGE_ERROR_TEXT }
+                            : { kind: 'info' as const, text: BETA_INFO_TEXT };
+
     return (
         <div
             style={ROOT_STYLE}
@@ -128,11 +198,12 @@ export const EnterPrompt: React.FC<EnterPromptProps> = ({
                 value={promptText}
                 onChange={setPromptText}
                 onSubmit={handlePromptSubmit}
+                disabled={capsSendDisabled}
                 attachedFiles={attachedFiles}
                 canSubmitWithoutText={attachedFiles.length > 0}
                 onRemoveFile={handleRemoveFile}
                 onPickFiles={(files) => attachFromFiles(files)}
-                statusMessage={analysisErrorMessage ? { kind: 'error', text: analysisErrorMessage } : null}
+                statusMessage={statusMessage}
                 onDismissStatusMessage={onDismissAnalysisError}
             />
             {SHOW_ENTERPROMPT_PAYMENT_PANEL ? <PaymentGopayPanel /> : null}

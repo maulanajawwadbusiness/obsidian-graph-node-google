@@ -42,7 +42,7 @@ type PromptCardProps = {
     canSubmitWithoutText?: boolean;
     onRemoveFile?: (index: number) => void;
     onPickFiles?: (files: File[]) => void;
-    statusMessage?: { kind: 'error'; text: string } | null;
+    statusMessage?: { kind: 'info' | 'error'; text: string } | null;
     onDismissStatusMessage?: () => void;
 };
 
@@ -134,10 +134,20 @@ export const PromptCard: React.FC<PromptCardProps> = ({
 
                 {statusMessage ? (
                     <div
-                        style={PROMPT_STATUS_BANNER_STYLE}
+                        style={{
+                            ...PROMPT_STATUS_BANNER_STYLE,
+                            ...(statusMessage.kind === 'error' ? PROMPT_STATUS_BANNER_ERROR_STYLE : PROMPT_STATUS_BANNER_INFO_STYLE)
+                        }}
                         onPointerDown={(e) => e.stopPropagation()}
                     >
-                        <span style={PROMPT_STATUS_TEXT_STYLE}>{statusMessage.text}</span>
+                        <span
+                            style={{
+                                ...PROMPT_STATUS_TEXT_STYLE,
+                                color: statusMessage.kind === 'error' ? '#ffdede' : '#d7f5ff'
+                            }}
+                        >
+                            {statusMessage.text}
+                        </span>
                         <button
                             type="button"
                             style={PROMPT_STATUS_DISMISS_STYLE}
@@ -355,13 +365,21 @@ const PROMPT_STATUS_BANNER_STYLE: React.CSSProperties = {
     maxWidth: '600px',
     padding: '10px 12px',
     borderRadius: '10px',
-    background: 'rgba(185, 49, 49, 0.2)',
-    border: '1px solid rgba(255, 120, 120, 0.35)',
     boxSizing: 'border-box',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: '10px',
+};
+
+const PROMPT_STATUS_BANNER_ERROR_STYLE: React.CSSProperties = {
+    background: 'rgba(185, 49, 49, 0.2)',
+    border: '1px solid rgba(255, 120, 120, 0.35)',
+};
+
+const PROMPT_STATUS_BANNER_INFO_STYLE: React.CSSProperties = {
+    background: 'rgba(38, 90, 112, 0.25)',
+    border: '1px solid rgba(129, 206, 238, 0.35)',
 };
 
 const PROMPT_STATUS_TEXT_STYLE: React.CSSProperties = {

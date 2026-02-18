@@ -43,7 +43,6 @@ type PromptCardProps = {
     onRemoveFile?: (index: number) => void;
     onPickFiles?: (files: File[]) => void;
     statusMessage?: { kind: 'info' | 'error'; text: string } | null;
-    onDismissStatusMessage?: () => void;
 };
 
 export const PromptCard: React.FC<PromptCardProps> = ({
@@ -56,7 +55,6 @@ export const PromptCard: React.FC<PromptCardProps> = ({
     onRemoveFile = () => { },
     onPickFiles = () => { },
     statusMessage = null,
-    onDismissStatusMessage = () => { },
 }) => {
     const [plusHover, setPlusHover] = React.useState(false);
     const [sendHover, setSendHover] = React.useState(false);
@@ -132,176 +130,173 @@ export const PromptCard: React.FC<PromptCardProps> = ({
                     {t('onboarding.enterprompt.heading')}
                 </div>
 
-                {statusMessage ? (
-                    <div
-                        style={{
-                            ...PROMPT_STATUS_BANNER_STYLE,
-                            ...(statusMessage.kind === 'error' ? PROMPT_STATUS_BANNER_ERROR_STYLE : PROMPT_STATUS_BANNER_INFO_STYLE)
-                        }}
-                        onPointerDown={(e) => e.stopPropagation()}
-                    >
-                        <span
-                            style={{
-                                ...PROMPT_STATUS_TEXT_STYLE,
-                                color: statusMessage.kind === 'error' ? '#ffdede' : '#d7f5ff'
+                <div style={INPUT_AND_STATUS_STACK_STYLE}>
+                    <div style={INPUT_PILL_STYLE}>
+                        <input
+                            ref={fileInputRef}
+                            type="file"
+                            accept=".pdf,.docx,.md,.markdown,.txt"
+                            multiple={true}
+                            style={{ display: 'none' }}
+                            onChange={(e) => {
+                                const files = e.target.files ? Array.from(e.target.files) : [];
+                                if (files.length > 0) {
+                                    onPickFiles(files);
+                                }
+                                e.currentTarget.value = '';
                             }}
-                        >
-                            {statusMessage.text}
-                        </span>
-                        <button
-                            type="button"
-                            style={PROMPT_STATUS_DISMISS_STYLE}
-                            onPointerDown={(e) => e.stopPropagation()}
-                            onClick={() => onDismissStatusMessage()}
-                        >
-                            Dismiss
-                        </button>
-                    </div>
-                ) : null}
-
-                <div style={INPUT_PILL_STYLE}>
-                    <input
-                        ref={fileInputRef}
-                        type="file"
-                        accept=".pdf,.docx,.md,.markdown,.txt"
-                        multiple={true}
-                        style={{ display: 'none' }}
-                        onChange={(e) => {
-                            const files = e.target.files ? Array.from(e.target.files) : [];
-                            if (files.length > 0) {
-                                onPickFiles(files);
-                            }
-                            e.currentTarget.value = '';
-                        }}
-                    />
-                    {attachedFiles.length > 0 && (
-                        <>
-                            <div style={FILE_CHIPS_ROW_STYLE}>
-                                {attachedFiles.map((file, index) => (
-                                    <div key={`${file.name}-${index}`} style={FILE_CHIP_STYLE}>
-                                        <img src={fileMiniIcon} alt="" style={FILE_CHIP_ICON_STYLE} />
-                                        <span style={FILE_CHIP_NAME_STYLE}>{file.name}</span>
+                        />
+                        {attachedFiles.length > 0 && (
+                            <>
+                                <div style={FILE_CHIPS_ROW_STYLE}>
+                                    {attachedFiles.map((file, index) => (
+                                        <div key={`${file.name}-${index}`} style={FILE_CHIP_STYLE}>
+                                            <img src={fileMiniIcon} alt="" style={FILE_CHIP_ICON_STYLE} />
+                                            <span style={FILE_CHIP_NAME_STYLE}>{file.name}</span>
+                                            <button
+                                                {...removeFileTooltip.getAnchorProps({
+                                                    type: 'button',
+                                                    style: FILE_CHIP_DISMISS_STYLE,
+                                                    onClick: () => onRemoveFile(index),
+                                                })}
+                                            >
+                                                x
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                            </>
+                        )}
+                        <textarea
+                            placeholder={t(placeholderKey)}
+                            style={INPUT_STYLE}
+                            rows={6}
+                            value={inputText}
+                            onChange={(e) => handleInputChange(e.target.value)}
+                            onFocus={handleInputFocus}
+                            onKeyDown={handleInputKeyDown}
+                            disabled={disabled}
+                        />
+                        <div style={ICON_ROW_STYLE}>
+                            <div style={{ position: 'relative' }}>
+                                <button
+                                    {...uploadDocumentTooltip.getAnchorProps({
+                                        type: 'button',
+                                        style: ICON_BUTTON_STYLE,
+                                        onMouseEnter: () => setPlusHover(true),
+                                        onMouseLeave: () => setPlusHover(false),
+                                        onClick: () => setShowUploadPopup(!showUploadPopup),
+                                    })}
+                                    disabled={disabled}
+                                >
+                                    <span
+                                        aria-hidden="true"
+                                        style={{
+                                            ...PLUS_ICON_STYLE,
+                                            backgroundColor: '#D7F5FF',
+                                            WebkitMaskImage: `url(${plusIcon})`,
+                                            maskImage: `url(${plusIcon})`,
+                                            opacity: plusHover ? 1 : 0.6
+                                        }}
+                                    />
+                                </button>
+                                {showUploadPopup && (
+                                    <div
+                                        ref={popupRef}
+                                        style={UPLOAD_POPUP_STYLE}
+                                        onPointerDown={(e) => e.stopPropagation()}
+                                        onPointerUp={(e) => e.stopPropagation()}
+                                        onClick={(e) => e.stopPropagation()}
+                                        onWheelCapture={(e) => e.stopPropagation()}
+                                        onWheel={(e) => e.stopPropagation()}
+                                    >
                                         <button
-                                            {...removeFileTooltip.getAnchorProps({
-                                                type: 'button',
-                                                style: FILE_CHIP_DISMISS_STYLE,
-                                                onClick: () => onRemoveFile(index),
-                                            })}
+                                            type="button"
+                                            style={UPLOAD_POPUP_ITEM_STYLE}
+                                            onPointerDown={(e) => e.stopPropagation()}
+                                            onPointerUp={(e) => e.stopPropagation()}
+                                            onWheelCapture={(e) => e.stopPropagation()}
+                                            onWheel={(e) => e.stopPropagation()}
+                                            onMouseEnter={() => setUploadMenuHover(true)}
+                                            onMouseLeave={() => setUploadMenuHover(false)}
+                                            onClick={(e) => {
+                                                e.preventDefault();
+                                                e.stopPropagation();
+                                                setShowUploadPopup(false);
+                                                fileInputRef.current?.click();
+                                            }}
                                         >
-                                            x
+                                            <span
+                                                aria-hidden="true"
+                                                style={{
+                                                    ...UPLOAD_POPUP_ITEM_HOVER_PLATE_STYLE,
+                                                    backgroundColor: uploadMenuHover ? 'rgba(215, 245, 255, 0.14)' : 'transparent',
+                                                }}
+                                            />
+                                            <span style={UPLOAD_POPUP_ITEM_CONTENT_STYLE}>
+                                                <span
+                                                    aria-hidden="true"
+                                                    style={{
+                                                        ...CLIP_ICON_STYLE,
+                                                        backgroundColor: '#D7F5FF',
+                                                        WebkitMaskImage: `url(${clipIcon})`,
+                                                        maskImage: `url(${clipIcon})`
+                                                    }}
+                                                />
+                                                <span>Upload document</span>
+                                            </span>
                                         </button>
                                     </div>
-                                ))}
+                                )}
                             </div>
-                        </>
-                    )}
-                    <textarea
-                        placeholder={t(placeholderKey)}
-                        style={INPUT_STYLE}
-                        rows={6}
-                        value={inputText}
-                        onChange={(e) => handleInputChange(e.target.value)}
-                        onFocus={handleInputFocus}
-                        onKeyDown={handleInputKeyDown}
-                        disabled={disabled}
-                    />
-                    <div style={ICON_ROW_STYLE}>
-                        <div style={{ position: 'relative' }}>
                             <button
-                                {...uploadDocumentTooltip.getAnchorProps({
-                                    type: 'button',
-                                    style: ICON_BUTTON_STYLE,
-                                    onMouseEnter: () => setPlusHover(true),
-                                    onMouseLeave: () => setPlusHover(false),
-                                    onClick: () => setShowUploadPopup(!showUploadPopup),
-                                })}
+                                type="button"
+                                style={ICON_BUTTON_STYLE}
+                                onMouseEnter={() => setSendHover(true)}
+                                onMouseLeave={() => setSendHover(false)}
+                                onClick={handleSubmit}
                                 disabled={disabled}
                             >
                                 <span
                                     aria-hidden="true"
                                     style={{
-                                        ...PLUS_ICON_STYLE,
+                                        ...SEND_ICON_STYLE,
                                         backgroundColor: '#D7F5FF',
-                                        WebkitMaskImage: `url(${plusIcon})`,
-                                        maskImage: `url(${plusIcon})`,
-                                        opacity: plusHover ? 1 : 0.6
+                                        WebkitMaskImage: `url(${sendIcon})`,
+                                        maskImage: `url(${sendIcon})`,
+                                        opacity: sendHover ? 0.8 : 0.4
                                     }}
                                 />
                             </button>
-                            {showUploadPopup && (
-                                <div
-                                    ref={popupRef}
-                                    style={UPLOAD_POPUP_STYLE}
-                                    onPointerDown={(e) => e.stopPropagation()}
-                                    onPointerUp={(e) => e.stopPropagation()}
-                                    onClick={(e) => e.stopPropagation()}
-                                    onWheelCapture={(e) => e.stopPropagation()}
-                                    onWheel={(e) => e.stopPropagation()}
-                                >
-                                    <button
-                                        type="button"
-                                        style={UPLOAD_POPUP_ITEM_STYLE}
-                                        onPointerDown={(e) => e.stopPropagation()}
-                                        onPointerUp={(e) => e.stopPropagation()}
-                                        onWheelCapture={(e) => e.stopPropagation()}
-                                        onWheel={(e) => e.stopPropagation()}
-                                        onMouseEnter={() => setUploadMenuHover(true)}
-                                        onMouseLeave={() => setUploadMenuHover(false)}
-                                        onClick={(e) => {
-                                            e.preventDefault();
-                                            e.stopPropagation();
-                                            setShowUploadPopup(false);
-                                            fileInputRef.current?.click();
-                                        }}
-                                    >
-                                        <span
-                                            aria-hidden="true"
-                                            style={{
-                                                ...UPLOAD_POPUP_ITEM_HOVER_PLATE_STYLE,
-                                                backgroundColor: uploadMenuHover ? 'rgba(215, 245, 255, 0.14)' : 'transparent',
-                                            }}
-                                        />
-                                        <span style={UPLOAD_POPUP_ITEM_CONTENT_STYLE}>
-                                            <span
-                                                aria-hidden="true"
-                                                style={{
-                                                    ...CLIP_ICON_STYLE,
-                                                    backgroundColor: '#D7F5FF',
-                                                    WebkitMaskImage: `url(${clipIcon})`,
-                                                    maskImage: `url(${clipIcon})`
-                                                }}
-                                            />
-                                            <span>Upload document</span>
-                                        </span>
-                                    </button>
-                                </div>
-                            )}
                         </div>
-                        <button
-                            type="button"
-                            style={ICON_BUTTON_STYLE}
-                            onMouseEnter={() => setSendHover(true)}
-                            onMouseLeave={() => setSendHover(false)}
-                            onClick={handleSubmit}
-                            disabled={disabled}
+                    </div>
+
+                    {statusMessage ? (
+                        <div
+                            style={{
+                                ...PROMPT_STATUS_BANNER_STYLE,
+                                ...(statusMessage.kind === 'error' ? PROMPT_STATUS_BANNER_ERROR_STYLE : PROMPT_STATUS_BANNER_INFO_STYLE)
+                            }}
+                            onPointerDown={(e) => e.stopPropagation()}
                         >
                             <span
-                                aria-hidden="true"
                                 style={{
-                                    ...SEND_ICON_STYLE,
-                                    backgroundColor: '#D7F5FF',
-                                    WebkitMaskImage: `url(${sendIcon})`,
-                                    maskImage: `url(${sendIcon})`,
-                                    opacity: sendHover ? 0.8 : 0.4
+                                    ...PROMPT_STATUS_TEXT_STYLE,
+                                    color: statusMessage.kind === 'error' ? '#ffdede' : '#869297'
                                 }}
-                            />
-                        </button>
-                    </div>
+                            >
+                                {statusMessage.text}
+                            </span>
+                        </div>
+                    ) : null}
                 </div>
             </div>
         </div>
     );
 };
+
+// Banner scale knob: 0.9 = 10% smaller, 1.0 = original size.
+const PROMPT_STATUS_SCALE = 0.95;
 
 const CARD_STYLE: React.CSSProperties = {
     position: 'relative',
@@ -360,16 +355,25 @@ const INPUT_PILL_STYLE: React.CSSProperties = {
     gap: '12px',
 };
 
-const PROMPT_STATUS_BANNER_STYLE: React.CSSProperties = {
+const INPUT_AND_STATUS_STACK_STYLE: React.CSSProperties = {
     width: '100%',
     maxWidth: '600px',
-    padding: '10px 12px',
-    borderRadius: '10px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '24px',
+};
+
+const PROMPT_STATUS_BANNER_STYLE: React.CSSProperties = {
+    width: 'fit-content',
+    maxWidth: '100%',
+    alignSelf: 'flex-start',
+    padding: `${10 * PROMPT_STATUS_SCALE}px ${12 * PROMPT_STATUS_SCALE}px`,
+    borderRadius: `${10 * PROMPT_STATUS_SCALE}px`,
     boxSizing: 'border-box',
     display: 'flex',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: '10px',
+    justifyContent: 'flex-start',
+    gap: `${10 * PROMPT_STATUS_SCALE}px`,
 };
 
 const PROMPT_STATUS_BANNER_ERROR_STYLE: React.CSSProperties = {
@@ -378,27 +382,16 @@ const PROMPT_STATUS_BANNER_ERROR_STYLE: React.CSSProperties = {
 };
 
 const PROMPT_STATUS_BANNER_INFO_STYLE: React.CSSProperties = {
-    background: 'rgba(38, 90, 112, 0.25)',
-    border: '1px solid rgba(129, 206, 238, 0.35)',
+    background: 'transparent',
+    border: '1px solid #303537',
 };
 
 const PROMPT_STATUS_TEXT_STYLE: React.CSSProperties = {
     color: '#ffdede',
-    fontSize: '12px',
+    fontSize: `${12 * PROMPT_STATUS_SCALE}px`,
     lineHeight: 1.4,
     fontFamily: 'var(--font-ui)',
-    flex: 1,
-};
-
-const PROMPT_STATUS_DISMISS_STYLE: React.CSSProperties = {
-    border: '1px solid rgba(255, 255, 255, 0.22)',
-    background: 'rgba(255, 255, 255, 0.06)',
-    color: '#f5f5f5',
-    fontSize: '11px',
-    fontFamily: 'var(--font-ui)',
-    borderRadius: '8px',
-    padding: '6px 10px',
-    cursor: 'pointer',
+    display: 'block',
 };
 
 const INPUT_STYLE: React.CSSProperties = {

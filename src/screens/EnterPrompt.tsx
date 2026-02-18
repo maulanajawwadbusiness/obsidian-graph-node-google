@@ -9,6 +9,7 @@ import { apiGet } from '../api';
 import { WorkerClient } from '../document/workerClient';
 import uploadOverlayIcon from '../assets/upload_overlay_icon.png';
 import errorIcon from '../assets/error_icon.png';
+import { t } from '../i18n/t';
 
 const LOGIN_OVERLAY_ENABLED = true;
 const ACCEPTED_EXTENSIONS = ['.pdf', '.docx', '.md', '.markdown', '.txt'];
@@ -18,13 +19,6 @@ const isFileSupported = (file: File): boolean => {
     const ext = file.name.toLowerCase().match(/\.[^.]+$/)?.[0];
     return ext ? ACCEPTED_EXTENSIONS.includes(ext) : false;
 };
-
-const BETA_INFO_TEXT = 'beta limit: max 7,500 words per document. daily: 150,000 words (resets 07:00 wib).';
-const BETA_DAILY_EXCEEDED_TEXT = 'daily beta limit reached (150,000 words). resets 07:00 wib.';
-const BETA_USAGE_LOADING_TEXT = 'checking beta usage...';
-const BETA_USAGE_ERROR_TEXT = 'failed to check beta usage';
-const BETA_DOC_PARSING_TEXT = 'checking document...';
-const BETA_DOC_PARSE_ERROR_TEXT = 'failed to parse document';
 
 function countWords(text: string): number {
     const trimmed = text.trim();
@@ -51,7 +45,7 @@ export const EnterPrompt: React.FC<EnterPromptProps> = ({
     onSubmitPromptText,
     onSubmitPromptFile,
     analysisErrorMessage = null,
-    onDismissAnalysisError
+    onDismissAnalysisError: _onDismissAnalysisError
 }) => {
     const { user } = useAuth();
     const [isOverlayHidden, setIsOverlayHidden] = React.useState(false);
@@ -230,23 +224,30 @@ export const EnterPrompt: React.FC<EnterPromptProps> = ({
     const betaDocumentParsing = BETA_CAPS_MODE_ENABLED && hasFileSubmission && attachedFileParseStatus === 'pending';
     const betaDocumentParseError = BETA_CAPS_MODE_ENABLED && hasFileSubmission && attachedFileParseStatus === 'error';
     const capsSendDisabled = betaTextOverLimit || betaDailyExceeded || betaUsagePending || betaUsageError || betaDocumentParsing || betaDocumentParseError;
+    const betaInfoText = t('onboarding.enterprompt.beta.info');
+    const betaDailyExceededText = t('onboarding.enterprompt.beta.daily_exceeded');
+    const betaUsageLoadingText = t('onboarding.enterprompt.beta.usage_loading');
+    const betaUsageErrorText = t('onboarding.enterprompt.beta.usage_error');
+    const betaDocParsingText = t('onboarding.enterprompt.beta.doc_parsing');
+    const betaDocParseErrorText = t('onboarding.enterprompt.beta.doc_parse_error');
+    const betaDocOverLimitText = t('onboarding.enterprompt.beta.doc_over_limit');
     const statusMessage = analysisErrorMessage
         ? { kind: 'error' as const, text: analysisErrorMessage }
         : !BETA_CAPS_MODE_ENABLED
             ? null
             : betaDocumentParsing
-                ? { kind: 'info' as const, text: BETA_DOC_PARSING_TEXT }
+                ? { kind: 'info' as const, text: betaDocParsingText }
                 : betaDocumentParseError
-                    ? { kind: 'error' as const, text: BETA_DOC_PARSE_ERROR_TEXT }
+                    ? { kind: 'error' as const, text: betaDocParseErrorText }
                     : betaTextOverLimit
-                ? { kind: 'error' as const, text: 'Document is more than 7500 words' }
+                ? { kind: 'error' as const, text: betaDocOverLimitText }
                 : betaDailyExceeded
-                    ? { kind: 'error' as const, text: BETA_DAILY_EXCEEDED_TEXT }
+                    ? { kind: 'error' as const, text: betaDailyExceededText }
                     : betaUsagePending
-                        ? { kind: 'info' as const, text: BETA_USAGE_LOADING_TEXT }
+                        ? { kind: 'info' as const, text: betaUsageLoadingText }
                         : betaUsageError
-                            ? { kind: 'error' as const, text: BETA_USAGE_ERROR_TEXT }
-                            : { kind: 'info' as const, text: BETA_INFO_TEXT };
+                            ? { kind: 'error' as const, text: betaUsageErrorText }
+                            : { kind: 'info' as const, text: betaInfoText };
 
     return (
         <div
@@ -266,7 +267,6 @@ export const EnterPrompt: React.FC<EnterPromptProps> = ({
                 onRemoveFile={handleRemoveFile}
                 onPickFiles={(files) => attachFromFiles(files)}
                 statusMessage={statusMessage}
-                onDismissStatusMessage={onDismissAnalysisError}
             />
             {SHOW_ENTERPROMPT_PAYMENT_PANEL ? <PaymentGopayPanel /> : null}
 

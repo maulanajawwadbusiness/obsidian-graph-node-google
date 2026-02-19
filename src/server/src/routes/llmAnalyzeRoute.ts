@@ -28,6 +28,7 @@ const ANALYZE_TOTAL_TIMEOUT_MS = 55000;
 const ANALYZE_OPENROUTER_RETRY_TIMEOUT_MS = 15000;
 const ANALYZE_OPENROUTER_FIRST_PASS_TIMEOUT_MS =
   ANALYZE_TOTAL_TIMEOUT_MS - ANALYZE_OPENROUTER_RETRY_TIMEOUT_MS;
+const KEEPALIVE_INTERVAL_MS = 15000;
 
 export function registerLlmAnalyzeRoute(app: express.Express, deps: LlmAnalyzeRouteDeps) {
 app.post("/api/llm/paper-analyze", deps.requireAuth, async (req, res) => {
@@ -77,6 +78,51 @@ app.post("/api/llm/paper-analyze", deps.requireAuth, async (req, res) => {
     typeof req.body?.model === "string" ? req.body.model : "unknown",
     deps.getPriceUsdPerM
   );
+  let sseStarted = false;
+  let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+
+  function startSse() {
+    if (sseStarted) return;
+    sseStarted = true;
+    res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
+    res.setHeader("Cache-Control", "no-cache, no-transform");
+    res.setHeader("Connection", "keep-alive");
+    res.setHeader("X-Request-Id", requestId);
+    res.flushHeaders();
+    heartbeatTimer = setInterval(() => {
+      if (!res.writableEnded) {
+        res.write(": keepalive\n\n");
+      }
+    }, KEEPALIVE_INTERVAL_MS);
+  }
+
+  function stopSse() {
+    if (heartbeatTimer) {
+      clearInterval(heartbeatTimer);
+      heartbeatTimer = null;
+    }
+  }
+
+  function sendSseResult(payload: Record<string, unknown>) {
+    stopSse();
+    if (sseStarted) {
+      res.write(`data: ${JSON.stringify(payload)}\n\n`);
+      res.end();
+      return;
+    }
+    res.setHeader("X-Request-Id", requestId);
+    res.json(payload);
+  }
+
+  function sendSseError(status: number, payload: Record<string, unknown>) {
+    stopSse();
+    if (sseStarted) {
+      res.write(`data: ${JSON.stringify({ ...payload, _status: status })}\n\n`);
+      res.end();
+      return;
+    }
+    deps.sendApiError(res, status, payload as any);
+  }
 
   async function writeAudit() {
     if (auditWritten) return;
@@ -334,6 +380,8 @@ app.post("/api/llm/paper-analyze", deps.requireAuth, async (req, res) => {
     let usage: { input_tokens?: number; output_tokens?: number } | undefined;
     let validationResult: "ok" | "retry_ok" | "failed" = "ok";
 
+    startSse();
+
     if (provider.name === "openrouter" && structuredOutputMode === "openrouter_prompt_json") {
       const openrouterResult = await runOpenrouterAnalyze({
         provider,
@@ -358,7 +406,7 @@ app.post("/api/llm/paper-analyze", deps.requireAuth, async (req, res) => {
           auditHttpStatus = 502;
           auditTerminationReason = "structured_output_invalid";
           await writeAudit();
-          deps.sendApiError(res, 502, {
+          sendSseError(502, {
             ok: false,
             request_id: requestId,
             code: "structured_output_invalid",
@@ -395,7 +443,7 @@ app.post("/api/llm/paper-analyze", deps.requireAuth, async (req, res) => {
         auditHttpStatus = status;
         auditTerminationReason = deps.mapTerminationReason(status, (openrouterError as LlmError).code);
         await writeAudit();
-        deps.sendApiError(res, status, {
+        sendSseError(status, {
           ok: false,
           request_id: requestId,
           code: (openrouterError as LlmError).code as ApiErrorCode,
@@ -446,7 +494,7 @@ app.post("/api/llm/paper-analyze", deps.requireAuth, async (req, res) => {
         auditHttpStatus = status;
         auditTerminationReason = deps.mapTerminationReason(status, llmError.code);
         await writeAudit();
-        deps.sendApiError(res, status, {
+        sendSseError(status, {
           ok: false,
           request_id: requestId,
           code: llmError.code as ApiErrorCode,
@@ -484,7 +532,7 @@ app.post("/api/llm/paper-analyze", deps.requireAuth, async (req, res) => {
         auditHttpStatus = 502;
         auditTerminationReason = "structured_output_invalid";
         await writeAudit();
-        deps.sendApiError(res, 502, {
+        sendSseError(502, {
           ok: false,
           request_id: requestId,
           code: "structured_output_invalid",
@@ -550,8 +598,7 @@ app.post("/api/llm/paper-analyze", deps.requireAuth, async (req, res) => {
       auditHttpStatus = 402;
       auditTerminationReason = "insufficient_rupiah";
       await writeAudit();
-      res.setHeader("X-Request-Id", requestId);
-      res.status(402).json({
+      sendSseError(402, {
         ok: false,
         code: "insufficient_rupiah",
         request_id: requestId,
@@ -612,8 +659,7 @@ app.post("/api/llm/paper-analyze", deps.requireAuth, async (req, res) => {
       console.warn(`[caps] record_failed request_id=${requestId} endpoint=/api/llm/paper-analyze error=${String(error)}`);
     }
 
-    res.setHeader("X-Request-Id", requestId);
-    res.json({ ok: true, request_id: requestId, json: resultJson });
+    sendSseResult({ ok: true, request_id: requestId, json: resultJson as any });
     const outputSize = JSON.stringify(resultJson || {}).length;
     auditHttpStatus = 200;
     auditTerminationReason = "success";
@@ -649,6 +695,7 @@ app.post("/api/llm/paper-analyze", deps.requireAuth, async (req, res) => {
       validation_result: validationResult
     });
   } finally {
+    stopSse();
     deps.releaseLlmSlot(userId);
     deps.decRequestsInflight();
   }

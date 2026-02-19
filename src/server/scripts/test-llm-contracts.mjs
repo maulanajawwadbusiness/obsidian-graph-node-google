@@ -34,9 +34,27 @@ function isErrorShape(json) {
   return json && json.ok === false && typeof json.code === "string";
 }
 
+function parseLastSseData(text) {
+  const lines = text.split("\n");
+  let lastData = null;
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (line.startsWith("data:")) {
+      lastData = line.slice(5).trimStart();
+    }
+  }
+  if (!lastData) return null;
+  try {
+    return JSON.parse(lastData);
+  } catch {
+    return null;
+  }
+}
+
 async function testPaperAnalyze() {
   const payload = { text: "Short test input for analysis.", nodeCount: 2 };
-  const { res, json } = await fetchJson("/api/llm/paper-analyze", payload);
+  const { res, json, text } = await fetchJson("/api/llm/paper-analyze", payload);
+  const contentType = res.headers.get("content-type") || "";
 
   if (res.status === 401) {
     console.log("[paper-analyze] skipped: unauthorized");
@@ -46,6 +64,16 @@ async function testPaperAnalyze() {
   if (res.status === 402 && ALLOW_INSUFFICIENT) {
     assert(isErrorShape(json), "[paper-analyze] insufficient: error shape invalid");
     console.log("[paper-analyze] ok: insufficient_rupiah error shape valid");
+    return;
+  }
+
+  if (contentType.includes("text/event-stream")) {
+    assert(res.ok, `[paper-analyze] SSE status not ok: ${res.status}`);
+    const ssePayload = parseLastSseData(text);
+    assert(ssePayload && ssePayload.ok === true, "[paper-analyze] SSE ok:true missing");
+    assert(typeof ssePayload.request_id === "string", "[paper-analyze] SSE request_id missing");
+    assert(ssePayload.json && typeof ssePayload.json === "object", "[paper-analyze] SSE json object missing");
+    console.log("[paper-analyze] ok: SSE contract valid");
     return;
   }
 

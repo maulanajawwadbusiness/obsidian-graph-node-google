@@ -3,7 +3,6 @@
  */
 
 import { AI_MODELS } from '../config/aiModels';
-import { apiPost } from '../api';
 import { createLLMClient } from './index';
 import { refreshBalance } from '../store/balanceStore';
 import { ensureSufficientBalance } from '../money/ensureSufficientBalance';
@@ -57,6 +56,12 @@ type AnalyzeJson = {
 const ANALYZE_API_TIMEOUT_MS = 120_000;
 const ANALYZE_TIMEOUT_RETRY_COUNT = 1;
 
+type SseAnalyzeResult = {
+    ok: boolean;
+    status: number;
+    data: Record<string, unknown> | null;
+};
+
 function normalizeNodeCount(nodeCount: number): number {
     return Math.max(2, Math.min(12, Math.floor(nodeCount)));
 }
@@ -69,6 +74,91 @@ function countWords(value: string): number {
     const trimmed = value.trim();
     if (!trimmed) return 0;
     return trimmed.split(/\s+/).filter(Boolean).length;
+}
+
+function resolveAnalyzeUrl(path: string): string {
+    const base = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim();
+    if (!base) {
+        throw new Error('VITE_API_BASE_URL is missing or empty');
+    }
+    const trimmedBase = base.replace(/\/+$/, '');
+    const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+    return `${trimmedBase}${normalizedPath}`;
+}
+
+async function fetchAnalyzeSse(url: string, body: object, timeoutMs: number): Promise<SseAnalyzeResult> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+        const response = await fetch(url, {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+            signal: controller.signal
+        });
+
+        const contentType = response.headers.get('content-type') || '';
+        if (contentType.includes('application/json')) {
+            let parsed: Record<string, unknown> | null = null;
+            try {
+                parsed = await response.json() as Record<string, unknown>;
+            } catch {
+                parsed = null;
+            }
+            return {
+                ok: response.ok,
+                status: response.status,
+                data: parsed
+            };
+        }
+
+        if (!response.body) {
+            return { ok: false, status: 502, data: null };
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder('utf-8');
+        let buffer = '';
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            if (value) {
+                buffer += decoder.decode(value, { stream: true });
+            }
+        }
+        buffer += decoder.decode();
+
+        const lines = buffer.split('\n');
+        let lastData: string | null = null;
+        for (const rawLine of lines) {
+            const line = rawLine.trim();
+            if (line.startsWith('data:')) {
+                lastData = line.slice(5).trimStart();
+            }
+        }
+
+        if (!lastData) {
+            return { ok: false, status: 502, data: null };
+        }
+
+        const parsed = JSON.parse(lastData) as Record<string, unknown>;
+        const embeddedStatus = typeof parsed._status === 'number' ? parsed._status : 200;
+        const status = Number.isFinite(embeddedStatus) ? embeddedStatus : 200;
+        const isOk = status >= 200 && status < 300 && parsed.ok === true;
+        return {
+            ok: isOk,
+            status,
+            data: parsed
+        };
+    } catch (error) {
+        if (error instanceof DOMException && error.name === 'AbortError') {
+            throw new Error('api_timeout');
+        }
+        throw error;
+    } finally {
+        clearTimeout(timer);
+    }
 }
 
 function assertSemanticAnalyzeJson(root: Record<string, unknown>, nodeCountRaw: number): void {
@@ -292,18 +382,17 @@ export async function analyzeDocument(text: string, opts?: { nodeCount?: number 
             return await analyzeViaDevOpenAI(safeText, nodeCount);
         }
 
-        let result: Awaited<ReturnType<typeof apiPost>> | null = null;
+        const analyzeUrl = resolveAnalyzeUrl('/api/llm/paper-analyze');
+        let result: SseAnalyzeResult | null = null;
         for (let attempt = 0; attempt <= ANALYZE_TIMEOUT_RETRY_COUNT; attempt += 1) {
             try {
-                const currentResult = await apiPost('/api/llm/paper-analyze', {
+                const currentResult = await fetchAnalyzeSse(analyzeUrl, {
                     text: safeText,
                     nodeCount,
                     model: AI_MODELS.ANALYZER,
                     lang,
                     submitted_word_count: submittedWordCount
-                }, {
-                    timeoutMs: ANALYZE_API_TIMEOUT_MS
-                });
+                }, ANALYZE_API_TIMEOUT_MS);
                 const responseCode = (() => {
                     if (!currentResult.data || typeof currentResult.data !== 'object') return null;
                     const code = (currentResult.data as { code?: unknown }).code;

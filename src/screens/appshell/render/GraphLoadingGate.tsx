@@ -233,8 +233,8 @@ export const GraphLoadingGate: React.FC<GraphLoadingGateProps> = ({
         >
             {isError ? (
                 <div role="status" aria-live="assertive" style={TEXT_STYLE}>
-                    <div style={ERROR_TITLE_STYLE}>Loading Failed</div>
-                    <div style={ERROR_MESSAGE_STYLE}>{errorMessage || 'Analysis failed. Please try again.'}</div>
+                    <div style={ERROR_TITLE_STYLE}>Analysis Failed</div>
+                    <div style={ERROR_MESSAGE_STYLE}>{errorMessage || 'Analysis failed. Please go back and try again.'}</div>
                 </div>
             ) : (
                 <div role="status" aria-live="polite" style={TEXT_STYLE}>

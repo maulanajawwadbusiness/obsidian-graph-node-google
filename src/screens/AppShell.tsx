@@ -117,7 +117,7 @@ const SIDEBAR_DIM_ALPHA_BY_SCREEN: Record<AppScreen, number> = {
     graph_loading: 0.5,
     graph: 1,
 };
-const FALLBACK_GATE_ERROR_MESSAGE = 'Analysis failed. Please try again.';
+const FALLBACK_GATE_ERROR_MESSAGE = 'Analysis failed. Please go back and try again.';
 
 function hasSameRuntimeStatus(
     left: RuntimeStatusSnapshot,

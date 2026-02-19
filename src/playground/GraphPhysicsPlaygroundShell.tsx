@@ -13,7 +13,7 @@ import { PlaygroundMetrics } from './playgroundTypes';
 import { useGraphRendering } from './useGraphRendering';
 import { generateRandomGraph } from './graphRandom';
 import { DocumentProvider, useDocument } from '../store/documentStore';
-import { applyFirstWordsToNodes, applyAnalysisToNodes } from '../document/nodeBinding';
+import { applyAnalysisToNodes } from '../document/nodeBinding';
 import type { ParsedDocument } from '../document/types';
 import { MapTitleBlock } from './components/MapTitleBlock';
 import { BrandLabel } from './components/BrandLabel';
@@ -635,14 +635,11 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
         // Parse file in worker and get document immediately
         const document = await documentContext.parseFile(file);
 
-        // Apply first 5 words to node labels (fast, synchronous)
         if (document) {
-            applyFirstWordsToNodes(engineRef.current, document);
-
             // Trigger AI label rewrite (async, non-blocking)
             // Capture docId now to avoid races with documentContext updates.
             const docId = document.id;
-            applyAnalysisToNodes(
+            void applyAnalysisToNodes(
                 engineRef.current,
                 document.text,
                 docId,
@@ -650,7 +647,9 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
                 documentContext.setAIActivity,
                 documentContext.setAIError,
                 documentContext.setInferredTitle
-            );
+            ).catch((error) => {
+                console.error('[AI] drop analysis failed:', error);
+            });
         }
     };
 
@@ -1216,7 +1215,6 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
                 } catch (error) {
                     ok = false;
                     console.error('[graph] pending analysis failed', error);
-                    setAIErrorWithAuthLog('We could not reach the server, so analysis did not run. Your graph is unchanged.');
                 } finally {
                     console.log(`[graph] pending_analysis_done ok=${ok}`);
                 }
@@ -1269,7 +1267,6 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
             const docId = parsed.id || `dropped-${pendingAnalysisPayload.createdAt}`;
             currentPendingDocIdRef.current = docId;
             documentContext.setDocument(parsed);
-            applyFirstWordsToNodes(engineRef.current, parsed);
 
             try {
                 await applyAnalysisToNodes(
@@ -1294,25 +1291,6 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
             } catch (error) {
                 ok = false;
                 console.error('[graph] pending_file_analyze_failed', error);
-                const message = error instanceof Error ? error.message : String(error);
-                const lower = message.toLowerCase();
-                if (
-                    lower.includes('401') ||
-                    lower.includes('403') ||
-                    lower.includes('unauthorized') ||
-                    lower.includes('forbidden') ||
-                    lower.includes('please log in')
-                ) {
-                    documentContext.setAIError('You are not logged in. Please log in and try again.');
-                } else if (
-                    lower.includes('failed to fetch') ||
-                    lower.includes('network') ||
-                    lower.includes('timeout')
-                ) {
-                    documentContext.setAIError('We could not reach the server, so analysis did not run. Your graph is unchanged.');
-                } else {
-                    documentContext.setAIError('Analysis failed. Please try again.');
-                }
             } finally {
                 documentContext.setAIActivity(false);
                 console.log(`[graph] pending_analysis_done ok=${ok}`);

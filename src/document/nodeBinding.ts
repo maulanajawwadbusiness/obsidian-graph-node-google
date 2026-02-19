@@ -1,6 +1,5 @@
 /**
- * Node Binding - Apply parsed text to node labels
- * Takes first 5 words from document and sets them as node labels
+ * Node Binding - Apply AI analysis output to graph dots.
  */
 
 import type { PhysicsEngine } from '../physics/engine';
@@ -11,35 +10,37 @@ import { springEdgesToPhysicsLinks } from '../graph/springToPhysics';
 import type { DirectedLink } from '../graph/topologyTypes';
 import { buildSavedInterfaceDedupeKey, type SavedInterfaceRecordV1 } from '../store/savedInterfacesStore';
 
-
-export function applyFirstWordsToNodes(
-  engine: PhysicsEngine,
-  document: ParsedDocument
-): void {
-  const words = document.text
-    .trim()
-    .split(/\s+/)
-    .filter(w => w.length > 0)
-    .slice(0, 5);
-
-  const nodes = Array.from(engine.nodes.values()).slice(0, 5);
-
-  nodes.forEach((node, i) => {
-    if (words[i]) {
-      node.label = words[i];
-      console.log(`[NodeBinding] Node ${i}: "${words[i]}"`);
-    }
-  });
-
-  console.log(`[NodeBinding] Applied ${words.length} words to ${nodes.length} nodes`);
-}
-
 import { analyzeDocument } from '../ai/paperAnalyzer';
 
 function countWords(text: string): number {
   const trimmed = text.trim();
   if (!trimmed) return 0;
   return trimmed.split(/\s+/).length;
+}
+
+function toAnalysisErrorMessage(error: unknown): string {
+  const raw = error instanceof Error ? error.message : String(error);
+  const normalized = raw.trim().toLowerCase();
+  if (
+    normalized.includes('401') ||
+    normalized.includes('403') ||
+    normalized.includes('unauthorized') ||
+    normalized.includes('forbidden') ||
+    normalized.includes('please log in')
+  ) {
+    return 'You are not logged in. Please log in and try again.';
+  }
+  if (normalized.includes('insufficient_balance') || normalized.includes('insufficient_rupiah')) {
+    return 'Your balance is not sufficient for analysis. Please top up and try again.';
+  }
+  if (
+    normalized.includes('failed to fetch') ||
+    normalized.includes('network') ||
+    normalized.includes('timeout')
+  ) {
+    return 'We could not reach the server, so analysis did not run. Your graph is unchanged.';
+  }
+  return 'Analysis failed. Please go back and try again.';
 }
 
 /**
@@ -246,11 +247,8 @@ export async function applyAnalysisToNodes(
 
   } catch (error) {
     console.error('[AI] Analysis failed:', error);
-    const raw = error instanceof Error ? error.message : 'analysis failed';
-    const message = raw === 'unauthorized'
-      ? 'We could not reach the server, so analysis did not run. Please log in and try again.'
-      : 'We could not reach the server, so analysis did not run. Your graph is unchanged.';
-    setAIError(message);
+    setAIError(toAnalysisErrorMessage(error));
+    throw error;
   } finally {
     setAIActivity(false);
   }

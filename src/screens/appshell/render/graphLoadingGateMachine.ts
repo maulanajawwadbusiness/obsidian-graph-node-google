@@ -49,6 +49,18 @@ export function computeGraphLoadingGateBase(input: GateBaseInput): GateBaseOutpu
     if (screen !== 'graph_loading') {
         return { nextPhase: 'idle', nextSeenLoadingTrue: false };
     }
+    if (!runtime.isLoading && runtime.aiErrorMessage) {
+        return {
+            nextPhase: 'error',
+            nextSeenLoadingTrue: seenLoadingTrue,
+        };
+    }
+    if (currentPhase === 'error') {
+        return {
+            nextPhase: 'error',
+            nextSeenLoadingTrue: seenLoadingTrue,
+        };
+    }
     if (runtime.isLoading) {
         return {
             nextPhase: 'loading',
@@ -58,12 +70,6 @@ export function computeGraphLoadingGateBase(input: GateBaseInput): GateBaseOutpu
     if (entryIntent === 'none') {
         return {
             nextPhase: 'done',
-            nextSeenLoadingTrue: seenLoadingTrue,
-        };
-    }
-    if (!runtime.isLoading && runtime.aiErrorMessage) {
-        return {
-            nextPhase: 'error',
             nextSeenLoadingTrue: seenLoadingTrue,
         };
     }

@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useFullscreen } from '../hooks/useFullscreen';
 import { ONBOARDING_SPLASH_MS } from '../config/env';
-import { SHOW_WELCOME1_FULLSCREEN_PROMPT } from '../config/onboardingUiFlags';
+import { SHOW_WELCOME1_BETA_BADGE, SHOW_WELCOME1_FULLSCREEN_PROMPT } from '../config/onboardingUiFlags';
 import { TypingCursor } from '../components/TypingCursor';
 import { t } from '../i18n/t';
 
@@ -133,7 +133,10 @@ export const Welcome1: React.FC<Welcome1Props> = ({ onNext, onSkip, onOverlayOpe
     return (
         <div style={ROOT_STYLE}>
             <div style={CONTENT_STYLE}>
-                <div style={TITLE_STYLE}>{TITLE_LINE_1}</div>
+                <div style={TITLE_ROW_STYLE}>
+                    <span style={TITLE_STYLE}>{TITLE_LINE_1}</span>
+                    {SHOW_WELCOME1_BETA_BADGE ? <span style={TITLE_BETA_STYLE}>Beta</span> : null}
+                </div>
 
                 <div style={SUBTITLE_WRAPPER_STYLE}>
                     <span
@@ -207,12 +210,28 @@ const CONTENT_STYLE: React.CSSProperties = {
     textAlign: 'center',
 };
 
+const TITLE_ROW_STYLE: React.CSSProperties = {
+    display: 'flex',
+    alignItems: 'baseline',
+    justifyContent: 'center',
+    gap: '6px',
+};
+
 const TITLE_STYLE: React.CSSProperties = {
     fontSize: '27px',
     fontWeight: 300,
     letterSpacing: '1px',
     fontFamily: 'var(--font-ui)',
     color: '#b9bcc5',
+};
+
+const TITLE_BETA_STYLE: React.CSSProperties = {
+    fontSize: '14px',
+    fontWeight: 300,
+    letterSpacing: '0.35px',
+    fontFamily: 'var(--font-ui)',
+    color: 'rgba(188, 196, 213, 0.9)',
+    transform: 'translateY(-0.12em)',
 };
 
 const SUBTITLE_WRAPPER_STYLE: React.CSSProperties = {

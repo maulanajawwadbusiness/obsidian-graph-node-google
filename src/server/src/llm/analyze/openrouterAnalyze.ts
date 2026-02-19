@@ -48,6 +48,8 @@ export async function runOpenrouterAnalyze(opts: {
   input: string;
   nodeCount: number;
   lang?: AnalyzePromptLang;
+  firstPassTimeoutMs?: number;
+  retryTimeoutMs?: number;
 }): Promise<OpenrouterAnalyzeResult> {
   const schema = buildAnalyzeJsonSchema(opts.nodeCount);
   const firstPrompt = buildOpenrouterAnalyzePrompt({
@@ -58,7 +60,8 @@ export async function runOpenrouterAnalyze(opts: {
   });
   const first = await opts.provider.generateText({
     model: opts.model,
-    input: firstPrompt
+    input: firstPrompt,
+    timeoutMs: opts.firstPassTimeoutMs
   });
 
   if (first.ok === false) {
@@ -87,7 +90,8 @@ export async function runOpenrouterAnalyze(opts: {
   });
   const retry = await opts.provider.generateText({
     model: opts.model,
-    input: retryPrompt
+    input: retryPrompt,
+    timeoutMs: opts.retryTimeoutMs
   });
 
   if (retry.ok === false) {

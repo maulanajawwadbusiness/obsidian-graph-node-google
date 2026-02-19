@@ -11,6 +11,10 @@ export type ApiGetResult = {
 };
 
 export type ApiPostResult = ApiGetResult;
+export type ApiPostOptions = {
+  timeoutMs?: number;
+  signal?: AbortSignal;
+};
 
 export type PaymentAction = {
   name: string;
@@ -34,6 +38,57 @@ export type SavedInterfaceUpsertInput = {
   payloadVersion: number;
   payloadJson: any;
 };
+
+function createPostSignal(opts?: ApiPostOptions): {
+  signal?: AbortSignal;
+  cleanup: () => void;
+  didTimeout: () => boolean;
+} {
+  if (!opts?.signal && !opts?.timeoutMs) {
+    return {
+      signal: undefined,
+      cleanup: () => {},
+      didTimeout: () => false
+    };
+  }
+
+  const hasTimeout = typeof opts?.timeoutMs === 'number' && Number.isFinite(opts.timeoutMs) && opts.timeoutMs > 0;
+  if (!hasTimeout) {
+    return {
+      signal: opts?.signal,
+      cleanup: () => {},
+      didTimeout: () => false
+    };
+  }
+
+  const controller = new AbortController();
+  let timeoutTriggered = false;
+  const timeoutId = setTimeout(() => {
+    timeoutTriggered = true;
+    controller.abort();
+  }, opts!.timeoutMs);
+
+  const parentSignal = opts?.signal;
+  const onParentAbort = () => controller.abort();
+  if (parentSignal) {
+    if (parentSignal.aborted) {
+      controller.abort();
+    } else {
+      parentSignal.addEventListener('abort', onParentAbort);
+    }
+  }
+
+  return {
+    signal: controller.signal,
+    cleanup: () => {
+      clearTimeout(timeoutId);
+      if (parentSignal) {
+        parentSignal.removeEventListener('abort', onParentAbort);
+      }
+    },
+    didTimeout: () => timeoutTriggered
+  };
+}
 
 function resolveUrl(base: string, path: string) {
   const trimmedBase = base.replace(/\/+$/, '');
@@ -94,20 +149,34 @@ export async function apiGet(path: string): Promise<ApiGetResult> {
   };
 }
 
-export async function apiPost(path: string, body: unknown): Promise<ApiPostResult> {
+export async function apiPost(path: string, body: unknown, opts?: ApiPostOptions): Promise<ApiPostResult> {
   if (!BASE || !BASE.trim()) {
     throw new Error('VITE_API_BASE_URL is missing or empty');
   }
 
   const url = resolveUrl(BASE, path);
   console.log(`[apiPost] POST ${url}`);
+  const postSignal = createPostSignal(opts);
 
-  const res = await fetch(url, {
-    method: 'POST',
-    credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body)
-  });
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: postSignal.signal
+    });
+  } catch (error) {
+    postSignal.cleanup();
+    const aborted = error instanceof DOMException && error.name === 'AbortError';
+    if (postSignal.didTimeout()) {
+      throw new Error('api_timeout');
+    }
+    if (aborted) throw error;
+    throw error;
+  }
+  postSignal.cleanup();
 
   const contentType = res.headers.get('content-type') || '';
   const text = await res.text();

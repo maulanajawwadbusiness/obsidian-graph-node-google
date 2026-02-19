@@ -54,6 +54,8 @@ type AnalyzeJson = {
     links: AnalyzeLink[];
 };
 
+const ANALYZE_API_TIMEOUT_MS = 75_000;
+
 function normalizeNodeCount(nodeCount: number): number {
     return Math.max(2, Math.min(12, Math.floor(nodeCount)));
 }
@@ -289,17 +291,38 @@ export async function analyzeDocument(text: string, opts?: { nodeCount?: number 
             return await analyzeViaDevOpenAI(safeText, nodeCount);
         }
 
-        const result = await apiPost('/api/llm/paper-analyze', {
-            text: safeText,
-            nodeCount,
-            model: AI_MODELS.ANALYZER,
-            lang,
-            submitted_word_count: submittedWordCount
-        });
+        let result: Awaited<ReturnType<typeof apiPost>>;
+        try {
+            result = await apiPost('/api/llm/paper-analyze', {
+                text: safeText,
+                nodeCount,
+                model: AI_MODELS.ANALYZER,
+                lang,
+                submitted_word_count: submittedWordCount
+            }, {
+                timeoutMs: ANALYZE_API_TIMEOUT_MS
+            });
+        } catch (error) {
+            if (error instanceof Error && error.message === 'api_timeout') {
+                console.warn('[PaperAnalyzer] timeout source=client');
+                throw new Error('timeout');
+            }
+            throw error;
+        }
 
         if (result.status === 401 || result.status === 403) {
             console.warn('[PaperAnalyzer] Unauthorized; please log in');
             throw new Error('unauthorized');
+        }
+
+        const responseCode = (() => {
+            if (!result.data || typeof result.data !== 'object') return null;
+            const code = (result.data as { code?: unknown }).code;
+            return typeof code === 'string' ? code : null;
+        })();
+        if (result.status === 504 || responseCode === 'timeout') {
+            console.warn('[PaperAnalyzer] timeout source=server status=504 code=timeout');
+            throw new Error('timeout');
         }
 
         if (!result.ok || !result.data || typeof result.data !== 'object') {

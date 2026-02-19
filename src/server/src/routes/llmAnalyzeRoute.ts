@@ -23,6 +23,12 @@ import { normalizeUsage, type ProviderUsage } from "../llm/usage/providerUsage";
 import { MARKUP_MULTIPLIER } from "../pricing/pricingConfig";
 import { estimateIdrCost } from "../pricing/pricingCalculator";
 import type { ApiErrorCode, AuthContext, LlmAnalyzeRouteDeps } from "./llmRouteDeps";
+
+const ANALYZE_TOTAL_TIMEOUT_MS = 55000;
+const ANALYZE_OPENROUTER_RETRY_TIMEOUT_MS = 15000;
+const ANALYZE_OPENROUTER_FIRST_PASS_TIMEOUT_MS =
+  ANALYZE_TOTAL_TIMEOUT_MS - ANALYZE_OPENROUTER_RETRY_TIMEOUT_MS;
+
 export function registerLlmAnalyzeRoute(app: express.Express, deps: LlmAnalyzeRouteDeps) {
 app.post("/api/llm/paper-analyze", deps.requireAuth, async (req, res) => {
   const startedAt = Date.now();
@@ -334,7 +340,9 @@ app.post("/api/llm/paper-analyze", deps.requireAuth, async (req, res) => {
         model: validation.model,
         input: validation.text,
         nodeCount: validation.nodeCount,
-        lang: validation.lang
+        lang: validation.lang,
+        firstPassTimeoutMs: ANALYZE_OPENROUTER_FIRST_PASS_TIMEOUT_MS,
+        retryTimeoutMs: ANALYZE_OPENROUTER_RETRY_TIMEOUT_MS
       });
 
       if (openrouterResult.ok === false) {
@@ -421,7 +429,8 @@ app.post("/api/llm/paper-analyze", deps.requireAuth, async (req, res) => {
       const result = await provider.generateStructuredJson({
         model: validation.model,
         input: analyzeInput,
-        schema: analyzeSchema
+        schema: analyzeSchema,
+        timeoutMs: ANALYZE_TOTAL_TIMEOUT_MS
       });
 
       if (result.ok === false) {

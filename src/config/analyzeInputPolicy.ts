@@ -3,7 +3,7 @@ export type AnalyzeInputPolicy = {
     maxChars: number;
 };
 
-export const ENABLE_ANALYZE_INPUT_TRUNCATION = true;
+export const ENABLE_ANALYZE_INPUT_TRUNCATION = false;
 export const ANALYZE_INPUT_MAX_CHARS = 6000;
 
 export const ANALYZE_INPUT_POLICY: AnalyzeInputPolicy = {

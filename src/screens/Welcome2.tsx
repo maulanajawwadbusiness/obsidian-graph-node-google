@@ -535,7 +535,7 @@ const CONTENT_STYLE: React.CSSProperties = {
 };
 
 const TEXT_STYLE: React.CSSProperties = {
-    fontSize: '18px',
+    fontSize: '15.3px',
     lineHeight: 1.8,
     color: '#b9bcc5',
     whiteSpace: 'pre-wrap',

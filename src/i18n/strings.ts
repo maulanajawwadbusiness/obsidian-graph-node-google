@@ -68,14 +68,20 @@ export const STRINGS = {
         "onboarding.welcome1.fullscreen_prompt.cta_no": "Tidak, tetap di layar ini",
 
         // Onboarding Welcome2
-        "onboarding.welcome2.manifesto": `Untukku, aku sering merasa lelah ketika membaca paper di jam 2 malam. {p=260}
-Menurutku teks itu bukanlah bentuk pengetahuan paling intuitif. {p=900}
+        "onboarding.welcome2.manifesto": `Untukku, aku sering merasa lelah ketika membaca paper di jam 2 malam.{p=260}
+Menurutku teks itu bukanlah bentuk pengetahuan paling intuitif.{p=900}
 
-Kita sudah membaca teks selama 50 tahun di hidup kita.
-Jika kita ingin memproses pengetahuan secara intuitif, kurasa kita perlu menciptakan bentuk medium informasi yang baru untuk diri kita sendiri.
-Medium yang cocok dengan pikiran kita. Yang selaras dengan saraf alami di dalam pikiran kita. {p=900}
+Kurasa menambahkan lebih banyak teks bukanlah cara untuk menyelesaikan masalah kita.
+Kurasa melihat inti dari keraguan dan ketakutan kita adalah cara mengatasi masalah ketika kita membaca paper di sini.
+Melihat ketidakpastian, keraguan, dan ketidakyakinan yang kita punya di saat membaca paper di jam 2 malam. 
+Kurasa memiliki medium yang memproses keraguan ini dengan baik itu adalah cara untuk kita memproses paper ini.{p=900}
 
-Kupikir ini waktunya untuk kita memikirkan medium informasi yang berbeda di sini.`,
+Medium yang menarik garis keraguan kita.
+Menyoroti titik ketidakyakinan kita.
+Menandakan tempat di mana kita meragukan diri kita ketika membaca paper di tengah malam.{p=900}
+
+Menurutku ini waktunya untuk kita memikirkan kembali cara kita membaca paper.
+Ini waktunya untuk memulai ini.`,
 
         // Onboarding EnterPrompt
         "onboarding.enterprompt.sidebar_label": "Sidebar",
@@ -176,11 +182,17 @@ Kupikir ini waktunya untuk kita memikirkan medium informasi yang berbeda di sini
         "onboarding.welcome2.manifesto": `For me, i often feel tired reading paper at 2 am.{p=260}
 I think text is not the most intuitive form of knowledge.{p=900}
 
-We have been reading text for more than 50 years.
-If we want to process information intuitively, i think we need to create a new form of information medium for ourselves.
-One that fit our mind well. One that fit natural nerve in our thought.{p=900}
+I think adding more text is not way for us to solve our problem. 
+I think seeing essence of our doubt and fear in paper itself is the way for us to understand our paper.
+Seeing our uncertainty, doubt, and strain in our paper when we read it in middle of the night.
+I think having a medium that can reliably process this is good way to process our paper.{p=900}
 
-I think it is time for us to think a different medium for ourselves.`,
+A medium that strain the line of our uncertainty.
+Pointing location of our doubt.
+Lighting up where we confuse ourselves in paper we read at night.{p=900}
+
+I think it is time for us to rethink how we read a paper.
+It is time to do this.`,
 
         // Onboarding EnterPrompt
         "onboarding.enterprompt.sidebar_label": "Sidebar",

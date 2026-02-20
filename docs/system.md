@@ -347,9 +347,10 @@ Gate state machine (high level):
   - explicit no-work fallback only when entry intent is `none`.
 - error policy:
   - for analysis/restore entry intent, runtime error moves gate to `error`.
-  - gate renders explicit error UI (`Loading Failed` + runtime error message).
+  - gate renders explicit error UI (`Analysis Failed` + runtime error message).
   - gate confirm is disabled in `error`.
   - user exits error gate via explicit Back action (or `Escape`) to prompt.
+  - analysis failure path has no first-5-word label fallback; graph content stays unchanged when analysis fails.
 - watchdog:
   - if loading never starts for analysis/restore intent, phase moves to `stalled` and escape remains available.
   - watchdog never overrides `error`, `done`, or `confirmed`.
@@ -900,7 +901,6 @@ Backend LLM endpoints:
   - `src/server/src/llm/requestFlow.ts`
   - contract guard: `npm run test:requestflow-contracts`
 - Retry-After and API error header/order behavior are locked in the requestFlow seam and guard tests.
-
 ## LLM Audit
 - Per-request audit records are stored in `llm_request_audit`.
 - Audit includes provider/model, token counts, rupiah cost, and free pool metadata.

@@ -18,17 +18,26 @@ export type SkeletonTopologyLink = {
   meta?: Record<string, unknown>;
 };
 
+function compareCodeUnit(a: string, b: string): number {
+  if (a < b) return -1;
+  if (a > b) return 1;
+  return 0;
+}
+
 function compareNodes(a: SkeletonNodeV1, b: SkeletonNodeV1): number {
   if (a.pressure !== b.pressure) return b.pressure - a.pressure;
-  return a.id.localeCompare(b.id);
+  return compareCodeUnit(a.id, b.id);
 }
 
 function compareEdges(a: SkeletonEdgeV1, b: SkeletonEdgeV1): number {
   if (a.weight !== b.weight) return b.weight - a.weight;
-  if (a.from !== b.from) return a.from.localeCompare(b.from);
-  if (a.to !== b.to) return a.to.localeCompare(b.to);
-  if (a.type !== b.type) return a.type.localeCompare(b.type);
-  return a.rationale.localeCompare(b.rationale);
+  if (a.from !== b.from) return compareCodeUnit(a.from, b.from);
+  if (a.to !== b.to) return compareCodeUnit(a.to, b.to);
+  if (a.type !== b.type) return compareCodeUnit(a.type, b.type);
+  if (a.rationale !== b.rationale) return compareCodeUnit(a.rationale, b.rationale);
+  const aStableKey = `${a.from}|${a.to}|${a.type}|${a.weight}|${a.rationale}`;
+  const bStableKey = `${b.from}|${b.to}|${b.type}|${b.weight}|${b.rationale}`;
+  return compareCodeUnit(aStableKey, bStableKey);
 }
 
 export function skeletonToTopologyCore(skeleton: KnowledgeSkeletonV1): {

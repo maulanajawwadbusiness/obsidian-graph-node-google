@@ -5,7 +5,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import analyzeModule from "../dist/llm/analyze/skeletonAnalyze.js";
 
-const { analyzeDocumentToSkeletonV1 } = analyzeModule;
+const { analyzeDocumentToSkeletonV1, summarizeValidationErrorsForRepair } = analyzeModule;
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -41,6 +41,18 @@ function createOpenrouterProvider(outputs) {
 async function run() {
   const minimal = readFixture("knowledge_skeleton_v1_minimal.json");
   const validJson = JSON.stringify(minimal);
+  const semanticInvalid = JSON.stringify({
+    ...minimal,
+    edges: [
+      {
+        from: "n-method",
+        to: "n-claim",
+        type: "operationalizes",
+        weight: 0.82,
+        rationale: "single edge leaves one node disconnected"
+      }
+    ]
+  });
 
   const fencedProvider = createOpenrouterProvider([`Here:\n\`\`\`json\n${validJson}\n\`\`\``]);
   const fencedResult = await analyzeDocumentToSkeletonV1({
@@ -79,7 +91,42 @@ async function run() {
   });
   assert(alwaysBadResult.ok === false, "[knowledge-skeleton-analyze] malformed json should fail");
   assert(alwaysBadResult.code === "parse_error", "[knowledge-skeleton-analyze] malformed json should return parse_error");
-  assert(alwaysBadProvider.getCallCount() === 3, "[knowledge-skeleton-analyze] parse error retries should cap at 2");
+  assert(alwaysBadProvider.getCallCount() === 2, "[knowledge-skeleton-analyze] parse error retries should cap at 1");
+
+  const parseThenSemanticProvider = createOpenrouterProvider([
+    "{ bad json",
+    semanticInvalid,
+    semanticInvalid,
+    validJson
+  ]);
+  const parseThenSemanticResult = await analyzeDocumentToSkeletonV1({
+    provider: parseThenSemanticProvider,
+    model: "gpt-4.1-mini",
+    text: "sample"
+  });
+  assert(parseThenSemanticResult.ok === true, "[knowledge-skeleton-analyze] semantic retries should survive parse retry");
+  assert(parseThenSemanticResult.validation_result === "retry_ok", "[knowledge-skeleton-analyze] combined retries should be retry_ok");
+  assert(parseThenSemanticProvider.getCallCount() === 4, "[knowledge-skeleton-analyze] parse retry must not consume semantic budget");
+
+  const manyErrors = [];
+  manyErrors.push({
+    code: "orphan_nodes_excessive",
+    message: "orphan nodes are not allowed: n-1",
+    path: "edges",
+    details: { orphan_ids: ["n-1"] }
+  });
+  for (let i = 0; i < 30; i += 1) {
+    manyErrors.push({
+      code: i % 2 === 0 ? "unknown_property" : "node_label_empty",
+      message: `error-${i}`,
+      path: `nodes[${i}]`
+    });
+  }
+  const summarized = summarizeValidationErrorsForRepair(manyErrors);
+  assert(summarized.lines.length === 21, "[knowledge-skeleton-analyze] summarized errors should be capped with truncation marker");
+  assert(summarized.lines[0].includes("orphan_nodes_excessive"), "[knowledge-skeleton-analyze] orphan error must be prioritized");
+  assert(summarized.lines[0].includes("orphan_ids"), "[knowledge-skeleton-analyze] orphan ids must be preserved in summary");
+  assert(summarized.lines[summarized.lines.length - 1].includes("more errors truncated"), "[knowledge-skeleton-analyze] truncation marker missing");
 
   console.log("[knowledge-skeleton-analyze-contracts] parse extraction + repair behavior valid");
   console.log("[knowledge-skeleton-analyze-contracts] done");

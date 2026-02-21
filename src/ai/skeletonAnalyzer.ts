@@ -1,6 +1,7 @@
 import { AI_MODELS } from "../config/aiModels";
 import type { KnowledgeSkeletonV1 } from "../server/src/llm/analyze/knowledgeSkeletonV1";
 import { assertSemanticKnowledgeSkeletonV1, parseKnowledgeSkeletonV1Response } from "./knowledgeSkeletonV1Parser";
+import { isSkeletonAnalyzeModeAllowed, resolveAnalyzeRequestMode } from "./analyzeMode";
 
 const SKELETON_API_TIMEOUT_MS = 120_000;
 const ENABLE_SKELETON_DEBUG_STORAGE = false;
@@ -97,12 +98,21 @@ function storeDebugSkeleton(skeleton: KnowledgeSkeletonV1): void {
 }
 
 export async function analyzeDocumentToSkeletonV1(text: string): Promise<KnowledgeSkeletonV1> {
+  const requestMode = resolveAnalyzeRequestMode();
+  if (requestMode !== "skeleton_v1" || !isSkeletonAnalyzeModeAllowed()) {
+    const guardMessage = "skeleton_v1 blocked until phase3 topology wiring is explicitly enabled";
+    if (import.meta.env.DEV) {
+      throw new SkeletonAnalyzeError(guardMessage, 400, "mode_guard_blocked");
+    }
+    throw new SkeletonAnalyzeError("skeleton analyzer unavailable", 400, "mode_guard_blocked");
+  }
+
   const url = resolveAnalyzeUrl("/api/llm/paper-analyze");
   const result = await fetchAnalyzeSse(
     url,
     {
       text,
-      mode: "skeleton_v1",
+      mode: requestMode,
       model: AI_MODELS.ANALYZER
     },
     SKELETON_API_TIMEOUT_MS

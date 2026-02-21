@@ -3,6 +3,7 @@
 import promptModule from "../dist/llm/analyze/skeletonPrompt.js";
 
 const {
+  buildDocumentExcerptHeadTail,
   buildSkeletonRepairInput,
   buildSkeletonParseRepairInput,
   trimWithHeadTail,
@@ -26,6 +27,12 @@ async function run() {
   assert(trimmed.includes("[truncated]"), "[knowledge-skeleton-repair-budget] trim must mark truncation");
   assert(trimmed.startsWith("prefix"), "[knowledge-skeleton-repair-budget] trim must keep head");
   assert(trimmed.endsWith("suffix"), "[knowledge-skeleton-repair-budget] trim must keep tail");
+
+  const excerptA = buildDocumentExcerptHeadTail(longText);
+  const excerptB = buildDocumentExcerptHeadTail(longText);
+  assert(excerptA === excerptB, "[knowledge-skeleton-repair-budget] excerpt selection must be deterministic");
+  assert(excerptA.length <= SKELETON_PROMPT_LIMITS.repairDocumentExcerptMaxChars, "[knowledge-skeleton-repair-budget] excerpt cap exceeded");
+  assert(excerptA.includes("[truncated]"), "[knowledge-skeleton-repair-budget] excerpt must include truncation marker");
 
   const repair = buildSkeletonRepairInput({
     text: longText,

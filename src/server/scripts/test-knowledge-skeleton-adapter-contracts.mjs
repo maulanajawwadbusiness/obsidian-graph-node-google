@@ -79,6 +79,35 @@ async function run() {
   const tieMappedB = skeletonToTopologyCore(tieValidated.value);
   assert(JSON.stringify(tieMappedA) === JSON.stringify(tieMappedB), "[knowledge-skeleton-adapter] tie mapping must be deterministic");
 
+  const unicodeTiePayload = {
+    nodes: [
+      { role: "claim", id: "n-claim", label: "Claim", summary: "Claim summary", pressure: 0.8, confidence: 0.8 },
+      { role: "evidence", id: "n-evidence", label: "Evidence", summary: "Evidence summary", pressure: 0.7, confidence: 0.7 },
+      { role: "method", id: "n-method", label: "Method", summary: "Method summary", pressure: 0.6, confidence: 0.6 }
+    ],
+    edges: [
+      { from: "n-claim", to: "n-evidence", type: "depends_on", weight: 0.5, rationale: "évidence" },
+      { from: "n-claim", to: "n-evidence", type: "depends_on", weight: 0.5, rationale: "漢字" }
+    ]
+  };
+  const unicodeValidated = validateKnowledgeSkeletonV1(unicodeTiePayload);
+  assert(unicodeValidated.ok === false, "[knowledge-skeleton-adapter] unicode duplicate semantic edges must be rejected");
+  const unicodeDeterministicPayload = {
+    ...unicodeTiePayload,
+    edges: [
+      { from: "n-claim", to: "n-evidence", type: "depends_on", weight: 0.5, rationale: "évidence" },
+      { from: "n-claim", to: "n-method", type: "produces", weight: 0.5, rationale: "漢字" }
+    ]
+  };
+  const unicodeDeterministicValidated = validateKnowledgeSkeletonV1(unicodeDeterministicPayload);
+  assert(unicodeDeterministicValidated.ok === true, "[knowledge-skeleton-adapter] unicode payload must validate");
+  const unicodeMappedA = skeletonToTopologyCore(unicodeDeterministicValidated.value);
+  const unicodeMappedB = skeletonToTopologyCore(unicodeDeterministicValidated.value);
+  assert(
+    JSON.stringify(unicodeMappedA) === JSON.stringify(unicodeMappedB),
+    "[knowledge-skeleton-adapter] unicode tie mapping must be deterministic"
+  );
+
   console.log("[knowledge-skeleton-adapter-contracts] fixture mapping valid");
   console.log("[knowledge-skeleton-adapter-contracts] deterministic ordering valid");
   console.log("[knowledge-skeleton-adapter-contracts] done");

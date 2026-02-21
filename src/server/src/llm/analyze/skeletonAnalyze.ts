@@ -35,7 +35,39 @@ type SkeletonAnalyzeErr = {
 export type SkeletonAnalyzeResult = SkeletonAnalyzeOk | SkeletonAnalyzeErr;
 
 const ENABLE_SKELETON_DEBUG_LOGS = false;
-const MAX_REPAIR_ATTEMPTS = 2;
+const MAX_PARSE_REPAIR_ATTEMPTS = 1;
+const MAX_SEMANTIC_REPAIR_ATTEMPTS = 2;
+const MAX_REPAIR_ERRORS_INCLUDED = 20;
+
+function compareCodeUnit(a: string, b: string): number {
+  if (a < b) return -1;
+  if (a > b) return 1;
+  return 0;
+}
+
+function getValidationPriority(error: KnowledgeSkeletonValidationError): number {
+  switch (error.code) {
+    case "orphan_nodes_excessive":
+      return 0;
+    case "edge_from_missing_node":
+    case "edge_to_missing_node":
+      return 1;
+    case "duplicate_edge_semantic":
+      return 2;
+    case "edge_count_out_of_range":
+      return 3;
+    case "unknown_property":
+      return 4;
+    default:
+      return 10;
+  }
+}
+
+function formatValidationEntry(error: KnowledgeSkeletonValidationError): string {
+  const path = error.path ?? "";
+  const details = error.details ? JSON.stringify(error.details) : "";
+  return `code=${error.code} path=${path} message=${error.message} details=${details}`;
+}
 
 function toValidationMessages(errors: KnowledgeSkeletonValidationError[]): string[] {
   return errors.map((entry) => {
@@ -43,6 +75,27 @@ function toValidationMessages(errors: KnowledgeSkeletonValidationError[]): strin
     const details = entry.details ? ` details=${JSON.stringify(entry.details)}` : "";
     return `${path}${entry.code} (${entry.message})${details}`;
   });
+}
+
+export function summarizeValidationErrorsForRepair(
+  errors: KnowledgeSkeletonValidationError[]
+): { lines: string[]; truncatedCount: number } {
+  const ranked = [...errors].sort((a, b) => {
+    const priorityDelta = getValidationPriority(a) - getValidationPriority(b);
+    if (priorityDelta !== 0) return priorityDelta;
+    const pathCompare = compareCodeUnit(a.path ?? "", b.path ?? "");
+    if (pathCompare !== 0) return pathCompare;
+    const codeCompare = compareCodeUnit(a.code, b.code);
+    if (codeCompare !== 0) return codeCompare;
+    return compareCodeUnit(a.message, b.message);
+  });
+  const limited = ranked.slice(0, MAX_REPAIR_ERRORS_INCLUDED);
+  const truncatedCount = Math.max(0, ranked.length - limited.length);
+  const lines = limited.map(formatValidationEntry);
+  if (truncatedCount > 0) {
+    lines.push(`+${truncatedCount} more errors truncated`);
+  }
+  return { lines, truncatedCount };
 }
 
 function toLlmError(result: { code: string; error: string }): SkeletonAnalyzeErr {
@@ -189,23 +242,24 @@ export async function analyzeDocumentToSkeletonV1(args: {
   if (args.provider.name === "openrouter") {
     let usage: { input_tokens?: number; output_tokens?: number } | undefined;
     let currentPrompt = firstInput;
-    let attempt = 0;
-    while (attempt <= MAX_REPAIR_ATTEMPTS) {
+    let parseRepairsUsed = 0;
+    let semanticRepairsUsed = 0;
+    while (true) {
       const pass = await runOpenrouterSkeletonPass({
         provider: args.provider,
         model: args.model,
         text: args.text,
         lang: args.lang,
-        timeoutMs: attempt === 0 ? args.timeoutMs : args.repairTimeoutMs,
+        timeoutMs: parseRepairsUsed + semanticRepairsUsed === 0 ? args.timeoutMs : args.repairTimeoutMs,
         prompt: currentPrompt
       });
       if (pass.ok === false) {
         if (pass.code !== "parse_error" || !("rawText" in pass)) return pass;
         usage = pass.usage;
         if (ENABLE_SKELETON_DEBUG_LOGS) {
-          console.log(`[skeleton] parse_error attempt=${attempt} raw=${toDebugPreview(pass.rawText)}`);
+          console.log(`[skeleton] parse_error parse_retries=${parseRepairsUsed} raw=${toDebugPreview(pass.rawText)}`);
         }
-        if (attempt >= MAX_REPAIR_ATTEMPTS) {
+        if (parseRepairsUsed >= MAX_PARSE_REPAIR_ATTEMPTS) {
           return {
             ok: false,
             code: "parse_error",
@@ -220,28 +274,38 @@ export async function analyzeDocumentToSkeletonV1(args: {
           parseError: pass.error,
           lang: args.lang
         });
-        attempt += 1;
+        parseRepairsUsed += 1;
         continue;
       }
       usage = pass.usage;
       const validation = validateKnowledgeSkeletonV1(pass.raw);
       if (validation.ok === true) {
         if (ENABLE_SKELETON_DEBUG_LOGS) {
-          console.log(`[skeleton] accepted attempt=${attempt} ${toSkeletonSummary(validation.value)}`);
+          console.log(
+            `[skeleton] accepted parse_retries=${parseRepairsUsed} semantic_retries=${semanticRepairsUsed} ` +
+            `${toSkeletonSummary(validation.value)}`
+          );
         }
         return {
           ok: true,
           value: validation.value,
-          validation_result: attempt === 0 ? "ok" : "retry_ok",
+          validation_result: parseRepairsUsed + semanticRepairsUsed > 0 ? "retry_ok" : "ok",
           usage
         };
       }
       const validationErrors = validation.errors;
+      const repairSummary = summarizeValidationErrorsForRepair(validationErrors);
       if (ENABLE_SKELETON_DEBUG_LOGS) {
-        console.log(`[skeleton] raw attempt=${attempt} value=${toDebugPreview(pass.raw)}`);
-        console.log(`[skeleton] invalid attempt=${attempt} errors=${toValidationMessages(validationErrors).join("; ")}`);
+        console.log(
+          `[skeleton] raw parse_retries=${parseRepairsUsed} semantic_retries=${semanticRepairsUsed} ` +
+          `value=${toDebugPreview(pass.raw)}`
+        );
+        console.log(
+          `[skeleton] invalid semantic_retries=${semanticRepairsUsed} ` +
+          `errors=${toValidationMessages(validationErrors).join("; ")}`
+        );
       }
-      if (attempt >= MAX_REPAIR_ATTEMPTS) {
+      if (semanticRepairsUsed >= MAX_SEMANTIC_REPAIR_ATTEMPTS) {
         return {
           ok: false,
           code: "skeleton_output_invalid",
@@ -254,28 +318,22 @@ export async function analyzeDocumentToSkeletonV1(args: {
       currentPrompt = buildSkeletonRepairInput({
         text: args.text,
         invalidJson: toDebugPreview(pass.raw),
-        validationErrors: toValidationMessages(validationErrors),
+        validationErrors: repairSummary.lines,
         lang: args.lang
       });
-      attempt += 1;
+      semanticRepairsUsed += 1;
     }
-    return {
-      ok: false,
-      code: "skeleton_output_invalid",
-      error: "structured skeleton output invalid",
-      validation_result: "failed"
-    };
   }
 
   let currentPrompt = firstInput;
-  let attempt = 0;
+  let semanticRepairsUsed = 0;
   let usage: { input_tokens?: number; output_tokens?: number } | undefined;
-  while (attempt <= MAX_REPAIR_ATTEMPTS) {
+  while (true) {
     const result = await args.provider.generateStructuredJson({
       model: args.model,
       input: currentPrompt,
       schema,
-      timeoutMs: attempt === 0 ? args.timeoutMs : args.repairTimeoutMs
+      timeoutMs: semanticRepairsUsed === 0 ? args.timeoutMs : args.repairTimeoutMs
     });
     if (result.ok === false) {
       return toLlmError(result as LlmError);
@@ -284,21 +342,25 @@ export async function analyzeDocumentToSkeletonV1(args: {
     const validation = validateKnowledgeSkeletonV1(result.json);
     if (validation.ok === true) {
       if (ENABLE_SKELETON_DEBUG_LOGS) {
-        console.log(`[skeleton] openai accepted attempt=${attempt} ${toSkeletonSummary(validation.value)}`);
+        console.log(`[skeleton] openai accepted semantic_retries=${semanticRepairsUsed} ${toSkeletonSummary(validation.value)}`);
       }
       return {
         ok: true,
         value: validation.value,
-        validation_result: attempt === 0 ? "ok" : "retry_ok",
+        validation_result: semanticRepairsUsed > 0 ? "retry_ok" : "ok",
         usage
       };
     }
     const validationErrors = validation.errors;
+    const repairSummary = summarizeValidationErrorsForRepair(validationErrors);
     if (ENABLE_SKELETON_DEBUG_LOGS) {
-      console.log(`[skeleton] openai raw attempt=${attempt} value=${toDebugPreview(result.json)}`);
-      console.log(`[skeleton] openai invalid attempt=${attempt} errors=${toValidationMessages(validationErrors).join("; ")}`);
+      console.log(`[skeleton] openai raw semantic_retries=${semanticRepairsUsed} value=${toDebugPreview(result.json)}`);
+      console.log(
+        `[skeleton] openai invalid semantic_retries=${semanticRepairsUsed} ` +
+        `errors=${toValidationMessages(validationErrors).join("; ")}`
+      );
     }
-    if (attempt >= MAX_REPAIR_ATTEMPTS) {
+    if (semanticRepairsUsed >= MAX_SEMANTIC_REPAIR_ATTEMPTS) {
       return {
         ok: false,
         code: "skeleton_output_invalid",
@@ -311,16 +373,9 @@ export async function analyzeDocumentToSkeletonV1(args: {
     currentPrompt = buildSkeletonRepairInput({
       text: args.text,
       invalidJson: toDebugPreview(result.json),
-      validationErrors: toValidationMessages(validationErrors),
+      validationErrors: repairSummary.lines,
       lang: args.lang
     });
-    attempt += 1;
+    semanticRepairsUsed += 1;
   }
-  return {
-    ok: false,
-    code: "skeleton_output_invalid",
-    error: "structured skeleton output invalid",
-    validation_result: "failed",
-    usage
-  };
 }

@@ -45,6 +45,10 @@ export function trimWithHeadTail(value: string, maxChars: number): string {
   return `${head}${marker}${tail}`;
 }
 
+export function buildDocumentExcerptHeadTail(value: string): string {
+  return trimWithHeadTail(value, SKELETON_PROMPT_LIMITS.repairDocumentExcerptMaxChars);
+}
+
 function buildCoreInstruction(lang: AnalyzePromptLang): string {
   return [
     "You are Arnvoid knowledge skeleton analyzer.",
@@ -81,7 +85,7 @@ function buildCoreInstruction(lang: AnalyzePromptLang): string {
 
 export function buildSkeletonAnalyzeInput(opts: SkeletonPromptOpts): string {
   const lang: AnalyzePromptLang = opts.lang === "en" ? "en" : "id";
-  const excerpt = trimWithHeadTail(opts.text, SKELETON_PROMPT_LIMITS.repairDocumentExcerptMaxChars);
+  const excerpt = buildDocumentExcerptHeadTail(opts.text);
   return [
     buildCoreInstruction(lang),
     "",
@@ -98,7 +102,7 @@ export function buildSkeletonRepairInput(args: {
 }): string {
   const lang: AnalyzePromptLang = args.lang === "en" ? "en" : "id";
   const invalidJsonPreview = trimWithHeadTail(args.invalidJson, SKELETON_PROMPT_LIMITS.repairInvalidJsonMaxChars);
-  const excerpt = trimWithHeadTail(args.text, SKELETON_PROMPT_LIMITS.repairDocumentExcerptMaxChars);
+  const excerpt = buildDocumentExcerptHeadTail(args.text);
   return [
     buildCoreInstruction(lang),
     "",
@@ -123,7 +127,7 @@ export function buildSkeletonParseRepairInput(args: {
 }): string {
   const lang: AnalyzePromptLang = args.lang === "en" ? "en" : "id";
   const rawPreview = trimWithHeadTail(args.rawOutputPreview, SKELETON_PROMPT_LIMITS.repairRawOutputPreviewMaxChars);
-  const excerpt = trimWithHeadTail(args.text, SKELETON_PROMPT_LIMITS.repairDocumentExcerptMaxChars);
+  const excerpt = buildDocumentExcerptHeadTail(args.text);
   return [
     buildCoreInstruction(lang),
     "",

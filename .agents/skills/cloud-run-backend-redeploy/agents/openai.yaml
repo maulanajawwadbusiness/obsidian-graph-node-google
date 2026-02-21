@@ -1,0 +1,4 @@
+interface:
+  display_name: "Cloud Run Backend Redeploy"
+  short_description: "One-command redeploy for arnvoid-api backend"
+  default_prompt: "Redeploy arnvoid-api backend to Cloud Run with safe env and secret updates, then verify revision readiness."

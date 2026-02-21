@@ -71,10 +71,10 @@ export const STRINGS = {
         "onboarding.welcome2.manifesto": `Untukku, aku sering merasa lelah ketika membaca paper di jam 2 malam.{p=260}
 Menurutku teks itu bukanlah bentuk pengetahuan paling intuitif.{p=900}
 
-Kurasa menambahkan lebih banyak teks bukanlah cara untuk menyelesaikan masalah kita.
-Kurasa melihat inti dari keraguan dan ketakutan kita adalah cara mengatasi masalah ketika kita membaca paper di sini.
-Melihat ketidakpastian, keraguan, dan ketidakyakinan yang kita punya di saat membaca paper di jam 2 malam. 
-Kurasa memiliki medium yang memproses keraguan ini dengan baik itu adalah cara untuk kita memproses paper ini.{p=900}
+Kurasa menambah lebih banyak teks bukanlah cara intuitif untuk menyelesaikan masalah kita.
+Inti dari keraguan dan ketakutan kita bukan ada pada tumpukan kertas di meja kita.
+Ketidakpastian, keraguan, dan ketidakyakinan ada ketika kita membaca paper di jam 2 malam. 
+Kurasa memiliki medium yang memproses keraguan ini dengan baik itu adalah cara untuk kita bisa memproses paper ini.{p=900}
 
 Medium yang menarik garis keraguan kita.
 Menyoroti titik ketidakyakinan kita.

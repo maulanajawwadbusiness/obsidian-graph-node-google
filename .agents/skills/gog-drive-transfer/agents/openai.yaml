@@ -1,0 +1,4 @@
+interface:
+  display_name: "GOG Drive Transfer"
+  short_description: "Reliable upload and download via gog drive CLI"
+  default_prompt: "Use gog-drive-transfer to upload or download Google Drive files with retries and verification."

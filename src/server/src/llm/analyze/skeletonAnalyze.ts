@@ -8,7 +8,11 @@ import {
   validateKnowledgeSkeletonV1,
   type KnowledgeSkeletonValidationError
 } from "./knowledgeSkeletonV1";
-import { buildSkeletonAnalyzeInput, buildSkeletonRepairInput } from "./skeletonPrompt";
+import {
+  buildSkeletonAnalyzeInput,
+  buildSkeletonParseRepairInput,
+  buildSkeletonRepairInput
+} from "./skeletonPrompt";
 import type { AnalyzePromptLang } from "./prompt";
 
 type SkeletonAnalyzeOk = {
@@ -50,19 +54,73 @@ function toLlmError(result: { code: string; error: string }): SkeletonAnalyzeErr
 }
 
 function tryParseJson(text: string): unknown | null {
+  const extracted = extractFirstJsonObject(text);
+  if (!extracted) return null;
+  try {
+    return JSON.parse(extracted);
+  } catch {
+    return null;
+  }
+}
+
+function stripCodeFences(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed.startsWith("```")) return trimmed;
+  const withoutOpen = trimmed.replace(/^```[a-zA-Z0-9_-]*\s*/, "");
+  return withoutOpen.replace(/\s*```$/, "").trim();
+}
+
+function extractBalancedObject(value: string): string | null {
+  const start = value.indexOf("{");
+  if (start < 0) return null;
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  for (let i = start; i < value.length; i += 1) {
+    const char = value[i];
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+      } else if (char === "\\") {
+        escaped = true;
+      } else if (char === "\"") {
+        inString = false;
+      }
+      continue;
+    }
+    if (char === "\"") {
+      inString = true;
+      continue;
+    }
+    if (char === "{") {
+      depth += 1;
+      continue;
+    }
+    if (char === "}") {
+      depth -= 1;
+      if (depth === 0) {
+        return value.slice(start, i + 1);
+      }
+    }
+  }
+  return null;
+}
+
+function extractFirstJsonObject(text: string): string | null {
   const trimmed = text.trim();
   if (!trimmed) return null;
+  const noFence = stripCodeFences(trimmed);
   try {
-    return JSON.parse(trimmed);
+    JSON.parse(noFence);
+    return noFence;
   } catch {
     // continue to extraction fallback
   }
-  const start = trimmed.indexOf("{");
-  const end = trimmed.lastIndexOf("}");
-  if (start === -1 || end === -1 || end <= start) return null;
-  const slice = trimmed.slice(start, end + 1);
+  const balanced = extractBalancedObject(noFence);
+  if (!balanced) return null;
   try {
-    return JSON.parse(slice);
+    JSON.parse(balanced);
+    return balanced;
   } catch {
     return null;
   }
@@ -85,7 +143,11 @@ async function runOpenrouterSkeletonPass(args: {
   lang?: AnalyzePromptLang;
   timeoutMs?: number;
   prompt: string;
-}): Promise<{ ok: true; raw: unknown; usage?: { input_tokens?: number; output_tokens?: number } } | SkeletonAnalyzeErr> {
+}): Promise<
+  | { ok: true; raw: unknown; usage?: { input_tokens?: number; output_tokens?: number } }
+  | { ok: false; code: "parse_error"; error: string; rawText: string; usage?: { input_tokens?: number; output_tokens?: number } }
+  | SkeletonAnalyzeErr
+> {
   const result = await args.provider.generateText({
     model: args.model,
     input: args.prompt,
@@ -100,7 +162,7 @@ async function runOpenrouterSkeletonPass(args: {
       ok: false,
       code: "parse_error",
       error: "invalid json",
-      validation_result: "failed",
+      rawText: result.text,
       usage: result.usage
     };
   }
@@ -131,7 +193,30 @@ export async function analyzeDocumentToSkeletonV1(args: {
         timeoutMs: attempt === 0 ? args.timeoutMs : args.repairTimeoutMs,
         prompt: currentPrompt
       });
-      if (pass.ok === false) return pass;
+      if (pass.ok === false) {
+        if (pass.code !== "parse_error" || !("rawText" in pass)) return pass;
+        usage = pass.usage;
+        if (ENABLE_SKELETON_DEBUG_LOGS) {
+          console.log(`[skeleton] parse_error attempt=${attempt} raw=${toDebugPreview(pass.rawText)}`);
+        }
+        if (attempt >= MAX_REPAIR_ATTEMPTS) {
+          return {
+            ok: false,
+            code: "parse_error",
+            error: "invalid json after repair attempts",
+            validation_result: "failed",
+            usage
+          };
+        }
+        currentPrompt = buildSkeletonParseRepairInput({
+          text: args.text,
+          rawOutputPreview: toDebugPreview(pass.rawText),
+          parseError: pass.error,
+          lang: args.lang
+        });
+        attempt += 1;
+        continue;
+      }
       usage = pass.usage;
       const validation = validateKnowledgeSkeletonV1(pass.raw);
       if (validation.ok === true) {

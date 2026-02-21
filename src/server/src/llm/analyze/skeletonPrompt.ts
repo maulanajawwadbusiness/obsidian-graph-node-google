@@ -81,3 +81,27 @@ export function buildSkeletonRepairInput(args: {
     `\"\"\"${args.text}\"\"\"`
   ].join("\n");
 }
+
+export function buildSkeletonParseRepairInput(args: {
+  text: string;
+  rawOutputPreview: string;
+  parseError: string;
+  lang?: AnalyzePromptLang;
+}): string {
+  const lang: AnalyzePromptLang = args.lang === "en" ? "en" : "id";
+  return [
+    buildCoreInstruction(lang),
+    "",
+    "Previous output failed JSON parsing.",
+    `Parse error: ${args.parseError}`,
+    "Return corrected JSON only.",
+    "Do not use markdown code fences.",
+    "Do not include any prose before or after JSON.",
+    "",
+    "Raw output preview:",
+    args.rawOutputPreview,
+    "",
+    "Document excerpt:",
+    `\"\"\"${args.text}\"\"\"`
+  ].join("\n");
+}

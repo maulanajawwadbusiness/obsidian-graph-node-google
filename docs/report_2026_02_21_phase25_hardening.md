@@ -31,3 +31,37 @@ Sample error payload shape:
   "path": "nodes[0].extra_node"
 }
 ```
+
+## Run 2: OpenRouter Parse Error Repair Flow
+
+Date: 2026-02-21
+
+Changes made:
+- OpenRouter path no longer exits immediately on JSON parse failure.
+- Added tolerant extraction for model text outputs:
+  - strips code fences when present
+  - attempts balanced JSON object extraction
+  - parses extracted object if valid
+- Parse failures now enter repair loop (up to existing cap), then return typed `parse_error` only after retries are exhausted.
+- Added parse-repair prompt builder with strict instructions:
+  - return JSON only
+  - no markdown fences
+  - no prose wrappers
+
+Code anchors:
+- `src/server/src/llm/analyze/skeletonAnalyze.ts`
+  - `extractFirstJsonObject(...)`
+  - `stripCodeFences(...)`
+  - `extractBalancedObject(...)`
+  - OpenRouter loop logic in `analyzeDocumentToSkeletonV1(...)`
+- `src/server/src/llm/analyze/skeletonPrompt.ts`
+  - `buildSkeletonParseRepairInput(...)`
+
+Tests added/updated:
+- `src/server/scripts/test-knowledge-skeleton-analyze-contracts.mjs`
+  - fenced JSON extraction
+  - prose-wrapped JSON extraction
+  - parse failure then successful repair
+  - persistent parse failure returns `parse_error` after capped retries
+- `src/server/scripts/test-knowledge-skeleton-prompt-contracts.mjs`
+  - parse-repair prompt instructions validated

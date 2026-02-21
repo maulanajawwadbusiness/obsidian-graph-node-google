@@ -10,6 +10,7 @@ import { deriveSpringEdges } from '../graph/springDerivation';
 import { springEdgesToPhysicsLinks } from '../graph/springToPhysics';
 import type { DirectedLink } from '../graph/topologyTypes';
 import { buildSavedInterfaceDedupeKey, type SavedInterfaceRecordV1 } from '../store/savedInterfacesStore';
+import { isStaleAnalysisResult } from '../server/src/llm/analyze/analysisFlowGuards';
 
 import { runAnalysis } from '../ai/analysisRouter';
 import { applySkeletonTopologyToRuntime } from '../graph/skeletonTopologyRuntime';
@@ -162,7 +163,7 @@ export async function applyAnalysisToNodes(
     // Call AI Analyzer
     const analysis = await runAnalysis({ text: documentText, nodeCount });
     const currentDocId = getCurrentDocId();
-    if (currentDocId !== documentId) {
+    if (isStaleAnalysisResult(documentId, currentDocId)) {
       console.log(
         `[AI] Discarding stale analysis (expected ${documentId.slice(0, 8)}, got ${currentDocId?.slice(0, 8)})`
       );

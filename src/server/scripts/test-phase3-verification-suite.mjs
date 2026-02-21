@@ -8,6 +8,7 @@ const PHASE3_SCRIPTS = [
   "test:analysis-router-contracts",
   "test:analysis-seed-spawn-gate-contracts",
   "test:pending-to-graph-transition-contracts",
+  "test:phase31-flow-guards-contracts",
   "test:llm-analyze-mode-gate-contracts",
   "test:skeleton-mode-guard-contracts"
 ];

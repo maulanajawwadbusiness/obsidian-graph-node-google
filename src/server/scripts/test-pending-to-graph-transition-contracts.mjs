@@ -66,6 +66,12 @@ function run() {
     "[pending-to-graph] zero-node analysis guard must allow skeleton mode"
   );
   assert(
+    graphShellSource.includes("pendingAnalysisLatchKeyRef") &&
+      graphShellSource.includes("buildPendingAnalysisPayloadKey") &&
+      graphShellSource.includes("shouldResetPendingConsumeLatch"),
+    "[pending-to-graph] pending latch reset must be keyed by pending payload identity"
+  );
+  assert(
     graphShellSource.includes("await applyAnalysisToNodes(") &&
       graphShellSource.includes("if (shouldDelayPendingConsume) {") &&
       graphShellSource.includes("consumePendingAnalysis();"),

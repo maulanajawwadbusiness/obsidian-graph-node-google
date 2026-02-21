@@ -53,6 +53,10 @@ import {
 } from '../store/savedInterfacesStore';
 import { resolveAnalyzeRequestMode } from '../ai/analyzeMode';
 import { shouldSpawnSeedGraphOnInit } from './analysisSeedSpawnPolicy';
+import {
+    buildPendingAnalysisPayloadKey,
+    shouldResetPendingConsumeLatch
+} from '../server/src/llm/analyze/analysisFlowGuards';
 // STEP3-RUN5-V4-FIX1: Removed unused recomputeSprings import
 // RUN 8: Dev console helpers (exposes window.__topology)
 // PRE-STEP2: Only import in dev mode to prevent bundling in production
@@ -173,6 +177,7 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
     const fullChatContext = useFullChat();
     const fullChatOpen = fullChatContext.isOpen;
     const hasConsumedPendingRef = useRef(false);
+    const pendingAnalysisLatchKeyRef = useRef<string | null>(null);
     const hasInitDecisionRef = useRef(false);
     const hasDefaultSpawnRunRef = useRef(false);
     const hasConsumedLoadRef = useRef(false);
@@ -1163,6 +1168,28 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
     ]);
 
     useEffect(() => {
+        const nextPendingKey = buildPendingAnalysisPayloadKey(
+            pendingAnalysisPayload
+                ? pendingAnalysisPayload.kind === 'text'
+                    ? {
+                        kind: 'text',
+                        createdAt: pendingAnalysisPayload.createdAt,
+                        text: pendingAnalysisPayload.text
+                    }
+                    : {
+                        kind: 'file',
+                        createdAt: pendingAnalysisPayload.createdAt,
+                        file: {
+                            name: pendingAnalysisPayload.file.name,
+                            size: pendingAnalysisPayload.file.size
+                        }
+                    }
+                : null
+        );
+        if (shouldResetPendingConsumeLatch(pendingAnalysisLatchKeyRef.current, nextPendingKey)) {
+            hasConsumedPendingRef.current = false;
+        }
+        pendingAnalysisLatchKeyRef.current = nextPendingKey;
         if (!pendingAnalysisPayload) return;
         if (hasConsumedPendingRef.current) return;
         if (pendingLoadInterface) return;

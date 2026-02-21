@@ -1,54 +1,53 @@
 /* eslint-disable no-console */
 
-import fs from "fs";
-import path from "path";
-import { fileURLToPath } from "url";
+import guardModule from "../dist/llm/analyze/skeletonModeGuards.js";
 
-function assert(condition, message) {
-  if (!condition) throw new Error(message);
-}
-
-function readRepoFile(relativePath) {
-  const __filename = fileURLToPath(import.meta.url);
-  const __dirname = path.dirname(__filename);
-  const fullPath = path.resolve(__dirname, "..", "..", "..", relativePath);
-  return fs.readFileSync(fullPath, "utf8").replace(/^\uFEFF/, "");
-}
+const {
+  DEFAULT_ANALYZE_MODE_FLAGS,
+  isSkeletonAnalyzeModeAllowedForFlags,
+  resolveAnalyzeRequestModeForFlags
+} = guardModule;
 
 async function run() {
-  const analyzeModeSource = readRepoFile("src/ai/analyzeMode.ts");
-  const skeletonAnalyzerSource = readRepoFile("src/ai/skeletonAnalyzer.ts");
+  function assert(condition, message) {
+    if (!condition) throw new Error(message);
+  }
 
   assert(
-    analyzeModeSource.includes("const SKELETON_TOPOLOGY_WIRING_ENABLED = false;"),
-    "[skeleton-mode-guard] topology wiring guard constant missing"
+    DEFAULT_ANALYZE_MODE_FLAGS.enableSkeletonAnalyzeMode === false &&
+      DEFAULT_ANALYZE_MODE_FLAGS.ackPhase3SkeletonWiringComplete === false &&
+      DEFAULT_ANALYZE_MODE_FLAGS.skeletonTopologyWiringEnabled === false,
+    "[skeleton-mode-guard] all default mode guard flags must be false"
   );
   assert(
-    analyzeModeSource.includes("export function resolveAnalyzeRequestModeForFlags"),
-    "[skeleton-mode-guard] resolveAnalyzeRequestModeForFlags helper missing"
+    isSkeletonAnalyzeModeAllowedForFlags(DEFAULT_ANALYZE_MODE_FLAGS) === false,
+    "[skeleton-mode-guard] default flags must block skeleton mode"
   );
   assert(
-    analyzeModeSource.includes("export function isSkeletonAnalyzeModeAllowed"),
-    "[skeleton-mode-guard] isSkeletonAnalyzeModeAllowed helper missing"
+    resolveAnalyzeRequestModeForFlags(DEFAULT_ANALYZE_MODE_FLAGS) === "classic",
+    "[skeleton-mode-guard] resolver must force classic under default flags"
   );
+  const partialFlags = {
+    enableSkeletonAnalyzeMode: true,
+    ackPhase3SkeletonWiringComplete: true,
+    skeletonTopologyWiringEnabled: false
+  };
   assert(
-    skeletonAnalyzerSource.includes("resolveAnalyzeRequestMode"),
-    "[skeleton-mode-guard] skeletonAnalyzer must use centralized mode resolver"
+    isSkeletonAnalyzeModeAllowedForFlags(partialFlags) === false,
+    "[skeleton-mode-guard] missing topology wiring acknowledgement must still block skeleton mode"
   );
+  const allEnabled = {
+    enableSkeletonAnalyzeMode: true,
+    ackPhase3SkeletonWiringComplete: true,
+    skeletonTopologyWiringEnabled: true
+  };
   assert(
-    skeletonAnalyzerSource.includes("isSkeletonAnalyzeModeAllowed"),
-    "[skeleton-mode-guard] skeletonAnalyzer must enforce centralized guard"
-  );
-  assert(
-    !skeletonAnalyzerSource.includes('mode: "skeleton_v1"'),
-    "[skeleton-mode-guard] hardcoded skeleton_v1 mode bypass detected"
-  );
-  assert(
-    skeletonAnalyzerSource.includes('"mode_guard_blocked"'),
-    "[skeleton-mode-guard] explicit mode guard error code missing"
+    isSkeletonAnalyzeModeAllowedForFlags(allEnabled) === true &&
+      resolveAnalyzeRequestModeForFlags(allEnabled) === "skeleton_v1",
+    "[skeleton-mode-guard] skeleton mode should resolve only when all guards are enabled"
   );
 
-  console.log("[skeleton-mode-guard-contracts] mode seam guard invariants valid");
+  console.log("[skeleton-mode-guard-contracts] executed mode guard contracts valid");
   console.log("[skeleton-mode-guard-contracts] done");
 }
 

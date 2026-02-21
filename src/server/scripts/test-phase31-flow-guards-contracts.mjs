@@ -42,9 +42,21 @@ function runStaleChecks() {
 function runLatchChecks() {
   const textA = { kind: "text", createdAt: 1, text: "hello world" };
   const textB = { kind: "text", createdAt: 2, text: "hello world" };
+  const textSameMsA = { kind: "text", createdAt: 50, text: "aaaaabbbbb" };
+  const textSameMsB = { kind: "text", createdAt: 50, text: "zzzzzbbbbb" };
   const keyA = buildPendingAnalysisPayloadKey(textA);
   const keyB = buildPendingAnalysisPayloadKey(textB);
   assert(keyA !== keyB, "[phase31-flow-guards] distinct submissions must produce distinct keys");
+  const keySameMsA = buildPendingAnalysisPayloadKey(textSameMsA);
+  const keySameMsB = buildPendingAnalysisPayloadKey(textSameMsB);
+  assert(
+    keySameMsA !== keySameMsB,
+    "[phase31-flow-guards] same timestamp and length with different content must produce different keys"
+  );
+  assert(
+    buildPendingAnalysisPayloadKey(textA) === buildPendingAnalysisPayloadKey(textA),
+    "[phase31-flow-guards] identical payload must produce stable key"
+  );
 
   let consumed = false;
   let prevKey = null;

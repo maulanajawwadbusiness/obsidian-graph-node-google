@@ -11,7 +11,7 @@ import hydrationModule from "../dist/llm/analyze/skeletonHydration.js";
 const { validateKnowledgeSkeletonV1 } = skeletonModule;
 const { buildTopologyFromSkeletonCore, applyTopologyToGraphState } = topologyBuildModule;
 const { skeletonToTopologyCore } = adapterModule;
-const { hydrateSkeletonNodePositions } = hydrationModule;
+const { hydrateSkeletonNodePositions, buildHydratedRuntimeSnapshot } = hydrationModule;
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -162,23 +162,27 @@ async function run() {
       JSON.stringify(builtA.initialPositions) !== JSON.stringify(builtC.initialPositions),
       `[skeleton-topology-runtime] initial positions must differ with different seed: ${name}`
     );
-    const hydratedA = hydrateSkeletonNodePositions({
-      nodes: builtA.nodes.map((node) => ({ id: node.id })),
-      initialPositions: builtA.initialPositions,
+    const hydratedA = buildHydratedRuntimeSnapshot({
+      skeleton: validation.value,
+      seed: 101,
       spacing: 140
     });
-    const hydratedB = hydrateSkeletonNodePositions({
-      nodes: builtB.nodes.map((node) => ({ id: node.id })),
-      initialPositions: builtB.initialPositions,
+    const hydratedB = buildHydratedRuntimeSnapshot({
+      skeleton: validation.value,
+      seed: 101,
       spacing: 140
     });
     assert(
       JSON.stringify(hydratedA) === JSON.stringify(hydratedB),
       `[skeleton-topology-runtime] hydrated positions not deterministic for seed: ${name}`
     );
-    const hydratedC = hydrateSkeletonNodePositions({
-      nodes: builtC.nodes.map((node) => ({ id: node.id })),
-      initialPositions: builtC.initialPositions,
+    assert(
+      hydratedA.applyCalls === 1 && hydratedB.applyCalls === 1,
+      `[skeleton-topology-runtime] hydrated runtime snapshot must use single apply call: ${name}`
+    );
+    const hydratedC = buildHydratedRuntimeSnapshot({
+      skeleton: validation.value,
+      seed: 202,
       spacing: 140
     });
     assert(
@@ -263,6 +267,20 @@ async function run() {
   assert(
     JSON.stringify(rationaleBySource) === JSON.stringify(["alpha", "beta", "zeta"]),
     "[skeleton-topology-runtime] code-unit rationale tie-break ordering failed"
+  );
+  const unicodeHydratedA = buildHydratedRuntimeSnapshot({
+    skeleton: unicodeTieSkeleton,
+    seed: 444,
+    spacing: 140
+  });
+  const unicodeHydratedB = buildHydratedRuntimeSnapshot({
+    skeleton: unicodeTieSkeleton,
+    seed: 444,
+    spacing: 140
+  });
+  assert(
+    JSON.stringify(unicodeHydratedA) === JSON.stringify(unicodeHydratedB),
+    "[skeleton-topology-runtime] unicode hydration determinism failed"
   );
 
   console.log("[skeleton-topology-runtime] done");

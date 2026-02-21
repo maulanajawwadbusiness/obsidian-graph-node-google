@@ -28,3 +28,34 @@ export function hydrateSkeletonNodePositions(args: {
   }
   return result;
 }
+
+import type { KnowledgeSkeletonV1 } from "./knowledgeSkeletonV1";
+import { applyTopologyToGraphState, buildTopologyFromSkeletonCore } from "./skeletonTopologyBuild";
+
+export function buildHydratedRuntimeSnapshot(args: {
+  skeleton: KnowledgeSkeletonV1;
+  seed: number;
+  spacing: number;
+}): {
+  nodeOrder: string[];
+  positionsById: Record<string, SkeletonPosition>;
+  applyCalls: number;
+} {
+  const built = buildTopologyFromSkeletonCore(args.skeleton, { seed: args.seed });
+  let applyCalls = 0;
+  let appliedNodes: SkeletonHydrationNode[] = [];
+  applyTopologyToGraphState({ nodes: built.nodes, links: built.links }, (topology) => {
+    applyCalls += 1;
+    appliedNodes = topology.nodes.map((node) => ({ id: node.id }));
+  });
+  const positionsById = hydrateSkeletonNodePositions({
+    nodes: appliedNodes,
+    initialPositions: built.initialPositions,
+    spacing: args.spacing
+  });
+  return {
+    nodeOrder: appliedNodes.map((node) => node.id),
+    positionsById,
+    applyCalls
+  };
+}

@@ -1,33 +1,21 @@
-export type AnalyzeRequestMode = "classic" | "skeleton_v1";
+import {
+  DEFAULT_ANALYZE_MODE_FLAGS,
+  isSkeletonAnalyzeModeAllowedForFlags,
+  resolveAnalyzeRequestModeForFlags as resolveAnalyzeRequestModeForSharedFlags,
+  type AnalyzeModeFlags,
+  type AnalyzeRequestMode
+} from "../server/src/llm/analyze/skeletonModeGuards";
 
-const ENABLE_SKELETON_ANALYZE_MODE = false;
-const ACK_PHASE3_SKELETON_WIRING_COMPLETE = false;
-const SKELETON_TOPOLOGY_WIRING_ENABLED = false;
-
-type AnalyzeModeFlags = {
-  enableSkeletonAnalyzeMode: boolean;
-  ackPhase3SkeletonWiringComplete: boolean;
-  skeletonTopologyWiringEnabled: boolean;
-};
-
-const DEFAULT_ANALYZE_MODE_FLAGS: AnalyzeModeFlags = {
-  enableSkeletonAnalyzeMode: ENABLE_SKELETON_ANALYZE_MODE,
-  ackPhase3SkeletonWiringComplete: ACK_PHASE3_SKELETON_WIRING_COMPLETE,
-  skeletonTopologyWiringEnabled: SKELETON_TOPOLOGY_WIRING_ENABLED
-};
+export type { AnalyzeRequestMode };
 
 export function isSkeletonAnalyzeModeAllowed(flags: AnalyzeModeFlags = DEFAULT_ANALYZE_MODE_FLAGS): boolean {
-  return (
-    flags.enableSkeletonAnalyzeMode &&
-    flags.ackPhase3SkeletonWiringComplete &&
-    flags.skeletonTopologyWiringEnabled
-  );
+  return isSkeletonAnalyzeModeAllowedForFlags(flags);
 }
 
 export function resolveAnalyzeRequestModeForFlags(
   flags: AnalyzeModeFlags = DEFAULT_ANALYZE_MODE_FLAGS
 ): AnalyzeRequestMode {
-  return isSkeletonAnalyzeModeAllowed(flags) ? "skeleton_v1" : "classic";
+  return resolveAnalyzeRequestModeForSharedFlags(flags);
 }
 
 export function resolveAnalyzeRequestMode(): AnalyzeRequestMode {

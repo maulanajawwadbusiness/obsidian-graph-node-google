@@ -11,6 +11,7 @@ export type AuthContext = {
 
 export type ApiErrorCode =
   | "bad_request"
+  | "MODE_DISABLED"
   | "too_large"
   | "unauthorized"
   | "insufficient_rupiah"

@@ -32,6 +32,26 @@ const ANALYZE_OPENROUTER_FIRST_PASS_TIMEOUT_MS =
   ANALYZE_TOTAL_TIMEOUT_MS - ANALYZE_OPENROUTER_RETRY_TIMEOUT_MS;
 const SKELETON_REPAIR_TIMEOUT_MS = 12000;
 const KEEPALIVE_INTERVAL_MS = 15000;
+export const SERVER_ALLOW_SKELETON_V1 = false;
+
+export function resolveAnalyzeModeGate(mode: "classic" | "skeleton_v1"): {
+  allowed: true;
+} | {
+  allowed: false;
+  status: 400;
+  code: "MODE_DISABLED";
+  error: string;
+} {
+  if (mode === "skeleton_v1" && !SERVER_ALLOW_SKELETON_V1) {
+    return {
+      allowed: false,
+      status: 400,
+      code: "MODE_DISABLED",
+      error: "skeleton_v1 mode is disabled on server"
+    };
+  }
+  return { allowed: true };
+}
 
 export function registerLlmAnalyzeRoute(app: express.Express, deps: LlmAnalyzeRouteDeps) {
 app.post("/api/llm/paper-analyze", deps.requireAuth, async (req, res) => {
@@ -196,6 +216,36 @@ app.post("/api/llm/paper-analyze", deps.requireAuth, async (req, res) => {
   }
   const validation = validationResult;
   const requestedMode = validation.mode;
+  const modeGate = resolveAnalyzeModeGate(requestedMode);
+  if (!modeGate.allowed) {
+    const modeBlocked = modeGate as Extract<ReturnType<typeof resolveAnalyzeModeGate>, { allowed: false }>;
+    auditHttpStatus = 400;
+    auditTerminationReason = "validation_error";
+    auditChargeStatus = "skipped";
+    await writeAudit();
+    deps.sendApiError(res, 400, {
+      ok: false,
+      request_id: requestId,
+      code: modeBlocked.code,
+      error: modeBlocked.error
+    });
+    deps.logLlmRequest({
+      request_id: requestId,
+      endpoint: "/api/llm/paper-analyze",
+      user_id: userId,
+      model: validation.model,
+      input_chars: validation.text.length,
+      output_chars: 0,
+      duration_ms: Date.now() - startedAt,
+      status_code: 400,
+      termination_reason: "validation_error",
+      rupiah_cost: null,
+      rupiah_balance_before: null,
+      rupiah_balance_after: null
+    });
+    deps.decRequestsInflight();
+    return;
+  }
 
   if (!deps.acquireLlmSlot(userId)) {
     auditHttpStatus = 429;

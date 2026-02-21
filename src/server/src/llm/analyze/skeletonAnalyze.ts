@@ -38,6 +38,7 @@ const ENABLE_SKELETON_DEBUG_LOGS = false;
 const MAX_PARSE_REPAIR_ATTEMPTS = 1;
 const MAX_SEMANTIC_REPAIR_ATTEMPTS = 2;
 const MAX_REPAIR_ERRORS_INCLUDED = 20;
+const MAX_TOTAL_MODEL_CALLS = 3;
 
 function compareCodeUnit(a: string, b: string): number {
   if (a < b) return -1;
@@ -181,10 +182,19 @@ function extractFirstJsonObject(text: string): string | null {
   }
 }
 
-function toDebugPreview(value: unknown): string {
+export function toRawPreviewForLogs(value: unknown): string {
   try {
-    const json = JSON.stringify(value);
-    return trimWithHeadTail(json, SKELETON_PROMPT_LIMITS.repairRawOutputPreviewMaxChars);
+    const text = typeof value === "string" ? value : JSON.stringify(value);
+    return trimWithHeadTail(text, SKELETON_PROMPT_LIMITS.repairRawOutputPreviewMaxChars);
+  } catch {
+    return "<unserializable>";
+  }
+}
+
+export function toRepairContext(value: unknown): string {
+  try {
+    const text = typeof value === "string" ? value : JSON.stringify(value);
+    return trimWithHeadTail(text, SKELETON_PROMPT_LIMITS.repairInvalidJsonMaxChars);
   } catch {
     return "<unserializable>";
   }
@@ -244,7 +254,17 @@ export async function analyzeDocumentToSkeletonV1(args: {
     let currentPrompt = firstInput;
     let parseRepairsUsed = 0;
     let semanticRepairsUsed = 0;
+    let totalModelCalls = 0;
     while (true) {
+      if (totalModelCalls >= MAX_TOTAL_MODEL_CALLS) {
+        return {
+          ok: false,
+          code: "skeleton_output_invalid",
+          error: "model call cap exceeded before valid skeleton output",
+          validation_result: "failed",
+          usage
+        };
+      }
       const pass = await runOpenrouterSkeletonPass({
         provider: args.provider,
         model: args.model,
@@ -253,13 +273,14 @@ export async function analyzeDocumentToSkeletonV1(args: {
         timeoutMs: parseRepairsUsed + semanticRepairsUsed === 0 ? args.timeoutMs : args.repairTimeoutMs,
         prompt: currentPrompt
       });
+      totalModelCalls += 1;
       if (pass.ok === false) {
         if (pass.code !== "parse_error" || !("rawText" in pass)) return pass;
         usage = pass.usage;
         if (ENABLE_SKELETON_DEBUG_LOGS) {
-          console.log(`[skeleton] parse_error parse_retries=${parseRepairsUsed} raw=${toDebugPreview(pass.rawText)}`);
+          console.log(`[skeleton] parse_error parse_retries=${parseRepairsUsed} raw=${toRawPreviewForLogs(pass.rawText)}`);
         }
-        if (parseRepairsUsed >= MAX_PARSE_REPAIR_ATTEMPTS) {
+        if (parseRepairsUsed >= MAX_PARSE_REPAIR_ATTEMPTS || totalModelCalls >= MAX_TOTAL_MODEL_CALLS) {
           return {
             ok: false,
             code: "parse_error",
@@ -270,7 +291,7 @@ export async function analyzeDocumentToSkeletonV1(args: {
         }
         currentPrompt = buildSkeletonParseRepairInput({
           text: args.text,
-          rawOutputPreview: toDebugPreview(pass.rawText),
+          rawOutputContext: toRepairContext(pass.rawText),
           parseError: pass.error,
           lang: args.lang
         });
@@ -298,14 +319,15 @@ export async function analyzeDocumentToSkeletonV1(args: {
       if (ENABLE_SKELETON_DEBUG_LOGS) {
         console.log(
           `[skeleton] raw parse_retries=${parseRepairsUsed} semantic_retries=${semanticRepairsUsed} ` +
-          `value=${toDebugPreview(pass.raw)}`
+          `value=${toRawPreviewForLogs(pass.raw)}`
         );
         console.log(
           `[skeleton] invalid semantic_retries=${semanticRepairsUsed} ` +
           `errors=${toValidationMessages(validationErrors).join("; ")}`
         );
       }
-      if (semanticRepairsUsed >= MAX_SEMANTIC_REPAIR_ATTEMPTS) {
+      const maxSemanticRepairsForPath = parseRepairsUsed > 0 ? 1 : MAX_SEMANTIC_REPAIR_ATTEMPTS;
+      if (semanticRepairsUsed >= maxSemanticRepairsForPath || totalModelCalls >= MAX_TOTAL_MODEL_CALLS) {
         return {
           ok: false,
           code: "skeleton_output_invalid",
@@ -317,7 +339,7 @@ export async function analyzeDocumentToSkeletonV1(args: {
       }
       currentPrompt = buildSkeletonRepairInput({
         text: args.text,
-        invalidJson: toDebugPreview(pass.raw),
+        invalidJson: toRepairContext(pass.raw),
         validationErrors: repairSummary.lines,
         lang: args.lang
       });
@@ -328,13 +350,24 @@ export async function analyzeDocumentToSkeletonV1(args: {
   let currentPrompt = firstInput;
   let semanticRepairsUsed = 0;
   let usage: { input_tokens?: number; output_tokens?: number } | undefined;
+  let totalModelCalls = 0;
   while (true) {
+    if (totalModelCalls >= MAX_TOTAL_MODEL_CALLS) {
+      return {
+        ok: false,
+        code: "skeleton_output_invalid",
+        error: "model call cap exceeded before valid skeleton output",
+        validation_result: "failed",
+        usage
+      };
+    }
     const result = await args.provider.generateStructuredJson({
       model: args.model,
       input: currentPrompt,
       schema,
       timeoutMs: semanticRepairsUsed === 0 ? args.timeoutMs : args.repairTimeoutMs
     });
+    totalModelCalls += 1;
     if (result.ok === false) {
       return toLlmError(result as LlmError);
     }
@@ -354,13 +387,13 @@ export async function analyzeDocumentToSkeletonV1(args: {
     const validationErrors = validation.errors;
     const repairSummary = summarizeValidationErrorsForRepair(validationErrors);
     if (ENABLE_SKELETON_DEBUG_LOGS) {
-      console.log(`[skeleton] openai raw semantic_retries=${semanticRepairsUsed} value=${toDebugPreview(result.json)}`);
+      console.log(`[skeleton] openai raw semantic_retries=${semanticRepairsUsed} value=${toRawPreviewForLogs(result.json)}`);
       console.log(
         `[skeleton] openai invalid semantic_retries=${semanticRepairsUsed} ` +
         `errors=${toValidationMessages(validationErrors).join("; ")}`
       );
     }
-    if (semanticRepairsUsed >= MAX_SEMANTIC_REPAIR_ATTEMPTS) {
+    if (semanticRepairsUsed >= MAX_SEMANTIC_REPAIR_ATTEMPTS || totalModelCalls >= MAX_TOTAL_MODEL_CALLS) {
       return {
         ok: false,
         code: "skeleton_output_invalid",
@@ -372,7 +405,7 @@ export async function analyzeDocumentToSkeletonV1(args: {
     }
     currentPrompt = buildSkeletonRepairInput({
       text: args.text,
-      invalidJson: toDebugPreview(result.json),
+      invalidJson: toRepairContext(result.json),
       validationErrors: repairSummary.lines,
       lang: args.lang
     });

@@ -45,12 +45,12 @@ async function run() {
 
   const parseRepair = buildSkeletonParseRepairInput({
     text: longText,
-    rawOutputPreview: longRaw,
+    rawOutputContext: longRaw,
     parseError: "invalid json",
     lang: "en"
   });
   assert(parseRepair.includes("[truncated]"), "[knowledge-skeleton-repair-budget] parse repair must include truncation marker");
-  assert(parseRepair.length <= 12000, "[knowledge-skeleton-repair-budget] parse repair prompt budget exceeded");
+  assert(parseRepair.length <= 18000, "[knowledge-skeleton-repair-budget] parse repair prompt budget exceeded");
   assert(
     parseRepair.includes("Do not include any prose before or after JSON."),
     "[knowledge-skeleton-repair-budget] parse repair strictness missing"

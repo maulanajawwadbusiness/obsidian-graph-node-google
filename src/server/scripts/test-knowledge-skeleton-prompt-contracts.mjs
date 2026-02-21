@@ -35,12 +35,13 @@ async function run() {
 
   const parseRepair = buildSkeletonParseRepairInput({
     text: "Sample document text.",
-    rawOutputPreview: "```json\\n{}\\n```",
+    rawOutputContext: "```json\\n{}\\n```",
     parseError: "invalid json",
     lang: "en"
   });
   assert(parseRepair.includes("failed JSON parsing"), "[knowledge-skeleton-prompt] parse repair must include parse context");
   assert(parseRepair.includes("Do not use markdown code fences"), "[knowledge-skeleton-prompt] parse repair must forbid fences");
+  assert(parseRepair.includes("must satisfy all graph constraints"), "[knowledge-skeleton-prompt] parse repair must enforce constraints");
   assert(parseRepair.includes("Return corrected JSON only"), "[knowledge-skeleton-prompt] parse repair must force json-only repair");
 
   console.log("[knowledge-skeleton-prompt-contracts] prompt contract valid");

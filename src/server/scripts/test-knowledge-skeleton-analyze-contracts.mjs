@@ -5,7 +5,12 @@ import path from "path";
 import { fileURLToPath } from "url";
 import analyzeModule from "../dist/llm/analyze/skeletonAnalyze.js";
 
-const { analyzeDocumentToSkeletonV1, summarizeValidationErrorsForRepair } = analyzeModule;
+const {
+  analyzeDocumentToSkeletonV1,
+  summarizeValidationErrorsForRepair,
+  toRawPreviewForLogs,
+  toRepairContext
+} = analyzeModule;
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -21,10 +26,12 @@ function readFixture(relativePath) {
 
 function createOpenrouterProvider(outputs) {
   let callIndex = 0;
+  const promptHistory = [];
   return {
     name: "openrouter",
-    async generateText() {
+    async generateText(input) {
       const next = outputs[Math.min(callIndex, outputs.length - 1)];
+      promptHistory.push(String(input?.input ?? ""));
       callIndex += 1;
       return {
         ok: true,
@@ -34,6 +41,9 @@ function createOpenrouterProvider(outputs) {
     },
     getCallCount() {
       return callIndex;
+    },
+    getPromptHistory() {
+      return promptHistory;
     }
   };
 }
@@ -96,7 +106,6 @@ async function run() {
   const parseThenSemanticProvider = createOpenrouterProvider([
     "{ bad json",
     semanticInvalid,
-    semanticInvalid,
     validJson
   ]);
   const parseThenSemanticResult = await analyzeDocumentToSkeletonV1({
@@ -106,7 +115,46 @@ async function run() {
   });
   assert(parseThenSemanticResult.ok === true, "[knowledge-skeleton-analyze] semantic retries should survive parse retry");
   assert(parseThenSemanticResult.validation_result === "retry_ok", "[knowledge-skeleton-analyze] combined retries should be retry_ok");
-  assert(parseThenSemanticProvider.getCallCount() === 4, "[knowledge-skeleton-analyze] parse retry must not consume semantic budget");
+  assert(parseThenSemanticProvider.getCallCount() === 3, "[knowledge-skeleton-analyze] parse + semantic retries must stay within total cap");
+
+  const parseThenDoubleSemanticProvider = createOpenrouterProvider([
+    "{ bad json",
+    semanticInvalid,
+    semanticInvalid
+  ]);
+  const parseThenDoubleSemanticResult = await analyzeDocumentToSkeletonV1({
+    provider: parseThenDoubleSemanticProvider,
+    model: "gpt-4.1-mini",
+    text: "sample"
+  });
+  assert(parseThenDoubleSemanticResult.ok === false, "[knowledge-skeleton-analyze] parse path should allow only one semantic repair");
+  assert(parseThenDoubleSemanticResult.code === "skeleton_output_invalid", "[knowledge-skeleton-analyze] expected semantic invalid failure");
+  assert(parseThenDoubleSemanticProvider.getCallCount() === 3, "[knowledge-skeleton-analyze] parse path total calls must cap at 3");
+
+  const semanticOnlyFailProvider = createOpenrouterProvider([semanticInvalid, semanticInvalid, semanticInvalid, validJson]);
+  const semanticOnlyFailResult = await analyzeDocumentToSkeletonV1({
+    provider: semanticOnlyFailProvider,
+    model: "gpt-4.1-mini",
+    text: "sample"
+  });
+  assert(semanticOnlyFailResult.ok === false, "[knowledge-skeleton-analyze] semantic-only repeated failures should fail at cap");
+  assert(semanticOnlyFailProvider.getCallCount() === 3, "[knowledge-skeleton-analyze] semantic-only total calls must cap at 3");
+
+  const hugeInvalidRaw = `{ "payload": "${"X".repeat(12000)}" `;
+  const contextProvider = createOpenrouterProvider([hugeInvalidRaw, validJson]);
+  const contextResult = await analyzeDocumentToSkeletonV1({
+    provider: contextProvider,
+    model: "gpt-4.1-mini",
+    text: "sample"
+  });
+  assert(contextResult.ok === true, "[knowledge-skeleton-analyze] context probe run should recover after parse repair");
+  const contextPrompt = contextProvider.getPromptHistory()[1] || "";
+  assert(contextPrompt.length > 2000, "[knowledge-skeleton-analyze] repair prompt should include >2000 context when available");
+  const previewOnly = toRawPreviewForLogs(hugeInvalidRaw);
+  const repairContext = toRepairContext(hugeInvalidRaw);
+  assert(previewOnly.length <= 2000, "[knowledge-skeleton-analyze] log preview must stay within 2000 cap");
+  assert(repairContext.length > 2000, "[knowledge-skeleton-analyze] repair context should exceed preview size");
+  assert(repairContext.length <= 8000, "[knowledge-skeleton-analyze] repair context must stay within 8000 cap");
 
   const manyErrors = [];
   manyErrors.push({

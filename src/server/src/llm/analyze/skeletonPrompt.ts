@@ -121,24 +121,25 @@ export function buildSkeletonRepairInput(args: {
 
 export function buildSkeletonParseRepairInput(args: {
   text: string;
-  rawOutputPreview: string;
+  rawOutputContext: string;
   parseError: string;
   lang?: AnalyzePromptLang;
 }): string {
   const lang: AnalyzePromptLang = args.lang === "en" ? "en" : "id";
-  const rawPreview = trimWithHeadTail(args.rawOutputPreview, SKELETON_PROMPT_LIMITS.repairRawOutputPreviewMaxChars);
+  const rawContext = trimWithHeadTail(args.rawOutputContext, SKELETON_PROMPT_LIMITS.repairInvalidJsonMaxChars);
   const excerpt = buildDocumentExcerptHeadTail(args.text);
   return [
     buildCoreInstruction(lang),
     "",
     "Previous output failed JSON parsing.",
     `Parse error: ${args.parseError}`,
+    "The corrected JSON must satisfy all graph constraints in this instruction.",
     "Return corrected JSON only.",
     "Do not use markdown code fences.",
     "Do not include any prose before or after JSON.",
     "",
-    "Raw output preview:",
-    rawPreview,
+    "Raw output context to repair:",
+    rawContext,
     "",
     "Document excerpt:",
     `\"\"\"${excerpt}\"\"\"`

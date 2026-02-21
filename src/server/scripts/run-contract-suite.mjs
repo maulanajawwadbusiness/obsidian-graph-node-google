@@ -23,6 +23,7 @@ const CONTRACT_SCRIPTS = [
   "test:knowledge-skeleton-analyze-contracts",
   "test:knowledge-skeleton-repair-budget-contracts",
   "test:skeleton-mode-guard-contracts",
+  "test:llm-analyze-mode-gate-contracts",
   "test:knowledge-skeleton-golden-contracts",
   "test:depsbuilder-contracts",
   "test:servermonolith-shell"

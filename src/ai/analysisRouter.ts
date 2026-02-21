@@ -1,6 +1,7 @@
 import { isSkeletonAnalyzeModeAllowed, resolveAnalyzeRequestMode, type AnalyzeRequestMode } from "./analyzeMode";
 import { analyzeDocument, type AnalysisResult } from "./paperAnalyzer";
 import type { KnowledgeSkeletonV1 } from "../server/src/llm/analyze/knowledgeSkeletonV1";
+import { normalizeRouterErrorPayload } from "../server/src/llm/analyze/routerError";
 import { analyzeDocumentToSkeletonV1, SkeletonAnalyzeError } from "./skeletonAnalyzer";
 
 export type AnalysisRouterMode = AnalyzeRequestMode;
@@ -9,7 +10,15 @@ export type AnalysisRouterErrorCode =
   | "MODE_DISABLED"
   | "mode_guard_blocked"
   | "skeleton_analyze_failed"
-  | "analysis_failed";
+  | "analysis_failed"
+  | string;
+
+export type AnalysisRouterError = {
+  code: AnalysisRouterErrorCode;
+  message: string;
+  status?: number;
+  details?: unknown;
+};
 
 export type AnalysisRouterResult =
   | {
@@ -24,13 +33,16 @@ export type AnalysisRouterResult =
     }
   | {
       kind: "error";
-      error: {
-        code: AnalysisRouterErrorCode;
-        message: string;
-        status?: number;
-      };
+      error: AnalysisRouterError;
       meta: { mode: AnalysisRouterMode };
     };
+
+export function normalizeRouterError(
+  error: unknown,
+  fallbackCode: AnalysisRouterErrorCode
+): AnalysisRouterError {
+  return normalizeRouterErrorPayload(error, fallbackCode);
+}
 
 export async function runAnalysis(args: {
   text: string;
@@ -92,29 +104,21 @@ export async function runAnalysis(args: {
         };
       }
 
-      const message = error instanceof Error ? error.message : String(error);
       return {
         kind: "error",
-        error: {
-          code: "skeleton_analyze_failed",
-          message
-        },
-        meta: { mode }
-      };
-    }
+        error: normalizeRouterError(error, "skeleton_analyze_failed"),
+          meta: { mode }
+        };
+      }
   }
 
   try {
     const json = await analyzeDocument(args.text, { nodeCount: args.nodeCount });
     return { kind: "classic", json, meta: { mode: "classic" } };
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
     return {
       kind: "error",
-      error: {
-        code: "analysis_failed",
-        message
-      },
+      error: normalizeRouterError(error, "analysis_failed"),
       meta: { mode: "classic" }
     };
   }

@@ -14,6 +14,35 @@ import { buildSavedInterfaceDedupeKey, type SavedInterfaceRecordV1 } from '../st
 import { runAnalysis } from '../ai/analysisRouter';
 import { applySkeletonTopologyToRuntime } from '../graph/skeletonTopologyRuntime';
 
+function compareCodeUnit(a: string, b: string): number {
+  if (a < b) return -1;
+  if (a > b) return 1;
+  return 0;
+}
+
+type AnalysisErrorPayload = {
+  code?: string;
+  message?: string;
+  status?: number;
+  details?: unknown;
+};
+
+class AnalysisRunError extends Error {
+  code?: string;
+  status?: number;
+  details?: unknown;
+
+  constructor(payload: AnalysisErrorPayload) {
+    const code = typeof payload.code === 'string' && payload.code.trim() ? payload.code.trim() : undefined;
+    const message = typeof payload.message === 'string' && payload.message.trim() ? payload.message.trim() : undefined;
+    super(message || code || 'analysis failed');
+    this.name = 'AnalysisRunError';
+    this.code = code;
+    this.status = Number.isFinite(payload.status) ? Number(payload.status) : undefined;
+    this.details = payload.details;
+  }
+}
+
 function countWords(text: string): number {
   const trimmed = text.trim();
   if (!trimmed) return 0;
@@ -21,12 +50,26 @@ function countWords(text: string): number {
 }
 
 function toAnalysisErrorMessage(error: unknown): string {
-  const raw = error instanceof Error ? error.message : String(error);
+  const status =
+    error && typeof error === 'object' && Number.isFinite((error as { status?: unknown }).status)
+      ? Number((error as { status: number }).status)
+      : undefined;
+  const code =
+    error && typeof error === 'object' && typeof (error as { code?: unknown }).code === 'string'
+      ? (error as { code: string }).code
+      : undefined;
+  const baseText = [code, error instanceof Error ? error.message : String(error)]
+    .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+    .join(' ')
+    .trim();
+  const raw = baseText || String(error ?? '');
   const normalized = raw.trim().toLowerCase();
   if (
+    status === 401 ||
+    status === 403 ||
+    normalized.includes('unauthorized') ||
     normalized.includes('401') ||
     normalized.includes('403') ||
-    normalized.includes('unauthorized') ||
     normalized.includes('forbidden') ||
     normalized.includes('please log in')
   ) {
@@ -113,22 +156,20 @@ export async function applyAnalysisToNodes(
 
   try {
     const orderedNodes = Array.from(engine.nodes.values())
-      .sort((a, b) => a.id.localeCompare(b.id));
+      .sort((a, b) => compareCodeUnit(a.id, b.id));
     const nodeCount = orderedNodes.length;
 
     // Call AI Analyzer
     const analysis = await runAnalysis({ text: documentText, nodeCount });
-    if (analysis.kind === 'error') {
-      throw new Error(analysis.error.code || analysis.error.message || 'analysis failed');
-    }
-
-    // Gate check
     const currentDocId = getCurrentDocId();
     if (currentDocId !== documentId) {
       console.log(
         `[AI] Discarding stale analysis (expected ${documentId.slice(0, 8)}, got ${currentDocId?.slice(0, 8)})`
       );
       return;
+    }
+    if (analysis.kind === 'error') {
+      throw new AnalysisRunError(analysis.error);
     }
 
     let finalTopology: ReturnType<typeof getTopology>;

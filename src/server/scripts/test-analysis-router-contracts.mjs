@@ -3,6 +3,9 @@
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+import routerErrorModule from "../dist/llm/analyze/routerError.js";
+
+const { normalizeRouterErrorPayload } = routerErrorModule;
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -51,6 +54,26 @@ async function run() {
   assert(
     nodeBindingSource.includes("runAnalysis({ text: documentText, nodeCount })"),
     "[analysis-router-contracts] nodeBinding must call runAnalysis"
+  );
+  assert(
+    nodeBindingSource.includes("new AnalysisRunError(analysis.error)"),
+    "[analysis-router-contracts] nodeBinding must preserve router error payload when surfacing failures"
+  );
+
+  const unauthorized = normalizeRouterErrorPayload(new Error("unauthorized"), "analysis_failed");
+  assert(
+    unauthorized.code === "unauthorized" && unauthorized.message === "unauthorized",
+    "[analysis-router-contracts] classic error normalization must preserve original message code"
+  );
+  const typed = normalizeRouterErrorPayload(
+    { code: "insufficient_balance", message: "insufficient_balance", status: 402, details: { source: "billing" } },
+    "analysis_failed"
+  );
+  assert(typed.code === "insufficient_balance", "[analysis-router-contracts] typed error code must be preserved");
+  assert(typed.status === 402, "[analysis-router-contracts] typed status must be preserved");
+  assert(
+    typeof typed.details === "object" && typed.details && typed.details.source === "billing",
+    "[analysis-router-contracts] typed details must be preserved"
   );
 
   console.log("[analysis-router-contracts] router seam invariants valid");

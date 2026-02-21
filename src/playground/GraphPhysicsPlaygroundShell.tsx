@@ -51,6 +51,8 @@ import { springEdgesToPhysicsLinks } from '../graph/springToPhysics';
 import {
     type SavedInterfaceRecordV1
 } from '../store/savedInterfacesStore';
+import { resolveAnalyzeRequestMode } from '../ai/analyzeMode';
+import { shouldSpawnSeedGraphOnInit } from './analysisSeedSpawnPolicy';
 // STEP3-RUN5-V4-FIX1: Removed unused recomputeSprings import
 // RUN 8: Dev console helpers (exposes window.__topology)
 // PRE-STEP2: Only import in dev mode to prevent bundling in production
@@ -951,19 +953,29 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
     useEffect(() => {
         if (hasInitDecisionRef.current) return;
 
-        const shouldRunDefaultSpawn =
-            !pendingRestoreAtInitRef.current && !pendingLoadInterface && !hasRestoredSuccessfullyRef.current;
+        const mode = resolveAnalyzeRequestMode();
+        const shouldRunDefaultSpawn = shouldSpawnSeedGraphOnInit({
+            mode,
+            hasPendingAnalysis: pendingAnalysisPayload !== null,
+            hasPendingRestore: pendingRestoreAtInitRef.current || Boolean(pendingLoadInterface),
+            hasRestoredSuccessfully: hasRestoredSuccessfullyRef.current
+        });
         hasInitDecisionRef.current = true;
 
         if (!shouldRunDefaultSpawn) {
             if (import.meta.env.DEV) {
-                console.log('[graph] default_spawn_skipped reason=pending_restore');
+                const reason = pendingRestoreAtInitRef.current || pendingLoadInterface
+                    ? 'pending_restore'
+                    : pendingAnalysisPayload !== null && mode === 'skeleton_v1'
+                        ? 'skeleton_pending_analysis'
+                        : 'policy_blocked';
+                console.log('[graph] default_spawn_skipped reason=%s mode=%s', reason, mode);
             }
             return;
         }
 
         runDefaultSpawnOnce('init');
-    }, [pendingLoadInterface]);
+    }, [pendingAnalysisPayload, pendingLoadInterface]);
 
     useEffect(() => {
         const nextId = pendingLoadInterface?.id ?? null;

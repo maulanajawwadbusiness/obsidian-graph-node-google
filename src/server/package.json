@@ -33,6 +33,7 @@
     "test:knowledge-skeleton-analyze-contracts": "node scripts/test-knowledge-skeleton-analyze-contracts.mjs",
     "test:knowledge-skeleton-repair-budget-contracts": "node scripts/test-knowledge-skeleton-repair-budget-contracts.mjs",
     "test:knowledge-skeleton-golden-contracts": "node scripts/test-knowledge-skeleton-golden-contracts.mjs",
+    "test:skeleton-topology-runtime-contracts": "node scripts/test-skeleton-topology-runtime-contracts.mjs",
     "test:skeleton-mode-guard-contracts": "node scripts/test-skeleton-mode-guard-contracts.mjs",
     "test:llm-analyze-mode-gate-contracts": "node scripts/test-llm-analyze-mode-gate-contracts.mjs",
     "test:analysis-router-contracts": "node scripts/test-analysis-router-contracts.mjs",

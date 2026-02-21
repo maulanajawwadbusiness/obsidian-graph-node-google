@@ -26,6 +26,7 @@ const CONTRACT_SCRIPTS = [
   "test:llm-analyze-mode-gate-contracts",
   "test:analysis-router-contracts",
   "test:knowledge-skeleton-golden-contracts",
+  "test:skeleton-topology-runtime-contracts",
   "test:depsbuilder-contracts",
   "test:servermonolith-shell"
 ];

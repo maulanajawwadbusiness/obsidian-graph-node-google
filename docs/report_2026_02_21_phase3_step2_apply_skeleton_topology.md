@@ -16,3 +16,21 @@
 ## Notes
 - This step does not change node binding behavior or spawn behavior.
 - Runtime wiring of skeleton mode remains for step 3.
+
+## Placement Algorithm
+- Module: `src/server/src/llm/analyze/skeletonTopologyBuild.ts`
+- Strategy: deterministic radial placement with seeded jitter.
+- Defaults:
+  - `seed=1337`
+  - `center=(0,0)`
+  - `radius=220`
+  - `jitter=18`
+- Determinism rule:
+  - same skeleton node order + same seed => same initial positions.
+  - position values are rounded to 6 decimals for stable equality checks.
+
+## Runtime Apply Seam
+- Module: `src/graph/skeletonTopologyRuntime.ts`
+- `buildTopologyFromSkeleton(...)` returns topology + initial positions + summary.
+- `applySkeletonTopologyToRuntime(...)` applies topology atomically through one mutation call.
+- No runtime call-site is switched in this step.

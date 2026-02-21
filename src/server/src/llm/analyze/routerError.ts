@@ -5,17 +5,22 @@ export type RouterErrorPayload = {
   details?: unknown;
 };
 
-const KNOWN_ERROR_CODES = new Set([
+export const ALLOWED_ROUTER_ERROR_CODES = new Set([
   "unauthorized",
   "insufficient_balance",
+  "insufficient_rupiah",
   "timeout",
+  "MODE_DISABLED",
   "mode_disabled",
   "mode_guard_blocked",
+  "validation_error",
+  "network_error",
   "analysis_failed",
   "skeleton_analyze_failed",
   "skeleton_output_invalid",
   "parse_error",
-  "upstream_error"
+  "upstream_error",
+  "unknown_error"
 ]);
 
 function truncateMessage(value: string, maxChars = 240): string {
@@ -24,16 +29,23 @@ function truncateMessage(value: string, maxChars = 240): string {
   return `${trimmed.slice(0, Math.max(0, maxChars - 12))} [truncated]`;
 }
 
+function resolveAllowedCode(code: unknown, fallbackCode: string): string {
+  const candidate = typeof code === "string" ? code.trim() : "";
+  if (candidate && ALLOWED_ROUTER_ERROR_CODES.has(candidate)) {
+    return candidate;
+  }
+  return ALLOWED_ROUTER_ERROR_CODES.has(fallbackCode) ? fallbackCode : "unknown_error";
+}
+
 export function normalizeRouterErrorPayload(
   error: unknown,
   fallbackCode: string
 ): RouterErrorPayload {
   if (error instanceof Error) {
     const normalizedMessage = truncateMessage(error.message || String(fallbackCode));
-    const normalizedCodeCandidate = normalizedMessage.toLowerCase().replace(/\s+/g, "_");
-    const code = KNOWN_ERROR_CODES.has(normalizedCodeCandidate) ? normalizedCodeCandidate : "unknown_error";
+    const messageCodeCandidate = normalizedMessage.toLowerCase().replace(/\s+/g, "_");
     return {
-      code,
+      code: resolveAllowedCode(messageCodeCandidate, fallbackCode),
       message: normalizedMessage
     };
   }
@@ -48,12 +60,18 @@ export function normalizeRouterErrorPayload(
     const code = typeof maybe.code === "string" && maybe.code.trim() ? maybe.code : null;
     const message = typeof maybe.message === "string" && maybe.message.trim() ? maybe.message : null;
     const status = typeof maybe.status === "number" && Number.isFinite(maybe.status) ? maybe.status : undefined;
-    const details = maybe.details;
+    const allowedCode = code
+      ? (ALLOWED_ROUTER_ERROR_CODES.has(code) ? code : "unknown_error")
+      : resolveAllowedCode(null, fallbackCode);
+    const details =
+      code && allowedCode === "unknown_error"
+        ? { ...(maybe.details && typeof maybe.details === "object" ? maybe.details as Record<string, unknown> : {}), original_code: code }
+        : maybe.details;
     if (code || message || status !== undefined || details !== undefined) {
-      const fallbackFromMessage = message ?? fallbackCode;
+      const fallbackFromMessage = message ?? allowedCode;
       return {
-        code: code ?? fallbackFromMessage,
-        message: message ?? String(code ?? fallbackFromMessage),
+        code: allowedCode,
+        message: truncateMessage(message ?? String(fallbackFromMessage)),
         status,
         details
       };
@@ -62,7 +80,7 @@ export function normalizeRouterErrorPayload(
 
   const fallbackMessage = truncateMessage(String(error ?? fallbackCode) || String(fallbackCode));
   return {
-    code: KNOWN_ERROR_CODES.has(fallbackCode) ? fallbackCode : "unknown_error",
+    code: resolveAllowedCode(null, fallbackCode),
     message: fallbackMessage
   };
 }

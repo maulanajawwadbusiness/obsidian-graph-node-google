@@ -26,12 +26,34 @@ async function run() {
   );
   const unknown = normalizeRouterErrorPayload(new Error("socket hangup exploded"), "analysis_failed");
   assert(
-    unknown.code === "unknown_error",
-    "[analysis-router-contracts] generic runtime errors must map to stable unknown_error code"
+    unknown.code === "analysis_failed",
+    "[analysis-router-contracts] generic runtime errors must use bounded fallback code"
   );
   assert(
     typeof unknown.message === "string" && unknown.message.length > 0 && unknown.message.length <= 240,
     "[analysis-router-contracts] generic runtime errors must still yield bounded message"
+  );
+  const unknownTyped = normalizeRouterErrorPayload(
+    { code: "vendor_random_code", message: "gateway exploded", details: { trace: "abc" } },
+    "analysis_failed"
+  );
+  assert(
+    unknownTyped.code === "unknown_error",
+    "[analysis-router-contracts] unknown object-shaped code must be bucketed to unknown_error"
+  );
+  assert(
+    typeof unknownTyped.details === "object" &&
+      unknownTyped.details &&
+      unknownTyped.details.original_code === "vendor_random_code",
+    "[analysis-router-contracts] unknown object-shaped code must preserve original_code in details"
+  );
+  const modeDisabled = normalizeRouterErrorPayload(
+    { code: "MODE_DISABLED", message: "mode disabled", status: 400 },
+    "analysis_failed"
+  );
+  assert(
+    modeDisabled.code === "MODE_DISABLED" && modeDisabled.status === 400,
+    "[analysis-router-contracts] allowlisted uppercase code must be preserved"
   );
 
   console.log("[analysis-router-contracts] executed router error contracts valid");

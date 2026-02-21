@@ -60,6 +60,10 @@ async function run() {
   duplicateId.nodes[1].id = duplicateId.nodes[0].id;
   assertInvalid(duplicateId, "node_id_duplicate");
 
+  const invalidIdChars = clone(minimal);
+  invalidIdChars.nodes[0].id = "Bad ID";
+  assertInvalid(invalidIdChars, "node_id_invalid_chars");
+
   const tooManyNodes = clone(minimal);
   while (tooManyNodes.nodes.length < 13) {
     const nextIndex = tooManyNodes.nodes.length + 1;

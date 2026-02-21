@@ -147,6 +147,7 @@ export async function analyzeDocumentToSkeletonV1(args: {
       }
       const validationErrors = validation.errors;
       if (ENABLE_SKELETON_DEBUG_LOGS) {
+        console.log(`[skeleton] raw attempt=${attempt} value=${toDebugPreview(pass.raw)}`);
         console.log(`[skeleton] invalid attempt=${attempt} errors=${toValidationMessages(validationErrors).join("; ")}`);
       }
       if (attempt >= MAX_REPAIR_ATTEMPTS) {
@@ -175,32 +176,60 @@ export async function analyzeDocumentToSkeletonV1(args: {
     };
   }
 
-  const result = await args.provider.generateStructuredJson({
-    model: args.model,
-    input: firstInput,
-    schema,
-    timeoutMs: args.timeoutMs
-  });
-  if (result.ok === false) {
-    return toLlmError(result as LlmError);
-  }
-  const validation = validateKnowledgeSkeletonV1(result.json);
-  if (validation.ok === false) {
+  let currentPrompt = firstInput;
+  let attempt = 0;
+  let usage: { input_tokens?: number; output_tokens?: number } | undefined;
+  while (attempt <= MAX_REPAIR_ATTEMPTS) {
+    const result = await args.provider.generateStructuredJson({
+      model: args.model,
+      input: currentPrompt,
+      schema,
+      timeoutMs: attempt === 0 ? args.timeoutMs : args.repairTimeoutMs
+    });
+    if (result.ok === false) {
+      return toLlmError(result as LlmError);
+    }
+    usage = result.usage;
+    const validation = validateKnowledgeSkeletonV1(result.json);
+    if (validation.ok === true) {
+      if (ENABLE_SKELETON_DEBUG_LOGS) {
+        console.log(`[skeleton] openai accepted attempt=${attempt} value=${toDebugPreview(validation.value)}`);
+      }
+      return {
+        ok: true,
+        value: validation.value,
+        validation_result: attempt === 0 ? "ok" : "retry_ok",
+        usage
+      };
+    }
     const validationErrors = validation.errors;
     if (ENABLE_SKELETON_DEBUG_LOGS) {
-      console.log(`[skeleton] openai invalid errors=${toValidationMessages(validationErrors).join("; ")}`);
+      console.log(`[skeleton] openai raw attempt=${attempt} value=${toDebugPreview(result.json)}`);
+      console.log(`[skeleton] openai invalid attempt=${attempt} errors=${toValidationMessages(validationErrors).join("; ")}`);
     }
-    return {
-      ok: false,
-      code: "skeleton_output_invalid",
-      error: "structured skeleton output invalid",
-      validation_result: "failed",
-      errors: validationErrors,
-      usage: result.usage
-    };
+    if (attempt >= MAX_REPAIR_ATTEMPTS) {
+      return {
+        ok: false,
+        code: "skeleton_output_invalid",
+        error: "structured skeleton output invalid",
+        validation_result: "failed",
+        errors: validationErrors,
+        usage
+      };
+    }
+    currentPrompt = buildSkeletonRepairInput({
+      text: args.text,
+      invalidJson: toDebugPreview(result.json),
+      validationErrors: toValidationMessages(validationErrors),
+      lang: args.lang
+    });
+    attempt += 1;
   }
-  if (ENABLE_SKELETON_DEBUG_LOGS) {
-    console.log(`[skeleton] openai accepted value=${toDebugPreview(validation.value)}`);
-  }
-  return { ok: true, value: validation.value, validation_result: "ok", usage: result.usage };
+  return {
+    ok: false,
+    code: "skeleton_output_invalid",
+    error: "structured skeleton output invalid",
+    validation_result: "failed",
+    usage
+  };
 }

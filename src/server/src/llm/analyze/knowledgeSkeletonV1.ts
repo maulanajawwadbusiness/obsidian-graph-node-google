@@ -60,6 +60,8 @@ export type KnowledgeSkeletonValidationResult =
   | { ok: true; value: KnowledgeSkeletonV1 }
   | { ok: false; errors: KnowledgeSkeletonValidationError[] };
 
+const SKELETON_ID_REGEX = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
 export function buildKnowledgeSkeletonV1JsonSchema(): object {
   return {
     type: "object",
@@ -124,6 +126,51 @@ export function trimToMax(value: string, maxChars: number): string {
 export function getSkeletonV1EdgeMax(nodeCount: number): number {
   const normalized = Number.isFinite(nodeCount) ? Math.floor(nodeCount) : 0;
   return Math.max(6, normalized * 2);
+}
+
+export function collectKnowledgeSkeletonV1IdIssues(
+  value: KnowledgeSkeletonV1
+): KnowledgeSkeletonValidationError[] {
+  const issues: KnowledgeSkeletonValidationError[] = [];
+  const seen = new Set<string>();
+  const nodeIds = new Set(value.nodes.map((node) => node.id));
+
+  for (let i = 0; i < value.nodes.length; i += 1) {
+    const node = value.nodes[i];
+    const path = `nodes[${i}].id`;
+    if (!node.id) {
+      issues.push(createValidationError("node_id_empty", "node.id must be non-empty", path));
+      continue;
+    }
+    if (!SKELETON_ID_REGEX.test(node.id)) {
+      issues.push(
+        createValidationError(
+          "node_id_invalid_chars",
+          "node.id must be slug-like lowercase letters numbers hyphen only",
+          path
+        )
+      );
+    }
+    if (seen.has(node.id)) {
+      issues.push(createValidationError("node_id_duplicate", `duplicate node id: ${node.id}`, path));
+    }
+    seen.add(node.id);
+  }
+
+  for (let i = 0; i < value.edges.length; i += 1) {
+    const edge = value.edges[i];
+    const edgePath = `edges[${i}]`;
+    if (!edge.from || !nodeIds.has(edge.from)) {
+      issues.push(createValidationError("edge_from_missing_node", "edge.from must reference an existing node id", `${edgePath}.from`));
+    }
+    if (!edge.to || !nodeIds.has(edge.to)) {
+      issues.push(createValidationError("edge_to_missing_node", "edge.to must reference an existing node id", `${edgePath}.to`));
+    }
+    if (edge.from === edge.to) {
+      issues.push(createValidationError("edge_self_loop", "edge self loop is not allowed", edgePath));
+    }
+  }
+  return issues;
 }
 
 function createValidationError(
@@ -296,12 +343,6 @@ export function validateKnowledgeSkeletonV1Semantic(
   for (let i = 0; i < value.nodes.length; i += 1) {
     const node = value.nodes[i];
     const nodePath = `nodes[${i}]`;
-    if (!node.id) {
-      errors.push(createValidationError("node_id_empty", "node.id must be non-empty", `${nodePath}.id`));
-    }
-    if (nodeIds.has(node.id)) {
-      errors.push(createValidationError("node_id_duplicate", `duplicate node id: ${node.id}`, `${nodePath}.id`));
-    }
     nodeIds.add(node.id);
 
     if (node.label.length === 0) {
@@ -351,15 +392,6 @@ export function validateKnowledgeSkeletonV1Semantic(
   for (let i = 0; i < value.edges.length; i += 1) {
     const edge = value.edges[i];
     const edgePath = `edges[${i}]`;
-    if (!edge.from || !nodeIds.has(edge.from)) {
-      errors.push(createValidationError("edge_from_missing_node", "edge.from must reference an existing node id", `${edgePath}.from`));
-    }
-    if (!edge.to || !nodeIds.has(edge.to)) {
-      errors.push(createValidationError("edge_to_missing_node", "edge.to must reference an existing node id", `${edgePath}.to`));
-    }
-    if (edge.from === edge.to) {
-      errors.push(createValidationError("edge_self_loop", "edge self loop is not allowed", edgePath));
-    }
     if (edge.weight < 0 || edge.weight > 1) {
       errors.push(createValidationError("edge_weight_out_of_range", "edge.weight must be within [0,1]", `${edgePath}.weight`));
     }
@@ -376,13 +408,15 @@ export function validateKnowledgeSkeletonV1Semantic(
       );
     }
 
-    if (degreeById.has(edge.from)) {
+    if (nodeIds.has(edge.from) && degreeById.has(edge.from)) {
       degreeById.set(edge.from, (degreeById.get(edge.from) || 0) + 1);
     }
-    if (degreeById.has(edge.to)) {
+    if (nodeIds.has(edge.to) && degreeById.has(edge.to)) {
       degreeById.set(edge.to, (degreeById.get(edge.to) || 0) + 1);
     }
   }
+
+  errors.push(...collectKnowledgeSkeletonV1IdIssues(value));
 
   let orphanCount = 0;
   for (const degree of degreeById.values()) {

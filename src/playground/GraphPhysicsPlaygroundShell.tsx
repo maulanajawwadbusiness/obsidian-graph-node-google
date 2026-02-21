@@ -1,5 +1,5 @@
 // type check enabled
-import React, { useRef, useState, useEffect, useLayoutEffect } from 'react';
+import React, { useRef, useState, useEffect, useLayoutEffect, useMemo } from 'react';
 import { PhysicsEngine } from '../physics/engine';
 import { ForceConfig, PhysicsNode } from '../physics/types';
 import { DEFAULT_PHYSICS_CONFIG } from '../physics/config';
@@ -256,6 +256,10 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
         degradePct: number;
     }>>({});
     const viewport = useGraphViewport();
+    const pendingAnalysisKey = useMemo(
+        () => buildPendingAnalysisPayloadKey(pendingAnalysisPayload),
+        [pendingAnalysisPayload]
+    );
     const isBoxedRuntime = isBoxedUi(viewport);
     const effectiveCameraLocked = cameraLocked || isBoxedRuntime;
     const previousBoxedViewportSizeRef = useRef<{ width: number; height: number } | null>(null);
@@ -1173,24 +1177,7 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
     ]);
 
     useEffect(() => {
-        const nextPendingKey = buildPendingAnalysisPayloadKey(
-            pendingAnalysisPayload
-                ? pendingAnalysisPayload.kind === 'text'
-                    ? {
-                        kind: 'text',
-                        createdAt: pendingAnalysisPayload.createdAt,
-                        text: pendingAnalysisPayload.text
-                    }
-                    : {
-                        kind: 'file',
-                        createdAt: pendingAnalysisPayload.createdAt,
-                        file: {
-                            name: pendingAnalysisPayload.file.name,
-                            size: pendingAnalysisPayload.file.size
-                        }
-                    }
-                : null
-        );
+        const nextPendingKey = pendingAnalysisKey;
         if (shouldResetPendingConsumeLatch(pendingAnalysisLatchKeyRef.current, nextPendingKey)) {
             hasConsumedPendingRef.current = false;
         }
@@ -1366,6 +1353,7 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
             }
         })();
     }, [
+        pendingAnalysisKey,
         pendingAnalysisPayload,
         pendingLoadInterface,
         onPendingAnalysisConsumed,

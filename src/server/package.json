@@ -40,6 +40,7 @@
     "test:analysis-seed-spawn-gate-contracts": "node scripts/test-analysis-seed-spawn-gate-contracts.mjs",
     "test:pending-to-graph-transition-contracts": "node scripts/test-pending-to-graph-transition-contracts.mjs",
     "test:phase31-flow-guards-contracts": "node scripts/test-phase31-flow-guards-contracts.mjs",
+    "test:phase33-policy-parity-contracts": "node scripts/test-phase33-policy-parity-contracts.mjs",
     "test:phase3": "node scripts/test-phase3-verification-suite.mjs",
     "test:knowledge-skeleton-harness": "node scripts/run-knowledge-skeleton-harness.mjs",
     "test:depsbuilder-contracts": "node scripts/test-depsbuilder-contracts.mjs",

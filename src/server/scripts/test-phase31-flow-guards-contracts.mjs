@@ -5,7 +5,9 @@ import flowGuardsModule from "../dist/llm/analyze/analysisFlowGuards.js";
 const {
   isStaleAnalysisResult,
   buildPendingAnalysisPayloadKey,
-  shouldResetPendingConsumeLatch
+  shouldResetPendingConsumeLatch,
+  __resetPendingKeyComputeCountForTests,
+  __getPendingKeyComputeCountForTests
 } = flowGuardsModule;
 
 function assert(condition, message) {
@@ -56,6 +58,15 @@ function runLatchChecks() {
   assert(
     buildPendingAnalysisPayloadKey(textA) === buildPendingAnalysisPayloadKey(textA),
     "[phase31-flow-guards] identical payload must produce stable key"
+  );
+  __resetPendingKeyComputeCountForTests();
+  const samePayload = { kind: "text", createdAt: 99, text: "memoize-me" };
+  for (let i = 0; i < 50; i += 1) {
+    buildPendingAnalysisPayloadKey(samePayload);
+  }
+  assert(
+    __getPendingKeyComputeCountForTests() === 1,
+    "[phase31-flow-guards] hash should compute once for repeated identical payload identity"
   );
 
   let consumed = false;

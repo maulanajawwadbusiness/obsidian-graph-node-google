@@ -180,6 +180,10 @@ async function run() {
       hydratedA.applyCalls === 1 && hydratedB.applyCalls === 1,
       `[skeleton-topology-runtime] hydrated runtime snapshot must use single apply call: ${name}`
     );
+    assert(
+      hydratedA.addNodeCalls === builtA.nodes.length && hydratedB.addNodeCalls === builtA.nodes.length,
+      `[skeleton-topology-runtime] nodeBinding-path hydration must add each runtime node exactly once: ${name}`
+    );
     const hydratedC = buildHydratedRuntimeSnapshot({
       skeleton: validation.value,
       seed: 202,

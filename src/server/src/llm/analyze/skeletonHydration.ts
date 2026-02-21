@@ -7,6 +7,30 @@ export type SkeletonPosition = {
   y: number;
 };
 
+export type HydratedRuntimeRole = "spine" | "rib" | "fiber";
+
+export type HydratedTopologyNodeSpec = {
+  id: string;
+  label?: string;
+  meta?: Record<string, unknown>;
+};
+
+export type HydratedRuntimeNode = {
+  id: string;
+  x: number;
+  y: number;
+  role: HydratedRuntimeRole;
+  label: string;
+  sourceTitle: string;
+  sourceSummary: string;
+};
+
+function mapSkeletonRoleToRuntimeRole(role: unknown): HydratedRuntimeRole {
+  if (role === "claim" || role === "context") return "spine";
+  if (role === "method" || role === "evidence") return "rib";
+  return "fiber";
+}
+
 export function hydrateSkeletonNodePositions(args: {
   nodes: SkeletonHydrationNode[];
   initialPositions: Record<string, SkeletonPosition>;
@@ -29,6 +53,36 @@ export function hydrateSkeletonNodePositions(args: {
   return result;
 }
 
+export function buildHydratedRuntimeNodes(args: {
+  topologyNodes: HydratedTopologyNodeSpec[];
+  initialPositions: Record<string, SkeletonPosition>;
+  spacing: number;
+}): HydratedRuntimeNode[] {
+  const hydratedPositions = hydrateSkeletonNodePositions({
+    nodes: args.topologyNodes.map((node) => ({ id: node.id })),
+    initialPositions: args.initialPositions,
+    spacing: args.spacing
+  });
+
+  return args.topologyNodes.map((spec) => {
+    const meta = spec.meta as Record<string, unknown> | undefined;
+    const role = mapSkeletonRoleToRuntimeRole(meta?.role);
+    const title = typeof spec.label === "string" && spec.label.trim() ? spec.label.trim() : spec.id;
+    const summaryRaw = typeof meta?.summary === "string" ? meta.summary : title;
+    const summary = summaryRaw.trim() || title;
+    const pos = hydratedPositions[spec.id];
+    return {
+      id: spec.id,
+      x: pos?.x ?? 0,
+      y: pos?.y ?? 0,
+      role,
+      label: title,
+      sourceTitle: title,
+      sourceSummary: summary
+    };
+  });
+}
+
 import type { KnowledgeSkeletonV1 } from "./knowledgeSkeletonV1";
 import { applyTopologyToGraphState, buildTopologyFromSkeletonCore } from "./skeletonTopologyBuild";
 
@@ -40,22 +94,58 @@ export function buildHydratedRuntimeSnapshot(args: {
   nodeOrder: string[];
   positionsById: Record<string, SkeletonPosition>;
   applyCalls: number;
+  addNodeCalls: number;
 } {
   const built = buildTopologyFromSkeletonCore(args.skeleton, { seed: args.seed });
   let applyCalls = 0;
-  let appliedNodes: SkeletonHydrationNode[] = [];
+  let appliedNodes: HydratedTopologyNodeSpec[] = [];
+  const engineNodeMap = new Map<string, SkeletonPosition>();
+  let addNodeCalls = 0;
+  const engineMock = {
+    addNode(node: { id: string; x: number; y: number }) {
+      addNodeCalls += 1;
+      engineNodeMap.set(node.id, {
+        x: Number(node.x.toFixed(6)),
+        y: Number(node.y.toFixed(6))
+      });
+    }
+  };
+
   applyTopologyToGraphState({ nodes: built.nodes, links: built.links }, (topology) => {
     applyCalls += 1;
-    appliedNodes = topology.nodes.map((node) => ({ id: node.id }));
+    appliedNodes = topology.nodes.map((node) => ({
+      id: node.id,
+      label: node.label,
+      meta: node.meta as Record<string, unknown> | undefined
+    }));
   });
-  const positionsById = hydrateSkeletonNodePositions({
-    nodes: appliedNodes,
+
+  const runtimeNodes = buildHydratedRuntimeNodes({
+    topologyNodes: appliedNodes,
     initialPositions: built.initialPositions,
     spacing: args.spacing
   });
+
+  runtimeNodes.forEach((node) => {
+    engineMock.addNode(node);
+  });
+
+  const sortedNodeOrder = [...engineNodeMap.keys()].sort((a, b) => {
+    if (a < b) return -1;
+    if (a > b) return 1;
+    return 0;
+  });
+  const positionsById: Record<string, SkeletonPosition> = {};
+  sortedNodeOrder.forEach((nodeId) => {
+    const pos = engineNodeMap.get(nodeId);
+    if (!pos) return;
+    positionsById[nodeId] = { x: pos.x, y: pos.y };
+  });
+
   return {
-    nodeOrder: appliedNodes.map((node) => node.id),
+    nodeOrder: sortedNodeOrder,
     positionsById,
-    applyCalls
+    applyCalls,
+    addNodeCalls
   };
 }

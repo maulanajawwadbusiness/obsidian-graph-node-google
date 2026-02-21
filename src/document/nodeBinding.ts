@@ -11,7 +11,7 @@ import { springEdgesToPhysicsLinks } from '../graph/springToPhysics';
 import type { DirectedLink } from '../graph/topologyTypes';
 import { buildSavedInterfaceDedupeKey, type SavedInterfaceRecordV1 } from '../store/savedInterfacesStore';
 import { isStaleAnalysisResult } from '../server/src/llm/analyze/analysisFlowGuards';
-import { hydrateSkeletonNodePositions } from '../server/src/llm/analyze/skeletonHydration';
+import { buildHydratedRuntimeNodes } from '../server/src/llm/analyze/skeletonHydration';
 
 import { runAnalysis } from '../ai/analysisRouter';
 import { applySkeletonTopologyToRuntime } from '../graph/skeletonTopologyRuntime';
@@ -90,36 +90,25 @@ function toAnalysisErrorMessage(error: unknown): string {
   return 'Analysis failed. Please go back and try again.';
 }
 
-function mapSkeletonRoleToPhysicsRole(role: unknown): 'spine' | 'rib' | 'fiber' {
-  if (role === 'claim' || role === 'context') return 'spine';
-  if (role === 'method' || role === 'evidence') return 'rib';
-  return 'fiber';
-}
-
 function buildPhysicsNodesFromTopology(args: {
   topologyNodes: Array<{ id: string; label?: string; meta?: Record<string, unknown> }>;
   initialPositions: Record<string, { x: number; y: number }>;
   documentId: string;
   spacing: number;
 }): PhysicsNode[] {
-  const hydratedPositions = hydrateSkeletonNodePositions({
-    nodes: args.topologyNodes.map((node) => ({ id: node.id })),
+  const runtimeNodes = buildHydratedRuntimeNodes({
+    topologyNodes: args.topologyNodes,
     initialPositions: args.initialPositions,
     spacing: args.spacing
   });
-  return args.topologyNodes.map((spec) => {
-    const meta = spec.meta as Record<string, unknown> | undefined;
-    const role = mapSkeletonRoleToPhysicsRole(meta?.role);
-    const title = typeof spec.label === 'string' && spec.label.trim() ? spec.label.trim() : spec.id;
-    const summaryRaw = typeof meta?.summary === 'string' ? meta.summary : title;
-    const summary = summaryRaw.trim() || title;
-    const pos = hydratedPositions[spec.id];
+  return runtimeNodes.map((node) => {
+    const role = node.role;
     const radius = role === 'spine' ? 8 : role === 'rib' ? 6 : 5;
     const mass = role === 'spine' ? 3 : role === 'rib' ? 2 : 1;
     return {
-      id: spec.id,
-      x: pos?.x ?? 0,
-      y: pos?.y ?? 0,
+      id: node.id,
+      x: node.x,
+      y: node.y,
       vx: 0,
       vy: 0,
       fx: 0,
@@ -129,11 +118,11 @@ function buildPhysicsNodesFromTopology(args: {
       isFixed: false,
       warmth: 1.0,
       role,
-      label: title,
+      label: node.label,
       meta: {
         docId: args.documentId,
-        sourceTitle: title,
-        sourceSummary: summary
+        sourceTitle: node.sourceTitle,
+        sourceSummary: node.sourceSummary
       }
     };
   });

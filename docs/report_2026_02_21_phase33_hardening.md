@@ -38,3 +38,26 @@
 - Updated contracts:
   - `src/server/scripts/test-analysis-router-contracts.mjs`
 
+## Mini-Run 3 Changes (H1)
+
+- Added shared runtime-node hydration mapper used by app binding and contracts:
+  - `src/server/src/llm/analyze/skeletonHydration.ts:32` (`buildHydratedRuntimeNodes`)
+- Updated app binding to consume the shared mapper:
+  - `src/document/nodeBinding.ts` (`buildPhysicsNodesFromTopology`)
+- Extended hydration snapshot contract to execute node materialization with an engine mock (`addNode` path):
+  - `src/server/src/llm/analyze/skeletonHydration.ts:67`
+  - `src/server/scripts/test-skeleton-topology-runtime-contracts.mjs`
+
+## Mini-Run 4 Changes (R1, R2)
+
+- Added pending-key memoization cache and test counters:
+  - `src/server/src/llm/analyze/analysisFlowGuards.ts`
+- Added shell-level memoization to avoid re-hashing recreated payload shapes:
+  - `src/playground/GraphPhysicsPlaygroundShell.tsx`
+- Added memoization contract:
+  - `src/server/scripts/test-phase31-flow-guards-contracts.mjs`
+- Added frontend/backend policy parity contract:
+  - `src/server/scripts/test-phase33-policy-parity-contracts.mjs`
+- Included parity contract in phase3 runner:
+  - `src/server/scripts/test-phase3-verification-suite.mjs`
+  - `src/server/package.json`

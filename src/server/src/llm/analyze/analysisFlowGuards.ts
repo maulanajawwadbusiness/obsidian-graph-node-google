@@ -15,6 +15,9 @@ type PendingFilePayload = {
 
 type PendingPayload = PendingTextPayload | PendingFilePayload | null;
 
+const pendingPayloadKeyCache = new WeakMap<object, string>();
+let pendingKeyComputeCount = 0;
+
 function fnv1aHash(value: string): string {
   let hash = 0x811c9dc5;
   for (let i = 0; i < value.length; i += 1) {
@@ -30,15 +33,30 @@ export function isStaleAnalysisResult(expectedDocId: string, currentDocId: strin
 
 export function buildPendingAnalysisPayloadKey(payload: PendingPayload): string | null {
   if (!payload) return null;
+  const cached = pendingPayloadKeyCache.get(payload);
+  if (cached) return cached;
+  pendingKeyComputeCount += 1;
+  let computed: string;
   if (payload.kind === "text") {
     const hash = fnv1aHash(payload.text);
-    return `text:${payload.createdAt}:${payload.text.length}:${hash}`;
+    computed = `text:${payload.createdAt}:${payload.text.length}:${hash}`;
+  } else {
+    const metadataHash = fnv1aHash(`${payload.file.name}:${payload.file.size}`);
+    computed = `file:${payload.createdAt}:${payload.file.name}:${payload.file.size}:${metadataHash}`;
   }
-  const metadataHash = fnv1aHash(`${payload.file.name}:${payload.file.size}`);
-  return `file:${payload.createdAt}:${payload.file.name}:${payload.file.size}:${metadataHash}`;
+  pendingPayloadKeyCache.set(payload, computed);
+  return computed;
 }
 
 export function shouldResetPendingConsumeLatch(prevKey: string | null, nextKey: string | null): boolean {
   if (nextKey === null) return prevKey !== null;
   return prevKey !== nextKey;
+}
+
+export function __resetPendingKeyComputeCountForTests(): void {
+  pendingKeyComputeCount = 0;
+}
+
+export function __getPendingKeyComputeCountForTests(): number {
+  return pendingKeyComputeCount;
 }

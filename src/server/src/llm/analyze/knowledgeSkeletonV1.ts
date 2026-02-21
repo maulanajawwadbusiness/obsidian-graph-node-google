@@ -54,6 +54,7 @@ export type KnowledgeSkeletonValidationError = {
   code: string;
   message: string;
   path?: string;
+  details?: Record<string, unknown>;
 };
 
 export type KnowledgeSkeletonValidationResult =
@@ -176,9 +177,10 @@ export function collectKnowledgeSkeletonV1IdIssues(
 function createValidationError(
   code: string,
   message: string,
-  path?: string
+  path?: string,
+  details?: Record<string, unknown>
 ): KnowledgeSkeletonValidationError {
-  return { code, message, path };
+  return { code, message, path, details };
 }
 
 function collectUnknownPropertyErrors(
@@ -451,12 +453,19 @@ export function validateKnowledgeSkeletonV1Semantic(
 
   errors.push(...collectKnowledgeSkeletonV1IdIssues(value));
 
-  let orphanCount = 0;
-  for (const degree of degreeById.values()) {
-    if (degree <= 0) orphanCount += 1;
+  const orphanNodeIds: string[] = [];
+  for (const [id, degree] of degreeById.entries()) {
+    if (degree <= 0) orphanNodeIds.push(id);
   }
-  if (orphanCount > 0) {
-    errors.push(createValidationError("orphan_nodes_excessive", "orphan nodes are not allowed", "edges"));
+  if (orphanNodeIds.length > 0) {
+    errors.push(
+      createValidationError(
+        "orphan_nodes_excessive",
+        `orphan nodes are not allowed: ${orphanNodeIds.join(", ")}`,
+        "edges",
+        { orphan_ids: orphanNodeIds }
+      )
+    );
   }
 
   if (errors.length > 0) {

@@ -39,7 +39,8 @@ const MAX_REPAIR_ATTEMPTS = 2;
 function toValidationMessages(errors: KnowledgeSkeletonValidationError[]): string[] {
   return errors.map((entry) => {
     const path = entry.path ? `${entry.path}: ` : "";
-    return `${path}${entry.code} (${entry.message})`;
+    const details = entry.details ? ` details=${JSON.stringify(entry.details)}` : "";
+    return `${path}${entry.code} (${entry.message})${details}`;
   });
 }
 

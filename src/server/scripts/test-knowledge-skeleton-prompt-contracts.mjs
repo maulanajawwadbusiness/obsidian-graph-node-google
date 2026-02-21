@@ -18,17 +18,19 @@ async function run() {
     lang: "en"
   });
   assert(base.includes("No orphan nodes"), "[knowledge-skeleton-prompt] base prompt must include no orphan rule");
+  assert(base.includes("edges <= max(6, nodeCount * 2)"), "[knowledge-skeleton-prompt] base prompt must include edge cap rule");
   assert(base.includes("slug-like"), "[knowledge-skeleton-prompt] base prompt must include id guidance");
 
   const repair = buildSkeletonRepairInput({
     text: "Sample document text.",
     invalidJson: "{\"nodes\":[]}",
-    validationErrors: ["nodes: node_count_out_of_range"],
+    validationErrors: ["edges: orphan_nodes_excessive (orphan nodes are not allowed) details={\"orphan_ids\":[\"n-evidence\"]}"],
     lang: "en"
   });
   assert(repair.includes("Validation errors:"), "[knowledge-skeleton-prompt] repair prompt must include errors");
   assert(repair.includes("{\"nodes\":[]}"), "[knowledge-skeleton-prompt] repair prompt must include invalid json");
   assert(repair.includes("Return corrected JSON only"), "[knowledge-skeleton-prompt] repair prompt must force json-only repair");
+  assert(repair.includes("orphan_ids"), "[knowledge-skeleton-prompt] repair prompt must include actionable orphan ids");
 
   const parseRepair = buildSkeletonParseRepairInput({
     text: "Sample document text.",

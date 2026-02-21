@@ -32,6 +32,7 @@ function assertInvalid(payload, errorCode) {
   const result = validateKnowledgeSkeletonV1(payload);
   assert(result && result.ok === false, `[knowledge-skeleton] expected invalid payload for ${errorCode}`);
   assert(result.errors.some((entry) => entry.code === errorCode), `[knowledge-skeleton] missing error code ${errorCode}`);
+  return result.errors;
 }
 
 function clone(value) {
@@ -118,7 +119,12 @@ async function run() {
       rationale: "single edge leaves one node disconnected"
     }
   ];
-  assertInvalid(orphanGraph, "orphan_nodes_excessive");
+  const orphanErrors = assertInvalid(orphanGraph, "orphan_nodes_excessive");
+  const orphanEntry = orphanErrors.find((entry) => entry.code === "orphan_nodes_excessive");
+  assert(orphanEntry, "[knowledge-skeleton] orphan error entry missing");
+  assert(Array.isArray(orphanEntry.details?.orphan_ids), "[knowledge-skeleton] orphan ids details missing");
+  assert(orphanEntry.details.orphan_ids.length === 1, "[knowledge-skeleton] orphan ids length mismatch");
+  assert(orphanEntry.details.orphan_ids[0] === "n-limit", "[knowledge-skeleton] orphan id mismatch");
 
   console.log("[knowledge-skeleton-contracts] fixtures valid");
   console.log("[knowledge-skeleton-contracts] invalid matrix valid");

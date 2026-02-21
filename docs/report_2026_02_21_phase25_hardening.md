@@ -65,3 +65,42 @@ Tests added/updated:
   - persistent parse failure returns `parse_error` after capped retries
 - `src/server/scripts/test-knowledge-skeleton-prompt-contracts.mjs`
   - parse-repair prompt instructions validated
+
+## Run 3: Prompt Constraint Alignment + Actionable Orphan Errors
+
+Date: 2026-02-21
+
+Changes made:
+- Prompt now states hard edge cap formula explicitly:
+  - `edges <= max(6, nodeCount * 2)`
+- Orphan validation now includes explicit orphan ids to make repair instructions actionable.
+- Validation error model now supports optional structured `details` payload.
+- Repair message formatting now includes `details` payload so orphan ids are passed through repair prompts.
+
+Code anchors:
+- `src/server/src/llm/analyze/skeletonPrompt.ts`
+  - edge-cap rule line in `buildCoreInstruction(...)`
+- `src/server/src/llm/analyze/knowledgeSkeletonV1.ts`
+  - `KnowledgeSkeletonValidationError.details`
+  - orphan list construction in `validateKnowledgeSkeletonV1Semantic(...)`
+- `src/server/src/llm/analyze/skeletonAnalyze.ts`
+  - `toValidationMessages(...)` includes details serialization
+
+Tests added/updated:
+- `src/server/scripts/test-knowledge-skeleton-contracts.mjs`
+  - orphan error now required to contain `details.orphan_ids`
+- `src/server/scripts/test-knowledge-skeleton-prompt-contracts.mjs`
+  - prompt includes explicit edge-cap formula
+  - repair input preserves orphan ids
+
+Example orphan error:
+```json
+{
+  "code": "orphan_nodes_excessive",
+  "message": "orphan nodes are not allowed: n-evidence",
+  "path": "edges",
+  "details": {
+    "orphan_ids": ["n-evidence"]
+  }
+}
+```

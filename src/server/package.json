@@ -27,6 +27,7 @@
     "test:payments-create-status-contracts": "node scripts/test-payments-create-status-contracts.mjs",
     "test:payments-webhook-contracts": "node scripts/test-payments-webhook-contracts.mjs",
     "test:payments-contracts": "node scripts/test-payments-contracts.mjs",
+    "test:knowledge-skeleton-contracts": "node scripts/test-knowledge-skeleton-contracts.mjs",
     "test:depsbuilder-contracts": "node scripts/test-depsbuilder-contracts.mjs",
     "test:servermonolith-shell": "node scripts/test-servermonolith-shell.mjs",
     "test:contracts": "node scripts/run-contract-suite.mjs",

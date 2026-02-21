@@ -17,6 +17,7 @@ const CONTRACT_SCRIPTS = [
   "test:beta-caps-usage-contracts",
   "test:saved-interfaces-contracts",
   "test:payments-contracts",
+  "test:knowledge-skeleton-contracts",
   "test:depsbuilder-contracts",
   "test:servermonolith-shell"
 ];

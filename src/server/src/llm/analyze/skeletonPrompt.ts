@@ -10,11 +10,39 @@ type SkeletonPromptOpts = {
   lang?: AnalyzePromptLang;
 };
 
+export const SKELETON_PROMPT_LIMITS = {
+  repairInvalidJsonMaxChars: 8000,
+  repairRawOutputPreviewMaxChars: 2000,
+  repairDocumentExcerptMaxChars: 3000
+} as const;
+
 function getLanguageDirective(lang: AnalyzePromptLang): string {
   if (lang === "id") {
     return "LANGUAGE DIRECTIVE: Write label, summary, and rationale in Bahasa Indonesia.";
   }
   return "LANGUAGE DIRECTIVE: Write label, summary, and rationale in English.";
+}
+
+function clampNonNegativeInteger(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  return Math.max(0, Math.floor(value));
+}
+
+export function trimWithHeadTail(value: string, maxChars: number): string {
+  const normalized = value.trim();
+  const limit = clampNonNegativeInteger(maxChars);
+  if (limit <= 0) return "";
+  if (normalized.length <= limit) return normalized;
+  const marker = "\n...[truncated]...\n";
+  if (limit <= marker.length + 2) {
+    return `${normalized.slice(0, limit)}...[truncated]`;
+  }
+  const keep = limit - marker.length;
+  const headLen = Math.ceil(keep / 2);
+  const tailLen = Math.floor(keep / 2);
+  const head = normalized.slice(0, headLen);
+  const tail = normalized.slice(Math.max(normalized.length - tailLen, 0));
+  return `${head}${marker}${tail}`;
 }
 
 function buildCoreInstruction(lang: AnalyzePromptLang): string {
@@ -52,11 +80,12 @@ function buildCoreInstruction(lang: AnalyzePromptLang): string {
 
 export function buildSkeletonAnalyzeInput(opts: SkeletonPromptOpts): string {
   const lang: AnalyzePromptLang = opts.lang === "en" ? "en" : "id";
+  const excerpt = trimWithHeadTail(opts.text, SKELETON_PROMPT_LIMITS.repairDocumentExcerptMaxChars);
   return [
     buildCoreInstruction(lang),
     "",
     "Document excerpt:",
-    `\"\"\"${opts.text}\"\"\"`
+    `\"\"\"${excerpt}\"\"\"`
   ].join("\n");
 }
 
@@ -67,6 +96,8 @@ export function buildSkeletonRepairInput(args: {
   lang?: AnalyzePromptLang;
 }): string {
   const lang: AnalyzePromptLang = args.lang === "en" ? "en" : "id";
+  const invalidJsonPreview = trimWithHeadTail(args.invalidJson, SKELETON_PROMPT_LIMITS.repairInvalidJsonMaxChars);
+  const excerpt = trimWithHeadTail(args.text, SKELETON_PROMPT_LIMITS.repairDocumentExcerptMaxChars);
   return [
     buildCoreInstruction(lang),
     "",
@@ -76,10 +107,10 @@ export function buildSkeletonRepairInput(args: {
     "Return corrected JSON only.",
     "",
     "Invalid JSON to repair:",
-    args.invalidJson,
+    invalidJsonPreview,
     "",
     "Document excerpt:",
-    `\"\"\"${args.text}\"\"\"`
+    `\"\"\"${excerpt}\"\"\"`
   ].join("\n");
 }
 
@@ -90,6 +121,8 @@ export function buildSkeletonParseRepairInput(args: {
   lang?: AnalyzePromptLang;
 }): string {
   const lang: AnalyzePromptLang = args.lang === "en" ? "en" : "id";
+  const rawPreview = trimWithHeadTail(args.rawOutputPreview, SKELETON_PROMPT_LIMITS.repairRawOutputPreviewMaxChars);
+  const excerpt = trimWithHeadTail(args.text, SKELETON_PROMPT_LIMITS.repairDocumentExcerptMaxChars);
   return [
     buildCoreInstruction(lang),
     "",
@@ -100,9 +133,9 @@ export function buildSkeletonParseRepairInput(args: {
     "Do not include any prose before or after JSON.",
     "",
     "Raw output preview:",
-    args.rawOutputPreview,
+    rawPreview,
     "",
     "Document excerpt:",
-    `\"\"\"${args.text}\"\"\"`
+    `\"\"\"${excerpt}\"\"\"`
   ].join("\n");
 }

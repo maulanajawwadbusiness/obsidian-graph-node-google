@@ -4,14 +4,15 @@ import type { LlmError } from "../llmClient";
 import {
   buildKnowledgeSkeletonV1JsonSchema,
   type KnowledgeSkeletonV1,
-  SKELETON_V1_LIMITS,
   validateKnowledgeSkeletonV1,
   type KnowledgeSkeletonValidationError
 } from "./knowledgeSkeletonV1";
 import {
   buildSkeletonAnalyzeInput,
   buildSkeletonParseRepairInput,
-  buildSkeletonRepairInput
+  buildSkeletonRepairInput,
+  SKELETON_PROMPT_LIMITS,
+  trimWithHeadTail
 } from "./skeletonPrompt";
 import type { AnalyzePromptLang } from "./prompt";
 
@@ -130,11 +131,15 @@ function extractFirstJsonObject(text: string): string | null {
 function toDebugPreview(value: unknown): string {
   try {
     const json = JSON.stringify(value);
-    if (json.length <= SKELETON_V1_LIMITS.maxRawModelJsonChars) return json;
-    return `${json.slice(0, SKELETON_V1_LIMITS.maxRawModelJsonChars)}...(truncated)`;
+    return trimWithHeadTail(json, SKELETON_PROMPT_LIMITS.repairRawOutputPreviewMaxChars);
   } catch {
     return "<unserializable>";
   }
+}
+
+function toSkeletonSummary(value: KnowledgeSkeletonV1): string {
+  const topNode = [...value.nodes].sort((a, b) => b.pressure - a.pressure)[0];
+  return `nodes=${value.nodes.length} edges=${value.edges.length} top_pressure_id=${topNode?.id ?? "none"}`;
 }
 
 async function runOpenrouterSkeletonPass(args: {
@@ -222,7 +227,7 @@ export async function analyzeDocumentToSkeletonV1(args: {
       const validation = validateKnowledgeSkeletonV1(pass.raw);
       if (validation.ok === true) {
         if (ENABLE_SKELETON_DEBUG_LOGS) {
-          console.log(`[skeleton] accepted attempt=${attempt} value=${toDebugPreview(validation.value)}`);
+          console.log(`[skeleton] accepted attempt=${attempt} ${toSkeletonSummary(validation.value)}`);
         }
         return {
           ok: true,
@@ -279,7 +284,7 @@ export async function analyzeDocumentToSkeletonV1(args: {
     const validation = validateKnowledgeSkeletonV1(result.json);
     if (validation.ok === true) {
       if (ENABLE_SKELETON_DEBUG_LOGS) {
-        console.log(`[skeleton] openai accepted attempt=${attempt} value=${toDebugPreview(validation.value)}`);
+        console.log(`[skeleton] openai accepted attempt=${attempt} ${toSkeletonSummary(validation.value)}`);
       }
       return {
         ok: true,

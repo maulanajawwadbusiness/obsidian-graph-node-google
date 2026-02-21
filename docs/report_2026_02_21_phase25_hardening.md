@@ -104,3 +104,41 @@ Example orphan error:
   }
 }
 ```
+
+## Run 4: Repair Payload Caps + Logging Safety
+
+Date: 2026-02-21
+
+Changes made:
+- Added hard caps for repair prompt payload components:
+  - invalid JSON preview: 8000 chars
+  - raw output preview: 2000 chars
+  - document excerpt: 3000 chars
+- Added head+tail truncation with explicit marker:
+  - `...[truncated]...`
+- Applied caps in:
+  - initial analyze input document excerpt
+  - validation-repair prompt payload
+  - parse-repair prompt payload
+- Debug logging kept default-off and now logs compact summary for accepted skeletons:
+  - node count
+  - edge count
+  - top pressure node id
+- Raw debug previews are now bounded by the raw preview cap.
+
+Code anchors:
+- `src/server/src/llm/analyze/skeletonPrompt.ts`
+  - `SKELETON_PROMPT_LIMITS`
+  - `trimWithHeadTail(...)`
+  - capped usage in `buildSkeletonAnalyzeInput(...)`
+  - capped usage in `buildSkeletonRepairInput(...)`
+  - capped usage in `buildSkeletonParseRepairInput(...)`
+- `src/server/src/llm/analyze/skeletonAnalyze.ts`
+  - bounded `toDebugPreview(...)`
+  - compact `toSkeletonSummary(...)`
+
+Tests added:
+- `src/server/scripts/test-knowledge-skeleton-repair-budget-contracts.mjs`
+  - truncation marker + head/tail preservation
+  - repair prompt length budget checks
+  - cap constant drift checks

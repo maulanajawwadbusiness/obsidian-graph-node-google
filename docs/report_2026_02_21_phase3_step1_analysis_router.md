@@ -12,5 +12,7 @@
 ## Current Invariants (Initial)
 - Router decides mode through `resolveAnalyzeRequestMode()`.
 - Classic path delegates to existing `analyzeDocument(...)`.
-- Skeleton path is intentionally blocked in step-1 scaffold and returns typed error.
+- `paperAnalyzer` now sends classic mode only and no longer resolves analysis mode itself.
+- Skeleton path is routed through `analyzeDocumentToSkeletonV1(...)` only from router.
+- Router maps skeleton gate failures to typed errors (`MODE_DISABLED`, `mode_guard_blocked`).
 - No graph/topology wiring changes in this step.

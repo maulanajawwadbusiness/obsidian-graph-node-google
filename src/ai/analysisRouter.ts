@@ -1,12 +1,14 @@
 import { isSkeletonAnalyzeModeAllowed, resolveAnalyzeRequestMode, type AnalyzeRequestMode } from "./analyzeMode";
 import { analyzeDocument, type AnalysisResult } from "./paperAnalyzer";
 import type { KnowledgeSkeletonV1 } from "../server/src/llm/analyze/knowledgeSkeletonV1";
+import { analyzeDocumentToSkeletonV1, SkeletonAnalyzeError } from "./skeletonAnalyzer";
 
 export type AnalysisRouterMode = AnalyzeRequestMode;
 
 export type AnalysisRouterErrorCode =
   | "MODE_DISABLED"
   | "mode_guard_blocked"
+  | "skeleton_analyze_failed"
   | "analysis_failed";
 
 export type AnalysisRouterResult =
@@ -52,15 +54,54 @@ export async function runAnalysis(args: {
       };
     }
 
-    return {
-      kind: "error",
-      error: {
-        code: "MODE_DISABLED",
-        message: "skeleton_v1 route path is not wired in phase3 step1",
-        status: 400
-      },
-      meta: { mode }
-    };
+    try {
+      const skeleton = await analyzeDocumentToSkeletonV1(args.text);
+      return { kind: "skeleton_v1", skeleton, meta: { mode: "skeleton_v1" } };
+    } catch (error) {
+      if (error instanceof SkeletonAnalyzeError) {
+        if (error.code === "MODE_DISABLED") {
+          return {
+            kind: "error",
+            error: {
+              code: "MODE_DISABLED",
+              message: error.message,
+              status: error.status
+            },
+            meta: { mode }
+          };
+        }
+        if (error.code === "mode_guard_blocked") {
+          return {
+            kind: "error",
+            error: {
+              code: "mode_guard_blocked",
+              message: error.message,
+              status: error.status
+            },
+            meta: { mode }
+          };
+        }
+        return {
+          kind: "error",
+          error: {
+            code: "skeleton_analyze_failed",
+            message: error.message,
+            status: error.status
+          },
+          meta: { mode }
+        };
+      }
+
+      const message = error instanceof Error ? error.message : String(error);
+      return {
+        kind: "error",
+        error: {
+          code: "skeleton_analyze_failed",
+          message
+        },
+        meta: { mode }
+      };
+    }
   }
 
   try {

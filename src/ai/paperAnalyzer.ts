@@ -12,7 +12,6 @@ import { pushMoneyNotice } from '../money/moneyNotices';
 import { getLang } from '../i18n/lang';
 import { buildStructuredAnalyzeInput, type AnalyzePromptLang } from '../server/src/llm/analyze/prompt';
 import { applyAnalyzeInputPolicy } from './analyzeInputPolicy';
-import { resolveAnalyzeRequestMode } from './analyzeMode';
 
 export interface AnalysisPoint {
     index: number;   // 0-based index (maps to node index)
@@ -356,7 +355,6 @@ async function analyzeViaDevOpenAI(text: string, nodeCount: number): Promise<Ana
 
 export async function analyzeDocument(text: string, opts?: { nodeCount?: number }): Promise<AnalysisResult> {
     const nodeCount = Math.max(2, Math.min(12, opts?.nodeCount ?? 5));
-    const requestMode = resolveAnalyzeRequestMode();
     const useDevDirectAnalyze = isDevDirectAnalyzeEnabled();
     const lang: AnalyzePromptLang = getLang() === 'en' ? 'en' : 'id';
     const submittedWordCount = countWords(text);
@@ -391,7 +389,7 @@ export async function analyzeDocument(text: string, opts?: { nodeCount?: number 
                 const currentResult = await fetchAnalyzeSse(analyzeUrl, {
                     text: safeText,
                     nodeCount,
-                    mode: requestMode,
+                    mode: 'classic',
                     model: AI_MODELS.ANALYZER,
                     lang,
                     submitted_word_count: submittedWordCount

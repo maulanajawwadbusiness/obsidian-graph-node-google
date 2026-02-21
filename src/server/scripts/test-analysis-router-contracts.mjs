@@ -18,6 +18,7 @@ function readRepoFile(relativePath) {
 async function run() {
   const routerSource = readRepoFile("src/ai/analysisRouter.ts");
   const paperAnalyzerSource = readRepoFile("src/ai/paperAnalyzer.ts");
+  const nodeBindingSource = readRepoFile("src/document/nodeBinding.ts");
 
   assert(
     routerSource.includes("resolveAnalyzeRequestMode"),
@@ -38,6 +39,18 @@ async function run() {
   assert(
     paperAnalyzerSource.includes("mode: 'classic'"),
     "[analysis-router-contracts] paperAnalyzer must send classic mode explicitly"
+  );
+  assert(
+    nodeBindingSource.includes("from '../ai/analysisRouter'"),
+    "[analysis-router-contracts] nodeBinding must consume analysis router"
+  );
+  assert(
+    !nodeBindingSource.includes("from '../ai/paperAnalyzer'"),
+    "[analysis-router-contracts] nodeBinding must not call paperAnalyzer directly"
+  );
+  assert(
+    nodeBindingSource.includes("runAnalysis({ text: documentText, nodeCount })"),
+    "[analysis-router-contracts] nodeBinding must call runAnalysis"
   );
 
   console.log("[analysis-router-contracts] router seam invariants valid");

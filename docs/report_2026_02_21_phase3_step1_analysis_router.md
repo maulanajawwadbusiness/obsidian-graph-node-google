@@ -16,3 +16,14 @@
 - Skeleton path is routed through `analyzeDocumentToSkeletonV1(...)` only from router.
 - Router maps skeleton gate failures to typed errors (`MODE_DISABLED`, `mode_guard_blocked`).
 - No graph/topology wiring changes in this step.
+
+## Runtime Call-Site Rule
+- Runtime call-site switched to router at `src/document/nodeBinding.ts`.
+- `nodeBinding` now handles tagged result union:
+  - `kind: "classic"` -> existing binding path
+  - `kind: "error"` or non-classic -> fail closed, classic flow remains safe
+- Direct runtime import of `paperAnalyzer` from `nodeBinding` was removed.
+
+## Phase 3 Follow-up Seam
+- Next step can consume `kind: "skeleton_v1"` inside binding/topology flow.
+- This step intentionally leaves that branch unused in runtime behavior.

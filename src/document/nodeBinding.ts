@@ -10,7 +10,7 @@ import { springEdgesToPhysicsLinks } from '../graph/springToPhysics';
 import type { DirectedLink } from '../graph/topologyTypes';
 import { buildSavedInterfaceDedupeKey, type SavedInterfaceRecordV1 } from '../store/savedInterfacesStore';
 
-import { analyzeDocument } from '../ai/paperAnalyzer';
+import { runAnalysis } from '../ai/analysisRouter';
 
 function countWords(text: string): number {
   const trimmed = text.trim();
@@ -73,7 +73,14 @@ export async function applyAnalysisToNodes(
     }
 
     // Call AI Analyzer
-    const { points, links, paperTitle } = await analyzeDocument(documentText, { nodeCount });
+    const analysis = await runAnalysis({ text: documentText, nodeCount });
+    if (analysis.kind === 'error') {
+      throw new Error(analysis.error.code || analysis.error.message || 'analysis failed');
+    }
+    if (analysis.kind !== 'classic') {
+      throw new Error('analysis mode unavailable');
+    }
+    const { points, links, paperTitle } = analysis.json;
 
     // Gate check
     const currentDocId = getCurrentDocId();

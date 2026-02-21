@@ -1,0 +1,30 @@
+﻿{
+  "nodes": [
+    { "role": "claim", "id": "g12-claim", "label": "Global Claim", "summary": "Umbrella claim for the full argument graph.", "pressure": 0.94, "confidence": 0.86 },
+    { "role": "evidence", "id": "g12-e1", "label": "Evidence E1", "summary": "First supporting evidence stream.", "pressure": 0.86, "confidence": 0.82 },
+    { "role": "evidence", "id": "g12-e2", "label": "Evidence E2", "summary": "Second supporting evidence stream.", "pressure": 0.81, "confidence": 0.79 },
+    { "role": "method", "id": "g12-m1", "label": "Method M1", "summary": "Primary method producing evidence quality.", "pressure": 0.8, "confidence": 0.78 },
+    { "role": "method", "id": "g12-m2", "label": "Method M2", "summary": "Secondary method for robustness and transfer.", "pressure": 0.74, "confidence": 0.72 },
+    { "role": "assumption", "id": "g12-a1", "label": "Assumption A1", "summary": "Semantic continuity assumption.", "pressure": 0.63, "confidence": 0.61 },
+    { "role": "assumption", "id": "g12-a2", "label": "Assumption A2", "summary": "Sampling representativeness assumption.", "pressure": 0.61, "confidence": 0.59 },
+    { "role": "limitation", "id": "g12-l1", "label": "Limitation L1", "summary": "Known external validity limitation.", "pressure": 0.67, "confidence": 0.63 },
+    { "role": "limitation", "id": "g12-l2", "label": "Limitation L2", "summary": "Measurement compression limitation.", "pressure": 0.66, "confidence": 0.62 },
+    { "role": "context", "id": "g12-c1", "label": "Context C1", "summary": "Institutional policy context.", "pressure": 0.7, "confidence": 0.67 },
+    { "role": "context", "id": "g12-c2", "label": "Context C2", "summary": "Alternative paradigm context.", "pressure": 0.65, "confidence": 0.64 },
+    { "role": "evidence", "id": "g12-e3", "label": "Evidence E3", "summary": "Residual evidence stream for uncertainty.", "pressure": 0.56, "confidence": 0.58 }
+  ],
+  "edges": [
+    { "from": "g12-e1", "to": "g12-claim", "type": "supports", "weight": 0.86, "rationale": "Evidence stream E1 supports global claim." },
+    { "from": "g12-e2", "to": "g12-claim", "type": "supports", "weight": 0.83, "rationale": "Evidence stream E2 supports global claim." },
+    { "from": "g12-m1", "to": "g12-e1", "type": "produces", "weight": 0.79, "rationale": "Method M1 produces E1 quality." },
+    { "from": "g12-m2", "to": "g12-e2", "type": "produces", "weight": 0.74, "rationale": "Method M2 produces E2 quality." },
+    { "from": "g12-a1", "to": "g12-m1", "type": "depends_on", "weight": 0.62, "rationale": "M1 depends on semantic continuity." },
+    { "from": "g12-a2", "to": "g12-m2", "type": "depends_on", "weight": 0.59, "rationale": "M2 depends on representative sampling." },
+    { "from": "g12-l1", "to": "g12-claim", "type": "limits", "weight": 0.68, "rationale": "L1 limits the claim scope." },
+    { "from": "g12-l2", "to": "g12-m1", "type": "limits", "weight": 0.64, "rationale": "L2 limits measurement fidelity." },
+    { "from": "g12-c2", "to": "g12-claim", "type": "challenges", "weight": 0.56, "rationale": "C2 challenges interpretation of the claim." },
+    { "from": "g12-m1", "to": "g12-claim", "type": "operationalizes", "weight": 0.72, "rationale": "M1 operationalizes the claim for measurement." },
+    { "from": "g12-c1", "to": "g12-m2", "type": "depends_on", "weight": 0.51, "rationale": "Institutional context constrains M2 deployment." },
+    { "from": "g12-e3", "to": "g12-claim", "type": "challenges", "weight": 0.45, "rationale": "Residual evidence adds uncertainty pressure on claim." }
+  ]
+}

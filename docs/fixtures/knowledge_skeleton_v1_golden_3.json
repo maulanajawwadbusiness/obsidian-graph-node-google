@@ -1,0 +1,11 @@
+﻿{
+  "nodes": [
+    { "role": "claim", "id": "g3-claim", "label": "Core Claim", "summary": "The central claim of the document.", "pressure": 0.9, "confidence": 0.82 },
+    { "role": "evidence", "id": "g3-evidence", "label": "Key Evidence", "summary": "Primary supporting evidence for the claim.", "pressure": 0.78, "confidence": 0.8 },
+    { "role": "limitation", "id": "g3-limitation", "label": "Main Limitation", "summary": "Primary limitation constraining claim scope.", "pressure": 0.66, "confidence": 0.69 }
+  ],
+  "edges": [
+    { "from": "g3-evidence", "to": "g3-claim", "type": "supports", "weight": 0.87, "rationale": "Evidence directly supports the claim." },
+    { "from": "g3-limitation", "to": "g3-claim", "type": "limits", "weight": 0.72, "rationale": "Limitation narrows claim applicability." }
+  ]
+}

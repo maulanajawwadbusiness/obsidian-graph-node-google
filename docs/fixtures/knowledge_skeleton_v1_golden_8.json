@@ -1,0 +1,22 @@
+﻿{
+  "nodes": [
+    { "role": "claim", "id": "g8-claim", "label": "Primary Thesis", "summary": "Main thesis the paper defends.", "pressure": 0.91, "confidence": 0.83 },
+    { "role": "evidence", "id": "g8-evidence-a", "label": "Dataset Evidence", "summary": "Empirical result backing the thesis.", "pressure": 0.82, "confidence": 0.79 },
+    { "role": "method", "id": "g8-method", "label": "Validation Method", "summary": "Method producing reliability of evidence.", "pressure": 0.8, "confidence": 0.77 },
+    { "role": "assumption", "id": "g8-assumption", "label": "Context Assumption", "summary": "Assumption required for method transfer.", "pressure": 0.62, "confidence": 0.58 },
+    { "role": "limitation", "id": "g8-limitation", "label": "Boundary Risk", "summary": "Known limitation for external validity.", "pressure": 0.65, "confidence": 0.61 },
+    { "role": "context", "id": "g8-context-a", "label": "Institutional Context", "summary": "Institutional constraints shaping deployment.", "pressure": 0.69, "confidence": 0.66 },
+    { "role": "context", "id": "g8-context-b", "label": "Competing Frame", "summary": "Alternative framework challenging interpretation.", "pressure": 0.63, "confidence": 0.62 },
+    { "role": "evidence", "id": "g8-evidence-b", "label": "Residual Signal", "summary": "Residual evidence adding uncertainty pressure.", "pressure": 0.57, "confidence": 0.6 }
+  ],
+  "edges": [
+    { "from": "g8-evidence-a", "to": "g8-claim", "type": "supports", "weight": 0.85, "rationale": "Empirical outcome supports thesis." },
+    { "from": "g8-method", "to": "g8-evidence-a", "type": "produces", "weight": 0.81, "rationale": "Method produces calibrated evidence." },
+    { "from": "g8-assumption", "to": "g8-method", "type": "depends_on", "weight": 0.64, "rationale": "Method depends on transfer assumption." },
+    { "from": "g8-limitation", "to": "g8-claim", "type": "limits", "weight": 0.68, "rationale": "Limitation constrains thesis reach." },
+    { "from": "g8-context-b", "to": "g8-claim", "type": "challenges", "weight": 0.55, "rationale": "Competing frame challenges thesis interpretation." },
+    { "from": "g8-method", "to": "g8-claim", "type": "operationalizes", "weight": 0.76, "rationale": "Method operationalizes the thesis into measurable structure." },
+    { "from": "g8-context-a", "to": "g8-method", "type": "depends_on", "weight": 0.5, "rationale": "Institutional constraints shape method usage." },
+    { "from": "g8-evidence-b", "to": "g8-claim", "type": "challenges", "weight": 0.43, "rationale": "Residual signal weakly challenges certainty." }
+  ]
+}

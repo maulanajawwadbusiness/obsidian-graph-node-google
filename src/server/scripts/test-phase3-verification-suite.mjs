@@ -24,15 +24,19 @@ function runNpmScript(scriptName) {
 }
 
 async function run() {
+  let passCount = 0;
   for (const scriptName of PHASE3_SCRIPTS) {
     console.log(`[test:phase3] running ${scriptName}`);
     const code = await runNpmScript(scriptName);
     if (code !== 0) {
       console.error(`[test:phase3] failed at ${scriptName} with exit code ${code}`);
+      console.error(`[test:phase3] summary: passed=${passCount} failed=1 total=${PHASE3_SCRIPTS.length}`);
       process.exitCode = code;
       return;
     }
+    passCount += 1;
   }
+  console.log(`[test:phase3] summary: passed=${passCount} failed=0 total=${PHASE3_SCRIPTS.length}`);
   console.log("[test:phase3] all phase3 verification contracts passed");
 }
 

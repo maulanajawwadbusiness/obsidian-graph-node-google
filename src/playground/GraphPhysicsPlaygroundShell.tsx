@@ -1168,13 +1168,19 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
         if (pendingLoadInterface) return;
         if (isRestoringRef.current) return;
         if (documentContext.state.aiActivity) return;
-        if (!engineRef.current || engineRef.current.nodes.size === 0) return;
+        if (!engineRef.current) return;
+        const requestMode = resolveAnalyzeRequestMode();
+        if (engineRef.current.nodes.size === 0 && requestMode !== 'skeleton_v1') return;
 
         const setAIErrorWithAuthLog = (message: string | null) => {
             if (message && message.includes('Please log in')) {
                 console.log('[graph] analyze_failed status=401 (auth)');
             }
             documentContext.setAIError(message);
+        };
+        const shouldDelayPendingConsume = requestMode === 'skeleton_v1';
+        const consumePendingAnalysis = () => {
+            onPendingAnalysisConsumed();
         };
 
         if (pendingAnalysisPayload.kind === 'text') {
@@ -1198,7 +1204,9 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
             currentPendingDocIdRef.current = docId;
 
             console.log(`[graph] consuming_pending_analysis kind=text len=${text.length}`);
-            onPendingAnalysisConsumed();
+            if (!shouldDelayPendingConsume) {
+                consumePendingAnalysis();
+            }
             documentContext.setDocument(syntheticDocument);
             documentContext.setInferredTitle(inferredTitle);
 
@@ -1228,6 +1236,9 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
                     ok = false;
                     console.error('[graph] pending analysis failed', error);
                 } finally {
+                    if (shouldDelayPendingConsume) {
+                        consumePendingAnalysis();
+                    }
                     console.log(`[graph] pending_analysis_done ok=${ok}`);
                 }
             })();
@@ -1240,7 +1251,9 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
         hasConsumedPendingRef.current = true;
         const file = pendingAnalysisPayload.file;
         console.log(`[graph] consuming_pending_analysis kind=file name=${file.name} size=${file.size}`);
-        onPendingAnalysisConsumed();
+        if (!shouldDelayPendingConsume) {
+            consumePendingAnalysis();
+        }
 
         void (async () => {
             let ok = true;
@@ -1253,6 +1266,9 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
                 console.error('[graph] pending_file_parse_failed', error);
                 documentContext.setAIError('Could not parse file. Please try another file.');
                 documentContext.setAIActivity(false);
+                if (shouldDelayPendingConsume) {
+                    consumePendingAnalysis();
+                }
                 console.log(`[graph] pending_analysis_done ok=${ok}`);
                 return;
             }
@@ -1262,6 +1278,9 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
                 console.log('[graph] pending_file_parse_failed reason=no_document');
                 documentContext.setAIError('Could not parse file. Please try another file.');
                 documentContext.setAIActivity(false);
+                if (shouldDelayPendingConsume) {
+                    consumePendingAnalysis();
+                }
                 console.log(`[graph] pending_analysis_done ok=${ok}`);
                 return;
             }
@@ -1272,6 +1291,9 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
                 console.log('[graph] pending_file_empty_text');
                 documentContext.setAIError('Could not extract text from file (scanned PDF or empty).');
                 documentContext.setAIActivity(false);
+                if (shouldDelayPendingConsume) {
+                    consumePendingAnalysis();
+                }
                 console.log(`[graph] pending_analysis_done ok=${ok}`);
                 return;
             }
@@ -1305,6 +1327,9 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
                 console.error('[graph] pending_file_analyze_failed', error);
             } finally {
                 documentContext.setAIActivity(false);
+                if (shouldDelayPendingConsume) {
+                    consumePendingAnalysis();
+                }
                 console.log(`[graph] pending_analysis_done ok=${ok}`);
             }
         })();

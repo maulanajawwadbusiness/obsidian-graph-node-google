@@ -92,6 +92,18 @@ async function run() {
   selfLoop.edges[0].to = selfLoop.edges[0].from;
   assertInvalid(selfLoop, "edge_self_loop");
 
+  const orphanGraph = clone(minimal);
+  orphanGraph.edges = [
+    {
+      from: "n-method",
+      to: "n-claim",
+      type: "operationalizes",
+      weight: 0.82,
+      rationale: "single edge leaves one node disconnected"
+    }
+  ];
+  assertInvalid(orphanGraph, "orphan_nodes_excessive");
+
   console.log("[knowledge-skeleton-contracts] fixtures valid");
   console.log("[knowledge-skeleton-contracts] invalid matrix valid");
   console.log("[knowledge-skeleton-contracts] done");

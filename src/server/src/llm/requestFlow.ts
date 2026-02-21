@@ -14,7 +14,8 @@ export type ApiErrorCode =
   | "upstream_error"
   | "timeout"
   | "parse_error"
-  | "structured_output_invalid";
+  | "structured_output_invalid"
+  | "skeleton_output_invalid";
 
 export type ApiError = {
   ok: false;
@@ -61,6 +62,7 @@ export function mapTerminationReason(statusCode: number, code?: string) {
   if (statusCode === 429) return "rate_limited";
   if (statusCode === 400 || statusCode === 413) return "validation_error";
   if (statusCode === 504 || code === "timeout") return "timeout";
+  if (code === "skeleton_output_invalid") return "skeleton_output_invalid";
   if (code === "structured_output_invalid") return "structured_output_invalid";
   if (code === "upstream_error" || statusCode >= 500) return "upstream_error";
   if (statusCode === 200) return "success";

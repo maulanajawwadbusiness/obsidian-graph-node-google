@@ -20,7 +20,8 @@ export type ApiErrorCode =
   | "upstream_error"
   | "timeout"
   | "parse_error"
-  | "structured_output_invalid";
+  | "structured_output_invalid"
+  | "skeleton_output_invalid";
 
 export type ApiError = {
   ok: false;

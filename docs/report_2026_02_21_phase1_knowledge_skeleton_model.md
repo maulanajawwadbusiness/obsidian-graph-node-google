@@ -63,7 +63,7 @@ Global constraints:
   - label `80`
   - summary `240`
   - rationale `180`
-- orphan policy: at most one orphan node
+- orphan policy: zero orphan nodes (every node must have degree >= 1)
 
 ## Validator Layers
 

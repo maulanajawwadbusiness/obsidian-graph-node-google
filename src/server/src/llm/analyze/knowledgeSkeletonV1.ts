@@ -24,7 +24,8 @@ export const SKELETON_V1_LIMITS = {
   nodesMax: 12,
   maxLabelChars: 80,
   maxSummaryChars: 240,
-  maxRationaleChars: 180
+  maxRationaleChars: 180,
+  maxRawModelJsonChars: 12000
 } as const;
 
 export type SkeletonNodeV1 = {
@@ -58,6 +59,49 @@ export type KnowledgeSkeletonValidationError = {
 export type KnowledgeSkeletonValidationResult =
   | { ok: true; value: KnowledgeSkeletonV1 }
   | { ok: false; errors: KnowledgeSkeletonValidationError[] };
+
+export function buildKnowledgeSkeletonV1JsonSchema(): object {
+  return {
+    type: "object",
+    properties: {
+      nodes: {
+        type: "array",
+        minItems: SKELETON_V1_LIMITS.nodesMin,
+        maxItems: SKELETON_V1_LIMITS.nodesMax,
+        items: {
+          type: "object",
+          properties: {
+            role: { type: "string", enum: [...SKELETON_NODE_ROLES] },
+            id: { type: "string" },
+            label: { type: "string", maxLength: SKELETON_V1_LIMITS.maxLabelChars },
+            summary: { type: "string", maxLength: SKELETON_V1_LIMITS.maxSummaryChars },
+            pressure: { type: "number", minimum: 0, maximum: 1 },
+            confidence: { type: "number", minimum: 0, maximum: 1 }
+          },
+          required: ["role", "id", "label", "summary", "pressure", "confidence"],
+          additionalProperties: false
+        }
+      },
+      edges: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            from: { type: "string" },
+            to: { type: "string" },
+            type: { type: "string", enum: [...SKELETON_EDGE_TYPES] },
+            weight: { type: "number", minimum: 0, maximum: 1 },
+            rationale: { type: "string", maxLength: SKELETON_V1_LIMITS.maxRationaleChars }
+          },
+          required: ["from", "to", "type", "weight", "rationale"],
+          additionalProperties: false
+        }
+      }
+    },
+    required: ["nodes", "edges"],
+    additionalProperties: false
+  };
+}
 
 export function clamp01(value: number): number {
   if (!Number.isFinite(value)) return 0;
@@ -344,8 +388,8 @@ export function validateKnowledgeSkeletonV1Semantic(
   for (const degree of degreeById.values()) {
     if (degree <= 0) orphanCount += 1;
   }
-  if (orphanCount > 1) {
-    errors.push(createValidationError("orphan_nodes_excessive", "at most one orphan node is allowed", "edges"));
+  if (orphanCount > 0) {
+    errors.push(createValidationError("orphan_nodes_excessive", "orphan nodes are not allowed", "edges"));
   }
 
   if (errors.length > 0) {

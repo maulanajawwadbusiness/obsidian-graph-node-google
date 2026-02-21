@@ -3,6 +3,8 @@ import type express from "express";
 import { buildAnalyzeJsonSchema, validateAnalyzeJson } from "../llm/analyze/schema";
 import { runOpenrouterAnalyze } from "../llm/analyze/openrouterAnalyze";
 import { buildStructuredAnalyzeInput } from "../llm/analyze/prompt";
+import { analyzeDocumentToSkeletonV1 } from "../llm/analyze/skeletonAnalyze";
+import { buildSkeletonAnalyzeInput } from "../llm/analyze/skeletonPrompt";
 import { buildAuditState } from "../llm/auditState";
 import { checkCaps, computeWordCount, recordUsage } from "../llm/betaCaps";
 import {
@@ -28,6 +30,7 @@ const ANALYZE_TOTAL_TIMEOUT_MS = 55000;
 const ANALYZE_OPENROUTER_RETRY_TIMEOUT_MS = 15000;
 const ANALYZE_OPENROUTER_FIRST_PASS_TIMEOUT_MS =
   ANALYZE_TOTAL_TIMEOUT_MS - ANALYZE_OPENROUTER_RETRY_TIMEOUT_MS;
+const SKELETON_REPAIR_TIMEOUT_MS = 12000;
 const KEEPALIVE_INTERVAL_MS = 15000;
 
 export function registerLlmAnalyzeRoute(app: express.Express, deps: LlmAnalyzeRouteDeps) {
@@ -192,6 +195,7 @@ app.post("/api/llm/paper-analyze", deps.requireAuth, async (req, res) => {
     return;
   }
   const validation = validationResult;
+  const requestedMode = validation.mode;
 
   if (!deps.acquireLlmSlot(userId)) {
     auditHttpStatus = 429;
@@ -297,11 +301,17 @@ app.post("/api/llm/paper-analyze", deps.requireAuth, async (req, res) => {
       console.log("[llm] analyze forced_provider=openai reason=analyze_requires_strict_json");
     }
 
-    const analyzeInput = buildStructuredAnalyzeInput({
-      text: validation.text,
-      nodeCount: validation.nodeCount,
-      lang: validation.lang
-    });
+    const analyzeInput =
+      requestedMode === "skeleton_v1"
+        ? buildSkeletonAnalyzeInput({
+            text: validation.text,
+            lang: validation.lang
+          })
+        : buildStructuredAnalyzeInput({
+            text: validation.text,
+            nodeCount: validation.nodeCount,
+            lang: validation.lang
+          });
     const usageTracker = initUsageTracker({
       provider: provider.name,
       logical_model: validation.model,
@@ -376,13 +386,71 @@ app.post("/api/llm/paper-analyze", deps.requireAuth, async (req, res) => {
     }
 
     const analyzeSchema = buildAnalyzeJsonSchema(validation.nodeCount);
-    let resultJson: unknown = null;
+    let resultPayload: unknown = null;
     let usage: { input_tokens?: number; output_tokens?: number } | undefined;
     let validationResult: "ok" | "retry_ok" | "failed" = "ok";
 
     startSse();
 
-    if (provider.name === "openrouter" && structuredOutputMode === "openrouter_prompt_json") {
+    if (requestedMode === "skeleton_v1") {
+      structuredOutputMode =
+        provider.name === "openrouter" ? "openrouter_prompt_json_skeleton" : "openai_native_skeleton";
+      const skeletonResult = await analyzeDocumentToSkeletonV1({
+        provider,
+        model: validation.model,
+        text: validation.text,
+        lang: validation.lang,
+        timeoutMs: ANALYZE_TOTAL_TIMEOUT_MS,
+        repairTimeoutMs: SKELETON_REPAIR_TIMEOUT_MS
+      });
+      if (skeletonResult.ok === false) {
+        const status = skeletonResult.code === "skeleton_output_invalid" ? 502 : 502;
+        const errorCode: ApiErrorCode =
+          skeletonResult.code === "skeleton_output_invalid"
+            ? "skeleton_output_invalid"
+            : (skeletonResult.code as ApiErrorCode);
+        auditInputTokens = inputTokensEstimate;
+        auditOutputTokens = 0;
+        auditTotalTokens = inputTokensEstimate;
+        auditUsageSource = "estimate_wordcount";
+        auditProviderUsagePresent = false;
+        auditCostIdr = 0;
+        auditChargeStatus = "skipped";
+        auditHttpStatus = status;
+        auditTerminationReason = skeletonResult.code;
+        await writeAudit();
+        sendSseError(status, {
+          ok: false,
+          request_id: requestId,
+          code: errorCode,
+          error: skeletonResult.error,
+          mode: "skeleton_v1",
+          validation_errors: skeletonResult.errors || []
+        });
+        deps.logLlmRequest({
+          request_id: requestId,
+          endpoint: "/api/llm/paper-analyze",
+          user_id: userId,
+          model: validation.model,
+          provider_model_id: providerModelId,
+          input_chars: validation.text.length,
+          output_chars: 0,
+          duration_ms: Date.now() - startedAt,
+          status_code: status,
+          termination_reason: skeletonResult.code,
+          rupiah_cost: null,
+          rupiah_balance_before: null,
+          rupiah_balance_after: null,
+          structured_output_mode: structuredOutputMode,
+          validation_result: "failed"
+        });
+        return;
+      }
+      resultPayload = skeletonResult.value;
+      usage = skeletonResult.usage;
+      providerUsage = normalizeUsage(usage) || null;
+      validationResult = skeletonResult.validation_result;
+    } else if (provider.name === "openrouter" && structuredOutputMode === "openrouter_prompt_json") {
       const openrouterResult = await runOpenrouterAnalyze({
         provider,
         model: validation.model,
@@ -469,7 +537,7 @@ app.post("/api/llm/paper-analyze", deps.requireAuth, async (req, res) => {
         return;
       }
 
-      resultJson = openrouterResult.json;
+      resultPayload = openrouterResult.json;
       usage = openrouterResult.usage;
       providerUsage = normalizeUsage(usage) || null;
       validationResult = openrouterResult.validation_result;
@@ -558,14 +626,14 @@ app.post("/api/llm/paper-analyze", deps.requireAuth, async (req, res) => {
         return;
       }
 
-      resultJson = validationCheck.value;
+      resultPayload = validationCheck.value;
       usage = result.usage;
       providerUsage = normalizeUsage(result.usage) || null;
       validationResult = "ok";
     }
 
-    const outputTextLength = JSON.stringify(resultJson || {}).length;
-    usageTracker.recordOutputText(JSON.stringify(resultJson || {}));
+    const outputTextLength = JSON.stringify(resultPayload || {}).length;
+    usageTracker.recordOutputText(JSON.stringify(resultPayload || {}));
     usageRecord = await usageTracker.finalize({ providerUsage });
     auditUsageSource = usageRecord.source;
     auditInputTokens = usageRecord.input_tokens;
@@ -659,8 +727,12 @@ app.post("/api/llm/paper-analyze", deps.requireAuth, async (req, res) => {
       console.warn(`[caps] record_failed request_id=${requestId} endpoint=/api/llm/paper-analyze error=${String(error)}`);
     }
 
-    sendSseResult({ ok: true, request_id: requestId, json: resultJson as any });
-    const outputSize = JSON.stringify(resultJson || {}).length;
+    if (requestedMode === "skeleton_v1") {
+      sendSseResult({ ok: true, request_id: requestId, mode: "skeleton_v1", skeleton: resultPayload as any });
+    } else {
+      sendSseResult({ ok: true, request_id: requestId, json: resultPayload as any });
+    }
+    const outputSize = JSON.stringify(resultPayload || {}).length;
     auditHttpStatus = 200;
     auditTerminationReason = "success";
     await writeAudit();

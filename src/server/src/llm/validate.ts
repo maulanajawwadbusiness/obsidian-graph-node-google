@@ -11,6 +11,7 @@ export type ValidationError = {
 export type PaperAnalyzeInput = {
   text: string;
   nodeCount: number;
+  mode: "classic" | "skeleton_v1";
   model: LogicalModel;
   lang?: "id" | "en";
   submitted_word_count?: number;
@@ -77,16 +78,25 @@ export function validatePaperAnalyze(body: any): PaperAnalyzeInput | ValidationE
     return { ok: false, status: 413, code: "too_large", error: "text too large" };
   }
 
+  let mode: "classic" | "skeleton_v1" = "classic";
+  if (body.mode !== undefined) {
+    if (!isString(body.mode)) return invalidType("mode");
+    if (body.mode !== "classic" && body.mode !== "skeleton_v1") return invalidType("mode");
+    mode = body.mode;
+  }
+
   const nodeCountRaw = body.nodeCount ?? LLM_LIMITS.paperAnalyzeNodeCountMin;
   const nodeCount = Number(nodeCountRaw);
-  if (!Number.isFinite(nodeCount)) return invalidType("nodeCount");
-  if (nodeCount < LLM_LIMITS.paperAnalyzeNodeCountMin || nodeCount > LLM_LIMITS.paperAnalyzeNodeCountMax) {
-    return {
-      ok: false,
-      status: 400,
-      code: "bad_request",
-      error: "nodeCount out of range"
-    };
+  if (mode === "classic") {
+    if (!Number.isFinite(nodeCount)) return invalidType("nodeCount");
+    if (nodeCount < LLM_LIMITS.paperAnalyzeNodeCountMin || nodeCount > LLM_LIMITS.paperAnalyzeNodeCountMax) {
+      return {
+        ok: false,
+        status: 400,
+        code: "bad_request",
+        error: "nodeCount out of range"
+      };
+    }
   }
 
   const resolvedModel = resolveModel(body.model, DEFAULT_LOGICAL_MODELS.analyze);
@@ -107,7 +117,8 @@ export function validatePaperAnalyze(body: any): PaperAnalyzeInput | ValidationE
 
   return {
     text: body.text,
-    nodeCount,
+    nodeCount: Number.isFinite(nodeCount) ? nodeCount : LLM_LIMITS.paperAnalyzeNodeCountMin,
+    mode,
     model: resolvedModel,
     lang,
     submitted_word_count: submittedWordCount

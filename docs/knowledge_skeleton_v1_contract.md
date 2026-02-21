@@ -57,6 +57,7 @@ Phase 1 scope is schema and validation foundation only. It is not wired into run
 - all node ids must be unique
 - all edges must reference existing node ids
 - no self loops (`from !== to`)
+- no orphan nodes (every node must have degree >= 1)
 - readability caps:
   - label max chars: `80`
   - summary max chars: `240`

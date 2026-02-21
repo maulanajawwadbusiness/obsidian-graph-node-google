@@ -1,0 +1,78 @@
+﻿{
+  "nodes": [
+    {
+      "role": "claim",
+      "id": "n1",
+      "label": "Islamic Happiness Is Action-Coupled",
+      "summary": "The text claims happiness is anchored in ethical practice rather than mood alone.",
+      "pressure": 0.9,
+      "confidence": 0.8
+    },
+    {
+      "role": "evidence",
+      "id": "n2",
+      "label": "Survey and Interview Convergence",
+      "summary": "Quantitative and qualitative findings align on behavior-linked well-being markers.",
+      "pressure": 0.72,
+      "confidence": 0.74
+    },
+    {
+      "role": "method",
+      "id": "n3",
+      "label": "Psychometric Validation Pipeline",
+      "summary": "The method applies calibration, item fit checks, and reliability thresholds.",
+      "pressure": 0.78,
+      "confidence": 0.77
+    },
+    {
+      "role": "assumption",
+      "id": "n4",
+      "label": "Cross-Context Semantic Stability",
+      "summary": "The design assumes key terms keep meaning across respondent backgrounds.",
+      "pressure": 0.61,
+      "confidence": 0.58
+    },
+    {
+      "role": "limitation",
+      "id": "n5",
+      "label": "Item Language Narrowness",
+      "summary": "Some prompts may underrepresent nuanced spiritual experiences.",
+      "pressure": 0.64,
+      "confidence": 0.63
+    },
+    {
+      "role": "context",
+      "id": "n6",
+      "label": "Positive Psychology Contrast",
+      "summary": "The paper positions itself against strictly secular happiness frameworks.",
+      "pressure": 0.69,
+      "confidence": 0.66
+    },
+    {
+      "role": "evidence",
+      "id": "n7",
+      "label": "Scale Performance Indicators",
+      "summary": "Fit statistics and separation values indicate acceptable instrument behavior.",
+      "pressure": 0.75,
+      "confidence": 0.81
+    },
+    {
+      "role": "context",
+      "id": "n8",
+      "label": "Institutional Adoption Pressure",
+      "summary": "Education institutions require concise metrics for policy and program evaluation.",
+      "pressure": 0.7,
+      "confidence": 0.72
+    }
+  ],
+  "edges": [
+    { "from": "n2", "to": "n1", "type": "supports", "weight": 0.82, "rationale": "Empirical alignment reinforces the central claim." },
+    { "from": "n3", "to": "n1", "type": "operationalizes", "weight": 0.88, "rationale": "Method converts conceptual claims into measurable structure." },
+    { "from": "n4", "to": "n3", "type": "depends_on", "weight": 0.62, "rationale": "Validation quality depends on semantic stability assumptions." },
+    { "from": "n5", "to": "n1", "type": "limits", "weight": 0.66, "rationale": "Question wording constraints reduce representational breadth." },
+    { "from": "n6", "to": "n1", "type": "challenges", "weight": 0.57, "rationale": "Contextual framing contests secular-only interpretations." },
+    { "from": "n7", "to": "n3", "type": "supports", "weight": 0.84, "rationale": "Statistical signals strengthen method credibility." },
+    { "from": "n8", "to": "n3", "type": "produces", "weight": 0.6, "rationale": "Institutional demand drives practical methodological refinement." },
+    { "from": "n8", "to": "n1", "type": "depends_on", "weight": 0.49, "rationale": "Policy use relies on the claim being quantifiable." }
+  ]
+}

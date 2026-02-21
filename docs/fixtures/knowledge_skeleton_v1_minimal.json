@@ -1,0 +1,44 @@
+﻿{
+  "nodes": [
+    {
+      "role": "claim",
+      "id": "n-claim",
+      "label": "Religious Ethics Can Be Measured",
+      "summary": "The paper argues that happiness in Islam can be operationalized as measurable indicators.",
+      "pressure": 0.84,
+      "confidence": 0.71
+    },
+    {
+      "role": "method",
+      "id": "n-method",
+      "label": "Rasch-Based Instrument Calibration",
+      "summary": "The study calibrates questionnaire items with Rasch to stabilize latent trait estimates.",
+      "pressure": 0.73,
+      "confidence": 0.76
+    },
+    {
+      "role": "limitation",
+      "id": "n-limit",
+      "label": "Construct Compression Risk",
+      "summary": "Reducing spiritual states to fixed scales can flatten contextual moral nuance.",
+      "pressure": 0.65,
+      "confidence": 0.62
+    }
+  ],
+  "edges": [
+    {
+      "from": "n-method",
+      "to": "n-claim",
+      "type": "operationalizes",
+      "weight": 0.82,
+      "rationale": "Measurement machinery turns the abstract thesis into testable indicators."
+    },
+    {
+      "from": "n-limit",
+      "to": "n-claim",
+      "type": "limits",
+      "weight": 0.67,
+      "rationale": "Formalization introduces abstraction loss that narrows interpretive validity."
+    }
+  ]
+}

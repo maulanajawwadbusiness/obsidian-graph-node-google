@@ -1,0 +1,30 @@
+﻿{
+  "nodes": [
+    { "role": "claim", "id": "n01", "label": "Claim 01", "summary": "Core thesis statement for scaffold stability.", "pressure": 0.95, "confidence": 0.9 },
+    { "role": "evidence", "id": "n02", "label": "Evidence 02", "summary": "Empirical signal that supports major thesis claims.", "pressure": 0.88, "confidence": 0.83 },
+    { "role": "method", "id": "n03", "label": "Method 03", "summary": "Methodological frame used to transform claims into measurements.", "pressure": 0.86, "confidence": 0.82 },
+    { "role": "assumption", "id": "n04", "label": "Assumption 04", "summary": "Assumed stability conditions for interpretation consistency.", "pressure": 0.72, "confidence": 0.6 },
+    { "role": "limitation", "id": "n05", "label": "Limitation 05", "summary": "Known boundary where model simplification may break.", "pressure": 0.68, "confidence": 0.64 },
+    { "role": "context", "id": "n06", "label": "Context 06", "summary": "Institutional and social setting that constrains interpretation.", "pressure": 0.7, "confidence": 0.66 },
+    { "role": "evidence", "id": "n07", "label": "Evidence 07", "summary": "Auxiliary evidence with moderate corroboration strength.", "pressure": 0.63, "confidence": 0.71 },
+    { "role": "method", "id": "n08", "label": "Method 08", "summary": "Secondary operational procedure for robustness checking.", "pressure": 0.6, "confidence": 0.67 },
+    { "role": "assumption", "id": "n09", "label": "Assumption 09", "summary": "Background prior required for inference continuity.", "pressure": 0.55, "confidence": 0.58 },
+    { "role": "limitation", "id": "n10", "label": "Limitation 10", "summary": "Edge case where external validity may degrade.", "pressure": 0.59, "confidence": 0.55 },
+    { "role": "context", "id": "n11", "label": "Context 11", "summary": "Environmental factor driving deployment tradeoffs.", "pressure": 0.57, "confidence": 0.6 },
+    { "role": "evidence", "id": "n12", "label": "Evidence 12", "summary": "Residual evidence used to challenge weak links.", "pressure": 0.52, "confidence": 0.57 }
+  ],
+  "edges": [
+    { "from": "n02", "to": "n01", "type": "supports", "weight": 0.9, "rationale": "Primary evidence directly reinforces the thesis." },
+    { "from": "n03", "to": "n01", "type": "operationalizes", "weight": 0.87, "rationale": "Method creates executable structure for the claim." },
+    { "from": "n04", "to": "n03", "type": "depends_on", "weight": 0.66, "rationale": "Method quality depends on this assumption." },
+    { "from": "n05", "to": "n01", "type": "limits", "weight": 0.61, "rationale": "Known boundary conditions constrain claim strength." },
+    { "from": "n06", "to": "n01", "type": "depends_on", "weight": 0.54, "rationale": "Interpretation must account for contextual environment." },
+    { "from": "n07", "to": "n02", "type": "supports", "weight": 0.58, "rationale": "Supplementary evidence backs primary evidence quality." },
+    { "from": "n08", "to": "n03", "type": "produces", "weight": 0.63, "rationale": "Secondary method produces calibration refinements." },
+    { "from": "n09", "to": "n08", "type": "depends_on", "weight": 0.55, "rationale": "Secondary procedure assumes stable priors." },
+    { "from": "n10", "to": "n03", "type": "challenges", "weight": 0.49, "rationale": "Edge cases challenge method universality." },
+    { "from": "n11", "to": "n08", "type": "limits", "weight": 0.46, "rationale": "Deployment constraints limit method applicability." },
+    { "from": "n12", "to": "n02", "type": "challenges", "weight": 0.41, "rationale": "Residual evidence exposes uncertainty in support strength." },
+    { "from": "n12", "to": "n01", "type": "challenges", "weight": 0.44, "rationale": "Residual evidence pressures the central claim directly." }
+  ]
+}

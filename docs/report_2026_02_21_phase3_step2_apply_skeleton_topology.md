@@ -34,3 +34,33 @@
 - `buildTopologyFromSkeleton(...)` returns topology + initial positions + summary.
 - `applySkeletonTopologyToRuntime(...)` applies topology atomically through one mutation call.
 - No runtime call-site is switched in this step.
+
+## Adapter Output Contract
+- Input: `KnowledgeSkeletonV1`
+- Output topology:
+  - `nodes: NodeSpec[]` preserving skeleton node `id` and mapped metadata.
+  - `links: DirectedLink[]` preserving `from`, `to`, `type -> kind`, `weight`, `rationale`.
+- Output placement:
+  - `initialPositions: Record<nodeId, {x,y}>` deterministic from seed and sorted node order.
+
+## Determinism Guarantees
+- Existing deterministic sorting from `skeletonToTopologyCore(...)` is preserved.
+- Placement determinism:
+  - same seed => identical positions
+  - different seed => different positions
+- Position rounding to 6 decimals is enforced for stable contract equality checks.
+
+## Offline Harness and Contracts
+- Runtime-free contract harness:
+  - `src/server/scripts/test-skeleton-topology-runtime-contracts.mjs`
+- Coverage:
+  - validates golden fixtures
+  - checks required runtime fields
+  - checks deterministic topology and placement
+  - checks atomic apply callback executes exactly once
+
+## Step 3 Handoff
+- Step 3 will consume router output when `kind === "skeleton_v1"` and call:
+  - `buildTopologyFromSkeleton(...)`
+  - `applySkeletonTopologyToRuntime(...)`
+- This step intentionally does not wire that path into `nodeBinding`.

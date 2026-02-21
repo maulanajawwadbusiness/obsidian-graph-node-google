@@ -57,6 +57,11 @@ import {
     buildPendingAnalysisPayloadKey,
     shouldResetPendingConsumeLatch
 } from '../server/src/llm/analyze/analysisFlowGuards';
+import {
+    shouldAllowZeroNodePendingAnalysis,
+    shouldConsumePendingAfterAsync,
+    shouldConsumePendingAtStart
+} from '../server/src/llm/analyze/pendingAnalysisTransitionPolicy';
 // STEP3-RUN5-V4-FIX1: Removed unused recomputeSprings import
 // RUN 8: Dev console helpers (exposes window.__topology)
 // PRE-STEP2: Only import in dev mode to prevent bundling in production
@@ -1197,7 +1202,7 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
         if (documentContext.state.aiActivity) return;
         if (!engineRef.current) return;
         const requestMode = resolveAnalyzeRequestMode();
-        if (engineRef.current.nodes.size === 0 && requestMode !== 'skeleton_v1') return;
+        if (engineRef.current.nodes.size === 0 && !shouldAllowZeroNodePendingAnalysis(requestMode)) return;
 
         const setAIErrorWithAuthLog = (message: string | null) => {
             if (message && message.includes('Please log in')) {
@@ -1205,7 +1210,7 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
             }
             documentContext.setAIError(message);
         };
-        const shouldDelayPendingConsume = requestMode === 'skeleton_v1';
+        const shouldDelayPendingConsume = shouldConsumePendingAfterAsync(requestMode);
         const consumePendingAnalysis = () => {
             onPendingAnalysisConsumed();
         };
@@ -1231,7 +1236,7 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
             currentPendingDocIdRef.current = docId;
 
             console.log(`[graph] consuming_pending_analysis kind=text len=${text.length}`);
-            if (!shouldDelayPendingConsume) {
+            if (shouldConsumePendingAtStart(requestMode)) {
                 consumePendingAnalysis();
             }
             documentContext.setDocument(syntheticDocument);
@@ -1278,7 +1283,7 @@ const GraphPhysicsPlaygroundInternal: React.FC<GraphPhysicsPlaygroundProps> = ({
         hasConsumedPendingRef.current = true;
         const file = pendingAnalysisPayload.file;
         console.log(`[graph] consuming_pending_analysis kind=file name=${file.name} size=${file.size}`);
-        if (!shouldDelayPendingConsume) {
+        if (shouldConsumePendingAtStart(requestMode)) {
             consumePendingAnalysis();
         }
 

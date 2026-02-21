@@ -1,4 +1,5 @@
 import type { AnalyzeRequestMode } from "../ai/analyzeMode";
+import { shouldSpawnSeedGraph } from "../server/src/llm/analyze/seedSpawnPolicy";
 
 export type SeedSpawnDecisionArgs = {
   mode: AnalyzeRequestMode;
@@ -8,13 +9,5 @@ export type SeedSpawnDecisionArgs = {
 };
 
 export function shouldSpawnSeedGraphOnInit(args: SeedSpawnDecisionArgs): boolean {
-  if (args.hasPendingRestore || args.hasRestoredSuccessfully) {
-    return false;
-  }
-
-  if (args.hasPendingAnalysis && args.mode === "skeleton_v1") {
-    return false;
-  }
-
-  return true;
+  return shouldSpawnSeedGraph(args);
 }

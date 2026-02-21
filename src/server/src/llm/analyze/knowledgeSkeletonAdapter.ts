@@ -27,7 +27,8 @@ function compareEdges(a: SkeletonEdgeV1, b: SkeletonEdgeV1): number {
   if (a.weight !== b.weight) return b.weight - a.weight;
   if (a.from !== b.from) return a.from.localeCompare(b.from);
   if (a.to !== b.to) return a.to.localeCompare(b.to);
-  return a.type.localeCompare(b.type);
+  if (a.type !== b.type) return a.type.localeCompare(b.type);
+  return a.rationale.localeCompare(b.rationale);
 }
 
 export function skeletonToTopologyCore(skeleton: KnowledgeSkeletonV1): {

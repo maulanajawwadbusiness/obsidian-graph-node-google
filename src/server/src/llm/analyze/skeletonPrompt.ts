@@ -72,6 +72,7 @@ function buildCoreInstruction(lang: AnalyzePromptLang): string {
     "Graph constraints:",
     "- No orphan nodes: every node must have degree >= 1 (incoming or outgoing).",
     "- Edge cap rule: edges must satisfy edges <= max(6, nodeCount * 2).",
+    "- No duplicate semantic edges: do not repeat the same (from, to, type).",
     "- Keep graph glance-readable and avoid edge spam.",
     "",
     getLanguageDirective(lang)

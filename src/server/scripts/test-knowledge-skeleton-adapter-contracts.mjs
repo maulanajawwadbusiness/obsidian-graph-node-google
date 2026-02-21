@@ -61,6 +61,24 @@ async function run() {
     assert(jsonA === jsonB, `[knowledge-skeleton-adapter] mapping must be deterministic: ${name}`);
   }
 
+  const tiePayload = {
+    nodes: [
+      { role: "claim", id: "n-claim", label: "Claim", summary: "Claim summary", pressure: 0.8, confidence: 0.8 },
+      { role: "evidence", id: "n-evidence", label: "Evidence", summary: "Evidence summary", pressure: 0.7, confidence: 0.7 },
+      { role: "method", id: "n-method", label: "Method", summary: "Method summary", pressure: 0.6, confidence: 0.6 }
+    ],
+    edges: [
+      { from: "n-claim", to: "n-evidence", type: "supports", weight: 0.5, rationale: "zeta" },
+      { from: "n-claim", to: "n-evidence", type: "depends_on", weight: 0.5, rationale: "alpha" },
+      { from: "n-claim", to: "n-method", type: "produces", weight: 0.5, rationale: "beta" }
+    ]
+  };
+  const tieValidated = validateKnowledgeSkeletonV1(tiePayload);
+  assert(tieValidated.ok === true, "[knowledge-skeleton-adapter] tie payload must validate");
+  const tieMappedA = skeletonToTopologyCore(tieValidated.value);
+  const tieMappedB = skeletonToTopologyCore(tieValidated.value);
+  assert(JSON.stringify(tieMappedA) === JSON.stringify(tieMappedB), "[knowledge-skeleton-adapter] tie mapping must be deterministic");
+
   console.log("[knowledge-skeleton-adapter-contracts] fixture mapping valid");
   console.log("[knowledge-skeleton-adapter-contracts] deterministic ordering valid");
   console.log("[knowledge-skeleton-adapter-contracts] done");

@@ -19,6 +19,7 @@ async function run() {
   });
   assert(base.includes("No orphan nodes"), "[knowledge-skeleton-prompt] base prompt must include no orphan rule");
   assert(base.includes("edges <= max(6, nodeCount * 2)"), "[knowledge-skeleton-prompt] base prompt must include edge cap rule");
+  assert(base.includes("No duplicate semantic edges"), "[knowledge-skeleton-prompt] base prompt must include duplicate-edge rule");
   assert(base.includes("slug-like"), "[knowledge-skeleton-prompt] base prompt must include id guidance");
 
   const repair = buildSkeletonRepairInput({

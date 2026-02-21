@@ -93,12 +93,28 @@ async function run() {
 
   const tooManyEdges = clone(minimal);
   const edgeMax = getSkeletonV1EdgeMax(tooManyEdges.nodes.length);
+  const additionalEdges = [
+    { from: "n-claim", to: "n-method", type: "depends_on" },
+    { from: "n-claim", to: "n-limit", type: "supports" },
+    { from: "n-method", to: "n-limit", type: "produces" },
+    { from: "n-limit", to: "n-method", type: "challenges" }
+  ];
+  for (const edge of additionalEdges) {
+    if (tooManyEdges.edges.length >= edgeMax) break;
+    tooManyEdges.edges.push({
+      ...edge,
+      weight: 0.5,
+      rationale: `edge at cap ${tooManyEdges.edges.length}`
+    });
+  }
+  const edgeAtCap = validateKnowledgeSkeletonV1(tooManyEdges);
+  assert(edgeAtCap.ok === true, "[knowledge-skeleton] expected valid payload at edge cap");
   while (tooManyEdges.edges.length <= edgeMax) {
     const idx = tooManyEdges.edges.length;
     tooManyEdges.edges.push({
       from: "n-claim",
-      to: "n-method",
-      type: "supports",
+      to: "n-limit",
+      type: "depends_on",
       weight: 0.5,
       rationale: `extra edge ${idx}`
     });
@@ -125,6 +141,35 @@ async function run() {
   assert(Array.isArray(orphanEntry.details?.orphan_ids), "[knowledge-skeleton] orphan ids details missing");
   assert(orphanEntry.details.orphan_ids.length === 1, "[knowledge-skeleton] orphan ids length mismatch");
   assert(orphanEntry.details.orphan_ids[0] === "n-limit", "[knowledge-skeleton] orphan id mismatch");
+
+  const duplicateSemanticEdge = clone(minimal);
+  duplicateSemanticEdge.edges.push({
+    from: "n-method",
+    to: "n-claim",
+    type: "operationalizes",
+    weight: 0.33,
+    rationale: "duplicate semantic relation"
+  });
+  assertInvalid(duplicateSemanticEdge, "duplicate_edge_semantic");
+
+  const unicodePayload = clone(minimal);
+  unicodePayload.nodes[0].label = "Klaim utama - bukti empiris";
+  unicodePayload.nodes[0].summary = "Metode ini tetap valid untuk konteks lokal dan global.";
+  unicodePayload.edges[0].rationale = "Relasi ini menegaskan koherensi argumen.";
+  const unicodeResult = validateKnowledgeSkeletonV1(unicodePayload);
+  assert(unicodeResult.ok === true, "[knowledge-skeleton] unicode payload should be valid");
+
+  const whitespaceNodeLabel = clone(minimal);
+  whitespaceNodeLabel.nodes[0].label = "   ";
+  assertInvalid(whitespaceNodeLabel, "node_label_empty");
+
+  const whitespaceNodeSummary = clone(minimal);
+  whitespaceNodeSummary.nodes[0].summary = "   ";
+  assertInvalid(whitespaceNodeSummary, "node_summary_empty");
+
+  const whitespaceEdgeRationale = clone(minimal);
+  whitespaceEdgeRationale.edges[0].rationale = "   ";
+  assertInvalid(whitespaceEdgeRationale, "edge_rationale_empty");
 
   console.log("[knowledge-skeleton-contracts] fixtures valid");
   console.log("[knowledge-skeleton-contracts] invalid matrix valid");

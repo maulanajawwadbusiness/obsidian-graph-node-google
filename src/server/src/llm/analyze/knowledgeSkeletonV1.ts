@@ -420,6 +420,7 @@ export function validateKnowledgeSkeletonV1Semantic(
   }
 
   const degreeById = new Map<string, number>();
+  const seenSemanticEdges = new Set<string>();
   for (const id of nodeIds) {
     degreeById.set(id, 0);
   }
@@ -441,6 +442,20 @@ export function validateKnowledgeSkeletonV1Semantic(
           `${edgePath}.rationale`
         )
       );
+    }
+
+    const semanticKey = `${edge.from}->${edge.to}:${edge.type}`;
+    if (seenSemanticEdges.has(semanticKey)) {
+      errors.push(
+        createValidationError(
+          "duplicate_edge_semantic",
+          `duplicate semantic edge is not allowed: ${semanticKey}`,
+          edgePath,
+          { edge_key: semanticKey }
+        )
+      );
+    } else {
+      seenSemanticEdges.add(semanticKey);
     }
 
     if (nodeIds.has(edge.from) && degreeById.has(edge.from)) {

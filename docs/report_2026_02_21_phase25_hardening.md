@@ -142,3 +142,40 @@ Tests added:
   - truncation marker + head/tail preservation
   - repair prompt length budget checks
   - cap constant drift checks
+
+## Run 5: Duplicate-Edge Policy + Determinism + Mode Seam Guard
+
+Date: 2026-02-21
+
+Changes made:
+- Duplicate semantic edges are now rejected in semantic validation:
+  - key definition: `(from, to, type)`
+  - error code: `duplicate_edge_semantic`
+  - error details include `edge_key`
+- Prompt now explicitly includes duplicate-edge prohibition.
+- Adapter edge ordering tie-breaks now include rationale after weight/from/to/type, improving deterministic output in tie cases.
+- Frontend mode seam guard hardened:
+  - skeleton mode requires two local constants to be true
+  - if only enable flag is set, resolver forces classic mode and warns in dev
+  - protects classic flow until phase 3 wiring is complete
+
+Code anchors:
+- `src/server/src/llm/analyze/knowledgeSkeletonV1.ts`
+  - duplicate semantic edge detection in `validateKnowledgeSkeletonV1Semantic(...)`
+- `src/server/src/llm/analyze/knowledgeSkeletonAdapter.ts`
+  - `compareEdges(...)` rationale tie-break
+- `src/server/src/llm/analyze/skeletonPrompt.ts`
+  - duplicate-edge rule in `buildCoreInstruction(...)`
+- `src/ai/analyzeMode.ts`
+  - dual-ack seam guard in `resolveAnalyzeRequestMode(...)`
+
+Tests added/updated:
+- `src/server/scripts/test-knowledge-skeleton-contracts.mjs`
+  - duplicate semantic edge invalid
+  - unicode payload valid
+  - whitespace-only label/summary/rationale invalid
+  - edge cap boundary valid at cap and invalid above cap
+- `src/server/scripts/test-knowledge-skeleton-adapter-contracts.mjs`
+  - deterministic mapping in tie payload
+- `src/server/scripts/test-knowledge-skeleton-prompt-contracts.mjs`
+  - duplicate-edge prompt rule assertion

@@ -181,6 +181,21 @@ function createValidationError(
   return { code, message, path };
 }
 
+function collectUnknownPropertyErrors(
+  raw: Record<string, unknown>,
+  allowedKeys: readonly string[],
+  basePath: string
+): KnowledgeSkeletonValidationError[] {
+  const allowed = new Set(allowedKeys);
+  const errors: KnowledgeSkeletonValidationError[] = [];
+  for (const key of Object.keys(raw)) {
+    if (allowed.has(key)) continue;
+    const path = basePath ? `${basePath}.${key}` : key;
+    errors.push(createValidationError("unknown_property", `unknown property: ${key}`, path));
+  }
+  return errors;
+}
+
 function isObject(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
@@ -213,6 +228,8 @@ export function validateKnowledgeSkeletonV1Shape(raw: unknown): KnowledgeSkeleto
   const nodes = raw.nodes;
   const edges = raw.edges;
 
+  errors.push(...collectUnknownPropertyErrors(raw, ["nodes", "edges"], ""));
+
   if (!Array.isArray(nodes)) {
     errors.push(createValidationError("nodes_invalid", "nodes must be an array", "nodes"));
   }
@@ -235,6 +252,14 @@ export function validateKnowledgeSkeletonV1Shape(raw: unknown): KnowledgeSkeleto
       errors.push(createValidationError("node_invalid", "node must be an object", basePath));
       continue;
     }
+
+    errors.push(
+      ...collectUnknownPropertyErrors(
+        item,
+        ["role", "id", "label", "summary", "pressure", "confidence"],
+        basePath
+      )
+    );
 
     if (!isNodeRole(item.role)) {
       errors.push(createValidationError("node_role_invalid", "node.role must be a known enum", `${basePath}.role`));
@@ -284,6 +309,14 @@ export function validateKnowledgeSkeletonV1Shape(raw: unknown): KnowledgeSkeleto
       errors.push(createValidationError("edge_invalid", "edge must be an object", basePath));
       continue;
     }
+
+    errors.push(
+      ...collectUnknownPropertyErrors(
+        item,
+        ["from", "to", "type", "weight", "rationale"],
+        basePath
+      )
+    );
 
     if (!isString(item.from)) {
       errors.push(createValidationError("edge_from_invalid", "edge.from must be a string", `${basePath}.from`));

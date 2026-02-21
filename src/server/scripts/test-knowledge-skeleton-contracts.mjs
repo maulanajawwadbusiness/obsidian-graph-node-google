@@ -64,6 +64,18 @@ async function run() {
   invalidIdChars.nodes[0].id = "Bad ID";
   assertInvalid(invalidIdChars, "node_id_invalid_chars");
 
+  const unknownRootField = clone(minimal);
+  unknownRootField.extra_root = true;
+  assertInvalid(unknownRootField, "unknown_property");
+
+  const unknownNodeField = clone(minimal);
+  unknownNodeField.nodes[0].extra_node = "x";
+  assertInvalid(unknownNodeField, "unknown_property");
+
+  const unknownEdgeField = clone(minimal);
+  unknownEdgeField.edges[0].extra_edge = "x";
+  assertInvalid(unknownEdgeField, "unknown_property");
+
   const tooManyNodes = clone(minimal);
   while (tooManyNodes.nodes.length < 13) {
     const nextIndex = tooManyNodes.nodes.length + 1;

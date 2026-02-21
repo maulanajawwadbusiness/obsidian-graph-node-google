@@ -1,0 +1,4 @@
+interface:
+  display_name: "GOG Gmail Ops"
+  short_description: "Read and send Gmail with gog CLI wrappers"
+  default_prompt: "Use gog-gmail-ops to search/read Gmail and send emails with validation and retries."

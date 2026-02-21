@@ -38,6 +38,7 @@
     "test:llm-analyze-mode-gate-contracts": "node scripts/test-llm-analyze-mode-gate-contracts.mjs",
     "test:analysis-router-contracts": "node scripts/test-analysis-router-contracts.mjs",
     "test:analysis-seed-spawn-gate-contracts": "node scripts/test-analysis-seed-spawn-gate-contracts.mjs",
+    "test:pending-to-graph-transition-contracts": "node scripts/test-pending-to-graph-transition-contracts.mjs",
     "test:knowledge-skeleton-harness": "node scripts/run-knowledge-skeleton-harness.mjs",
     "test:depsbuilder-contracts": "node scripts/test-depsbuilder-contracts.mjs",
     "test:servermonolith-shell": "node scripts/test-servermonolith-shell.mjs",

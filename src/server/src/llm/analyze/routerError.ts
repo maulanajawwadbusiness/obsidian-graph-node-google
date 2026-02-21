@@ -5,10 +5,39 @@ export type RouterErrorPayload = {
   details?: unknown;
 };
 
+const KNOWN_ERROR_CODES = new Set([
+  "unauthorized",
+  "insufficient_balance",
+  "timeout",
+  "mode_disabled",
+  "mode_guard_blocked",
+  "analysis_failed",
+  "skeleton_analyze_failed",
+  "skeleton_output_invalid",
+  "parse_error",
+  "upstream_error"
+]);
+
+function truncateMessage(value: string, maxChars = 240): string {
+  const trimmed = value.trim().replace(/\s+/g, " ");
+  if (trimmed.length <= maxChars) return trimmed;
+  return `${trimmed.slice(0, Math.max(0, maxChars - 12))} [truncated]`;
+}
+
 export function normalizeRouterErrorPayload(
   error: unknown,
   fallbackCode: string
 ): RouterErrorPayload {
+  if (error instanceof Error) {
+    const normalizedMessage = truncateMessage(error.message || String(fallbackCode));
+    const normalizedCodeCandidate = normalizedMessage.toLowerCase().replace(/\s+/g, "_");
+    const code = KNOWN_ERROR_CODES.has(normalizedCodeCandidate) ? normalizedCodeCandidate : "unknown_error";
+    return {
+      code,
+      message: normalizedMessage
+    };
+  }
+
   if (error && typeof error === "object") {
     const maybe = error as {
       code?: unknown;
@@ -31,17 +60,9 @@ export function normalizeRouterErrorPayload(
     }
   }
 
-  if (error instanceof Error) {
-    const normalizedMessage = error.message.trim() || String(fallbackCode);
-    return {
-      code: normalizedMessage,
-      message: normalizedMessage
-    };
-  }
-
-  const fallbackMessage = String(error ?? fallbackCode).trim() || String(fallbackCode);
+  const fallbackMessage = truncateMessage(String(error ?? fallbackCode) || String(fallbackCode));
   return {
-    code: fallbackCode,
+    code: KNOWN_ERROR_CODES.has(fallbackCode) ? fallbackCode : "unknown_error",
     message: fallbackMessage
   };
 }

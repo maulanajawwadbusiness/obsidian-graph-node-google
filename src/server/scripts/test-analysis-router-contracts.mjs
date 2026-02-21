@@ -26,11 +26,11 @@ async function run() {
   );
   const unknown = normalizeRouterErrorPayload(new Error("socket hangup exploded"), "analysis_failed");
   assert(
-    typeof unknown.code === "string" && unknown.code.length > 0,
-    "[analysis-router-contracts] generic runtime errors must still yield stable non-empty code"
+    unknown.code === "unknown_error",
+    "[analysis-router-contracts] generic runtime errors must map to stable unknown_error code"
   );
   assert(
-    typeof unknown.message === "string" && unknown.message.length > 0,
+    typeof unknown.message === "string" && unknown.message.length > 0 && unknown.message.length <= 240,
     "[analysis-router-contracts] generic runtime errors must still yield bounded message"
   );
 

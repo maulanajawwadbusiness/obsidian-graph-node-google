@@ -5,9 +5,11 @@ import path from "path";
 import { fileURLToPath } from "url";
 import skeletonModule from "../dist/llm/analyze/knowledgeSkeletonV1.js";
 import adapterModule from "../dist/llm/analyze/knowledgeSkeletonAdapter.js";
+import topologyBuildModule from "../dist/llm/analyze/skeletonTopologyBuild.js";
 
 const { validateKnowledgeSkeletonV1 } = skeletonModule;
 const { skeletonToTopologyCore } = adapterModule;
+const { buildTopologyFromSkeletonCore } = topologyBuildModule;
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -52,13 +54,20 @@ async function run() {
 
     const mappedA = skeletonToTopologyCore(validated.value);
     const mappedB = skeletonToTopologyCore(validated.value);
+    const builtA = buildTopologyFromSkeletonCore(validated.value, { seed: 42 });
+    const builtB = buildTopologyFromSkeletonCore(validated.value, { seed: 42 });
 
     assertCountsPreserved(validated.value, mappedA);
     assertStableOrdering(mappedA);
+    assertCountsPreserved(validated.value, builtA);
 
     const jsonA = JSON.stringify(mappedA);
     const jsonB = JSON.stringify(mappedB);
     assert(jsonA === jsonB, `[knowledge-skeleton-adapter] mapping must be deterministic: ${name}`);
+    assert(
+      JSON.stringify(builtA.initialPositions) === JSON.stringify(builtB.initialPositions),
+      `[knowledge-skeleton-adapter] initial positions must be deterministic: ${name}`
+    );
   }
 
   const tiePayload = {

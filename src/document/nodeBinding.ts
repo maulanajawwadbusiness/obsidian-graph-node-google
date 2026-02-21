@@ -11,6 +11,7 @@ import { springEdgesToPhysicsLinks } from '../graph/springToPhysics';
 import type { DirectedLink } from '../graph/topologyTypes';
 import { buildSavedInterfaceDedupeKey, type SavedInterfaceRecordV1 } from '../store/savedInterfacesStore';
 import { isStaleAnalysisResult } from '../server/src/llm/analyze/analysisFlowGuards';
+import { hydrateSkeletonNodePositions } from '../server/src/llm/analyze/skeletonHydration';
 
 import { runAnalysis } from '../ai/analysisRouter';
 import { applySkeletonTopologyToRuntime } from '../graph/skeletonTopologyRuntime';
@@ -101,22 +102,24 @@ function buildPhysicsNodesFromTopology(args: {
   documentId: string;
   spacing: number;
 }): PhysicsNode[] {
-  return args.topologyNodes.map((spec, index) => {
+  const hydratedPositions = hydrateSkeletonNodePositions({
+    nodes: args.topologyNodes.map((node) => ({ id: node.id })),
+    initialPositions: args.initialPositions,
+    spacing: args.spacing
+  });
+  return args.topologyNodes.map((spec) => {
     const meta = spec.meta as Record<string, unknown> | undefined;
     const role = mapSkeletonRoleToPhysicsRole(meta?.role);
     const title = typeof spec.label === 'string' && spec.label.trim() ? spec.label.trim() : spec.id;
     const summaryRaw = typeof meta?.summary === 'string' ? meta.summary : title;
     const summary = summaryRaw.trim() || title;
-    const pos = args.initialPositions[spec.id];
-    const fallbackAngle = (Math.PI * 2 * index) / Math.max(1, args.topologyNodes.length);
-    const fallbackX = Math.cos(fallbackAngle) * args.spacing;
-    const fallbackY = Math.sin(fallbackAngle) * args.spacing;
+    const pos = hydratedPositions[spec.id];
     const radius = role === 'spine' ? 8 : role === 'rib' ? 6 : 5;
     const mass = role === 'spine' ? 3 : role === 'rib' ? 2 : 1;
     return {
       id: spec.id,
-      x: Number.isFinite(pos?.x) ? pos.x : fallbackX,
-      y: Number.isFinite(pos?.y) ? pos.y : fallbackY,
+      x: pos?.x ?? 0,
+      y: pos?.y ?? 0,
       vx: 0,
       vy: 0,
       fx: 0,

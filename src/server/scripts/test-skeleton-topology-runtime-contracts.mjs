@@ -6,10 +6,12 @@ import { fileURLToPath } from "url";
 import skeletonModule from "../dist/llm/analyze/knowledgeSkeletonV1.js";
 import topologyBuildModule from "../dist/llm/analyze/skeletonTopologyBuild.js";
 import adapterModule from "../dist/llm/analyze/knowledgeSkeletonAdapter.js";
+import hydrationModule from "../dist/llm/analyze/skeletonHydration.js";
 
 const { validateKnowledgeSkeletonV1 } = skeletonModule;
 const { buildTopologyFromSkeletonCore, applyTopologyToGraphState } = topologyBuildModule;
 const { skeletonToTopologyCore } = adapterModule;
+const { hydrateSkeletonNodePositions } = hydrationModule;
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -159,6 +161,29 @@ async function run() {
     assert(
       JSON.stringify(builtA.initialPositions) !== JSON.stringify(builtC.initialPositions),
       `[skeleton-topology-runtime] initial positions must differ with different seed: ${name}`
+    );
+    const hydratedA = hydrateSkeletonNodePositions({
+      nodes: builtA.nodes.map((node) => ({ id: node.id })),
+      initialPositions: builtA.initialPositions,
+      spacing: 140
+    });
+    const hydratedB = hydrateSkeletonNodePositions({
+      nodes: builtB.nodes.map((node) => ({ id: node.id })),
+      initialPositions: builtB.initialPositions,
+      spacing: 140
+    });
+    assert(
+      JSON.stringify(hydratedA) === JSON.stringify(hydratedB),
+      `[skeleton-topology-runtime] hydrated positions not deterministic for seed: ${name}`
+    );
+    const hydratedC = hydrateSkeletonNodePositions({
+      nodes: builtC.nodes.map((node) => ({ id: node.id })),
+      initialPositions: builtC.initialPositions,
+      spacing: 140
+    });
+    assert(
+      JSON.stringify(hydratedA) !== JSON.stringify(hydratedC),
+      `[skeleton-topology-runtime] hydrated positions must differ with different seed: ${name}`
     );
 
     let applyCalls = 0;
